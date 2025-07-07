@@ -93,10 +93,6 @@ use wasmtime_wmemcheck::AccessError::{
 /// For more information on converting from host-defined values to Cranelift ABI
 /// values see the `catch_unwind_and_record_trap` function.
 pub mod raw {
-    // Allow these things because of the macro and how we can't differentiate
-    // between doc comments and `cfg`s.
-    #![allow(unused_doc_comments, unused_attributes)]
-
     use crate::runtime::vm::{InstanceAndStore, VMContext, f32x4, f64x2, i8x16};
     use core::ptr::NonNull;
 
@@ -114,10 +110,7 @@ pub mod raw {
                 // This will delegate to the outer module to the actual
                 // implementation and automatically perform `catch_unwind` along
                 // with conversion of the return value in the face of traps.
-                //
-                // Ignore improper ctypes to permit `__m128i` on x86_64.
-                #[allow(unused_variables, missing_docs)]
-                #[allow(improper_ctypes_definitions)]
+                #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
                 pub unsafe extern "C" fn $name(
                     vmctx: NonNull<VMContext>,
                     $( $pname : libcall!(@ty $param), )*
@@ -133,19 +126,19 @@ pub mod raw {
                     }
                     $(
                         #[cfg(not($attr))]
-                        unreachable!();
+                        {
+                            let _ = vmctx;
+                            unreachable!();
+                        }
                     )?
                 }
 
                 // This works around a `rustc` bug where compiling with LTO
                 // will sometimes strip out some of these symbols resulting
                 // in a linking failure.
-                //
-                // Ignore improper ctypes to permit `__m128i` on x86_64.
-                #[allow(non_upper_case_globals)]
+                #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
                 const _: () = {
                     #[used]
-                    #[allow(improper_ctypes_definitions)]
                     static I_AM_USED: unsafe extern "C" fn(
                         NonNull<VMContext>,
                         $( $pname : libcall!(@ty $param), )*
@@ -445,7 +438,7 @@ fn memory_fill(
     len: u64,
 ) -> Result<(), Trap> {
     let memory_index = MemoryIndex::from_u32(memory_index);
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "known to truncate here")]
     instance.memory_fill(memory_index, dst, val as u8, len)
 }
 

@@ -22,14 +22,19 @@ mod null;
 #[cfg(feature = "gc-null")]
 pub use null::*;
 
-// Explicit methods with `#[allow]` to clearly indicate that truncation is
-// desired when used.
-#[allow(clippy::cast_possible_truncation)]
+// Explicit methods to clearly indicate that truncation is desired when used.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "that's the purpose of this method"
+)]
 fn truncate_i32_to_i16(a: i32) -> i16 {
     a as i16
 }
 
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "that's the purpose of this method"
+)]
 fn truncate_i32_to_i8(a: i32) -> i8 {
     a as i8
 }

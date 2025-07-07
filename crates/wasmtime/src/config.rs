@@ -2281,17 +2281,16 @@ impl Config {
 
         match &self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => {
-                #[allow(unused_mut)]
-                let mut allocator = Box::new(OnDemandInstanceAllocator::new(
+                let mut _allocator = Box::new(OnDemandInstanceAllocator::new(
                     self.mem_creator.clone(),
                     stack_size,
                     stack_zeroing,
                 ));
                 #[cfg(feature = "async")]
                 if let Some(stack_creator) = &self.stack_creator {
-                    allocator.set_stack_creator(stack_creator.clone());
+                    _allocator.set_stack_creator(stack_creator.clone());
                 }
-                Ok(allocator)
+                Ok(_allocator)
             }
             #[cfg(feature = "pooling-allocator")]
             InstanceAllocationStrategy::Pooling(config) => {
@@ -2317,7 +2316,7 @@ impl Config {
         #[cfg(feature = "gc")]
         #[cfg_attr(
             not(any(feature = "gc-null", feature = "gc-drc")),
-            allow(unused_variables, unreachable_code)
+            expect(unreachable_code, reason = "definitions known to be dummy")
         )]
         {
             Ok(Some(match self.collector.try_not_auto()? {
@@ -3571,7 +3570,10 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
         };
     }
 
-    #[allow(unreachable_code)]
+    #[allow(
+        unreachable_code,
+        reason = "reachable or not depending on if a target above matches"
+    )]
     {
         let _ = feature;
         return None;

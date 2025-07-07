@@ -290,11 +290,9 @@ impl InterpreterRef<'_> {
         /// `call(@host Ty(ty1, ty2, ...) -> retty)` - invoke a host function
         /// with the type `Ty`. The other types in the macro are checked by
         /// rustc to match the actual `Ty` definition in Rust.
-        ///
-        /// Ignore improper ctypes to permit `__m128i` on x86_64.
         macro_rules! call {
             (@builtin($($param:ident),*) $(-> $result:ident)?) => {{
-                #[allow(improper_ctypes_definitions)]
+                #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
                 type T = unsafe extern "C" fn($(call!(@ty $param)),*) $(-> call!(@ty $result))?;
                 call!(@host T($($param),*) $(-> $result)?);
             }};

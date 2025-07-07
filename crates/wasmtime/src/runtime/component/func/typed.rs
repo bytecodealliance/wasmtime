@@ -1006,7 +1006,7 @@ macro_rules! integers {
 
         unsafe impl Lower for $primitive {
             #[inline]
-            #[allow(trivial_numeric_casts)]
+            #[allow(trivial_numeric_casts, reason = "macro-generated code")]
             fn linear_lower_to_flat<T>(
                 &self,
                 _cx: &mut LowerContext<'_, T>,
@@ -1071,7 +1071,11 @@ macro_rules! integers {
 
         unsafe impl Lift for $primitive {
             #[inline]
-            #[allow(trivial_numeric_casts, clippy::cast_possible_truncation)]
+            #[allow(
+                trivial_numeric_casts,
+                clippy::cast_possible_truncation,
+                reason = "macro-generated code"
+            )]
             fn linear_lift_from_flat(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 Ok(src.$get() as $primitive)
@@ -2645,7 +2649,7 @@ where
 ///
 /// Uses default type parameters to have fields be zero-sized and not present
 /// in memory for smaller tuple values.
-#[allow(non_snake_case)]
+#[expect(non_snake_case, reason = "more amenable to macro-generated code")]
 #[doc(hidden)]
 #[derive(Clone, Copy)]
 #[repr(C)]
@@ -2691,7 +2695,7 @@ pub struct TupleLower<
 
 macro_rules! impl_component_ty_for_tuples {
     ($n:tt $($t:ident)*) => {
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t,)*> ComponentType for ($($t,)*)
             where $($t: ComponentType),*
         {
@@ -2718,7 +2722,7 @@ macro_rules! impl_component_ty_for_tuples {
             }
         }
 
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t,)*> Lower for ($($t,)*)
             where $($t: Lower),*
         {
@@ -2762,7 +2766,7 @@ macro_rules! impl_component_ty_for_tuples {
             }
         }
 
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t,)*> Lift for ($($t,)*)
             where $($t: Lift),*
         {
@@ -2799,7 +2803,7 @@ macro_rules! impl_component_ty_for_tuples {
             }
         }
 
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t,)*> ComponentNamedList for ($($t,)*)
             where $($t: ComponentType),*
         {}

@@ -1,5 +1,3 @@
-#![allow(non_camel_case_types)]
-
 // Flags to either `wasmtime_mmap_{new,remap}` or `wasmtime_mprotect`.
 
 /// Indicates that the memory region should be readable.
@@ -44,12 +42,14 @@ pub use WASMTIME_PROT_WRITE as PROT_WRITE;
 /// When this function does not return it's because `wasmtime_longjmp` is
 /// used to handle a Wasm-based trap.
 #[cfg(has_native_signals)]
+#[expect(non_camel_case_types, reason = "matching C conventions")]
 pub type wasmtime_trap_handler_t =
     extern "C" fn(ip: usize, fp: usize, has_faulting_addr: bool, faulting_addr: usize);
 
 /// Abstract pointer type used in the `wasmtime_memory_image_*` APIs which
 /// is defined by the embedder.
 #[cfg(has_virtual_memory)]
+#[expect(non_camel_case_types, reason = "matching C conventions")]
 pub enum wasmtime_memory_image {}
 
 unsafe extern "C" {

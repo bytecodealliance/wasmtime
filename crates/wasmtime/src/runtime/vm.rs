@@ -7,13 +7,13 @@
 
 // Polyfill `std::simd::i8x16` etc. until they're stable.
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 pub(crate) type i8x16 = core::arch::x86_64::__m128i;
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 pub(crate) type f32x4 = core::arch::x86_64::__m128;
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 pub(crate) type f64x2 = core::arch::x86_64::__m128d;
 
 // On platforms other than x86_64, define i8x16 to a non-constructible type;
@@ -21,15 +21,15 @@ pub(crate) type f64x2 = core::arch::x86_64::__m128d;
 // functions that are awkward to make conditional on the target, but it
 // doesn't need to actually be constructible unless we're on x86_64.
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
 pub(crate) struct i8x16(crate::uninhabited::Uninhabited);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
 pub(crate) struct f32x4(crate::uninhabited::Uninhabited);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
 pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
 

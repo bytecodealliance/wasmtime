@@ -80,7 +80,6 @@ wasmtime_environ::foreach_builtin_component_function!(define_builtins);
 /// transcoders that are invoked by Cranelift. These functions have a specific
 /// ABI defined by the macro itself and will defer to the actual bodies of each
 /// implementation following this submodule.
-#[allow(improper_ctypes_definitions)]
 mod trampolines {
     use super::{ComponentInstance, VMComponentContext};
     use core::ptr::NonNull;
