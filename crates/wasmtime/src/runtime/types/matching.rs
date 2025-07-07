@@ -70,6 +70,7 @@ fn type_reference(
     Err(concrete_type_mismatch(msg, &expected, &actual))
 }
 
+#[cfg(feature = "component-model")]
 pub fn entity_ty(engine: &Engine, expected: &EntityType, actual: &EntityType) -> Result<()> {
     match expected {
         EntityType::Memory(expected) => match actual {
@@ -403,6 +404,7 @@ fn match_limits(
     )
 }
 
+#[cfg(feature = "component-model")]
 fn entity_desc(ty: &EntityType) -> &'static str {
     match ty {
         EntityType::Global(_) => "global",
