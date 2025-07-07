@@ -35,7 +35,6 @@ pub(crate) const fn vr_preg(num: u8) -> PReg {
 }
 
 /// Get a writable reference to a VR.
-#[allow(dead_code)] // used by tests.
 pub fn writable_vr(num: u8) -> Writable<Reg> {
     Writable::from_reg(vr(num))
 }

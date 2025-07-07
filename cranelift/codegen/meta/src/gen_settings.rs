@@ -23,7 +23,10 @@ fn gen_constructor(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatte
     };
     fmt.add_block("impl Flags", |fmt| {
         fmt.doc_comment(format!("Create flags {} settings group.", group.name));
-        fmtln!(fmt, "#[allow(unused_variables)]");
+        fmtln!(
+            fmt,
+            "#[allow(unused_variables, reason = \"generated code\")]"
+        );
         fmt.add_block(&format!("pub fn new({args}) -> Self"), |fmt| {
             fmtln!(fmt, "let bvec = builder.state_for(\"{}\");", group.name);
             fmtln!(
@@ -203,7 +206,7 @@ fn gen_pred_getter(predicate: &Predicate, group: &SettingGroup, fmt: &mut Format
 /// Emits getters for each setting value.
 fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
     fmt.doc_comment("User-defined settings.");
-    fmtln!(fmt, "#[allow(dead_code)]");
+    fmtln!(fmt, "#[allow(dead_code, reason = \"generated code\")]");
     fmt.add_block("impl Flags", |fmt| {
         fmt.doc_comment("Get a view of the boolean predicates.");
         fmt.add_block(

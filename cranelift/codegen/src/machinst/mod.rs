@@ -81,9 +81,6 @@ pub mod buffer;
 pub use buffer::*;
 pub mod helpers;
 pub use helpers::*;
-pub mod inst_common;
-#[allow(unused_imports)] // not used in all backends right now
-pub use inst_common::*;
 pub mod valueregs;
 pub use reg::*;
 pub use valueregs::*;

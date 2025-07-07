@@ -22,9 +22,7 @@ use crate::{isa::x64::inst::regs, machinst::Reg};
 ///
 /// We never actually interact with values of that type in Cranelift, but are
 /// only interested in its layout for the purposes of generating code.
-#[allow(dead_code)]
 pub struct ControlContextLayout {
-    pub size: usize,
     pub stack_pointer_offset: usize,
     pub frame_pointer_offset: usize,
     pub ip_offset: usize,
@@ -32,7 +30,6 @@ pub struct ControlContextLayout {
 
 pub fn control_context_layout() -> ControlContextLayout {
     ControlContextLayout {
-        size: 24,
         stack_pointer_offset: 0,
         frame_pointer_offset: 8,
         ip_offset: 16,

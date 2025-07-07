@@ -219,27 +219,6 @@ impl Inst {
         Inst::External { inst }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn xmm_min_max_seq(
-        size: OperandSize,
-        is_min: bool,
-        lhs: Reg,
-        rhs: Reg,
-        dst: Writable<Reg>,
-    ) -> Inst {
-        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert_eq!(lhs.class(), RegClass::Float);
-        debug_assert_eq!(rhs.class(), RegClass::Float);
-        debug_assert_eq!(dst.to_reg().class(), RegClass::Float);
-        Inst::XmmMinMaxSeq {
-            size,
-            is_min,
-            lhs: Xmm::unwrap_new(lhs),
-            rhs: Xmm::unwrap_new(rhs),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     pub(crate) fn movzx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);

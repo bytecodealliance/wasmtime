@@ -18,7 +18,7 @@ use core::fmt;
 macro_rules! define_passes {
     ($($pass:ident: $desc:expr,)+) => {
         /// A single profiled pass.
-        #[allow(non_camel_case_types)]
+        #[expect(non_camel_case_types, reason = "macro-generated code")]
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub enum Pass {
             $(#[doc=$desc] $pass,)+
