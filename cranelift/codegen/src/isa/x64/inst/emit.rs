@@ -35,9 +35,73 @@ fn one_way_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
     let cond_start = sink.cur_offset();
     let cond_disp_off = cond_start + 2;
     sink.use_label_at_offset(cond_disp_off, label, LabelUse::JmpRel32);
-    sink.put1(0x0F);
-    sink.put1(0x80 + cc.get_enc());
-    sink.put4(0x0);
+    emit_jcc_no_offset(sink, cc);
+    debug_assert_eq!(sink.cur_offset(), cond_disp_off + 4);
+}
+
+/// Like `one_way_jmp` above emitting a conditional jump, but also using
+/// `MachBuffer::add_cond_branch`.
+fn cond_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
+    let cond_start = sink.cur_offset();
+    let cond_disp_off = cond_start + 2;
+    let cond_end = cond_start + 6;
+
+    sink.use_label_at_offset(cond_disp_off, label, LabelUse::JmpRel32);
+    // FIXME: ideally this `inverted` calculation would go through the external
+    // assembler, but for now it's left done manually.
+    let inverted: [u8; 6] = [0x0F, 0x80 + (cc.invert().get_enc()), 0x00, 0x00, 0x00, 0x00];
+    sink.add_cond_branch(cond_start, cond_end, label, &inverted[..]);
+
+    emit_jcc_no_offset(sink, cc);
+
+    debug_assert_eq!(sink.cur_offset(), cond_disp_off + 4);
+    debug_assert_eq!(sink.cur_offset(), cond_end);
+}
+
+fn emit_jcc_no_offset(sink: &mut MachBuffer<Inst>, cc: CC) {
+    // Note that the disassembler matches Capstone which doesn't match the `CC`
+    // enum directly as Intel has multiple mnemonics use the same encoding.
+    let inst: AsmInst = match cc {
+        CC::Z => asm::inst::je_d32::new(0).into(),   // jz == je
+        CC::NZ => asm::inst::jne_d32::new(0).into(), // jnz == jne
+        CC::B => asm::inst::jb_d32::new(0).into(),
+        CC::NB => asm::inst::jae_d32::new(0).into(), // jnb == jae
+        CC::BE => asm::inst::jbe_d32::new(0).into(),
+        CC::NBE => asm::inst::ja_d32::new(0).into(), // jnbe == ja
+        CC::L => asm::inst::jl_d32::new(0).into(),
+        CC::LE => asm::inst::jle_d32::new(0).into(),
+        CC::NL => asm::inst::jge_d32::new(0).into(), // jnl == jge
+        CC::NLE => asm::inst::jg_d32::new(0).into(), // jnle == jg
+        CC::O => asm::inst::jo_d32::new(0).into(),
+        CC::NO => asm::inst::jno_d32::new(0).into(),
+        CC::P => asm::inst::jp_d32::new(0).into(),
+        CC::NP => asm::inst::jnp_d32::new(0).into(),
+        CC::S => asm::inst::js_d32::new(0).into(),
+        CC::NS => asm::inst::jns_d32::new(0).into(),
+    };
+    inst.encode(&mut external::AsmCodeSink {
+        sink,
+        incoming_arg_offset: 0,
+        slot_offset: 0,
+    });
+}
+
+/// Emits an unconditional branch.
+fn uncond_jmp(sink: &mut MachBuffer<Inst>, label: MachLabel) {
+    let uncond_start = sink.cur_offset();
+    let uncond_disp_off = uncond_start + 1;
+    let uncond_end = uncond_start + 5;
+
+    sink.use_label_at_offset(uncond_disp_off, label, LabelUse::JmpRel32);
+    sink.add_uncond_branch(uncond_start, uncond_end, label);
+
+    asm::inst::jmp_d32::new(0).encode(&mut external::AsmCodeSink {
+        sink,
+        incoming_arg_offset: 0,
+        slot_offset: 0,
+    });
+    debug_assert_eq!(sink.cur_offset(), uncond_disp_off + 4);
+    debug_assert_eq!(sink.cur_offset(), uncond_end);
 }
 
 /// Emits a relocation, attaching the current source location as well.
@@ -427,11 +491,11 @@ pub(crate) fn emit(
             // Note: this is not `Inst::Jmp { .. }.emit(..)` because we have
             // different metadata in this case: we don't have a label for the
             // target, but rather a function relocation.
-            sink.put1(0xE9);
+            asm::inst::jmp_d32::new(0).emit(sink, info, state);
+            let offset = sink.cur_offset();
             // The addend adjusts for the difference between the end of the instruction and the
             // beginning of the immediate field.
-            emit_reloc(sink, Reloc::X86CallPCRel4, &call_info.dest, -4);
-            sink.put4(0);
+            sink.add_reloc_at_offset(offset - 4, Reloc::X86CallPCRel4, &call_info.dest, -4);
             sink.add_call_site(&[]);
         }
 
@@ -595,62 +659,17 @@ pub(crate) fn emit(
             sink.bind_label(resume, state.ctrl_plane_mut());
         }
 
-        Inst::JmpKnown { dst } => {
-            let br_start = sink.cur_offset();
-            let br_disp_off = br_start + 1;
-            let br_end = br_start + 5;
+        Inst::JmpKnown { dst } => uncond_jmp(sink, *dst),
 
-            sink.use_label_at_offset(br_disp_off, *dst, LabelUse::JmpRel32);
-            sink.add_uncond_branch(br_start, br_end, *dst);
-
-            sink.put1(0xE9);
-            // Placeholder for the label value.
-            sink.put4(0x0);
-        }
-
-        Inst::WinchJmpIf { cc, taken } => {
-            let cond_start = sink.cur_offset();
-            let cond_disp_off = cond_start + 2;
-
-            sink.use_label_at_offset(cond_disp_off, *taken, LabelUse::JmpRel32);
-            // Since this is not a terminator, don't enroll in the branch inversion mechanism.
-
-            sink.put1(0x0F);
-            sink.put1(0x80 + cc.get_enc());
-            // Placeholder for the label value.
-            sink.put4(0x0);
-        }
+        Inst::WinchJmpIf { cc, taken } => one_way_jmp(sink, *cc, *taken),
 
         Inst::JmpCond {
             cc,
             taken,
             not_taken,
         } => {
-            // If taken.
-            let cond_start = sink.cur_offset();
-            let cond_disp_off = cond_start + 2;
-            let cond_end = cond_start + 6;
-
-            sink.use_label_at_offset(cond_disp_off, *taken, LabelUse::JmpRel32);
-            let inverted: [u8; 6] = [0x0F, 0x80 + (cc.invert().get_enc()), 0x00, 0x00, 0x00, 0x00];
-            sink.add_cond_branch(cond_start, cond_end, *taken, &inverted[..]);
-
-            sink.put1(0x0F);
-            sink.put1(0x80 + cc.get_enc());
-            // Placeholder for the label value.
-            sink.put4(0x0);
-
-            // If not taken.
-            let uncond_start = sink.cur_offset();
-            let uncond_disp_off = uncond_start + 1;
-            let uncond_end = uncond_start + 5;
-
-            sink.use_label_at_offset(uncond_disp_off, *not_taken, LabelUse::JmpRel32);
-            sink.add_uncond_branch(uncond_start, uncond_end, *not_taken);
-
-            sink.put1(0xE9);
-            // Placeholder for the label value.
-            sink.put4(0x0);
+            cond_jmp(sink, *cc, *taken);
+            uncond_jmp(sink, *not_taken);
         }
 
         Inst::JmpCondOr {
@@ -671,56 +690,9 @@ pub(crate) fn emit(
             // not_taken and that one block is the fallthrough block,
             // all three branches can disappear.
 
-            // jcc1 taken
-            let cond_1_start = sink.cur_offset();
-            let cond_1_disp_off = cond_1_start + 2;
-            let cond_1_end = cond_1_start + 6;
-
-            sink.use_label_at_offset(cond_1_disp_off, *taken, LabelUse::JmpRel32);
-            let inverted: [u8; 6] = [
-                0x0F,
-                0x80 + (cc1.invert().get_enc()),
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-            ];
-            sink.add_cond_branch(cond_1_start, cond_1_end, *taken, &inverted[..]);
-
-            sink.put1(0x0F);
-            sink.put1(0x80 + cc1.get_enc());
-            sink.put4(0x0);
-
-            // jcc2 taken
-            let cond_2_start = sink.cur_offset();
-            let cond_2_disp_off = cond_2_start + 2;
-            let cond_2_end = cond_2_start + 6;
-
-            sink.use_label_at_offset(cond_2_disp_off, *taken, LabelUse::JmpRel32);
-            let inverted: [u8; 6] = [
-                0x0F,
-                0x80 + (cc2.invert().get_enc()),
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-            ];
-            sink.add_cond_branch(cond_2_start, cond_2_end, *taken, &inverted[..]);
-
-            sink.put1(0x0F);
-            sink.put1(0x80 + cc2.get_enc());
-            sink.put4(0x0);
-
-            // jmp not_taken
-            let uncond_start = sink.cur_offset();
-            let uncond_disp_off = uncond_start + 1;
-            let uncond_end = uncond_start + 5;
-
-            sink.use_label_at_offset(uncond_disp_off, *not_taken, LabelUse::JmpRel32);
-            sink.add_uncond_branch(uncond_start, uncond_end, *not_taken);
-
-            sink.put1(0xE9);
-            sink.put4(0x0);
+            cond_jmp(sink, *cc1, *taken);
+            cond_jmp(sink, *cc2, *taken);
+            uncond_jmp(sink, *not_taken);
         }
 
         &Inst::JmpTableSeq {

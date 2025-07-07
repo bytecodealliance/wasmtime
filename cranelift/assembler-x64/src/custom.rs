@@ -195,12 +195,7 @@ pub mod display {
 
     pub fn callq_d(f: &mut fmt::Formatter, inst: &inst::callq_d) -> fmt::Result {
         let inst::callq_d { imm32 } = inst;
-        let displacement = i64::from(imm32.value()) + 5;
-        if displacement >= 0 && displacement < 10 {
-            write!(f, "callq {displacement:}")
-        } else {
-            write!(f, "callq {displacement:#x}")
-        }
+        display_displacement(f, "callq", i64::from(imm32.value()) + 5)
     }
 
     pub fn callq_m<R: Registers>(f: &mut fmt::Formatter, inst: &inst::callq_m<R>) -> fmt::Result {
@@ -584,6 +579,61 @@ pub mod display {
         let inst::jmpq_m { rm64 } = jmp;
         let rm64 = rm64.to_string(Size::Quadword);
         write!(f, "jmpq *{rm64}")
+    }
+
+    pub fn jmp_d8(f: &mut fmt::Formatter<'_>, jmp: &inst::jmp_d8) -> fmt::Result {
+        let inst::jmp_d8 { imm8 } = jmp;
+        display_displacement(f, "jmp", i64::from(imm8.value()) + 2)
+    }
+
+    pub fn jmp_d32(f: &mut fmt::Formatter<'_>, jmp: &inst::jmp_d32) -> fmt::Result {
+        let inst::jmp_d32 { imm32 } = jmp;
+        display_displacement(f, "jmp", i64::from(imm32.value()) + 5)
+    }
+
+    macro_rules! jcc {
+        ($($mnemonic:tt = $j8:ident / $j32:ident;)*) => ($(
+            pub fn $j8(f: &mut fmt::Formatter<'_>, jmp: &inst::$j8) -> fmt::Result {
+                let inst::$j8 { imm8 } = jmp;
+                display_displacement(f, $mnemonic, i64::from(imm8.value()) + 2)
+            }
+
+            pub fn $j32(f: &mut fmt::Formatter<'_>, jmp: &inst::$j32) -> fmt::Result {
+                let inst::$j32 { imm32 } = jmp;
+                display_displacement(f, $mnemonic, i64::from(imm32.value()) + 6)
+            }
+        )*)
+    }
+
+    jcc! {
+        "ja" = ja_d8 / ja_d32;
+        "jae" = jae_d8 / jae_d32;
+        "jb" = jb_d8 / jb_d32;
+        "jbe" = jbe_d8 / jbe_d32;
+        "je" = je_d8 / je_d32;
+        "jg" = jg_d8 / jg_d32;
+        "jge" = jge_d8 / jge_d32;
+        "jl" = jl_d8 / jl_d32;
+        "jle" = jle_d8 / jle_d32;
+        "jne" = jne_d8 / jne_d32;
+        "jno" = jno_d8 / jno_d32;
+        "jnp" = jnp_d8 / jnp_d32;
+        "jns" = jns_d8 / jns_d32;
+        "jo" = jo_d8 / jo_d32;
+        "jp" = jp_d8 / jp_d32;
+        "js" = js_d8 / js_d32;
+    }
+
+    fn display_displacement(
+        f: &mut fmt::Formatter<'_>,
+        mnemonic: &str,
+        displacement: i64,
+    ) -> fmt::Result {
+        if displacement >= 0 && displacement < 10 {
+            write!(f, "{mnemonic} {displacement}")
+        } else {
+            write!(f, "{mnemonic} {displacement:#x}")
+        }
     }
 }
 
