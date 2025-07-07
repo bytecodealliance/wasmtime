@@ -1,5 +1,5 @@
 // TODO: This duplicates a lot of resource_table.rs; consider reducing that
-// duplication.
+// duplication: https://github.com/bytecodealliance/wasmtime/issues/11190.
 //
 // The main difference between this and resource_table.rs is that the key type,
 // `TableId<T>` implements `Copy`, making them much easier to work with than
