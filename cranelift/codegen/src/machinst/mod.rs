@@ -81,8 +81,6 @@ pub mod buffer;
 pub use buffer::*;
 pub mod helpers;
 pub use helpers::*;
-pub(crate) mod inst_common;
-pub use inst_common::*;
 pub mod valueregs;
 pub use reg::*;
 pub use valueregs::*;
