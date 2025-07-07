@@ -11,6 +11,7 @@ use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 pub struct VMContinuationStack {
     _top: *mut u8,
     _len: usize,
+    _match_size_on_unix: u8,
 }
 
 impl VMContinuationStack {
