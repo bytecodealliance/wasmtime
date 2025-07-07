@@ -2837,7 +2837,7 @@ impl<'a> InterfaceGenerator<'a> {
 
         if concurrent {
             if func.result.is_some() {
-                uwrite!(self.src, "let future =");
+                uwrite!(self.src, "{wt}::component::__internal::FutureExt::map(");
             }
             uwrite!(self.src, "callee.call_concurrent(store.as_context_mut(), (");
             for (i, _) in func.params.iter().enumerate() {
@@ -2846,15 +2846,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.src.push_str("))");
 
             if func.result.is_some() {
-                self.src.push_str(";\n");
-                uwriteln!(
-                    self.src,
-                    "\
-async move {{
-    let (ret0,) = future.await?;
-    Ok(ret0)
-}}"
-                );
+                self.src.push_str(", |v| v.map(|(v,)| v))");
             }
         } else {
             self.src.push_str("let (");

@@ -281,9 +281,6 @@ fn mismatch(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
         Val::Result(..) => "result",
         Val::Flags(..) => "flags",
         Val::Resource(..) => "resource",
-        Val::Future(..) => "future",
-        Val::Stream(..) => "stream",
-        Val::ErrorContext(..) => "error-context",
     };
     bail!("expected `{expected}` got `{actual}`")
 }

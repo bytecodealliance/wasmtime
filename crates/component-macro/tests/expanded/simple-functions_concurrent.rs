@@ -476,11 +476,10 @@ pub mod exports {
                                 (u32,),
                             >::new_unchecked(self.f4)
                         };
-                        let future = callee.call_concurrent(store.as_context_mut(), ());
-                        async move {
-                            let (ret0,) = future.await?;
-                            Ok(ret0)
-                        }
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), ()),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
                     pub fn call_f5<S: wasmtime::AsContextMut>(
                         &self,
@@ -497,11 +496,10 @@ pub mod exports {
                                 ((u32, u32),),
                             >::new_unchecked(self.f5)
                         };
-                        let future = callee.call_concurrent(store.as_context_mut(), ());
-                        async move {
-                            let (ret0,) = future.await?;
-                            Ok(ret0)
-                        }
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), ()),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
                     pub fn call_f6<S: wasmtime::AsContextMut>(
                         &self,
@@ -521,12 +519,14 @@ pub mod exports {
                                 ((u32, u32, u32),),
                             >::new_unchecked(self.f6)
                         };
-                        let future = callee
-                            .call_concurrent(store.as_context_mut(), (arg0, arg1, arg2));
-                        async move {
-                            let (ret0,) = future.await?;
-                            Ok(ret0)
-                        }
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee
+                                .call_concurrent(
+                                    store.as_context_mut(),
+                                    (arg0, arg1, arg2),
+                                ),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
                 }
             }
