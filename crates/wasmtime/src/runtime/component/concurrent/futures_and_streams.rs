@@ -1262,7 +1262,7 @@ impl ErrorContext {
                 let (rep, _) = cx
                     .instance_mut()
                     .concurrent_state_mut()
-                    .error_context_tables()
+                    .error_context_tables
                     .get_mut(src)
                     .expect("error context table index present in (sub)component table during lift")
                     .get_mut_by_index(index)?;
@@ -1284,7 +1284,7 @@ pub(crate) fn lower_error_context_to_index<U>(
             let tbl = cx
                 .instance_mut()
                 .concurrent_state_mut()
-                .error_context_tables()
+                .error_context_tables
                 .get_mut(dst)
                 .expect("error context table index present in (sub)component table during lower");
 
@@ -2790,7 +2790,7 @@ impl Instance {
 
         // Add to the global error context ref counts
         let _ = state
-            .global_error_context_ref_counts()
+            .global_error_context_ref_counts
             .insert(global_ref_count_idx, GlobalErrorContextRefCount(1));
 
         // Error context are tracked both locally (to a single component instance) and globally
@@ -2799,7 +2799,7 @@ impl Instance {
         // Here we reflect the newly created global concurrent error context state into the
         // component instance's locally tracked count, along with the appropriate key into the global
         // ref tracking data structures to enable later lookup
-        let local_tbl = &mut state.error_context_tables()[ty];
+        let local_tbl = &mut state.error_context_tables[ty];
 
         assert!(
             !local_tbl.has_handle(table_id.rep()),
@@ -2828,7 +2828,7 @@ impl Instance {
         let id = store.0.store_opaque().id();
         let state = self.concurrent_state_mut(store.0);
         let (state_table_id_rep, _) = state
-            .error_context_tables()
+            .error_context_tables
             .get_mut(ty)
             .context("error context table index present in (sub)component lookup during debug_msg")?
             .get_mut_by_index(err_ctx_handle)?;
@@ -3036,7 +3036,7 @@ impl ConcurrentState {
             TableIndex::Stream(ty) => self.component.types()[ty].instance,
             TableIndex::Future(ty) => self.component.types()[ty].instance,
         };
-        &mut self.waitable_tables()[runtime_instance]
+        &mut self.waitable_tables[runtime_instance]
     }
 
     /// Allocate a new future or stream and grant ownership of both the read and
@@ -3344,7 +3344,7 @@ impl ConcurrentState {
         error_context: u32,
     ) -> Result<()> {
         let local_state_table = self
-            .error_context_tables()
+            .error_context_tables
             .get_mut(ty)
             .context("error context table index present in (sub)component table during drop")?;
 
@@ -3367,7 +3367,7 @@ impl ConcurrentState {
         let global_ref_count_idx = TypeComponentGlobalErrorContextTableIndex::from_u32(rep);
 
         let GlobalErrorContextRefCount(global_ref_count) = self
-            .global_error_context_ref_counts()
+            .global_error_context_ref_counts
             .get_mut(&global_ref_count_idx)
             .expect("retrieve concurrent state for error context during drop");
 
@@ -3377,7 +3377,7 @@ impl ConcurrentState {
         if *global_ref_count == 0 {
             assert!(local_ref_removed);
 
-            self.global_error_context_ref_counts()
+            self.global_error_context_ref_counts
                 .remove(&global_ref_count_idx);
 
             self.delete(TableId::<ErrorContextState>::new(rep))
@@ -3399,14 +3399,14 @@ impl ConcurrentState {
         match_state: impl Fn(&mut WaitableState) -> Result<(U, &mut StreamFutureState)>,
         make_state: impl Fn(U, StreamFutureState) -> WaitableState,
     ) -> Result<u32> {
-        let src_table = &mut self.waitable_tables()[src_instance];
+        let src_table = &mut self.waitable_tables[src_instance];
         let (_rep, src_state) = src_table.get_mut_by_index(src_idx)?;
         let (src_ty, _) = match_state(src_state)?;
         if src_ty != src {
             bail!("invalid future handle");
         }
 
-        let src_table = &mut self.waitable_tables()[src_instance];
+        let src_table = &mut self.waitable_tables[src_instance];
         let (rep, src_state) = src_table.get_mut_by_index(src_idx)?;
         let (_, src_state) = match_state(src_state)?;
 
@@ -3417,7 +3417,7 @@ impl ConcurrentState {
             StreamFutureState::Read { done: false } => {
                 src_table.remove_by_index(src_idx)?;
 
-                let dst_table = &mut self.waitable_tables()[dst_instance];
+                let dst_table = &mut self.waitable_tables[dst_instance];
                 dst_table.insert(
                     rep,
                     make_state(dst, StreamFutureState::Read { done: false }),
@@ -3561,14 +3561,14 @@ impl ConcurrentState {
     ) -> Result<u32> {
         let (rep, _) = {
             let rep = self
-                .error_context_tables()
+                .error_context_tables
                 .get_mut(src)
                 .context("error context table index present in (sub)component lookup")?
                 .get_mut_by_index(src_idx)?;
             rep
         };
         let dst = self
-            .error_context_tables()
+            .error_context_tables
             .get_mut(dst)
             .context("error context table index present in (sub)component lookup")?;
 
@@ -3584,7 +3584,7 @@ impl ConcurrentState {
         // as the new component has essentially created a new reference that will
         // be dropped/handled independently
         let global_ref_count = self
-            .global_error_context_ref_counts()
+            .global_error_context_ref_counts
             .get_mut(&TypeComponentGlobalErrorContextTableIndex::from_u32(rep))
             .context("global ref count present for existing (sub)component error context")?;
         global_ref_count.0 += 1;
