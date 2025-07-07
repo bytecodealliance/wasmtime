@@ -74,15 +74,16 @@ use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
 use std::pin::{Pin, pin};
 use std::ptr::{self, NonNull};
+use std::slice;
 use std::sync::Mutex;
 use std::task::{Context, Poll, Waker};
 use std::vec::Vec;
 use table::{Table, TableDebug, TableError, TableId};
 use wasmtime_environ::component::{
-    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
-    RuntimeComponentInstanceIndex, StringEncoding, TypeComponentGlobalErrorContextTableIndex,
-    TypeComponentLocalErrorContextTableIndex, TypeFutureTableIndex, TypeStreamTableIndex,
-    TypeTupleIndex,
+    ExportIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, PREPARE_ASYNC_NO_RESULT,
+    PREPARE_ASYNC_WITH_RESULT, RuntimeComponentInstanceIndex, StringEncoding,
+    TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
+    TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
 };
 use wasmtime_environ::{PrimaryMap, fact};
 
@@ -1800,12 +1801,9 @@ impl Instance {
             let token = StoreToken::new(store);
             move |store: &mut dyn VMStore, instance: Instance| {
                 let mut storage = [MaybeUninit::uninit(); MAX_FLAT_PARAMS];
-                let lower = instance
-                    .concurrent_state_mut(store)
-                    .get_mut(guest_task)?
-                    .lower_params
-                    .take()
-                    .unwrap();
+                let task = instance.concurrent_state_mut(store).get_mut(guest_task)?;
+                let may_enter_after_call = task.call_post_return_automatically;
+                let lower = task.lower_params.take().unwrap();
 
                 lower(store, instance, &mut storage[..param_count])?;
 
@@ -1827,7 +1825,7 @@ impl Instance {
                         .unwrap(),
                     )?;
                     if let Some(mut flags) = flags {
-                        flags.set_may_enter(true);
+                        flags.set_may_enter(may_enter_after_call);
                     }
                 }
 
@@ -1941,10 +1939,10 @@ impl Instance {
                         return Err(anyhow!(crate::Trap::NoAsyncResult));
                     }
                 } else {
-                    // This is a sync-lifted export, so now is when we lift
-                    // the result, call the post-return function, if any,
-                    // and finally notify any current or future waiters that
-                    // the subtask has returned.
+                    // This is a sync-lifted export, so now is when we lift the
+                    // result, optionally call the post-return function, if any,
+                    // and finally notify any current or future waiters that the
+                    // subtask has returned.
 
                     let lift = {
                         let state = instance.concurrent_state_mut(store);
@@ -1963,37 +1961,48 @@ impl Instance {
                         )
                     })?;
 
-                    unsafe { flags.set_needs_post_return(false) }
+                    let post_return_arg = match result_count {
+                        0 => ValRaw::i32(0),
+                        // SAFETY: `result_count` represents the number of
+                        // core Wasm results returned, per `wasmparser`.
+                        1 => unsafe { storage[0].assume_init() },
+                        _ => unreachable!(),
+                    };
 
-                    if let Some(func) = post_return {
-                        let arg = match result_count {
-                            0 => ValRaw::i32(0),
-                            // SAFETY: `result_count` represents the number of
-                            // core Wasm results returned, per `wasmparser`.
-                            1 => unsafe { storage[0].assume_init() },
-                            _ => unreachable!(),
-                        };
+                    if instance
+                        .concurrent_state_mut(store)
+                        .get(guest_task)?
+                        .call_post_return_automatically
+                    {
+                        unsafe { flags.set_needs_post_return(false) }
 
-                        let mut store = token.as_context_mut(store);
+                        if let Some(func) = post_return {
+                            let mut store = token.as_context_mut(store);
 
-                        // SAFETY: `func` is a valid `*mut VMFuncRef` from
-                        // either `wasmtime-cranelift`-generated fused adapter
-                        // code or `component::Options`.  Per `wasmparser`
-                        // post-return signature validation, we know it takes a
-                        // single parameter.
-                        unsafe {
-                            crate::Func::call_unchecked_raw(
-                                &mut store,
-                                func.as_non_null(),
-                                NonNull::new(ptr::slice_from_raw_parts(&arg, 1).cast_mut())
-                                    .unwrap(),
-                            )?;
+                            // SAFETY: `func` is a valid `*mut VMFuncRef` from
+                            // either `wasmtime-cranelift`-generated fused adapter
+                            // code or `component::Options`.  Per `wasmparser`
+                            // post-return signature validation, we know it takes a
+                            // single parameter.
+                            unsafe {
+                                crate::Func::call_unchecked_raw(
+                                    &mut store,
+                                    func.as_non_null(),
+                                    slice::from_ref(&post_return_arg).into(),
+                                )?;
+                            }
                         }
+
+                        unsafe { flags.set_may_enter(true) }
                     }
 
-                    unsafe { flags.set_may_enter(true) }
-
-                    instance.task_complete(store, guest_task, result, Status::Returned)?;
+                    instance.task_complete(
+                        store,
+                        guest_task,
+                        result,
+                        Status::Returned,
+                        post_return_arg,
+                    )?;
                 }
 
                 instance.maybe_pop_call_context(store.store_opaque_mut(), guest_task)?;
@@ -2172,6 +2181,7 @@ impl Instance {
             },
             None,
             callee_instance,
+            true,
         )?;
 
         let guest_task = state.push(new_task)?;
@@ -2203,6 +2213,7 @@ impl Instance {
         function: SendSyncPtr<VMFuncRef>,
         event: Event,
         handle: u32,
+        may_enter_after_call: bool,
     ) -> Result<u32> {
         let mut flags = self.id().get(store.0).instance_flags(callee_instance);
 
@@ -2223,7 +2234,7 @@ impl Instance {
                 function.as_non_null(),
                 params.as_mut_slice().into(),
             )?;
-            flags.set_may_enter(true);
+            flags.set_may_enter(may_enter_after_call);
         }
         Ok(params[0].get_u32())
     }
@@ -2255,6 +2266,7 @@ impl Instance {
         let async_caller = storage.is_none();
         let state = self.concurrent_state_mut(store.0);
         let guest_task = state.guest_task.unwrap();
+        let may_enter_after_call = state.get(guest_task)?.call_post_return_automatically;
         let callee = SendSyncPtr::new(NonNull::new(callee).unwrap());
         let param_count = usize::try_from(param_count).unwrap();
         assert!(param_count <= MAX_FLAT_PARAMS);
@@ -2277,6 +2289,7 @@ impl Instance {
                             callback,
                             event,
                             handle,
+                            may_enter_after_call,
                         )
                     }
                 },
@@ -2703,7 +2716,7 @@ impl Instance {
 
         let result = (lift.lift)(store, self, storage)?;
 
-        self.task_complete(store, guest_task, result, Status::Returned)
+        self.task_complete(store, guest_task, result, Status::Returned, ValRaw::i32(0))
     }
 
     /// Implements the `task.cancel` intrinsic.
@@ -2731,6 +2744,7 @@ impl Instance {
             guest_task,
             Box::new(DummyResult),
             Status::ReturnCancelled,
+            ValRaw::i32(0),
         )
     }
 
@@ -2745,16 +2759,37 @@ impl Instance {
         guest_task: TableId<GuestTask>,
         result: Box<dyn Any + Send + Sync>,
         status: Status,
+        post_return_arg: ValRaw,
     ) -> Result<()> {
-        let (calls, host_table, _, instance) = store
-            .store_opaque_mut()
-            .component_resource_state_with_instance(self);
-        ResourceTables {
-            calls,
-            host_table: Some(host_table),
-            guest: Some(instance.guest_tables()),
+        if self
+            .concurrent_state_mut(store)
+            .get(guest_task)?
+            .call_post_return_automatically
+        {
+            let (calls, host_table, _, instance) = store
+                .store_opaque_mut()
+                .component_resource_state_with_instance(self);
+            ResourceTables {
+                calls,
+                host_table: Some(host_table),
+                guest: Some(instance.guest_tables()),
+            }
+            .exit_call()?;
+        } else {
+            // As of this writing, the only scenario where
+            // `call_post_return_automatically` would be false for a `GuestTask`
+            // is for host-to-guest calls using `[Typed]Func::call_async`, in
+            // which case the `function_index` should be a non-`None` value.
+            let function_index = self
+                .concurrent_state_mut(store)
+                .get(guest_task)?
+                .function_index
+                .unwrap();
+
+            self.id()
+                .get_mut(store)
+                .post_return_arg_set(function_index, post_return_arg);
         }
-        .exit_call()?;
 
         let state = self.concurrent_state_mut(store);
         let task = state.get_mut(guest_task)?;
@@ -3708,6 +3743,11 @@ struct GuestTask {
     /// If present, indicates that the task is currently waiting on the
     /// specified set but may be cancelled and woken immediately.
     wake_on_cancel: Option<TableId<WaitableSet>>,
+    /// Whether to call the post-return function (if any) automatically after
+    /// the task ends.
+    call_post_return_automatically: bool,
+    /// The `ExportIndex` of the guest function being called, if known.
+    function_index: Option<ExportIndex>,
 }
 
 impl GuestTask {
@@ -3718,6 +3758,7 @@ impl GuestTask {
         caller: Caller,
         callback: Option<CallbackFn>,
         component_instance: RuntimeComponentInstanceIndex,
+        call_post_return_automatically: bool,
     ) -> Result<Self> {
         let sync_call_set = state.push(WaitableSet::default())?;
 
@@ -3738,6 +3779,8 @@ impl GuestTask {
             instance: component_instance,
             event: None,
             wake_on_cancel: None,
+            call_post_return_automatically,
+            function_index: None,
         })
     }
 
@@ -4361,6 +4404,7 @@ pub(crate) fn prepare_call<T, R>(
     + 'static,
     handle: Func,
     param_count: usize,
+    call_post_return_automatically: bool,
 ) -> Result<PreparedCall<R>> {
     let (options, _flags, ty, raw_options) = handle.abi_info(store.0);
 
@@ -4377,7 +4421,7 @@ pub(crate) fn prepare_call<T, R>(
 
     let (tx, rx) = oneshot::channel();
 
-    let task = GuestTask::new(
+    let mut task = GuestTask::new(
         state,
         Box::new(for_any_lower(move |store, instance, params| {
             debug_assert!(instance.id() == handle.instance().id());
@@ -4402,17 +4446,25 @@ pub(crate) fn prepare_call<T, R>(
                       event,
                       handle| {
                     let store = token.as_context_mut(store);
-                    // SAFETY: Per the contract of `prepare_call`, the
-                    // callback will remain valid at least as long is this
-                    // task exists.
+                    // SAFETY: Per the contract of `prepare_call`, the callback
+                    // will remain valid at least as long is this task exists.
                     unsafe {
-                        instance.call_callback(store, runtime_instance, callback, event, handle)
+                        instance.call_callback(
+                            store,
+                            runtime_instance,
+                            callback,
+                            event,
+                            handle,
+                            call_post_return_automatically,
+                        )
                     }
                 },
             ) as CallbackFn
         }),
         component_instance,
+        call_post_return_automatically,
     )?;
+    task.function_index = Some(handle.index());
 
     let task = state.push(task)?;
 

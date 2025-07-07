@@ -209,20 +209,24 @@ where
             let ptr = Arc::new(AtomicPtr::new((&raw mut params).cast::<u8>()));
             let _clear = ClearOnDrop(ptr.clone());
 
-            let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
-                // SAFETY: the goal here is to get `Params`, a non-`'static`
-                // value, to live long enough to the lowering of the
-                // parameters. We're guaranteed that `Params` lives in the
-                // future of the outer function (we're in an `async fn`) so it'll
-                // stay alive as long as the future itself. That is distinct,
-                // for example, from the signature of `call_concurrent` below.
-                //
-                // Here a pointer to `Params` is smuggled to this location
-                // through a `AtomicPtr<u8>` to thwart the `'static` check of
-                // rustc and the signature of `prepare_call`.
-                let params = unsafe { ptr.load(Relaxed).cast::<Params>().as_ref().unwrap() };
-                Self::lower_args(cx, ty, dst, params)
-            })?;
+            let prepared = self.prepare_call(
+                store.as_context_mut(),
+                move |cx, ty, dst| {
+                    // SAFETY: the goal here is to get `Params`, a non-`'static`
+                    // value, to live long enough to the lowering of the
+                    // parameters. We're guaranteed that `Params` lives in the
+                    // future of the outer function (we're in an `async fn`) so it'll
+                    // stay alive as long as the future itself. That is distinct,
+                    // for example, from the signature of `call_concurrent` below.
+                    //
+                    // Here a pointer to `Params` is smuggled to this location
+                    // through a `AtomicPtr<u8>` to thwart the `'static` check of
+                    // rustc and the signature of `prepare_call`.
+                    let params = unsafe { ptr.load(Relaxed).cast::<Params>().as_ref().unwrap() };
+                    Self::lower_args(cx, ty, dst, params)
+                },
+                false,
+            )?;
 
             let result = concurrent::queue_call(store.as_context_mut(), prepared)?;
             return self.func.instance.run(store, result).await?;
@@ -240,7 +244,9 @@ where
     /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
-    /// instance.
+    /// instance.  In addition, the runtime will call the `post-return` function
+    /// (if any) automatically when the guest task completes -- no need to
+    /// explicitly call `Func::post_return` afterward.
     ///
     /// Note that the `Future` returned by this method will panic if polled or
     /// `.await`ed outside of the event loop of the component instance this
@@ -270,9 +276,11 @@ where
         );
 
         let result = (|| {
-            let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
-                Self::lower_args(cx, ty, dst, &params)
-            })?;
+            let prepared = self.prepare_call(
+                store.as_context_mut(),
+                move |cx, ty, dst| Self::lower_args(cx, ty, dst, &params),
+                true,
+            )?;
             concurrent::queue_call(store, prepared)
         })();
 
@@ -315,6 +323,7 @@ where
         + Send
         + Sync
         + 'static,
+        call_post_return_automatically: bool,
     ) -> Result<PreparedCall<Return>>
     where
         Return: 'static,
@@ -334,7 +343,11 @@ where
         concurrent::prepare_call(
             store,
             move |func, store, params_out| {
-                func.with_lower_context(store, |cx, ty| lower(cx, ty, params_out))
+                func.with_lower_context(
+                    store,
+                    |cx, ty| lower(cx, ty, params_out),
+                    call_post_return_automatically,
+                )
             },
             move |func, store, results| {
                 let result = if Return::flatten_count() <= max_results {
@@ -368,6 +381,7 @@ where
             },
             self.func,
             param_count,
+            call_post_return_automatically,
         )
     }
 
