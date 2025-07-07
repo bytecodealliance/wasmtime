@@ -2,8 +2,6 @@
 //!
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
-#![cfg_attr(feature = "gc", allow(irrefutable_let_patterns))]
-
 use crate::prelude::*;
 use crate::runtime::vm::stack_switching::VMContObj;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};

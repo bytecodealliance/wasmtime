@@ -14,6 +14,11 @@
 //!
 //! See a brief overview of this module in `sync_std.rs` as well.
 
+#![cfg_attr(
+    all(feature = "std", not(test)),
+    expect(dead_code, reason = "not used, but typechecked")
+)]
+
 use core::cell::UnsafeCell;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};

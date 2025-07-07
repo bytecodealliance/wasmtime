@@ -1,5 +1,3 @@
-#![allow(missing_docs)]
-
 use crate::prelude::*;
 use crate::runtime::vm::memory::LocalMemory;
 use crate::runtime::vm::{VMMemoryDefinition, VMStore, WaitResult};

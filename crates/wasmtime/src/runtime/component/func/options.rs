@@ -49,7 +49,10 @@ pub struct Options {
     async_: bool,
 
     /// The callback for an async-lifted export, if specified.
-    #[cfg_attr(not(feature = "component-model-async"), expect(unused))]
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(unused, reason = "to be used soon")
+    )]
     callback: Option<NonNull<VMFuncRef>>,
 }
 

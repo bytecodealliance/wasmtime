@@ -661,7 +661,7 @@ where
 
 macro_rules! impl_wasm_params {
     ($n:tt $($t:ident)*) => {
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t: WasmTy,)*> WasmParams for ($($t,)*) {
             type ValRawStorage = [ValRaw; $n];
 
@@ -753,11 +753,11 @@ unsafe impl<T: WasmTy> WasmResults for T {
 
 macro_rules! impl_wasm_results {
     ($n:tt $($t:ident)*) => {
-        #[allow(non_snake_case, unused_variables)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t: WasmTy,)*> WasmResults for ($($t,)*) {
-            unsafe fn load(store: &mut AutoAssertNoGc<'_>, abi: &Self::ValRawStorage) -> Self {
+            unsafe fn load(_store: &mut AutoAssertNoGc<'_>, abi: &Self::ValRawStorage) -> Self {
                 let [$($t,)*] = abi;
-                ($($t::load(store, $t),)*)
+                ($($t::load(_store, $t),)*)
             }
         }
     };

@@ -1,4 +1,4 @@
-#![allow(non_camel_case_types)]
+#![expect(non_camel_case_types, reason = "matching C conventions")]
 
 // Flags to either `wasmtime_mmap_{new,remap}` or `wasmtime_mprotect`.
 

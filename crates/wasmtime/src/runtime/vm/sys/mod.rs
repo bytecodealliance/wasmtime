@@ -6,7 +6,10 @@
 //! needed is an extra block below and a new platform should be good to go after
 //! filling out the implementation.
 
-#![allow(clippy::cast_sign_loss)] // platforms too fiddly to worry about this
+#![allow(
+    clippy::cast_sign_loss,
+    reason = "platforms too fiddly to worry about this"
+)]
 
 use crate::runtime::vm::SendSyncPtr;
 use core::ptr::{self, NonNull};

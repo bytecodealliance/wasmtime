@@ -544,29 +544,6 @@ pub enum VMStackState {
     Returned = wasmtime_environ::STACK_STATE_RETURNED_DISCRIMINANT,
 }
 
-/// Universal control effect. This structure encodes return signal, resume
-/// signal, suspension signal, and the handler to suspend to in a single variant
-/// type. This instance is used at runtime. There is a codegen counterpart in
-/// `cranelift/src/stack-switching/control_effect.rs`.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u32)]
-#[allow(dead_code)]
-pub enum ControlEffect {
-    /// Used to signal that a continuation has returned and control switches
-    /// back to the parent.
-    Return = wasmtime_environ::CONTROL_EFFECT_RETURN_DISCRIMINANT,
-    /// Used to signal to a continuation that it is being resumed.
-    Resume = wasmtime_environ::CONTROL_EFFECT_RESUME_DISCRIMINANT,
-    /// Used to signal that a continuation has invoked a `suspend` instruction.
-    Suspend {
-        /// The index of the handler to be used in the parent continuation to
-        /// switch back to.
-        handler_index: u32,
-    } = wasmtime_environ::CONTROL_EFFECT_SUSPEND_DISCRIMINANT,
-    /// Used to signal that a continuation has invoked a `suspend` instruction.
-    Switch = wasmtime_environ::CONTROL_EFFECT_SWITCH_DISCRIMINANT,
-}
-
 #[cfg(test)]
 mod tests {
     use core::mem::{offset_of, size_of};

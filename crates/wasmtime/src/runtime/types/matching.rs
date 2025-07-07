@@ -70,7 +70,6 @@ fn type_reference(
     Err(concrete_type_mismatch(msg, &expected, &actual))
 }
 
-#[cfg_attr(not(feature = "component-model"), allow(dead_code))]
 pub fn entity_ty(engine: &Engine, expected: &EntityType, actual: &EntityType) -> Result<()> {
     match expected {
         EntityType::Memory(expected) => match actual {

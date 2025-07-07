@@ -25,7 +25,7 @@ pub(crate) use futures_and_streams::{
 
 mod futures_and_streams;
 
-#[allow(dead_code)]
+#[expect(dead_code, reason = "to be used soon")]
 pub enum Status {
     Starting = 0,
     Started = 1,

@@ -1458,7 +1458,10 @@ impl Func {
     /// Even if the same underlying function is added to the `StoreData`
     /// multiple times and becomes multiple `wasmtime::Func`s, this hash key
     /// will be consistent across all of these functions.
-    #[allow(dead_code)] // Not used yet, but added for consistency.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Not used yet, but added for consistency")
+    )]
     pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
         self.vm_func_ref(store).as_ptr().addr()
     }
@@ -1775,7 +1778,7 @@ where
 
 macro_rules! impl_wasm_host_results {
     ($n:tt $($t:ident)*) => (
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t),*> WasmRet for ($($t,)*)
         where
             $($t: WasmTy,)*
@@ -1850,7 +1853,7 @@ macro_rules! impl_into_func {
         // Implement for functions without a leading `&Caller` parameter,
         // delegating to the implementation below which does have the leading
         // `Caller` parameter.
-        #[allow(non_snake_case)]
+        #[expect(non_snake_case, reason = "macro-generated code")]
         impl<T, F, $arg, R> IntoFunc<T, $arg, R> for F
         where
             F: Fn($arg) -> R + Send + Sync + 'static,
@@ -1867,7 +1870,7 @@ macro_rules! impl_into_func {
             }
         }
 
-        #[allow(non_snake_case)]
+        #[expect(non_snake_case, reason = "macro-generated code")]
         impl<T, F, $arg, R> IntoFunc<T, (Caller<'_, T>, $arg), R> for F
         where
             F: Fn(Caller<'_, T>, $arg) -> R + Send + Sync + 'static,
@@ -1886,7 +1889,7 @@ macro_rules! impl_into_func {
         // Implement for functions without a leading `&Caller` parameter,
         // delegating to the implementation below which does have the leading
         // `Caller` parameter.
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         impl<T, F, $($args,)* R> IntoFunc<T, ($($args,)*), R> for F
         where
             F: Fn($($args),*) -> R + Send + Sync + 'static,
@@ -1903,7 +1906,7 @@ macro_rules! impl_into_func {
             }
         }
 
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         impl<T, F, $($args,)* R> IntoFunc<T, (Caller<'_, T>, $($args,)*), R> for F
         where
             F: Fn(Caller<'_, T>, $($args),*) -> R + Send + Sync + 'static,
@@ -1944,7 +1947,7 @@ pub unsafe trait WasmTyList {
 
 macro_rules! impl_wasm_ty_list {
     ($num:tt $($args:ident)*) => (
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($args),*> WasmTyList for ($($args,)*)
         where
             $($args: WasmTy,)*
@@ -2229,8 +2232,7 @@ struct HostFuncState<F> {
 
     // NB: We have to keep our `VMSharedTypeIndex` registered in the engine for
     // as long as this function exists.
-    #[allow(dead_code)]
-    ty: RegisteredType,
+    _ty: RegisteredType,
 }
 
 #[doc(hidden)]
@@ -2263,7 +2265,7 @@ impl HostContext {
                 type_index,
                 Box::new(HostFuncState {
                     func,
-                    ty: ty.into_registered_type(),
+                    _ty: ty.into_registered_type(),
                 }),
             )
         };

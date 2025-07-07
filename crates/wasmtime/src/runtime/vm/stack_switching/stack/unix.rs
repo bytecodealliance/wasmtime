@@ -58,8 +58,6 @@
 //! the example above, thus assuming args_capacity = 2) is saved as the `data`
 //! field of the VMContRef's `args` object.
 
-#![allow(unused_macros)]
-
 use core::ptr::NonNull;
 use std::io;
 use std::ops::Range;
@@ -134,7 +132,6 @@ impl VMContinuationStack {
         self.len == 0
     }
 
-    #[allow(clippy::missing_safety_doc)]
     pub unsafe fn from_raw_parts(
         base: *mut u8,
         _guard_size: usize,
@@ -297,7 +294,6 @@ impl Drop for VMContinuationStack {
 }
 
 unsafe extern "C" {
-    #[allow(dead_code)] // only used in inline assembly for some platforms
     fn wasmtime_continuation_start();
 }
 

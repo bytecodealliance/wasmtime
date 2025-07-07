@@ -569,7 +569,7 @@ impl Eq for StreamType {}
 
 /// Represents a component model interface type
 #[derive(Clone, PartialEq, Eq, Debug)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum Type {
     Bool,
     S8,

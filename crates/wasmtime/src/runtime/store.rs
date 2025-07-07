@@ -250,7 +250,10 @@ enum CallHookInner<T: 'static> {
     Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
     #[cfg(all(feature = "async", feature = "call-hook"))]
     Async(Box<dyn CallHookHandler<T> + Send + Sync>),
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "forcing, regardless of cfg, the type param to be used"
+    )]
     ForceTypeParameterToBeUsed {
         uninhabited: Uninhabited,
         _marker: marker::PhantomData<T>,
@@ -1103,7 +1106,6 @@ impl<T> StoreInner<T> {
 
         // Temporarily take the configured behavior to avoid mutably borrowing
         // multiple times.
-        #[cfg_attr(not(feature = "call-hook"), allow(unreachable_patterns))]
         if let Some(mut call_hook) = self.call_hook.take() {
             let result = self.invoke_call_hook(&mut call_hook, s);
             self.call_hook = Some(call_hook);
@@ -1358,7 +1360,7 @@ impl StoreOpaque {
         }
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms
+    #[cfg(all(feature = "std", any(unix, windows)))]
     pub fn set_signal_handler(&mut self, handler: Option<SignalHandler>) {
         self.signal_handler = handler;
     }
@@ -1411,6 +1413,7 @@ impl StoreOpaque {
                 )),
                 imports: vm::Imports::default(),
                 store: StorePtr::new(vmstore),
+                #[cfg(feature = "wmemcheck")]
                 wmemcheck: false,
                 pkey,
                 tunables: engine.tunables(),
@@ -2035,6 +2038,7 @@ at https://bytecodealliance.org/security.
             runtime_info,
             imports,
             store: StorePtr::new(self.traitobj()),
+            #[cfg(feature = "wmemcheck")]
             wmemcheck: self.engine().config().wmemcheck,
             pkey: self.get_pkey(),
             tunables: self.engine().tunables(),
