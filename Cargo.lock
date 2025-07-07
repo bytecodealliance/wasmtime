@@ -8,7 +8,16 @@ version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5fb1d8e4442bd405fdfd1dacb42792696b0cf9cb15882e5d097b742a676d375"
 dependencies = [
- "gimli",
+ "gimli 0.31.1",
+]
+
+[[package]]
+name = "addr2line"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9acbfca36652500c911ddb767ed433e3ed99b032b5d935be73c6923662db1d43"
+dependencies = [
+ "gimli 0.32.0",
 ]
 
 [[package]]
@@ -172,11 +181,11 @@ version = "0.3.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d82cb332cdfaed17ae235a638438ac4d4839913cc2af585c3c6746e8f8bee1a"
 dependencies = [
- "addr2line",
+ "addr2line 0.24.1",
  "cfg-if",
  "libc",
  "miniz_oxide 0.8.5",
- "object",
+ "object 0.36.5",
  "rustc-demangle",
  "windows-targets",
 ]
@@ -732,7 +741,7 @@ dependencies = [
  "cranelift-isle",
  "criterion",
  "env_logger 0.11.5",
- "gimli",
+ "gimli 0.32.0",
  "hashbrown 0.15.2",
  "log",
  "postcard",
@@ -796,7 +805,7 @@ dependencies = [
  "cranelift-reader",
  "file-per-thread-logger",
  "filecheck",
- "gimli",
+ "gimli 0.32.0",
  "log",
  "num_cpus",
  "pulley-interpreter",
@@ -912,7 +921,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "log",
- "object",
+ "object 0.37.1",
  "target-lexicon",
 ]
 
@@ -1582,6 +1591,17 @@ name = "gimli"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
+dependencies = [
+ "fallible-iterator",
+ "indexmap 2.7.0",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "gimli"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93563d740bc9ef04104f9ed6f86f1e3275c2cdafb95664e26584b9ca807a8ffe"
 dependencies = [
  "fallible-iterator",
  "indexmap 2.7.0",
@@ -2305,7 +2325,7 @@ version = "36.0.0"
 dependencies = [
  "anyhow",
  "libloading",
- "object",
+ "object 0.37.1",
  "wasmtime",
 ]
 
@@ -2463,6 +2483,15 @@ name = "object"
 version = "0.36.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aedf0a2d09c573ed1d8d85b30c119153926a2b36dce0ab28322c09a117a4683e"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "object"
+version = "0.37.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03fd943161069e1768b4b3d050890ba48730e590f57e56d4aa04e7e090e61b4a"
 dependencies = [
  "crc32fast",
  "hashbrown 0.15.2",
@@ -4043,7 +4072,7 @@ version = "36.0.0"
 dependencies = [
  "bitflags 2.6.0",
  "byte-array-literals",
- "object",
+ "object 0.37.1",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "wasm-encoder",
  "wit-bindgen-rust-macro",
@@ -4257,7 +4286,7 @@ dependencies = [
 name = "wasmtime"
 version = "36.0.0"
 dependencies = [
- "addr2line",
+ "addr2line 0.25.0",
  "anyhow",
  "async-trait",
  "bitflags 2.6.0",
@@ -4269,7 +4298,7 @@ dependencies = [
  "env_logger 0.11.5",
  "futures",
  "fxprof-processed-profile",
- "gimli",
+ "gimli 0.32.0",
  "hashbrown 0.15.2",
  "indexmap 2.7.0",
  "ittapi",
@@ -4278,7 +4307,7 @@ dependencies = [
  "log",
  "mach2",
  "memfd",
- "object",
+ "object 0.37.1",
  "once_cell",
  "postcard",
  "proptest",
@@ -4379,7 +4408,7 @@ dependencies = [
  "env_logger 0.11.5",
  "filecheck",
  "futures",
- "gimli",
+ "gimli 0.32.0",
  "http",
  "http-body-util",
  "hyper",
@@ -4389,7 +4418,7 @@ dependencies = [
  "log",
  "memchr",
  "num_cpus",
- "object",
+ "object 0.37.1",
  "pulley-interpreter",
  "rayon",
  "rustix 1.0.3",
@@ -4457,10 +4486,10 @@ dependencies = [
  "cranelift-bitset",
  "cranelift-entity",
  "env_logger 0.11.5",
- "gimli",
+ "gimli 0.32.0",
  "indexmap 2.7.0",
  "log",
- "object",
+ "object 0.37.1",
  "postcard",
  "rustc-demangle",
  "semver",
@@ -4620,10 +4649,10 @@ dependencies = [
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-native",
- "gimli",
+ "gimli 0.32.0",
  "itertools 0.14.0",
  "log",
- "object",
+ "object 0.37.1",
  "pulley-interpreter",
  "smallvec",
  "target-lexicon",
@@ -4669,7 +4698,7 @@ name = "wasmtime-internal-jit-debug"
 version = "36.0.0"
 dependencies = [
  "cc",
- "object",
+ "object 0.37.1",
  "rustix 1.0.3",
  "wasmtime-internal-versioned-export-macros",
 ]
@@ -4703,7 +4732,7 @@ dependencies = [
  "cfg-if",
  "cranelift-codegen",
  "log",
- "object",
+ "object 0.37.1",
 ]
 
 [[package]]
@@ -4721,8 +4750,8 @@ version = "36.0.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
- "gimli",
- "object",
+ "gimli 0.32.0",
+ "object 0.37.1",
  "target-lexicon",
  "wasmparser 0.235.0",
  "wasmtime-environ",
@@ -4958,7 +4987,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1eda4293f626c99021bb3a6fbe4fbbe90c0e31a5ace89b5f620af8925de72e13"
 dependencies = [
  "bumpalo",
- "gimli",
+ "gimli 0.31.1",
  "leb128fmt",
  "memchr",
  "unicode-width 0.2.0",
@@ -5096,7 +5125,7 @@ dependencies = [
  "anyhow",
  "cranelift-assembler-x64",
  "cranelift-codegen",
- "gimli",
+ "gimli 0.32.0",
  "regalloc2",
  "smallvec",
  "target-lexicon",

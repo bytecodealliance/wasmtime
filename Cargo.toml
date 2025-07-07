@@ -345,9 +345,9 @@ wasm-compose = "0.235.0"
 arbitrary = "1.4.0"
 mutatis = "0.3.2"
 cc = "1.0"
-object = { version = "0.36.5", default-features = false, features = ['read_core', 'elf'] }
-gimli = { version = "0.31.0", default-features = false, features = ['read'] }
-addr2line = { version = "0.24.1", default-features = false }
+object = { version = "0.37.0", default-features = false, features = ['read_core', 'elf'] }
+gimli = { version = "0.32.0", default-features = false, features = ['read'] }
+addr2line = { version = "0.25.0", default-features = false }
 anyhow = { version = "1.0.93", default-features = false }
 windows-sys = "0.59.0"
 env_logger = "0.11.5"
