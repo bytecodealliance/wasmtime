@@ -1,13 +1,10 @@
-use {
-    bytes::{Bytes, BytesMut},
-    std::{
-        any::TypeId,
-        io::Cursor,
-        mem::{self, MaybeUninit},
-        ptr, slice,
-        vec::Vec,
-    },
-};
+use bytes::{Bytes, BytesMut};
+use std::any::TypeId;
+use std::io::Cursor;
+use std::mem::{self, MaybeUninit};
+use std::ptr;
+use std::slice;
+use std::vec::Vec;
 
 /// Trait representing a buffer from which items may be moved (i.e. ownership
 /// transferred).

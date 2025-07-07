@@ -6,16 +6,14 @@
 // `Resource<T>`.  I've also added a `Table::delete_any` function, useful for
 // implementing `subtask.drop`.
 
-use std::{
-    any::Any,
-    boxed::Box,
-    cmp::Ordering,
-    collections::BTreeSet,
-    fmt,
-    hash::{Hash, Hasher},
-    marker::PhantomData,
-    vec::{self, Vec},
-};
+use std::any::Any;
+use std::boxed::Box;
+use std::cmp::Ordering;
+use std::collections::BTreeSet;
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
+use std::vec::{self, Vec};
 
 pub struct TableId<T> {
     rep: u32,

@@ -2,11 +2,9 @@
 // deduplicated as part of
 // https://github.com/bytecodealliance/wasmtime/issues/11189.
 
-use {
-    alloc::vec::Vec,
-    anyhow::{Result, bail},
-    core::mem,
-};
+use alloc::vec::Vec;
+use anyhow::{Result, bail};
+use core::mem;
 
 /// The maximum handle value is specified in
 /// <https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md>
