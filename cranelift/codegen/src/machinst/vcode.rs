@@ -215,9 +215,6 @@ pub struct EmitResult {
     /// bb-starts. Computed only if `machine_code_cfg_info` is enabled.
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
 
-    /// Final length of function body.
-    pub func_body_len: CodeOffset,
-
     /// The pretty-printed disassembly, if any. This uses the same
     /// pretty-printing for MachInsts as the pre-regalloc VCode Debug
     /// implementation, but additionally includes the prologue and
@@ -1110,7 +1107,6 @@ impl<I: VCodeInst> VCode<I> {
             buffer: buffer.finish(&self.constants, ctrl_plane),
             bb_offsets,
             bb_edges,
-            func_body_len,
             disasm: if want_disasm { Some(disasm) } else { None },
             sized_stackslot_offsets: self.abi.sized_stackslot_offsets().clone(),
             dynamic_stackslot_offsets: self.abi.dynamic_stackslot_offsets().clone(),
