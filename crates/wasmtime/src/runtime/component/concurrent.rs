@@ -1301,8 +1301,7 @@ impl Instance {
         let token = StoreToken::new(store.as_context_mut());
         async move {
             let mut accessor = Accessor::new(token, self);
-            let mut future = pin!(fun(&mut accessor));
-            future::poll_fn(move |cx| self.poll_then_spawn(cx, future.as_mut())).await
+            fun(&mut accessor).await
         }
     }
 
@@ -1342,11 +1341,8 @@ impl Instance {
         // Create an "abortable future" here where internally the future will
         // hook calls to poll and possibly spawn more background tasks on each
         // iteration.
-        let (handle, future) = AbortHandle::run(async move {
-            let mut future = pin!(task.run(&mut accessor));
-            let result = future::poll_fn(|cx| self.poll_then_spawn(cx, future.as_mut())).await;
-            HostTaskOutput::Result(result)
-        });
+        let (handle, future) =
+            AbortHandle::run(async move { HostTaskOutput::Result(task.run(&mut accessor).await) });
         self.concurrent_state_mut(store.0)
             .push_future(Box::pin(async move {
                 future.await.unwrap_or(HostTaskOutput::Result(Ok(())))
@@ -2425,8 +2421,7 @@ impl Instance {
         let token = StoreToken::new(store);
         async move {
             let mut accessor = Accessor::new(token, self);
-            let mut future = pin!(closure(&mut accessor));
-            future::poll_fn(move |cx| self.poll_then_spawn(cx, future.as_mut())).await
+            closure(&mut accessor).await
         }
     }
 
@@ -3097,39 +3092,6 @@ impl Instance {
         let reset = Reset(store, prev);
 
         tls::set(reset.0, f)
-    }
-
-    /// Poll the specified future and then handles any spawned tasks by spawning
-    /// them onto this instance.
-    ///
-    /// This will use `cx` to poll the `future` specified. Once that operation
-    /// is complete then the store's list of spawned tasks will be scraped and
-    /// placed onto this instance, if any are present.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this is called outside of a `self.set_tls(...)` block.
-    fn poll_then_spawn<F: Future + Send + ?Sized>(
-        &self,
-        cx: &mut Context,
-        future: Pin<&mut F>,
-    ) -> Poll<F::Output> {
-        let result = future.poll(cx);
-
-        tls::get(|store| {
-            let spawned_tasks = mem::take(
-                &mut store
-                    .store_opaque_mut()
-                    .concurrent_async_state_mut()
-                    .spawned_tasks,
-            );
-            let state = self.concurrent_state_mut(store);
-            for spawned in spawned_tasks {
-                state.push_future(spawned);
-            }
-        });
-
-        result
     }
 
     /// Convenience function to reduce boilerplate.
@@ -4094,10 +4056,6 @@ struct DummyResult;
 /// Represents the state of a currently executing fiber which has been resumed
 /// via `self::poll_fn`.
 pub(crate) struct AsyncState {
-    /// List of spawned tasks built up during a polling operation. This is
-    /// drained after the poll in `poll_with_state`.
-    spawned_tasks: Vec<HostTaskFuture>,
-
     /// The current instance being polled, if any, which is used to perform
     /// checks to ensure that futures are always polled within the correct
     /// instance.
@@ -4107,14 +4065,10 @@ pub(crate) struct AsyncState {
 impl Default for AsyncState {
     fn default() -> Self {
         Self {
-            spawned_tasks: Vec::new(),
             current_instance: None,
         }
     }
 }
-
-unsafe impl Send for AsyncState {}
-unsafe impl Sync for AsyncState {}
 
 /// Represents the Component Model Async state of a (sub-)component instance.
 #[derive(Default)]
