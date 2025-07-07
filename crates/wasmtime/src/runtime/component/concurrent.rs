@@ -2888,7 +2888,7 @@ impl Instance {
 
     /// Helper function for the `waitable-set.wait`, `waitable-set.poll`, and
     /// `yield` intrinsics.
-    pub(crate) fn waitable_check(
+    fn waitable_check(
         self,
         store: &mut dyn VMStore,
         async_: bool,
@@ -4400,7 +4400,7 @@ fn unpack_callback_code(code: u32) -> (u32, u32) {
 /// Helper struct for packaging parameters to be passed to
 /// `ComponentInstance::waitable_check` for calls to `waitable-set.wait` or
 /// `waitable-set.poll`.
-pub(crate) struct WaitableCheckParams {
+struct WaitableCheckParams {
     set: TableId<WaitableSet>,
     memory: *mut VMMemoryDefinition,
     payload: u32,
@@ -4408,7 +4408,7 @@ pub(crate) struct WaitableCheckParams {
 }
 
 /// Helper enum for passing parameters to `ComponentInstance::waitable_check`.
-pub(crate) enum WaitableCheck {
+enum WaitableCheck {
     Wait(WaitableCheckParams),
     Poll(WaitableCheckParams),
     Yield,
