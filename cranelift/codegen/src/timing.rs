@@ -232,7 +232,7 @@ mod enabled {
     impl Profiler for DefaultProfiler {
         fn start_pass(&self, pass: Pass) -> Box<dyn Any> {
             let prev = CURRENT_PASS.with(|p| p.replace(pass));
-            log::debug!("timing: Starting {}, (during {})", pass, prev);
+            log::debug!("timing: Starting {pass}, (during {prev})");
             Box::new(DefaultTimingToken {
                 start: Instant::now(),
                 pass,

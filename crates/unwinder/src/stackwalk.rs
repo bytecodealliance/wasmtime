@@ -102,9 +102,9 @@ pub unsafe fn visit_frames<R>(
     mut f: impl FnMut(Frame) -> ControlFlow<R>,
 ) -> ControlFlow<R> {
     log::trace!("=== Tracing through contiguous sequence of Wasm frames ===");
-    log::trace!("trampoline_fp = 0x{:016x}", trampoline_fp);
-    log::trace!("   initial pc = 0x{:016x}", pc);
-    log::trace!("   initial fp = 0x{:016x}", fp);
+    log::trace!("trampoline_fp = 0x{trampoline_fp:016x}");
+    log::trace!("   initial pc = 0x{pc:016x}");
+    log::trace!("   initial fp = 0x{fp:016x}");
 
     // Safety requirements documented above.
     assert_ne!(pc, 0);

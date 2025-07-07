@@ -166,7 +166,7 @@ impl ConstExprEvaluator {
         context: &mut ConstEvalContext,
         expr: &ConstExpr,
     ) -> Result<ValRaw> {
-        log::trace!("evaluating const expr: {:?}", expr);
+        log::trace!("evaluating const expr: {expr:?}");
 
         self.stack.clear();
 

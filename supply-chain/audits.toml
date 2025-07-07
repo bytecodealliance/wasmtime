@@ -2470,6 +2470,12 @@ criteria = "safe-to-deploy"
 delta = "0.4.20 -> 0.4.22"
 notes = "Mostly updates around the key-value implementation of this crate, but nothing out of place."
 
+[[audits.log]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.22 -> 0.4.27"
+notes = "Lots of minor updates to macros and such, nothing touching `unsafe`"
+
 [[audits.mach2]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"

@@ -386,7 +386,7 @@ impl DrcHeap {
                 continue;
             }
 
-            log::trace!("Found GC reference on the stack: {:#p}", gc_ref);
+            log::trace!("Found GC reference on the stack: {gc_ref:#p}");
 
             debug_assert!(
                 over_approx_set.contains(&gc_ref),

@@ -163,7 +163,7 @@ where
                 let data: &(P, R) = cx.data().downcast_ref().unwrap();
                 let (expected_params, result) = data;
                 assert_eq!(params, *expected_params);
-                log::trace!("returning result {:?}", result);
+                log::trace!("returning result {result:?}");
                 Ok(result.clone())
             },
         )
@@ -180,7 +180,7 @@ where
         *store.data_mut() = Box::new((params.clone(), result.clone()));
         log::trace!("passing in parameters {params:?}");
         let actual = func.call(&mut store, params).unwrap();
-        log::trace!("got result {:?}", actual);
+        log::trace!("got result {actual:?}");
         assert_eq!(actual, result);
         func.post_return(&mut store).unwrap();
     }

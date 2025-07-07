@@ -346,7 +346,7 @@ pub fn cont_new(
     csi.state = VMStackState::Fresh;
     csi.limits = limits;
 
-    log::trace!("Created contref @ {:p}", contref);
+    log::trace!("Created contref @ {contref:p}");
     Ok(contref)
 }
 

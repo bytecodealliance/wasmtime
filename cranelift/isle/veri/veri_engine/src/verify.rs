@@ -112,7 +112,7 @@ pub fn verify_rules_for_term(
             if !names.contains(name) {
                 continue;
             } else {
-                log::debug!("Verifying rule: {}", name);
+                log::debug!("Verifying rule: {name}");
             }
         }
         let ctx = Context::new(typesols);
@@ -121,7 +121,7 @@ pub fn verify_rules_for_term(
         }
         let rule_sem = &ctx.typesols[&rule.id];
         log::debug!("Term: {}", config.term);
-        log::debug!("Type instantiation: {}", types);
+        log::debug!("Type instantiation: {types}");
         let result = run_solver(rule_sem, rule, termenv, typeenv, concrete, config, &types);
         rules_checked += 1;
         if result != VerificationResult::Success {
