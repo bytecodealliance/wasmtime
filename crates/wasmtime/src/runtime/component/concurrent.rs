@@ -3233,13 +3233,11 @@ impl Instance {
 
         impl Drop for Reset<'_> {
             fn drop(&mut self) {
-                unsafe {
-                    (*self.0.concurrent_async_state()).current_instance = self.1;
-                }
+                self.0.concurrent_async_state_mut().current_instance = self.1;
             }
         }
         let prev = mem::replace(
-            unsafe { &mut (*store.concurrent_async_state()).current_instance },
+            &mut store.concurrent_async_state_mut().current_instance,
             Some(self.id().instance()),
         );
         let reset = Reset(store, prev);
@@ -3265,9 +3263,12 @@ impl Instance {
         let result = future.poll(cx);
 
         tls::get(|store| {
-            let spawned_tasks = mem::take(unsafe {
-                &mut (*store.store_opaque_mut().concurrent_async_state()).spawned_tasks
-            });
+            let spawned_tasks = mem::take(
+                &mut store
+                    .store_opaque_mut()
+                    .concurrent_async_state_mut()
+                    .spawned_tasks,
+            );
             let state = self.concurrent_state_mut(store);
             for spawned in spawned_tasks {
                 state.push_future(spawned);
@@ -4471,7 +4472,7 @@ fn checked<F: Future + Send + 'static>(
             tls::try_get(|store| {
                 let matched = match store {
                     tls::TryGet::Some(store) => {
-                        let a = unsafe { (*store.concurrent_async_state()).current_instance };
+                        let a = store.concurrent_async_state_mut().current_instance;
                         a == Some(instance.id().instance())
                     }
                     tls::TryGet::Taken | tls::TryGet::None => false,
