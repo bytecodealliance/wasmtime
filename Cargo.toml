@@ -349,7 +349,7 @@ object = { version = "0.36.5", default-features = false, features = ['read_core'
 gimli = { version = "0.31.0", default-features = false, features = ['read'] }
 addr2line = { version = "0.24.1", default-features = false }
 anyhow = { version = "1.0.93", default-features = false }
-windows-sys = "0.59.0"
+windows-sys = "0.60.0"
 env_logger = "0.11.5"
 log = { version = "0.4.8", default-features = false }
 clap = { version = "4.5.17", default-features = false, features = ["std", "derive"] }

@@ -239,13 +239,7 @@ impl WorkerThread {
         // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority
         // https://docs.microsoft.com/en-us/windows/win32/procthread/scheduling-priorities
 
-        if unsafe {
-            SetThreadPriority(
-                GetCurrentThread(),
-                THREAD_MODE_BACKGROUND_BEGIN.try_into().unwrap(),
-            )
-        } == 0
-        {
+        if unsafe { SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN) } == 0 {
             warn!(
                 "Failed to lower worker thread priority. It might affect application performance."
             );
