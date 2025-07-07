@@ -44,13 +44,6 @@ pub struct Options {
     ///
     /// This defaults to utf-8 but can be changed if necessary.
     string_encoding: StringEncoding,
-
-    /// Whether or not this the async option was set when lowering.
-    async_: bool,
-
-    /// The callback for an async-lifted export, if specified.
-    #[cfg_attr(not(feature = "component-model-async"), expect(unused))]
-    callback: Option<NonNull<VMFuncRef>>,
 }
 
 // The `Options` structure stores raw pointers but they're never used unless a
@@ -74,16 +67,12 @@ impl Options {
         memory: Option<NonNull<VMMemoryDefinition>>,
         realloc: Option<NonNull<VMFuncRef>>,
         string_encoding: StringEncoding,
-        async_: bool,
-        callback: Option<NonNull<VMFuncRef>>,
     ) -> Options {
         Options {
             store_id,
             memory,
             realloc,
             string_encoding,
-            async_,
-            callback,
         }
     }
 
@@ -170,20 +159,6 @@ impl Options {
     /// Returns the id of the store that this `Options` is connected to.
     pub fn store_id(&self) -> StoreId {
         self.store_id
-    }
-
-    /// Returns whether this lifting or lowering uses the async ABI.
-    pub fn async_(&self) -> bool {
-        self.async_
-    }
-
-    #[cfg(feature = "component-model-async")]
-    #[expect(
-        dead_code,
-        reason = "won't be used until `component-model-async` is fully implemented"
-    )]
-    pub(crate) fn callback(&self) -> Option<NonNull<VMFuncRef>> {
-        self.callback
     }
 }
 

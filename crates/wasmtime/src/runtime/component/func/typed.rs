@@ -17,10 +17,6 @@ use wasmtime_environ::component::{
 };
 
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, PreparedCall};
-#[cfg(feature = "component-model-async")]
-use core::future::Future;
-#[cfg(feature = "component-model-async")]
 use core::pin::Pin;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
@@ -180,47 +176,12 @@ where
         &self,
         mut store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Result<Return>
-    where
-        Return: 'static,
-    {
+    ) -> Result<Return> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "cannot use `call_async` when async support is not enabled on the config"
         );
-
-        // FIXME: this'll get updated in #11127 but for now it's just showing
-        // that this can compile.
-        #[cfg(feature = "component-model-async")]
-        if false {
-            use crate::runtime::vm::SendSyncPtr;
-            use core::ptr::NonNull;
-
-            let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
-            let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
-                // SAFETY: the goal here is to get `Params`, a non-`'static`
-                // value, to live long enough to the lowering of the
-                // parameters. We're guaranteed that `Params` lives in the
-                // future of the outer function (we're in an `async fn`) so it'll
-                // stay alive as long as the future itself. That is distinct,
-                // for example, from the signature of `call_concurrent` below.
-                //
-                // Here a pointer to `Params` is smuggled to this location
-                // through a `SendSyncPtr<u8>` to thwart the `'static` check of
-                // rustc and the signature of `prepare_call`.
-                let params = unsafe { ptr.cast::<Params>().as_ref() };
-                Self::lower_args(cx, ty, dst, params)
-            })?;
-
-            // TODO: need to place a dtor on the stack referencing the store
-            // which removes `prepared.task` from the store to ensure that the
-            // future is for sure 100% gone when this stack frame goes away.
-
-            let result = concurrent::queue_call(store.as_context_mut(), prepared)?;
-            return self.func.instance.run(store, result).await?;
-        }
-
         store
             .on_fiber(|store| self.call_impl(store, params))
             .await?
@@ -238,137 +199,22 @@ where
     /// function belongs to; use `Instance::run`, `Instance::run_with`, or
     /// `Instance::spawn` to poll it from within the event loop.  See
     /// [`Instance::run`] for examples.
-    //
-    // FIXME: this function should return `impl Future` but that forces
-    // capturing all type parameters in scope at this time. The future
-    // intentionally does not close over `store` but returning `impl Future`
-    // implicitly does so. In a future version of Rust maybe this limitation
-    // will be lifted? Maybe rust-lang/rust#130043. Unsure.
     #[cfg(feature = "component-model-async")]
     pub fn call_concurrent(
         self,
-        mut store: impl AsContextMut<Data: Send>,
+        store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send>>
+    ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + 'static>>
     where
         Params: 'static,
         Return: 'static,
     {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_concurrent` when async support is not enabled on the config"
-        );
-
-        let result = (|| {
-            let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
-                Self::lower_args(cx, ty, dst, &params)
-            })?;
-            concurrent::queue_call(store, prepared)
-        })();
-
-        Box::pin(async move { result?.await })
-    }
-
-    fn lower_args<T>(
-        cx: &mut LowerContext<T>,
-        ty: InterfaceType,
-        dst: &mut [MaybeUninit<ValRaw>],
-        params: &Params,
-    ) -> Result<()> {
-        use crate::component::storage::slice_to_storage_mut;
-
-        if Params::flatten_count() <= MAX_FLAT_PARAMS {
-            // SAFETY: the safety of `slice_to_storage_mut` relies on
-            // `Params::Lower` being represented by a sequence of
-            // `ValRaw`, and that's a guarantee upheld by the `Lower`
-            // trait itself.
-            let dst: &mut MaybeUninit<Params::Lower> = unsafe { slice_to_storage_mut(dst) };
-            Self::lower_stack_args(cx, &params, ty, dst)
-        } else {
-            Self::lower_heap_args(cx, &params, ty, &mut dst[0])
-        }
-    }
-
-    /// Calls `concurrent::prepare_call` with monomorphized functions for
-    /// lowering the parameters and lifting the result according to the number
-    /// of core Wasm parameters and results in the signature of the function to
-    /// be called.
-    #[cfg(feature = "component-model-async")]
-    fn prepare_call<T>(
-        self,
-        store: StoreContextMut<'_, T>,
-        lower: impl FnOnce(
-            &mut LowerContext<T>,
-            InterfaceType,
-            &mut [MaybeUninit<ValRaw>],
-        ) -> Result<()>
-        + Send
-        + Sync
-        + 'static,
-    ) -> Result<PreparedCall<Return>>
-    where
-        Return: 'static,
-    {
-        use crate::component::storage::slice_to_storage;
-
-        let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
-            Params::flatten_count()
-        } else {
-            1
-        };
-        let max_results = if self.func.abi_async(store.0) {
-            MAX_FLAT_PARAMS
-        } else {
-            MAX_FLAT_RESULTS
-        };
-        concurrent::prepare_call(
-            store,
-            move |func, store, params_out| {
-                func.with_lower_context(store, |cx, ty| lower(cx, ty, params_out))
-            },
-            move |func, store, results| {
-                let result = if Return::flatten_count() <= max_results {
-                    func.with_lift_context(store, |cx, ty| {
-                        // SAFETY: Per the safety requiments documented for the
-                        // `ComponentType` trait, `Return::Lower` must be
-                        // compatible at the binary level with a `[ValRaw; N]`,
-                        // where `N` is `mem::size_of::<Return::Lower>() /
-                        // mem::size_of::<ValRaw>()`.  And since this function
-                        // is only used when `Return::flatten_count() <=
-                        // MAX_FLAT_RESULTS` and `MAX_FLAT_RESULTS == 1`, `N`
-                        // can only either be 0 or 1.
-                        //
-                        // See `ComponentInstance::exit_call` for where we use
-                        // the result count passed from
-                        // `wasmtime_environ::fact::trampoline`-generated code
-                        // to ensure the slice has the correct length, and also
-                        // `concurrent::start_call` for where we conservatively
-                        // use a slice length of 1 unconditionally.  Also note
-                        // that, as of this writing `slice_to_storage`
-                        // double-checks the slice length is sufficient.
-                        let results: &Return::Lower = unsafe { slice_to_storage(results) };
-                        Self::lift_stack_result(cx, ty, results)
-                    })?
-                } else {
-                    func.with_lift_context(store, |cx, ty| {
-                        Self::lift_heap_result(cx, ty, &results[0])
-                    })?
-                };
-                Ok(Box::new(result))
-            },
-            self.func,
-            param_count,
-        )
+        let _ = (self, store, params);
+        todo!()
     }
 
     fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
-        let store = store.as_context_mut();
-
-        if self.func.abi_async(store.0) {
-            bail!("must enable the `component-model-async` feature to call async-lifted exports")
-        }
-
+        let store = &mut store.as_context_mut();
         // Note that this is in theory simpler than it might read at this time.
         // Here we're doing a runtime dispatch on the `flatten_count` for the
         // params/results to see whether they're inbounds. This creates 4 cases
@@ -379,42 +225,35 @@ where
         // space reserved for the params/results is always of the appropriate
         // size (as the params/results needed differ depending on the "flatten"
         // count)
-        //
-        // SAFETY: the safety of these invocations of `call_raw` depends on the
-        // correctness of the ascription of the `LowerParams` and `LowerReturn`
-        // types on the `call_raw` function. That's upheld here through the
-        // safety requirements of `Lift` and `Lower` on `Params` and `Return` in
-        // combination with checking the various possible branches here and
-        // dispatching to appropriately typed functions.
-        unsafe {
-            // This type is used as `LowerParams` for `call_raw` which is either
-            // `Params::Lower` or `ValRaw` representing it's either on the stack
-            // or it's on the heap. This allocates 1 extra `ValRaw` on the stack
-            // if `Params` is empty and `Return` is also empty, but that's a
-            // reasonable enough price to pay for now given the current code
-            // organization.
-            #[derive(Copy, Clone)]
-            union Union<T: Copy, U: Copy> {
-                _a: T,
-                _b: U,
-            }
-
+        if Params::flatten_count() <= MAX_FLAT_PARAMS {
             if Return::flatten_count() <= MAX_FLAT_RESULTS {
                 self.func.call_raw(
                     store,
-                    |cx, ty, dst: &mut MaybeUninit<Union<Params::Lower, ValRaw>>| {
-                        let dst = storage_as_slice_mut(dst);
-                        Self::lower_args(cx, ty, dst, &params)
-                    },
+                    &params,
+                    Self::lower_stack_args,
                     Self::lift_stack_result,
                 )
             } else {
                 self.func.call_raw(
                     store,
-                    |cx, ty, dst: &mut MaybeUninit<Union<Params::Lower, ValRaw>>| {
-                        let dst = storage_as_slice_mut(dst);
-                        Self::lower_args(cx, ty, dst, &params)
-                    },
+                    &params,
+                    Self::lower_stack_args,
+                    Self::lift_heap_result,
+                )
+            }
+        } else {
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                self.func.call_raw(
+                    store,
+                    &params,
+                    Self::lower_heap_args,
+                    Self::lift_stack_result,
+                )
+            } else {
+                self.func.call_raw(
+                    store,
+                    &params,
+                    Self::lower_heap_args,
                     Self::lift_heap_result,
                 )
             }
@@ -450,6 +289,8 @@ where
         ty: InterfaceType,
         dst: &mut MaybeUninit<ValRaw>,
     ) -> Result<()> {
+        assert!(Params::flatten_count() > MAX_FLAT_PARAMS);
+
         // Memory must exist via validation if the arguments are stored on the
         // heap, so we can create a `MemoryMut` at this point. Afterwards
         // `realloc` is used to allocate space for all the arguments and then
@@ -484,6 +325,7 @@ where
         ty: InterfaceType,
         dst: &Return::Lower,
     ) -> Result<Return> {
+        assert!(Return::flatten_count() <= MAX_FLAT_RESULTS);
         Return::linear_lift_from_flat(cx, ty, dst)
     }
 
@@ -850,6 +692,10 @@ pub unsafe trait Lift: Sized + ComponentType {
     ) -> Result<Self>;
 
     /// Converts `list` into a `Vec<T>`, used in `Lift for Vec<T>`.
+    ///
+    /// This is primarily here to get overridden for implementations of integers
+    /// which can avoid some extra fluff and use a pattern that's more easily
+    /// optimizable by LLVM.
     #[doc(hidden)]
     fn linear_lift_list_from_memory(
         cx: &mut LiftContext<'_>,
@@ -858,29 +704,9 @@ pub unsafe trait Lift: Sized + ComponentType {
     where
         Self: Sized,
     {
-        let mut dst = Vec::with_capacity(list.len);
-        Self::linear_lift_into_from_memory(cx, list, &mut dst)?;
-        Ok(dst)
-    }
-
-    /// Load no more than `max_count` items from `list` into `dst`.
-    ///
-    /// This is primarily here to get overridden for implementations of integers
-    /// which can avoid some extra fluff and use a pattern that's more easily
-    /// optimizable by LLVM.
-    #[doc(hidden)]
-    fn linear_lift_into_from_memory(
-        cx: &mut LiftContext<'_>,
-        list: &WasmList<Self>,
-        dst: &mut impl Extend<Self>,
-    ) -> Result<()>
-    where
-        Self: Sized,
-    {
-        for i in 0..list.len {
-            dst.extend(Some(list.get_from_store(cx, i).unwrap()?));
-        }
-        Ok(())
+        (0..list.len)
+            .map(|index| list.get_from_store(cx, index).unwrap())
+            .collect()
     }
 }
 
@@ -1084,18 +910,13 @@ macro_rules! integers {
                 Ok($primitive::from_le_bytes(bytes.try_into().unwrap()))
             }
 
-            fn linear_lift_into_from_memory(
-                cx: &mut LiftContext<'_>,
-                list: &WasmList<Self>,
-                dst: &mut impl Extend<Self>,
-            ) -> Result<()>
-            where
-                Self: Sized,
-            {
-                dst.extend(list._as_le_slice(cx.memory())
-                           .iter()
-                           .map(|i| Self::from_le(*i)));
-                Ok(())
+            fn linear_lift_list_from_memory(cx: &mut LiftContext<'_>, list: &WasmList<Self>) -> Result<Vec<Self>> {
+                Ok(
+                    list._as_le_slice(cx.memory())
+                        .iter()
+                        .map(|i| Self::from_le(*i))
+                        .collect(),
+                )
             }
         }
     )*)
@@ -2388,7 +2209,7 @@ pub unsafe fn lower_payload<P, T>(
     let typed_len = storage_as_slice(typed).len();
     let payload = storage_as_slice_mut(payload);
     for slot in payload[typed_len..].iter_mut() {
-        slot.write(ValRaw::u64(0));
+        *slot = ValRaw::u64(0);
     }
     Ok(())
 }

@@ -942,11 +942,10 @@ pub mod exports {
                                 ((char, u32),),
                             >::new_unchecked(self.tuple_result)
                         };
-                        let future = callee.call_concurrent(store.as_context_mut(), ());
-                        async move {
-                            let (ret0,) = future.await?;
-                            Ok(ret0)
-                        }
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), ()),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
                     pub fn call_empty_arg<S: wasmtime::AsContextMut>(
                         &self,
@@ -981,11 +980,10 @@ pub mod exports {
                                 (Empty,),
                             >::new_unchecked(self.empty_result)
                         };
-                        let future = callee.call_concurrent(store.as_context_mut(), ());
-                        async move {
-                            let (ret0,) = future.await?;
-                            Ok(ret0)
-                        }
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), ()),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
                     pub fn call_scalar_arg<S: wasmtime::AsContextMut>(
                         &self,
@@ -1020,11 +1018,10 @@ pub mod exports {
                                 (Scalars,),
                             >::new_unchecked(self.scalar_result)
                         };
-                        let future = callee.call_concurrent(store.as_context_mut(), ());
-                        async move {
-                            let (ret0,) = future.await?;
-                            Ok(ret0)
-                        }
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), ()),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
                     pub fn call_flags_arg<S: wasmtime::AsContextMut>(
                         &self,
@@ -1059,11 +1056,10 @@ pub mod exports {
                                 (ReallyFlags,),
                             >::new_unchecked(self.flags_result)
                         };
-                        let future = callee.call_concurrent(store.as_context_mut(), ());
-                        async move {
-                            let (ret0,) = future.await?;
-                            Ok(ret0)
-                        }
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), ()),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
                     pub fn call_aggregate_arg<S: wasmtime::AsContextMut>(
                         &self,
@@ -1098,11 +1094,10 @@ pub mod exports {
                                 (Aggregates,),
                             >::new_unchecked(self.aggregate_result)
                         };
-                        let future = callee.call_concurrent(store.as_context_mut(), ());
-                        async move {
-                            let (ret0,) = future.await?;
-                            Ok(ret0)
-                        }
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), ()),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
                     pub fn call_typedef_inout<S: wasmtime::AsContextMut>(
                         &self,
@@ -1120,12 +1115,10 @@ pub mod exports {
                                 (i32,),
                             >::new_unchecked(self.typedef_inout)
                         };
-                        let future = callee
-                            .call_concurrent(store.as_context_mut(), (arg0,));
-                        async move {
-                            let (ret0,) = future.await?;
-                            Ok(ret0)
-                        }
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
                 }
             }

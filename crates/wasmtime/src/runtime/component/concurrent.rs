@@ -1,129 +1,86 @@
-use crate::component::{Component, Func, HasData, HasSelf, Instance};
-use crate::store::{StoreInner, StoreOpaque};
-use crate::vm::{VMFuncRef, VMMemoryDefinition, VMStore, component::ComponentInstance};
-use crate::{AsContextMut, StoreContextMut, ValRaw};
-use anyhow::Result;
-use std::any::Any;
-use std::boxed::Box;
-use std::future::Future;
-use std::marker::PhantomData;
-use std::mem::MaybeUninit;
-use std::pin::{Pin, pin};
-use std::task::{Context, Poll, Waker};
-use wasmtime_environ::component::{
-    RuntimeComponentInstanceIndex, TypeComponentLocalErrorContextTableIndex, TypeFutureTableIndex,
-    TypeStreamTableIndex, TypeTupleIndex,
+use {
+    crate::{
+        AsContextMut, ValRaw,
+        component::{HasData, HasSelf, Instance},
+        store::StoreInner,
+        vm::{VMFuncRef, VMMemoryDefinition, VMStore, component::ComponentInstance},
+    },
+    anyhow::Result,
+    futures::{FutureExt, stream::FuturesUnordered},
+    std::{boxed::Box, future::Future, mem::MaybeUninit, pin::Pin},
+    wasmtime_environ::component::{
+        RuntimeComponentInstanceIndex, TypeComponentLocalErrorContextTableIndex,
+        TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
+    },
 };
 
 pub(crate) use futures_and_streams::ResourcePair;
-pub use futures_and_streams::{
-    ErrorContext, FutureReader, FutureWriter, HostFuture, HostStream, StreamReader, StreamWriter,
-};
-pub(crate) use futures_and_streams::{
-    lower_error_context_to_index, lower_future_to_index, lower_stream_to_index,
-};
+pub use futures_and_streams::{ErrorContext, FutureReader, StreamReader};
 
 mod futures_and_streams;
 
-#[allow(dead_code)]
-pub enum Status {
-    Starting = 0,
-    Started = 1,
-    Returned = 2,
-    StartCancelled = 3,
-    ReturnCancelled = 4,
-}
-
-impl Status {
-    /// Packs this status and the optional `waitable` provided into a 32-bit
-    /// result that the canonical ABI requires.
-    ///
-    /// The low 4 bits are reserved for the status while the upper 28 bits are
-    /// the waitable, if present.
-    pub fn pack(self, waitable: Option<u32>) -> u32 {
-        _ = waitable;
-        todo!()
-    }
-}
-
-pub(crate) struct ConcurrentState {}
-
-impl ConcurrentState {
-    pub(crate) fn new(component: &Component) -> Self {
-        _ = component;
-        Self {}
-    }
-
-    /// Implements the `context.get` intrinsic.
-    pub(crate) fn context_get(&mut self, slot: u32) -> Result<u32> {
-        _ = slot;
-        todo!()
-    }
-
-    /// Implements the `context.set` intrinsic.
-    pub(crate) fn context_set(&mut self, slot: u32, val: u32) -> Result<()> {
-        _ = (slot, val);
-        todo!()
-    }
-
-    /// Implements the `backpressure.set` intrinsic.
-    pub(crate) fn backpressure_set(
-        &mut self,
-        caller_instance: RuntimeComponentInstanceIndex,
-        enabled: u32,
-    ) -> Result<()> {
-        _ = (caller_instance, enabled);
-        todo!()
-    }
-
-    /// Implements the `waitable-set.new` intrinsic.
-    pub(crate) fn waitable_set_new(
-        &mut self,
-        caller_instance: RuntimeComponentInstanceIndex,
-    ) -> Result<u32> {
-        _ = caller_instance;
-        todo!()
-    }
-
-    /// Implements the `waitable-set.drop` intrinsic.
-    pub(crate) fn waitable_set_drop(
-        &mut self,
-        caller_instance: RuntimeComponentInstanceIndex,
-        set: u32,
-    ) -> Result<()> {
-        _ = (caller_instance, set);
-        todo!()
-    }
-
-    /// Implements the `waitable.join` intrinsic.
-    pub(crate) fn waitable_join(
-        &mut self,
-        caller_instance: RuntimeComponentInstanceIndex,
-        waitable_handle: u32,
-        set_handle: u32,
-    ) -> Result<()> {
-        _ = (caller_instance, waitable_handle, set_handle);
-        todo!()
-    }
-
-    /// Implements the `subtask.drop` intrinsic.
-    pub(crate) fn subtask_drop(
-        &mut self,
-        caller_instance: RuntimeComponentInstanceIndex,
-        task_id: u32,
-    ) -> Result<()> {
-        _ = (caller_instance, task_id);
-        todo!()
-    }
-}
-
-/// Provides access to either store data (via the `get` method) or the store
-/// itself (via [`AsContext`]/[`AsContextMut`]), as well as the component
-/// instance to which the current host task belongs.
+/// Represents the result of a concurrent operation.
 ///
-/// See [`Accessor::with`] for details.
-pub struct Access<'a, T: 'static, D: HasData = HasSelf<T>> {
-    _phantom: PhantomData<(&'a (), T, D)>,
+/// This is similar to a [`std::future::Future`] except that it represents an
+/// operation which requires exclusive access to a store in order to make
+/// progress -- without monopolizing that store for the lifetime of the
+/// operation.
+pub struct Promise<T>(Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>);
+
+impl<T: 'static> Promise<T> {
+    /// Map the result of this `Promise` from one value to another.
+    pub fn map<U>(self, fun: impl FnOnce(T) -> U + Send + Sync + 'static) -> Promise<U> {
+        Promise(Box::pin(self.0.map(fun)))
+    }
+
+    /// Convert this `Promise` to a future which may be `await`ed for its
+    /// result.
+    ///
+    /// The returned future will require exclusive use of the store until it
+    /// completes.  If you need to await more than one `Promise` concurrently,
+    /// use [`PromisesUnordered`].
+    pub async fn get<U: Send>(self, store: impl AsContextMut<Data = U>) -> Result<T> {
+        _ = store;
+        todo!()
+    }
+
+    /// Convert this `Promise` to a future which may be `await`ed for its
+    /// result.
+    ///
+    /// Unlike [`Self::get`], this does _not_ take a store parameter, meaning
+    /// the returned future will not make progress until and unless the event
+    /// loop for the store it came from is polled.  Thus, this method should
+    /// only be used from within host functions and not from top-level embedder
+    /// code.
+    pub fn into_future(self) -> Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>> {
+        self.0
+    }
+}
+
+/// Represents a collection of zero or more concurrent operations.
+///
+/// Similar to [`futures::stream::FuturesUnordered`], this type supports
+/// `await`ing more than one [`Promise`]s concurrently.
+pub struct PromisesUnordered<T>(
+    FuturesUnordered<Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>>,
+);
+
+impl<T: 'static> PromisesUnordered<T> {
+    /// Create a new `PromisesUnordered` with no entries.
+    pub fn new() -> Self {
+        Self(FuturesUnordered::new())
+    }
+
+    /// Add the specified [`Promise`] to this collection.
+    pub fn push(&mut self, promise: Promise<T>) {
+        self.0.push(promise.0)
+    }
+
+    /// Get the next result from this collection, if any.
+    pub async fn next<U: Send>(&mut self, store: impl AsContextMut<Data = U>) -> Result<Option<T>> {
+        _ = store;
+        todo!()
+    }
 }
 
 /// Provides scoped mutable access to store data in the context of a concurrent
@@ -157,213 +114,9 @@ where
     }
 }
 
-impl Instance {
-    /// Wrap the specified host function in a future which will call it, passing
-    /// it an `&mut Accessor<T>`.
-    ///
-    /// See the `Accessor` documentation for details.
-    pub(crate) fn wrap_call<T: 'static, F, R>(
-        self,
-        store: StoreContextMut<T>,
-        closure: F,
-    ) -> impl Future<Output = Result<R>> + 'static
-    where
-        T: 'static,
-        F: FnOnce(&mut Accessor<T>) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
-            + Send
-            + Sync
-            + 'static,
-        R: Send + Sync + 'static,
-    {
-        _ = (store, closure);
-        async { todo!() }
-    }
-
-    /// Poll the specified future once on behalf of a guest->host call using an
-    /// async-lowered import.
-    ///
-    /// If it returns `Ready`, return `Ok(None)`.  Otherwise, if it returns
-    /// `Pending`, add it to the set of futures to be polled as part of this
-    /// instance's event loop until it completes, and then return
-    /// `Ok(Some(handle))` where `handle` is the waitable handle to return.
-    ///
-    /// Whether the future returns `Ready` immediately or later, the `lower`
-    /// function will be used to lower the result, if any, into the guest caller's
-    /// stack and linear memory unless the task has been cancelled.
-    pub(crate) fn first_poll<T: 'static, R: Send + 'static>(
-        self,
-        mut store: StoreContextMut<T>,
-        future: impl Future<Output = Result<R>> + Send + 'static,
-        caller_instance: RuntimeComponentInstanceIndex,
-        lower: impl FnOnce(StoreContextMut<T>, Instance, R) -> Result<()> + Send + 'static,
-    ) -> Result<Option<u32>> {
-        _ = (&mut store, future, caller_instance, lower);
-        todo!()
-    }
-
-    /// Poll the specified future until it completes on behalf of a guest->host
-    /// call using a sync-lowered import.
-    ///
-    /// This is similar to `Self::first_poll` except it's for sync-lowered
-    /// imports, meaning we don't need to handle cancellation and we can block
-    /// the caller until the task completes, at which point the caller can
-    /// handle lowering the result to the guest's stack and linear memory.
-    pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
-        self,
-        store: &mut dyn VMStore,
-        future: impl Future<Output = Result<R>> + Send + 'static,
-        caller_instance: RuntimeComponentInstanceIndex,
-    ) -> Result<R> {
-        _ = (store, caller_instance);
-        match pin!(future).poll(&mut Context::from_waker(Waker::noop())) {
-            Poll::Ready(result) => result,
-            Poll::Pending => {
-                todo!()
-            }
-        }
-    }
-
-    /// TODO: docs
-    pub async fn run<F>(&self, mut store: impl AsContextMut, fut: F) -> Result<F::Output>
-    where
-        F: Future,
-    {
-        _ = (&mut store, fut);
-        todo!()
-    }
-
-    /// Implements the `task.return` intrinsic, lifting the result for the
-    /// current guest task.
-    ///
-    /// SAFETY: The `memory` and `storage` pointers must be valid, and `storage`
-    /// must contain at least `storage_len` items.
-    pub(crate) unsafe fn task_return(
-        self,
-        store: &mut dyn VMStore,
-        ty: TypeTupleIndex,
-        memory: *mut VMMemoryDefinition,
-        string_encoding: u8,
-        storage: *mut ValRaw,
-        storage_len: usize,
-    ) -> Result<()> {
-        _ = (store, ty, memory, string_encoding, storage, storage_len);
-        todo!()
-    }
-
-    /// Implements the `task.cancel` intrinsic.
-    pub(crate) fn task_cancel(
-        self,
-        store: &mut dyn VMStore,
-        _caller_instance: RuntimeComponentInstanceIndex,
-    ) -> Result<()> {
-        _ = store;
-        todo!()
-    }
-
-    /// Implements the `waitable-set.wait` intrinsic.
-    pub(crate) fn waitable_set_wait(
-        self,
-        store: &mut dyn VMStore,
-        caller_instance: RuntimeComponentInstanceIndex,
-        async_: bool,
-        memory: *mut VMMemoryDefinition,
-        set: u32,
-        payload: u32,
-    ) -> Result<u32> {
-        _ = (store, caller_instance, async_, memory, set, payload);
-        todo!()
-    }
-
-    /// Implements the `waitable-set.poll` intrinsic.
-    pub(crate) fn waitable_set_poll(
-        self,
-        store: &mut dyn VMStore,
-        caller_instance: RuntimeComponentInstanceIndex,
-        async_: bool,
-        memory: *mut VMMemoryDefinition,
-        set: u32,
-        payload: u32,
-    ) -> Result<u32> {
-        _ = (store, caller_instance, async_, memory, set, payload);
-        todo!()
-    }
-
-    /// Implements the `yield` intrinsic.
-    pub(crate) fn yield_(self, store: &mut dyn VMStore, async_: bool) -> Result<bool> {
-        _ = (store, async_);
-        todo!()
-    }
-
-    /// Implements the `subtask.cancel` intrinsic.
-    pub(crate) fn subtask_cancel(
-        self,
-        store: &mut dyn VMStore,
-        caller_instance: RuntimeComponentInstanceIndex,
-        async_: bool,
-        task_id: u32,
-    ) -> Result<u32> {
-        _ = (store, caller_instance, async_, task_id);
-        todo!()
-    }
-
-    /// Convenience function to reduce boilerplate.
-    pub(crate) fn concurrent_state_mut<'a>(
-        &self,
-        store: &'a mut StoreOpaque,
-    ) -> &'a mut ConcurrentState {
-        _ = store;
-        todo!()
-    }
-}
-
 /// Trait representing component model ABI async intrinsics and fused adapter
 /// helper functions.
 pub unsafe trait VMComponentAsyncStore {
-    /// A helper function for fused adapter modules involving calls where the
-    /// one of the caller or callee is async.
-    ///
-    /// This helper is not used when the caller and callee both use the sync
-    /// ABI, only when at least one is async is this used.
-    unsafe fn prepare_call(
-        &mut self,
-        instance: Instance,
-        memory: *mut VMMemoryDefinition,
-        start: *mut VMFuncRef,
-        return_: *mut VMFuncRef,
-        caller_instance: RuntimeComponentInstanceIndex,
-        callee_instance: RuntimeComponentInstanceIndex,
-        task_return_type: TypeTupleIndex,
-        string_encoding: u8,
-        result_count: u32,
-        storage: *mut ValRaw,
-        storage_len: usize,
-    ) -> Result<()>;
-
-    /// A helper function for fused adapter modules involving calls where the
-    /// caller is sync-lowered but the callee is async-lifted.
-    unsafe fn sync_start(
-        &mut self,
-        instance: Instance,
-        callback: *mut VMFuncRef,
-        callee: *mut VMFuncRef,
-        param_count: u32,
-        storage: *mut MaybeUninit<ValRaw>,
-        storage_len: usize,
-    ) -> Result<()>;
-
-    /// A helper function for fused adapter modules involving calls where the
-    /// caller is async-lowered.
-    unsafe fn async_start(
-        &mut self,
-        instance: Instance,
-        callback: *mut VMFuncRef,
-        post_return: *mut VMFuncRef,
-        callee: *mut VMFuncRef,
-        param_count: u32,
-        result_count: u32,
-        flags: u32,
-    ) -> Result<u32>;
-
     /// The `backpressure.set` intrinsic.
     fn backpressure_set(
         &mut self,
@@ -491,40 +244,85 @@ pub unsafe trait VMComponentAsyncStore {
         flags: u32,
     ) -> Result<u32>;
 
-    /// The `future.write` intrinsic.
-    unsafe fn future_write(
+    /// The `future.new` intrinsic.
+    fn future_new(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
+        ty: TypeFutureTableIndex,
+    ) -> Result<u32>;
+
+    /// The `future.write` intrinsic.
+    fn future_write(
+        &mut self,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
-        async_: bool,
         ty: TypeFutureTableIndex,
         future: u32,
         address: u32,
     ) -> Result<u32>;
 
     /// The `future.read` intrinsic.
-    unsafe fn future_read(
+    fn future_read(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
-        async_: bool,
         ty: TypeFutureTableIndex,
         future: u32,
         address: u32,
     ) -> Result<u32>;
 
-    /// The `stream.write` intrinsic.
-    unsafe fn stream_write(
+    /// The `future.cancel-write` intrinsic.
+    fn future_cancel_write(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
+        ty: TypeFutureTableIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<u32>;
+
+    /// The `future.cancel-read` intrinsic.
+    fn future_cancel_read(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeFutureTableIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<u32>;
+
+    /// The `future.drop-writable` intrinsic.
+    fn future_drop_writable(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeFutureTableIndex,
+        writer: u32,
+    ) -> Result<()>;
+
+    /// The `future.drop-readable` intrinsic.
+    fn future_drop_readable(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeFutureTableIndex,
+        reader: u32,
+    ) -> Result<()>;
+
+    /// The `stream.new` intrinsic.
+    fn stream_new(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeStreamTableIndex,
+    ) -> Result<u32>;
+
+    /// The `stream.write` intrinsic.
+    fn stream_write(
+        &mut self,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
-        async_: bool,
         ty: TypeStreamTableIndex,
         stream: u32,
         address: u32,
@@ -532,27 +330,59 @@ pub unsafe trait VMComponentAsyncStore {
     ) -> Result<u32>;
 
     /// The `stream.read` intrinsic.
-    unsafe fn stream_read(
+    fn stream_read(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
-        async_: bool,
         ty: TypeStreamTableIndex,
         stream: u32,
         address: u32,
         count: u32,
     ) -> Result<u32>;
 
+    /// The `stream.cancel-write` intrinsic.
+    fn stream_cancel_write(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeStreamTableIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<u32>;
+
+    /// The `stream.cancel-read` intrinsic.
+    fn stream_cancel_read(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeStreamTableIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<u32>;
+
+    /// The `stream.drop-writable` intrinsic.
+    fn stream_drop_writable(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeStreamTableIndex,
+        writer: u32,
+    ) -> Result<()>;
+
+    /// The `stream.drop-readable` intrinsic.
+    fn stream_drop_readable(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeStreamTableIndex,
+        reader: u32,
+    ) -> Result<()>;
+
     /// The "fast-path" implementation of the `stream.write` intrinsic for
     /// "flat" (i.e. memcpy-able) payloads.
-    unsafe fn flat_stream_write(
+    fn flat_stream_write(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
-        async_: bool,
         ty: TypeStreamTableIndex,
         payload_size: u32,
         payload_align: u32,
@@ -563,12 +393,11 @@ pub unsafe trait VMComponentAsyncStore {
 
     /// The "fast-path" implementation of the `stream.read` intrinsic for "flat"
     /// (i.e. memcpy-able) payloads.
-    unsafe fn flat_stream_read(
+    fn flat_stream_read(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
-        async_: bool,
         ty: TypeStreamTableIndex,
         payload_size: u32,
         payload_align: u32,
@@ -577,10 +406,22 @@ pub unsafe trait VMComponentAsyncStore {
         count: u32,
     ) -> Result<u32>;
 
-    /// The `error-context.debug-message` intrinsic.
-    unsafe fn error_context_debug_message(
+    /// The `error-context.new` intrinsic.
+    fn error_context_new(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
+        memory: *mut VMMemoryDefinition,
+        realloc: *mut VMFuncRef,
+        string_encoding: u8,
+        ty: TypeComponentLocalErrorContextTableIndex,
+        debug_msg_address: u32,
+        debug_msg_len: u32,
+    ) -> Result<u32>;
+
+    /// The `error-context.debug-message` intrinsic.
+    fn error_context_debug_message(
+        &mut self,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
@@ -588,81 +429,17 @@ pub unsafe trait VMComponentAsyncStore {
         err_ctx_handle: u32,
         debug_msg_address: u32,
     ) -> Result<()>;
+
+    /// The `error-context.drop` intrinsic.
+    fn error_context_drop(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeComponentLocalErrorContextTableIndex,
+        err_ctx_handle: u32,
+    ) -> Result<()>;
 }
 
 unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
-    unsafe fn prepare_call(
-        &mut self,
-        instance: Instance,
-        memory: *mut VMMemoryDefinition,
-        start: *mut VMFuncRef,
-        return_: *mut VMFuncRef,
-        caller_instance: RuntimeComponentInstanceIndex,
-        callee_instance: RuntimeComponentInstanceIndex,
-        task_return_type: TypeTupleIndex,
-        string_encoding: u8,
-        result_count: u32,
-        storage: *mut ValRaw,
-        storage_len: usize,
-    ) -> Result<()> {
-        _ = (
-            instance,
-            memory,
-            start,
-            return_,
-            caller_instance,
-            callee_instance,
-            task_return_type,
-            string_encoding,
-            result_count,
-            storage,
-            storage_len,
-        );
-        todo!()
-    }
-
-    unsafe fn sync_start(
-        &mut self,
-        instance: Instance,
-        callback: *mut VMFuncRef,
-        callee: *mut VMFuncRef,
-        param_count: u32,
-        storage: *mut MaybeUninit<ValRaw>,
-        storage_len: usize,
-    ) -> Result<()> {
-        _ = (
-            instance,
-            callback,
-            callee,
-            param_count,
-            storage,
-            storage_len,
-        );
-        todo!()
-    }
-
-    unsafe fn async_start(
-        &mut self,
-        instance: Instance,
-        callback: *mut VMFuncRef,
-        post_return: *mut VMFuncRef,
-        callee: *mut VMFuncRef,
-        param_count: u32,
-        result_count: u32,
-        flags: u32,
-    ) -> Result<u32> {
-        _ = (
-            instance,
-            callback,
-            post_return,
-            callee,
-            param_count,
-            result_count,
-            flags,
-        );
-        todo!()
-    }
-
     fn backpressure_set(
         &mut self,
         caller_instance: RuntimeComponentInstanceIndex,
@@ -846,13 +623,21 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    unsafe fn future_write(
+    fn future_new(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
+        ty: TypeFutureTableIndex,
+    ) -> Result<u32> {
+        _ = (instance, ty);
+        todo!()
+    }
+
+    fn future_write(
+        &mut self,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
-        async_: bool,
         ty: TypeFutureTableIndex,
         future: u32,
         address: u32,
@@ -862,7 +647,6 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
             memory,
             realloc,
             string_encoding,
-            async_,
             ty,
             future,
             address,
@@ -870,13 +654,12 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    unsafe fn future_read(
+    fn future_read(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
-        async_: bool,
         ty: TypeFutureTableIndex,
         future: u32,
         address: u32,
@@ -886,7 +669,6 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
             memory,
             realloc,
             string_encoding,
-            async_,
             ty,
             future,
             address,
@@ -894,13 +676,63 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    unsafe fn stream_write(
+    fn future_cancel_write(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
+        ty: TypeFutureTableIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<u32> {
+        _ = (instance, ty, async_, writer);
+        todo!()
+    }
+
+    fn future_cancel_read(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeFutureTableIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<u32> {
+        _ = (instance, ty, async_, reader);
+        todo!()
+    }
+
+    fn future_drop_writable(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeFutureTableIndex,
+        writer: u32,
+    ) -> Result<()> {
+        _ = (instance, ty, writer);
+        todo!()
+    }
+
+    fn future_drop_readable(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeFutureTableIndex,
+        reader: u32,
+    ) -> Result<()> {
+        _ = (instance, ty, reader);
+        todo!()
+    }
+
+    fn stream_new(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeStreamTableIndex,
+    ) -> Result<u32> {
+        _ = (instance, ty);
+        todo!()
+    }
+
+    fn stream_write(
+        &mut self,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
-        async_: bool,
         ty: TypeStreamTableIndex,
         stream: u32,
         address: u32,
@@ -911,7 +743,6 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
             memory,
             realloc,
             string_encoding,
-            async_,
             ty,
             stream,
             address,
@@ -920,13 +751,12 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    unsafe fn stream_read(
+    fn stream_read(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
-        async_: bool,
         ty: TypeStreamTableIndex,
         stream: u32,
         address: u32,
@@ -937,7 +767,6 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
             memory,
             realloc,
             string_encoding,
-            async_,
             ty,
             stream,
             address,
@@ -946,12 +775,53 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    unsafe fn flat_stream_write(
+    fn stream_cancel_write(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
+        ty: TypeStreamTableIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<u32> {
+        _ = (instance, ty, async_, writer);
+        todo!()
+    }
+
+    fn stream_cancel_read(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeStreamTableIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<u32> {
+        _ = (instance, ty, async_, reader);
+        todo!()
+    }
+
+    fn stream_drop_writable(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeStreamTableIndex,
+        writer: u32,
+    ) -> Result<()> {
+        _ = (instance, ty, writer);
+        todo!()
+    }
+
+    fn stream_drop_readable(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeStreamTableIndex,
+        reader: u32,
+    ) -> Result<()> {
+        _ = (instance, ty, reader);
+        todo!()
+    }
+
+    fn flat_stream_write(
+        &mut self,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
-        async_: bool,
         ty: TypeStreamTableIndex,
         payload_size: u32,
         payload_align: u32,
@@ -963,7 +833,6 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
             instance,
             memory,
             realloc,
-            async_,
             ty,
             payload_size,
             payload_align,
@@ -974,12 +843,11 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    unsafe fn flat_stream_read(
+    fn flat_stream_read(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
-        async_: bool,
         ty: TypeStreamTableIndex,
         payload_size: u32,
         payload_align: u32,
@@ -991,7 +859,6 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
             instance,
             memory,
             realloc,
-            async_,
             ty,
             payload_size,
             payload_align,
@@ -1002,9 +869,31 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    unsafe fn error_context_debug_message(
+    fn error_context_new(
         &mut self,
-        instance: Instance,
+        instance: &mut ComponentInstance,
+        memory: *mut VMMemoryDefinition,
+        realloc: *mut VMFuncRef,
+        string_encoding: u8,
+        ty: TypeComponentLocalErrorContextTableIndex,
+        debug_msg_address: u32,
+        debug_msg_len: u32,
+    ) -> Result<u32> {
+        _ = (
+            instance,
+            memory,
+            realloc,
+            string_encoding,
+            ty,
+            debug_msg_address,
+            debug_msg_len,
+        );
+        todo!()
+    }
+
+    fn error_context_debug_message(
+        &mut self,
+        instance: &mut ComponentInstance,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
@@ -1023,59 +912,14 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         );
         todo!()
     }
-}
 
-pub(crate) struct PreparedCall<R> {
-    _phantom: PhantomData<R>,
-}
-
-/// Prepare a call to the specified exported Wasm function, providing functions
-/// for lowering the parameters and lifting the result.
-///
-/// To enqueue the returned `PreparedCall` in the `ComponentInstance`'s event
-/// loop, use `queue_call`.
-///
-/// Note that this function is used in `TypedFunc::call_async`, which accepts
-/// parameters of a generic type which might not be `'static`.  However the
-/// `GuestTask` created by this function must be `'static`, so it can't safely
-/// close over those parameters.  Instead, `PreparedCall` has a `params` field
-/// of type `Arc<AtomicPtr<u8>>`, which the caller is responsible for setting to
-/// a valid, non-null pointer to the params prior to polling the event loop (at
-/// least until the parameters have been lowered), and then resetting back to
-/// null afterward.  That ensures that the lowering code never sees a stale
-/// pointer, even if the application `drop`s or `mem::forget`s the future
-/// returned by `TypedFunc::call_async`.
-///
-/// In the case where the parameters are passed using a type that _is_
-/// `'static`, they can be boxed and stored in `PreparedCall::params`
-/// indefinitely; `drop_params` will be called when they are no longer needed.
-pub(crate) fn prepare_call<T, R>(
-    mut store: StoreContextMut<T>,
-    lower_params: impl FnOnce(Func, StoreContextMut<T>, &mut [MaybeUninit<ValRaw>]) -> Result<()>
-    + Send
-    + Sync
-    + 'static,
-    lift_result: impl FnOnce(Func, &mut StoreOpaque, &[ValRaw]) -> Result<Box<dyn Any + Send + Sync>>
-    + Send
-    + Sync
-    + 'static,
-    handle: Func,
-    param_count: usize,
-) -> Result<PreparedCall<R>> {
-    let _ = (&mut store, lower_params, lift_result, handle, param_count);
-    todo!()
-}
-
-/// Queue a call previously prepared using `prepare_call` to be run as part of
-/// the associated `ComponentInstance`'s event loop.
-///
-/// The returned future will resolve to the result once it is available, but
-/// must only be polled via the instance's event loop.  See `Instance::run` for
-/// details.
-pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
-    mut store: StoreContextMut<T>,
-    prepared: PreparedCall<R>,
-) -> Result<impl Future<Output = Result<R>> + Send + 'static + use<T, R>> {
-    _ = (&mut store, prepared);
-    Ok(async { todo!() })
+    fn error_context_drop(
+        &mut self,
+        instance: &mut ComponentInstance,
+        ty: TypeComponentLocalErrorContextTableIndex,
+        err_ctx_handle: u32,
+    ) -> Result<()> {
+        _ = (instance, ty, err_ctx_handle);
+        todo!()
+    }
 }

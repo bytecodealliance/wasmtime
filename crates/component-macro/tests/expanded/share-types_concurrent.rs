@@ -368,11 +368,10 @@ pub mod exports {
                         (Response,),
                     >::new_unchecked(self.handle_request)
                 };
-                let future = callee.call_concurrent(store.as_context_mut(), (arg0,));
-                async move {
-                    let (ret0,) = future.await?;
-                    Ok(ret0)
-                }
+                wasmtime::component::__internal::FutureExt::map(
+                    callee.call_concurrent(store.as_context_mut(), (arg0,)),
+                    |v| v.map(|(v,)| v),
+                )
             }
         }
     }

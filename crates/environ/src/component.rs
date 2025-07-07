@@ -124,7 +124,7 @@ macro_rules! foreach_builtin_component_function {
                 string_encoding: u32,
                 result_count_or_max_if_async: u32,
                 storage: ptr_u8,
-                storage_len: size
+                torage_len: size
             ) -> bool;
             #[cfg(feature = "component-model-async")]
             sync_start(vmctx: vmctx, callback: ptr_u8, callee: ptr_u8, param_count: u32, storage: ptr_u8, storage_len: size) -> bool;

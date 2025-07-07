@@ -391,4 +391,5 @@ component-model-async = [
   "component-model",
   "std",
   "wasmtime-component-macro?/component-model-async",
+  "dep:futures"
 ]

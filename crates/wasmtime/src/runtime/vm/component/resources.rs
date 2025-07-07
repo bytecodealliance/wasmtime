@@ -215,19 +215,8 @@ pub struct CallContexts {
     scopes: Vec<CallContext>,
 }
 
-impl CallContexts {
-    pub fn push(&mut self, cx: CallContext) {
-        self.scopes.push(cx);
-    }
-
-    pub fn pop(&mut self) -> Option<CallContext> {
-        self.scopes.pop()
-    }
-}
-
-/// State related to borrows for a specific call.
 #[derive(Default)]
-pub struct CallContext {
+struct CallContext {
     lenders: Vec<TypedResourceIndex>,
     borrow_count: u32,
 }
