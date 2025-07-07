@@ -62,7 +62,6 @@ use futures::channel::oneshot;
 use futures::future::{self, Either, FutureExt};
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, StreamFutureState, TableIndex, TransmitHandle};
-use once_cell::sync::Lazy;
 use states::StateTable;
 use std::any::Any;
 use std::borrow::ToOwned;
@@ -75,8 +74,8 @@ use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
 use std::pin::{Pin, pin};
 use std::ptr::{self, NonNull};
-use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, Wake, Waker};
+use std::sync::Mutex;
+use std::task::{Context, Poll, Waker};
 use std::vec::Vec;
 use table::{Table, TableDebug, TableError, TableId};
 use wasmtime_environ::component::{
@@ -2534,7 +2533,7 @@ impl Instance {
         let poll = self.set_tls(store.0, || {
             future
                 .as_mut()
-                .poll(&mut Context::from_waker(&dummy_waker()))
+                .poll(&mut Context::from_waker(&Waker::noop()))
         });
 
         Ok(match poll {
@@ -2581,7 +2580,7 @@ impl Instance {
         // was registered using e.g. `LinkerInstance::func_wrap`, in which case
         // it should complete immediately.
         let Some(caller) = state.guest_task else {
-            return match pin!(future).poll(&mut Context::from_waker(&dummy_waker())) {
+            return match pin!(future).poll(&mut Context::from_waker(&Waker::noop())) {
                 Poll::Ready(result) => result,
                 Poll::Pending => {
                     unreachable!()
@@ -2630,7 +2629,7 @@ impl Instance {
         let poll = self.set_tls(store, || {
             future
                 .as_mut()
-                .poll(&mut Context::from_waker(&dummy_waker()))
+                .poll(&mut Context::from_waker(&Waker::noop()))
         });
 
         match poll {
@@ -4272,18 +4271,6 @@ impl ConcurrentState {
         take_items(&mut self.high_priority);
         take_items(&mut self.low_priority);
     }
-}
-
-fn dummy_waker() -> Waker {
-    struct DummyWaker;
-
-    impl Wake for DummyWaker {
-        fn wake(self: Arc<Self>) {}
-    }
-
-    static WAKER: Lazy<Arc<DummyWaker>> = Lazy::new(|| Arc::new(DummyWaker));
-
-    WAKER.clone().into()
 }
 
 /// Provide a type hint to compiler about the shape of a parameter lower
