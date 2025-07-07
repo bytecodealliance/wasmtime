@@ -698,4 +698,22 @@ mod test {
         // for good measure make sure id3 is still affine
         assert_eq!(state.alloc(Some(id3)), Some(SlotId(0)));
     }
+
+    #[test]
+    fn test_freelist() {
+        let allocator = SimpleIndexAllocator::new(10);
+        assert_eq!(allocator.testing_freelist(), []);
+        let a = allocator.alloc().unwrap();
+        assert_eq!(allocator.testing_freelist(), []);
+        allocator.free(a);
+        assert_eq!(allocator.testing_freelist(), [a]);
+        assert_eq!(allocator.alloc(), Some(a));
+        assert_eq!(allocator.testing_freelist(), []);
+        let b = allocator.alloc().unwrap();
+        assert_eq!(allocator.testing_freelist(), []);
+        allocator.free(b);
+        assert_eq!(allocator.testing_freelist(), [b]);
+        allocator.free(a);
+        assert_eq!(allocator.testing_freelist(), [b, a]);
+    }
 }
