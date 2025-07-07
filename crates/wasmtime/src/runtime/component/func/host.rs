@@ -13,10 +13,9 @@ use alloc::sync::Arc;
 use core::any::Any;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
-use core::slice;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
-    StringEncoding, TypeFuncIndex,
+    StringEncoding, TypeFuncIndex, TypeTuple,
 };
 
 pub struct HostFunc {
@@ -212,13 +211,13 @@ where
                 storage,
                 // Don't need to check validation here since it is
                 // covered by the push predicate in this case
-                Some(param_tys),
+                Some(&types[ty.params]),
             )
         },
     );
     cx.0.replay_event(
         |r| r.validate,
-        |event: ComponentHostFuncEntryEvent, _| event.validate(&param_tys),
+        |event: ComponentHostFuncEntryEvent, _| event.validate(&types[ty.params]),
     )?;
 
     // There's a 2x2 matrix of whether parameters and results are stored on the
@@ -259,7 +258,7 @@ where
 
     flags.set_may_leave(false);
     let mut lower = LowerContext::new(cx, &options, types, instance);
-    storage.lower_results(&mut lower, result_tys, ret)?;
+    storage.lower_results(&mut lower, result_tys, &types[ty.results], ret)?;
     flags.set_may_leave(true);
 
     if !replay_enabled {
@@ -299,6 +298,7 @@ where
             &mut self,
             cx: &mut LowerContext<'_, T>,
             ty: InterfaceType,
+            rr_tys: &TypeTuple,
             ret: Option<R>,
         ) -> Result<()> {
             let direct_results_lower =
@@ -313,7 +313,7 @@ where
                             |event: ComponentHostFuncReturnEvent, rmeta| {
                                 event.move_into_slice(
                                     storage_as_slice_mut(dst),
-                                    rmeta.validate.then_some(&ty),
+                                    rmeta.validate.then_some(rr_tys),
                                 )
                             },
                         )
@@ -323,7 +323,7 @@ where
                         |rmeta| {
                             ComponentHostFuncReturnEvent::new(
                                 storage_as_slice(dst),
-                                rmeta.add_validation.then_some(ty),
+                                rmeta.add_validation.then_some(rr_tys),
                             )
                         },
                     );
@@ -334,12 +334,30 @@ where
                 let res = if let Some(retval) = &ret {
                     retval.store(cx, ty, ptr)
                 } else {
-                    // `dst` is a Wasm i32 pointer to indirect results. This itself will remain
-                    // deterministic, and thus replay will not change this, but will have to
-                    // account for all of the `store` values.
-                    // Replay will however have to overwrite all of the stored values (deep copy)
-                    Ok(())
+                    // `dst` is a Wasm pointer to indirect results. This pointer itself will remain
+                    // deterministic, and thus replay will not need to change this. However,
+                    // replay will have to overwrite any nested stored lowerings (deep copy)
+                    cx.store.0.replay_event(
+                        |_| true,
+                        |event: ComponentHostFuncReturnEvent, rmeta| {
+                            if rmeta.validate {
+                                event.validate(rr_tys)
+                            } else {
+                                Ok(())
+                            }
+                        },
+                    )
                 };
+                // Recording here is just for marking the return event
+                cx.store.0.record_event(
+                    |_| true,
+                    |rmeta| {
+                        ComponentHostFuncReturnEvent::new(
+                            &[],
+                            rmeta.add_validation.then_some(rr_tys),
+                        )
+                    },
+                );
                 res
             };
             match self {
@@ -438,61 +456,138 @@ where
     let func_ty = &types[ty];
     let param_tys = &types[func_ty.params];
     let result_tys = &types[func_ty.results];
-    let mut cx = LiftContext::new(store.0, &options, types, instance);
-    cx.enter_call();
-    if let Some(param_count) = param_tys.abi.flat_count(MAX_FLAT_PARAMS) {
-        // NB: can use `MaybeUninit::slice_assume_init_ref` when that's stable
-        let mut iter =
-            mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(&storage[..param_count]).iter();
-        args = param_tys
-            .types
-            .iter()
-            .map(|ty| Val::lift(&mut cx, *ty, &mut iter))
-            .collect::<Result<Box<[_]>>>()?;
-        ret_index = param_count;
-        assert!(iter.next().is_none());
-    } else {
-        let mut offset =
-            validate_inbounds_dynamic(&param_tys.abi, cx.memory(), storage[0].assume_init_ref())?;
-        args = param_tys
-            .types
-            .iter()
-            .map(|ty| {
-                let abi = types.canonical_abi(ty);
-                let size = usize::try_from(abi.size32).unwrap();
-                let memory = &cx.memory()[abi.next_field32_size(&mut offset)..][..size];
-                Val::load(&mut cx, *ty, memory)
-            })
-            .collect::<Result<Box<[_]>>>()?;
-        ret_index = 1;
-    };
 
-    let mut result_vals = Vec::with_capacity(result_tys.types.len());
-    for _ in result_tys.types.iter() {
-        result_vals.push(Val::Bool(false));
-    }
-    closure(store.as_context_mut(), &args, &mut result_vals)?;
+    let replay_enabled = store.0.replay_enabled();
+
+    store.0.record_event(
+        |r| r.add_validation,
+        |_| {
+            ComponentHostFuncEntryEvent::new(
+                storage,
+                // Don't need to check validation here since it is
+                // covered by the push predicate in this case
+                Some(&types[func_ty.params]),
+            )
+        },
+    );
+    store.0.replay_event(
+        |r| r.validate,
+        |event: ComponentHostFuncEntryEvent, _| event.validate(&types[func_ty.params]),
+    )?;
+
+    let results = if replay_enabled {
+        None
+    } else {
+        Some({
+            let mut cx = LiftContext::new(store.0, &options, types, instance);
+            cx.enter_call();
+            if let Some(param_count) = param_tys.abi.flat_count(MAX_FLAT_PARAMS) {
+                // NB: can use `MaybeUninit::slice_assume_init_ref` when that's stable
+                let mut iter =
+                    mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(&storage[..param_count])
+                        .iter();
+                args = param_tys
+                    .types
+                    .iter()
+                    .map(|ty| Val::lift(&mut cx, *ty, &mut iter))
+                    .collect::<Result<Box<[_]>>>()?;
+                ret_index = param_count;
+                assert!(iter.next().is_none());
+            } else {
+                let mut offset = validate_inbounds_dynamic(
+                    &param_tys.abi,
+                    cx.memory(),
+                    storage[0].assume_init_ref(),
+                )?;
+                args = param_tys
+                    .types
+                    .iter()
+                    .map(|ty| {
+                        let abi = types.canonical_abi(ty);
+                        let size = usize::try_from(abi.size32).unwrap();
+                        let memory = &cx.memory()[abi.next_field32_size(&mut offset)..][..size];
+                        Val::load(&mut cx, *ty, memory)
+                    })
+                    .collect::<Result<Box<[_]>>>()?;
+                ret_index = 1;
+            };
+
+            let mut result_vals = Vec::with_capacity(result_tys.types.len());
+            for _ in result_tys.types.iter() {
+                result_vals.push(Val::Bool(false));
+            }
+            closure(store.as_context_mut(), &args, &mut result_vals)?;
+            (result_vals, ret_index)
+        })
+    };
     flags.set_may_leave(false);
 
     let mut cx = LowerContext::new(store, &options, types, instance);
     if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
-        let mut dst = storage[..cnt].iter_mut();
-        for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-            val.lower(&mut cx, *ty, &mut dst)?;
+        if let Some((result_vals, _)) = results {
+            let mut dst = storage[..cnt].iter_mut();
+            for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
+                val.lower(&mut cx, *ty, &mut dst)?;
+            }
+            assert!(dst.next().is_none());
+        } else {
+            // Replay stubbing required
+            cx.store.0.replay_event(
+                |_| true,
+                |event: ComponentHostFuncReturnEvent, rmeta| {
+                    event.move_into_slice(
+                        mem::transmute::<&mut [MaybeUninit<ValRaw>], &mut [ValRaw]>(storage),
+                        rmeta.validate.then_some(result_tys),
+                    )
+                },
+            )?;
         }
-        assert!(dst.next().is_none());
+        cx.store.0.record_event(
+            |_| true,
+            |rmeta| {
+                ComponentHostFuncReturnEvent::new(
+                    mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(storage),
+                    rmeta.add_validation.then_some(result_tys),
+                )
+            },
+        );
     } else {
-        let ret_ptr = storage[ret_index].assume_init_ref();
-        let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice_mut(), ret_ptr)?;
-        for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-            let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
-            val.store(&mut cx, *ty, offset)?;
+        if let Some((result_vals, ret_index)) = results {
+            let ret_ptr = storage[ret_index].assume_init_ref();
+            let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice_mut(), ret_ptr)?;
+            for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
+                let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
+                val.store(&mut cx, *ty, offset)?;
+            }
+        } else {
+            // The indirect `ret_ptr` itself will remain deterministic, and thus replay will not
+            // need to change this. However, replay will have to overwrite any nested stored
+            // lowerings (deep copy)
+            cx.store.0.replay_event(
+                |_| true,
+                |event: ComponentHostFuncReturnEvent, rmeta| {
+                    if rmeta.validate {
+                        event.validate(result_tys)
+                    } else {
+                        Ok(())
+                    }
+                },
+            )?;
         }
+        // Recording here is just for marking the return event
+        cx.store.0.record_event(
+            |_| true,
+            |rmeta| {
+                ComponentHostFuncReturnEvent::new(&[], rmeta.add_validation.then_some(result_tys))
+            },
+        );
     }
 
     flags.set_may_leave(true);
 
-    cx.exit_call()?;
+    if !replay_enabled {
+        cx.exit_call()?;
+    }
 
     return Ok(());
 }

@@ -3,7 +3,7 @@ use crate::prelude::*;
 use core::fmt;
 use core::mem::{self, MaybeUninit};
 use serde::{Deserialize, Serialize};
-use wasmtime_environ::component::InterfaceType;
+use wasmtime_environ::component::TypeTuple;
 use wasmtime_environ::{WasmFuncType, WasmValType};
 
 const VAL_RAW_SIZE: usize = mem::size_of::<ValRaw>();
@@ -105,7 +105,7 @@ where
 /// Typechecking validation for replay, if `src_types` exist
 ///
 /// Returns [`ReplayError::FailedFuncValidation`] if typechecking fails
-fn replay_args_typecheck<T>(src_types: Option<&T>, expect_types: &T) -> Result<(), ReplayError>
+fn replay_args_typecheck<T>(src_types: Option<T>, expect_types: T) -> Result<(), ReplayError>
 where
     T: PartialEq,
 {
@@ -134,19 +134,19 @@ pub struct ComponentHostFuncEntryEvent {
     ///
     /// Note: This relies on the invariant that [InterfaceType] will always be
     /// deterministic. Currently, the type indices into various [ComponentTypes]
-    /// do maintain this allowing for quick type-checking.
-    types: Option<InterfaceType>,
+    /// maintain this, allowing for quick type-checking.
+    types: Option<TypeTuple>,
 }
 impl ComponentHostFuncEntryEvent {
     // Record
-    pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<InterfaceType>) -> Self {
+    pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<&TypeTuple>) -> Self {
         Self {
             args: func_argvals_from_raw_slice(args),
-            types: types,
+            types: types.cloned(),
         }
     }
     // Replay
-    pub fn validate(&self, expect_types: &InterfaceType) -> Result<(), ReplayError> {
+    pub fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
         replay_args_typecheck(self.types.as_ref(), expect_types)
     }
 }
@@ -158,27 +158,35 @@ impl ComponentHostFuncEntryEvent {
 pub struct ComponentHostFuncReturnEvent {
     /// Lowered values passed across the call return boundary
     args: RRFuncArgVals,
-    /// Optional param/return types (required to support replay validation)
-    types: Option<InterfaceType>,
+    /// Optional param/return types (required to support replay validation).
+    ///
+    /// Note: This relies on the invariant that [InterfaceType] will always be
+    /// deterministic. Currently, the type indices into various [ComponentTypes]
+    /// maintain this, allowing for quick type-checking.
+    types: Option<TypeTuple>,
 }
 impl ComponentHostFuncReturnEvent {
     // Record
-    pub fn new(args: &[ValRaw], types: Option<InterfaceType>) -> Self {
+    pub fn new(args: &[ValRaw], types: Option<&TypeTuple>) -> Self {
         Self {
             args: func_argvals_from_raw_slice(args),
-            types: types,
+            types: types.cloned(),
         }
     }
     // Replay
+    pub fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
+        replay_args_typecheck(self.types.as_ref(), expect_types)
+    }
+
     /// Consume the caller event and encode it back into the slice with an optional
     /// typechecking validation of the event.
     pub fn move_into_slice(
         self,
         args: &mut [ValRaw],
-        expect_types: Option<&InterfaceType>,
+        expect_types: Option<&TypeTuple>,
     ) -> Result<(), ReplayError> {
         if let Some(e) = expect_types {
-            replay_args_typecheck(self.types.as_ref(), e)?;
+            self.validate(e)?;
         }
         func_argvals_into_raw_slice(self.args, args);
         Ok(())
