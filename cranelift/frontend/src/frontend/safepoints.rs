@@ -610,10 +610,7 @@ impl SafepointSpiller {
     /// rewrite the function's instructions to spill and reload them as
     /// necessary.
     pub fn run(&mut self, func: &mut Function, stack_map_values: &EntitySet<ir::Value>) {
-        log::trace!(
-            "values needing inclusion in stack maps: {:?}",
-            stack_map_values
-        );
+        log::trace!("values needing inclusion in stack maps: {stack_map_values:?}");
         log::trace!(
             "before inserting safepoint spills and reloads:\n{}",
             func.display()

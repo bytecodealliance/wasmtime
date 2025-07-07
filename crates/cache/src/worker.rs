@@ -110,8 +110,7 @@ impl Worker {
         if let Err(ref err) = sent_event {
             info!(
                 "Failed to send asynchronously message to worker thread, \
-                 event: {:?}, error: {}",
-                event, err
+                 event: {event:?}, error: {err}"
             );
         }
 
@@ -260,12 +259,11 @@ impl WorkerThread {
 
         match rustix::process::nice(NICE_DELTA_FOR_BACKGROUND_TASKS) {
             Ok(current_nice) => {
-                debug!("New nice value of worker thread: {}", current_nice);
+                debug!("New nice value of worker thread: {current_nice}");
             }
             Err(err) => {
                 warn!(
-                    "Failed to lower worker thread priority ({:?}). It might affect application performance.",
-                    err
+                    "Failed to lower worker thread priority ({err:?}). It might affect application performance."
                 );
             }
         };

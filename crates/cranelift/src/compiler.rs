@@ -280,7 +280,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let timing = cranelift_codegen::timing::take_current();
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
-        log::trace!("{:?} timing info\n{}", func_index, timing);
+        log::trace!("{func_index:?} timing info\n{timing}");
 
         Ok(CompiledFunctionBody {
             code: Box::new(func),

@@ -115,7 +115,7 @@ impl<'a> StackMap<'a> {
     /// map is associated with.
     pub unsafe fn live_gc_refs(&self, sp: *mut usize) -> impl Iterator<Item = *mut u32> + '_ {
         self.offsets().map(move |i| {
-            log::trace!("Live GC ref in frame at frame offset {:#x}", i);
+            log::trace!("Live GC ref in frame at frame offset {i:#x}");
             let i = usize::try_from(i).unwrap();
             let ptr_to_gc_ref = unsafe { sp.byte_add(i) };
 
