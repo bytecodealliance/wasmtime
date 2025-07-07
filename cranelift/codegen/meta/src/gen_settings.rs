@@ -205,18 +205,6 @@ fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
     fmt.doc_comment("User-defined settings.");
     fmtln!(fmt, "#[allow(dead_code)]");
     fmt.add_block("impl Flags", |fmt| {
-        fmt.doc_comment("Get a view of the boolean predicates.");
-        fmt.add_block(
-            "pub fn predicate_view(&self) -> crate::settings::PredicateView<'_>",
-            |fmt| {
-                fmtln!(
-                    fmt,
-                    "crate::settings::PredicateView::new(&self.bytes[{}..])",
-                    group.bool_start_byte_offset
-                );
-            },
-        );
-
         if !group.settings.is_empty() {
             fmt.doc_comment("Dynamic numbered predicate getter.");
             fmt.add_block("fn numbered_predicate(&self, p: usize) -> bool", |fmt| {
