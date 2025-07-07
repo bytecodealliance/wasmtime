@@ -1,3 +1,7 @@
+// FIXME: This file was copied from vm/component/resources.rs and should be
+// deduplicated as part of
+// https://github.com/bytecodealliance/wasmtime/issues/11189.
+
 use {
     alloc::vec::Vec,
     anyhow::{Result, bail},
