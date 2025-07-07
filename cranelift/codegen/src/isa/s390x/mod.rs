@@ -112,6 +112,10 @@ impl TargetIsa for S390xBackend {
         self.isa_flags.iter().collect()
     }
 
+    fn isa_flags_hash_key(&self) -> &[u8] {
+        self.isa_flags.hash_key()
+    }
+
     fn dynamic_vector_bytes(&self, _dyn_ty: Type) -> u32 {
         16
     }

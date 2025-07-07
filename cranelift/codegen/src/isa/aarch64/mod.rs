@@ -112,6 +112,10 @@ impl TargetIsa for AArch64Backend {
         self.isa_flags.iter().collect()
     }
 
+    fn isa_flags_hash_key(&self) -> &[u8] {
+        self.isa_flags.hash_key()
+    }
+
     fn is_branch_protection_enabled(&self) -> bool {
         self.isa_flags.use_bti()
     }

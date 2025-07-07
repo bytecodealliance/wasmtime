@@ -114,6 +114,10 @@ impl TargetIsa for Riscv64Backend {
         self.isa_flags.iter().collect()
     }
 
+    fn isa_flags_hash_key(&self) -> &[u8] {
+        self.isa_flags.hash_key()
+    }
+
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,

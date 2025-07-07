@@ -409,9 +409,18 @@ fn gen_display(group: &SettingGroup, fmt: &mut Formatter) {
     });
 }
 
+fn gen_hash_key(fmt: &mut Formatter) {
+    fmt.add_block("impl Flags", |fmt| {
+        fmt.doc_comment("Get the flag values as raw bytes for hashing.");
+        fmt.add_block("pub fn hash_key(&self) -> &[u8]", |fmt| {
+            fmtln!(fmt, "&self.bytes");
+        });
+    });
+}
+
 fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     // Generate struct.
-    fmtln!(fmt, "#[derive(Clone, Hash)]");
+    fmtln!(fmt, "#[derive(Clone, PartialEq, Hash)]");
     fmt.doc_comment(format!("Flags group `{}`.", group.name));
     fmt.add_block("pub struct Flags", |fmt| {
         fmtln!(fmt, "bytes: [u8; {}],", group.byte_size());
@@ -424,6 +433,7 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     gen_descriptors(group, fmt);
     gen_template(group, fmt);
     gen_display(group, fmt);
+    gen_hash_key(fmt);
 }
 
 pub(crate) fn generate(
