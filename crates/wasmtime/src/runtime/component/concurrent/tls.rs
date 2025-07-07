@@ -149,3 +149,78 @@ pub fn try_get<R>(f: impl FnOnce(TryGet<'_>) -> R) -> R {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{TryGet, get, set, try_get};
+    use crate::{AsContextMut, Engine, Store};
+
+    #[test]
+    fn test_simple() {
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
+
+        set(store.as_context_mut().0, || {
+            get(|_| {});
+            try_get(|t| {
+                assert!(matches!(t, TryGet::Some(_)));
+            });
+        });
+    }
+
+    #[test]
+    fn test_try_get() {
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
+
+        try_get(|t| {
+            assert!(matches!(t, TryGet::None));
+            try_get(|t| {
+                assert!(matches!(t, TryGet::None));
+            });
+        });
+        set(store.as_context_mut().0, || {
+            get(|_| {
+                try_get(|t| {
+                    assert!(matches!(t, TryGet::Taken));
+                    try_get(|t| {
+                        assert!(matches!(t, TryGet::Taken));
+                    });
+                });
+            });
+            try_get(|t| {
+                assert!(matches!(t, TryGet::Some(_)));
+                try_get(|t| {
+                    assert!(matches!(t, TryGet::Taken));
+                    try_get(|t| {
+                        assert!(matches!(t, TryGet::Taken));
+                    });
+                });
+            });
+            try_get(|t| {
+                assert!(matches!(t, TryGet::Some(_)));
+                try_get(|t| {
+                    assert!(matches!(t, TryGet::Taken));
+                });
+            });
+        });
+        try_get(|t| {
+            assert!(matches!(t, TryGet::None));
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "attempted to recursively call")]
+    fn test_get_panic() {
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
+
+        set(store.as_context_mut().0, || {
+            get(|_| {
+                get(|_| {
+                    panic!("should not get here");
+                });
+            });
+        });
+    }
+}
