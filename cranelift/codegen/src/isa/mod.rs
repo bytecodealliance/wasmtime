@@ -294,6 +294,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 
+    /// Get the ISA-dependent flag values as raw bytes for hashing.
+    fn isa_flags_hash_key(&self) -> IsaFlagsHashKey<'_>;
+
     /// Get a flag indicating whether branch protection is enabled.
     fn is_branch_protection_enabled(&self) -> bool {
         false
@@ -414,6 +417,10 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// generally only necessary for the `default_call_conv`.
     fn default_argument_extension(&self) -> ir::ArgumentExtension;
 }
+
+/// A wrapper around the ISA-dependent flags types which only implements `Hash`.
+#[derive(Hash)]
+pub struct IsaFlagsHashKey<'a>(&'a [u8]);
 
 /// Function alignment specifications as required by an ISA, returned by
 /// [`TargetIsa::function_alignment`].

@@ -208,18 +208,6 @@ fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
     fmt.doc_comment("User-defined settings.");
     fmtln!(fmt, "#[allow(dead_code, reason = \"generated code\")]");
     fmt.add_block("impl Flags", |fmt| {
-        fmt.doc_comment("Get a view of the boolean predicates.");
-        fmt.add_block(
-            "pub fn predicate_view(&self) -> crate::settings::PredicateView<'_>",
-            |fmt| {
-                fmtln!(
-                    fmt,
-                    "crate::settings::PredicateView::new(&self.bytes[{}..])",
-                    group.bool_start_byte_offset
-                );
-            },
-        );
-
         if !group.settings.is_empty() {
             fmt.doc_comment("Dynamic numbered predicate getter.");
             fmt.add_block("fn numbered_predicate(&self, p: usize) -> bool", |fmt| {
@@ -424,9 +412,18 @@ fn gen_display(group: &SettingGroup, fmt: &mut Formatter) {
     });
 }
 
+fn gen_hash_key(fmt: &mut Formatter) {
+    fmt.add_block("impl Flags", |fmt| {
+        fmt.doc_comment("Get the flag values as raw bytes for hashing.");
+        fmt.add_block("pub fn hash_key(&self) -> &[u8]", |fmt| {
+            fmtln!(fmt, "&self.bytes");
+        });
+    });
+}
+
 fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     // Generate struct.
-    fmtln!(fmt, "#[derive(Clone, Hash)]");
+    fmtln!(fmt, "#[derive(Clone, PartialEq, Hash)]");
     fmt.doc_comment(format!("Flags group `{}`.", group.name));
     fmt.add_block("pub struct Flags", |fmt| {
         fmtln!(fmt, "bytes: [u8; {}],", group.byte_size());
@@ -439,6 +436,7 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     gen_descriptors(group, fmt);
     gen_template(group, fmt);
     gen_display(group, fmt);
+    gen_hash_key(fmt);
 }
 
 pub(crate) fn generate(

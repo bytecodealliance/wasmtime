@@ -5,7 +5,7 @@ use crate::ir::{self, Function, Type};
 use crate::isa::s390x::settings as s390x_settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::isa::{Builder as IsaBuilder, FunctionAlignment, TargetIsa};
+use crate::isa::{Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey, TargetIsa};
 use crate::machinst::{
     CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode, compile,
@@ -110,6 +110,10 @@ impl TargetIsa for S390xBackend {
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
+    }
+
+    fn isa_flags_hash_key(&self) -> IsaFlagsHashKey<'_> {
+        IsaFlagsHashKey(self.isa_flags.hash_key())
     }
 
     fn dynamic_vector_bytes(&self, _dyn_ty: Type) -> u32 {
