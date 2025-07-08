@@ -794,15 +794,19 @@ impl ConcurrentState {
         };
 
         match code {
-            callback_code::EXIT => match &self.get(guest_task)?.caller {
-                Caller::Host(_) => {
-                    log::trace!("handle_callback_code will delete task {guest_task:?}");
-                    Waitable::Guest(guest_task).delete_from(self)?;
+            callback_code::EXIT => {
+                let task = self.get_mut(guest_task)?;
+                match &task.caller {
+                    Caller::Host(_) => {
+                        log::trace!("handle_callback_code will delete task {guest_task:?}");
+                        Waitable::Guest(guest_task).delete_from(self)?;
+                    }
+                    Caller::Guest { .. } => {
+                        task.exited = true;
+                        task.callback = None;
+                    }
                 }
-                Caller::Guest { .. } => {
-                    self.get_mut(guest_task)?.callback = None;
-                }
-            },
+            }
             callback_code::YIELD => {
                 // Push this task onto the "low priority" queue so it runs after
                 // any other tasks have had a chance to run.
@@ -1041,14 +1045,14 @@ impl ConcurrentState {
 
         let (rep, state) = self.waitable_tables[caller_instance].remove_by_index(task_id)?;
 
-        let (waitable, expected_caller_instance) = match state {
+        let (waitable, expected_caller_instance, delete) = match state {
             WaitableState::HostTask => {
                 let id = TableId::<HostTask>::new(rep);
                 let task = self.get(id)?;
                 if task.abort_handle.is_some() {
                     bail!("cannot drop a subtask which has not yet resolved");
                 }
-                (Waitable::Host(id), task.caller_instance)
+                (Waitable::Host(id), task.caller_instance, true)
             }
             WaitableState::GuestTask => {
                 let id = TableId::<GuestTask>::new(rep);
@@ -1057,7 +1061,7 @@ impl ConcurrentState {
                     bail!("cannot drop a subtask which has not yet resolved");
                 }
                 if let Caller::Guest { instance, .. } = &task.caller {
-                    (Waitable::Guest(id), *instance)
+                    (Waitable::Guest(id), *instance, task.exited)
                 } else {
                     unreachable!()
                 }
@@ -1067,6 +1071,10 @@ impl ConcurrentState {
 
         if waitable.take_event(self)?.is_some() {
             bail!("cannot drop a subtask with an undelivered event");
+        }
+
+        if delete {
+            waitable.delete_from(self)?;
         }
 
         // Since waitables can neither be passed between instances nor forged,
@@ -1095,8 +1103,73 @@ impl ConcurrentState {
 }
 
 impl Instance {
+    /// Enable or disable concurrent state debugging mode for e.g. integration
+    /// tests.
+    ///
+    /// This will avoid re-using deleted handles, making it easier to catch
+    /// e.g. "use-after-delete" and "double-delete" errors.  It can also make
+    /// reading trace output easier since it ensures handles are never
+    /// repurposed.
+    #[doc(hidden)]
+    pub fn enable_concurrent_state_debug(&self, mut store: impl AsContextMut, enable: bool) {
+        self.id()
+            .get_mut(store.as_context_mut().0)
+            .concurrent_state_mut()
+            .table
+            .enable_debug(enable);
+        // TODO: do the same for the tables holding guest-facing handles
+    }
+
+    /// Assert that all the relevant tables and queues in the concurrent state
+    /// for this instance are empty.
+    ///
+    /// This is for sanity checking in integration tests
+    /// (e.g. `component-async-tests`) that the relevant state has been cleared
+    /// after each test concludes.  This should help us catch leaks, e.g. guest
+    /// tasks which haven't been deleted despite having completed and having
+    /// been dropped by their supertasks.
+    #[doc(hidden)]
+    pub fn assert_concurrent_state_empty(&self, mut store: impl AsContextMut) {
+        let state = self
+            .id()
+            .get_mut(store.as_context_mut().0)
+            .concurrent_state_mut();
+        assert!(state.table.is_empty(), "non-empty table: {:?}", state.table);
+        assert!(state.high_priority.is_empty());
+        assert!(state.low_priority.is_empty());
+        assert!(state.guest_task.is_none());
+        assert!(
+            state
+                .futures
+                .get_mut()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            state
+                .waitable_tables
+                .iter()
+                .all(|(_, table)| table.is_empty())
+        );
+        assert!(
+            state
+                .instance_states
+                .iter()
+                .all(|(_, state)| state.pending.is_empty())
+        );
+        assert!(
+            state
+                .error_context_tables
+                .iter()
+                .all(|(_, table)| table.is_empty())
+        );
+        assert!(state.global_error_context_ref_counts.is_empty());
+    }
+
     /// Poll the specified future as part of this instance's event loop until it
-    /// yields a result _or_ no further progress can be maded.
+    /// yields a result _or_ no further progress can be made.
     ///
     /// This is intended for use in the top-level code of a host embedding with
     /// `Future`s which depend (directly or indirectly) on previously-started
@@ -2007,6 +2080,18 @@ impl Instance {
 
                 instance.maybe_pop_call_context(store.store_opaque_mut(), guest_task)?;
 
+                let task = instance.concurrent_state_mut(store).get_mut(guest_task)?;
+
+                match &task.caller {
+                    Caller::Host(_) => {
+                        Waitable::Guest(guest_task)
+                            .delete_from(instance.concurrent_state_mut(store))?;
+                    }
+                    Caller::Guest { .. } => {
+                        task.exited = true;
+                    }
+                }
+
                 Ok(())
             })
         };
@@ -2345,13 +2430,14 @@ impl Instance {
         // event loop more complicated and is probably only worth doing if
         // there's a measurable performance benefit.  In addition, it would mean
         // blocking the caller if the callee calls a blocking sync-lowered
-        // import.
+        // import, and as of this writing the spec says we must not do that.
         //
         // Alternatively, the fused adapter code could be modified to call the
         // callee directly without calling a host-provided intrinsic at all (in
         // which case it would need to do its own, inline backpressure checks,
         // etc.).  Again, we'd want to see a measurable performance benefit
-        // before committing to such an optimization.
+        // before committing to such an optimization.  And again, we'd need to
+        // update the spec to allow that.
         let (status, waitable) = loop {
             self.suspend(
                 store.0.traitobj_mut(),
@@ -2400,6 +2486,8 @@ impl Instance {
                 if let Some(result) = result {
                     storage[0] = MaybeUninit::new(result);
                 }
+
+                Waitable::Guest(guest_task).delete_from(state)?;
             } else {
                 // This means the callee failed to call either `task.return` or
                 // `task.cancel` before exiting.
@@ -3748,6 +3836,8 @@ struct GuestTask {
     call_post_return_automatically: bool,
     /// The `ExportIndex` of the guest function being called, if known.
     function_index: Option<ExportIndex>,
+    /// Whether or not the task has exited.
+    exited: bool,
 }
 
 impl GuestTask {
@@ -3781,6 +3871,7 @@ impl GuestTask {
             wake_on_cancel: None,
             call_post_return_automatically,
             function_index: None,
+            exited: false,
         })
     }
 

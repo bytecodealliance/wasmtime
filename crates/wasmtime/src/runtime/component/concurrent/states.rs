@@ -37,6 +37,13 @@ impl<T> Default for StateTable<T> {
 }
 
 impl<T> StateTable<T> {
+    /// Returns whether or not this table is empty.
+    pub fn is_empty(&self) -> bool {
+        self.slots
+            .iter()
+            .all(|slot| matches!(slot, Slot::Free { .. }))
+    }
+
     pub fn insert(&mut self, rep: u32, state: T) -> Result<u32> {
         if matches!(self
             .reps_to_indexes

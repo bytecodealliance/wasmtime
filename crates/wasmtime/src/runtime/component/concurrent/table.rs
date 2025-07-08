@@ -109,6 +109,7 @@ impl std::error::Error for TableError {}
 pub struct Table {
     entries: Vec<Entry>,
     free_head: Option<usize>,
+    debug: bool,
 }
 
 enum Entry {
@@ -131,6 +132,8 @@ impl Entry {
         }
     }
 }
+
+struct Tombstone;
 
 /// This structure tracks parent and child relationships for a given table entry.
 ///
@@ -169,15 +172,29 @@ impl TableEntry {
 impl Table {
     /// Create an empty table
     pub fn new() -> Self {
-        let mut me = Self {
+        Self {
             entries: Vec::new(),
             free_head: None,
-        };
+            debug: false,
+        }
+    }
 
-        // TODO: remove this once we've stopped exposing these indexes to guest code:
-        me.push(()).unwrap();
+    /// Returns whether or not this table is empty.
+    pub fn is_empty(&self) -> bool {
+        self.entries.iter().all(|entry| match entry {
+            Entry::Free { .. } => true,
+            Entry::Occupied { entry } => entry.entry.downcast_ref::<Tombstone>().is_some(),
+        })
+    }
 
-        me
+    /// Enable or disable "debug mode".
+    ///
+    /// When this is enabled, the `delete` method will leave a tombstone in
+    /// place of the deleted item rather than add the entry to the free list.
+    /// This can help uncover "use-after-delete" or "double-delete" bugs which
+    /// might otherwise go unnoticed if an entry is repopulated.
+    pub fn enable_debug(&mut self, enable: bool) {
+        self.debug = enable;
     }
 
     /// Inserts a new entry into this table, returning a corresponding
@@ -203,19 +220,35 @@ impl Table {
 
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
     fn free_entry(&mut self, ix: usize) -> TableEntry {
-        let entry = match std::mem::replace(
-            &mut self.entries[ix],
-            Entry::Free {
-                next: self.free_head,
-            },
-        ) {
-            Entry::Occupied { entry } => entry,
-            Entry::Free { .. } => unreachable!(),
-        };
+        if self.debug {
+            match std::mem::replace(
+                &mut self.entries[ix],
+                Entry::Occupied {
+                    entry: TableEntry {
+                        entry: Box::new(Tombstone),
+                        parent: None,
+                        children: BTreeSet::new(),
+                    },
+                },
+            ) {
+                Entry::Occupied { entry } => entry,
+                Entry::Free { .. } => unreachable!(),
+            }
+        } else {
+            let entry = match std::mem::replace(
+                &mut self.entries[ix],
+                Entry::Free {
+                    next: self.free_head,
+                },
+            ) {
+                Entry::Occupied { entry } => entry,
+                Entry::Free { .. } => unreachable!(),
+            };
 
-        self.free_head = Some(ix);
+            self.free_head = Some(ix);
 
-        entry
+            entry
+        }
     }
 
     /// Push a new entry into the table, returning its handle. This will prefer to use free entries
@@ -349,5 +382,25 @@ impl IntoIterator for Table {
 
     fn into_iter(self) -> TableIterator {
         TableIterator(self.entries.into_iter())
+    }
+}
+
+impl fmt::Debug for Table {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[")?;
+        let mut wrote = false;
+        for (index, entry) in self.entries.iter().enumerate() {
+            if let Entry::Occupied { entry } = entry {
+                if entry.entry.downcast_ref::<Tombstone>().is_none() {
+                    if wrote {
+                        write!(f, ", ")?;
+                    } else {
+                        wrote = true;
+                    }
+                    write!(f, "{index}")?;
+                }
+            }
+        }
+        write!(f, "]")
     }
 }
