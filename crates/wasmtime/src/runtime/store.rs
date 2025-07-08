@@ -240,9 +240,9 @@ pub struct StoreInner<T: 'static> {
 }
 
 enum ResourceLimiterInner<T> {
-    Sync(Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync>),
+    Sync(Box<dyn (FnMut(&mut T) -> &mut dyn crate::ResourceLimiter) + Send + Sync>),
     #[cfg(feature = "async")]
-    Async(Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync) + Send + Sync>),
+    Async(Box<dyn (FnMut(&mut T) -> &mut dyn crate::ResourceLimiterAsync) + Send + Sync>),
 }
 
 enum CallHookInner<T: 'static> {
@@ -753,7 +753,7 @@ impl<T> Store<T> {
     /// [`ResourceLimiter`]: crate::ResourceLimiter
     pub fn limiter(
         &mut self,
-        mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync + 'static,
+        mut limiter: impl (FnMut(&mut T) -> &mut dyn crate::ResourceLimiter) + Send + Sync + 'static,
     ) {
         // Apply the limits on instances, tables, and memory given by the limiter:
         let inner = &mut self.inner;
