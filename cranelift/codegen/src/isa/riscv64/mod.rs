@@ -3,7 +3,9 @@
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{Function, Type};
 use crate::isa::riscv64::settings as riscv_settings;
-use crate::isa::{Builder as IsaBuilder, FunctionAlignment, OwnedTargetIsa, TargetIsa};
+use crate::isa::{
+    Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey, OwnedTargetIsa, TargetIsa,
+};
 use crate::machinst::{
     CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode, compile,
@@ -114,8 +116,8 @@ impl TargetIsa for Riscv64Backend {
         self.isa_flags.iter().collect()
     }
 
-    fn isa_flags_hash_key(&self) -> &[u8] {
-        self.isa_flags.hash_key()
+    fn isa_flags_hash_key(&self) -> IsaFlagsHashKey<'_> {
+        IsaFlagsHashKey(self.isa_flags.hash_key())
     }
 
     #[cfg(feature = "unwind")]

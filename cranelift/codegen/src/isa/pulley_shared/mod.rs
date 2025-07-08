@@ -11,7 +11,7 @@ use crate::{
     MachTextSectionBuilder, TextSectionBuilder,
     dominator_tree::DominatorTree,
     ir,
-    isa::{self, OwnedTargetIsa, TargetIsa},
+    isa::{self, IsaFlagsHashKey, OwnedTargetIsa, TargetIsa},
     machinst::{self, CompiledCodeStencil, MachInst, SigSet, VCode},
     result::CodegenResult,
     settings::{self as shared_settings, Flags},
@@ -155,8 +155,8 @@ where
         self.isa_flags.iter().collect()
     }
 
-    fn isa_flags_hash_key(&self) -> &[u8] {
-        self.isa_flags.hash_key()
+    fn isa_flags_hash_key(&self) -> IsaFlagsHashKey<'_> {
+        IsaFlagsHashKey(self.isa_flags.hash_key())
     }
 
     fn dynamic_vector_bytes(&self, _dynamic_ty: ir::Type) -> u32 {
