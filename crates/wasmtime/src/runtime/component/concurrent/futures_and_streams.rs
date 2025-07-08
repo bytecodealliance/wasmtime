@@ -22,7 +22,6 @@ use std::future::Future;
 use std::iter;
 use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
-use std::ops::DerefMut;
 use std::ptr::NonNull;
 use std::string::{String, ToString};
 use std::sync::{Arc, Mutex};
@@ -415,22 +414,22 @@ fn send<T>(tx: &mut mpsc::Sender<T>, value: T) {
     }
 }
 
-/// State shared between a `Watch` and the wrapped future it is associated with.
-///
-/// See `Watch` for details.
-struct WatchInner<T> {
-    inner: T,
-    rx: oneshot::Receiver<()>,
-    waker: Option<Waker>,
-}
-
 /// Wrapper struct which may be converted to the inner value as needed.
 ///
 /// This object is normally paired with a `Future` which represents a state
 /// change on the inner value, resolving when that state change happens _or_
 /// when the `Watch` is converted back into the inner value -- whichever happens
 /// first.
-pub struct Watch<T>(Arc<Mutex<Option<WatchInner<T>>>>);
+pub struct Watch<T> {
+    inner: T,
+    waker: Arc<Mutex<WatchState>>,
+}
+
+enum WatchState {
+    Idle,
+    Waiting(Waker),
+    Done,
+}
 
 impl<T> Watch<T> {
     /// Convert this object into its inner value.
@@ -438,11 +437,11 @@ impl<T> Watch<T> {
     /// Calling this function will cause the associated `Future` to resolve
     /// immediately if it hasn't already.
     pub fn into_inner(self) -> T {
-        let inner = self.0.try_lock().unwrap().take().unwrap();
-        if let Some(waker) = inner.waker {
+        let state = mem::replace(&mut *self.waker.lock().unwrap(), WatchState::Done);
+        if let WatchState::Waiting(waker) = state {
             waker.wake();
         }
-        inner.inner
+        self.inner
     }
 }
 
@@ -451,36 +450,32 @@ impl<T> Watch<T> {
 /// the returned `Watch`.
 fn watch<T: Send + 'static>(
     instance: Instance,
-    rx: oneshot::Receiver<()>,
+    mut rx: oneshot::Receiver<()>,
     inner: T,
 ) -> (impl Future<Output = ()> + Send + 'static, Watch<T>) {
-    let inner = Arc::new(Mutex::new(Some(WatchInner {
-        inner,
-        rx,
-        waker: None,
-    })));
+    let waker = Arc::new(Mutex::new(WatchState::Idle));
     (
         super::checked(
             instance,
             future::poll_fn({
-                let inner = inner.clone();
+                let waker = waker.clone();
 
                 move |cx| {
-                    if let Some(inner) = inner.try_lock().unwrap().deref_mut() {
-                        match inner.rx.poll_unpin(cx) {
-                            Poll::Ready(_) => Poll::Ready(()),
-                            Poll::Pending => {
-                                inner.waker = Some(cx.waker().clone());
-                                Poll::Pending
-                            }
+                    if rx.poll_unpin(cx).is_ready() {
+                        return Poll::Ready(());
+                    }
+                    let mut state = waker.lock().unwrap();
+                    match *state {
+                        WatchState::Done => Poll::Ready(()),
+                        _ => {
+                            *state = WatchState::Waiting(cx.waker().clone());
+                            Poll::Pending
                         }
-                    } else {
-                        Poll::Ready(())
                     }
                 }
             }),
         ),
-        Watch(inner),
+        Watch { waker, inner },
     )
 }
 
