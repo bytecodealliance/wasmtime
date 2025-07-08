@@ -650,11 +650,10 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.backtrace]]
-version = "0.3.74"
-when = "2024-09-08"
-user-id = 539
-user-login = "cuviper"
-user-name = "Josh Stone"
+version = "0.3.75"
+when = "2025-05-06"
+user-id = 55123
+user-login = "rust-lang-owner"
 
 [[publisher.bstr]]
 version = "1.6.0"

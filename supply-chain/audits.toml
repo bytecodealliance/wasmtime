@@ -4387,6 +4387,12 @@ user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2023-06-29"
 end = "2024-07-14"
 
+[[trusted.backtrace]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2025-05-06"
+end = "2026-07-08"
+
 [[trusted.bstr]]
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
