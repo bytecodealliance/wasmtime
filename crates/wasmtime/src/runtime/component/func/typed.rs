@@ -209,9 +209,8 @@ where
             let ptr = Arc::new(AtomicPtr::new((&raw mut params).cast::<u8>()));
             let _clear = ClearOnDrop(ptr.clone());
 
-            let prepared = self.prepare_call(
-                store.as_context_mut(),
-                move |cx, ty, dst| {
+            let prepared =
+                self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
                     // SAFETY: the goal here is to get `Params`, a non-`'static`
                     // value, to live long enough to the lowering of the
                     // parameters. We're guaranteed that `Params` lives in the
@@ -224,9 +223,7 @@ where
                     // rustc and the signature of `prepare_call`.
                     let params = unsafe { ptr.load(Relaxed).cast::<Params>().as_ref().unwrap() };
                     Self::lower_args(cx, ty, dst, params)
-                },
-                false,
-            )?;
+                })?;
 
             let result = concurrent::queue_call(store.as_context_mut(), prepared)?;
             return self.func.instance.run(store, result).await?;
@@ -276,11 +273,10 @@ where
         );
 
         let result = (|| {
-            let prepared = self.prepare_call(
-                store.as_context_mut(),
-                move |cx, ty, dst| Self::lower_args(cx, ty, dst, &params),
-                true,
-            )?;
+            let prepared =
+                self.prepare_call(store.as_context_mut(), true, move |cx, ty, dst| {
+                    Self::lower_args(cx, ty, dst, &params)
+                })?;
             concurrent::queue_call(store, prepared)
         })();
 
@@ -315,6 +311,7 @@ where
     fn prepare_call<T>(
         self,
         store: StoreContextMut<'_, T>,
+        call_post_return_automatically: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
             InterfaceType,
@@ -323,7 +320,6 @@ where
         + Send
         + Sync
         + 'static,
-        call_post_return_automatically: bool,
     ) -> Result<PreparedCall<Return>>
     where
         Return: 'static,
@@ -342,12 +338,13 @@ where
         };
         concurrent::prepare_call(
             store,
+            self.func,
+            param_count,
+            call_post_return_automatically,
             move |func, store, params_out| {
-                func.with_lower_context(
-                    store,
-                    |cx, ty| lower(cx, ty, params_out),
-                    call_post_return_automatically,
-                )
+                func.with_lower_context(store, call_post_return_automatically, |cx, ty| {
+                    lower(cx, ty, params_out)
+                })
             },
             move |func, store, results| {
                 let result = if Return::flatten_count() <= max_results {
@@ -379,9 +376,6 @@ where
                 };
                 Ok(Box::new(result))
             },
-            self.func,
-            param_count,
-            call_post_return_automatically,
         )
     }
 

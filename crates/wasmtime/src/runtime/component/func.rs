@@ -375,12 +375,13 @@ impl Func {
 
         concurrent::prepare_call(
             store,
+            self,
+            MAX_FLAT_PARAMS,
+            call_post_return_automatically,
             move |func, store, params_out| {
-                func.with_lower_context(
-                    store,
-                    |cx, ty| Self::lower_args(cx, &params, ty, params_out),
-                    call_post_return_automatically,
-                )
+                func.with_lower_context(store, call_post_return_automatically, |cx, ty| {
+                    Self::lower_args(cx, &params, ty, params_out)
+                })
             },
             move |func, store, results| {
                 let max_flat = if func.abi_async(store) {
@@ -393,9 +394,6 @@ impl Func {
                 })?;
                 Ok(Box::new(results))
             },
-            self,
-            MAX_FLAT_PARAMS,
-            call_post_return_automatically,
         )
     }
 
@@ -572,14 +570,10 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        self.with_lower_context(
-            store.as_context_mut(),
-            |cx, ty| {
-                cx.enter_call();
-                lower(cx, ty, map_maybe_uninit!(space.params))
-            },
-            false,
-        )?;
+        self.with_lower_context(store.as_context_mut(), false, |cx, ty| {
+            cx.enter_call();
+            lower(cx, ty, map_maybe_uninit!(space.params))
+        })?;
 
         // SAFETY: We are providing the guarantee that all the inputs are valid.
         // The various pointers passed in for the function are all valid since
@@ -874,8 +868,8 @@ impl Func {
     fn with_lower_context<T>(
         self,
         mut store: StoreContextMut<T>,
-        lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
         may_enter: bool,
+        lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
         let types = self.instance.id().get(store.0).component().types().clone();
         let (options, mut flags, ty, _) = self.abi_info(store.0);

@@ -4394,6 +4394,9 @@ pub(crate) struct PreparedCall<R> {
 /// indefinitely; `drop_params` will be called when they are no longer needed.
 pub(crate) fn prepare_call<T, R>(
     mut store: StoreContextMut<T>,
+    handle: Func,
+    param_count: usize,
+    call_post_return_automatically: bool,
     lower_params: impl FnOnce(Func, StoreContextMut<T>, &mut [MaybeUninit<ValRaw>]) -> Result<()>
     + Send
     + Sync
@@ -4402,9 +4405,6 @@ pub(crate) fn prepare_call<T, R>(
     + Send
     + Sync
     + 'static,
-    handle: Func,
-    param_count: usize,
-    call_post_return_automatically: bool,
 ) -> Result<PreparedCall<R>> {
     let (options, _flags, ty, raw_options) = handle.abi_info(store.0);
 
