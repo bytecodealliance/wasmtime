@@ -2105,6 +2105,14 @@ at https://bytecodealliance.org/security.
         }
         Ok(())
     }
+
+    /// Panics if the replay buffer in the store is non-empty
+    pub(crate) fn ensure_empty_replay_buffer(&mut self) {
+        if let Some(buf) = self.replay_buffer_mut() {
+            let event = buf.pop_event();
+            assert!(event.is_err_and(|e| matches!(e, ReplayError::EmptyBuffer)));
+        }
+    }
 }
 
 /// Helper parameter to [`StoreOpaque::allocate_instance`].
@@ -2435,7 +2443,8 @@ impl Drop for StoreOpaque {
             }
         }
 
-        let _ = self.flush_record_buffer();
+        let _ = self.flush_record_buffer().unwrap();
+        self.ensure_empty_replay_buffer();
     }
 }
 

@@ -19,7 +19,12 @@ pub use events::*;
 /// Macro template for [`RREvent`] and its conversion to/from specific
 /// event types
 macro_rules! rr_event {
-    ( $( $variant:ident($event:ty) ),* ) => (
+        (
+            $(
+                $(#[doc = $doc:literal])*
+                $variant:ident => $event:ty
+            ),*
+        ) => (
         /// A single, unified, low-level recording/replay event
         ///
         /// This type is the narrow waist for serialization/deserialization.
@@ -27,7 +32,10 @@ macro_rules! rr_event {
         /// of parameter/return types) may drop down to one or more [`RREvent`]s
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
         pub enum RREvent {
-            $($variant($event),)*
+            $(
+                $(#[doc = $doc])*
+                $variant($event),
+            )*
         }
         $(
             impl From<$event> for RREvent {
@@ -49,12 +57,20 @@ macro_rules! rr_event {
    );
 }
 
-// Set of supported events
+// Set of supported record/replay events
 rr_event! {
-    CoreHostFuncEntry(CoreHostFuncEntryEvent),
-    CoreHostFuncReturn(CoreHostFuncReturnEvent),
-    ComponentHostFuncEntry(ComponentHostFuncEntryEvent),
-    ComponentHostFuncReturn(ComponentHostFuncReturnEvent)
+    /// Call into host function from Core Wasm
+    CoreHostFuncEntry => CoreHostFuncEntryEvent,
+    /// Return from host function to Core Wasm
+    CoreHostFuncReturn => CoreHostFuncReturnEvent,
+    /// Call into host function from component
+    ComponentHostFuncEntry => ComponentHostFuncEntryEvent,
+    /// Return from host function to component
+    ComponentHostFuncReturn => ComponentHostFuncReturnEvent
+    ///// Component ABI Realloc of linear wasm memory
+    //ComponentRealloc => ComponentReallocEvent,
+    ///// A store into linear wasm memory during component type lowering operations
+    //ComponentLowerStore => ComponentLowerStore
 }
 
 pub trait Recorder {
