@@ -173,12 +173,12 @@ impl<T: Send + Sync + 'static> ReadBuffer<T> for Option<T> {
 }
 
 /// A `WriteBuffer` implementation, backed by a `Vec`.
-pub struct VecBuffer<T> {
+pub struct VecBuffer<T: Send + Sync + 'static> {
     buffer: Vec<MaybeUninit<T>>,
     offset: usize,
 }
 
-impl<T> VecBuffer<T> {
+impl<T: Send + Sync + 'static> VecBuffer<T> {
     /// Create a new instance with the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
@@ -190,35 +190,27 @@ impl<T> VecBuffer<T> {
     /// Reset the state of this buffer, removing all items and preserving its
     /// capacity.
     pub fn reset(&mut self) {
-        self.skip_(self.remaining_().len());
+        self.skip(self.remaining().len());
         self.buffer.clear();
         self.offset = 0;
     }
+}
 
-    fn remaining_(&self) -> &[T] {
+impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
+    fn remaining(&self) -> &[T] {
         // SAFETY: This relies on the invariant (upheld in the other methods of
         // this type) that all the elements from `self.offset` onward are
         // initialized and valid for `self.buffer`.
         unsafe { mem::transmute::<&[MaybeUninit<T>], &[T]>(&self.buffer[self.offset..]) }
     }
 
-    fn skip_(&mut self, count: usize) {
-        assert!(count <= self.remaining_().len());
+    fn skip(&mut self, count: usize) {
+        assert!(count <= self.remaining().len());
         // SAFETY: See comment in `Self::remaining_`
         for item in &mut self.buffer[self.offset..][..count] {
             drop(unsafe { item.as_mut_ptr().read() })
         }
         self.offset = self.offset.checked_add(count).unwrap();
-    }
-}
-
-impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
-    fn remaining(&self) -> &[T] {
-        self.remaining_()
-    }
-
-    fn skip(&mut self, count: usize) {
-        self.skip_(count)
     }
 
     fn take(&mut self, count: usize, fun: &mut dyn FnMut(*const T)) {
@@ -228,7 +220,7 @@ impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
     }
 }
 
-impl<T> From<Vec<T>> for VecBuffer<T> {
+impl<T: Send + Sync + 'static> From<Vec<T>> for VecBuffer<T> {
     fn from(buffer: Vec<T>) -> Self {
         Self {
             // SAFETY: Transmuting from `Vec<T>` to `Vec<MaybeUninit<T>>` should
@@ -239,9 +231,9 @@ impl<T> From<Vec<T>> for VecBuffer<T> {
     }
 }
 
-impl<T> Drop for VecBuffer<T> {
+impl<T: Send + Sync + 'static> Drop for VecBuffer<T> {
     fn drop(&mut self) {
-        self.skip_(self.remaining_().len());
+        self.reset();
     }
 }
 
