@@ -1,7 +1,6 @@
 use bytes::{Bytes, BytesMut};
 use std::io::Cursor;
 use std::mem::{self, MaybeUninit};
-use std::ptr;
 use std::slice;
 use std::vec::Vec;
 
@@ -73,16 +72,34 @@ mod untyped {
 }
 
 /// Trait representing a buffer which may be written to a `StreamWriter`.
+///
+/// # Unsafety
+///
+/// This trait is unsafe due to the contract of the `take` function. This trait
+/// is only safe to implement if the `take` function is implemented correctly,
+/// namely that all the items passed to the closure are fully initialized for
+/// `T`.
 #[doc(hidden)]
-pub trait WriteBuffer<T>: Send + Sync + 'static {
+pub unsafe trait WriteBuffer<T>: Send + Sync + 'static {
     /// Slice of items remaining to be read.
     fn remaining(&self) -> &[T];
+
     /// Skip and drop the specified number of items.
     fn skip(&mut self, count: usize);
+
     /// Take ownership of the specified number of items.
     ///
-    /// The items are passed to `fun` as a raw pointer.
-    fn take(&mut self, count: usize, fun: &mut dyn FnMut(*const T));
+    /// This function will take `count` items from `self` and pass them as a
+    /// contiguous slice to the closure `fun` provided. The `fun` closure may
+    /// assume that the items are all fully initialized and available to read.
+    /// It is expected that `fun` will read all the items provided. Any items
+    /// that aren't read by `fun` will be leaked.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `count` is larger than `self.remaining()`. If `fun` panics
+    /// then items may be leaked.
+    fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<T>]));
 }
 
 /// Trait representing a buffer which may be used to read from a `StreamReader`.
@@ -90,11 +107,19 @@ pub trait WriteBuffer<T>: Send + Sync + 'static {
 pub trait ReadBuffer<T>: Send + Sync + 'static {
     /// Move the specified items into this buffer.
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I);
+
     /// Number of items which may be read before this buffer is full.
     fn remaining_capacity(&self) -> usize;
+
     /// Move (i.e. take ownership of) the specified items into this buffer.
     ///
-    /// This will panic if the specified `input` item type does not match `T`.
+    /// This method will drain `count` items from the `input` provided and move
+    /// ownership into this buffer.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if `count` is larger than
+    /// `self.remaining_capacity()` or if it's larger than `input.remaining()`.
     fn move_from(&mut self, input: &mut dyn WriteBuffer<T>, count: usize);
 }
 
@@ -106,7 +131,9 @@ impl<T, B: ReadBuffer<T>> Extend<T> for Extender<'_, B> {
     }
 }
 
-impl<T: Send + Sync + 'static> WriteBuffer<T> for Option<T> {
+// SAFETY: the `take` implementation below guarantees that the `fun` closure is
+// provided with fully initialized items.
+unsafe impl<T: Send + Sync + 'static> WriteBuffer<T> for Option<T> {
     fn remaining(&self) -> &[T] {
         if let Some(me) = self {
             slice::from_ref(me)
@@ -126,13 +153,12 @@ impl<T: Send + Sync + 'static> WriteBuffer<T> for Option<T> {
         }
     }
 
-    fn take(&mut self, count: usize, fun: &mut dyn FnMut(*const T)) {
+    fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<T>])) {
         match count {
-            0 => fun(ptr::null_mut()),
+            0 => fun(&mut []),
             1 => {
-                assert!(self.is_some());
-                fun(self.remaining().as_ptr());
-                mem::forget(self.take());
+                let mut item = MaybeUninit::new(self.take().unwrap());
+                fun(slice::from_mut(&mut item));
             }
             _ => panic!("cannot forget more than {} item(s)", self.remaining().len()),
         }
@@ -157,11 +183,13 @@ impl<T: Send + Sync + 'static> ReadBuffer<T> for Option<T> {
             0 => {}
             1 => {
                 assert!(self.is_none());
-                input.take(1, &mut |ptr| {
-                    // SAFETY: Per the `TakeBuffer` implementation contract and
-                    // the above assertion, the types match and we have been
-                    // given ownership of the item.
-                    unsafe { *self = Some(ptr.cast::<T>().read()) };
+                input.take(1, &mut |slice| {
+                    // SAFETY: Per the `WriteBuffer` trait contract this block
+                    // has ownership of the items in `slice` and they're all
+                    // valid to take.
+                    unsafe {
+                        *self = Some(slice[0].assume_init_read());
+                    }
                 });
             }
             _ => panic!(
@@ -196,7 +224,10 @@ impl<T: Send + Sync + 'static> VecBuffer<T> {
     }
 }
 
-impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
+// SAFETY: the `take` implementation below guarantees that the `fun` closure is
+// provided with fully initialized items due to `self.offset`-and-onwards being
+// always initialized.
+unsafe impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
     fn remaining(&self) -> &[T] {
         // SAFETY: This relies on the invariant (upheld in the other methods of
         // this type) that all the elements from `self.offset` onward are
@@ -206,17 +237,24 @@ impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
 
     fn skip(&mut self, count: usize) {
         assert!(count <= self.remaining().len());
-        // SAFETY: See comment in `Self::remaining_`
         for item in &mut self.buffer[self.offset..][..count] {
-            drop(unsafe { item.as_mut_ptr().read() })
+            // Note that the offset is incremented first here to ensure that if
+            // any destructors panic we don't attempt to re-drop the item.
+            self.offset += 1;
+            // SAFETY: See comment in `Self::remaining`
+            unsafe {
+                item.assume_init_drop();
+            }
         }
-        self.offset = self.offset.checked_add(count).unwrap();
     }
 
-    fn take(&mut self, count: usize, fun: &mut dyn FnMut(*const T)) {
+    fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<T>])) {
         assert!(count <= self.remaining().len());
-        fun(self.remaining().as_ptr());
-        self.offset = self.offset.checked_add(count).unwrap();
+        // Note that the offset here is incremented before `fun` is called to
+        // ensure that if `fun` panics that the items are still considered
+        // transferred.
+        self.offset += count;
+        fun(&mut self.buffer[self.offset - count..]);
     }
 }
 
@@ -248,19 +286,20 @@ impl<T: Send + Sync + 'static> ReadBuffer<T> for Vec<T> {
 
     fn move_from(&mut self, input: &mut dyn WriteBuffer<T>, count: usize) {
         assert!(count <= self.remaining_capacity());
-        input.take(count, &mut |ptr| {
-            // SAFETY: Per the `TakeBuffer` implementation contract and the
-            // above assertion, the types match and we have been given ownership
-            // of the items.
-            unsafe {
-                ptr::copy(ptr, self.as_mut_ptr().add(self.len()), count);
-                self.set_len(self.len() + count);
+        input.take(count, &mut |slice| {
+            for item in slice {
+                // SAFETY: Per the `WriteBuffer` implementation contract this
+                // function has exclusive ownership of all items in `slice` so
+                // this is safe to take and transfer them here.
+                self.push(unsafe { item.assume_init_read() });
             }
         });
     }
 }
 
-impl WriteBuffer<u8> for Cursor<Bytes> {
+// SAFETY: the `take` implementation below guarantees that the `fun` closure is
+// provided with fully initialized items.
+unsafe impl WriteBuffer<u8> for Cursor<Bytes> {
     fn remaining(&self) -> &[u8] {
         &self.get_ref()[usize::try_from(self.position()).unwrap()..]
     }
@@ -278,14 +317,16 @@ impl WriteBuffer<u8> for Cursor<Bytes> {
         );
     }
 
-    fn take(&mut self, count: usize, fun: &mut dyn FnMut(*const u8)) {
+    fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<u8>])) {
         assert!(count <= self.remaining().len());
-        fun(self.remaining().as_ptr());
+        fun(unsafe_byte_slice(self.remaining()));
         self.skip(count);
     }
 }
 
-impl WriteBuffer<u8> for Cursor<BytesMut> {
+// SAFETY: the `take` implementation below guarantees that the `fun` closure is
+// provided with fully initialized items.
+unsafe impl WriteBuffer<u8> for Cursor<BytesMut> {
     fn remaining(&self) -> &[u8] {
         &self.get_ref()[usize::try_from(self.position()).unwrap()..]
     }
@@ -299,9 +340,9 @@ impl WriteBuffer<u8> for Cursor<BytesMut> {
         );
     }
 
-    fn take(&mut self, count: usize, fun: &mut dyn FnMut(*const u8)) {
+    fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<u8>])) {
         assert!(count <= self.remaining().len());
-        fun(self.remaining().as_ptr());
+        fun(unsafe_byte_slice(self.remaining()));
         self.skip(count);
     }
 }
@@ -317,13 +358,18 @@ impl ReadBuffer<u8> for BytesMut {
 
     fn move_from(&mut self, input: &mut dyn WriteBuffer<u8>, count: usize) {
         assert!(count <= self.remaining_capacity());
-        input.take(count, &mut |ptr| {
-            // SAFETY: Per the `TakeBuffer` implementation contract and the
-            // above assertion, the types match.
-            unsafe {
-                ptr::copy(ptr, self.as_mut_ptr().add(self.len()), count);
-                self.set_len(self.len() + count);
-            }
+        input.take(count, &mut |slice| {
+            // SAFETY: per the contract of `WriteBuffer` all the elements of
+            // the input `slice` are fully initialized so this is safe
+            // to reinterpret the slice.
+            let slice = unsafe { mem::transmute::<&[MaybeUninit<u8>], &[u8]>(slice) };
+            self.extend_from_slice(slice);
         });
     }
+}
+
+fn unsafe_byte_slice(slice: &[u8]) -> &[MaybeUninit<u8>] {
+    // SAFETY: it's always safe to interpret a slice of items as a
+    // possibly-initialized slice of items.
+    unsafe { mem::transmute::<&[u8], &[MaybeUninit<u8>]>(slice) }
 }
