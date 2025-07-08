@@ -2597,6 +2597,12 @@ idioms. No new `unsafe` code and everything looks like what you'd expect a
 compression library to be doing.
 """
 
+[[audits.miniz_oxide]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.5 -> 0.8.9"
+notes = "No new unsafe code, just refactorings."
+
 [[audits.mio]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
