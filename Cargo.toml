@@ -397,7 +397,7 @@ test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter', 'ansi', 'tracing-log'] }
 url = "2.3.1"
 postcard = { version = "1.0.8", default-features = false, features = ['alloc'] }
-criterion = { version = "0.5.0", default-features = false, features = ["html_reports", "rayon"] }
+criterion = { version = "0.6.0", default-features = false, features = ["html_reports", "rayon"] }
 rustc-hash = "2.0.0"
 libtest-mimic = "0.8.1"
 semver = { version = "1.0.17", default-features = false }

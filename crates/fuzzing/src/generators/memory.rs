@@ -1,6 +1,5 @@
 //! Generate various kinds of Wasm memory.
 
-use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 
 /// A description of a memory config, image, etc... that can be used to test
