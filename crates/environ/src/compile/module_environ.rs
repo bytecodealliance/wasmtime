@@ -676,7 +676,7 @@ and for re-adding support for interface types you can see this issue:
             KnownCustom::Name(name) => {
                 let result = self.name_section(name);
                 if let Err(e) = result {
-                    log::warn!("failed to parse name section {:?}", e);
+                    log::warn!("failed to parse name section {e:?}");
                 }
             }
             _ => {
@@ -730,7 +730,7 @@ and for re-adding support for interface types you can see this issue:
             // We don't use these at the moment.
             ".debug_aranges" | ".debug_pubnames" | ".debug_pubtypes" => return,
             other => {
-                log::warn!("unknown debug section `{}`", other);
+                log::warn!("unknown debug section `{other}`");
                 return;
             }
         }

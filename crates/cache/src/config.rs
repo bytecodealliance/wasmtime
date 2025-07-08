@@ -116,7 +116,7 @@ impl Default for CacheConfig {
 /// Creates a new configuration file at specified path, or default path if None is passed.
 /// Fails if file already exists.
 pub fn create_new_config<P: AsRef<Path> + Debug>(config_file: Option<P>) -> Result<PathBuf> {
-    trace!("Creating new config file, path: {:?}", config_file);
+    trace!("Creating new config file, path: {config_file:?}");
 
     let config_file = match config_file {
         Some(path) => path.as_ref().to_path_buf(),

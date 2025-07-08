@@ -1173,7 +1173,7 @@ impl FRM {
 
 impl FFlagsException {
     #[inline]
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "here for future use")]
     pub(crate) fn mask(self) -> u32 {
         match self {
             FFlagsException::NV => 1 << 4,
@@ -1300,7 +1300,6 @@ impl StoreOP {
     }
 }
 
-#[allow(dead_code)]
 impl FClassResult {
     pub(crate) const fn bit(self) -> u32 {
         match self {
@@ -1318,15 +1317,18 @@ impl FClassResult {
     }
 
     #[inline]
+    #[expect(dead_code, reason = "here for future use")]
     pub(crate) const fn is_nan_bits() -> u32 {
         Self::SNaN.bit() | Self::QNaN.bit()
     }
     #[inline]
+    #[expect(dead_code, reason = "here for future use")]
     pub(crate) fn is_zero_bits() -> u32 {
         Self::NegZero.bit() | Self::PosZero.bit()
     }
 
     #[inline]
+    #[expect(dead_code, reason = "here for future use")]
     pub(crate) fn is_infinite_bits() -> u32 {
         Self::PosInfinite.bit() | Self::NegInfinite.bit()
     }

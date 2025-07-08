@@ -67,7 +67,7 @@ use wasmtime_environ::{
     GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
 };
 
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "known to not overflow")]
 const GC_REF_ARRAY_ELEMS_OFFSET: u32 = ARRAY_LENGTH_OFFSET + (mem::size_of::<u32>() as u32);
 
 /// The deferred reference-counting (DRC) collector.
@@ -386,7 +386,7 @@ impl DrcHeap {
                 continue;
             }
 
-            log::trace!("Found GC reference on the stack: {:#p}", gc_ref);
+            log::trace!("Found GC reference on the stack: {gc_ref:#p}");
 
             debug_assert!(
                 over_approx_set.contains(&gc_ref),

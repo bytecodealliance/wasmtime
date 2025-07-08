@@ -83,10 +83,7 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                 // what the user expects from the CLI but probably not in a
                 // Wasmtime embedding.
                 log::trace!(
-                    "spawned thread id = {}; calling start function `{}` with: {}",
-                    wasi_thread_id,
-                    WASI_ENTRY_POINT,
-                    thread_start_arg
+                    "spawned thread id = {wasi_thread_id}; calling start function `{WASI_ENTRY_POINT}` with: {thread_start_arg}"
                 );
                 let res = if instance_pre.module().engine().is_async() {
                     wasmtime_wasi::runtime::in_tokio(
@@ -97,9 +94,9 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                     thread_entry_point.call(&mut store, (wasi_thread_id, thread_start_arg))
                 };
                 match res {
-                    Ok(_) => log::trace!("exiting thread id = {} normally", wasi_thread_id),
+                    Ok(_) => log::trace!("exiting thread id = {wasi_thread_id} normally"),
                     Err(e) => {
-                        log::trace!("exiting thread id = {} due to error", wasi_thread_id);
+                        log::trace!("exiting thread id = {wasi_thread_id} due to error");
                         let e = wasi_common::maybe_exit_on_error(e);
                         eprintln!("Error: {e:?}");
                         std::process::exit(1);
@@ -158,7 +155,7 @@ pub fn add_to_linker<T: Clone + Send + 'static>(
                     thread_id
                 }
                 Err(e) => {
-                    log::error!("failed to spawn thread: {}", e);
+                    log::error!("failed to spawn thread: {e}");
                     -1
                 }
             }

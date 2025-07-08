@@ -1031,7 +1031,14 @@ impl SharedMemory {
         wasmtime_export: crate::runtime::vm::ExportMemory,
         store: &StoreOpaque,
     ) -> Self {
-        #[cfg_attr(not(feature = "threads"), allow(unused_variables, unreachable_code))]
+        #[cfg_attr(
+            not(feature = "threads"),
+            expect(
+                unused_variables,
+                unreachable_code,
+                reason = "definitions cfg'd to dummy",
+            )
+        )]
         crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
             let memory_index = handle.env_module().memory_index(wasmtime_export.index);
             let page_size = handle.memory_page_size(memory_index);

@@ -198,12 +198,7 @@ where
 
             self.available_block[result] = self.get_available_block(inst);
             let opt_value = self.optimize_pure_enode(inst);
-            log::trace!(
-                "optimizing inst {} orig result {} gave {}",
-                inst,
-                result,
-                opt_value
-            );
+            log::trace!("optimizing inst {inst} orig result {result} gave {opt_value}");
 
             let gvn_context = GVNContext {
                 value_lists: &self.func.dfg.value_lists,

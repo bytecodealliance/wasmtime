@@ -294,7 +294,7 @@ impl Instance {
                         .unwrap_or(0)
                         * 64
                         * 1024;
-                    Some(Wmemcheck::new(size as usize))
+                    Some(Wmemcheck::new(size.try_into().unwrap()))
                 } else {
                     None
                 }

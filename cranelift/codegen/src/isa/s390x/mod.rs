@@ -81,7 +81,7 @@ impl TargetIsa for S390xBackend {
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
         if let Some(disasm) = emit_result.disasm.as_ref() {
-            log::debug!("disassembly:\n{}", disasm);
+            log::debug!("disassembly:\n{disasm}");
         }
 
         Ok(CompiledCodeStencil {

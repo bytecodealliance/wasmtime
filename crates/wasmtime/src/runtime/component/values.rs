@@ -63,7 +63,7 @@ use wasmtime_environ::component::{
 ///
 /// [`Func::call`]: crate::component::Func::call
 #[derive(Debug, Clone)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum Val {
     Bool(bool),
     S8(i8),

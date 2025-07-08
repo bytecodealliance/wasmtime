@@ -482,7 +482,7 @@ impl ObjectModule {
         bytes: &[u8],
         relocs: Vec<ObjectRelocRecord>,
     ) -> Result<(), ModuleError> {
-        info!("defining function {} with bytes", func_id);
+        info!("defining function {func_id} with bytes");
         let decl = self.declarations.get_function_decl(func_id);
         let decl_name = decl.linkage_name(func_id);
         if !decl.linkage.is_definable() {

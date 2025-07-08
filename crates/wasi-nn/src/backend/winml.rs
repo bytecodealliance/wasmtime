@@ -35,7 +35,7 @@ impl BackendInner for WinMLBackend {
 
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError> {
         if builders.len() != 1 {
-            return Err(BackendError::InvalidNumberOfBuilders(1, builders.len()).into());
+            return Err(BackendError::InvalidNumberOfBuilders(1, builders.len()));
         }
 
         let model_stream = InMemoryRandomAccessStream::new()?;
@@ -83,7 +83,7 @@ unsafe impl Sync for WinMLGraph {}
 
 impl BackendGraph for WinMLGraph {
     fn init_execution_context(&self) -> Result<ExecutionContext, BackendError> {
-        let device = LearningModelDevice::Create(self.device_kind.clone())?;
+        let device = LearningModelDevice::Create(self.device_kind)?;
         let session = LearningModelSession::CreateFromModelOnDevice(&self.model, &device)?;
         let box_: Box<dyn BackendExecutionContext> = Box::new(WinMLExecutionContext::new(session));
         Ok(box_.into())

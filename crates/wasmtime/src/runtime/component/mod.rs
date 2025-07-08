@@ -97,8 +97,10 @@
 //!
 //! See the docs for [`bindgen!`] for more information on how to use it.
 
-// rustdoc appears to lie about a warning above, so squelch it for now.
-#![allow(rustdoc::redundant_explicit_links)]
+#![allow(
+    rustdoc::redundant_explicit_links,
+    reason = "rustdoc appears to lie about a warning above, so squelch it for now"
+)]
 
 mod component;
 #[cfg(feature = "component-model-async")]

@@ -9,13 +9,6 @@ use crate::ir::entities::{DynamicStackSlot, DynamicType};
 use core::fmt;
 use core::str::FromStr;
 
-/// imports only needed for testing.
-#[allow(unused_imports)]
-use crate::ir::{DynamicTypeData, GlobalValueData};
-
-#[allow(unused_imports)]
-use crate::ir::types::*;
-
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
@@ -146,6 +139,8 @@ pub type DynamicStackSlots = PrimaryMap<DynamicStackSlot, DynamicStackSlotData>;
 mod tests {
     use super::*;
     use crate::ir::Function;
+    use crate::ir::types::*;
+    use crate::ir::{DynamicTypeData, GlobalValueData};
     use alloc::string::ToString;
 
     #[test]

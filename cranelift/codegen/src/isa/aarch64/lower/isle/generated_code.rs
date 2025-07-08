@@ -2,13 +2,15 @@
 // the generated ISLE source below because we include!() it. We must include!() it because its path
 // depends on an environment variable; and also because of this, we can't do the `#[path = "..."]
 // mod generated_code;` trick either.
-#![allow(missing_docs, dead_code, unreachable_code, unreachable_patterns)]
-#![allow(unused_imports, unused_variables, non_snake_case, unused_mut)]
-#![allow(
+#![expect(
+    missing_docs,
+    dead_code,
+    unreachable_patterns,
+    unused_imports,
+    unused_variables,
     irrefutable_let_patterns,
-    unused_assignments,
-    non_camel_case_types,
-    clippy::clone_on_copy
+    clippy::clone_on_copy,
+    reason = "generated code"
 )]
 
 include!(concat!(env!("ISLE_DIR"), "/isle_aarch64.rs"));

@@ -18,7 +18,7 @@ use core::fmt;
 macro_rules! define_passes {
     ($($pass:ident: $desc:expr,)+) => {
         /// A single profiled pass.
-        #[allow(non_camel_case_types)]
+        #[expect(non_camel_case_types, reason = "macro-generated code")]
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub enum Pass {
             $(#[doc=$desc] $pass,)+
@@ -232,7 +232,7 @@ mod enabled {
     impl Profiler for DefaultProfiler {
         fn start_pass(&self, pass: Pass) -> Box<dyn Any> {
             let prev = CURRENT_PASS.with(|p| p.replace(pass));
-            log::debug!("timing: Starting {}, (during {})", pass, prev);
+            log::debug!("timing: Starting {pass}, (during {prev})");
             Box::new(DefaultTimingToken {
                 start: Instant::now(),
                 pass,

@@ -55,7 +55,10 @@ impl Default for EvexInstruction {
     }
 }
 
-#[allow(non_upper_case_globals)] // This makes it easier to match the bit range names to the manual's names.
+#[expect(
+    non_upper_case_globals,
+    reason = "This makes it easier to match the bit range names to the manual's names"
+)]
 impl EvexInstruction {
     /// Construct a default EVEX instruction.
     pub fn new() -> Self {
@@ -127,8 +130,8 @@ impl EvexInstruction {
 
     /// Set the mask to use. See section 2.6 in the Intel Software Developer's Manual, volume 2A for
     /// more details.
-    #[allow(dead_code)]
     #[inline(always)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "here for future use"))]
     pub fn mask(mut self, mask: EvexMasking) -> Self {
         self.write(Self::aaa, mask.aaa_bits() as u32);
         self.write(Self::z, mask.z_bit() as u32);
@@ -137,7 +140,6 @@ impl EvexInstruction {
 
     /// Set the `vvvvv` register; some instructions allow using this as a second, non-destructive
     /// source register in 3-operand instructions (e.g. 2 read, 1 write).
-    #[allow(dead_code)]
     #[inline(always)]
     pub fn vvvvv(mut self, reg: impl Into<Register>) -> Self {
         let reg = reg.into();
@@ -321,7 +323,6 @@ impl From<Register> for u8 {
     }
 }
 
-#[allow(missing_docs)]
 #[derive(Debug, Clone)]
 pub enum RegisterOrAmode {
     Register(Register),
@@ -345,15 +346,17 @@ impl From<Amode> for RegisterOrAmode {
 /// used together for certain classes of instructions; i.e., special care should be taken to ensure
 /// that instructions use an applicable correct `EvexContext`. Table 2-39 contains cases where
 /// opcodes can result in an #UD.
-#[allow(dead_code, missing_docs)] // Rounding and broadcast modes are not yet used.
 pub enum EvexContext {
+    #[expect(dead_code, reason = "here for future use")]
     RoundingRegToRegFP {
         rc: EvexRoundingControl,
     },
+    #[expect(dead_code, reason = "here for future use")]
     NoRoundingFP {
         sae: bool,
         length: EvexVectorLength,
     },
+    #[expect(dead_code, reason = "here for future use")]
     MemoryOp {
         broadcast: bool,
         length: EvexVectorLength,
@@ -384,10 +387,11 @@ impl EvexContext {
 }
 
 /// The EVEX format allows choosing a vector length in the `L'` and `L` bits; see `EvexContext`.
-#[allow(dead_code, missing_docs)] // Wider-length vectors are not yet used.
 pub enum EvexVectorLength {
     V128,
+    #[expect(dead_code, reason = "here for future cranelift use")]
     V256,
+    #[expect(dead_code, reason = "here for future cranelift use")]
     V512,
 }
 
@@ -410,7 +414,7 @@ impl Default for EvexVectorLength {
 }
 
 /// The EVEX format allows defining rounding control in the `L'` and `L` bits; see `EvexContext`.
-#[allow(dead_code, missing_docs)] // Rounding controls are not yet used.
+#[expect(dead_code, reason = "here for future use")]
 pub enum EvexRoundingControl {
     RNE,
     RD,
@@ -432,11 +436,16 @@ impl EvexRoundingControl {
 
 /// Defines the EVEX masking behavior; masking support is described in section 2.6.4 of the Intel
 /// Software Development Manual, volume 2A.
-#[allow(dead_code, missing_docs)] // Masking is not yet used.
 pub enum EvexMasking {
     None,
-    Merging { k: u8 },
-    Zeroing { k: u8 },
+    #[expect(dead_code, reason = "here for future use")]
+    Merging {
+        k: u8,
+    },
+    #[expect(dead_code, reason = "here for future use")]
+    Zeroing {
+        k: u8,
+    },
 }
 
 impl Default for EvexMasking {

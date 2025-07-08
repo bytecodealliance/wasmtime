@@ -25,8 +25,10 @@ use core::ptr::NonNull;
 use wasmtime_environ::component::*;
 use wasmtime_environ::{DefinedTableIndex, HostPtr, PrimaryMap, VMSharedTypeIndex};
 
-#[allow(clippy::cast_possible_truncation)] // it's intended this is truncated on
-// 32-bit platforms
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "it's intended this is truncated on 32-bit platforms"
+)]
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
 mod libcalls;
@@ -863,12 +865,10 @@ impl VMOpaqueContext {
     }
 }
 
-#[allow(missing_docs)]
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct InstanceFlags(SendSyncPtr<VMGlobalDefinition>);
 
-#[allow(missing_docs)]
 impl InstanceFlags {
     /// Wraps the given pointer as an `InstanceFlags`
     ///

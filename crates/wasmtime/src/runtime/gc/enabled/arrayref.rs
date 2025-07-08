@@ -183,7 +183,6 @@ pub struct ArrayRef {
 }
 
 unsafe impl GcRefImpl for ArrayRef {
-    #[allow(private_interfaces)]
     fn transmute_ref(index: &GcRootIndex) -> &Self {
         // Safety: `ArrayRef` is a newtype of a `GcRootIndex`.
         let me: &Self = unsafe { mem::transmute(index) };

@@ -70,7 +70,7 @@ pub struct InstanceAllocationRequest<'a> {
     pub store: StorePtr,
 
     /// Indicates '--wmemcheck' flag.
-    #[cfg_attr(not(feature = "wmemcheck"), allow(dead_code))]
+    #[cfg(feature = "wmemcheck")]
     pub wmemcheck: bool,
 
     /// Request that the instance's memories be protected by a specific
