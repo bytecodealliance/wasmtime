@@ -13,6 +13,7 @@ use crate::vm::{VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{Context, Result, anyhow, bail};
 use buffers::Extender;
+use buffers::UntypedWriteBuffer;
 use futures::channel::{mpsc, oneshot};
 use futures::future::{self, FutureExt};
 use futures::stream::StreamExt;
@@ -33,7 +34,7 @@ use wasmtime_environ::component::{
     TypeFutureTableIndex, TypeStreamTableIndex,
 };
 
-pub use buffers::{ReadBuffer, TakeBuffer, VecBuffer, WriteBuffer};
+pub use buffers::{ReadBuffer, VecBuffer, WriteBuffer};
 
 mod buffers;
 
@@ -236,7 +237,8 @@ fn accept_reader<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>
             }
             Reader::Host { accept } => {
                 let count = buffer.remaining().len();
-                let count = accept(&mut buffer, count);
+                let mut untyped = UntypedWriteBuffer::new(&mut buffer);
+                let count = accept(&mut untyped, count);
                 _ = tx.send(HostResult {
                     buffer,
                     dropped: false,
@@ -309,7 +311,7 @@ fn accept_writer<T: func::Lift + Send + 'static, B: ReadBuffer<T>, U>(
                 count,
             } => {
                 let count = count.min(buffer.remaining_capacity());
-                buffer.move_from(input, count);
+                buffer.move_from(input.get_mut::<T>(), count);
                 _ = tx.send(HostResult {
                     buffer,
                     dropped: false,
@@ -1503,7 +1505,7 @@ enum Writer<'a> {
     },
     /// The write end is owned by the host.
     Host {
-        buffer: &'a mut dyn TakeBuffer,
+        buffer: &'a mut UntypedWriteBuffer<'a>,
         count: usize,
     },
     /// The write end has been dropped.
@@ -1523,7 +1525,7 @@ enum Reader<'a> {
     },
     /// The read end is owned by the host.
     Host {
-        accept: Box<dyn FnOnce(&mut dyn TakeBuffer, usize) -> usize>,
+        accept: Box<dyn FnOnce(&mut UntypedWriteBuffer, usize) -> usize>,
     },
     /// The read end has been dropped.
     End,
@@ -1849,8 +1851,9 @@ impl Instance {
 
             ReadState::HostReady { accept } => {
                 let count = buffer.remaining().len();
+                let mut untyped = UntypedWriteBuffer::new(&mut buffer);
                 let code = accept(Writer::Host {
-                    buffer: &mut buffer,
+                    buffer: &mut untyped,
                     count,
                 })?;
                 let (ReturnCode::Completed(_) | ReturnCode::Dropped(_)) = code else {
@@ -1974,7 +1977,7 @@ impl Instance {
                     Reader::Host {
                         accept: Box::new(move |input, count| {
                             let count = count.min(buffer.remaining_capacity());
-                            buffer.move_from(input, count);
+                            buffer.move_from(input.get_mut::<T>(), count);
                             _ = tx.send(HostResult {
                                 buffer,
                                 dropped: false,
