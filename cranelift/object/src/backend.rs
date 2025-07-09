@@ -15,8 +15,8 @@ use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
 };
 use object::{
-    RelocationEncoding, RelocationFlags, RelocationKind, SectionKind, SymbolFlags, SymbolKind,
-    SymbolScope,
+    RelocationEncoding, RelocationFlags, RelocationKind, SectionFlags, SectionKind, SymbolFlags,
+    SymbolKind, SymbolScope,
 };
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -394,6 +394,7 @@ impl Module for ObjectModule {
             data_relocs: _,
             ref custom_segment_section,
             align,
+            used,
         } = data;
 
         let pointer_reloc = match self.isa.triple().pointer_width().unwrap() {
@@ -422,7 +423,7 @@ impl Module for ObjectModule {
             } else {
                 StandardSection::ReadOnlyDataWithRel
             };
-            if self.per_data_object_section {
+            if self.per_data_object_section || used {
                 // FIXME pass empty symbol name once add_subsection produces `.text` as section name
                 // instead of `.text.` when passed an empty symbol name. (object#748) Until then
                 // pass `subsection` to produce `.text.subsection` as section name to reduce
@@ -450,6 +451,34 @@ impl Module for ObjectModule {
                 },
             )
         };
+
+        if used {
+            match self.object.format() {
+                object::BinaryFormat::Elf => {
+                    let section = self.object.section_mut(section);
+                    match &mut section.flags {
+                        SectionFlags::None => {
+                            section.flags = SectionFlags::Elf {
+                                sh_flags: object::elf::SHF_GNU_RETAIN.into(),
+                            }
+                        }
+                        SectionFlags::Elf { sh_flags } => {
+                            *sh_flags |= u64::from(object::elf::SHF_GNU_RETAIN)
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                object::BinaryFormat::Coff => {}
+                object::BinaryFormat::MachO => {
+                    let symbol = self.object.symbol_mut(symbol);
+                    assert!(matches!(symbol.flags, SymbolFlags::None));
+                    symbol.flags = SymbolFlags::MachO {
+                        n_desc: object::macho::N_NO_DEAD_STRIP,
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
 
         let align = std::cmp::max(align.unwrap_or(1), self.isa.symbol_alignment());
         let offset = match *init {
