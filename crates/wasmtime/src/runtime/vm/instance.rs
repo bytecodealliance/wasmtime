@@ -423,22 +423,6 @@ impl Instance {
         }
     }
 
-    /// Get a locally defined or imported memory.
-    #[cfg(feature = "threads")]
-    pub(crate) fn get_runtime_memory(self: Pin<&mut Self>, index: MemoryIndex) -> &mut Memory {
-        if let Some(defined_index) = self.env_module().defined_memory_index(index) {
-            unsafe { &mut *self.get_defined_memory(defined_index) }
-        } else {
-            let import = self.imported_memory(index);
-            unsafe {
-                let ptr = Instance::from_vmctx(import.vmctx.as_non_null(), |i| {
-                    i.get_defined_memory(import.index)
-                });
-                &mut *ptr
-            }
-        }
-    }
-
     /// Return the indexed `VMMemoryDefinition`, loaded from vmctx memory
     /// already.
     pub fn memory(&self, index: DefinedMemoryIndex) -> VMMemoryDefinition {
@@ -698,36 +682,12 @@ impl Instance {
         index
     }
 
-    /// Get the given memory's page size, in bytes.
-    pub(crate) fn memory_page_size(&self, index: MemoryIndex) -> usize {
-        usize::try_from(self.env_module().memories[index].page_size()).unwrap()
-    }
-
     /// Grow memory by the specified amount of pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages. Returns `Some` with the old size in bytes if growth was
     /// successful.
     pub(crate) fn memory_grow(
-        self: Pin<&mut Self>,
-        store: &mut dyn VMStore,
-        index: MemoryIndex,
-        delta: u64,
-    ) -> Result<Option<usize>, Error> {
-        match self.env_module().defined_memory_index(index) {
-            Some(idx) => self.defined_memory_grow(store, idx, delta),
-            None => {
-                let import = self.imported_memory(index);
-                unsafe {
-                    Instance::from_vmctx(import.vmctx.as_non_null(), |i| {
-                        i.defined_memory_grow(store, import.index, delta)
-                    })
-                }
-            }
-        }
-    }
-
-    fn defined_memory_grow(
         mut self: Pin<&mut Self>,
         store: &mut dyn VMStore,
         idx: DefinedMemoryIndex,
@@ -1064,10 +1024,8 @@ impl Instance {
     }
 
     /// Get a locally-defined memory.
-    pub fn get_defined_memory(self: Pin<&mut Self>, index: DefinedMemoryIndex) -> *mut Memory {
-        // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
-        // `*mut A`, which should be a safe operation to do.
-        unsafe { &raw mut (*self.memories_mut().get_raw_mut(index).unwrap()).1 }
+    pub fn get_defined_memory(self: Pin<&mut Self>, index: DefinedMemoryIndex) -> &mut Memory {
+        &mut self.memories_mut()[index].1
     }
 
     /// Do a `memory.copy`
@@ -1126,11 +1084,12 @@ impl Instance {
     /// Returns a `Trap` error if the memory range is out of bounds.
     pub(crate) fn memory_fill(
         self: Pin<&mut Self>,
-        memory_index: MemoryIndex,
+        memory_index: DefinedMemoryIndex,
         dst: u64,
         val: u8,
         len: u64,
     ) -> Result<(), Trap> {
+        let memory_index = self.env_module().memory_index(memory_index);
         let memory = self.get_memory(memory_index);
         let dst = self.validate_inbounds(memory.current_length(), dst, len)?;
         let len = usize::try_from(len).unwrap();

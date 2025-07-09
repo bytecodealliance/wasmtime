@@ -234,6 +234,14 @@ mod test_vmmemory_import {
             offset_of!(VMMemoryImport, from),
             usize::from(offsets.vmmemory_import_from())
         );
+        assert_eq!(
+            offset_of!(VMMemoryImport, vmctx),
+            usize::from(offsets.vmmemory_import_vmctx())
+        );
+        assert_eq!(
+            offset_of!(VMMemoryImport, index),
+            usize::from(offsets.vmmemory_import_index())
+        );
     }
 }
 

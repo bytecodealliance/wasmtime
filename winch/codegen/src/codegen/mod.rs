@@ -1,13 +1,13 @@
 use crate::{
     abi::{ABIOperand, ABISig, RetArea, vmctx},
     codegen::BlockSig,
-    isa::reg::{Reg, writable},
+    isa::reg::{Reg, RegClass, writable},
     masm::{
         AtomicWaitKind, Extend, Imm, IntCmpKind, IntScratch, LaneSelector, LoadKind,
         MacroAssembler, OperandSize, RegImm, RmwOp, SPOffset, ShiftKind, StoreKind, TrapCode,
         UNTRUSTED_FLAGS, Zero,
     },
-    stack::TypedReg,
+    stack::{TypedReg, Val},
 };
 use anyhow::{Result, anyhow, bail, ensure};
 use cranelift_codegen::{
@@ -1475,9 +1475,16 @@ where
         let addr = self.context.pop_to_reg(self.masm, None)?;
 
         // Put the target memory index as the first argument.
-        self.context
-            .stack
-            .push(crate::stack::Val::I32(arg.memory as i32));
+        let stack_len = self.context.stack.len();
+        let builtin = match kind {
+            AtomicWaitKind::Wait32 => self.env.builtins.memory_atomic_wait32::<M::ABI, M::Ptr>()?,
+            AtomicWaitKind::Wait64 => self.env.builtins.memory_atomic_wait64::<M::ABI, M::Ptr>()?,
+        };
+        let builtin = self.prepare_builtin_defined_memory_arg(
+            MemoryIndex::from_u32(arg.memory),
+            stack_len,
+            builtin,
+        )?;
 
         if arg.offset != 0 {
             self.masm.add(
@@ -1494,17 +1501,7 @@ where
         self.context.stack.push(expected.into());
         self.context.stack.push(timeout.into());
 
-        let builtin = match kind {
-            AtomicWaitKind::Wait32 => self.env.builtins.memory_atomic_wait32::<M::ABI, M::Ptr>()?,
-            AtomicWaitKind::Wait64 => self.env.builtins.memory_atomic_wait64::<M::ABI, M::Ptr>()?,
-        };
-
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin.clone()),
-        )?;
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
 
         Ok(())
     }
@@ -1531,9 +1528,13 @@ where
         let addr = self.context.pop_to_reg(self.masm, None)?;
 
         // Put the target memory index as the first argument.
-        self.context
-            .stack
-            .push(crate::stack::Val::I32(arg.memory as i32));
+        let builtin = self.env.builtins.memory_atomic_notify::<M::ABI, M::Ptr>()?;
+        let stack_len = self.context.stack.len();
+        let builtin = self.prepare_builtin_defined_memory_arg(
+            MemoryIndex::from_u32(arg.memory),
+            stack_len,
+            builtin,
+        )?;
 
         if arg.offset != 0 {
             self.masm.add(
@@ -1550,16 +1551,44 @@ where
             .push(TypedReg::new(WasmValType::I64, addr.reg).into());
         self.context.stack.push(count.into());
 
-        let builtin = self.env.builtins.memory_atomic_notify::<M::ABI, M::Ptr>()?;
-
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin.clone()),
-        )?;
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
 
         Ok(())
+    }
+
+    pub fn prepare_builtin_defined_memory_arg(
+        &mut self,
+        mem: MemoryIndex,
+        defined_index_at: usize,
+        builtin: BuiltinFunction,
+    ) -> Result<Callee> {
+        match self.env.translation.module.defined_memory_index(mem) {
+            // This memory is defined in this module, so the vmctx is this
+            // module's vmctx and the memory index is `defined` as returned here.
+            Some(defined) => {
+                self.context
+                    .stack
+                    .insert_many(defined_index_at, &[defined.as_u32().try_into()?]);
+                Ok(Callee::Builtin(builtin))
+            }
+
+            // This memory is not defined in this module, so the defined index
+            // is loaded from the `VMMemoryImport` and the vmctx is loaded from
+            // the vmctx itself.
+            None => {
+                let vmimport = self.env.vmoffsets.vmctx_vmmemory_import(mem);
+                let vmctx_offset = vmimport + u32::from(self.env.vmoffsets.vmmemory_import_vmctx());
+                let index_offset = vmimport + u32::from(self.env.vmoffsets.vmmemory_import_index());
+                let index_addr = self.masm.address_at_vmctx(index_offset)?;
+                let index_dst = self.context.reg_for_class(RegClass::Int, self.masm)?;
+                self.masm
+                    .load(index_addr, writable!(index_dst), OperandSize::S32)?;
+                self.context
+                    .stack
+                    .insert_many(defined_index_at, &[Val::reg(index_dst, WasmValType::I32)]);
+                Ok(Callee::BuiltinWithDifferentVmctx(builtin, vmctx_offset))
+            }
+        }
     }
 }
 
