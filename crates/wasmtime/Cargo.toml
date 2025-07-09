@@ -394,5 +394,10 @@ component-model-async = [
   "wasmtime-component-macro?/component-model-async",
   "dep:futures",
   "futures/std",
+]
+
+# Enables support for `stream` interop with the `bytes` crate.
+component-model-async-bytes = [
+  "component-model-async",
   "dep:bytes",
 ]
