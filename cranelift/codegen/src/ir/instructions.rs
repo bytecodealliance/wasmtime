@@ -1062,6 +1062,12 @@ pub trait InstructionMapper {
         &mut self,
         dynamic_stack_slot: ir::DynamicStackSlot,
     ) -> ir::DynamicStackSlot;
+
+    /// Map a function over a `Constant`.
+    fn map_constant(&mut self, constant: ir::Constant) -> ir::Constant;
+
+    /// Map a function over an `Immediate`.
+    fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate;
 }
 
 impl<'a, T> InstructionMapper for &'a mut T
@@ -1109,6 +1115,14 @@ where
         dynamic_stack_slot: ir::DynamicStackSlot,
     ) -> ir::DynamicStackSlot {
         (**self).map_dynamic_stack_slot(dynamic_stack_slot)
+    }
+
+    fn map_constant(&mut self, constant: ir::Constant) -> ir::Constant {
+        (**self).map_constant(constant)
+    }
+
+    fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate {
+        (**self).map_immediate(immediate)
     }
 }
 
@@ -1320,6 +1334,14 @@ mod tests {
             ) -> ir::DynamicStackSlot {
                 DynamicStackSlot::from_u32(dynamic_stack_slot.as_u32() + 1)
             }
+
+            fn map_constant(&mut self, constant: ir::Constant) -> ir::Constant {
+                ir::Constant::from_u32(constant.as_u32() + 1)
+            }
+
+            fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate {
+                ir::Immediate::from_u32(immediate.as_u32() + 1)
+            }
         }
 
         let mut pool = ValueListPool::new();
@@ -1448,6 +1470,32 @@ mod tests {
             InstructionData::DynamicStackLoad {
                 opcode: Opcode::DynamicStackLoad,
                 dynamic_stack_slot: DynamicStackSlot::from_u32(1),
+            },
+        );
+
+        // Mapping `Constant`s
+        assert_eq!(
+            map(InstructionData::UnaryConst {
+                opcode: ir::Opcode::Vconst,
+                constant_handle: ir::Constant::from_u32(2)
+            }),
+            InstructionData::UnaryConst {
+                opcode: ir::Opcode::Vconst,
+                constant_handle: ir::Constant::from_u32(3)
+            },
+        );
+
+        // Mapping `Immediate`s
+        assert_eq!(
+            map(InstructionData::Shuffle {
+                opcode: ir::Opcode::Shuffle,
+                args: [Value::from_u32(0), Value::from_u32(1)],
+                imm: ir::Immediate::from_u32(41),
+            }),
+            InstructionData::Shuffle {
+                opcode: ir::Opcode::Shuffle,
+                args: [Value::from_u32(1), Value::from_u32(2)],
+                imm: ir::Immediate::from_u32(42),
             },
         );
     }

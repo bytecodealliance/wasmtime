@@ -1478,7 +1478,7 @@ pub(crate) fn define(
         "#,
             &formats.unary_const,
         )
-        .operands_in(vec![Operand::new("N", &imm.pool_constant)])
+        .operands_in(vec![Operand::new("N", &entities.pool_constant)])
         .operands_out(vec![
             Operand::new("a", f128_).with_doc("A constant f128 scalar value"),
         ]),
@@ -1495,7 +1495,7 @@ pub(crate) fn define(
             &formats.unary_const,
         )
         .operands_in(vec![
-            Operand::new("N", &imm.pool_constant)
+            Operand::new("N", &entities.pool_constant)
                 .with_doc("The 16 immediate bytes of a 128-bit vector"),
         ])
         .operands_out(vec![
@@ -1530,7 +1530,7 @@ pub(crate) fn define(
         .operands_in(vec![
             Operand::new("a", Tx16).with_doc("A vector value"),
             Operand::new("b", Tx16).with_doc("A vector value"),
-            Operand::new("mask", &imm.uimm128)
+            Operand::new("mask", &entities.uimm128)
                 .with_doc("The 16 immediate bytes used for selecting the elements to shuffle"),
         ])
         .operands_out(vec![Operand::new("a", Tx16).with_doc("A vector value")]),
