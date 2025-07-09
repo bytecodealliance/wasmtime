@@ -847,7 +847,7 @@ macro_rules! integers {
                 // `align_to_mut` which is not safe in general but is safe in
                 // our specific case as all `u8` patterns are valid `Self`
                 // patterns since `Self` is an integral type.
-                let dst = &mut cx.as_slice_mut()[offset..][..items.len() * Self::SIZE32];
+                let dst = cx.get_dyn(offset, items.len() * Self::SIZE32);
                 let (before, middle, end) = unsafe { dst.align_to_mut::<Self>() };
                 assert!(before.is_empty() && end.is_empty());
                 assert_eq!(middle.len(), items.len());
@@ -960,7 +960,7 @@ macro_rules! floats {
                 // This should all have already been verified in terms of
                 // alignment and sizing meaning that these assertions here are
                 // not truly necessary but are instead double-checks.
-                let dst = &mut cx.as_slice_mut()[offset..][..items.len() * Self::SIZE32];
+                let dst = cx.get_dyn(offset, items.len() * Self::SIZE32);
                 assert!(dst.as_ptr().cast::<Self>().is_aligned());
 
                 // And with all that out of the way perform the copying loop.
@@ -1214,7 +1214,8 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
                 );
             }
             let ptr = cx.realloc(0, 0, 1, string.len())?;
-            cx.as_slice_mut()[ptr..][..string.len()].copy_from_slice(string.as_bytes());
+            cx.get_dyn(ptr, string.len())
+                .copy_from_slice(string.as_bytes());
             Ok((ptr, string.len()))
         }
 
@@ -1231,7 +1232,7 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
             }
             let mut ptr = cx.realloc(0, 0, 2, size)?;
             let mut copied = 0;
-            let bytes = &mut cx.as_slice_mut()[ptr..][..size];
+            let bytes = cx.get_dyn(ptr, size);
             for (u, bytes) in string.encode_utf16().zip(bytes.chunks_mut(2)) {
                 let u_bytes = u.to_le_bytes();
                 bytes[0] = u_bytes[0];
@@ -1249,7 +1250,7 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
             let bytes = string.as_bytes();
             let mut iter = string.char_indices();
             let mut ptr = cx.realloc(0, 0, 2, bytes.len())?;
-            let mut dst = &mut cx.as_slice_mut()[ptr..][..bytes.len()];
+            let mut dst = cx.get_dyn(ptr, bytes.len());
             let mut result = 0;
             while let Some((i, ch)) = iter.next() {
                 // Test if this `char` fits into the latin1 encoding.
@@ -1269,7 +1270,7 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
                     bail!("byte length too large");
                 }
                 ptr = cx.realloc(ptr, bytes.len(), 2, worst_case)?;
-                dst = &mut cx.as_slice_mut()[ptr..][..worst_case];
+                dst = cx.get_dyn(ptr, worst_case);
 
                 // Previously encoded latin1 bytes are inflated to their 16-bit
                 // size for utf16

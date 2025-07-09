@@ -336,7 +336,7 @@ where
                     res
                 };
             let indirect_results_lower = |cx: &mut LowerContext<'_, T>, dst: &ValRaw| {
-                let ptr = validate_inbounds::<R>(cx.as_slice_mut(), dst)?;
+                let ptr = validate_inbounds::<R>(cx.as_slice(), dst)?;
                 let res = if let Some(retval) = &ret {
                     let r = retval.store(cx, ty, ptr);
                     cx.store
@@ -559,7 +559,7 @@ where
     } else {
         if let Some((result_vals, ret_index)) = results {
             let ret_ptr = storage[ret_index].assume_init_ref();
-            let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice_mut(), ret_ptr)?;
+            let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice(), ret_ptr)?;
             for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
                 let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
                 val.store(&mut cx, *ty, offset)?;

@@ -232,8 +232,18 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     ///
     /// This will panic if memory has not been configured for this lowering
     /// (e.g. it wasn't present during the specification of canonical options).
-    pub fn as_slice_mut(&mut self) -> &mut [u8] {
+    fn as_slice_mut(&mut self) -> &mut [u8] {
         self.options.memory_mut(self.store.0)
+    }
+
+    /// Returns a view into memory as an immutable slice of bytes.
+    ///
+    /// # Panics
+    ///
+    /// This will panic if memory has not been configured for this lowering
+    /// (e.g. it wasn't present during the specification of canonical options).
+    pub fn as_slice(&mut self) -> &[u8] {
+        self.options.memory(self.store.0)
     }
 
     /// Invokes the memory allocation function (which is style after `realloc`)
@@ -284,6 +294,12 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// This will panic if memory has not been configured for this lowering
     /// (e.g. it wasn't present during the specification of canonical options).
     pub fn get<const N: usize>(&mut self, offset: usize) -> &mut [u8; N] {
+        // Accessing the store for event recording after getting the slice is
+        // tricky to resolve by the borrow checker. Instead, we just record before
+        // since this operation panics anyway, and the replay should still be faithful
+        self.store
+            .0
+            .record_event(|_| true, |_| MemorySliceBorrowEvent::new(offset, N));
         // FIXME: this bounds check shouldn't actually be necessary, all
         // callers of `ComponentType::store` have already performed a bounds
         // check so we're guaranteed that `offset..offset+N` is in-bounds. That
@@ -294,14 +310,20 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         // For now I figure we can leave in this bounds check and if it becomes
         // an issue we can optimize further later, probably with judicious use
         // of `unsafe`.
+        self.as_slice_mut()[offset..].first_chunk_mut().unwrap()
+    }
 
-        // Accessing the store for event recording after getting the slice is
-        // tricky to resolve by the borrow checker. Instead, we just record before
-        // since this operation panics anyway, and the replay should still be faithful
+    /// The non-const version of [`get`](Self::get). If size of slice required is
+    /// statically known, prefer the const version for optimal efficiency
+    ///
+    /// # Panics
+    ///
+    /// Refer to [`get`](Self::get).
+    pub fn get_dyn(&mut self, offset: usize, size: usize) -> &mut [u8] {
         self.store
             .0
-            .record_event(|_| true, |_| MemorySliceBorrowEvent::new(offset, N));
-        self.as_slice_mut()[offset..].first_chunk_mut().unwrap()
+            .record_event(|_| true, |_| MemorySliceBorrowEvent::new(offset, size));
+        &mut self.as_slice_mut()[offset..][..size]
     }
 
     /// Lowers an `own` resource into the guest, converting the `rep` specified
