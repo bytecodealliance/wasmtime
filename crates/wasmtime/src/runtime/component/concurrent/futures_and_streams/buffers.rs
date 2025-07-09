@@ -73,13 +73,14 @@ mod untyped {
 
 /// Trait representing a buffer which may be written to a `StreamWriter`.
 ///
+/// See also [`crate::component::Instance::stream`].
+///
 /// # Unsafety
 ///
 /// This trait is unsafe due to the contract of the `take` function. This trait
 /// is only safe to implement if the `take` function is implemented correctly,
 /// namely that all the items passed to the closure are fully initialized for
 /// `T`.
-#[doc(hidden)]
 pub unsafe trait WriteBuffer<T>: Send + Sync + 'static {
     /// Slice of items remaining to be read.
     fn remaining(&self) -> &[T];
@@ -103,7 +104,8 @@ pub unsafe trait WriteBuffer<T>: Send + Sync + 'static {
 }
 
 /// Trait representing a buffer which may be used to read from a `StreamReader`.
-#[doc(hidden)]
+///
+/// See also [`crate::component::Instance::stream`].
 pub trait ReadBuffer<T>: Send + Sync + 'static {
     /// Move the specified items into this buffer.
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I);
