@@ -162,7 +162,7 @@ pub mod raw {
     wasmtime_environ::foreach_builtin_function!(libcall);
 }
 
-fn memory32_grow(
+fn memory_grow(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
     delta: u64,

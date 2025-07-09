@@ -2752,7 +2752,7 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
     ) -> WasmResult<ir::Value> {
         let mut pos = builder.cursor();
-        let memory_grow = self.builtin_functions.memory32_grow(&mut pos.func);
+        let memory_grow = self.builtin_functions.memory_grow(&mut pos.func);
         let index_arg = index.index();
 
         let memory_index = pos.ins().iconst(I32, index_arg as i64);
