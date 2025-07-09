@@ -3,7 +3,9 @@ use crate::component::matching::InstanceType;
 use crate::component::storage::{slice_to_storage_mut, storage_as_slice, storage_as_slice_mut};
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
 use crate::prelude::*;
-use crate::runtime::rr::{ComponentHostFuncEntryEvent, ComponentHostFuncReturnEvent};
+use crate::runtime::rr::events::component_wasm::{
+    HostFuncEntryEvent, HostFuncReturnEvent, LowerReturnEvent, LowerStoreReturnEvent,
+};
 use crate::runtime::vm::component::{
     ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
@@ -207,7 +209,7 @@ where
     cx.0.record_event(
         |r| r.add_validation,
         |_| {
-            ComponentHostFuncEntryEvent::new(
+            HostFuncEntryEvent::new(
                 storage,
                 // Don't need to check validation here since it is
                 // covered by the push predicate in this case
@@ -217,7 +219,7 @@ where
     );
     cx.0.replay_event(
         |r| r.validate,
-        |event: ComponentHostFuncEntryEvent, _| event.validate(&types[ty.params]),
+        |event: HostFuncEntryEvent, _| event.validate(&types[ty.params]),
     )?;
 
     // There's a 2x2 matrix of whether parameters and results are stored on the
@@ -305,12 +307,16 @@ where
                 |cx: &mut LowerContext<'_, T>,
                  dst: &mut MaybeUninit<<R as ComponentType>::Lower>| {
                     let res = if let Some(retval) = &ret {
-                        retval.lower(cx, ty, dst)
+                        let r = retval.lower(cx, ty, dst);
+                        cx.store
+                            .0
+                            .record_event(|_| true, |_| LowerReturnEvent::new(&r));
+                        r
                     } else {
                         // `None` return value implies replay stubbing is required
                         cx.store.0.replay_event(
                             |_| true,
-                            |event: ComponentHostFuncReturnEvent, rmeta| {
+                            |event: HostFuncReturnEvent, rmeta| {
                                 event.move_into_slice(
                                     storage_as_slice_mut(dst),
                                     rmeta.validate.then_some(rr_tys),
@@ -321,7 +327,7 @@ where
                     cx.store.0.record_event(
                         |_| true,
                         |rmeta| {
-                            ComponentHostFuncReturnEvent::new(
+                            HostFuncReturnEvent::new(
                                 storage_as_slice(dst),
                                 rmeta.add_validation.then_some(rr_tys),
                             )
@@ -332,14 +338,18 @@ where
             let indirect_results_lower = |cx: &mut LowerContext<'_, T>, dst: &ValRaw| {
                 let ptr = validate_inbounds::<R>(cx.as_slice_mut(), dst)?;
                 let res = if let Some(retval) = &ret {
-                    retval.store(cx, ty, ptr)
+                    let r = retval.store(cx, ty, ptr);
+                    cx.store
+                        .0
+                        .record_event(|_| true, |_| LowerStoreReturnEvent::new(&r));
+                    r
                 } else {
                     // `dst` is a Wasm pointer to indirect results. This pointer itself will remain
                     // deterministic, and thus replay will not need to change this. However,
                     // replay will have to overwrite any nested stored lowerings (deep copy)
                     cx.store.0.replay_event(
                         |_| true,
-                        |event: ComponentHostFuncReturnEvent, rmeta| {
+                        |event: HostFuncReturnEvent, rmeta| {
                             if rmeta.validate {
                                 event.validate(rr_tys)
                             } else {
@@ -351,12 +361,7 @@ where
                 // Recording here is just for marking the return event
                 cx.store.0.record_event(
                     |_| true,
-                    |rmeta| {
-                        ComponentHostFuncReturnEvent::new(
-                            &[],
-                            rmeta.add_validation.then_some(rr_tys),
-                        )
-                    },
+                    |rmeta| HostFuncReturnEvent::new(&[], rmeta.add_validation.then_some(rr_tys)),
                 );
                 res
             };
@@ -462,7 +467,7 @@ where
     store.0.record_event(
         |r| r.add_validation,
         |_| {
-            ComponentHostFuncEntryEvent::new(
+            HostFuncEntryEvent::new(
                 storage,
                 // Don't need to check validation here since it is
                 // covered by the push predicate in this case
@@ -472,7 +477,7 @@ where
     );
     store.0.replay_event(
         |r| r.validate,
-        |event: ComponentHostFuncEntryEvent, _| event.validate(&types[func_ty.params]),
+        |event: HostFuncEntryEvent, _| event.validate(&types[func_ty.params]),
     )?;
 
     let results = if replay_enabled {
@@ -534,7 +539,7 @@ where
             // Replay stubbing required
             cx.store.0.replay_event(
                 |_| true,
-                |event: ComponentHostFuncReturnEvent, rmeta| {
+                |event: HostFuncReturnEvent, rmeta| {
                     event.move_into_slice(
                         mem::transmute::<&mut [MaybeUninit<ValRaw>], &mut [ValRaw]>(storage),
                         rmeta.validate.then_some(result_tys),
@@ -545,7 +550,7 @@ where
         cx.store.0.record_event(
             |_| true,
             |rmeta| {
-                ComponentHostFuncReturnEvent::new(
+                HostFuncReturnEvent::new(
                     mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(storage),
                     rmeta.add_validation.then_some(result_tys),
                 )
@@ -565,7 +570,7 @@ where
             // lowerings (deep copy)
             cx.store.0.replay_event(
                 |_| true,
-                |event: ComponentHostFuncReturnEvent, rmeta| {
+                |event: HostFuncReturnEvent, rmeta| {
                     if rmeta.validate {
                         event.validate(result_tys)
                     } else {
@@ -577,9 +582,7 @@ where
         // Recording here is just for marking the return event
         cx.store.0.record_event(
             |_| true,
-            |rmeta| {
-                ComponentHostFuncReturnEvent::new(&[], rmeta.add_validation.then_some(result_tys))
-            },
+            |rmeta| HostFuncReturnEvent::new(&[], rmeta.add_validation.then_some(result_tys)),
         );
     }
 

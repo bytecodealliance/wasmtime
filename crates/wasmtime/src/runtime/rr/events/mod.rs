@@ -1,3 +1,4 @@
+use super::ReplayError;
 use crate::ValRaw;
 use crate::prelude::*;
 use core::fmt;
@@ -6,30 +7,29 @@ use serde::{Deserialize, Serialize};
 
 const VAL_RAW_SIZE: usize = mem::size_of::<ValRaw>();
 
-#[derive(Debug)]
-pub enum ReplayError {
-    EmptyBuffer,
-    FailedFuncValidation,
-    IncorrectEventVariant,
+/// A serde compatible representation of errors produced by specific events
+///
+/// We need this since the [anyhow::Error] trait object cannot be used. This
+/// type just encapsulates the corresponding display messages during recording
+/// so that it can be validated and/or re-thrown during replay
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EventError {
+    ReallocError(String),
+    LowerError(String),
+    LowerStoreError(String),
 }
 
-impl fmt::Display for ReplayError {
+impl fmt::Display for EventError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::EmptyBuffer => {
-                write!(f, "replay buffer is empty!")
-            }
-            Self::FailedFuncValidation => {
-                write!(f, "func replay event validation failed")
-            }
-            Self::IncorrectEventVariant => {
-                write!(f, "event methods invoked on incorrect variant")
+            Self::ReallocError(s) | Self::LowerError(s) | Self::LowerStoreError(s) => {
+                write!(f, "{}", s)
             }
         }
     }
 }
 
-impl std::error::Error for ReplayError {}
+impl std::error::Error for EventError {}
 
 /// Transmutable byte array used to serialize [`ValRaw`] union
 ///
@@ -119,8 +119,5 @@ where
     }
 }
 
-mod core_wasm;
-pub use core_wasm::*;
-
-mod component_wasm;
-pub use component_wasm::*;
+pub mod component_wasm;
+pub mod core_wasm;

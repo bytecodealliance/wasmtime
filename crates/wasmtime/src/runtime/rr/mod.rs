@@ -6,15 +6,17 @@ use crate::config::{RecordConfig, RecordMetadata, ReplayConfig, ReplayMetadata};
 use crate::prelude::*;
 #[allow(unused_imports)]
 use crate::runtime::Store;
+use core::fmt;
 use postcard;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::File;
+#[allow(unused_imports)]
 use std::io::{BufWriter, Seek, Write};
 
 /// Encapsulation of event types comprising an [`RREvent`] sum type
-mod events;
-pub use events::*;
+pub mod events;
+use events::*;
 
 /// Macro template for [`RREvent`] and its conversion to/from specific
 /// event types
@@ -60,18 +62,59 @@ macro_rules! rr_event {
 // Set of supported record/replay events
 rr_event! {
     /// Call into host function from Core Wasm
-    CoreHostFuncEntry => CoreHostFuncEntryEvent,
+    CoreHostFuncEntry => core_wasm::HostFuncEntryEvent,
     /// Return from host function to Core Wasm
-    CoreHostFuncReturn => CoreHostFuncReturnEvent,
-    /// Call into host function from component
-    ComponentHostFuncEntry => ComponentHostFuncEntryEvent,
+    CoreHostFuncReturn => core_wasm::HostFuncReturnEvent,
+
+    // REQUIRED events for replay
+    //
     /// Return from host function to component
-    ComponentHostFuncReturn => ComponentHostFuncReturnEvent
-    ///// Component ABI Realloc of linear wasm memory
-    //ComponentRealloc => ComponentReallocEvent,
-    ///// A store into linear wasm memory during component type lowering operations
-    //ComponentLowerStore => ComponentLowerStore
+    ComponentHostFuncReturn => component_wasm::HostFuncReturnEvent,
+    /// Component ABI realloc call in linear wasm memory
+    ComponentReallocEntry => component_wasm::ReallocEntryEvent,
+    /// Return from a type lowering operation
+    ComponentLowerReturn => component_wasm::LowerReturnEvent,
+    /// Return from a store during a type lowering operation
+    ComponentLowerStoreReturn => component_wasm::LowerStoreReturnEvent,
+    /// An attempt to obtain a mutable slice into Wasm linear memory
+    ComponentMemorySliceBorrow => component_wasm::MemorySliceBorrowEvent,
+
+    // OPTIONAL events for replay validation
+    //
+    /// Call into host function from component
+    ComponentHostFuncEntry => component_wasm::HostFuncEntryEvent,
+    /// Call into [Lower::lower] for type lowering
+    ComponentLowerEntry => component_wasm::LowerEntryEvent,
+    /// Call into [Lower::store] during type lowering
+    ComponentLowerStoreEntry => component_wasm::LowerStoreEntryEvent,
+    /// Return from Component ABI realloc call
+    ComponentReallocReturn => component_wasm::ReallocReturnEvent
 }
+
+#[derive(Debug)]
+pub enum ReplayError {
+    EmptyBuffer,
+    FailedFuncValidation,
+    IncorrectEventVariant,
+}
+
+impl fmt::Display for ReplayError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyBuffer => {
+                write!(f, "replay buffer is empty!")
+            }
+            Self::FailedFuncValidation => {
+                write!(f, "func replay event validation failed")
+            }
+            Self::IncorrectEventVariant => {
+                write!(f, "event method invoked on incorrect variant")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ReplayError {}
 
 pub trait Recorder {
     /// Constructs a writer on new buffer
@@ -231,7 +274,7 @@ mod tests {
             .map(|x| MaybeUninit::new(x))
             .collect::<Vec<_>>();
 
-        let event = CoreHostFuncEntryEvent::new(values.as_slice(), None);
+        let event = core_wasm::CoreHostFuncEntryEvent::new(values.as_slice(), None);
 
         // Record values
         let mut recorder = RecordBuffer::new_recorder(record_cfg)?;
@@ -249,7 +292,7 @@ mod tests {
             metadata: ReplayMetadata { validate: true },
         };
         let mut replayer = ReplayBuffer::new_replayer(replay_cfg)?;
-        let event_pop = CoreHostFuncEntryEvent::try_from(replayer.pop_event()?)?;
+        let event_pop = core_wasm::CoreHostFuncEntryEvent::try_from(replayer.pop_event()?)?;
         // Replay matches record
         assert!(event == event_pop);
 

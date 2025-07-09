@@ -2,6 +2,9 @@ use crate::component::ResourceType;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::prelude::*;
+use crate::rr::events::component_wasm::{
+    MemorySliceBorrowEvent, ReallocEntryEvent, ReallocReturnEvent,
+};
 use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
 };
@@ -248,7 +251,13 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         new_size: usize,
     ) -> Result<usize> {
         let realloc_func_ty = Arc::clone(unsafe { (*self.instance).component().realloc_func_ty() });
-        self.options
+
+        self.store.0.record_event(
+            |_| true,
+            |_| ReallocEntryEvent::new(old, old_size, old_align, new_size),
+        );
+        let result = self
+            .options
             .realloc(
                 &mut self.store,
                 &realloc_func_ty,
@@ -257,7 +266,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
                 old_align,
                 new_size,
             )
-            .map(|(_, ptr)| ptr)
+            .map(|(_, ptr)| ptr);
+        self.store
+            .0
+            .record_event(|r| r.add_validation, |_| ReallocReturnEvent::new(&result));
+        result
     }
 
     /// Returns a fixed mutable slice of memory `N` bytes large starting at
@@ -281,6 +294,13 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         // For now I figure we can leave in this bounds check and if it becomes
         // an issue we can optimize further later, probably with judicious use
         // of `unsafe`.
+
+        // Accessing the store for event recording after getting the slice is
+        // tricky to resolve by the borrow checker. Instead, we just record before
+        // since this operation panics anyway, and the replay should still be faithful
+        self.store
+            .0
+            .record_event(|_| true, |_| MemorySliceBorrowEvent::new(offset, N));
         self.as_slice_mut()[offset..].first_chunk_mut().unwrap()
     }
 

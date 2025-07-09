@@ -1,5 +1,6 @@
 //! Module comprising of core wasm events
 use super::*;
+#[allow(unused_imports)]
 use wasmtime_environ::{WasmFuncType, WasmValType};
 
 /// Note: Switch [`CoreFuncArgTypes`] to use [`Vec<WasmValType>`] for better efficiency
@@ -7,13 +8,13 @@ type CoreFuncArgTypes = WasmFuncType;
 
 /// A call event from a Core Wasm module into the host
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CoreHostFuncEntryEvent {
+pub struct HostFuncEntryEvent {
     /// Raw values passed across the call/return boundary
     args: RRFuncArgVals,
     /// Optional param/return types (required to support replay validation)
     types: Option<CoreFuncArgTypes>,
 }
-impl CoreHostFuncEntryEvent {
+impl HostFuncEntryEvent {
     // Record
     pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<WasmFuncType>) -> Self {
         Self {
@@ -29,15 +30,15 @@ impl CoreHostFuncEntryEvent {
 
 /// A return event after a host call for a Core Wasm
 ///
-/// Matches 1:1 with [`CoreHostFuncEntryEvent`]
+/// Matches 1:1 with [`HostFuncEntryEvent`]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CoreHostFuncReturnEvent {
+pub struct HostFuncReturnEvent {
     /// Raw values passed across the call/return boundary
     args: RRFuncArgVals,
     /// Optional param/return types (required to support replay validation)
     types: Option<CoreFuncArgTypes>,
 }
-impl CoreHostFuncReturnEvent {
+impl HostFuncReturnEvent {
     // Record
     pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<WasmFuncType>) -> Self {
         Self {
