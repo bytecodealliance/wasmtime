@@ -785,8 +785,7 @@ impl<T> FutureReader<T> {
     /// Read the value from this `future`.
     ///
     /// The returned `Future` will yield `None` if the guest has trapped
-    /// before it could produce a result or if the write end belonged to the
-    /// host and was dropped without writing a result.
+    /// before it could produce a result.
     ///
     /// Note that the returned `Future` must be polled from the event loop of
     /// the component instance from which this `FutureReader` originated.  See
