@@ -1062,6 +1062,12 @@ pub trait InstructionMapper {
         &mut self,
         dynamic_stack_slot: ir::DynamicStackSlot,
     ) -> ir::DynamicStackSlot;
+
+    /// Map a function over a `Constant`.
+    fn map_constant(&mut self, constant: ir::Constant) -> ir::Constant;
+
+    /// Map a function over an `Immediate`.
+    fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate;
 }
 
 impl<'a, T> InstructionMapper for &'a mut T
@@ -1109,6 +1115,14 @@ where
         dynamic_stack_slot: ir::DynamicStackSlot,
     ) -> ir::DynamicStackSlot {
         (**self).map_dynamic_stack_slot(dynamic_stack_slot)
+    }
+
+    fn map_constant(&mut self, constant: ir::Constant) -> ir::Constant {
+        (**self).map_constant(constant)
+    }
+
+    fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate {
+        (**self).map_immediate(immediate)
     }
 }
 
