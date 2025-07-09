@@ -1874,7 +1874,7 @@ where
         self.context.stack.extend([mem.try_into()?]);
 
         let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
-        let builtin = self.env.builtins.memory32_grow::<M::ABI, M::Ptr>()?;
+        let builtin = self.env.builtins.memory_grow::<M::ABI, M::Ptr>()?;
         FnCall::emit::<M>(
             &mut self.env,
             self.masm,
