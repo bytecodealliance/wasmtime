@@ -191,27 +191,14 @@ where
         );
         #[cfg(feature = "component-model-async")]
         {
-            use std::ptr;
-            use std::sync::atomic::{AtomicPtr, Ordering::Relaxed};
+            use crate::component::concurrent::TaskId;
+            use crate::runtime::vm::SendSyncPtr;
+            use core::ptr::NonNull;
 
-            struct ClearOnDrop(Arc<AtomicPtr<u8>>);
-
-            impl Drop for ClearOnDrop {
-                fn drop(&mut self) {
-                    self.0.store(ptr::null_mut(), Relaxed);
-                }
-            }
-
-            // TODO: Can we make this more efficient while guaranteeing the
-            // closure we pass to `prepare_call` below never sees a stale
-            // pointer?
-            let mut params = params;
-            let ptr = Arc::new(AtomicPtr::new((&raw mut params).cast::<u8>()));
-            let _clear = ClearOnDrop(ptr.clone());
-
+            let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
             let prepared =
-                self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
-                    // SAFETY: the goal here is to get `Params`, a non-`'static`
+                self.prepare_call(store.as_context_mut(), false, false, move |cx, ty, dst| {
+                    // SAFETY: The goal here is to get `Params`, a non-`'static`
                     // value, to live long enough to the lowering of the
                     // parameters. We're guaranteed that `Params` lives in the
                     // future of the outer function (we're in an `async fn`) so it'll
@@ -219,14 +206,40 @@ where
                     // for example, from the signature of `call_concurrent` below.
                     //
                     // Here a pointer to `Params` is smuggled to this location
-                    // through a `AtomicPtr<u8>` to thwart the `'static` check of
-                    // rustc and the signature of `prepare_call`.
-                    let params = unsafe { ptr.load(Relaxed).cast::<Params>().as_ref().unwrap() };
+                    // through a `SendSyncPtr<u8>` to thwart the `'static` check
+                    // of rustc and the signature of `prepare_call`.
+                    //
+                    // Note the use of `RemoveOnDrop` in the code that follows
+                    // this closure, which ensures that the task will be removed
+                    // from the concurrent state to which it belongs when the
+                    // containing `Future` is dropped, thereby ensuring that
+                    // this closure will never be called if it hasn't already,
+                    // meaning it will never see a dangling pointer.
+                    let params = unsafe { ptr.cast::<Params>().as_ref() };
                     Self::lower_args(cx, ty, dst, params)
                 })?;
 
-            let result = concurrent::queue_call(store.as_context_mut(), prepared)?;
-            return self.func.instance.run(store, result).await?;
+            struct RemoveOnDrop<'a, T: 'static> {
+                store: StoreContextMut<'a, T>,
+                task: TaskId,
+            }
+
+            impl<'a, T> Drop for RemoveOnDrop<'a, T> {
+                fn drop(&mut self) {
+                    self.task.remove(self.store.as_context_mut()).unwrap();
+                }
+            }
+
+            let mut wrapper = RemoveOnDrop {
+                store,
+                task: prepared.task_id(),
+            };
+
+            let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
+            self.func
+                .instance
+                .run(wrapper.store.as_context_mut(), result)
+                .await?
         }
         #[cfg(not(feature = "component-model-async"))]
         {
@@ -274,7 +287,7 @@ where
 
         let result = (|| {
             let prepared =
-                self.prepare_call(store.as_context_mut(), true, move |cx, ty, dst| {
+                self.prepare_call(store.as_context_mut(), true, true, move |cx, ty, dst| {
                     Self::lower_args(cx, ty, dst, &params)
                 })?;
             concurrent::queue_call(store, prepared)
@@ -311,6 +324,7 @@ where
     fn prepare_call<T>(
         self,
         store: StoreContextMut<'_, T>,
+        remove_task_automatically: bool,
         call_post_return_automatically: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
@@ -340,6 +354,7 @@ where
             store,
             self.func,
             param_count,
+            remove_task_automatically,
             call_post_return_automatically,
             move |func, store, params_out| {
                 func.with_lower_context(store, call_post_return_automatically, |cx, ty| {

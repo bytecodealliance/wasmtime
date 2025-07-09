@@ -733,7 +733,7 @@ impl ConcurrentState {
         // constant time check.
         loop {
             match &self.get_mut(guest_task).unwrap().caller {
-                Caller::Host(_) => break true,
+                Caller::Host { .. } => break true,
                 Caller::Guest { task, instance } => {
                     if *instance == guest_instance {
                         break false;
@@ -797,9 +797,14 @@ impl ConcurrentState {
             callback_code::EXIT => {
                 let task = self.get_mut(guest_task)?;
                 match &task.caller {
-                    Caller::Host(_) => {
-                        log::trace!("handle_callback_code will delete task {guest_task:?}");
-                        Waitable::Guest(guest_task).delete_from(self)?;
+                    Caller::Host {
+                        remove_task_automatically,
+                        ..
+                    } => {
+                        if *remove_task_automatically {
+                            log::trace!("handle_callback_code will delete task {guest_task:?}");
+                            Waitable::Guest(guest_task).delete_from(self)?;
+                        }
                     }
                     Caller::Guest { .. } => {
                         task.exited = true;
@@ -1875,7 +1880,7 @@ impl Instance {
             move |store: &mut dyn VMStore, instance: Instance| {
                 let mut storage = [MaybeUninit::uninit(); MAX_FLAT_PARAMS];
                 let task = instance.concurrent_state_mut(store).get_mut(guest_task)?;
-                let may_enter_after_call = task.call_post_return_automatically;
+                let may_enter_after_call = task.call_post_return_automatically();
                 let lower = task.lower_params.take().unwrap();
 
                 lower(store, instance, &mut storage[..param_count])?;
@@ -2045,7 +2050,7 @@ impl Instance {
                     if instance
                         .concurrent_state_mut(store)
                         .get(guest_task)?
-                        .call_post_return_automatically
+                        .call_post_return_automatically()
                     {
                         unsafe { flags.set_needs_post_return(false) }
 
@@ -2083,9 +2088,14 @@ impl Instance {
                 let task = instance.concurrent_state_mut(store).get_mut(guest_task)?;
 
                 match &task.caller {
-                    Caller::Host(_) => {
-                        Waitable::Guest(guest_task)
-                            .delete_from(instance.concurrent_state_mut(store))?;
+                    Caller::Host {
+                        remove_task_automatically,
+                        ..
+                    } => {
+                        if *remove_task_automatically {
+                            Waitable::Guest(guest_task)
+                                .delete_from(instance.concurrent_state_mut(store))?;
+                        }
                     }
                     Caller::Guest { .. } => {
                         task.exited = true;
@@ -2266,7 +2276,6 @@ impl Instance {
             },
             None,
             callee_instance,
-            true,
         )?;
 
         let guest_task = state.push(new_task)?;
@@ -2351,7 +2360,7 @@ impl Instance {
         let async_caller = storage.is_none();
         let state = self.concurrent_state_mut(store.0);
         let guest_task = state.guest_task.unwrap();
-        let may_enter_after_call = state.get(guest_task)?.call_post_return_automatically;
+        let may_enter_after_call = state.get(guest_task)?.call_post_return_automatically();
         let callee = SendSyncPtr::new(NonNull::new(callee).unwrap());
         let param_count = usize::try_from(param_count).unwrap();
         assert!(param_count <= MAX_FLAT_PARAMS);
@@ -2852,7 +2861,7 @@ impl Instance {
         if self
             .concurrent_state_mut(store)
             .get(guest_task)?
-            .call_post_return_automatically
+            .call_post_return_automatically()
         {
             let (calls, host_table, _, instance) = store
                 .store_opaque_mut()
@@ -2864,10 +2873,10 @@ impl Instance {
             }
             .exit_call()?;
         } else {
-            // As of this writing, the only scenario where
-            // `call_post_return_automatically` would be false for a `GuestTask`
-            // is for host-to-guest calls using `[Typed]Func::call_async`, in
-            // which case the `function_index` should be a non-`None` value.
+            // As of this writing, the only scenario where `call_post_return_automatically`
+            // would be false for a `GuestTask` is for host-to-guest calls using
+            // `[Typed]Func::call_async`, in which case the `function_index`
+            // should be a non-`None` value.
             let function_index = self
                 .concurrent_state_mut(store)
                 .get(guest_task)?
@@ -2882,7 +2891,7 @@ impl Instance {
         let state = self.concurrent_state_mut(store);
         let task = state.get_mut(guest_task)?;
 
-        if let Caller::Host(tx) = &mut task.caller {
+        if let Caller::Host { tx, .. } = &mut task.caller {
             if let Some(tx) = tx.take() {
                 _ = tx.send(result);
             }
@@ -3756,9 +3765,15 @@ type CallbackFn = Box<
 /// Represents the caller of a given guest task.
 enum Caller {
     /// The host called the guest task.
-    ///
-    /// The `Sender`, if present, may be used to deliver the result.
-    Host(Option<oneshot::Sender<LiftedResult>>),
+    Host {
+        /// If present, may be used to deliver the result.
+        tx: Option<oneshot::Sender<LiftedResult>>,
+        /// If true, remove the task from the concurrent state that owns it
+        /// automatically after it completes.
+        remove_task_automatically: bool,
+        /// If true, call `post-return` function (if any) automatically.
+        call_post_return_automatically: bool,
+    },
     /// Another guest task called the guest task
     Guest {
         /// The id of the caller
@@ -3831,9 +3846,6 @@ struct GuestTask {
     /// If present, indicates that the task is currently waiting on the
     /// specified set but may be cancelled and woken immediately.
     wake_on_cancel: Option<TableId<WaitableSet>>,
-    /// Whether to call the post-return function (if any) automatically after
-    /// the task ends.
-    call_post_return_automatically: bool,
     /// The `ExportIndex` of the guest function being called, if known.
     function_index: Option<ExportIndex>,
     /// Whether or not the task has exited.
@@ -3848,7 +3860,6 @@ impl GuestTask {
         caller: Caller,
         callback: Option<CallbackFn>,
         component_instance: RuntimeComponentInstanceIndex,
-        call_post_return_automatically: bool,
     ) -> Result<Self> {
         let sync_call_set = state.push(WaitableSet::default())?;
 
@@ -3869,7 +3880,6 @@ impl GuestTask {
             instance: component_instance,
             event: None,
             wake_on_cancel: None,
-            call_post_return_automatically,
             function_index: None,
             exited: false,
         })
@@ -3913,11 +3923,26 @@ impl GuestTask {
             }
         } else {
             for subtask in &self.subtasks {
-                state.get_mut(*subtask)?.caller = Caller::Host(None);
+                state.get_mut(*subtask)?.caller = Caller::Host {
+                    tx: None,
+                    remove_task_automatically: true,
+                    call_post_return_automatically: true,
+                };
             }
         }
 
         Ok(())
+    }
+
+    fn call_post_return_automatically(&self) -> bool {
+        matches!(
+            self.caller,
+            Caller::Guest { .. }
+                | Caller::Host {
+                    call_post_return_automatically: true,
+                    ..
+                }
+        )
     }
 }
 
@@ -4463,30 +4488,47 @@ pub(crate) struct PreparedCall<R> {
     _phantom: PhantomData<R>,
 }
 
+impl<R> PreparedCall<R> {
+    /// Get a copy of the `TaskId` for this `PreparedCall`.
+    pub(crate) fn task_id(&self) -> TaskId {
+        TaskId {
+            handle: self.handle,
+            task: self.task,
+        }
+    }
+}
+
+/// Represents a task created by `prepare_call`.
+pub(crate) struct TaskId {
+    handle: Func,
+    task: TableId<GuestTask>,
+}
+
+impl TaskId {
+    /// Remove the specified task from the concurrent state to which it belongs.
+    ///
+    /// This must be used with care to avoid use-after-delete or double-delete
+    /// bugs.  Specifically, it should only be called on tasks created with the
+    /// `remove_task_automatically` parameter to `prepare_call` set to `false`,
+    /// which tells the runtime that the caller is responsible for removing the
+    /// task from the state; otherwise, it will be removed automatically.  Also,
+    /// it should only be called once for a given task, and only after either
+    /// the task has completed or the instance has trapped.
+    pub(crate) fn remove<T>(&self, store: StoreContextMut<T>) -> Result<()> {
+        Waitable::Guest(self.task).delete_from(self.handle.instance().concurrent_state_mut(store.0))
+    }
+}
+
 /// Prepare a call to the specified exported Wasm function, providing functions
 /// for lowering the parameters and lifting the result.
 ///
 /// To enqueue the returned `PreparedCall` in the `ComponentInstance`'s event
 /// loop, use `queue_call`.
-///
-/// Note that this function is used in `TypedFunc::call_async`, which accepts
-/// parameters of a generic type which might not be `'static`.  However the
-/// `GuestTask` created by this function must be `'static`, so it can't safely
-/// close over those parameters.  Instead, `PreparedCall` has a `params` field
-/// of type `Arc<AtomicPtr<u8>>`, which the caller is responsible for setting to
-/// a valid, non-null pointer to the params prior to polling the event loop (at
-/// least until the parameters have been lowered), and then resetting back to
-/// null afterward.  That ensures that the lowering code never sees a stale
-/// pointer, even if the application `drop`s or `mem::forget`s the future
-/// returned by `TypedFunc::call_async`.
-///
-/// In the case where the parameters are passed using a type that _is_
-/// `'static`, they can be boxed and stored in `PreparedCall::params`
-/// indefinitely; `drop_params` will be called when they are no longer needed.
 pub(crate) fn prepare_call<T, R>(
     mut store: StoreContextMut<T>,
     handle: Func,
     param_count: usize,
+    remove_task_automatically: bool,
     call_post_return_automatically: bool,
     lower_params: impl FnOnce(Func, StoreContextMut<T>, &mut [MaybeUninit<ValRaw>]) -> Result<()>
     + Send
@@ -4527,7 +4569,11 @@ pub(crate) fn prepare_call<T, R>(
             memory,
             string_encoding,
         },
-        Caller::Host(Some(tx)),
+        Caller::Host {
+            tx: Some(tx),
+            remove_task_automatically,
+            call_post_return_automatically,
+        },
         callback.map(|callback| {
             let callback = SendSyncPtr::new(callback);
             Box::new(
@@ -4553,7 +4599,6 @@ pub(crate) fn prepare_call<T, R>(
             ) as CallbackFn
         }),
         component_instance,
-        call_post_return_automatically,
     )?;
     task.function_index = Some(handle.index());
 
