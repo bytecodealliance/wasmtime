@@ -69,7 +69,9 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
 use core::time::Duration;
-use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap};
+use wasmtime_environ::{
+    DataIndex, DefinedMemoryIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap,
+};
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
     DoubleMalloc, InvalidFree, InvalidRead, InvalidWrite, OutOfBounds,
@@ -168,13 +170,14 @@ fn memory_grow(
     delta: u64,
     memory_index: u32,
 ) -> Result<Option<AllocationSize>, TrapReason> {
-    let memory_index = MemoryIndex::from_u32(memory_index);
+    let memory_index = DefinedMemoryIndex::from_u32(memory_index);
+    let module = instance.env_module();
+    let page_size_log2 = module.memories[module.memory_index(memory_index)].page_size_log2;
+
     let result = instance
         .as_mut()
         .memory_grow(store, memory_index, delta)?
-        .map(|size_in_bytes| {
-            AllocationSize(size_in_bytes / instance.memory_page_size(memory_index))
-        });
+        .map(|size_in_bytes| AllocationSize(size_in_bytes >> page_size_log2));
 
     Ok(result)
 }
@@ -437,7 +440,7 @@ fn memory_fill(
     val: u32,
     len: u64,
 ) -> Result<(), Trap> {
-    let memory_index = MemoryIndex::from_u32(memory_index);
+    let memory_index = DefinedMemoryIndex::from_u32(memory_index);
     #[expect(clippy::cast_possible_truncation, reason = "known to truncate here")]
     instance.memory_fill(memory_index, dst, val as u8, len)
 }
@@ -1056,9 +1059,9 @@ fn memory_atomic_notify(
     addr_index: u64,
     count: u32,
 ) -> Result<u32, Trap> {
-    let memory = MemoryIndex::from_u32(memory_index);
+    let memory = DefinedMemoryIndex::from_u32(memory_index);
     instance
-        .get_runtime_memory(memory)
+        .get_defined_memory(memory)
         .atomic_notify(addr_index, count)
 }
 
@@ -1073,9 +1076,9 @@ fn memory_atomic_wait32(
     timeout: u64,
 ) -> Result<u32, Trap> {
     let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
-    let memory = MemoryIndex::from_u32(memory_index);
+    let memory = DefinedMemoryIndex::from_u32(memory_index);
     Ok(instance
-        .get_runtime_memory(memory)
+        .get_defined_memory(memory)
         .atomic_wait32(addr_index, expected, timeout)? as u32)
 }
 
@@ -1090,9 +1093,9 @@ fn memory_atomic_wait64(
     timeout: u64,
 ) -> Result<u32, Trap> {
     let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
-    let memory = MemoryIndex::from_u32(memory_index);
+    let memory = DefinedMemoryIndex::from_u32(memory_index);
     Ok(instance
-        .get_runtime_memory(memory)
+        .get_defined_memory(memory)
         .atomic_wait64(addr_index, expected, timeout)? as u32)
 }
 
