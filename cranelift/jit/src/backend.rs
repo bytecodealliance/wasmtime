@@ -611,6 +611,7 @@ impl Module for JITModule {
             data_relocs: _,
             custom_segment_section: _,
             align,
+            used: _,
         } = data;
 
         // Make sure to allocate at least 1 byte. Allocating 0 bytes is UB. Previously a dummy
