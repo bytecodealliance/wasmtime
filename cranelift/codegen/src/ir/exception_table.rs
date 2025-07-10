@@ -189,18 +189,20 @@ impl ExceptionTableData {
     }
 
     /// Push a catch target onto this exception table.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this exception table has been cleared.
     pub fn push_catch(&mut self, tag: Option<ExceptionTag>, block_call: BlockCall) {
+        assert_eq!(
+            self.tags.len() + 1,
+            self.targets.len(),
+            "cannot push onto an exception table that has been cleared"
+        );
+
         self.tags.push(tag.into());
 
-        // We don't want to push the target, because the normal return is always
-        // last. Instead we want to insert it in the second to last spot.
-        //
-        // It is always true that `self.tags.len() == self.targets.len() + 1`
-        // because of the presence of the normal return which does not have an
-        // associated tag *except* for the case where we have cleared the
-        // exception table, in which case both vecs will be empty. We handle the
-        // cleared case by using saturating subtraction here.
-        let target_index = self.targets.len().saturating_sub(1);
+        let target_index = self.targets.len() - 1;
         self.targets.insert(target_index, block_call);
     }
 }

@@ -24,6 +24,7 @@ use crate::ir::{self, InstBuilder as _};
 use crate::result::CodegenResult;
 use crate::trace;
 use crate::traversals::Dfs;
+use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use cranelift_entity::{SecondaryMap, packed_option::PackedOption};
 use smallvec::SmallVec;
@@ -41,7 +42,7 @@ pub enum InlineCommand<'a> {
     /// It is the `Inline` implementor's responsibility to ensure that this
     /// function is the correct callee. Providing the wrong function may result
     /// in panics during compilation or incorrect runtime behavior.
-    Inline(&'a ir::Function),
+    Inline(Cow<'a, ir::Function>),
 }
 
 /// A trait for directing Cranelift whether to inline a particular call or not.
@@ -125,7 +126,7 @@ pub(crate) fn do_inlining(func: &mut ir::Function, inliner: impl Inline) -> Code
                                 block,
                                 inst,
                                 opcode,
-                                callee,
+                                &callee,
                                 None,
                             );
                             inlined_any = true;
@@ -150,7 +151,7 @@ pub(crate) fn do_inlining(func: &mut ir::Function, inliner: impl Inline) -> Code
                                 block,
                                 inst,
                                 opcode,
-                                callee,
+                                &callee,
                                 Some(exception),
                             );
                             inlined_any = true;
@@ -964,9 +965,22 @@ fn split_off_return_block(
     //   returns to that block (and therefore that block's parameter types also
     //   exactly match the callee's return types). Otherwise, we must create a new
     //   return block that forwards to the existing normal-return
-    //   block. (Elsewhere, at the end of inlining, we will also update any
-    //   inlined calls to forward any raised exceptions to the caller's
-    //   exception table, as necessary).
+    //   block. (Elsewhere, at the end of inlining, we will also update any inlined
+    //   calls to forward any raised exceptions to the caller's exception table,
+    //   as necessary.)
+    //
+    //   Finally, note that reusing the normal-return's target block is just an
+    //   optimization to emit a simpler CFG when we can, and is not
+    //   fundamentally required for correctness. We could always insert a
+    //   temporary block as our control-flow join point that then forwards to
+    //   the normal-return's target block. However, at the time of writing,
+    //   Cranelift doesn't currently do any jump-threading or branch
+    //   simplification in the mid-end, and removing unnecessary blocks in this
+    //   way can help some subsequent mid-end optimizations. If, in the future,
+    //   we gain support for jump-threading optimizations in the mid-end, we can
+    //   come back and simplify the below code a bit to always generate the
+    //   temporary block, and then rely on the subsequent optimizations to clean
+    //   everything up.
     debug_assert_eq!(
         return_block.is_none(),
         opcode == ir::Opcode::ReturnCall || opcode == ir::Opcode::TryCall,
