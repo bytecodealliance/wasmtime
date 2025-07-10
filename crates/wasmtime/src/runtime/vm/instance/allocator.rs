@@ -615,8 +615,10 @@ fn initialize_tables(
                 let idx = module.table_index(table);
                 match module.tables[idx].ref_type.heap_type.top() {
                     WasmHeapTopType::Extern => {
+                        store.gc_store_mut()?;
                         let (gc_store, instance) =
-                            store.gc_store_and_instance_mut(context.instance)?;
+                            store.optional_gc_store_and_instance_mut(context.instance);
+                        let gc_store = gc_store.unwrap();
                         let table = instance.get_defined_table(table);
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
                         let items = (0..table.size())
@@ -625,8 +627,10 @@ fn initialize_tables(
                     }
 
                     WasmHeapTopType::Any => {
+                        store.gc_store_mut()?;
                         let (gc_store, instance) =
-                            store.gc_store_and_instance_mut(context.instance)?;
+                            store.optional_gc_store_and_instance_mut(context.instance);
+                        let gc_store = gc_store.unwrap();
                         let table = instance.get_defined_table(table);
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
                         let items = (0..table.size())
