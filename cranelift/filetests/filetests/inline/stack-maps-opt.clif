@@ -30,15 +30,16 @@ block0(v0: i32):
 ;     fn0 = %f0 sig0
 ;
 ; block0(v0: i32):
-;     v7 = stack_addr.i64 ss0
-;     store notrap v0, v7
+;     v5 = stack_addr.i64 ss0
+;     store notrap v0, v5
 ;     jump block1
 ;
 ; block1:
 ;     jump block2
 ;
 ; block2:
-;     v5 = iconst.i32 1234
-;     v3 = iadd.i32 v0, v5  ; v5 = 1234
+;     v7 = iconst.i32 1234
+;     v3 = iadd.i32 v0, v7  ; v7 = 1234
 ;     return v3
 ; }
+

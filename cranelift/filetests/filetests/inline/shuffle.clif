@@ -1,6 +1,7 @@
 ;; Test that `ir::Immediate` entities, used by `shuffle`, are properly inlined.
 
 test inline precise-output
+target x86_64
 
 function %f0(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):

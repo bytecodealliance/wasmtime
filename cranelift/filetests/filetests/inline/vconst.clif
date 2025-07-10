@@ -1,6 +1,7 @@
 ;; Test that `ir::Constant`s, used by `vconst` and others, are properly inlined.
 
 test inline precise-output
+target x86_64
 
 function %f0(i32x4) -> i32x4 {
 block0(v0: i32x4):

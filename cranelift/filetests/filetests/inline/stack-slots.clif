@@ -33,9 +33,11 @@ block0:
 ;     jump block1
 ;
 ; block1:
-;     stack_store.i64 v0, ss1
-;     v5 = stack_load.i64 ss1
-;     jump block2(v5)
+;     v5 = stack_addr.i64 ss1
+;     store.i64 notrap v0, v5
+;     v6 = stack_addr.i64 ss1
+;     v7 = load.i64 notrap v6
+;     jump block2(v7)
 ;
 ; block2(v4: i64):
 ;     v1 -> v4

@@ -36,10 +36,12 @@ block0:
 ;     jump block1
 ;
 ; block1:
-;     stack_store.i64 v0, ss0+8  ; v0 = 0
+;     v3 = stack_addr.i64 ss0+8
+;     store.i64 notrap v0, v3  ; v0 = 0
 ;     call fn1(v0), stack_map=[i64 @ ss0+8]  ; v0 = 0
-;     v3 = stack_load.i64 ss0+8
-;     jump block2(v3)
+;     v4 = stack_addr.i64 ss0+8
+;     v5 = load.i64 notrap v4
+;     jump block2(v5)
 ;
 ; block2(v2: i64):
 ;     v1 -> v2
@@ -77,16 +79,18 @@ block0(v0: i64):
 ;     fn1 = %whatever sig1
 ;
 ; block0(v0: i64):
-;     stack_store v0, ss0+8
+;     v5 = stack_addr.i64 ss0+8
+;     store notrap v0, v5
 ;     jump block1
 ;
 ; block1:
-;     v5 = call fn1(v0), stack_map=[i64 @ ss0+8]
-;     jump block2(v5)
+;     v7 = call fn1(v0), stack_map=[i64 @ ss0+8]
+;     jump block2(v7)
 ;
-; block2(v4: i64):
-;     v1 -> v4
-;     v2 = stack_load.i64 ss0+8
+; block2(v6: i64):
+;     v1 -> v6
+;     v4 = stack_addr.i64 ss0+8
+;     v2 = load.i64 notrap v4
 ;     v3 = iadd v1, v2
 ;     return v3
 ; }
@@ -126,18 +130,22 @@ block0(v0: i64):
 ;     fn1 = %whatever sig1
 ;
 ; block0(v0: i64):
-;     stack_store v0, ss0+8
+;     v5 = stack_addr.i64 ss0+8
+;     store notrap v0, v5
 ;     jump block1
 ;
 ; block1:
-;     stack_store.i64 v0, ss1
+;     v7 = stack_addr.i64 ss1
+;     store.i64 notrap v0, v7
 ;     call fn1(v0), stack_map=[i64 @ ss0+8, i64 @ ss1+0]
-;     v5 = stack_load.i64 ss1
-;     jump block2(v5)
+;     v8 = stack_addr.i64 ss1
+;     v9 = load.i64 notrap v8
+;     jump block2(v9)
 ;
-; block2(v4: i64):
-;     v1 -> v4
-;     v2 = stack_load.i64 ss0+8
+; block2(v6: i64):
+;     v1 -> v6
+;     v4 = stack_addr.i64 ss0+8
+;     v2 = load.i64 notrap v4
 ;     v3 = iadd v1, v2
 ;     return v3
 ; }
@@ -173,16 +181,18 @@ block0(v0: i64):
 ;     fn1 = %whatever sig1
 ;
 ; block0(v0: i64):
-;     stack_store v0, ss0+8
+;     v5 = stack_addr.i64 ss0+8
+;     store notrap v0, v5
 ;     jump block1
 ;
 ; block1:
-;     v5 = call fn1(v0), stack_map=[i64 @ ss0+8]
-;     jump block2(v5)
+;     v7 = call fn1(v0), stack_map=[i64 @ ss0+8]
+;     jump block2(v7)
 ;
-; block2(v4: i64):
-;     v1 -> v4
-;     v2 = stack_load.i64 ss0+8
+; block2(v6: i64):
+;     v1 -> v6
+;     v4 = stack_addr.i64 ss0+8
+;     v2 = load.i64 notrap v4
 ;     v3 = iadd v1, v2
 ;     return v3
 ; }
@@ -217,16 +227,19 @@ block0(v0: i64, v1: i64):
 ;     fn0 = %f8 sig0
 ;
 ; block0(v0: i64, v1: i64):
-;     stack_store v0, ss0+8
+;     v6 = stack_addr.i64 ss0+8
+;     store notrap v0, v6
 ;     jump block1
 ;
 ; block1:
-;     v6 = call_indirect.i64 sig1, v1(v0), stack_map=[i64 @ ss0+8]
-;     jump block2(v6)
+;     v8 = call_indirect.i64 sig1, v1(v0), stack_map=[i64 @ ss0+8]
+;     jump block2(v8)
 ;
-; block2(v5: i64):
-;     v2 -> v5
-;     v3 = stack_load.i64 ss0+8
+; block2(v7: i64):
+;     v2 -> v7
+;     v5 = stack_addr.i64 ss0+8
+;     v3 = load.i64 notrap v5
 ;     v4 = iadd v2, v3
 ;     return v4
 ; }
+

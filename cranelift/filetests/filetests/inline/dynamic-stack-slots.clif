@@ -38,13 +38,15 @@ block0:
 ; block0:
 ;     v0 = iconst.i64 99
 ;     v1 = splat.types::I64x2xN v0  ; v0 = 99
-;     dynamic_stack_store v1, dss0
+;     v3 = dynamic_stack_addr.i64 dss0
+;     store notrap aligned v1, v3
 ;     v2 = iconst.i32 1
 ;     jump block1
 ;
 ; block1:
-;     v3 = splat.types::I32x4xN v2  ; v2 = 1
-;     dynamic_stack_store v3, dss1
+;     v4 = splat.types::I32x4xN v2  ; v2 = 1
+;     v5 = dynamic_stack_addr.i64 dss1
+;     store notrap aligned v4, v5
 ;     jump block2
 ;
 ; block2:

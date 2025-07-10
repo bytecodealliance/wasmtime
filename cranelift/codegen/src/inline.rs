@@ -56,11 +56,22 @@ pub trait Inline {
     /// The Cranelift user is responsible for defining their own hueristics and
     /// deciding whether inlining the call is beneficial.
     ///
-    /// It is the `Inline` implementor's responsibility to ensure that, when
-    /// directing Cranelift to inline a call, the provided callee function is
-    /// the correct function. Providing the wrong function may result in panics
-    /// during compilation (e.g. due to signature type mismatches) or incorrect
-    /// runtime behavior.
+    /// When returning a function and directing Cranelift to inline its body
+    /// into the call site, the `Inline` implementer must ensure the following:
+    ///
+    /// * The returned function's signature exactly matches the `callee`
+    ///   `FuncRef`'s signature.
+    ///
+    /// * The returned function must be legalized.
+    ///
+    /// * The returned function must be valid (i.e. it must pass the CLIF
+    ///   verifier).
+    ///
+    /// * The returned function is a correct and valid implementation of the
+    ///   `callee` according to your language's semantics.
+    ///
+    /// Failure to uphold these invariants may result in panics during
+    /// compilation or incorrect runtime behavior in the generated code.
     fn inline(
         &self,
         caller: &ir::Function,
@@ -172,14 +183,6 @@ struct InliningAllocs {
     /// Map from callee value to inlined caller value.
     values: SecondaryMap<ir::Value, PackedOption<ir::Value>>,
 
-    /// The set of _callee_ global values that are derived (directly or
-    /// transitively) from the `vmctx`.
-    ///
-    /// Because the `vmctx` of the callee might not be the same as the `vmctx`
-    /// of the caller, we translate these globals differently from others, so we
-    /// must know which globals these are.
-    vmctx_global_values: SecondaryMap<ir::GlobalValue, PackedOption<ir::Value>>,
-
     /// Map from callee constant to inlined caller constant.
     constants: SecondaryMap<ir::Constant, PackedOption<ir::Constant>>,
 
@@ -214,7 +217,6 @@ impl InliningAllocs {
     fn reset(&mut self, callee: &ir::Function) {
         let InliningAllocs {
             values,
-            vmctx_global_values,
             constants,
             calls_needing_exception_table_fixup,
             existing_exception_tags,
@@ -222,11 +224,6 @@ impl InliningAllocs {
 
         values.clear();
         values.resize(callee.dfg.len_values());
-
-        // Note: We do not reserve capacity for `vmctx_global_values` because it
-        // is a sparse set and we don't know how large it needs to be ahead of
-        // time.
-        vmctx_global_values.clear();
 
         constants.clear();
         constants.resize(callee.dfg.constants.len());
@@ -240,6 +237,24 @@ impl InliningAllocs {
         // because it is a sparse set and we don't know how large it needs to be
         // ahead of time.
         existing_exception_tags.clear();
+    }
+
+    fn set_inlined_value(
+        &mut self,
+        callee: &ir::Function,
+        callee_val: ir::Value,
+        inlined_val: ir::Value,
+    ) {
+        trace!("  --> callee {callee_val:?} = inlined {inlined_val:?}");
+        debug_assert!(self.values[callee_val].is_none());
+        let resolved_callee_val = callee.dfg.resolve_aliases(callee_val);
+        debug_assert!(self.values[resolved_callee_val].is_none());
+        self.values[resolved_callee_val] = Some(inlined_val).into();
+    }
+
+    fn get_inlined_value(&self, callee: &ir::Function, callee_val: ir::Value) -> Option<ir::Value> {
+        let resolved_callee_val = callee.dfg.resolve_aliases(callee_val);
+        self.values[resolved_callee_val].expand()
     }
 }
 
@@ -274,16 +289,12 @@ fn inline_one(
     // Inlined prologue: split the call instruction's block at the point of the
     // call and replace the call with a jump.
     let return_block = split_off_return_block(func, call_inst, call_opcode, callee);
-    let (call_stack_map, vmctx) =
-        replace_call_with_jump(allocs, func, call_inst, callee, &entity_map);
-    debug_assert!(allocs.vmctx_global_values.is_empty() || vmctx.is_some());
+    let call_stack_map = replace_call_with_jump(allocs, func, call_inst, callee, &entity_map);
 
     // Prepare for translating the actual instructions by inserting the inlined
     // blocks into the caller's layout in the same order that they appear in the
-    // callee, and define any vmctx-based global values in the inlined entry
-    // block.
+    // callee.
     inline_block_layout(func, call_block, callee, &entity_map);
-    define_vmctx_global_values(allocs, func, callee, vmctx, &entity_map);
 
     // Translate each instruction from the callee into the caller,
     // appending them to their associated block in the caller.
@@ -303,36 +314,16 @@ fn inline_one(
                 callee.dfg.display_inst(callee_inst)
             );
 
-            // Special case for `global_value` instructions that reference a
-            // global value that is defined in terms of the the callee's
-            // `vmctx`. We cannot translate these to `global_value` instructions
-            // in the caller, because the caller's `vmctx` might not be the same
-            // as the callee's `vmctx`, if it even has one. Instead, use the
-            // pre-defined values for these globals in the `vmctx_global_values`
-            // map.
-            if let ir::InstructionData::UnaryGlobalValue {
-                opcode: ir::Opcode::GlobalValue,
-                global_value,
-            } = &callee.dfg.insts[callee_inst]
-            {
-                if let Some(inlined_value) = allocs
-                    .vmctx_global_values
-                    .get(*global_value)
-                    .and_then(|o| o.expand())
-                {
-                    let callee_value = callee.dfg.first_result(callee_inst);
-                    trace!(
-                        "  --> use of vmctx-based global value; callee {callee_value:?} = inlined {inlined_value:?}"
-                    );
-                    allocs.values[callee_value] = Some(inlined_value).into();
+            assert_ne!(
+                callee.dfg.insts[callee_inst].opcode(),
+                ir::Opcode::GlobalValue,
+                "callee must already be legalized, we shouldn't see any `global_value` \
+                 instructions when inlining; found {callee_inst:?}: {}",
+                callee.dfg.display_inst(callee_inst)
+            );
 
-                    next_callee_inst = callee.layout.next_inst(callee_inst);
-                    continue;
-                }
-            }
-
-            // General case: remap the callee instruction's entities and insert
-            // it into the caller's DFG.
+            // Remap the callee instruction's entities and insert it into the
+            // caller's DFG.
             let inlined_inst_data = callee.dfg.insts[callee_inst].map(InliningInstRemapper {
                 allocs: &allocs,
                 func,
@@ -377,8 +368,7 @@ fn inline_one(
                 let inlined_results = func.dfg.inst_results(inlined_inst);
                 debug_assert_eq!(callee_results.len(), inlined_results.len());
                 for (callee_val, inlined_val) in callee_results.iter().zip(inlined_results) {
-                    trace!("  --> callee {callee_val:?} = inlined {inlined_val:?}");
-                    allocs.values[*callee_val] = Some(*inlined_val).into();
+                    allocs.set_inlined_value(callee, *callee_val, *inlined_val);
                 }
 
                 if opcode.is_call() {
@@ -789,14 +779,10 @@ struct InliningInstRemapper<'a> {
 
 impl<'a> ir::instructions::InstructionMapper for InliningInstRemapper<'a> {
     fn map_value(&mut self, value: ir::Value) -> ir::Value {
-        self.allocs
-            .values
-            .get(value)
-            .and_then(|opt| opt.expand())
-            .expect(
-                "defs come before uses; we should have already inlined all values \
-                 used by an instruction",
-            )
+        self.allocs.get_inlined_value(self.callee, value).expect(
+            "defs come before uses; we should have already inlined all values \
+             used by an instruction",
+        )
     }
 
     fn map_value_list(&mut self, value_list: ir::ValueList) -> ir::ValueList {
@@ -809,14 +795,6 @@ impl<'a> ir::instructions::InstructionMapper for InliningInstRemapper<'a> {
     }
 
     fn map_global_value(&mut self, global_value: ir::GlobalValue) -> ir::GlobalValue {
-        debug_assert!(
-            self.allocs
-                .vmctx_global_values
-                .get(global_value)
-                .and_then(|o| o.expand())
-                .is_none(),
-            "vmctx-based globals are handled via a special case"
-        );
         self.entity_map.inlined_global_value(global_value)
     }
 
@@ -1055,15 +1033,14 @@ fn split_off_return_block(
 /// Also associates the callee's parameters with the caller's arguments in our
 /// value map.
 ///
-/// Returns the caller's stack map entries and argument value that is associated
-/// with the callee's `vmctx` parameter, if any.
+/// Returns the caller's stack map entries, if any.
 fn replace_call_with_jump(
     allocs: &mut InliningAllocs,
     func: &mut ir::Function,
     call_inst: ir::Inst,
     callee: &ir::Function,
     entity_map: &EntityMap,
-) -> (Option<ir::UserStackMapEntryVec>, Option<ir::Value>) {
+) -> Option<ir::UserStackMapEntryVec> {
     trace!("Replacing `call` with `jump`");
     trace!(
         "  --> call instruction: {call_inst:?}: {}",
@@ -1078,7 +1055,6 @@ fn replace_call_with_jump(
     let caller_arg_values = SmallValueVec::from_iter(func.dfg.inst_args(call_inst).iter().copied());
     debug_assert_eq!(callee_param_values.len(), caller_arg_values.len());
     debug_assert_eq!(callee_param_values.len(), callee.signature.params.len());
-    let mut inlined_vmctx = None;
     for (abi, (callee_param_value, caller_arg_value)) in callee
         .signature
         .params
@@ -1087,14 +1063,7 @@ fn replace_call_with_jump(
     {
         debug_assert_eq!(abi.value_type, callee.dfg.value_type(*callee_param_value));
         debug_assert_eq!(abi.value_type, func.dfg.value_type(caller_arg_value));
-
-        if abi.purpose == ir::ArgumentPurpose::VMContext {
-            debug_assert!(inlined_vmctx.is_none());
-            inlined_vmctx = Some(caller_arg_value);
-        }
-
-        trace!("  --> callee {callee_param_value:?} = inlined {caller_arg_value:?}");
-        allocs.values[*callee_param_value] = Some(caller_arg_value).into();
+        allocs.set_inlined_value(callee, *callee_param_value, caller_arg_value);
     }
 
     // Replace the caller's call instruction with a jump to the caller's inlined
@@ -1111,7 +1080,7 @@ fn replace_call_with_jump(
     );
 
     let stack_map_entries = func.dfg.take_user_stack_map_entries(call_inst);
-    (stack_map_entries, inlined_vmctx)
+    stack_map_entries
 }
 
 /// Keeps track of mapping callee entities to their associated inlined caller
@@ -1255,11 +1224,7 @@ fn create_blocks(
                 let ty = callee.dfg.value_type(*callee_param);
                 let caller_param = func.dfg.append_block_param(caller_block, ty);
 
-                trace!(
-                    "  --> added inlined block param: callee {callee_param:?} = inlined {caller_param:?}"
-                );
-                debug_assert!(allocs.values[*callee_param].is_none());
-                allocs.values[*callee_param] = Some(caller_param).into();
+                allocs.set_inlined_value(callee, *callee_param, caller_param);
             }
         }
     }
@@ -1307,94 +1272,6 @@ fn create_global_values(func: &mut ir::Function, callee: &ir::Function) -> u32 {
     }
 
     gv_offset
-}
-
-/// Eagerly define `ir::Value`s for all `ir::GlobalValue`s that depend on the
-/// `vmctx` at the start of the inlined entry block.
-///
-/// References to these globals cannot simply be translated into the inlined
-/// versions because the `vmctx` of the caller might be different from the
-/// `vmctx` of the callee.
-fn define_vmctx_global_values(
-    allocs: &mut InliningAllocs,
-    func: &mut ir::Function,
-    callee: &ir::Function,
-    vmctx: Option<ir::Value>,
-    entity_map: &EntityMap,
-) {
-    trace!("Defining values for vmctx-based global values");
-
-    let callee_entry_block = callee.layout.entry_block().unwrap();
-    let inlined_entry_block = entity_map.inlined_block(callee_entry_block);
-
-    let mut cursor = FuncCursor::new(func);
-    cursor.goto_first_insertion_point(inlined_entry_block);
-
-    for (gv, gv_data) in callee.global_values.iter() {
-        debug_assert!(
-            allocs
-                .vmctx_global_values
-                .get(gv)
-                .and_then(|o| o.expand())
-                .is_none(),
-            "should not have already processed this global value"
-        );
-        match gv_data {
-            ir::GlobalValueData::VMContext => {
-                let vmctx = vmctx
-                    .expect("should have a vmctx argument value if we have a vmctx global value");
-                trace!("  --> callee vmctx global {gv:?} = inlined {vmctx:?}");
-                allocs.vmctx_global_values[gv] = Some(vmctx).into();
-            }
-            ir::GlobalValueData::Load {
-                base,
-                offset,
-                global_type,
-                flags,
-            } => {
-                if let Some(base) = allocs
-                    .vmctx_global_values
-                    .get(*base)
-                    .and_then(|o| o.expand())
-                {
-                    let val = cursor.ins().load(*global_type, *flags, base, *offset);
-                    trace!(
-                        "  --> callee vmctx-based global {gv:?} = inlined {}",
-                        cursor.func.dfg.display_value_inst(val)
-                    );
-                    allocs.vmctx_global_values[gv] = Some(val).into();
-                }
-            }
-            ir::GlobalValueData::IAddImm {
-                base,
-                offset,
-                global_type,
-            } => {
-                if let Some(base) = allocs
-                    .vmctx_global_values
-                    .get(*base)
-                    .and_then(|o| o.expand())
-                {
-                    let offset = cursor.ins().iconst(*global_type, *offset);
-                    let val = cursor.ins().iadd(base, offset);
-                    trace!(
-                        "  --> callee vmctx-based global {gv:?} = inlined {}",
-                        cursor.func.dfg.display_value_inst(val)
-                    );
-                    allocs.vmctx_global_values[gv] = Some(val).into();
-                }
-            }
-
-            // These global values do not reference the `vmctx`.
-            ir::GlobalValueData::Symbol {
-                name: _,
-                offset: _,
-                colocated: _,
-                tls: _,
-            }
-            | ir::GlobalValueData::DynScaleTargetConst { vector_type: _ } => continue,
-        }
-    }
 }
 
 /// Copy `ir::SigRef`s from the callee into the caller.

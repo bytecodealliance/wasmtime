@@ -9,7 +9,7 @@
 //! (for now).
 
 use crate::subtest::{Context, SubTest, check_precise_output, run_filecheck};
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use cranelift_codegen::{
     inline::{Inline, InlineCommand},
     ir,
@@ -63,33 +63,42 @@ impl SubTest for TestInline {
     }
 
     fn needs_isa(&self) -> bool {
-        false
+        true
     }
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> Result<()> {
+        // Legalize this function.
+        let isa = context.isa.unwrap();
+        let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
+        comp_ctx
+            .legalize(isa)
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))
+            .context("error while legalizing")?;
+
         // Insert this function in our map for inlining into subsequent
         // functions.
-        let func_name = func.name.clone();
+        let func_name = comp_ctx.func.name.clone();
         self.funcs
             .borrow_mut()
-            .insert(func_name, func.clone().into_owned());
+            .insert(func_name, comp_ctx.func.clone());
 
         // Run the inliner.
-        let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
         let inlined_any = comp_ctx.inline(Inliner(self.funcs.borrow()))?;
 
         // Verify that the CLIF is still valid.
-        comp_ctx.verify(context.flags_or_isa()).map_err(|errors| {
-            anyhow::Error::msg(pretty_verifier_error(&comp_ctx.func, None, errors))
-                .context("The CLIF failed verification after inlining")
-        })?;
+        comp_ctx
+            .verify(context.flags_or_isa())
+            .map_err(|errors| {
+                anyhow::Error::msg(pretty_verifier_error(&comp_ctx.func, None, errors))
+            })
+            .context("CLIF verification error after inlining")?;
 
         // If requested, run optimizations.
         if self.optimize {
-            let isa = context.isa.expect("optimization needs an ISA");
             comp_ctx
                 .optimize(isa, &mut ControlPlane::default())
-                .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
+                .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))
+                .context("error while optimizing")?;
         }
 
         // Check the filecheck expectations.
