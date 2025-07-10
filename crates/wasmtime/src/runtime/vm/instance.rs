@@ -1218,7 +1218,9 @@ impl Instance {
         range: impl Iterator<Item = u64>,
     ) -> *mut Table {
         self.with_defined_table_index_and_instance(table_index, |idx, instance| {
-            instance.get_defined_table_with_lazy_init(idx, range)
+            // FIXME(#11179) shouldn't need to subvert the borrow checker
+            let ret: *mut Table = instance.get_defined_table_with_lazy_init(idx, range);
+            ret
         })
     }
 
@@ -1230,7 +1232,7 @@ impl Instance {
         mut self: Pin<&mut Self>,
         idx: DefinedTableIndex,
         range: impl Iterator<Item = u64>,
-    ) -> *mut Table {
+    ) -> &mut Table {
         let elt_ty = self.tables[idx].1.element_type();
 
         if elt_ty == TableElementType::Func {
@@ -1272,9 +1274,7 @@ impl Instance {
             }
         }
 
-        // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
-        // `*mut A`, which should be a safe operation to do.
-        unsafe { &raw mut (*self.tables_mut().get_raw_mut(idx).unwrap()).1 }
+        self.get_defined_table(idx)
     }
 
     /// Get a table by index regardless of whether it is locally-defined or an
