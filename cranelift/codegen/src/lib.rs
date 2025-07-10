@@ -21,9 +21,9 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashbrown::{HashMap, hash_map};
+use hashbrown::{HashMap, HashSet, hash_map};
 #[cfg(feature = "std")]
-use std::collections::{HashMap, hash_map};
+use std::collections::{HashMap, HashSet, hash_map};
 
 pub use crate::context::Context;
 pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};
@@ -50,6 +50,7 @@ pub mod data_value;
 pub mod dbg;
 pub mod dominator_tree;
 pub mod flowgraph;
+pub mod inline;
 pub mod ir;
 pub mod isa;
 pub mod loop_analysis;

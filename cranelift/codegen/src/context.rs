@@ -14,6 +14,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::dominator_tree::DominatorTreePreorder;
 use crate::egraph::EgraphPass;
 use crate::flowgraph::ControlFlowGraph;
+use crate::inline::{Inline, do_inlining};
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::legalizer::simple_legalize;
@@ -191,6 +192,13 @@ impl Context {
         }
 
         Ok(())
+    }
+
+    /// Perform function call inlining.
+    ///
+    /// Returns `true` if any function call was inlined, `false` otherwise.
+    pub fn inline(&mut self, inliner: impl Inline) -> CodegenResult<bool> {
+        do_inlining(&mut self.func, inliner)
     }
 
     /// Compile the function,
