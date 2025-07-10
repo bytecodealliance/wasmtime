@@ -53,6 +53,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "45862d1c77f2228b9e10bc609d5bc203d86ebc9b87ad8d5d5167a6c9abf739d9"
 
 [[package]]
+name = "allocator-api2"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78200ac3468a57d333cd0ea5dd398e25111194dcacd49208afca95c629a6311d"
+
+[[package]]
 name = "ambient-authority"
 version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -259,6 +265,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "brie-tree"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2314e51eefedcdef28777b80cdf66293635ffe1017ebb047b7ea46f1860eabf7"
+dependencies = [
+ "allocator-api2 0.3.0",
+ "cfg-if",
+ "nonmax",
+]
+
+[[package]]
 name = "bstr"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -275,7 +292,7 @@ version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 dependencies = [
- "allocator-api2",
+ "allocator-api2 0.2.20",
 ]
 
 [[package]]
@@ -1662,6 +1679,8 @@ version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 dependencies = [
+ "allocator-api2 0.2.20",
+ "equivalent",
  "foldhash",
  "serde",
 ]
@@ -2412,6 +2431,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nonmax"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "610a5acd306ec67f907abe5567859a3c693fb9886eb1f012ab8f2a47bef3db51"
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2605,6 +2630,15 @@ dependencies = [
  "env_logger 0.11.5",
  "libloading",
  "openvino-finder",
+]
+
+[[package]]
+name = "ordered-float"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2c1f9f56e534ac6a9b8a4600bdf0f530fb393b5f393e7b4d03489c3cf0c3f01"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]
@@ -2897,15 +2931,30 @@ dependencies = [
 [[package]]
 name = "regalloc2"
 version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5216b1837de2149f8bc8e6d5f88a9326b63b8c836ed58ce4a0a29ec736a59734"
+source = "git+https://github.com/Amanieu/regalloc2.git?branch=regalloc3#2b124549e47a203dd623e1d0d299d7f6a8e08746"
 dependencies = [
- "allocator-api2",
+ "allocator-api2 0.2.20",
  "bumpalo",
  "hashbrown 0.15.2",
  "log",
+ "regalloc3",
  "rustc-hash",
  "serde",
+ "smallvec",
+]
+
+[[package]]
+name = "regalloc3"
+version = "0.1.0"
+source = "git+https://github.com/Amanieu/regalloc3.git#c4a2b2767a94565557ca2b55aacb97e598fb9950"
+dependencies = [
+ "anyhow",
+ "bitflags 2.6.0",
+ "brie-tree",
+ "hashbrown 0.15.2",
+ "log",
+ "ordered-float",
+ "rustc-hash",
  "smallvec",
 ]
 

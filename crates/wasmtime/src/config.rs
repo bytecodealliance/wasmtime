@@ -1296,6 +1296,7 @@ impl Config {
     pub fn cranelift_regalloc_algorithm(&mut self, algo: RegallocAlgorithm) -> &mut Self {
         let val = match algo {
             RegallocAlgorithm::Backtracking => "backtracking",
+            RegallocAlgorithm::Regalloc3 => "regalloc3",
         };
         self.compiler_config
             .settings
@@ -2873,6 +2874,9 @@ pub enum RegallocAlgorithm {
     /// results in better register utilization, producing fewer spills
     /// and moves, but can cause super-linear compile runtime.
     Backtracking,
+
+    /// New experimental register allocator.
+    Regalloc3,
 }
 
 /// Select which profiling technique to support.
