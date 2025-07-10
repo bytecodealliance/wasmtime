@@ -50,9 +50,6 @@ pub struct ReturnCallInfo<T> {
 
     /// The in-register arguments and their constraints.
     pub uses: CallArgList,
-
-    /// A temporary for use when moving the return address.
-    pub tmp: WritableGpr,
 }
 
 #[test]
@@ -676,11 +673,9 @@ impl PrettyPrint for Inst {
                 let ReturnCallInfo {
                     uses,
                     new_stack_arg_size,
-                    tmp,
                     dest,
                 } = &**info;
-                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8);
-                let mut s = format!("return_call_known {dest:?} ({new_stack_arg_size}) tmp={tmp}");
+                let mut s = format!("return_call_known {dest:?} ({new_stack_arg_size})");
                 for ret in uses {
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8);
@@ -693,13 +688,10 @@ impl PrettyPrint for Inst {
                 let ReturnCallInfo {
                     uses,
                     new_stack_arg_size,
-                    tmp,
                     dest,
                 } = &**info;
                 let callee = pretty_print_reg(*dest, 8);
-                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8);
-                let mut s =
-                    format!("return_call_unknown {callee} ({new_stack_arg_size}) tmp={tmp}");
+                let mut s = format!("return_call_unknown {callee} ({new_stack_arg_size})");
                 for ret in uses {
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8);
@@ -1133,10 +1125,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
 
         Inst::ReturnCallKnown { info } => {
-            let ReturnCallInfo {
-                dest, uses, tmp, ..
-            } = &mut **info;
-            collector.reg_fixed_def(tmp, regs::r11());
+            let ReturnCallInfo { dest, uses, .. } = &mut **info;
             // Same as in the `Inst::CallKnown` branch.
             debug_assert_ne!(*dest, ExternalName::LibCall(LibCall::Probestack));
             for CallArgPair { vreg, preg } in uses {
@@ -1145,9 +1134,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
 
         Inst::ReturnCallUnknown { info } => {
-            let ReturnCallInfo {
-                dest, uses, tmp, ..
-            } = &mut **info;
+            let ReturnCallInfo { dest, uses, .. } = &mut **info;
 
             // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
             // This shouldn't be a fixed register constraint, but it's not clear how to
@@ -1156,7 +1143,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             // safe to use.
             collector.reg_fixed_use(dest, regs::r10());
 
-            collector.reg_fixed_def(tmp, regs::r11());
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
