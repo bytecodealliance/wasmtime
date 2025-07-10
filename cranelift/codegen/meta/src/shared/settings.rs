@@ -43,7 +43,7 @@ pub(crate) fn define() -> SettingGroup {
             have adequate support for the kinds of allocations required by exception
             handling (https://github.com/bytecodealliance/regalloc2/issues/217).
         "#,
-        vec!["backtracking"],
+        vec!["backtracking", "regalloc3"],
     );
 
     settings.add_enum(

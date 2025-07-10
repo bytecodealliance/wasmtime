@@ -619,3 +619,6 @@ debug = "line-tables-only"
 inherits = "release"
 codegen-units = 1
 lto = true
+
+[patch.crates-io]
+regalloc2 = { git = "https://github.com/Amanieu/regalloc2.git", branch = "regalloc3" }

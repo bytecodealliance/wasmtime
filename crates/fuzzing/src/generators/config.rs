@@ -806,6 +806,7 @@ impl OptLevel {
 enum RegallocAlgorithm {
     Backtracking,
     SinglePass,
+    Regalloc3,
 }
 
 impl RegallocAlgorithm {
@@ -819,6 +820,7 @@ impl RegallocAlgorithm {
             // `arbitrary` mappings, we keep the `RegallocAlgorithm`
             // enum as it is and remap here to `Backtracking`.
             RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::Backtracking,
+            RegallocAlgorithm::Regalloc3 => wasmtime::RegallocAlgorithm::Regalloc3,
         }
     }
 }
