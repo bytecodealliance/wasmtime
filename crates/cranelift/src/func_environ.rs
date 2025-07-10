@@ -1,4 +1,5 @@
 mod gc;
+pub(crate) mod stack_switching;
 
 use crate::compiler::Compiler;
 use crate::translate::{
@@ -18,15 +19,15 @@ use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::Variable;
 use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use std::mem;
 use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncIndex, GlobalIndex,
     IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation,
-    ModuleTypesBuilder, PtrSize, Table, TableIndex, TripleExt, Tunables, TypeConvert, TypeIndex,
-    VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType,
-    WasmResult, WasmValType,
+    ModuleTypesBuilder, PtrSize, Table, TableIndex, TagIndex, TripleExt, Tunables, TypeConvert,
+    TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType,
+    WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 use wasmtime_math::f64_cvt_to_int_bounds;
@@ -174,6 +175,16 @@ pub struct FuncEnvironment<'module_environment> {
     /// always present even if this is a "leaf" function, as we have to call
     /// into the host to trap when signal handlers are disabled.
     pub(crate) stack_limit_at_function_entry: Option<ir::GlobalValue>,
+
+    /// Used by the stack switching feature. If set, we have a allocated a
+    /// slot on this function's stack to be used for the
+    /// current stack's `handler_list` field.
+    pub(crate) stack_switching_handler_list_buffer: Option<ir::StackSlot>,
+
+    /// Used by the stack switching feature. If set, we have a allocated a
+    /// slot on this function's stack to be used for the
+    /// current continuation's `values` field.
+    pub stack_switching_values_buffer: Option<ir::StackSlot>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -228,6 +239,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             translation,
 
             stack_limit_at_function_entry: None,
+
+            stack_switching_handler_list_buffer: None,
+            stack_switching_values_buffer: None,
         }
     }
 
@@ -1498,8 +1512,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
-            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
-
             // Engine-indexed types don't show up until runtime and it's a Wasm
             // validation error to perform a call through a non-function table,
             // so these cases are dynamically not reachable.
@@ -1514,6 +1526,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             | WasmHeapType::ConcreteArray(_)
             | WasmHeapType::Struct
             | WasmHeapType::ConcreteStruct(_)
+            | WasmHeapType::Cont
+            | WasmHeapType::ConcreteCont(_)
+            | WasmHeapType::NoCont
             | WasmHeapType::None => {
                 unreachable!()
             }
@@ -1743,7 +1758,9 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
         let needs_stack_map = match wasm_ty.top() {
             WasmHeapTopType::Extern | WasmHeapTopType::Any => true,
             WasmHeapTopType::Func => false,
-            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+            // TODO(#10248) Once continuations can be stored on the GC heap, we
+            // will need stack maps for continuation objects.
+            WasmHeapTopType::Cont => false,
         };
         (ty, needs_stack_map)
     }
@@ -1807,22 +1824,35 @@ impl FuncEnvironment<'_> {
         let mut pos = builder.cursor();
         let table = self.table(table_index);
         let ty = table.ref_type.heap_type;
-        let grow = if ty.is_vmgcref_type() {
-            gc::builtins::table_grow_gc_ref(self, &mut pos.func)?
-        } else {
-            debug_assert_eq!(ty.top(), WasmHeapTopType::Func);
-            self.builtin_functions.table_grow_func_ref(&mut pos.func)
+        let vmctx = self.vmctx_val(&mut pos);
+        let index_type = table.idx_type;
+        let delta = self.cast_index_to_i64(&mut builder.cursor(), delta, index_type);
+        let table_index_arg = builder.ins().iconst(I32, table_index.as_u32() as i64);
+        let mut args: SmallVec<[_; 6]> = smallvec![vmctx, table_index_arg, delta];
+
+        let grow = match ty.top() {
+            WasmHeapTopType::Extern | WasmHeapTopType::Any => {
+                args.push(init_value);
+                gc::builtins::table_grow_gc_ref(self, &mut builder.cursor().func)?
+            }
+            WasmHeapTopType::Func => {
+                args.push(init_value);
+                self.builtin_functions
+                    .table_grow_func_ref(&mut builder.func)
+            }
+            WasmHeapTopType::Cont => {
+                let (revision, contref) = stack_switching::fatpointer::deconstruct(
+                    self,
+                    &mut builder.cursor(),
+                    init_value,
+                );
+                args.extend_from_slice(&[contref, revision]);
+                stack_switching::builtins::table_grow_cont_obj(self, &mut builder.func)?
+            }
         };
 
-        let vmctx = self.vmctx_val(&mut pos);
-
-        let index_type = table.idx_type;
-        let delta = self.cast_index_to_i64(&mut pos, delta, index_type);
-        let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
-        let call_inst = pos
-            .ins()
-            .call(grow, &[vmctx, table_index_arg, delta, init_value]);
-        let result = pos.func.dfg.first_result(call_inst);
+        let call_inst = builder.ins().call(grow, &args);
+        let result = builder.func.dfg.first_result(call_inst);
         Ok(self.convert_pointer_to_index_type(builder.cursor(), result, index_type, false))
     }
 
@@ -1855,7 +1885,16 @@ impl FuncEnvironment<'_> {
             }
 
             // Continuation types.
-            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+            WasmHeapTopType::Cont => {
+                self.ensure_table_exists(builder.func, table_index);
+                let (table_entry_addr, flags) = table_data.prepare_table_addr(self, builder, index);
+                Ok(builder.ins().load(
+                    stack_switching::fatpointer::POINTER_TYPE,
+                    flags,
+                    table_entry_addr,
+                    0,
+                ))
+            }
         }
     }
 
@@ -1904,7 +1943,11 @@ impl FuncEnvironment<'_> {
             }
 
             // Continuation types.
-            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+            WasmHeapTopType::Cont => {
+                let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
+                builder.ins().store(flags, value, elem_addr, 0);
+                Ok(())
+            }
         }
     }
 
@@ -1918,22 +1961,33 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let mut pos = builder.cursor();
         let table = self.table(table_index);
-        let index_type = table.idx_type;
-        let dst = self.cast_index_to_i64(&mut pos, dst, index_type);
-        let len = self.cast_index_to_i64(&mut pos, len, index_type);
         let ty = table.ref_type.heap_type;
-        let libcall = if ty.is_vmgcref_type() {
-            gc::builtins::table_fill_gc_ref(self, &mut pos.func)?
-        } else {
-            debug_assert_eq!(ty.top(), WasmHeapTopType::Func);
-            self.builtin_functions.table_fill_func_ref(&mut pos.func)
+        let vmctx = self.vmctx_val(&mut pos);
+        let index_type = table.idx_type;
+        let table_index_arg = builder.ins().iconst(I32, table_index.as_u32() as i64);
+        let dst = self.cast_index_to_i64(&mut builder.cursor(), dst, index_type);
+        let len = self.cast_index_to_i64(&mut builder.cursor(), len, index_type);
+        let mut args: SmallVec<[_; 6]> = smallvec![vmctx, table_index_arg, dst];
+        let libcall = match ty.top() {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+                args.push(val);
+                gc::builtins::table_fill_gc_ref(self, &mut builder.cursor().func)?
+            }
+            WasmHeapTopType::Func => {
+                args.push(val);
+                self.builtin_functions
+                    .table_fill_func_ref(&mut builder.func)
+            }
+            WasmHeapTopType::Cont => {
+                let (revision, contref) =
+                    stack_switching::fatpointer::deconstruct(self, &mut builder.cursor(), val);
+                args.extend_from_slice(&[contref, revision]);
+                stack_switching::builtins::table_fill_cont_obj(self, &mut builder.func)?
+            }
         };
 
-        let vmctx = self.vmctx_val(&mut pos);
-
-        let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
-        pos.ins()
-            .call(libcall, &[vmctx, table_index_arg, dst, val, len]);
+        args.push(len);
+        builder.ins().call(libcall, &args);
 
         Ok(())
     }
@@ -2255,7 +2309,10 @@ impl FuncEnvironment<'_> {
             WasmHeapTopType::Func => pos.ins().iconst(self.pointer_type(), 0),
             // NB: null GC references don't need to be in stack maps.
             WasmHeapTopType::Any | WasmHeapTopType::Extern => pos.ins().iconst(types::I32, 0),
-            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+            WasmHeapTopType::Cont => {
+                let zero = pos.ins().iconst(self.pointer_type(), 0);
+                stack_switching::fatpointer::construct(self, &mut pos, zero, zero)
+            }
         })
     }
 
@@ -2271,9 +2328,18 @@ impl FuncEnvironment<'_> {
             return Ok(pos.ins().iconst(ir::types::I32, 0));
         }
 
-        let byte_is_null =
-            pos.ins()
-                .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, value, 0);
+        let byte_is_null = match ty.heap_type.top() {
+            WasmHeapTopType::Cont => {
+                let (_revision, contref) =
+                    stack_switching::fatpointer::deconstruct(self, &mut pos, value);
+                pos.ins()
+                    .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, contref, 0)
+            }
+            _ => pos
+                .ins()
+                .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, value, 0),
+        };
+
         Ok(pos.ins().uextend(ir::types::I32, byte_is_null))
     }
 
@@ -3248,6 +3314,119 @@ impl FuncEnvironment<'_> {
         self.isa.triple().architecture == target_lexicon::Architecture::X86_64
     }
 
+    pub fn translate_cont_bind(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        contobj: ir::Value,
+        args: &[ir::Value],
+    ) -> ir::Value {
+        stack_switching::instructions::translate_cont_bind(self, builder, contobj, args)
+    }
+
+    pub fn translate_cont_new(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        _state: &FuncTranslationState,
+        func: ir::Value,
+        arg_types: &[WasmValType],
+        return_types: &[WasmValType],
+    ) -> WasmResult<ir::Value> {
+        stack_switching::instructions::translate_cont_new(
+            self,
+            builder,
+            func,
+            arg_types,
+            return_types,
+        )
+    }
+
+    pub fn translate_resume(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        type_index: u32,
+        contobj: ir::Value,
+        resume_args: &[ir::Value],
+        resumetable: &[(u32, Option<ir::Block>)],
+    ) -> WasmResult<Vec<ir::Value>> {
+        stack_switching::instructions::translate_resume(
+            self,
+            builder,
+            type_index,
+            contobj,
+            resume_args,
+            resumetable,
+        )
+    }
+
+    pub fn translate_suspend(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: u32,
+        suspend_args: &[ir::Value],
+        tag_return_types: &[ir::Type],
+    ) -> Vec<ir::Value> {
+        stack_switching::instructions::translate_suspend(
+            self,
+            builder,
+            tag_index,
+            suspend_args,
+            tag_return_types,
+        )
+    }
+
+    /// Translates switch instructions.
+    pub fn translate_switch(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        tag_index: u32,
+        contobj: ir::Value,
+        switch_args: &[ir::Value],
+        return_types: &[ir::Type],
+    ) -> WasmResult<Vec<ir::Value>> {
+        stack_switching::instructions::translate_switch(
+            self,
+            builder,
+            tag_index,
+            contobj,
+            switch_args,
+            return_types,
+        )
+    }
+
+    pub fn continuation_arguments(&self, index: TypeIndex) -> &[WasmValType] {
+        let idx = self.module.types[index].unwrap_module_type_index();
+        self.types[self.types[idx]
+            .unwrap_cont()
+            .clone()
+            .unwrap_module_type_index()]
+        .unwrap_func()
+        .params()
+    }
+
+    pub fn continuation_returns(&self, index: TypeIndex) -> &[WasmValType] {
+        let idx = self.module.types[index].unwrap_module_type_index();
+        self.types[self.types[idx]
+            .unwrap_cont()
+            .clone()
+            .unwrap_module_type_index()]
+        .unwrap_func()
+        .returns()
+    }
+
+    pub fn tag_params(&self, tag_index: TagIndex) -> &[WasmValType] {
+        let idx = self.module.tags[tag_index].signature;
+        self.types[idx.unwrap_module_type_index()]
+            .unwrap_func()
+            .params()
+    }
+
+    pub fn tag_returns(&self, tag_index: TagIndex) -> &[WasmValType] {
+        let idx = self.module.tags[tag_index].signature;
+        self.types[idx.unwrap_module_type_index()]
+            .unwrap_func()
+            .returns()
+    }
+
     pub fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
         self.isa.has_x86_blendv_lowering(ty)
     }
@@ -3829,18 +4008,4 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
         IndexType::I32 => I32,
         IndexType::I64 => I64,
     }
-}
-
-/// TODO(10248) This is removed in the next stack switching PR. It stops the
-/// compiler from complaining about the stack switching libcalls being dead
-/// code.
-#[cfg(feature = "stack-switching")]
-#[allow(
-    dead_code,
-    reason = "Dummy function to suppress more dead code warnings"
-)]
-pub fn use_stack_switching_libcalls() {
-    let _ = BuiltinFunctions::cont_new;
-    let _ = BuiltinFunctions::table_grow_cont_obj;
-    let _ = BuiltinFunctions::table_fill_cont_obj;
 }

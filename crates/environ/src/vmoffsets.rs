@@ -161,6 +161,12 @@ pub trait PtrSize {
         4
     }
 
+    /// This is the size of the largest value type (i.e. a V128).
+    #[inline]
+    fn maximum_value_size(&self) -> u8 {
+        self.size_of_vmglobal_definition()
+    }
+
     // Offsets within `VMStoreContext`
 
     /// Return the offset of the `fuel_consumed` field of `VMStoreContext`
@@ -330,6 +336,23 @@ pub trait PtrSize {
             u32::from(self.size()),
         ))
         .unwrap()
+    }
+
+    // Offsets within `VMContObj`
+
+    /// Return the offset of `VMContObj::contref`
+    fn vmcontobj_contref(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMContObj::revision`
+    fn vmcontobj_revision(&self) -> u8 {
+        8
+    }
+
+    /// Return the size of `VMHostArray`.
+    fn size_of_vmcontobj(&self) -> u8 {
+        16
     }
 
     // Offsets within `VMContRef`
