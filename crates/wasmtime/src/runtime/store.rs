@@ -1296,6 +1296,20 @@ impl StoreOpaque {
         self.instances[id].handle.get_mut()
     }
 
+    /// Pair of `Self::gc_store_mut` and `Self::instance_mut`
+    pub fn gc_store_and_instance_mut(
+        &mut self,
+        id: InstanceId,
+    ) -> Result<(&mut GcStore, Pin<&mut vm::Instance>)> {
+        // Fill in `self.gc_store`, then proceed below to the point where we
+        // convince the borrow checker that we're accessing disjoint fields.
+        self.gc_store_mut()?;
+        Ok((
+            self.gc_store.as_mut().unwrap(),
+            self.instances[id].handle.get_mut(),
+        ))
+    }
+
     /// Get all instances (ignoring dummy instances) within this store.
     pub fn all_instances<'a>(&'a mut self) -> impl ExactSizeIterator<Item = Instance> + 'a {
         let instances = self
