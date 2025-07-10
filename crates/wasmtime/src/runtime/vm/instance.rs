@@ -1263,10 +1263,8 @@ impl Instance {
     }
 
     /// Get a locally-defined table.
-    pub(crate) fn get_defined_table(self: Pin<&mut Self>, index: DefinedTableIndex) -> *mut Table {
-        // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
-        // `*mut A`, which should be a safe operation to do.
-        unsafe { &raw mut (*self.tables_mut().get_raw_mut(index).unwrap()).1 }
+    pub(crate) fn get_defined_table(self: Pin<&mut Self>, index: DefinedTableIndex) -> &mut Table {
+        &mut self.tables_mut()[index].1
     }
 
     pub(crate) fn with_defined_table_index_and_instance<R>(
