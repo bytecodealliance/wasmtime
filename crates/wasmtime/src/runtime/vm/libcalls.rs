@@ -70,7 +70,8 @@ use core::ptr::NonNull;
 #[cfg(feature = "threads")]
 use core::time::Duration;
 use wasmtime_environ::{
-    DataIndex, DefinedMemoryIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap,
+    DataIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, FuncIndex, MemoryIndex,
+    TableIndex, Trap,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -223,20 +224,19 @@ unsafe impl HostResultHasUnwindSentinel for Option<AllocationSize> {
 unsafe fn table_grow_func_ref(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
-    table_index: u32,
+    defined_table_index: u32,
     delta: u64,
     init_value: *mut u8,
 ) -> Result<Option<AllocationSize>> {
-    let table_index = TableIndex::from_u32(table_index);
-
-    let element = match instance.as_mut().table_element_type(table_index) {
-        TableElementType::Func => NonNull::new(init_value.cast::<VMFuncRef>()).into(),
-        TableElementType::GcRef => unreachable!(),
-        TableElementType::Cont => unreachable!(),
-    };
-
+    let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
+    let table_index = instance.env_module().table_index(defined_table_index);
+    debug_assert!(matches!(
+        instance.as_mut().table_element_type(table_index),
+        TableElementType::Func,
+    ));
+    let element = NonNull::new(init_value.cast::<VMFuncRef>()).into();
     let result = instance
-        .table_grow(store, table_index, delta, element)?
+        .defined_table_grow(store, defined_table_index, delta, element)?
         .map(AllocationSize);
     Ok(result)
 }
@@ -246,27 +246,28 @@ unsafe fn table_grow_func_ref(
 unsafe fn table_grow_gc_ref(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
-    table_index: u32,
+    defined_table_index: u32,
     delta: u64,
     init_value: u32,
 ) -> Result<Option<AllocationSize>> {
-    let table_index = TableIndex::from_u32(table_index);
+    let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
+    let table_index = instance.env_module().table_index(defined_table_index);
+    debug_assert!(matches!(
+        instance.as_mut().table_element_type(table_index),
+        TableElementType::GcRef,
+    ));
 
-    let element = match instance.as_mut().table_element_type(table_index) {
-        TableElementType::Func => unreachable!(),
-        TableElementType::GcRef => VMGcRef::from_raw_u32(init_value)
-            .map(|r| {
-                store
-                    .store_opaque_mut()
-                    .unwrap_gc_store_mut()
-                    .clone_gc_ref(&r)
-            })
-            .into(),
-        TableElementType::Cont => unreachable!(),
-    };
+    let element = VMGcRef::from_raw_u32(init_value)
+        .map(|r| {
+            store
+                .store_opaque_mut()
+                .unwrap_gc_store_mut()
+                .clone_gc_ref(&r)
+        })
+        .into();
 
     let result = instance
-        .table_grow(store, table_index, delta, element)?
+        .defined_table_grow(store, defined_table_index, delta, element)?
         .map(AllocationSize);
     Ok(result)
 }
@@ -275,24 +276,22 @@ unsafe fn table_grow_gc_ref(
 unsafe fn table_grow_cont_obj(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
-    table_index: u32,
+    defined_table_index: u32,
     delta: u64,
     // The following two values together form the initial Option<VMContObj>.
     // A None value is indicated by the pointer being null.
     init_value_contref: *mut u8,
     init_value_revision: u64,
 ) -> Result<Option<AllocationSize>> {
-    let init_value = VMContObj::from_raw_parts(init_value_contref, init_value_revision);
-
-    let table_index = TableIndex::from_u32(table_index);
-
-    let element = match instance.as_mut().table_element_type(table_index) {
-        TableElementType::Cont => init_value.into(),
-        _ => panic!("Wrong table growing function"),
-    };
-
+    let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
+    let table_index = instance.env_module().table_index(defined_table_index);
+    debug_assert!(matches!(
+        instance.as_mut().table_element_type(table_index),
+        TableElementType::Cont,
+    ));
+    let element = VMContObj::from_raw_parts(init_value_contref, init_value_revision).into();
     let result = instance
-        .table_grow(store, table_index, delta, element)?
+        .defined_table_grow(store, defined_table_index, delta, element)?
         .map(AllocationSize);
     Ok(result)
 }

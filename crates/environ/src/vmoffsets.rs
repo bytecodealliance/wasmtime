@@ -706,6 +706,18 @@ impl<P: PtrSize> VMOffsets<P> {
         0 * self.pointer_size()
     }
 
+    /// The offset of the `vmctx` field.
+    #[inline]
+    pub fn vmtable_import_vmctx(&self) -> u8 {
+        1 * self.pointer_size()
+    }
+
+    /// The offset of the `index` field.
+    #[inline]
+    pub fn vmtable_import_index(&self) -> u8 {
+        2 * self.pointer_size()
+    }
+
     /// Return the size of `VMTableImport`.
     #[inline]
     pub fn size_of_vmtable_import(&self) -> u8 {

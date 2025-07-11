@@ -179,6 +179,14 @@ mod test_vmtable {
             offset_of!(VMTableImport, from),
             usize::from(offsets.vmtable_import_from())
         );
+        assert_eq!(
+            offset_of!(VMTableImport, vmctx),
+            usize::from(offsets.vmtable_import_vmctx())
+        );
+        assert_eq!(
+            offset_of!(VMTableImport, index),
+            usize::from(offsets.vmtable_import_index())
+        );
     }
 
     #[test]
