@@ -134,9 +134,7 @@ impl Extern {
                     Extern::Memory(Memory::from_wasmtime_memory(m, store))
                 }
             }
-            crate::runtime::vm::Export::Global(g) => {
-                Extern::Global(Global::from_wasmtime_global(g, store))
-            }
+            crate::runtime::vm::Export::Global(g) => Extern::Global(g),
             crate::runtime::vm::Export::Table(t) => Extern::Table(t),
             crate::runtime::vm::Export::Tag(t) => Extern::Tag(t),
         }

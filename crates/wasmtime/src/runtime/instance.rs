@@ -554,11 +554,8 @@ impl Instance {
         &'a self,
         store: &'a mut StoreOpaque,
     ) -> impl ExactSizeIterator<Item = (GlobalIndex, Global)> + 'a {
-        store[self.id]
-            .all_globals()
-            .collect::<Vec<_>>()
-            .into_iter()
-            .map(|(i, g)| (i, unsafe { Global::from_wasmtime_global(g, store) }))
+        let store_id = store.id();
+        store[self.id].all_globals(store_id)
     }
 
     /// Get all memories within this instance.
@@ -665,7 +662,7 @@ impl OwnedImports {
                 });
             }
             crate::runtime::vm::Export::Global(g) => {
-                self.globals.push(g.vmimport());
+                self.globals.push(g.vmimport(store));
             }
             crate::runtime::vm::Export::Table(t) => {
                 self.tables.push(t.vmimport(store));

@@ -13,8 +13,8 @@ use crate::runtime::vm::vmcontext::{
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    ExportFunction, ExportGlobal, ExportGlobalKind, ExportMemory, GcStore, Imports,
-    ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMStore, VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
+    ExportFunction, ExportMemory, GcStore, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef,
+    VMGlobalKind, VMStore, VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
 };
 use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque};
 use alloc::sync::Arc;
@@ -483,32 +483,26 @@ impl Instance {
     /// Returns both exported and non-exported globals.
     ///
     /// Gives access to the full globals space.
-    pub fn all_globals(&self) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + '_ {
-        let module = self.env_module().clone();
+    pub fn all_globals(
+        &self,
+        store: StoreId,
+    ) -> impl ExactSizeIterator<Item = (GlobalIndex, crate::Global)> + '_ {
+        let module = self.env_module();
         module
             .globals
             .keys()
-            .map(move |idx| (idx, self.get_exported_global(idx)))
+            .map(move |idx| (idx, self.get_exported_global(store, idx)))
     }
 
     /// Get the globals defined in this instance (not imported).
     pub fn defined_globals(
         &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedGlobalIndex, ExportGlobal)> + '_ {
-        let module = self.env_module().clone();
-        module
-            .globals
-            .keys()
+        store: StoreId,
+    ) -> impl ExactSizeIterator<Item = (DefinedGlobalIndex, crate::Global)> + '_ {
+        let module = self.env_module();
+        self.all_globals(store)
             .skip(module.num_imported_globals)
-            .map(move |global_idx| {
-                let def_idx = module.defined_global_index(global_idx).unwrap();
-                let global = ExportGlobal {
-                    definition: self.global_ptr(def_idx),
-                    kind: ExportGlobalKind::Instance(self.vmctx(), def_idx),
-                    global: self.env_module().globals[global_idx],
-                };
-                (def_idx, global)
-            })
+            .map(move |(i, global)| (module.defined_global_index(i).unwrap(), global))
     }
 
     /// Return a pointer to the interrupts structure
@@ -629,16 +623,43 @@ impl Instance {
         }
     }
 
-    fn get_exported_global(&self, index: GlobalIndex) -> ExportGlobal {
-        let global = self.env_module().globals[index];
+    fn get_exported_global(&self, store: StoreId, index: GlobalIndex) -> crate::Global {
+        // If this global is defined within this instance, then that's easy to
+        // calculate the `Global`.
         if let Some(def_index) = self.env_module().defined_global_index(index) {
-            ExportGlobal {
-                definition: self.global_ptr(def_index),
-                kind: ExportGlobalKind::Instance(self.vmctx(), def_index),
-                global,
+            let instance = StoreInstanceId::new(store, self.id);
+            return crate::Global::from_core(instance, def_index);
+        }
+
+        // For imported globals it's required to match on the `kind` to
+        // determine which `Global` constructor is going to be invoked.
+        let import = self.imported_global(index);
+        match import.kind {
+            VMGlobalKind::Host(index) => crate::Global::from_host(store, index),
+            VMGlobalKind::Instance(index) => {
+                // SAFETY: validity of this `&Instance` means validity of its
+                // imports meaning we can read the id of the vmctx within.
+                let id = unsafe {
+                    let vmctx = VMContext::from_opaque(import.vmctx.unwrap().as_non_null());
+                    Instance::vmctx_instance_id(vmctx)
+                };
+                crate::Global::from_core(StoreInstanceId::new(store, id), index)
             }
-        } else {
-            ExportGlobal::from_vmimport(self.imported_global(index), global)
+            #[cfg(feature = "component-model")]
+            VMGlobalKind::ComponentFlags(index) => {
+                // SAFETY: validity of this `&Instance` means validity of its
+                // imports meaning we can read the id of the vmctx within.
+                let id = unsafe {
+                    let vmctx = super::component::VMComponentContext::from_opaque(
+                        import.vmctx.unwrap().as_non_null(),
+                    );
+                    super::component::ComponentInstance::vmctx_instance_id(vmctx)
+                };
+                crate::Global::from_component_flags(
+                    crate::component::store::StoreComponentInstanceId::new(store, id),
+                    index,
+                )
+            }
         }
     }
 
@@ -1475,7 +1496,7 @@ impl Instance {
     ) -> Export {
         match export {
             EntityIndex::Function(i) => Export::Function(self.get_exported_func(i)),
-            EntityIndex::Global(i) => Export::Global(self.get_exported_global(i)),
+            EntityIndex::Global(i) => Export::Global(self.get_exported_global(store, i)),
             EntityIndex::Table(i) => Export::Table(self.get_exported_table(store, i)),
             EntityIndex::Memory(i) => Export::Memory(self.get_exported_memory(i)),
             EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(store, i)),

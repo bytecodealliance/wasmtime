@@ -11,7 +11,7 @@ use crate::prelude::*;
 use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, ResourceTables, TypedResource, TypedResourceIndex,
 };
-use crate::runtime::vm::{self, ExportFunction, ExportGlobal, ExportGlobalKind, VMFuncRef};
+use crate::runtime::vm::{self, ExportFunction, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
@@ -19,7 +19,7 @@ use core::marker;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::{EngineOrModuleTypeIndex, component::*};
-use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
+use wasmtime_environ::{EntityIndex, EntityType, PrimaryMap};
 
 /// An instantiated component.
 ///
@@ -477,15 +477,8 @@ pub(crate) fn lookup_vmdef(
                 .trampoline_func_ref(*idx),
         }),
         CoreDef::InstanceFlags(idx) => {
-            let instance = store.store_data_mut().component_instance_mut(id);
-            vm::Export::Global(ExportGlobal {
-                definition: instance.instance_flags(*idx).as_raw(),
-                global: Global {
-                    wasm_ty: WasmValType::I32,
-                    mutability: true,
-                },
-                kind: ExportGlobalKind::ComponentFlags(instance.vmctx(), *idx),
-            })
+            let id = StoreComponentInstanceId::new(store.id(), id);
+            vm::Export::Global(crate::Global::from_component_flags(id, *idx))
         }
     }
 }

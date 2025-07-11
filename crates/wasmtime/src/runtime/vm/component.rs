@@ -234,6 +234,22 @@ impl ComponentInstance {
         f(store, instance)
     }
 
+    /// Returns the `InstanceId` associated with the `vmctx` provided.
+    ///
+    /// # Safety
+    ///
+    /// The `vmctx` pointer must be a valid pointer to read the
+    /// `ComponentInstanceId` from.
+    pub(crate) unsafe fn vmctx_instance_id(
+        vmctx: NonNull<VMComponentContext>,
+    ) -> ComponentInstanceId {
+        vmctx
+            .byte_sub(mem::size_of::<ComponentInstance>())
+            .cast::<ComponentInstance>()
+            .as_ref()
+            .id
+    }
+
     /// Returns the layout corresponding to what would be an allocation of a
     /// `ComponentInstance` for the `offsets` provided.
     ///
