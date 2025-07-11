@@ -185,6 +185,10 @@ criteria = "safe-to-deploy"
 version = "1.3.2"
 criteria = "safe-to-deploy"
 
+[[exemptions.bitmaps]]
+version = "2.1.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.capstone]]
 version = "0.12.0"
 criteria = "safe-to-deploy"
@@ -401,6 +405,10 @@ criteria = "safe-to-deploy"
 version = "0.11.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.petgraph]]
+version = "0.6.5"
+criteria = "safe-to-deploy"
+
 [[exemptions.ppv-lite86]]
 version = "0.2.16"
 criteria = "safe-to-deploy"
@@ -427,6 +435,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rand_xorshift]]
 version = "0.3.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand_xoshiro]]
+version = "0.6.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rawpointer]]
@@ -477,8 +489,16 @@ criteria = "safe-to-deploy"
 version = "2.14.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.serde_yaml]]
+version = "0.9.34+deprecated"
+criteria = "safe-to-deploy"
+
 [[exemptions.shuffling-allocator]]
 version = "1.1.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.sized-chunks]]
+version = "0.6.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.smallvec]]
@@ -541,6 +561,10 @@ notes = "This crate is maintained by the `rust-lang` maintainers and is [officia
 
 [[exemptions.typenum]]
 version = "1.15.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.unsafe-libyaml]]
+version = "0.2.11"
 criteria = "safe-to-deploy"
 
 [[exemptions.untrusted]]

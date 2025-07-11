@@ -2189,6 +2189,17 @@ crate is broadly used throughout the ecosystem and does not contain anything
 suspicious.
 """
 
+[[audits.im-rc]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-run"
+version = "15.1.0"
+notes = """
+This library has a few `unsafe` blocks for performance reasons, but most of them
+are unreachable from `wasm-compose` because it only uses the `HashMap` type.
+The `unsafe` blocks reachable from the `HashMap` type are narrowly scoped, well
+commented, and easy to reason about.
+"""
+
 [[audits.indexmap-nostd]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -3538,6 +3549,12 @@ notes = "This crate contains `unsafe` code due to its purpose: it wraps up `witx
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.2.83 -> 0.2.80"
+
+[[audits.wasm-compose]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-run"
+version = "0.235.0"
+notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.wasm-coredump-builder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
