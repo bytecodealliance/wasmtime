@@ -437,7 +437,7 @@ impl Func {
             def.clone()
         };
         match self.instance.lookup_vmdef(store, &def) {
-            Export::Function(f) => f.func_ref,
+            Export::Function(f) => f.vm_func_ref(store),
             _ => unreachable!(),
         }
     }

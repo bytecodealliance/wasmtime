@@ -124,9 +124,7 @@ impl Extern {
         store: &StoreOpaque,
     ) -> Extern {
         match wasmtime_export {
-            crate::runtime::vm::Export::Function(f) => {
-                Extern::Func(Func::from_wasmtime_function(f, store))
-            }
+            crate::runtime::vm::Export::Function(f) => Extern::Func(f),
             crate::runtime::vm::Export::Memory { memory, shared } => {
                 if shared {
                     Extern::SharedMemory(SharedMemory::from_memory(memory, store))

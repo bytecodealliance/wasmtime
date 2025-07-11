@@ -11,7 +11,7 @@ use crate::prelude::*;
 use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, ResourceTables, TypedResource, TypedResourceIndex,
 };
-use crate::runtime::vm::{self, ExportFunction, VMFuncRef};
+use crate::runtime::vm::{self, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
@@ -470,12 +470,15 @@ pub(crate) fn lookup_vmdef(
 ) -> vm::Export {
     match def {
         CoreDef::Export(e) => lookup_vmexport(store, id, e),
-        CoreDef::Trampoline(idx) => vm::Export::Function(ExportFunction {
-            func_ref: store
+        CoreDef::Trampoline(idx) => {
+            let funcref = store
                 .store_data_mut()
                 .component_instance_mut(id)
-                .trampoline_func_ref(*idx),
-        }),
+                .trampoline_func_ref(*idx);
+            // SAFETY: the `funcref` is owned by `store` and is valid within
+            // that store, so it's safe to create a `Func`.
+            vm::Export::Function(unsafe { crate::Func::from_vm_func_ref(store.id(), funcref) })
+        }
         CoreDef::InstanceFlags(idx) => {
             let id = StoreComponentInstanceId::new(store.id(), id);
             vm::Export::Global(crate::Global::from_component_flags(id, *idx))
@@ -751,7 +754,7 @@ impl<'a> Instantiator<'a> {
             .as_ref()
             .map(|dtor| lookup_vmdef(store, self.id, dtor));
         let dtor = dtor.map(|export| match export {
-            crate::runtime::vm::Export::Function(f) => f.func_ref,
+            crate::runtime::vm::Export::Function(f) => f.vm_func_ref(store),
             _ => unreachable!(),
         });
         let index = self
@@ -778,7 +781,7 @@ impl<'a> Instantiator<'a> {
 
     fn extract_realloc(&mut self, store: &mut StoreOpaque, realloc: &ExtractRealloc) {
         let func_ref = match lookup_vmdef(store, self.id, &realloc.def) {
-            crate::runtime::vm::Export::Function(f) => f.func_ref,
+            crate::runtime::vm::Export::Function(f) => f.vm_func_ref(store),
             _ => unreachable!(),
         };
         self.instance_mut(store)
@@ -787,7 +790,7 @@ impl<'a> Instantiator<'a> {
 
     fn extract_callback(&mut self, store: &mut StoreOpaque, callback: &ExtractCallback) {
         let func_ref = match lookup_vmdef(store, self.id, &callback.def) {
-            crate::runtime::vm::Export::Function(f) => f.func_ref,
+            crate::runtime::vm::Export::Function(f) => f.vm_func_ref(store),
             _ => unreachable!(),
         };
         self.instance_mut(store)
@@ -796,7 +799,7 @@ impl<'a> Instantiator<'a> {
 
     fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {
         let func_ref = match lookup_vmdef(store, self.id, &post_return.def) {
-            crate::runtime::vm::Export::Function(f) => f.func_ref,
+            crate::runtime::vm::Export::Function(f) => f.vm_func_ref(store),
             _ => unreachable!(),
         };
         self.instance_mut(store)
@@ -838,9 +841,7 @@ impl<'a> Instantiator<'a> {
             // directly from an instance which should only give us valid export
             // items.
             let export = lookup_vmdef(store, self.id, arg);
-            unsafe {
-                self.core_imports.push_export(store, &export);
-            }
+            self.core_imports.push_export(store, &export);
         }
         debug_assert!(imports.next().is_none());
 
@@ -868,7 +869,7 @@ impl<'a> Instantiator<'a> {
                 EngineOrModuleTypeIndex::Module(m) => module.signatures().shared_type(m),
                 EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
             };
-            let actual = unsafe { f.func_ref.as_ref().type_index };
+            let actual = unsafe { f.vm_func_ref(store).as_ref().type_index };
             assert_eq!(
                 expected,
                 Some(actual),

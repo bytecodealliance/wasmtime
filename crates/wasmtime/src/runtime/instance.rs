@@ -326,12 +326,14 @@ impl Instance {
     fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>, start: FuncIndex) -> Result<()> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
+        let store_id = store.0.id();
         let mut instance = self.id.get_mut(store.0);
-        let f = instance.as_mut().get_exported_func(start);
+        let f = instance.as_mut().get_exported_func(store_id, start);
         let caller_vmctx = instance.vmctx();
         unsafe {
+            let funcref = f.vm_func_ref(store.0);
             super::func::invoke_wasm_and_catch_traps(store, |_default_caller, vm| {
-                VMFuncRef::array_call(f.func_ref, vm, caller_vmctx, NonNull::from(&mut []))
+                VMFuncRef::array_call(funcref, vm, caller_vmctx, NonNull::from(&mut []))
             })?;
         }
         Ok(())
@@ -644,14 +646,12 @@ impl OwnedImports {
     /// Note that this is unsafe as the validity of `item` is not verified and
     /// it contains a bunch of raw pointers.
     #[cfg(feature = "component-model")]
-    pub(crate) unsafe fn push_export(
-        &mut self,
-        store: &StoreOpaque,
-        item: &crate::runtime::vm::Export,
-    ) {
+    pub(crate) fn push_export(&mut self, store: &StoreOpaque, item: &crate::runtime::vm::Export) {
         match item {
             crate::runtime::vm::Export::Function(f) => {
-                let f = f.func_ref.as_ref();
+                // SAFETY: the funcref associated with a `Func` is valid to use
+                // under the `store` that owns the function.
+                let f = unsafe { f.vm_func_ref(store).as_ref() };
                 self.functions.push(VMFunctionImport {
                     wasm_call: f.wasm_call.unwrap(),
                     array_call: f.array_call,

@@ -838,7 +838,7 @@ unsafe fn array_new_elem(
                         .iter()
                         .map(|f| {
                             let raw_func_ref = instance.as_mut().get_func_ref(*f);
-                            let func = raw_func_ref.map(|p| Func::from_vm_func_ref(store, p));
+                            let func = raw_func_ref.map(|p| Func::from_vm_func_ref(store.id(), p));
                             Val::FuncRef(func)
                         }),
                 );
@@ -931,7 +931,7 @@ unsafe fn array_init_elem(
             .iter()
             .map(|f| {
                 let raw_func_ref = instance.as_mut().get_func_ref(*f);
-                let func = raw_func_ref.map(|p| Func::from_vm_func_ref(&store, p));
+                let func = raw_func_ref.map(|p| Func::from_vm_func_ref(store.id(), p));
                 Val::FuncRef(func)
             })
             .collect::<Vec<_>>(),

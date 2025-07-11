@@ -543,7 +543,7 @@ unsafe impl WasmTy for Func {
     #[inline]
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
         let p = NonNull::new(ptr.get_funcref()).unwrap().cast();
-        Func::from_vm_func_ref(store, p)
+        Func::from_vm_func_ref(store.id(), p)
     }
 }
 
@@ -595,7 +595,7 @@ unsafe impl WasmTy for Option<Func> {
     #[inline]
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
         let ptr = NonNull::new(ptr.get_funcref())?.cast();
-        Some(Func::from_vm_func_ref(store, ptr))
+        Some(Func::from_vm_func_ref(store.id(), ptr))
     }
 }
 

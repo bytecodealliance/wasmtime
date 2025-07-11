@@ -13,8 +13,8 @@ use crate::runtime::vm::vmcontext::{
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    ExportFunction, GcStore, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMGlobalKind,
-    VMStore, VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
+    GcStore, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMGlobalKind, VMStore,
+    VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
 };
 use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque};
 use alloc::sync::Arc;
@@ -573,9 +573,13 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds for this instance.
-    pub fn get_exported_func(self: Pin<&mut Self>, index: FuncIndex) -> ExportFunction {
+    pub fn get_exported_func(
+        self: Pin<&mut Self>,
+        store: StoreId,
+        index: FuncIndex,
+    ) -> crate::Func {
         let func_ref = self.get_func_ref(index).unwrap();
-        ExportFunction { func_ref }
+        unsafe { crate::Func::from_vm_func_ref(store, func_ref) }
     }
 
     /// Lookup a table by index.
@@ -1497,7 +1501,7 @@ impl Instance {
         export: EntityIndex,
     ) -> Export {
         match export {
-            EntityIndex::Function(i) => Export::Function(self.get_exported_func(i)),
+            EntityIndex::Function(i) => Export::Function(self.get_exported_func(store, i)),
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(store, i)),
             EntityIndex::Table(i) => Export::Table(self.get_exported_table(store, i)),
             EntityIndex::Memory(i) => Export::Memory {
