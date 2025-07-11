@@ -34,6 +34,8 @@ const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 mod libcalls;
 mod resources;
 
+#[cfg(feature = "component-model-async")]
+pub use self::resources::CallContext;
 pub use self::resources::{
     CallContexts, ResourceTable, ResourceTables, TypedResource, TypedResourceIndex,
 };
@@ -795,6 +797,13 @@ impl ComponentInstance {
         // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().post_return_arg }
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_state_mut(self: Pin<&mut Self>) -> &mut concurrent::ConcurrentState {
+        // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
+        // the map returned.
+        unsafe { &mut self.get_unchecked_mut().concurrent_state }
     }
 }
 

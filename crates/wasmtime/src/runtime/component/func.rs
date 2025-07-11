@@ -284,9 +284,23 @@ impl Func {
             store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config"
         );
-        store
-            .on_fiber(|store| self.call_impl(store, params, results))
-            .await?
+        #[cfg(feature = "component-model-async")]
+        {
+            let future =
+                self.call_concurrent_dynamic(store.as_context_mut(), params.to_vec(), false);
+            let run_results = self.instance.run(store, future).await??;
+            assert_eq!(run_results.len(), results.len());
+            for (result, slot) in run_results.into_iter().zip(results) {
+                *slot = result;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            store
+                .on_fiber(|store| self.call_impl(store, params, results))
+                .await?
+        }
     }
 
     fn check_param_count<T>(&self, store: StoreContextMut<T>, count: usize) -> Result<()> {
@@ -303,7 +317,9 @@ impl Func {
     /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
-    /// instance.
+    /// instance.  In addition, the runtime will call the `post-return` function
+    /// (if any) automatically when the guest task completes -- no need to
+    /// explicitly call `Func::post_return` afterward.
     ///
     /// Note that the `Future` returned by this method will panic if polled or
     /// `.await`ed outside of the event loop of the component instance this
@@ -316,15 +332,30 @@ impl Func {
         mut store: impl AsContextMut<Data = T>,
         params: Vec<Val>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Val>>> + Send + 'static>> {
-        let mut store = store.as_context_mut();
+        let store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "cannot use `call_concurrent` when async support is not enabled on the config"
         );
 
+        self.call_concurrent_dynamic(store, params, true)
+    }
+
+    /// Internal helper function for `call_async` and `call_concurrent`.
+    #[cfg(feature = "component-model-async")]
+    fn call_concurrent_dynamic<'a, T: Send + 'static>(
+        self,
+        mut store: StoreContextMut<'a, T>,
+        params: Vec<Val>,
+        call_post_return_automatically: bool,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Val>>> + Send + 'static>> {
         let result = (|| {
             self.check_param_count(store.as_context_mut(), params.len())?;
-            let prepared = self.prepare_call_dynamic(store.as_context_mut(), params)?;
+            let prepared = self.prepare_call_dynamic(
+                store.as_context_mut(),
+                params,
+                call_post_return_automatically,
+            )?;
             concurrent::queue_call(store, prepared)
         })();
 
@@ -338,13 +369,18 @@ impl Func {
         self,
         mut store: StoreContextMut<'a, T>,
         params: Vec<Val>,
+        call_post_return_automatically: bool,
     ) -> Result<PreparedCall<Vec<Val>>> {
         let store = store.as_context_mut();
 
         concurrent::prepare_call(
             store,
+            self,
+            MAX_FLAT_PARAMS,
+            true,
+            call_post_return_automatically,
             move |func, store, params_out| {
-                func.with_lower_context(store, |cx, ty| {
+                func.with_lower_context(store, call_post_return_automatically, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
                 })
             },
@@ -359,8 +395,6 @@ impl Func {
                 })?;
                 Ok(Box::new(results))
             },
-            self,
-            MAX_FLAT_PARAMS,
         )
     }
 
@@ -537,7 +571,7 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        self.with_lower_context(store.as_context_mut(), |cx, ty| {
+        self.with_lower_context(store.as_context_mut(), false, |cx, ty| {
             cx.enter_call();
             lower(cx, ty, map_maybe_uninit!(space.params))
         })?;
@@ -816,6 +850,16 @@ impl Func {
         }))
     }
 
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn instance(self) -> Instance {
+        self.instance
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn index(self) -> ExportIndex {
+        self.index
+    }
+
     /// Creates a `LowerContext` using the configuration values of this lifted
     /// function.
     ///
@@ -825,6 +869,7 @@ impl Func {
     fn with_lower_context<T>(
         self,
         mut store: StoreContextMut<T>,
+        may_enter: bool,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
         let types = self.instance.id().get(store.0).component().types().clone();
@@ -855,12 +900,12 @@ impl Func {
         unsafe { flags.set_may_leave(true) };
         result?;
 
-        // If this is an async function then we're allowed to reenter the
-        // component at this point, and otherwise flag a post-return call being
-        // required as we're about to enter wasm and afterwards need a
-        // post-return.
+        // If this is an async function and `may_enter == true` then we're
+        // allowed to reenter the component at this point, and otherwise flag a
+        // post-return call being required as we're about to enter wasm and
+        // afterwards need a post-return.
         unsafe {
-            if options.async_() {
+            if may_enter && options.async_() {
                 flags.set_may_enter(true);
             } else {
                 flags.set_needs_post_return(true);

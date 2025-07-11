@@ -189,41 +189,64 @@ where
             store.0.async_support(),
             "cannot use `call_async` when async support is not enabled on the config"
         );
-
-        // FIXME: this'll get updated in #11127 but for now it's just showing
-        // that this can compile.
         #[cfg(feature = "component-model-async")]
-        if false {
+        {
+            use crate::component::concurrent::TaskId;
             use crate::runtime::vm::SendSyncPtr;
             use core::ptr::NonNull;
 
             let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
-            let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
-                // SAFETY: the goal here is to get `Params`, a non-`'static`
-                // value, to live long enough to the lowering of the
-                // parameters. We're guaranteed that `Params` lives in the
-                // future of the outer function (we're in an `async fn`) so it'll
-                // stay alive as long as the future itself. That is distinct,
-                // for example, from the signature of `call_concurrent` below.
-                //
-                // Here a pointer to `Params` is smuggled to this location
-                // through a `SendSyncPtr<u8>` to thwart the `'static` check of
-                // rustc and the signature of `prepare_call`.
-                let params = unsafe { ptr.cast::<Params>().as_ref() };
-                Self::lower_args(cx, ty, dst, params)
-            })?;
+            let prepared =
+                self.prepare_call(store.as_context_mut(), false, false, move |cx, ty, dst| {
+                    // SAFETY: The goal here is to get `Params`, a non-`'static`
+                    // value, to live long enough to the lowering of the
+                    // parameters. We're guaranteed that `Params` lives in the
+                    // future of the outer function (we're in an `async fn`) so it'll
+                    // stay alive as long as the future itself. That is distinct,
+                    // for example, from the signature of `call_concurrent` below.
+                    //
+                    // Here a pointer to `Params` is smuggled to this location
+                    // through a `SendSyncPtr<u8>` to thwart the `'static` check
+                    // of rustc and the signature of `prepare_call`.
+                    //
+                    // Note the use of `RemoveOnDrop` in the code that follows
+                    // this closure, which ensures that the task will be removed
+                    // from the concurrent state to which it belongs when the
+                    // containing `Future` is dropped, thereby ensuring that
+                    // this closure will never be called if it hasn't already,
+                    // meaning it will never see a dangling pointer.
+                    let params = unsafe { ptr.cast::<Params>().as_ref() };
+                    Self::lower_args(cx, ty, dst, params)
+                })?;
 
-            // TODO: need to place a dtor on the stack referencing the store
-            // which removes `prepared.task` from the store to ensure that the
-            // future is for sure 100% gone when this stack frame goes away.
+            struct RemoveOnDrop<'a, T: 'static> {
+                store: StoreContextMut<'a, T>,
+                task: TaskId,
+            }
 
-            let result = concurrent::queue_call(store.as_context_mut(), prepared)?;
-            return self.func.instance.run(store, result).await?;
+            impl<'a, T> Drop for RemoveOnDrop<'a, T> {
+                fn drop(&mut self) {
+                    self.task.remove(self.store.as_context_mut()).unwrap();
+                }
+            }
+
+            let mut wrapper = RemoveOnDrop {
+                store,
+                task: prepared.task_id(),
+            };
+
+            let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
+            self.func
+                .instance
+                .run(wrapper.store.as_context_mut(), result)
+                .await?
         }
-
-        store
-            .on_fiber(|store| self.call_impl(store, params))
-            .await?
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            store
+                .on_fiber(|store| self.call_impl(store, params))
+                .await?
+        }
     }
 
     /// Start a concurrent call to this function.
@@ -231,7 +254,9 @@ where
     /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
-    /// instance.
+    /// instance.  In addition, the runtime will call the `post-return` function
+    /// (if any) automatically when the guest task completes -- no need to
+    /// explicitly call `Func::post_return` afterward.
     ///
     /// Note that the `Future` returned by this method will panic if polled or
     /// `.await`ed outside of the event loop of the component instance this
@@ -261,9 +286,10 @@ where
         );
 
         let result = (|| {
-            let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
-                Self::lower_args(cx, ty, dst, &params)
-            })?;
+            let prepared =
+                self.prepare_call(store.as_context_mut(), true, true, move |cx, ty, dst| {
+                    Self::lower_args(cx, ty, dst, &params)
+                })?;
             concurrent::queue_call(store, prepared)
         })();
 
@@ -298,6 +324,8 @@ where
     fn prepare_call<T>(
         self,
         store: StoreContextMut<'_, T>,
+        remove_task_automatically: bool,
+        call_post_return_automatically: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
             InterfaceType,
@@ -324,8 +352,14 @@ where
         };
         concurrent::prepare_call(
             store,
+            self.func,
+            param_count,
+            remove_task_automatically,
+            call_post_return_automatically,
             move |func, store, params_out| {
-                func.with_lower_context(store, |cx, ty| lower(cx, ty, params_out))
+                func.with_lower_context(store, call_post_return_automatically, |cx, ty| {
+                    lower(cx, ty, params_out)
+                })
             },
             move |func, store, results| {
                 let result = if Return::flatten_count() <= max_results {
@@ -357,8 +391,6 @@ where
                 };
                 Ok(Box::new(result))
             },
-            self.func,
-            param_count,
         )
     }
 
@@ -1569,7 +1601,7 @@ pub struct WasmStr {
 }
 
 impl WasmStr {
-    fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
+    pub(crate) fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
         let byte_len = match cx.options.string_encoding() {
             StringEncoding::Utf8 => Some(len),
             StringEncoding::Utf16 => len.checked_mul(2),
@@ -1622,7 +1654,7 @@ impl WasmStr {
         self.to_str_from_memory(memory)
     }
 
-    fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
+    pub(crate) fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         match self.options.string_encoding() {
             StringEncoding::Utf8 => self.decode_utf8(memory),
             StringEncoding::Utf16 => self.decode_utf16(memory, self.len),
@@ -1828,7 +1860,7 @@ pub struct WasmList<T> {
 }
 
 impl<T: Lift> WasmList<T> {
-    fn new(
+    pub(crate) fn new(
         ptr: usize,
         len: usize,
         cx: &mut LiftContext<'_>,

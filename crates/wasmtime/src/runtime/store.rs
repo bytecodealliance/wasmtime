@@ -79,6 +79,8 @@
 use crate::RootSet;
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentStoreData;
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent;
 #[cfg(feature = "async")]
 use crate::fiber;
 use crate::module::RegisteredModuleId;
@@ -399,6 +401,9 @@ pub struct StoreOpaque {
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
 
+    #[cfg(feature = "component-model-async")]
+    concurrent_async_state: concurrent::AsyncState,
+
     /// State related to the executor of wasm code.
     ///
     /// For example if Pulley is enabled and configured then this will store a
@@ -594,6 +599,8 @@ impl<T> Store<T> {
             #[cfg(feature = "component-model")]
             host_resource_data: Default::default(),
             executor: Executor::new(engine),
+            #[cfg(feature = "component-model-async")]
+            concurrent_async_state: Default::default(),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -1971,6 +1978,11 @@ at https://bytecodealliance.org/security.
     #[cfg(feature = "async")]
     pub(crate) fn fiber_async_state_mut(&mut self) -> &mut fiber::AsyncState {
         &mut self.async_state
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_async_state_mut(&mut self) -> &mut concurrent::AsyncState {
+        &mut self.concurrent_async_state
     }
 
     #[cfg(feature = "async")]

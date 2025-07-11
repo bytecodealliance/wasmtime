@@ -48,11 +48,7 @@ pub struct Options {
     /// Whether or not this the async option was set when lowering.
     async_: bool,
 
-    /// The callback for an async-lifted export, if specified.
-    #[cfg_attr(
-        not(feature = "component-model-async"),
-        expect(unused, reason = "to be used soon")
-    )]
+    #[cfg(feature = "component-model-async")]
     callback: Option<NonNull<VMFuncRef>>,
 }
 
@@ -80,12 +76,14 @@ impl Options {
         async_: bool,
         callback: Option<NonNull<VMFuncRef>>,
     ) -> Options {
+        let _ = callback;
         Options {
             store_id,
             memory,
             realloc,
             string_encoding,
             async_,
+            #[cfg(feature = "component-model-async")]
             callback,
         }
     }
@@ -181,12 +179,13 @@ impl Options {
     }
 
     #[cfg(feature = "component-model-async")]
-    #[expect(
-        dead_code,
-        reason = "won't be used until `component-model-async` is fully implemented"
-    )]
     pub(crate) fn callback(&self) -> Option<NonNull<VMFuncRef>> {
         self.callback
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn memory_raw(&self) -> Option<NonNull<VMMemoryDefinition>> {
+        self.memory
     }
 }
 

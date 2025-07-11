@@ -4276,6 +4276,7 @@ dependencies = [
  "async-trait",
  "bitflags 2.6.0",
  "bumpalo",
+ "bytes",
  "cc",
  "cfg-if",
  "cranelift-native",
