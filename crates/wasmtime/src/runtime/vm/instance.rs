@@ -13,7 +13,7 @@ use crate::runtime::vm::vmcontext::{
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    ExportFunction, ExportGlobal, ExportGlobalKind, ExportMemory, ExportTag, GcStore, Imports,
+    ExportFunction, ExportGlobal, ExportGlobalKind, ExportMemory, GcStore, Imports,
     ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMStore, VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
 };
 use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque};
@@ -642,25 +642,18 @@ impl Instance {
         }
     }
 
-    fn get_exported_tag(&self, index: TagIndex) -> ExportTag {
-        let tag = self.env_module().tags[index];
-        let (vmctx, definition, index) =
-            if let Some(def_index) = self.env_module().defined_tag_index(index) {
-                (self.vmctx(), self.tag_ptr(def_index), def_index)
-            } else {
-                let import = self.imported_tag(index);
-                (
-                    import.vmctx.as_non_null(),
-                    import.from.as_non_null(),
-                    import.index,
-                )
-            };
-        ExportTag {
-            definition,
-            vmctx,
-            index,
-            tag,
-        }
+    fn get_exported_tag(&self, store: StoreId, index: TagIndex) -> crate::Tag {
+        let (id, def_index) = if let Some(def_index) = self.env_module().defined_tag_index(index) {
+            (self.id, def_index)
+        } else {
+            let import = self.imported_tag(index);
+            // SAFETY: validity of this `Instance` guarantees validity of the
+            // `vmctx` pointer being read here to find the transitive
+            // `InstanceId` that the import is associated with.
+            let id = unsafe { Instance::vmctx_instance_id(import.vmctx.as_non_null()) };
+            (id, import.index)
+        };
+        crate::Tag::from_raw(StoreInstanceId::new(store, id), def_index)
     }
 
     /// Return an iterator over the exports of this instance.
@@ -1485,7 +1478,7 @@ impl Instance {
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(i)),
             EntityIndex::Table(i) => Export::Table(self.get_exported_table(store, i)),
             EntityIndex::Memory(i) => Export::Memory(self.get_exported_memory(i)),
-            EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(i)),
+            EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(store, i)),
         }
     }
 

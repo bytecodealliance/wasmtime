@@ -2,14 +2,12 @@
 use crate::runtime::vm::component::VMComponentContext;
 use crate::runtime::vm::vmcontext::{
     VMContext, VMFuncRef, VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition,
-    VMOpaqueContext, VMTagDefinition,
+    VMOpaqueContext,
 };
 use core::ptr::NonNull;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
-use wasmtime_environ::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTagIndex, Global, Memory, Tag,
-};
+use wasmtime_environ::{DefinedGlobalIndex, DefinedMemoryIndex, Global, Memory};
 
 /// The value of an export passed from one instance to another.
 pub enum Export {
@@ -26,7 +24,7 @@ pub enum Export {
     Global(ExportGlobal),
 
     /// A tag export value.
-    Tag(ExportTag),
+    Tag(crate::Tag),
 }
 
 /// A function export value.
@@ -152,28 +150,5 @@ unsafe impl Sync for ExportGlobal {}
 impl From<ExportGlobal> for Export {
     fn from(func: ExportGlobal) -> Export {
         Export::Global(func)
-    }
-}
-
-/// A tag export value.
-#[derive(Debug, Clone)]
-pub struct ExportTag {
-    /// The address of the global storage.
-    pub definition: NonNull<VMTagDefinition>,
-    /// The instance that owns this tag.
-    pub vmctx: NonNull<VMContext>,
-    /// The global declaration, used for compatibility checking.
-    pub tag: Tag,
-    /// The index at which the tag is defined within the `vmctx`.
-    pub index: DefinedTagIndex,
-}
-
-// See docs on send/sync for `ExportFunction` above.
-unsafe impl Send for ExportTag {}
-unsafe impl Sync for ExportTag {}
-
-impl From<ExportTag> for Export {
-    fn from(func: ExportTag) -> Export {
-        Export::Tag(func)
     }
 }
