@@ -28,12 +28,10 @@ pub fn generate_memory_export(
         .get_exported_memory(MemoryIndex::from_u32(0)))
 }
 
-pub fn generate_table_export(
-    store: &mut StoreOpaque,
-    t: &TableType,
-) -> Result<crate::runtime::vm::ExportTable> {
+pub fn generate_table_export(store: &mut StoreOpaque, t: &TableType) -> Result<crate::Table> {
+    let id = store.id();
     let instance = create_table(store, t)?;
     Ok(store
         .instance_mut(instance)
-        .get_exported_table(TableIndex::from_u32(0)))
+        .get_exported_table(id, TableIndex::from_u32(0)))
 }

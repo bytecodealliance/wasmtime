@@ -137,9 +137,7 @@ impl Extern {
             crate::runtime::vm::Export::Global(g) => {
                 Extern::Global(Global::from_wasmtime_global(g, store))
             }
-            crate::runtime::vm::Export::Table(t) => {
-                Extern::Table(Table::from_wasmtime_table(t, store))
-            }
+            crate::runtime::vm::Export::Table(t) => Extern::Table(t),
             crate::runtime::vm::Export::Tag(t) => Extern::Tag(Tag::from_wasmtime_tag(t, store)),
         }
     }

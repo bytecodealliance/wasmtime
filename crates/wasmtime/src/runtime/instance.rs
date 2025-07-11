@@ -427,7 +427,8 @@ impl Instance {
     }
 
     fn _get_export(&self, store: &mut StoreOpaque, entity: EntityIndex) -> Extern {
-        let export = self.id.get_mut(store).get_export_by_index_mut(entity);
+        let id = store.id();
+        let export = self.id.get_mut(store).get_export_by_index_mut(id, entity);
         unsafe { Extern::from_wasmtime_export(export, store) }
     }
 
@@ -649,7 +650,11 @@ impl OwnedImports {
     /// Note that this is unsafe as the validity of `item` is not verified and
     /// it contains a bunch of raw pointers.
     #[cfg(feature = "component-model")]
-    pub(crate) unsafe fn push_export(&mut self, item: &crate::runtime::vm::Export) {
+    pub(crate) unsafe fn push_export(
+        &mut self,
+        store: &StoreOpaque,
+        item: &crate::runtime::vm::Export,
+    ) {
         match item {
             crate::runtime::vm::Export::Function(f) => {
                 let f = f.func_ref.as_ref();
@@ -663,11 +668,7 @@ impl OwnedImports {
                 self.globals.push(g.vmimport());
             }
             crate::runtime::vm::Export::Table(t) => {
-                self.tables.push(VMTableImport {
-                    from: t.definition.into(),
-                    vmctx: t.vmctx.into(),
-                    index: t.index,
-                });
+                self.tables.push(t.vmimport(store));
             }
             crate::runtime::vm::Export::Memory(m) => {
                 self.memories.push(VMMemoryImport {

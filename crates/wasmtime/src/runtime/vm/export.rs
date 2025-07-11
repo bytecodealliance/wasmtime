@@ -2,14 +2,13 @@
 use crate::runtime::vm::component::VMComponentContext;
 use crate::runtime::vm::vmcontext::{
     VMContext, VMFuncRef, VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition,
-    VMOpaqueContext, VMTableDefinition, VMTagDefinition,
+    VMOpaqueContext, VMTagDefinition,
 };
 use core::ptr::NonNull;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex, Global, Memory,
-    Table, Tag,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTagIndex, Global, Memory, Tag,
 };
 
 /// The value of an export passed from one instance to another.
@@ -18,7 +17,7 @@ pub enum Export {
     Function(ExportFunction),
 
     /// A table export value.
-    Table(ExportTable),
+    Table(crate::Table),
 
     /// A memory export value.
     Memory(ExportMemory),
@@ -49,29 +48,6 @@ unsafe impl Sync for ExportFunction {}
 impl From<ExportFunction> for Export {
     fn from(func: ExportFunction) -> Export {
         Export::Function(func)
-    }
-}
-
-/// A table export value.
-#[derive(Debug, Clone)]
-pub struct ExportTable {
-    /// The address of the table descriptor.
-    pub definition: NonNull<VMTableDefinition>,
-    /// Pointer to the containing `VMContext`.
-    pub vmctx: NonNull<VMContext>,
-    /// The table declaration, used for compatibility checking.
-    pub table: Table,
-    /// The index at which the table is defined within the `vmctx`.
-    pub index: DefinedTableIndex,
-}
-
-// See docs on send/sync for `ExportFunction` above.
-unsafe impl Send for ExportTable {}
-unsafe impl Sync for ExportTable {}
-
-impl From<ExportTable> for Export {
-    fn from(func: ExportTable) -> Export {
-        Export::Table(func)
     }
 }
 

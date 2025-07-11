@@ -500,6 +500,7 @@ pub(crate) fn lookup_vmexport<T>(
 where
     T: Copy + Into<EntityIndex>,
 {
+    let store_id = store.id();
     let id = store
         .store_data_mut()
         .component_instance_mut(id)
@@ -519,7 +520,7 @@ where
         // investigated if this becomes a performance issue though.
         ExportItem::Name(name) => instance.env_module().exports[name],
     };
-    instance.get_export_by_index_mut(idx)
+    instance.get_export_by_index_mut(store_id, idx)
 }
 
 fn resource_tables<'a>(
@@ -813,12 +814,9 @@ impl<'a> Instantiator<'a> {
             crate::runtime::vm::Export::Table(t) => t,
             _ => unreachable!(),
         };
-        self.instance_mut(store).set_runtime_table(
-            table.index,
-            export.definition,
-            export.vmctx,
-            export.index,
-        );
+        let import = export.vmimport(store);
+        self.instance_mut(store)
+            .set_runtime_table(table.index, import);
     }
 
     fn build_imports<'b>(
@@ -847,7 +845,7 @@ impl<'a> Instantiator<'a> {
             // items.
             let export = lookup_vmdef(store, self.id, arg);
             unsafe {
-                self.core_imports.push_export(&export);
+                self.core_imports.push_export(store, &export);
             }
         }
         debug_assert!(imports.next().is_none());

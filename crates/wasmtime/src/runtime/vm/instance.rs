@@ -13,11 +13,10 @@ use crate::runtime::vm::vmcontext::{
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    ExportFunction, ExportGlobal, ExportGlobalKind, ExportMemory, ExportTable, ExportTag, GcStore,
-    Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMStore, VMStoreRawPtr, VmPtr, VmSafe,
-    WasmFault,
+    ExportFunction, ExportGlobal, ExportGlobalKind, ExportMemory, ExportTag, GcStore, Imports,
+    ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMStore, VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
 };
-use crate::store::{InstanceId, StoreOpaque};
+use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::marker;
@@ -341,6 +340,16 @@ impl Instance {
         f(Pin::new_unchecked(ptr.as_mut()))
     }
 
+    /// Returns the `InstanceId` associated with the `vmctx` provided.
+    ///
+    /// # Safety
+    ///
+    /// The `vmctx` pointer must be a valid pointer to read the `InstanceId`
+    /// from.
+    unsafe fn vmctx_instance_id(vmctx: NonNull<VMContext>) -> InstanceId {
+        Instance::from_vmctx(vmctx, |i| i.id)
+    }
+
     pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
         self.runtime_info.env_module()
     }
@@ -580,25 +589,19 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds for this instance.
-    pub fn get_exported_table(&self, index: TableIndex) -> ExportTable {
-        let ty = self.env_module().tables[index];
-        let (definition, vmctx, index) =
-            if let Some(def_index) = self.env_module().defined_table_index(index) {
-                (self.table_ptr(def_index), self.vmctx(), def_index)
-            } else {
-                let import = self.imported_table(index);
-                (
-                    import.from.as_non_null(),
-                    import.vmctx.as_non_null(),
-                    import.index,
-                )
-            };
-        ExportTable {
-            definition,
-            vmctx,
-            table: ty,
-            index,
-        }
+    pub fn get_exported_table(&self, store: StoreId, index: TableIndex) -> crate::Table {
+        let (id, def_index) = if let Some(def_index) = self.env_module().defined_table_index(index)
+        {
+            (self.id, def_index)
+        } else {
+            let import = self.imported_table(index);
+            // SAFETY: validity of this `Instance` guarantees validity of the
+            // `vmctx` pointer being read here to find the transitive
+            // `InstanceId` that the import is associated with.
+            let id = unsafe { Instance::vmctx_instance_id(import.vmctx.as_non_null()) };
+            (id, import.index)
+        };
+        crate::Table::from_raw(StoreInstanceId::new(store, id), def_index)
     }
 
     /// Lookup a memory by index.
@@ -1472,11 +1475,15 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `export` is not valid for this instance.
-    pub fn get_export_by_index_mut(self: Pin<&mut Self>, export: EntityIndex) -> Export {
+    pub fn get_export_by_index_mut(
+        self: Pin<&mut Self>,
+        store: StoreId,
+        export: EntityIndex,
+    ) -> Export {
         match export {
             EntityIndex::Function(i) => Export::Function(self.get_exported_func(i)),
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(i)),
-            EntityIndex::Table(i) => Export::Table(self.get_exported_table(i)),
+            EntityIndex::Table(i) => Export::Table(self.get_exported_table(store, i)),
             EntityIndex::Memory(i) => Export::Memory(self.get_exported_memory(i)),
             EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(i)),
         }
