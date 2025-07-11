@@ -87,8 +87,8 @@ impl WritableRegPair {
 pub(crate) enum InstructionSet {
     /// Baseline ISA for cranelift is z14.
     Base,
-    /// Miscellaneous-Instruction-Extensions Facility 2 (z15)
-    MIE2,
+    /// Miscellaneous-Instruction-Extensions Facility 3 (z15)
+    MIE3,
     /// Vector-Enhancements Facility 2 (z15)
     VXRS_EXT2,
 }
@@ -242,15 +242,15 @@ impl Inst {
 
             // These depend on the opcode
             Inst::AluRRR { alu_op, .. } => match alu_op {
-                ALUOp::NotAnd32 | ALUOp::NotAnd64 => InstructionSet::MIE2,
-                ALUOp::NotOrr32 | ALUOp::NotOrr64 => InstructionSet::MIE2,
-                ALUOp::NotXor32 | ALUOp::NotXor64 => InstructionSet::MIE2,
-                ALUOp::AndNot32 | ALUOp::AndNot64 => InstructionSet::MIE2,
-                ALUOp::OrrNot32 | ALUOp::OrrNot64 => InstructionSet::MIE2,
+                ALUOp::NotAnd32 | ALUOp::NotAnd64 => InstructionSet::MIE3,
+                ALUOp::NotOrr32 | ALUOp::NotOrr64 => InstructionSet::MIE3,
+                ALUOp::NotXor32 | ALUOp::NotXor64 => InstructionSet::MIE3,
+                ALUOp::AndNot32 | ALUOp::AndNot64 => InstructionSet::MIE3,
+                ALUOp::OrrNot32 | ALUOp::OrrNot64 => InstructionSet::MIE3,
                 _ => InstructionSet::Base,
             },
             Inst::UnaryRR { op, .. } => match op {
-                UnaryOp::PopcntReg => InstructionSet::MIE2,
+                UnaryOp::PopcntReg => InstructionSet::MIE3,
                 _ => InstructionSet::Base,
             },
             Inst::FpuRound { op, .. } => match op {

@@ -15,7 +15,7 @@ rust-version.workspace = true
 cranelift-codegen = { workspace = true }
 target-lexicon = { workspace = true }
 
-[target.'cfg(any(target_arch = "s390x", target_arch = "riscv64"))'.dependencies]
+[target.'cfg(target_arch = "riscv64")'.dependencies]
 libc = { workspace = true }
 
 [features]

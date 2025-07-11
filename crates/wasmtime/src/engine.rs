@@ -508,7 +508,9 @@ impl Engine {
 
             // s390x features to detect
             "has_vxrs_ext2" => "vxrs_ext2",
-            "has_mie2" => "mie2",
+            "has_vxrs_ext3" => "vxrs_ext3",
+            "has_mie3" => "mie3",
+            "has_mie4" => "mie4",
 
             // x64 features to detect
             "has_cmpxchg16b" => "cmpxchg16b",

@@ -3519,17 +3519,29 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
         };
     }
 
-    // There is no is_s390x_feature_detected macro yet, so for now
-    // we use getauxval from the libc crate directly.
-    #[cfg(all(target_arch = "s390x", target_os = "linux"))]
+    // `is_s390x_feature_detected` is nightly only for now, so use the
+    // STORE FACILITY LIST EXTENDED instruction as a temporary measure.
+    #[cfg(target_arch = "s390x")]
     {
-        let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
-        const HWCAP_S390X_VXRS_EXT2: libc::c_ulong = 32768;
+        let mut facility_list: [u64; 4] = [0; 4];
+        unsafe {
+            core::arch::asm!(
+                "stfle 0({})",
+                in(reg_addr) facility_list.as_mut_ptr() ,
+                inout("r0") facility_list.len() as u64 - 1 => _,
+                options(nostack)
+            );
+        }
+        let get_facility_bit = |n: usize| {
+            // NOTE: bits are numbered from the left.
+            facility_list[n / 64] & (1 << (63 - (n % 64))) != 0
+        };
 
         return match feature {
-            // There is no separate HWCAP bit for mie2, so assume
-            // that any machine with vxrs_ext2 also has mie2.
-            "vxrs_ext2" | "mie2" => Some((v & HWCAP_S390X_VXRS_EXT2) != 0),
+            "mie3" => Some(get_facility_bit(61)),
+            "mie4" => Some(get_facility_bit(84)),
+            "vxrs_ext2" => Some(get_facility_bit(148)),
+            "vxrs_ext3" => Some(get_facility_bit(198)),
 
             _ => None,
         };

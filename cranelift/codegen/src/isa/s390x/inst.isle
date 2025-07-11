@@ -1482,10 +1482,10 @@
 
 ;; Helpers for querying enabled ISA extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl mie2_enabled () Type)
-(extern extractor mie2_enabled mie2_enabled)
-(decl mie2_disabled () Type)
-(extern extractor mie2_disabled mie2_disabled)
+(decl mie3_enabled () Type)
+(extern extractor mie3_enabled mie3_enabled)
+(decl mie3_disabled () Type)
+(extern extractor mie3_disabled mie3_disabled)
 
 (decl vxrs_ext2_enabled () Type)
 (extern extractor vxrs_ext2_enabled vxrs_ext2_enabled)
