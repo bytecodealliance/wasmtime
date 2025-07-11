@@ -1392,7 +1392,7 @@ impl StoreOpaque {
     {
         if let Some(buf) = self.replay_buffer_mut() {
             if pop_predicate(buf.metadata()) {
-                let call_event = T::try_from(buf.pop_event()?)?;
+                let call_event = T::try_from(buf.next().ok_or(ReplayError::EmptyBuffer)?)?;
                 println!("Replay | {:?}", &call_event);
                 Ok(f(call_event, buf.metadata())?)
             } else {
@@ -2111,8 +2111,7 @@ at https://bytecodealliance.org/security.
     /// Panics if the replay buffer in the store is non-empty
     pub(crate) fn ensure_empty_replay_buffer(&mut self) {
         if let Some(buf) = self.replay_buffer_mut() {
-            let event = buf.pop_event();
-            assert!(event.is_err_and(|e| matches!(e, ReplayError::EmptyBuffer)));
+            assert!(buf.next().is_none());
         }
     }
 }
