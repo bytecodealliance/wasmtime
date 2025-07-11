@@ -542,6 +542,13 @@ impl Module {
         })
     }
 
+    /// Get this module's `i`th import.
+    pub fn import(&self, i: usize) -> Option<(&str, &str, EntityType)> {
+        match self.initializers.get(i)? {
+            Initializer::Import { name, field, index } => Some((name, field, self.type_of(*index))),
+        }
+    }
+
     /// Returns the type of an item based on its index
     pub fn type_of(&self, index: EntityIndex) -> EntityType {
         match index {

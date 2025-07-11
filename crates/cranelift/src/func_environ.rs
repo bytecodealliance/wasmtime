@@ -118,7 +118,6 @@ pub struct FuncEnvironment<'module_environment> {
     #[cfg(feature = "gc")]
     gc_heap_bound: Option<ir::GlobalValue>,
 
-    #[cfg(feature = "wmemcheck")]
     translation: &'module_environment ModuleTranslation<'module_environment>,
 
     /// Heaps implementing WebAssembly linear memories.
@@ -224,7 +223,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // functions should consume at least some fuel.
             fuel_consumed: 1,
 
-            #[cfg(feature = "wmemcheck")]
             translation,
 
             stack_limit_at_function_entry: None,
@@ -1321,26 +1319,34 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 .vmctx_vmfunction_import_wasm_call(callee_index),
         )
         .unwrap();
-        let func_addr = self
-            .builder
-            .ins()
-            .load(pointer_type, mem_flags, base, body_offset);
 
         // First append the callee vmctx address.
         let vmctx_offset =
             i32::try_from(self.env.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
-        let vmctx = self
+        let callee_vmctx = self
             .builder
             .ins()
             .load(pointer_type, mem_flags, base, vmctx_offset);
-        real_call_args.push(vmctx);
+        real_call_args.push(callee_vmctx);
         real_call_args.push(caller_vmctx);
 
         // Then append the regular call arguments.
         real_call_args.extend_from_slice(call_args);
 
-        // Finally, make the indirect call!
-        Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+        // If we statically know the imported function (e.g. this is a
+        // component-to-component call where we statically know both components)
+        // then we can actually still make a direct call (although we do have to
+        // pass the callee's vmctx that we just loaded, not our own). Otherwise,
+        // we really do an indirect call.
+        if self.env.translation.known_imported_functions[callee_index].is_some() {
+            Ok(self.direct_call_inst(callee, &real_call_args))
+        } else {
+            let func_addr = self
+                .builder
+                .ins()
+                .load(pointer_type, mem_flags, base, body_offset);
+            Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+        }
     }
 
     /// Do an indirect call through the given funcref table.
@@ -2646,7 +2652,8 @@ impl FuncEnvironment<'_> {
             // wasm module (e.g. imports or libcalls) are either encoded through
             // the `vmcontext` as relative jumps (hence no relocations) or
             // they're libcalls with absolute relocations.
-            colocated: self.module.defined_func_index(index).is_some(),
+            colocated: self.module.defined_func_index(index).is_some()
+                || self.translation.known_imported_functions[index].is_some(),
         }))
     }
 

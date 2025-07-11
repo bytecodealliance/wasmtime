@@ -803,18 +803,26 @@ impl FunctionIndices {
             &compiled_funcs,
             &|caller_index: usize, callee: RelocationTarget| match callee {
                 RelocationTarget::Wasm(callee_index) => {
-                    let module = self
+                    let caller_module = self
                         .compiled_func_index_to_module
                         .get(&caller_index)
                         .copied()
                         .expect("should only reloc inside wasm function callers");
-                    let def_func_index = translations[module]
+                    let key = if let Some(def_func_index) = translations[caller_module]
                         .module
                         .defined_func_index(callee_index)
-                        .unwrap();
-                    self.indices[&CompileKind::WasmFunction]
-                        [&CompileKey::wasm_function(module, def_func_index)]
-                        .unwrap_function()
+                    {
+                        CompileKey::wasm_function(caller_module, def_func_index)
+                    } else {
+                        let (def_module, def_func_index) = translations[caller_module]
+                            .known_imported_functions[callee_index]
+                            .expect(
+                                "a direct call to an imported function must have a \
+                                 statically-known import",
+                            );
+                        CompileKey::wasm_function(def_module, def_func_index)
+                    };
+                    self.indices[&CompileKind::WasmFunction][&key].unwrap_function()
                 }
                 RelocationTarget::Builtin(builtin) => self.indices
                     [&CompileKind::WasmToBuiltinTrampoline]
