@@ -106,19 +106,19 @@ pub async fn test_run_bool(components: &[&str], v: bool) -> Result<()> {
     let borrowing_host =
         component_async_tests::borrowing_host::bindings::BorrowingHost::new(&mut store, &instance)?;
 
-    // Start three concurrent calls and then join them all:
-    let mut futures = FuturesUnordered::new();
-    for _ in 0..3 {
-        futures.push(
-            borrowing_host
-                .local_local_run_bool()
-                .call_run(&mut store, v),
-        );
-    }
+    instance
+        .run_with(&mut store, async move |accessor| {
+            // Start three concurrent calls and then join them all:
+            let mut futures = FuturesUnordered::new();
+            for _ in 0..3 {
+                futures.push(borrowing_host.local_local_run_bool().call_run(accessor, v));
+            }
 
-    while let Some(()) = instance.run(&mut store, futures.try_next()).await?? {
-        // continue
-    }
+            while let Some(()) = futures.try_next().await? {
+                // continue
+            }
 
-    Ok(())
+            anyhow::Ok(())
+        })
+        .await?
 }

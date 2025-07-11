@@ -203,23 +203,19 @@ const _: () = {
             foo::foo::i::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
-        pub fn call_f<S: wasmtime::AsContextMut>(
+        pub async fn call_f<_T, _D>(
             &self,
-            mut store: S,
-        ) -> impl wasmtime::component::__internal::Future<
-            Output = wasmtime::Result<(T, U, R)>,
-        > + Send + 'static + use<S>
+            accessor: &wasmtime::component::Accessor<_T, _D>,
+        ) -> wasmtime::Result<(T, U, R)>
         where
-            <S as wasmtime::AsContext>::Data: Send + 'static,
+            _T: Send,
+            _D: wasmtime::component::HasData,
         {
             let callee = unsafe {
                 wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
             };
-            let future = callee.call_concurrent(store.as_context_mut(), ());
-            async move {
-                let (ret0,) = future.await?;
-                Ok(ret0)
-            }
+            let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+            Ok(ret0)
         }
     }
 };

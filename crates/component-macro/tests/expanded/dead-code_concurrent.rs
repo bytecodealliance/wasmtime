@@ -191,7 +191,7 @@ pub mod a {
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostConcurrent: wasmtime::component::HasData + Send {
                 fn f<T: 'static>(
-                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                    accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = LiveType> + Send
                 where
                     Self: Sized;
@@ -211,7 +211,7 @@ pub mod a {
                 let mut inst = linker.instance("a:b/interface-with-live-type")?;
                 inst.func_wrap_concurrent(
                     "f",
-                    move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
+                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &mut unsafe { caller.with_data(host_getter) };
                             let r = <D as HostConcurrent>::f(accessor).await;

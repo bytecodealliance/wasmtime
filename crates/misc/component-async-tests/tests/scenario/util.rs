@@ -214,14 +214,19 @@ pub async fn test_run_with_count(components: &[&str], count: usize) -> Result<()
         component_async_tests::yield_host::bindings::YieldHost::new(&mut store, &instance)?;
 
     // Start `count` concurrent calls and then join them all:
-    let mut futures = FuturesUnordered::new();
-    for _ in 0..count {
-        futures.push(yield_host.local_local_run().call_run(&mut store));
-    }
+    instance
+        .run_with(&mut store, async |store| {
+            let mut futures = FuturesUnordered::new();
+            for _ in 0..count {
+                futures.push(yield_host.local_local_run().call_run(store));
+            }
 
-    while let Some(()) = instance.run(&mut store, futures.try_next()).await?? {
-        // continue
-    }
+            while let Some(()) = futures.try_next().await? {
+                // continue
+            }
+            anyhow::Ok(())
+        })
+        .await??;
 
     Ok(())
 }

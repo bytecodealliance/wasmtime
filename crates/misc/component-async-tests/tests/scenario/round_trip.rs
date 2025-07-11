@@ -1,10 +1,7 @@
-use std::future::Future;
-use std::pin::pin;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU32, Ordering::Relaxed},
 };
-use std::task::{Context, Wake, Waker};
 use std::time::Duration;
 
 use super::util::{config, make_component};
@@ -16,7 +13,6 @@ use futures::{
     channel::oneshot,
     stream::{FuturesUnordered, TryStreamExt},
 };
-use once_cell::sync::Lazy;
 use wasmtime::component::{Accessor, AccessorTask, HasSelf, Instance, Linker, ResourceTable, Val};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::p2::WasiCtxBuilder;
@@ -221,7 +217,7 @@ pub async fn test_round_trip(
     // On miri, we only use one call style per test since they take so long to
     // run.  On non-miri, we use every call style for each test.
     static CALL_STYLE_COUNTER: AtomicU32 = AtomicU32::new(0);
-    let call_style = CALL_STYLE_COUNTER.fetch_add(1, Relaxed) % 6;
+    let call_style = CALL_STYLE_COUNTER.fetch_add(1, Relaxed) % 5;
 
     // First, test the `wasmtime-wit-bindgen` static API:
     {
@@ -241,28 +237,6 @@ pub async fn test_round_trip(
             component_async_tests::round_trip::bindings::RoundTrip::new(&mut store, &instance)?;
 
         if call_style == 0 || !cfg!(miri) {
-            // Start concurrent calls and then join them all:
-            let mut futures = FuturesUnordered::new();
-            for (input, output) in inputs_and_outputs {
-                let output = (*output).to_owned();
-                futures.push(
-                    round_trip
-                        .local_local_baz()
-                        .call_foo(&mut store, (*input).to_owned())
-                        .map(move |v| v.map(move |v| (v, output))),
-                );
-            }
-
-            while let Some((actual, expected)) =
-                instance.run(&mut store, futures.try_next()).await??
-            {
-                assert_eq!(expected, actual);
-            }
-
-            instance.assert_concurrent_state_empty(&mut store);
-        }
-
-        if call_style == 1 || !cfg!(miri) {
             // Now do it again using `Instance::run_with`:
             instance
                 .run_with(&mut store, {
@@ -271,28 +245,24 @@ pub async fn test_round_trip(
                         .map(|(a, b)| (String::from(*a), String::from(*b)))
                         .collect::<Vec<_>>();
 
-                    move |accessor| {
-                        Box::pin(async move {
-                            let mut futures = FuturesUnordered::new();
-                            accessor.with(|mut store| {
-                                for (input, output) in &inputs_and_outputs {
-                                    let output = output.clone();
-                                    futures.push(
-                                        round_trip
-                                            .local_local_baz()
-                                            .call_foo(&mut store, input.clone())
-                                            .map(move |v| v.map(move |v| (v, output)))
-                                            .boxed(),
-                                    );
-                                }
-                            });
+                    async move |accessor| {
+                        let mut futures = FuturesUnordered::new();
+                        for (input, output) in &inputs_and_outputs {
+                            let output = output.clone();
+                            futures.push(
+                                round_trip
+                                    .local_local_baz()
+                                    .call_foo(accessor, input.clone())
+                                    .map(move |v| v.map(move |v| (v, output)))
+                                    .boxed(),
+                            );
+                        }
 
-                            while let Some((actual, expected)) = futures.try_next().await? {
-                                assert_eq!(expected, actual);
-                            }
+                        while let Some((actual, expected)) = futures.try_next().await? {
+                            assert_eq!(expected, actual);
+                        }
 
-                            Ok::<_, wasmtime::Error>(())
-                        })
+                        Ok::<_, wasmtime::Error>(())
                     }
                 })
                 .await??;
@@ -300,7 +270,7 @@ pub async fn test_round_trip(
             instance.assert_concurrent_state_empty(&mut store);
         }
 
-        if call_style == 2 || !cfg!(miri) {
+        if call_style == 1 || !cfg!(miri) {
             // And again using `Instance::spawn`:
             struct Task {
                 instance: Instance,
@@ -309,28 +279,25 @@ pub async fn test_round_trip(
             }
 
             impl AccessorTask<Ctx, HasSelf<Ctx>, Result<()>> for Task {
-                async fn run(self, accessor: &mut Accessor<Ctx>) -> Result<()> {
-                    let mut futures = FuturesUnordered::new();
-                    accessor.with(|mut store| {
-                        let round_trip =
-                            component_async_tests::round_trip::bindings::RoundTrip::new(
-                                &mut store,
-                                &self.instance,
-                            )?;
-
-                        for (input, output) in &self.inputs_and_outputs {
-                            let output = output.clone();
-                            futures.push(
-                                round_trip
-                                    .local_local_baz()
-                                    .call_foo(&mut store, input.clone())
-                                    .map(move |v| v.map(move |v| (v, output)))
-                                    .boxed(),
-                            );
-                        }
-
-                        Ok::<_, wasmtime::Error>(())
+                async fn run(self, accessor: &Accessor<Ctx>) -> Result<()> {
+                    let round_trip = accessor.with(|mut store| {
+                        component_async_tests::round_trip::bindings::RoundTrip::new(
+                            &mut store,
+                            &self.instance,
+                        )
                     })?;
+
+                    let mut futures = FuturesUnordered::new();
+                    for (input, output) in &self.inputs_and_outputs {
+                        let output = output.clone();
+                        futures.push(
+                            round_trip
+                                .local_local_baz()
+                                .call_foo(accessor, input.clone())
+                                .map(move |v| v.map(move |v| (v, output)))
+                                .boxed(),
+                        );
+                    }
 
                     while let Some((actual, expected)) = futures.try_next().await? {
                         assert_eq!(expected, actual);
@@ -360,7 +327,7 @@ pub async fn test_round_trip(
             instance.assert_concurrent_state_empty(&mut store);
         }
 
-        if call_style == 3 || !cfg!(miri) {
+        if call_style == 2 || !cfg!(miri) {
             // And again using `TypedFunc::call_async`-based bindings:
             let round_trip =
                 component_async_tests::round_trip::non_concurrent_export_bindings::RoundTrip::new(
@@ -413,31 +380,34 @@ pub async fn test_round_trip(
             .get_func(&mut store, foo_function)
             .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
 
-        if call_style == 4 || !cfg!(miri) {
-            // Start three concurrent calls and then join them all:
-            let mut futures = FuturesUnordered::new();
-            for (input, output) in inputs_and_outputs {
-                let output = (*output).to_owned();
-                futures.push(
-                    foo_function
-                        .call_concurrent(&mut store, vec![Val::String((*input).to_owned())])
-                        .map(move |v| v.map(move |v| (v, output))),
-                );
-            }
+        if call_style == 3 || !cfg!(miri) {
+            instance
+                .run_with(&mut store, async |store| {
+                    // Start three concurrent calls and then join them all:
+                    let mut futures = FuturesUnordered::new();
+                    for (input, output) in inputs_and_outputs {
+                        let output = (*output).to_owned();
+                        futures.push(
+                            foo_function
+                                .call_concurrent(store, vec![Val::String((*input).to_owned())])
+                                .map(move |v| v.map(move |v| (v, output))),
+                        );
+                    }
 
-            while let Some((actual, expected)) =
-                instance.run(&mut store, futures.try_next()).await??
-            {
-                let Some(Val::String(actual)) = actual.into_iter().next() else {
-                    unreachable!()
-                };
-                assert_eq!(expected, actual);
-            }
+                    while let Some((actual, expected)) = futures.try_next().await? {
+                        let Some(Val::String(actual)) = actual.into_iter().next() else {
+                            unreachable!()
+                        };
+                        assert_eq!(expected, actual);
+                    }
+                    anyhow::Ok(())
+                })
+                .await??;
 
             instance.assert_concurrent_state_empty(&mut store);
         }
 
-        if call_style == 5 || !cfg!(miri) {
+        if call_style == 4 || !cfg!(miri) {
             // Now do it again using `Func::call_async`:
             for (input, expected) in inputs_and_outputs {
                 let mut results = [Val::Bool(false)];
@@ -505,129 +475,4 @@ pub async fn test_round_trip_composed(a: &str, b: &str) -> Result<()> {
         ],
     )
     .await
-}
-
-enum PanicKind {
-    DirectAwait,
-    WrongInstance,
-    RecursiveRun,
-}
-
-#[tokio::test]
-#[should_panic(
-    expected = "may only be polled from the event loop of the instance from which they originated"
-)]
-pub async fn panic_on_direct_await() {
-    _ = test_panic(
-        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
-        PanicKind::DirectAwait,
-    )
-    .await;
-}
-
-#[tokio::test]
-#[should_panic(
-    expected = "may only be polled from the event loop of the instance from which they originated"
-)]
-pub async fn panic_on_wrong_instance() {
-    _ = test_panic(
-        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
-        PanicKind::WrongInstance,
-    )
-    .await;
-}
-
-#[tokio::test]
-#[should_panic(expected = "Recursive `Instance::run[_with]` calls not supported")]
-pub async fn panic_on_recursive_run() {
-    _ = test_panic(
-        test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
-        PanicKind::RecursiveRun,
-    )
-    .await;
-}
-
-async fn test_panic(component: &str, kind: PanicKind) -> Result<()> {
-    let inputs_and_outputs = &[("a", "b"), ("c", "d")];
-
-    let engine = Engine::new(&config())?;
-
-    let make_store = || {
-        Store::new(
-            &engine,
-            Ctx {
-                wasi: WasiCtxBuilder::new().inherit_stdio().build(),
-                table: ResourceTable::default(),
-                continue_: false,
-                wakers: Arc::new(Mutex::new(None)),
-            },
-        )
-    };
-
-    let component = make_component(&engine, &[component]).await?;
-
-    let mut linker = Linker::new(&engine);
-
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
-    component_async_tests::round_trip::bindings::local::local::baz::add_to_linker::<_, Ctx>(
-        &mut linker,
-        |ctx| ctx,
-    )?;
-
-    let mut store = make_store();
-
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let round_trip =
-        component_async_tests::round_trip::bindings::RoundTrip::new(&mut store, &instance)?;
-
-    // Start concurrent calls and then join them all:
-    let mut futures = FuturesUnordered::new();
-    for (input, output) in inputs_and_outputs {
-        let output = (*output).to_owned();
-        futures.push(
-            round_trip
-                .local_local_baz()
-                .call_foo(&mut store, (*input).to_owned())
-                .map(move |v| v.map(move |v| (v, output))),
-        );
-    }
-
-    match kind {
-        PanicKind::DirectAwait => {
-            // This should panic because we're polling it outside the instance's event loop:
-            _ = futures.try_next().await?;
-        }
-        PanicKind::WrongInstance => {
-            let instance = linker.instantiate_async(&mut store, &component).await?;
-            // This should panic because we're polling it in the wrong instance's event loop:
-            _ = instance.run(&mut store, futures.try_next()).await??;
-        }
-        PanicKind::RecursiveRun => {
-            instance
-                .run_with(&mut store, move |accessor| {
-                    Box::pin(async move {
-                        accessor.with(|mut access| {
-                            // This should panic because we're already being polled inside the event loop:
-                            _ = pin!(access.instance().run(&mut access, futures.try_next()))
-                                .poll(&mut Context::from_waker(&dummy_waker()));
-                        })
-                    })
-                })
-                .await?;
-        }
-    }
-
-    unreachable!()
-}
-
-fn dummy_waker() -> Waker {
-    struct DummyWaker;
-
-    impl Wake for DummyWaker {
-        fn wake(self: Arc<Self>) {}
-    }
-
-    static WAKER: Lazy<Arc<DummyWaker>> = Lazy::new(|| Arc::new(DummyWaker));
-
-    WAKER.clone().into()
 }

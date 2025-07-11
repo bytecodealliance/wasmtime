@@ -2453,10 +2453,7 @@ impl<'a> InterfaceGenerator<'a> {
 
         let wt = self.generator.wasmtime_path();
         if let CallStyle::Concurrent = style {
-            uwrite!(
-                self.src,
-                "move |caller: &mut {wt}::component::Accessor::<T>, ("
-            );
+            uwrite!(self.src, "move |caller: &{wt}::component::Accessor::<T>, (");
         } else {
             uwrite!(
                 self.src,
@@ -2651,7 +2648,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str("fn ");
         self.push_str(&rust_function_name(func));
         self.push_str(&if let CallStyle::Concurrent = &style {
-            format!("<T: 'static>(accessor: &mut {wt}::component::Accessor<T, Self>, ")
+            format!("<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, ")
         } else {
             "(&mut self, ".to_string()
         });
@@ -2728,7 +2725,7 @@ impl<'a> InterfaceGenerator<'a> {
         let (async_, async__, await_, concurrent) = match &style {
             CallStyle::Async | CallStyle::Concurrent => {
                 if self.generator.opts.concurrent_exports {
-                    ("", "INVALID", "INVALID", true)
+                    ("async", "_async", ".await", true)
                 } else {
                     ("async", "_async", ".await", false)
                 }
@@ -2741,9 +2738,17 @@ impl<'a> InterfaceGenerator<'a> {
 
         uwrite!(
             self.src,
-            "pub {async_} fn call_{}<S: {wt}::AsContextMut>(&self, mut store: S, ",
+            "pub {async_} fn call_{}",
             func.item_name().to_snake_case(),
         );
+        if concurrent {
+            uwrite!(
+                self.src,
+                "<_T, _D>(&self, accessor: &{wt}::component::Accessor<_T, _D>, ",
+            );
+        } else {
+            uwrite!(self.src, "<S: {wt}::AsContextMut>(&self, mut store: S, ",);
+        }
 
         let param_mode = if let CallStyle::Concurrent = &style {
             TypeMode::Owned
@@ -2757,37 +2762,23 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(",");
         }
 
-        if concurrent {
-            uwrite!(
-                self.src,
-                ") -> impl {wt}::component::__internal::Future<Output = {wt}::Result<"
-            );
-        } else {
-            uwrite!(self.src, ") -> {wt}::Result<");
-        }
+        uwrite!(self.src, ") -> {wt}::Result<");
         self.print_result_ty(func.result, TypeMode::Owned);
-        if concurrent {
-            uwrite!(self.src, ">> + Send + 'static + use<S>");
-        } else {
-            uwrite!(self.src, ">");
-        }
+        uwrite!(self.src, ">");
 
-        match style {
-            CallStyle::Concurrent => {
-                uwrite!(
-                    self.src,
-                    " where <S as {wt}::AsContext>::Data: Send + 'static",
-                );
+        if concurrent {
+            uwrite!(self.src, " where _T: Send, _D: {wt}::component::HasData");
+        } else {
+            match style {
+                CallStyle::Concurrent | CallStyle::Async => {
+                    uwrite!(self.src, " where <S as {wt}::AsContext>::Data: Send");
+                }
+                CallStyle::Sync => {}
             }
-            CallStyle::Async => {
-                uwrite!(self.src, " where <S as {wt}::AsContext>::Data: Send");
-            }
-            CallStyle::Sync => {}
         }
         uwrite!(self.src, "{{\n");
 
-        // TODO: support tracing concurrent calls
-        if self.generator.opts.tracing && !concurrent {
+        if self.generator.opts.tracing {
             if let CallStyle::Async | CallStyle::Concurrent = &style {
                 self.src.push_str("use tracing::Instrument;\n");
             }
@@ -2835,70 +2826,53 @@ impl<'a> InterfaceGenerator<'a> {
         );
         self.src.push_str("};\n");
 
+        self.src.push_str("let (");
+        if func.result.is_some() {
+            uwrite!(self.src, "ret0,");
+        }
         if concurrent {
-            if func.result.is_some() {
-                uwrite!(self.src, "let future =");
-            }
-            uwrite!(self.src, "callee.call_concurrent(store.as_context_mut(), (");
-            for (i, _) in func.params.iter().enumerate() {
-                uwrite!(self.src, "arg{i}, ");
-            }
-            self.src.push_str("))");
-
-            if func.result.is_some() {
-                self.src.push_str(";\n");
-                uwriteln!(
-                    self.src,
-                    "\
-async move {{
-    let (ret0,) = future.await?;
-    Ok(ret0)
-}}"
-                );
-            }
+            uwrite!(self.src, ") = callee.call_concurrent(accessor, (");
         } else {
-            self.src.push_str("let (");
-            if func.result.is_some() {
-                uwrite!(self.src, "ret0,");
-            }
             uwrite!(
                 self.src,
                 ") = callee.call{async__}(store.as_context_mut(), ("
             );
-            for (i, _) in func.params.iter().enumerate() {
-                uwrite!(self.src, "arg{}, ", i);
-            }
+        }
+        for (i, _) in func.params.iter().enumerate() {
+            uwrite!(self.src, "arg{}, ", i);
+        }
 
-            let instrument = if matches!(&style, CallStyle::Async | CallStyle::Concurrent)
-                && self.generator.opts.tracing
-            {
-                ".instrument(span.clone())"
-            } else {
-                ""
-            };
-            uwriteln!(self.src, ")){instrument}{await_}?;");
+        let instrument = if matches!(&style, CallStyle::Async | CallStyle::Concurrent)
+            && self.generator.opts.tracing
+        {
+            ".instrument(span.clone())"
+        } else {
+            ""
+        };
+        uwriteln!(self.src, ")){instrument}{await_}?;");
 
-            let instrument = if matches!(&style, CallStyle::Async | CallStyle::Concurrent)
-                && self.generator.opts.tracing
-            {
-                ".instrument(span)"
-            } else {
-                ""
-            };
+        let instrument = if matches!(&style, CallStyle::Async | CallStyle::Concurrent)
+            && self.generator.opts.tracing
+        {
+            ".instrument(span)"
+        } else {
+            ""
+        };
 
+        if !concurrent {
             uwriteln!(
                 self.src,
                 "callee.post_return{async__}(store.as_context_mut()){instrument}{await_}?;"
             );
-
-            self.src.push_str("Ok(");
-            if func.result.is_some() {
-                self.src.push_str("ret0");
-            } else {
-                self.src.push_str("()");
-            }
-            self.src.push_str(")\n");
         }
+
+        self.src.push_str("Ok(");
+        if func.result.is_some() {
+            self.src.push_str("ret0");
+        } else {
+            self.src.push_str("()");
+        }
+        self.src.push_str(")\n");
 
         // End function body
         self.src.push_str("}\n");
