@@ -55,9 +55,12 @@ windows-sys = { workspace = true }
 rustix = { workspace = true, features = ["event", "net"] }
 
 [features]
-default = [ "preview1"]
+default = ["preview1"]
 preview1 = [
     "dep:wiggle",
+]
+p3 = [
+    "wasmtime/component-model-async",
 ]
 
 [[test]]

@@ -1,4 +1,56 @@
-use cap_rand::RngCore;
+use cap_rand::{Rng as _, RngCore, SeedableRng as _};
+
+#[repr(transparent)]
+pub struct WasiRandomImpl<T>(pub T);
+
+impl<T: WasiRandomView> WasiRandomView for &mut T {
+    fn random(&mut self) -> &mut WasiRandomCtx {
+        (**self).random()
+    }
+}
+
+impl<T: WasiRandomView> WasiRandomView for WasiRandomImpl<T> {
+    fn random(&mut self) -> &mut WasiRandomCtx {
+        self.0.random()
+    }
+}
+
+impl WasiRandomView for WasiRandomCtx {
+    fn random(&mut self) -> &mut WasiRandomCtx {
+        self
+    }
+}
+
+pub trait WasiRandomView: Send {
+    fn random(&mut self) -> &mut WasiRandomCtx;
+}
+
+pub struct WasiRandomCtx {
+    pub random: Box<dyn RngCore + Send>,
+    pub insecure_random: Box<dyn RngCore + Send>,
+    pub insecure_random_seed: u128,
+}
+
+impl Default for WasiRandomCtx {
+    fn default() -> Self {
+        // For the insecure random API, use `SmallRng`, which is fast. It's
+        // also insecure, but that's the deal here.
+        let insecure_random = Box::new(
+            cap_rand::rngs::SmallRng::from_rng(cap_rand::thread_rng(cap_rand::ambient_authority()))
+                .unwrap(),
+        );
+        // For the insecure random seed, use a `u128` generated from
+        // `thread_rng()`, so that it's not guessable from the insecure_random
+        // API.
+        let insecure_random_seed =
+            cap_rand::thread_rng(cap_rand::ambient_authority()).r#gen::<u128>();
+        Self {
+            random: thread_rng(),
+            insecure_random,
+            insecure_random_seed,
+        }
+    }
+}
 
 /// Implement `insecure-random` using a deterministic cycle of bytes.
 pub struct Deterministic {
