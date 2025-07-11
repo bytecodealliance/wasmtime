@@ -16,7 +16,7 @@ use object::write::{
 };
 use object::{
     RelocationEncoding, RelocationFlags, RelocationKind, SectionFlags, SectionKind, SymbolFlags,
-    SymbolKind, SymbolScope,
+    SymbolKind, SymbolScope, elf,
 };
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -458,12 +458,20 @@ impl Module for ObjectModule {
                     let section = self.object.section_mut(section);
                     match &mut section.flags {
                         SectionFlags::None => {
+                            // Explicitly specify default flags as SectionFlags::Elf overwrites them
+                            let sh_flags = if decl.tls {
+                                elf::SHF_ALLOC | elf::SHF_WRITE | elf::SHF_TLS
+                            } else if decl.writable || !relocs.is_empty() {
+                                elf::SHF_ALLOC | elf::SHF_WRITE
+                            } else {
+                                elf::SHF_ALLOC
+                            };
                             section.flags = SectionFlags::Elf {
-                                sh_flags: object::elf::SHF_GNU_RETAIN.into(),
+                                sh_flags: u64::from(sh_flags | elf::SHF_GNU_RETAIN),
                             }
                         }
                         SectionFlags::Elf { sh_flags } => {
-                            *sh_flags |= u64::from(object::elf::SHF_GNU_RETAIN)
+                            *sh_flags |= u64::from(elf::SHF_GNU_RETAIN)
                         }
                         _ => unreachable!(),
                     }
@@ -472,8 +480,13 @@ impl Module for ObjectModule {
                 object::BinaryFormat::MachO => {
                     let symbol = self.object.symbol_mut(symbol);
                     assert!(matches!(symbol.flags, SymbolFlags::None));
+                    let n_desc = if decl.linkage == Linkage::Preemptible {
+                        object::macho::N_WEAK_DEF
+                    } else {
+                        0
+                    };
                     symbol.flags = SymbolFlags::MachO {
-                        n_desc: object::macho::N_NO_DEAD_STRIP,
+                        n_desc: n_desc | object::macho::N_NO_DEAD_STRIP,
                     }
                 }
                 _ => unreachable!(),
