@@ -21,11 +21,12 @@ pub fn generate_memory_export(
     store: &mut StoreOpaque,
     m: &MemoryType,
     preallocation: Option<&SharedMemory>,
-) -> Result<crate::runtime::vm::ExportMemory> {
+) -> Result<crate::Memory> {
+    let id = store.id();
     let instance = create_memory(store, m, preallocation)?;
     Ok(store
         .instance_mut(instance)
-        .get_exported_memory(MemoryIndex::from_u32(0)))
+        .get_exported_memory(id, MemoryIndex::from_u32(0)))
 }
 
 pub fn generate_table_export(store: &mut StoreOpaque, t: &TableType) -> Result<crate::Table> {

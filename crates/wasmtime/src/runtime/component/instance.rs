@@ -768,11 +768,12 @@ impl<'a> Instantiator<'a> {
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
         let mem = match lookup_vmexport(store, self.id, &memory.export) {
-            crate::runtime::vm::Export::Memory(m) => m,
+            crate::runtime::vm::Export::Memory { memory, .. } => memory,
             _ => unreachable!(),
         };
+        let import = mem.vmimport(store);
         self.instance_mut(store)
-            .set_runtime_memory(memory.index, mem.definition);
+            .set_runtime_memory(memory.index, import.from.as_non_null());
     }
 
     fn extract_realloc(&mut self, store: &mut StoreOpaque, realloc: &ExtractRealloc) {

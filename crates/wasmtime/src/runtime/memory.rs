@@ -1,6 +1,5 @@
 use crate::Trap;
 use crate::prelude::*;
-use crate::runtime::vm::VMMemoryImport;
 use crate::store::{StoreInstanceId, StoreOpaque};
 use crate::trampoline::generate_memory_export;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
@@ -286,10 +285,7 @@ impl Memory {
 
     /// Helper function for attaching the memory to a "frankenstein" instance
     fn _new(store: &mut StoreOpaque, ty: MemoryType) -> Result<Memory> {
-        unsafe {
-            let export = generate_memory_export(store, &ty, None)?;
-            Ok(Memory::from_wasmtime_memory(export, store))
-        }
+        generate_memory_export(store, &ty, None)
     }
 
     /// Returns the underlying type of this memory.
@@ -644,17 +640,13 @@ impl Memory {
         &self,
         store: &'a mut StoreOpaque,
     ) -> &'a mut crate::runtime::vm::Memory {
-        self.instance.get_mut(store).get_defined_memory(self.index)
+        self.instance
+            .get_mut(store)
+            .get_defined_memory_mut(self.index)
     }
 
-    pub(crate) unsafe fn from_wasmtime_memory(
-        wasmtime_export: crate::runtime::vm::ExportMemory,
-        store: &StoreOpaque,
-    ) -> Memory {
-        Memory {
-            instance: store.vmctx_id(wasmtime_export.vmctx),
-            index: wasmtime_export.index,
-        }
+    pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedMemoryIndex) -> Memory {
+        Memory { instance, index }
     }
 
     pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreOpaque) -> &'a wasmtime_environ::Memory {
@@ -1021,22 +1013,16 @@ impl SharedMemory {
     /// Construct a single-memory instance to provide a way to import
     /// [`SharedMemory`] into other modules.
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
-        let export_memory = generate_memory_export(store, &self.ty(), Some(&self.vm)).unwrap();
-        VMMemoryImport {
-            from: export_memory.definition.into(),
-            vmctx: export_memory.vmctx.into(),
-            index: export_memory.index,
-        }
+        generate_memory_export(store, &self.ty(), Some(&self.vm))
+            .unwrap()
+            .vmimport(store)
     }
 
     /// Create a [`SharedMemory`] from an [`ExportMemory`] definition. This
     /// function is available to handle the case in which a Wasm module exports
     /// shared memory and the user wants host-side access to it.
-    pub(crate) unsafe fn from_wasmtime_memory(
-        wasmtime_export: crate::runtime::vm::ExportMemory,
-        store: &StoreOpaque,
-    ) -> Self {
-        #[cfg_attr(
+    pub(crate) fn from_memory(mem: Memory, store: &StoreOpaque) -> Self {
+        #![cfg_attr(
             not(feature = "threads"),
             expect(
                 unused_variables,
@@ -1044,21 +1030,19 @@ impl SharedMemory {
                 reason = "definitions cfg'd to dummy",
             )
         )]
-        crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
-            let module = handle.env_module();
-            let memory_index = module.memory_index(wasmtime_export.index);
-            let page_size_log2 = module.memories[memory_index].page_size_log2;
 
-            let memory = handle.get_defined_memory(wasmtime_export.index);
-            match memory.as_shared_memory() {
-                Some(mem) => Self {
-                    vm: mem.clone(),
-                    engine: store.engine().clone(),
-                    page_size_log2,
-                },
-                None => panic!("unable to convert from a shared memory"),
-            }
-        })
+        let instance = mem.instance.get(store);
+        let memory = instance.get_defined_memory(mem.index);
+        let module = instance.env_module();
+        let page_size_log2 = module.memories[module.memory_index(mem.index)].page_size_log2;
+        match memory.as_shared_memory() {
+            Some(mem) => Self {
+                vm: mem.clone(),
+                engine: store.engine().clone(),
+                page_size_log2,
+            },
+            None => panic!("unable to convert from a shared memory"),
+        }
     }
 }
 

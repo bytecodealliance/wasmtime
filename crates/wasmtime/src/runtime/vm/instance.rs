@@ -13,8 +13,8 @@ use crate::runtime::vm::vmcontext::{
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    ExportFunction, ExportMemory, GcStore, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef,
-    VMGlobalKind, VMStore, VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
+    ExportFunction, GcStore, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMGlobalKind,
+    VMStore, VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
 };
 use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque};
 use alloc::sync::Arc;
@@ -603,24 +603,19 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `index` is out-of-bounds for this instance.
-    pub fn get_exported_memory(&self, index: MemoryIndex) -> ExportMemory {
-        let (definition, vmctx, def_index) =
-            if let Some(def_index) = self.env_module().defined_memory_index(index) {
-                (self.memory_ptr(def_index), self.vmctx(), def_index)
-            } else {
-                let import = self.imported_memory(index);
-                (
-                    import.from.as_non_null(),
-                    import.vmctx.as_non_null(),
-                    import.index,
-                )
-            };
-        ExportMemory {
-            definition,
-            vmctx,
-            memory: self.env_module().memories[index],
-            index: def_index,
-        }
+    pub fn get_exported_memory(&self, store: StoreId, index: MemoryIndex) -> crate::Memory {
+        let (id, def_index) = if let Some(def_index) = self.env_module().defined_memory_index(index)
+        {
+            (self.id, def_index)
+        } else {
+            let import = self.imported_memory(index);
+            // SAFETY: validity of this `Instance` guarantees validity of the
+            // `vmctx` pointer being read here to find the transitive
+            // `InstanceId` that the import is associated with.
+            let id = unsafe { Instance::vmctx_instance_id(import.vmctx.as_non_null()) };
+            (id, import.index)
+        };
+        crate::Memory::from_raw(StoreInstanceId::new(store, id), def_index)
     }
 
     fn get_exported_global(&self, store: StoreId, index: GlobalIndex) -> crate::Global {
@@ -1041,8 +1036,13 @@ impl Instance {
     }
 
     /// Get a locally-defined memory.
-    pub fn get_defined_memory(self: Pin<&mut Self>, index: DefinedMemoryIndex) -> &mut Memory {
+    pub fn get_defined_memory_mut(self: Pin<&mut Self>, index: DefinedMemoryIndex) -> &mut Memory {
         &mut self.memories_mut()[index].1
+    }
+
+    /// Get a locally-defined memory.
+    pub fn get_defined_memory(&self, index: DefinedMemoryIndex) -> &Memory {
+        &self.memories[index].1
     }
 
     /// Do a `memory.copy`
@@ -1467,19 +1467,21 @@ impl Instance {
     /// Gives access to the full memories space.
     pub fn all_memories<'a>(
         &'a self,
-    ) -> impl ExactSizeIterator<Item = (MemoryIndex, ExportMemory)> + 'a {
-        let indices = (0..self.env_module().memories.len())
-            .map(|i| MemoryIndex::new(i))
-            .collect::<Vec<_>>();
-        indices
-            .into_iter()
-            .map(|i| (i, self.get_exported_memory(i)))
+        store: StoreId,
+    ) -> impl ExactSizeIterator<Item = (MemoryIndex, crate::Memory)> + 'a {
+        self.env_module()
+            .memories
+            .iter()
+            .map(move |(i, _)| (i, self.get_exported_memory(store, i)))
     }
 
     /// Return the memories defined in this instance (not imported).
-    pub fn defined_memories<'a>(&'a self) -> impl ExactSizeIterator<Item = ExportMemory> + 'a {
+    pub fn defined_memories<'a>(
+        &'a self,
+        store: StoreId,
+    ) -> impl ExactSizeIterator<Item = crate::Memory> + 'a {
         let num_imported = self.env_module().num_imported_memories;
-        self.all_memories()
+        self.all_memories(store)
             .skip(num_imported)
             .map(|(_i, memory)| memory)
     }
@@ -1498,7 +1500,10 @@ impl Instance {
             EntityIndex::Function(i) => Export::Function(self.get_exported_func(i)),
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(store, i)),
             EntityIndex::Table(i) => Export::Table(self.get_exported_table(store, i)),
-            EntityIndex::Memory(i) => Export::Memory(self.get_exported_memory(i)),
+            EntityIndex::Memory(i) => Export::Memory {
+                memory: self.get_exported_memory(store, i),
+                shared: self.env_module().memories[i].shared,
+            },
             EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(store, i)),
         }
     }

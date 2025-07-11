@@ -1,6 +1,5 @@
-use crate::runtime::vm::vmcontext::{VMContext, VMFuncRef, VMMemoryDefinition};
+use crate::runtime::vm::vmcontext::VMFuncRef;
 use core::ptr::NonNull;
-use wasmtime_environ::{DefinedMemoryIndex, Memory};
 
 /// The value of an export passed from one instance to another.
 pub enum Export {
@@ -11,7 +10,7 @@ pub enum Export {
     Table(crate::Table),
 
     /// A memory export value.
-    Memory(ExportMemory),
+    Memory { memory: crate::Memory, shared: bool },
 
     /// A global export value.
     Global(crate::Global),
@@ -39,28 +38,5 @@ unsafe impl Sync for ExportFunction {}
 impl From<ExportFunction> for Export {
     fn from(func: ExportFunction) -> Export {
         Export::Function(func)
-    }
-}
-
-/// A memory export value.
-#[derive(Debug, Clone)]
-pub struct ExportMemory {
-    /// The address of the memory descriptor.
-    pub definition: NonNull<VMMemoryDefinition>,
-    /// Pointer to the containing `VMContext`.
-    pub vmctx: NonNull<VMContext>,
-    /// The memory declaration, used for compatibility checking.
-    pub memory: Memory,
-    /// The index at which the memory is defined within the `vmctx`.
-    pub index: DefinedMemoryIndex,
-}
-
-// See docs on send/sync for `ExportFunction` above.
-unsafe impl Send for ExportMemory {}
-unsafe impl Sync for ExportMemory {}
-
-impl From<ExportMemory> for Export {
-    fn from(func: ExportMemory) -> Export {
-        Export::Memory(func)
     }
 }

@@ -568,13 +568,10 @@ impl Instance {
     #[cfg(feature = "coredump")]
     pub(crate) fn all_memories<'a>(
         &'a self,
-        store: &'a mut StoreOpaque,
+        store: &'a StoreOpaque,
     ) -> impl ExactSizeIterator<Item = (MemoryIndex, Memory)> + 'a {
-        store[self.id]
-            .all_memories()
-            .collect::<Vec<_>>()
-            .into_iter()
-            .map(|(i, m)| (i, unsafe { Memory::from_wasmtime_memory(m, store) }))
+        let store_id = store.id();
+        store[self.id].all_memories(store_id)
     }
 }
 
@@ -667,12 +664,8 @@ impl OwnedImports {
             crate::runtime::vm::Export::Table(t) => {
                 self.tables.push(t.vmimport(store));
             }
-            crate::runtime::vm::Export::Memory(m) => {
-                self.memories.push(VMMemoryImport {
-                    from: m.definition.into(),
-                    vmctx: m.vmctx.into(),
-                    index: m.index,
-                });
+            crate::runtime::vm::Export::Memory { memory, .. } => {
+                self.memories.push(memory.vmimport(store));
             }
             crate::runtime::vm::Export::Tag(t) => {
                 self.tags.push(t.vmimport(store));

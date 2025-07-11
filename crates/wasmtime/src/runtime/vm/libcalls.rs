@@ -1061,7 +1061,7 @@ fn memory_atomic_notify(
 ) -> Result<u32, Trap> {
     let memory = DefinedMemoryIndex::from_u32(memory_index);
     instance
-        .get_defined_memory(memory)
+        .get_defined_memory_mut(memory)
         .atomic_notify(addr_index, count)
 }
 
@@ -1078,7 +1078,7 @@ fn memory_atomic_wait32(
     let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
     let memory = DefinedMemoryIndex::from_u32(memory_index);
     Ok(instance
-        .get_defined_memory(memory)
+        .get_defined_memory_mut(memory)
         .atomic_wait32(addr_index, expected, timeout)? as u32)
 }
 
@@ -1095,7 +1095,7 @@ fn memory_atomic_wait64(
     let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
     let memory = DefinedMemoryIndex::from_u32(memory_index);
     Ok(instance
-        .get_defined_memory(memory)
+        .get_defined_memory_mut(memory)
         .atomic_wait64(addr_index, expected, timeout)? as u32)
 }
 
