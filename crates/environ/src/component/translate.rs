@@ -567,14 +567,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                     CoreDef::InstanceFlags(_) => unreachable!("instance flags are not a function"),
 
                     // We could in theory inline these trampolines, so it could
-                    // make sense to record that we know this imported function
-                    // is this particular trampoline. However, everything else
-                    // is based around (module, defined-function) pairs and
-                    // trampolines don't fit that paradigm. Also, things get
-                    // really tricky when we consider the stack pointer, frame
-                    // pointer, and return address note-taking that trampolines
-                    // do for the stack walker. Therefore, we don't bother
-                    // turning these into inlinable direct calls.
+                    // potentially make sense to record that we know this
+                    // imported function is this particular trampoline. However,
+                    // everything else is based around (module,
+                    // defined-function) pairs and these trampolines don't fit
+                    // that paradigm. Also, inlining trampolines gets really
+                    // tricky when we consider the stack pointer, frame pointer,
+                    // and return address note-taking that they do for the
+                    // purposes of stack walking. We could, with enough effort,
+                    // turn them into direct calls even though we probably
+                    // wouldn't ever inline them, but it just doesn't seem worth
+                    // the effort.
                     CoreDef::Trampoline(_) => continue,
 
                     // This imported function is an export from another
@@ -607,6 +610,10 @@ impl<'a, 'data> Translator<'a, 'data> {
                             continue;
                         };
 
+                        assert!(
+                            self.static_modules[module].known_imported_functions[imported_func]
+                                .is_none()
+                        );
                         self.static_modules[module].known_imported_functions[imported_func] =
                             Some((*arg_module, arg_module_def_func));
                     }
