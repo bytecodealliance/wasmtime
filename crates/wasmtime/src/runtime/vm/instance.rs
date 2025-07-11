@@ -719,19 +719,7 @@ impl Instance {
     ///
     /// Returns `None` if table can't be grown by the specified amount of
     /// elements, or if `init_value` is the wrong type of table element.
-    pub(crate) fn table_grow(
-        self: Pin<&mut Self>,
-        store: &mut dyn VMStore,
-        table_index: TableIndex,
-        delta: u64,
-        init_value: TableElement,
-    ) -> Result<Option<usize>, Error> {
-        self.with_defined_table_index_and_instance(table_index, |i, instance| {
-            instance.defined_table_grow(store, i, delta, init_value)
-        })
-    }
-
-    fn defined_table_grow(
+    pub(crate) fn defined_table_grow(
         mut self: Pin<&mut Self>,
         store: &mut dyn VMStore,
         table_index: DefinedTableIndex,

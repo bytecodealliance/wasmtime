@@ -1590,6 +1590,36 @@ where
             }
         }
     }
+
+    /// Same as `prepare_builtin_defined_memory_arg`, but for tables.
+    pub fn prepare_builtin_defined_table_arg(
+        &mut self,
+        table: TableIndex,
+        defined_index_at: usize,
+        builtin: BuiltinFunction,
+    ) -> Result<Callee> {
+        match self.env.translation.module.defined_table_index(table) {
+            Some(defined) => {
+                self.context
+                    .stack
+                    .insert_many(defined_index_at, &[defined.as_u32().try_into()?]);
+                Ok(Callee::Builtin(builtin))
+            }
+            None => {
+                let vmimport = self.env.vmoffsets.vmctx_vmtable_import(table);
+                let vmctx_offset = vmimport + u32::from(self.env.vmoffsets.vmtable_import_vmctx());
+                let index_offset = vmimport + u32::from(self.env.vmoffsets.vmtable_import_index());
+                let index_addr = self.masm.address_at_vmctx(index_offset)?;
+                let index_dst = self.context.reg_for_class(RegClass::Int, self.masm)?;
+                self.masm
+                    .load(index_addr, writable!(index_dst), OperandSize::S32)?;
+                self.context
+                    .stack
+                    .insert_many(defined_index_at, &[Val::reg(index_dst, WasmValType::I32)]);
+                Ok(Callee::BuiltinWithDifferentVmctx(builtin, vmctx_offset))
+            }
+        }
+    }
 }
 
 /// Returns the index of the [`ControlStackFrame`] for the given

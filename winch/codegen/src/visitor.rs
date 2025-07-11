@@ -1718,14 +1718,10 @@ where
         // but the builtin function expects the init value as the last
         // argument.
         self.context.stack.inner_mut().swap(len - 1, len - 2);
-        self.context.stack.insert_many(at, &[table.try_into()?]);
 
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin.clone()),
-        )?;
+        let builtin = self.prepare_builtin_defined_table_arg(table_index, at, builtin)?;
+
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
 
         Ok(())
     }

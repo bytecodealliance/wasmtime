@@ -1814,14 +1814,14 @@ impl FuncEnvironment<'_> {
             self.builtin_functions.table_grow_func_ref(&mut pos.func)
         };
 
-        let vmctx = self.vmctx_val(&mut pos);
+        let (table_vmctx, defined_table_index) =
+            self.table_vmctx_and_defined_index(&mut pos, table_index);
 
         let index_type = table.idx_type;
         let delta = self.cast_index_to_i64(&mut pos, delta, index_type);
-        let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
         let call_inst = pos
             .ins()
-            .call(grow, &[vmctx, table_index_arg, delta, init_value]);
+            .call(grow, &[table_vmctx, defined_table_index, delta, init_value]);
         let result = pos.func.dfg.first_result(call_inst);
         Ok(self.convert_pointer_to_index_type(builder.cursor(), result, index_type, false))
     }
@@ -2765,6 +2765,42 @@ impl FuncEnvironment<'_> {
                     ir::MemFlags::trusted(),
                     cur_vmctx,
                     i32::try_from(vmimport + u32::from(self.offsets.vmmemory_import_index()))
+                        .unwrap(),
+                );
+                (vmctx, index)
+            }
+        }
+    }
+
+    /// Returns two `ir::Value`s, the first of which is the vmctx for the table
+    /// `index` and the second of which is the `DefinedTableIndex` for `index`.
+    ///
+    /// Handles internally whether `index` is an imported table or not.
+    fn table_vmctx_and_defined_index(
+        &mut self,
+        pos: &mut FuncCursor,
+        index: TableIndex,
+    ) -> (ir::Value, ir::Value) {
+        // NB: the body of this method is similar to
+        // `memory_vmctx_and_defined_index` above.
+        let cur_vmctx = self.vmctx_val(pos);
+        match self.module.defined_table_index(index) {
+            Some(index) => (cur_vmctx, pos.ins().iconst(I32, i64::from(index.as_u32()))),
+            None => {
+                let vmimport = self.offsets.vmctx_vmtable_import(index);
+
+                let vmctx = pos.ins().load(
+                    self.isa.pointer_type(),
+                    ir::MemFlags::trusted(),
+                    cur_vmctx,
+                    i32::try_from(vmimport + u32::from(self.offsets.vmtable_import_vmctx()))
+                        .unwrap(),
+                );
+                let index = pos.ins().load(
+                    ir::types::I32,
+                    ir::MemFlags::trusted(),
+                    cur_vmctx,
+                    i32::try_from(vmimport + u32::from(self.offsets.vmtable_import_index()))
                         .unwrap(),
                 );
                 (vmctx, index)
