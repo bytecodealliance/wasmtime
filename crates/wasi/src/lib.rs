@@ -11,6 +11,7 @@
 //! For WASIp1 and core modules, see the [`preview1`] module documentation.
 
 mod clocks;
+mod ctx;
 mod error;
 mod fs;
 mod net;
@@ -23,6 +24,7 @@ mod random;
 pub mod runtime;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
+pub(crate) use self::ctx::WasiCtxBuilder;
 pub use self::error::{I32Exit, TrappableError};
 pub use self::fs::{DirPerms, FilePerms, OpenMode};
 pub use self::net::{Network, SocketAddrUse};
