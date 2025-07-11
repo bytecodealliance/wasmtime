@@ -1,8 +1,7 @@
-use crate::clocks::host::{monotonic_clock, wall_clock};
-use crate::clocks::{HostMonotonicClock, HostWallClock};
+use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
 use crate::net::{SocketAddrCheck, SocketAddrUse};
-use crate::random;
-use cap_rand::{Rng, RngCore, SeedableRng};
+use crate::random::WasiRandomCtx;
+use cap_rand::RngCore;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -20,12 +19,9 @@ use std::sync::Arc;
 pub(crate) struct WasiCtxBuilder {
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
+    pub(crate) random: WasiRandomCtx,
+    pub(crate) clocks: WasiClocksCtx,
     pub(crate) socket_addr_check: SocketAddrCheck,
-    pub(crate) random: Box<dyn RngCore + Send>,
-    pub(crate) insecure_random: Box<dyn RngCore + Send>,
-    pub(crate) insecure_random_seed: u128,
-    pub(crate) wall_clock: Box<dyn HostWallClock + Send>,
-    pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
     pub(crate) allow_blocking_current_thread: bool,
 }
@@ -49,27 +45,14 @@ impl WasiCtxBuilder {
     /// These defaults can all be updated via the various builder configuration
     /// methods below.
     pub(crate) fn new() -> Self {
-        // For the insecure random API, use `SmallRng`, which is fast. It's
-        // also insecure, but that's the deal here.
-        let insecure_random = Box::new(
-            cap_rand::rngs::SmallRng::from_rng(cap_rand::thread_rng(cap_rand::ambient_authority()))
-                .unwrap(),
-        );
-
-        // For the insecure random seed, use a `u128` generated from
-        // `thread_rng()`, so that it's not guessable from the insecure_random
-        // API.
-        let insecure_random_seed =
-            cap_rand::thread_rng(cap_rand::ambient_authority()).r#gen::<u128>();
+        let random = WasiRandomCtx::default();
+        let clocks = WasiClocksCtx::default();
         Self {
             env: Vec::new(),
             args: Vec::new(),
+            random,
+            clocks,
             socket_addr_check: SocketAddrCheck::default(),
-            random: random::thread_rng(),
-            insecure_random,
-            insecure_random_seed,
-            wall_clock: wall_clock(),
-            monotonic_clock: monotonic_clock(),
             allowed_network_uses: AllowedNetworkUses::default(),
             allow_blocking_current_thread: false,
         }
@@ -169,7 +152,7 @@ impl WasiCtxBuilder {
     /// and ideally should use the insecure random API otherwise, so using any
     /// prerecorded or otherwise predictable data may compromise security.
     pub fn secure_random(&mut self, random: impl RngCore + Send + 'static) -> &mut Self {
-        self.random = Box::new(random);
+        self.random.random = Box::new(random);
         self
     }
 
@@ -178,7 +161,7 @@ impl WasiCtxBuilder {
     /// The `insecure_random` generator provided will be used for all randomness
     /// requested by the `wasi:random/insecure` interface.
     pub fn insecure_random(&mut self, insecure_random: impl RngCore + Send + 'static) -> &mut Self {
-        self.insecure_random = Box::new(insecure_random);
+        self.random.insecure_random = Box::new(insecure_random);
         self
     }
 
@@ -187,7 +170,7 @@ impl WasiCtxBuilder {
     ///
     /// By default this number is randomly generated when a builder is created.
     pub fn insecure_random_seed(&mut self, insecure_random_seed: u128) -> &mut Self {
-        self.insecure_random_seed = insecure_random_seed;
+        self.random.insecure_random_seed = insecure_random_seed;
         self
     }
 
@@ -195,7 +178,7 @@ impl WasiCtxBuilder {
     ///
     /// By default the host's wall clock is used.
     pub fn wall_clock(&mut self, clock: impl HostWallClock + 'static) -> &mut Self {
-        self.wall_clock = Box::new(clock);
+        self.clocks.wall_clock = Box::new(clock);
         self
     }
 
@@ -203,7 +186,7 @@ impl WasiCtxBuilder {
     ///
     /// By default the host's monotonic clock is used.
     pub fn monotonic_clock(&mut self, clock: impl HostMonotonicClock + 'static) -> &mut Self {
-        self.monotonic_clock = Box::new(clock);
+        self.clocks.monotonic_clock = Box::new(clock);
         self
     }
 

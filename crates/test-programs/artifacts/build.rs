@@ -78,6 +78,7 @@ impl Artifacts {
                 s if s.starts_with("config_") => "config",
                 s if s.starts_with("keyvalue_") => "keyvalue",
                 s if s.starts_with("tls_") => "tls",
+                s if s.starts_with("p3_") => "p3",
                 // If you're reading this because you hit this panic, either add
                 // it to a test suite above or add a new "suite". The purpose of
                 // the categorization above is to have a static assertion that
@@ -100,6 +101,7 @@ impl Artifacts {
             }
             let adapter = match test.name.as_str() {
                 "reactor" => &reactor_adapter,
+                s if s.starts_with("p3_") => &reactor_adapter,
                 s if s.starts_with("api_proxy") => &proxy_adapter,
                 _ => &command_adapter,
             };
