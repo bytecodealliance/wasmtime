@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use component_async_tests::util::test_run;
+use super::util::test_run;
 
 // No-op function; we only test this by composing it in `async_post_return_caller`
 #[allow(

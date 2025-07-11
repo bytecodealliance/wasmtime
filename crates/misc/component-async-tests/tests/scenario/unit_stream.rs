@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use component_async_tests::util::test_run_with_count;
+use super::util::test_run_with_count;
 
 // No-op function; we only test this by composing it in `async_unit_stream_caller`
 #[allow(

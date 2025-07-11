@@ -2,7 +2,11 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
+use super::util::{config, make_component, test_run, test_run_with_count};
 use anyhow::{Result, anyhow};
+use cancel::exports::local::local::cancel::Mode;
+use component_async_tests::transmit::bindings::exports::local::local::transmit::Control;
+use component_async_tests::{Ctx, sleep, transmit};
 use futures::{
     future::{self, FutureExt},
     stream::{FuturesUnordered, TryStreamExt},
@@ -13,12 +17,6 @@ use wasmtime::component::{
 };
 use wasmtime::{AsContextMut, Engine, Store};
 use wasmtime_wasi::p2::WasiCtxBuilder;
-
-use component_async_tests::transmit::bindings::exports::local::local::transmit::Control;
-use component_async_tests::util::{config, make_component, test_run, test_run_with_count};
-use component_async_tests::{Ctx, sleep, transmit};
-
-use cancel::exports::local::local::cancel::Mode;
 
 #[tokio::test]
 pub async fn async_poll_synchronous() -> Result<()> {

@@ -1,14 +1,14 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use super::util::{config, make_component};
 use anyhow::{Result, anyhow};
+use component_async_tests::Ctx;
+use component_async_tests::util::sleep;
 use futures::stream::{FuturesUnordered, TryStreamExt};
 use wasmtime::component::{Linker, ResourceTable, Val};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::p2::WasiCtxBuilder;
-
-use component_async_tests::Ctx;
-use component_async_tests::util::{config, make_component, sleep};
 
 #[tokio::test]
 pub async fn async_round_trip_direct_stackless() -> Result<()> {

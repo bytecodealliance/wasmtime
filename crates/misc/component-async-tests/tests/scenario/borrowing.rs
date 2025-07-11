@@ -2,13 +2,12 @@ use std::env;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use super::util::{config, make_component};
 use anyhow::Result;
 use futures::stream::{FuturesUnordered, TryStreamExt};
 use wasmtime::component::{Linker, ResourceTable};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::p2::WasiCtxBuilder;
-
-use component_async_tests::util::{config, make_component};
 
 #[tokio::test]
 pub async fn async_borrowing_caller() -> Result<()> {

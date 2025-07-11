@@ -22,7 +22,6 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
   "time",
 ] }
-wasm-compose = { workspace = true }
 wasmparser = { workspace = true }
 wasmtime = { workspace = true, features = [
   "default",
@@ -33,6 +32,7 @@ wasmtime = { workspace = true, features = [
 wasmtime-wasi = { workspace = true }
 
 [dev-dependencies]
+wasm-compose = { workspace = true }
 test-programs-artifacts = { workspace = true }
 bytes = { workspace = true }
 once_cell = { version = "1.12.0" }

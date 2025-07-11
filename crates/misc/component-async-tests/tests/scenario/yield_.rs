@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use component_async_tests::util::test_run;
+use super::util::test_run;
 
 // No-op function; we only test this by composing it in
 // `async_yield_callee_synchronous` and `async_yield_callee_stackful`

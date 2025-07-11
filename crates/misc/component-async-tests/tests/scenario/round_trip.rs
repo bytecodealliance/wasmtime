@@ -7,7 +7,10 @@ use std::sync::{
 use std::task::{Context, Wake, Waker};
 use std::time::Duration;
 
+use super::util::{config, make_component};
 use anyhow::{Result, anyhow};
+use component_async_tests::Ctx;
+use component_async_tests::util::sleep;
 use futures::{
     FutureExt,
     channel::oneshot,
@@ -17,10 +20,6 @@ use once_cell::sync::Lazy;
 use wasmtime::component::{Accessor, AccessorTask, HasSelf, Instance, Linker, ResourceTable, Val};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::p2::WasiCtxBuilder;
-
-use component_async_tests::Ctx;
-
-pub use component_async_tests::util::{config, make_component, sleep};
 
 #[tokio::test]
 pub async fn async_round_trip_stackful() -> Result<()> {

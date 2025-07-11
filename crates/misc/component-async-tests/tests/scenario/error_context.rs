@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use component_async_tests::util::test_run;
+use super::util::test_run;
 
 #[tokio::test]
 pub async fn async_error_context() -> Result<()> {

@@ -1,9 +1,7 @@
 use {
+    super::util::{config, make_component},
     anyhow::Result,
-    component_async_tests::{
-        Ctx, closed_streams,
-        util::{config, make_component},
-    },
+    component_async_tests::{Ctx, closed_streams},
     futures::{
         future::{self, FutureExt},
         stream::{FuturesUnordered, StreamExt, TryStreamExt},
