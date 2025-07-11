@@ -2,9 +2,10 @@ use crate::component::ResourceType;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::prelude::*;
-use crate::rr::events::component_wasm::{
-    MemorySliceBorrowEvent, ReallocEntryEvent, ReallocReturnEvent,
+use crate::runtime::rr::events::component_wasm::{
+    MemorySliceWriteEvent, ReallocEntryEvent, ReallocReturnEvent,
 };
+use crate::runtime::rr::{RREvent, RecordBuffer, Recorder, ReplayError};
 use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
 };
@@ -12,8 +13,98 @@ use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
 use crate::{FuncType, StoreContextMut};
 use alloc::sync::Arc;
+use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
+
+/// Same as [`ConstMemorySliceCell`] except allows for dynamically sized slices.
+///
+/// Prefer the above for efficiency if slice size is known statically.
+///
+/// **Note**: The correct operation of this type relies of several invariants.
+/// See [`ConstMemorySliceCell`] for detailed description on the role
+/// of these types.
+pub struct MemorySliceCell<'a> {
+    offset: usize,
+    bytes: &'a mut [u8],
+    recorder: Option<&'a mut RecordBuffer>,
+}
+impl<'a> Deref for MemorySliceCell<'a> {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        self.bytes
+    }
+}
+impl DerefMut for MemorySliceCell<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.bytes
+    }
+}
+impl Drop for MemorySliceCell<'_> {
+    /// Drop serves as a recording hook for stores to the memory slice
+    fn drop(&mut self) {
+        if let Some(buf) = &mut self.recorder {
+            buf.push_event(RREvent::ComponentMemorySliceWrite(
+                MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()),
+            ));
+        }
+    }
+}
+
+/// Zero-cost encapsulation type for a statically sized slice of mutable memory
+///
+/// # Purpose and Usage (Read Carefully!)
+///
+/// This type (and its dynamic counterpart [`MemorySliceCell`]) are critical to
+/// record/replay (RR) support in Wasmtime. In practice, all lowering operations utilize
+/// a [`LowerContext`], which provides a capability to modify guest Wasm module state in
+/// the following ways:
+///
+/// 1. Write to slices of memory with [`get`](LowerContext::get)/[`get_dyn`](LowerContext::get_dyn)
+/// 2. Movement of memory with [`realloc`](LowerContext::realloc)
+///
+/// The above are intended to be the narrow waists for recording changes to guest state, and
+/// should be the **only** interfaces used during lowerng. In particular,
+/// [`get`](LowerContext::get)/[`get_dyn`](LowerContext::get_dyn) return
+/// ([`ConstMemorySliceCell`]/[`MemorySliceCell`]), which implement [`Drop`]
+/// allowing us a hook to just capture the final aggregate changes made to guest memory by the host.
+///
+/// ## Critical Invariants
+///
+/// Typically recording would need to know both when the slice was borrowed AND when it was
+/// dropped, since memory movement with [`realloc`](LowerContext::realloc) can be interleave between
+/// borrows and drops, and replays would have to be aware of this. **However**, with this abstraction,
+/// we can be more efficient and get away with **only** recording drops, because of the implicit interaction between
+/// [`realloc`](LowerContext::realloc) and [`get`](LowerContext::get)/[`get_dyn`](LowerContext::get_dyn),
+/// which both take a `&mut self`. Since the latter implements [`Drop`], which also takes a `&mut self`,
+/// the compiler will automatically enforce that drops of this type need to be triggered before a
+/// [`realloc`](LowerContext::realloc), preventing any interleavings in between the borrow and drop of the slice.
+pub struct ConstMemorySliceCell<'a, const N: usize> {
+    offset: usize,
+    bytes: &'a mut [u8; N],
+    recorder: Option<&'a mut RecordBuffer>,
+}
+impl<'a, const N: usize> Deref for ConstMemorySliceCell<'a, N> {
+    type Target = [u8; N];
+    fn deref(&self) -> &Self::Target {
+        self.bytes
+    }
+}
+impl<'a, const N: usize> DerefMut for ConstMemorySliceCell<'a, N> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.bytes
+    }
+}
+impl<'a, const N: usize> Drop for ConstMemorySliceCell<'a, N> {
+    /// Drops serves as a recording hook for stores to the memory slice
+    fn drop(&mut self) {
+        if let Some(buf) = &mut self.recorder {
+            buf.push_event(RREvent::ComponentMemorySliceWrite(
+                MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()),
+            ));
+        }
+    }
+}
 
 /// Runtime representation of canonical ABI options in the component model.
 ///
@@ -157,6 +248,21 @@ impl Options {
         }
     }
 
+    /// Same as above, but also obtain the record buffer from the encapsulating store
+    fn memory_mut_with_recorder<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> (&'a mut [u8], Option<&'a mut RecordBuffer>) {
+        self.store_id.assert_belongs_to(store.id());
+
+        // See comments in `memory` about the unsafety
+        let memslice = unsafe {
+            let memory = self.memory.unwrap().as_ref();
+            core::slice::from_raw_parts_mut(memory.base.as_ptr(), memory.current_length())
+        };
+        (memslice, store.record_buffer_mut())
+    }
+
     /// Returns the underlying encoding used for strings in this
     /// lifting/lowering.
     pub fn string_encoding(&self) -> StringEncoding {
@@ -226,14 +332,15 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         }
     }
 
-    /// Returns a view into memory as a mutable slice of bytes.
+    /// Returns a view into memory as a mutable slice of bytes along with the
+    /// record buffer to record state.
     ///
     /// # Panics
     ///
     /// This will panic if memory has not been configured for this lowering
     /// (e.g. it wasn't present during the specification of canonical options).
-    fn as_slice_mut(&mut self) -> &mut [u8] {
-        self.options.memory_mut(self.store.0)
+    fn as_slice_mut_with_recorder(&mut self) -> (&mut [u8], Option<&mut RecordBuffer>) {
+        self.options.memory_mut_with_recorder(self.store.0)
     }
 
     /// Returns a view into memory as an immutable slice of bytes.
@@ -244,6 +351,26 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// (e.g. it wasn't present during the specification of canonical options).
     pub fn as_slice(&mut self) -> &[u8] {
         self.options.memory(self.store.0)
+    }
+
+    fn realloc_inner(
+        &mut self,
+        old: usize,
+        old_size: usize,
+        old_align: u32,
+        new_size: usize,
+    ) -> Result<usize> {
+        let realloc_func_ty = Arc::clone(unsafe { (*self.instance).component().realloc_func_ty() });
+        self.options
+            .realloc(
+                &mut self.store,
+                &realloc_func_ty,
+                old,
+                old_size,
+                old_align,
+                new_size,
+            )
+            .map(|(_, ptr)| ptr)
     }
 
     /// Invokes the memory allocation function (which is style after `realloc`)
@@ -260,23 +387,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         old_align: u32,
         new_size: usize,
     ) -> Result<usize> {
-        let realloc_func_ty = Arc::clone(unsafe { (*self.instance).component().realloc_func_ty() });
-
         self.store.0.record_event(
             |_| true,
             |_| ReallocEntryEvent::new(old, old_size, old_align, new_size),
         );
-        let result = self
-            .options
-            .realloc(
-                &mut self.store,
-                &realloc_func_ty,
-                old,
-                old_size,
-                old_align,
-                new_size,
-            )
-            .map(|(_, ptr)| ptr);
+        let result = self.realloc_inner(old, old_size, old_align, new_size);
         self.store
             .0
             .record_event(|r| r.add_validation, |_| ReallocReturnEvent::new(&result));
@@ -293,13 +408,9 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     ///
     /// This will panic if memory has not been configured for this lowering
     /// (e.g. it wasn't present during the specification of canonical options).
-    pub fn get<const N: usize>(&mut self, offset: usize) -> &mut [u8; N] {
-        // Accessing the store for event recording after getting the slice is
-        // tricky to resolve by the borrow checker. Instead, we just record before
-        // since this operation panics anyway, and the replay should still be faithful
-        self.store
-            .0
-            .record_event(|_| true, |_| MemorySliceBorrowEvent::new(offset, N));
+    #[inline]
+    pub fn get<const N: usize>(&mut self, offset: usize) -> ConstMemorySliceCell<N> {
+        let (slice_mut, recorder) = self.as_slice_mut_with_recorder();
         // FIXME: this bounds check shouldn't actually be necessary, all
         // callers of `ComponentType::store` have already performed a bounds
         // check so we're guaranteed that `offset..offset+N` is in-bounds. That
@@ -310,7 +421,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         // For now I figure we can leave in this bounds check and if it becomes
         // an issue we can optimize further later, probably with judicious use
         // of `unsafe`.
-        self.as_slice_mut()[offset..].first_chunk_mut().unwrap()
+        ConstMemorySliceCell {
+            offset: offset,
+            bytes: slice_mut[offset..].first_chunk_mut().unwrap(),
+            recorder: recorder,
+        }
     }
 
     /// The non-const version of [`get`](Self::get). If size of slice required is
@@ -319,11 +434,13 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// # Panics
     ///
     /// Refer to [`get`](Self::get).
-    pub fn get_dyn(&mut self, offset: usize, size: usize) -> &mut [u8] {
-        self.store
-            .0
-            .record_event(|_| true, |_| MemorySliceBorrowEvent::new(offset, size));
-        &mut self.as_slice_mut()[offset..][..size]
+    pub fn get_dyn(&mut self, offset: usize, size: usize) -> MemorySliceCell {
+        let (slice_mut, recorder) = self.as_slice_mut_with_recorder();
+        MemorySliceCell {
+            offset: offset,
+            bytes: &mut slice_mut[offset..][..size],
+            recorder: recorder,
+        }
     }
 
     /// Lowers an `own` resource into the guest, converting the `rep` specified
@@ -414,6 +531,29 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             },
             host_resource_data,
         )
+    }
+
+    /// Perform a replay of all the type lowering-associated events for this context
+    ///
+    /// These typically include all `Lower*` and `Realloc*` event, along with relevant
+    /// `HostFunctionReturnEvent` if it exists
+    pub fn replay_lowering(&mut self) -> Result<()> {
+        ///// Get and execute `F` on the events from the replay buffer iteratively
+        /////
+        ///// Iteration continues as long as `F` returns `Ok(true)` or buffer ends
+        //pub(crate) fn replay_events_while<F>(&mut self, mut f: F) -> Result<()>
+        //where
+        //    F: FnMut(RREvent, &ReplayMetadata) -> Result<bool>,
+        //{
+        //    if let Some(buf) = self.replay_buffer_mut() {
+        //        while f(buf.next().ok_or(ReplayError::EmptyBuffer)?, buf.metadata())? {}
+        //    } else {
+        //    }
+        //    Ok(())
+        //}
+
+        todo!();
+        Ok(())
     }
 
     /// See [`HostResourceTables::enter_call`].

@@ -1354,12 +1354,12 @@ impl StoreOpaque {
     }
 
     #[inline]
-    fn record_buffer_mut(&mut self) -> Option<&mut RecordBuffer> {
+    pub fn record_buffer_mut(&mut self) -> Option<&mut RecordBuffer> {
         self.record_buffer.as_mut()
     }
 
     #[inline]
-    fn replay_buffer_mut(&mut self) -> Option<&mut ReplayBuffer> {
+    pub fn replay_buffer_mut(&mut self) -> Option<&mut ReplayBuffer> {
         self.replay_buffer.as_mut()
     }
 
@@ -1383,7 +1383,7 @@ impl StoreOpaque {
 
     /// Get the next replay event if `P` holds true and process it with `F`
     #[inline(always)]
-    pub(crate) fn replay_event<T, P, F>(&mut self, pop_predicate: P, f: F) -> Result<()>
+    pub(crate) fn replay_event_typed<T, P, F>(&mut self, pop_predicate: P, f: F) -> Result<()>
     where
         T: TryFrom<RREvent> + fmt::Debug,
         <T as TryFrom<RREvent>>::Error: std::error::Error + Send + Sync + 'static,
@@ -1403,7 +1403,7 @@ impl StoreOpaque {
         }
     }
 
-    /// Check if recording or replaying is tied to the store
+    /// Check if recording or replaying is enabled for the Store
     #[inline]
     pub fn rr_enabled(&self) -> bool {
         self.record_buffer.is_some() || self.replay_buffer.is_some()

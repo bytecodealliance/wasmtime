@@ -2354,7 +2354,7 @@ impl HostContext {
                 // (only when validation is enabled).
                 // Function type unwraps should never panic since they are
                 // lazily evaluated
-                store.replay_event(
+                store.replay_event_typed(
                     |r| r.validate,
                     |event: HostFuncEntryEvent, _| event.validate(wasm_func_type.unwrap()),
                 )?;
@@ -2403,7 +2403,7 @@ impl HostContext {
 
             // Record/replay interceptions of raw return args
             let ret = if store.replay_enabled() {
-                store.replay_event(
+                store.replay_event_typed(
                     |_| true,
                     |event: HostFuncReturnEvent, rmeta| {
                         event.move_into_slice(

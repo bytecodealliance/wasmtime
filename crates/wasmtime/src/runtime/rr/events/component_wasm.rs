@@ -163,13 +163,13 @@ generic_new_events! {
         offset: usize
     },
 
-    /// A mutable borrow of a slice of Wasm linear memory by the host
-    ///
-    /// This is the fundamental interface used during lowering of a [`ComponentType`].
+    /// A write to a mutable slice of Wasm linear memory by the host. This is the
+    /// fundamental representation of host-written data to Wasm and is usually
+    /// performed during lowering of a [`ComponentType`].
     /// Note that this currently signifies a single mutable operation at the smallest granularity
     /// on a given linear memory slice. These can be optimized and coalesced into
     /// larger granularity operations in the future at either the recording or the replay level.
-    MemorySliceBorrowEvent {
+    MemorySliceWriteEvent {
         offset: usize,
         bytes: Vec<u8>
     }

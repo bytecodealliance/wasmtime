@@ -3,6 +3,7 @@ use crate::component::matching::InstanceType;
 use crate::component::storage::{slice_to_storage_mut, storage_as_slice, storage_as_slice_mut};
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
 use crate::prelude::*;
+use crate::runtime::rr::RREvent;
 use crate::runtime::rr::events::component_wasm::{
     HostFuncEntryEvent, HostFuncReturnEvent, LowerReturnEvent, LowerStoreReturnEvent,
 };
@@ -217,7 +218,7 @@ where
             )
         },
     );
-    cx.0.replay_event(
+    cx.0.replay_event_typed(
         |r| r.validate,
         |event: HostFuncEntryEvent, _| event.validate(&types[ty.params]),
     )?;
@@ -314,7 +315,7 @@ where
                         r
                     } else {
                         // `None` return value implies replay stubbing is required
-                        cx.store.0.replay_event(
+                        cx.store.0.replay_event_typed(
                             |_| true,
                             |event: HostFuncReturnEvent, rmeta| {
                                 event.move_into_slice(
@@ -347,7 +348,7 @@ where
                     // `dst` is a Wasm pointer to indirect results. This pointer itself will remain
                     // deterministic, and thus replay will not need to change this. However,
                     // replay will have to overwrite any nested stored lowerings (deep copy)
-                    cx.store.0.replay_event(
+                    cx.store.0.replay_event_typed(
                         |_| true,
                         |event: HostFuncReturnEvent, rmeta| {
                             if rmeta.validate {
@@ -475,7 +476,7 @@ where
             )
         },
     );
-    store.0.replay_event(
+    store.0.replay_event_typed(
         |r| r.validate,
         |event: HostFuncEntryEvent, _| event.validate(&types[func_ty.params]),
     )?;
@@ -537,7 +538,7 @@ where
             assert!(dst.next().is_none());
         } else {
             // Replay stubbing required
-            cx.store.0.replay_event(
+            cx.store.0.replay_event_typed(
                 |_| true,
                 |event: HostFuncReturnEvent, rmeta| {
                     event.move_into_slice(
@@ -568,16 +569,7 @@ where
             // The indirect `ret_ptr` itself will remain deterministic, and thus replay will not
             // need to change this. However, replay will have to overwrite any nested stored
             // lowerings (deep copy)
-            cx.store.0.replay_event(
-                |_| true,
-                |event: HostFuncReturnEvent, rmeta| {
-                    if rmeta.validate {
-                        event.validate(result_tys)
-                    } else {
-                        Ok(())
-                    }
-                },
-            )?;
+            cx.replay_lowering()?;
         }
         // Recording here is just for marking the return event
         cx.store.0.record_event(

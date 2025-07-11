@@ -77,7 +77,7 @@ rr_event! {
     /// Return from a store during a type lowering operation
     ComponentLowerStoreReturn => component_wasm::LowerStoreReturnEvent,
     /// An attempt to obtain a mutable slice into Wasm linear memory
-    ComponentMemorySliceBorrow => component_wasm::MemorySliceBorrowEvent,
+    ComponentMemorySliceWrite => component_wasm::MemorySliceWriteEvent,
 
     // OPTIONAL events for replay validation
     //

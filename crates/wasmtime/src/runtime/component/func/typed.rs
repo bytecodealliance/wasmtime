@@ -847,7 +847,7 @@ macro_rules! integers {
                 // `align_to_mut` which is not safe in general but is safe in
                 // our specific case as all `u8` patterns are valid `Self`
                 // patterns since `Self` is an integral type.
-                let dst = cx.get_dyn(offset, items.len() * Self::SIZE32);
+                let mut dst = cx.get_dyn(offset, items.len() * Self::SIZE32);
                 let (before, middle, end) = unsafe { dst.align_to_mut::<Self>() };
                 assert!(before.is_empty() && end.is_empty());
                 assert_eq!(middle.len(), items.len());
@@ -938,7 +938,7 @@ macro_rules! floats {
             ) -> Result<()> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 debug_assert!(offset % Self::SIZE32 == 0);
-                let ptr = cx.get(offset);
+                let mut ptr = cx.get(offset);
                 *ptr = self.to_bits().to_le_bytes();
                 Ok(())
             }
@@ -960,7 +960,7 @@ macro_rules! floats {
                 // This should all have already been verified in terms of
                 // alignment and sizing meaning that these assertions here are
                 // not truly necessary but are instead double-checks.
-                let dst = cx.get_dyn(offset, items.len() * Self::SIZE32);
+                let mut dst = cx.get_dyn(offset, items.len() * Self::SIZE32);
                 assert!(dst.as_ptr().cast::<Self>().is_aligned());
 
                 // And with all that out of the way perform the copying loop.
@@ -1232,13 +1232,14 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
             }
             let mut ptr = cx.realloc(0, 0, 2, size)?;
             let mut copied = 0;
-            let bytes = cx.get_dyn(ptr, size);
+            let mut bytes = cx.get_dyn(ptr, size);
             for (u, bytes) in string.encode_utf16().zip(bytes.chunks_mut(2)) {
                 let u_bytes = u.to_le_bytes();
                 bytes[0] = u_bytes[0];
                 bytes[1] = u_bytes[1];
                 copied += 1;
             }
+            drop(bytes);
             if (copied * 2) < size {
                 ptr = cx.realloc(ptr, size, 2, copied * 2)?;
             }
@@ -1269,6 +1270,7 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
                 if worst_case > MAX_STRING_BYTE_LENGTH {
                     bail!("byte length too large");
                 }
+                drop(dst);
                 ptr = cx.realloc(ptr, bytes.len(), 2, worst_case)?;
                 dst = cx.get_dyn(ptr, worst_case);
 
@@ -1289,11 +1291,13 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
                     bytes[1] = u_bytes[1];
                     result += 1;
                 }
+                drop(dst);
                 if worst_case > 2 * result {
                     ptr = cx.realloc(ptr, worst_case, 2, 2 * result)?;
                 }
                 return Ok((ptr, result | UTF16_TAG));
             }
+            drop(dst);
             if result < bytes.len() {
                 ptr = cx.realloc(ptr, bytes.len(), 2, result)?;
             }
