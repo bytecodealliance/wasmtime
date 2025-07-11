@@ -7,19 +7,20 @@ use serde::{Deserialize, Serialize};
 
 const VAL_RAW_SIZE: usize = mem::size_of::<ValRaw>();
 
-/// A serde compatible representation of errors produced by specific events
+/// A serde compatible representation of errors produced by actions during
+/// initial recording for specific events
 ///
 /// We need this since the [anyhow::Error] trait object cannot be used. This
 /// type just encapsulates the corresponding display messages during recording
 /// so that it can be validated and/or re-thrown during replay
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum EventError {
+pub enum EventActionError {
     ReallocError(String),
     LowerError(String),
     LowerStoreError(String),
 }
 
-impl fmt::Display for EventError {
+impl fmt::Display for EventActionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ReallocError(s) | Self::LowerError(s) | Self::LowerStoreError(s) => {
@@ -29,7 +30,7 @@ impl fmt::Display for EventError {
     }
 }
 
-impl std::error::Error for EventError {}
+impl std::error::Error for EventActionError {}
 
 /// Transmutable byte array used to serialize [`ValRaw`] union
 ///

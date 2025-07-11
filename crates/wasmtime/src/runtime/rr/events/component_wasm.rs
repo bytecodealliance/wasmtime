@@ -2,6 +2,7 @@
 use super::*;
 #[allow(unused_imports)]
 use crate::component::ComponentType;
+use std::vec::Vec;
 use wasmtime_environ::component::{InterfaceType, TypeTuple};
 
 /// A call event from a Wasm component into the host
@@ -84,14 +85,18 @@ macro_rules! generic_new_result_events {
             $(#[doc= $doc])*
             #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
             pub struct $event {
-                ret: Result<$ok_ty, EventError>,
+                ret: Result<$ok_ty, EventActionError>,
             }
+
             impl $event {
                 pub fn new(ret: &Result<$ok_ty>) -> Self {
                     Self {
                         ret: ret.as_ref().map(|t| *t).map_err(|e| $err_variant(e.to_string()))
                     }
                 }
+                #[inline]
+                #[allow(dead_code)]
+                pub fn ret(self) -> Result<$ok_ty, EventActionError> { self.ret }
             }
         )*
     );
@@ -112,7 +117,7 @@ macro_rules! generic_new_events {
             #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
             pub struct $struct {
                 $(
-                    $field: $field_ty,
+                    pub $field: $field_ty,
                 )*
             }
         )*
@@ -131,11 +136,11 @@ macro_rules! generic_new_events {
 
 generic_new_result_events! {
     /// Return from a reallocation call (needed only for validation)
-    ReallocReturnEvent => (usize, EventError::ReallocError),
+    ReallocReturnEvent => (usize, EventActionError::ReallocError),
     /// Return from a type lowering invocation
-    LowerReturnEvent => ((), EventError::LowerError),
+    LowerReturnEvent => ((), EventActionError::LowerError),
     /// Return from store invocations during type lowering
-    LowerStoreReturnEvent => ((), EventError::LowerStoreError)
+    LowerStoreReturnEvent => ((), EventActionError::LowerStoreError)
 }
 
 generic_new_events! {
@@ -166,6 +171,6 @@ generic_new_events! {
     /// larger granularity operations in the future at either the recording or the replay level.
     MemorySliceBorrowEvent {
         offset: usize,
-        size: usize
+        bytes: Vec<u8>
     }
 }

@@ -96,6 +96,7 @@ pub enum ReplayError {
     EmptyBuffer,
     FailedFuncValidation,
     IncorrectEventVariant,
+    EventActionError(EventActionError),
 }
 
 impl fmt::Display for ReplayError {
@@ -110,11 +111,20 @@ impl fmt::Display for ReplayError {
             Self::IncorrectEventVariant => {
                 write!(f, "event method invoked on incorrect variant")
             }
+            Self::EventActionError(e) => {
+                write!(f, "{:?}", e)
+            }
         }
     }
 }
 
 impl std::error::Error for ReplayError {}
+
+impl From<EventActionError> for ReplayError {
+    fn from(value: EventActionError) -> Self {
+        Self::EventActionError(value)
+    }
+}
 
 pub trait Recorder {
     /// Constructs a writer on new buffer
@@ -134,17 +144,13 @@ pub trait Recorder {
     fn metadata(&self) -> &RecordMetadata;
 }
 
-pub trait Replayer {
+pub trait Replayer: Iterator {
     type ReplayError;
 
     /// Constructs a reader on buffer
     fn new_replayer(cfg: ReplayConfig) -> Result<Self>
     where
         Self: Sized;
-
-    /// Pop the next [`RREvent`] from the buffer
-    /// Events should be FIFO
-    fn pop_event(&mut self) -> Result<RREvent, ReplayError>;
 
     /// Get metadata associated with the replay process
     fn metadata(&self) -> &ReplayMetadata;
@@ -216,6 +222,14 @@ pub struct ReplayBuffer {
     metadata: ReplayMetadata,
 }
 
+impl Iterator for ReplayBuffer {
+    type Item = RREvent;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.data.buf.pop_front()
+    }
+}
+
 impl Replayer for ReplayBuffer {
     type ReplayError = ReplayError;
 
@@ -234,13 +248,6 @@ impl Replayer for ReplayBuffer {
             },
             metadata: cfg.metadata,
         })
-    }
-
-    fn pop_event(&mut self) -> Result<RREvent, ReplayError> {
-        self.data
-            .buf
-            .pop_front()
-            .ok_or(Self::ReplayError::EmptyBuffer.into())
     }
 
     #[inline]
@@ -274,7 +281,7 @@ mod tests {
             .map(|x| MaybeUninit::new(x))
             .collect::<Vec<_>>();
 
-        let event = core_wasm::CoreHostFuncEntryEvent::new(values.as_slice(), None);
+        let event = core_wasm::HostFuncEntryEvent::new(values.as_slice(), None);
 
         // Record values
         let mut recorder = RecordBuffer::new_recorder(record_cfg)?;
@@ -292,13 +299,14 @@ mod tests {
             metadata: ReplayMetadata { validate: true },
         };
         let mut replayer = ReplayBuffer::new_replayer(replay_cfg)?;
-        let event_pop = core_wasm::CoreHostFuncEntryEvent::try_from(replayer.pop_event()?)?;
+        let event_pop = core_wasm::HostFuncEntryEvent::try_from(
+            replayer.next().ok_or(ReplayError::EmptyBuffer)?,
+        )?;
         // Replay matches record
         assert!(event == event_pop);
 
         // Queue is empty
-        let event = replayer.pop_event();
-        assert!(event.is_err() && matches!(event.unwrap_err(), ReplayError::EmptyBuffer));
+        assert!(replayer.next().is_none());
 
         Ok(())
     }
