@@ -113,7 +113,7 @@ mod matching;
 mod resource_table;
 mod resources;
 mod storage;
-mod store;
+pub(crate) mod store;
 pub mod types;
 mod values;
 pub use self::component::{Component, ComponentExportIndex};

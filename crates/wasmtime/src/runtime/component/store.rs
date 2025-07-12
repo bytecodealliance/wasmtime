@@ -100,6 +100,11 @@ impl StoreComponentInstanceId {
     }
 
     #[inline]
+    pub(crate) fn store_id(&self) -> StoreId {
+        self.store_id
+    }
+
+    #[inline]
     pub(crate) fn instance(&self) -> ComponentInstanceId {
         self.instance
     }

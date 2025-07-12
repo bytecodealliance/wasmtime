@@ -172,7 +172,7 @@ impl VMArrayRef {
                         .func_ref_table
                         .get_untyped(func_ref_id);
                     Val::FuncRef(unsafe {
-                        func_ref.map(|p| Func::from_vm_func_ref(store, p.as_non_null()))
+                        func_ref.map(|p| Func::from_vm_func_ref(store.id(), p.as_non_null()))
                     })
                 }
                 otherwise => unreachable!("not a top type: {otherwise:?}"),

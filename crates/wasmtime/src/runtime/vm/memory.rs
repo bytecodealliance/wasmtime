@@ -439,7 +439,7 @@ impl Memory {
 
     /// If the [Memory] is a [SharedMemory], unwrap it and return a clone to
     /// that shared memory.
-    pub fn as_shared_memory(&mut self) -> Option<&mut SharedMemory> {
+    pub fn as_shared_memory(&self) -> Option<&SharedMemory> {
         match self {
             Memory::Local(_) => None,
             Memory::Shared(mem) => Some(mem),
