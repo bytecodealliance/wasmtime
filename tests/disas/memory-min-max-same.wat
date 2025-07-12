@@ -46,8 +46,8 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0028                               v3 = iconst.i32 0
-;; @0030                               v6 = load.i64 notrap aligned readonly can_move v0+72
-;; @0030                               v7 = load.i64 notrap aligned readonly can_move v0+88
+;; @0030                               v7 = load.i64 notrap aligned readonly can_move v0+72
+;; @0030                               v6 = load.i64 notrap aligned readonly can_move v0+88
 ;; @0039                               v13 = iconst.i64 0x0001_0000
 ;; @0039                               v17 = iconst.i64 0
 ;; @0039                               v15 = load.i64 notrap aligned readonly can_move checked v0+56
@@ -55,7 +55,7 @@
 ;; @002e                               jump block2(v3)  ; v3 = 0
 ;;
 ;;                                 block2(v9: i32):
-;; @0030                               call_indirect.i64 sig0, v6(v7, v0)
+;; @0030                               call_indirect.i64 sig0, v7(v6, v0)
 ;;                                     v22 = iconst.i32 0
 ;; @0036                               v10 = iadd.i32 v2, v9
 ;; @0039                               v12 = uextend.i64 v10

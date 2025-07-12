@@ -159,6 +159,40 @@ pub enum SideEffect {
     Resource(DefinedResourceIndex),
 }
 
+/// A sound approximation of a particular module's set of instantiations.
+///
+/// This type forms a simple lattice that we can use in static analyses that in
+/// turn let us specialize a module's compilation to exactly the imports it is
+/// given.
+#[derive(Clone, Copy, Default)]
+pub enum AbstractInstantiations<'a> {
+    /// The associated module is instantiated many times.
+    Many,
+
+    /// The module is instantiated exactly once, with the given definitions as
+    /// arguments to that instantiation.
+    One(&'a [info::CoreDef]),
+
+    /// The module is never instantiated.
+    #[default]
+    None,
+}
+
+impl AbstractInstantiations<'_> {
+    /// Join two facts about a particular module's instantiation together.
+    ///
+    /// This is the least-upper-bound operation on the lattice.
+    pub fn join(&mut self, other: Self) {
+        *self = match (*self, other) {
+            (Self::Many, _) | (_, Self::Many) => Self::Many,
+            (Self::One(a), Self::One(b)) if a == b => Self::One(a),
+            (Self::One(_), Self::One(_)) => Self::Many,
+            (Self::One(a), Self::None) | (Self::None, Self::One(a)) => Self::One(a),
+            (Self::None, Self::None) => Self::None,
+        }
+    }
+}
+
 macro_rules! id {
     ($(pub struct $name:ident(u32);)*) => ($(
         #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]

@@ -73,14 +73,14 @@
 ;; @002e                               brif v24, block8, block2
 ;;
 ;;                                 block8:
-;; @0034                               v26 = load.i64 notrap aligned readonly can_move v0+48
-;; @0034                               v27 = load.i64 notrap aligned readonly can_move v0+64
-;; @0034                               call_indirect sig1, v26(v27, v0)
+;; @0034                               v27 = load.i64 notrap aligned readonly can_move v0+48
+;; @0034                               v26 = load.i64 notrap aligned readonly can_move v0+64
+;; @0034                               call_indirect sig1, v27(v26, v0)
 ;; @0036                               return
 ;;
 ;;                                 block2:
-;; @0038                               v29 = load.i64 notrap aligned readonly can_move v0+72
-;; @0038                               v30 = load.i64 notrap aligned readonly can_move v0+88
-;; @0038                               call_indirect sig2, v29(v30, v0)
+;; @0038                               v30 = load.i64 notrap aligned readonly can_move v0+72
+;; @0038                               v29 = load.i64 notrap aligned readonly can_move v0+88
+;; @0038                               call_indirect sig2, v30(v29, v0)
 ;; @003a                               return
 ;; }

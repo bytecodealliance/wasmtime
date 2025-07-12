@@ -1045,8 +1045,7 @@ impl<'a> Inliner<'a> {
             // and an initializer is recorded to indicate that it's being
             // instantiated.
             ModuleInstantiate(module, args) => {
-                let instance_module;
-                let init = match &frame.modules[*module] {
+                let (instance_module, init) = match &frame.modules[*module] {
                     ModuleDef::Static(idx, _ty) => {
                         let mut defs = Vec::new();
                         for (module, name, _ty) in self.nested_modules[*idx].module.imports() {
@@ -1055,8 +1054,10 @@ impl<'a> Inliner<'a> {
                                 self.core_def_of_module_instance_export(frame, instance, name),
                             );
                         }
-                        instance_module = InstanceModule::Static(*idx);
-                        dfg::Instance::Static(*idx, defs.into())
+                        (
+                            InstanceModule::Static(*idx),
+                            dfg::Instance::Static(*idx, defs.into()),
+                        )
                     }
                     ModuleDef::Import(path, ty) => {
                         let mut defs = IndexMap::new();
@@ -1069,20 +1070,24 @@ impl<'a> Inliner<'a> {
                                 .insert(name.to_string(), def);
                         }
                         let index = self.runtime_import(path);
-                        instance_module = InstanceModule::Import(*ty);
-                        dfg::Instance::Import(index, defs)
+                        (
+                            InstanceModule::Import(*ty),
+                            dfg::Instance::Import(index, defs),
+                        )
                     }
                 };
 
-                let idx = self.result.instances.push(init);
+                let instance = self.result.instances.push(init);
+                let instance2 = self.runtime_instances.push(instance_module);
+                assert_eq!(instance, instance2);
+
                 self.result
                     .side_effects
-                    .push(dfg::SideEffect::Instance(idx));
-                let idx2 = self.runtime_instances.push(instance_module);
-                assert_eq!(idx, idx2);
+                    .push(dfg::SideEffect::Instance(instance));
+
                 frame
                     .module_instances
-                    .push(ModuleInstanceDef::Instantiated(idx, *module));
+                    .push(ModuleInstanceDef::Instantiated(instance, *module));
             }
 
             ModuleSynthetic(map) => {
@@ -1772,6 +1777,7 @@ impl<'a> ComponentItemDef<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
 enum InstanceModule {
     Static(StaticModuleIndex),
     Import(TypeModuleIndex),
