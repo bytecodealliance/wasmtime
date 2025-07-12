@@ -1469,10 +1469,10 @@ impl Instance {
     /// Returns both exported and non-exported memories.
     ///
     /// Gives access to the full memories space.
-    pub fn all_memories<'a>(
-        &'a self,
+    pub fn all_memories(
+        &self,
         store: StoreId,
-    ) -> impl ExactSizeIterator<Item = (MemoryIndex, crate::Memory)> + 'a {
+    ) -> impl ExactSizeIterator<Item = (MemoryIndex, crate::Memory)> + '_ {
         self.env_module()
             .memories
             .iter()
