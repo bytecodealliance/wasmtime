@@ -330,16 +330,17 @@ wit-bindgen-rt = { version = "0.43.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.43.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { git = "https://github.com/cpetig/wasm-tools", branch = "fixed-length-list", default-features = false, features = ['simd'] }
-wat = { git = "https://github.com/cpetig/wasm-tools", branch = "fixed-length-list" }
-wast = { git = "https://github.com/cpetig/wasm-tools", branch = "fixed-length-list" }
-wasmprinter = { git = "https://github.com/cpetig/wasm-tools", branch = "fixed-length-list" }
-wasm-encoder = { git = "https://github.com/cpetig/wasm-tools", branch = "fixed-length-list" }
-wasm-smith = { git = "https://github.com/cpetig/wasm-tools", branch = "fixed-length-list" }
-wasm-mutate = { git = "https://github.com/cpetig/wasm-tools", branch = "fixed-length-list" }
-wit-parser = { git = "https://github.com/cpetig/wasm-tools", branch = "fixed-length-list" }
-wit-component = { git = "https://github.com/cpetig/wasm-tools", branch = "fixed-length-list" }
-wasm-wave = { git = "https://github.com/cpetig/wasm-tools", branch = "fixed-length-list" }
+wasmparser = { version = "0.235.0", default-features = false, features = ['simd'] }
+wat = "1.235.0"
+wast = "235.0.0"
+wasmprinter = "0.235.0"
+wasm-encoder = "0.235.0"
+wasm-smith = "0.235.0"
+wasm-mutate = "0.235.0"
+wit-parser = "0.235.0"
+wit-component = "0.235.0"
+wasm-wave = "0.235.0"
+wasm-compose = "0.235.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
