@@ -117,8 +117,10 @@ fn read_field_at_addr(
             WasmValType::F64 => builder.ins().load(ir::types::F64, flags, addr, 0),
             WasmValType::V128 => builder.ins().load(ir::types::I8X16, flags, addr, 0),
             WasmValType::Ref(r) => match r.heap_type.top() {
-                WasmHeapTopType::Any | WasmHeapTopType::Extern => gc_compiler(func_env)?
-                    .translate_read_gc_reference(func_env, builder, r, addr, flags)?,
+                WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
+                    gc_compiler(func_env)?
+                        .translate_read_gc_reference(func_env, builder, r, addr, flags)?
+                }
                 WasmHeapTopType::Func => {
                     let expected_ty = match r.heap_type {
                         WasmHeapType::Func => ModuleInternedTypeIndex::reserved_value(),
@@ -1042,6 +1044,8 @@ pub fn translate_ref_test(
         | WasmHeapType::NoFunc
         | WasmHeapType::Cont
         | WasmHeapType::NoCont
+        | WasmHeapType::Exn
+        | WasmHeapType::NoExn
         | WasmHeapType::I31 => unreachable!("handled top, bottom, and i31 types above"),
 
         // For these abstract but non-top and non-bottom types, we check the
@@ -1057,7 +1061,9 @@ pub fn translate_ref_test(
         // TODO: This check should ideally be done inline, but we don't have a
         // good way to access the `TypeRegistry`'s supertypes arrays from Wasm
         // code at the moment.
-        WasmHeapType::ConcreteArray(ty) | WasmHeapType::ConcreteStruct(ty) => {
+        WasmHeapType::ConcreteArray(ty)
+        | WasmHeapType::ConcreteStruct(ty)
+        | WasmHeapType::ConcreteExn(ty) => {
             let expected_interned_ty = ty.unwrap_module_type_index();
             let expected_shared_ty =
                 func_env.module_interned_to_shared_ty(&mut builder.cursor(), expected_interned_ty);
@@ -1416,6 +1422,8 @@ impl FuncEnvironment<'_> {
 
             // Can only ever be `null`.
             WasmHeapType::NoExtern => false,
+
+            WasmHeapType::Exn | WasmHeapType::ConcreteExn(_) | WasmHeapType::NoExn => false,
 
             // Wrong type hierarchy, and also funcrefs are not GC-managed
             // types. Should have been caught by the assertion at the start of

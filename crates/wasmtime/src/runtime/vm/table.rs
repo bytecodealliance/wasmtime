@@ -376,6 +376,7 @@ pub(crate) fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
         WasmHeapTopType::Func => TableElementType::Func,
         WasmHeapTopType::Any | WasmHeapTopType::Extern => TableElementType::GcRef,
         WasmHeapTopType::Cont => TableElementType::Cont,
+        WasmHeapTopType::Exn => TableElementType::GcRef,
     }
 }
 

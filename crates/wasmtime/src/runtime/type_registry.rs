@@ -929,9 +929,16 @@ impl TypeRegistryInner {
             ),
             wasmtime_environ::WasmCompositeInnerType::Struct(s) => Some(
                 gc_runtime
-                    .expect("must have a GC runtime to register array types")
+                    .expect("must have a GC runtime to register struct types")
                     .layouts()
                     .struct_layout(s)
+                    .into(),
+            ),
+            wasmtime_environ::WasmCompositeInnerType::Exn(e) => Some(
+                gc_runtime
+                    .expect("must have a GC runtime to register exception types")
+                    .layouts()
+                    .exn_layout(e)
                     .into(),
             ),
             wasmtime_environ::WasmCompositeInnerType::Cont(_) => None, // FIXME: #10248 stack switching support.

@@ -642,6 +642,32 @@ impl Instance {
         }
     }
 
+    /// Lookup a tag by index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds for this instance.
+    pub fn get_exported_tag(&self, index: TagIndex) -> ExportTag {
+        let ty = self.env_module().tags[index];
+        let (definition, vmctx, index) =
+            if let Some(def_index) = self.env_module().defined_tag_index(index) {
+                (self.tag_ptr(def_index), self.vmctx(), def_index)
+            } else {
+                let import = self.imported_tag(index);
+                (
+                    import.from.as_non_null(),
+                    import.vmctx.as_non_null(),
+                    import.index,
+                )
+            };
+        ExportTag {
+            definition,
+            vmctx,
+            tag: ty,
+            index,
+        }
+    }
+
     fn get_exported_global(&self, index: GlobalIndex) -> ExportGlobal {
         let global = self.env_module().globals[index];
         if let Some(def_index) = self.env_module().defined_global_index(index) {
@@ -652,27 +678,6 @@ impl Instance {
             }
         } else {
             ExportGlobal::from_vmimport(self.imported_global(index), global)
-        }
-    }
-
-    fn get_exported_tag(&self, index: TagIndex) -> ExportTag {
-        let tag = self.env_module().tags[index];
-        let (vmctx, definition, index) =
-            if let Some(def_index) = self.env_module().defined_tag_index(index) {
-                (self.vmctx(), self.tag_ptr(def_index), def_index)
-            } else {
-                let import = self.imported_tag(index);
-                (
-                    import.vmctx.as_non_null(),
-                    import.from.as_non_null(),
-                    import.index,
-                )
-            };
-        ExportTag {
-            definition,
-            vmctx,
-            index,
-            tag,
         }
     }
 
@@ -1045,6 +1050,9 @@ impl Instance {
                             )
                         }),
                     )?,
+                    WasmHeapTopType::Exn => {
+                        unreachable!("Cannot initialize exception objects from an element segment")
+                    }
                     WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
                 }
             }

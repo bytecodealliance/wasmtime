@@ -637,6 +637,14 @@ fn initialize_tables(
                         table.init_gc_refs(0, items)?;
                     }
 
+                    WasmHeapTopType::Exn => {
+                        let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
+                        let gc_store = store.gc_store_mut()?;
+                        let items = (0..table.size())
+                            .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
+                        table.init_gc_refs(0, items)?;
+                    }
+
                     WasmHeapTopType::Func => {
                         let funcref = NonNull::new(raw.get_funcref().cast::<VMFuncRef>());
                         let items = (0..table.size()).map(|_| funcref);

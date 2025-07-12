@@ -1,6 +1,9 @@
+use crate::Result;
 use crate::runtime::types::TagType;
+use crate::store::InstanceId;
+use crate::trampoline::generate_tag_export;
 use crate::{
-    AsContext,
+    AsContext, AsContextMut,
     store::{StoreInstanceId, StoreOpaque},
 };
 use wasmtime_environ::{DefinedTagIndex, VMSharedTypeIndex};
@@ -26,6 +29,43 @@ impl Tag {
             instance: store.vmctx_id(wasmtime_export.vmctx),
             index: wasmtime_export.index,
         }
+    }
+
+    /// Create a new tag instance from a given TagType.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic when used with a [`Store`](`crate::Store`)
+    /// which has a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`)
+    /// (see also: [`Store::limiter_async`](`crate::Store::limiter_async`).
+    /// When using an async resource limiter, use [`Tag::new_async`]
+    /// instead.
+    pub fn new(mut store: impl AsContextMut, ty: &TagType) -> Result<Tag> {
+        Tag::_new(store.as_context_mut().0, ty)
+    }
+
+    /// Async variant of [`Tag::new`]. You must use this variant with
+    /// [`Store`](`crate::Store`)s which have a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
+    ///
+    /// # Panics
+    ///
+    /// This function will panic when used with a non-async
+    /// [`Store`](`crate::Store`).
+    #[cfg(feature = "async")]
+    pub async fn new_async(mut store: impl AsContextMut<Data: Send>, ty: &TagType) -> Result<Tag> {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `new_async` without enabling async support on the config"
+        );
+        store.on_fiber(|store| Tag::_new(store.0, ty)).await?
+    }
+
+    fn _new(store: &mut StoreOpaque, ty: &TagType) -> Result<Tag> {
+        let wasmtime_export = generate_tag_export(store, ty)?;
+        let tag = unsafe { Tag::from_wasmtime_tag(wasmtime_export, store) };
+        Ok(tag)
     }
 
     /// Returns the underlying type of this `tag`.
@@ -74,5 +114,29 @@ impl Tag {
 
         // then compare to see if they have the same definition
         a.instance == b.instance && a.index == b.index
+    }
+
+    /// Get the "index coordinates" for this `Tag`: the raw instance
+    /// ID and defined-tag index within that instance. This can be
+    /// used to "serialize" the tag as safe (tamper-proof,
+    /// bounds-checked) values, e.g. within the GC store for an
+    /// exception object.
+    pub(crate) fn to_raw_indices(&self) -> (InstanceId, DefinedTagIndex) {
+        (self.instance.instance(), self.index)
+    }
+
+    /// Create a new `Tag` from known raw indices as produced by
+    /// `to_raw_indices()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the indices are out-of-bounds in the given store.
+    pub(crate) fn from_raw_indices(
+        store: &StoreOpaque,
+        instance: InstanceId,
+        index: DefinedTagIndex,
+    ) -> Tag {
+        let instance = StoreInstanceId::new(store.id(), instance);
+        Tag { instance, index }
     }
 }
