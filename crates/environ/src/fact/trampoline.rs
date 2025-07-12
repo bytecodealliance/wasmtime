@@ -19,9 +19,10 @@ use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
     FlatType, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
     PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
-    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex,
-    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
-    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
+    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedSizeListIndex,
+    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
+    TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
+    TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -2878,10 +2879,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // TODO: subtyping
         assert_eq!(src_ty.size, dst_ty.size);
 
-        let srcs = src
-            .record_field_srcs(self.types, (0..src_ty.size).into_iter().map(|_| src_ty.element));
-        let dsts = dst
-            .record_field_dsts(self.types, (0..dst_ty.size).into_iter().map(|_| dst_ty.element));
+        let srcs = src.record_field_srcs(
+            self.types,
+            (0..src_ty.size).into_iter().map(|_| src_ty.element),
+        );
+        let dsts = dst.record_field_dsts(
+            self.types,
+            (0..dst_ty.size).into_iter().map(|_| dst_ty.element),
+        );
         for (src, dst) in srcs.zip(dsts) {
             self.translate(&src_ty.element, &src, &dst_ty.element, &dst);
         }
