@@ -215,6 +215,7 @@ impl Val {
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_flat(cx, ty, next(src))?.into_val()
             }
+            InterfaceType::FixedSizeList(_) => todo!(),
         })
     }
 
@@ -345,6 +346,7 @@ impl Val {
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_memory(cx, ty, bytes)?.into_val()
             }
+            InterfaceType::FixedSizeList(_) => todo!(),
         })
     }
 
@@ -503,6 +505,7 @@ impl Val {
                 )
             }
             (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
+            (InterfaceType::FixedSizeList(_), _) => todo!(),
         }
     }
 
@@ -668,6 +671,7 @@ impl Val {
                 )
             }
             (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
+            (InterfaceType::FixedSizeList(_), _) => todo!(),
         }
     }
 
