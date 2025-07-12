@@ -13,6 +13,7 @@ mod custom_code_memory;
 mod debug;
 mod defaults;
 mod epoch_interruption;
+mod exnrefs;
 mod externals;
 mod fuel;
 mod func;

@@ -441,6 +441,7 @@ where
                         WasmCompositeInnerType::Func(_) => WasmHeapType::ConcreteFunc(index),
                         WasmCompositeInnerType::Struct(_) => WasmHeapType::ConcreteStruct(index),
                         WasmCompositeInnerType::Cont(_) => WasmHeapType::ConcreteCont(index),
+                        WasmCompositeInnerType::Exn(_) => WasmHeapType::ConcreteExn(index),
                     }
                 } else if let Some((wasmparser_types, _)) = self.rec_group_context.as_ref() {
                     let wasmparser_ty = &wasmparser_types[id].composite_type;
@@ -481,6 +482,7 @@ where
                         WasmCompositeInnerType::Func(_) => WasmHeapType::ConcreteFunc(index),
                         WasmCompositeInnerType::Struct(_) => WasmHeapType::ConcreteStruct(index),
                         WasmCompositeInnerType::Cont(_) => WasmHeapType::ConcreteCont(index),
+                        WasmCompositeInnerType::Exn(_) => WasmHeapType::ConcreteExn(index),
                     }
                 } else if let Some((parser_types, rec_group)) = self.rec_group_context.as_ref() {
                     let rec_group_index = interned.index() - self.types.types.len_types();

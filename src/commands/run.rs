@@ -719,6 +719,8 @@ impl RunCommand {
                 Val::FuncRef(Some(_)) => println!("<funcref>"),
                 Val::AnyRef(None) => println!("<null anyref>"),
                 Val::AnyRef(Some(_)) => println!("<anyref>"),
+                Val::ExnRef(None) => println!("<null exnref>"),
+                Val::ExnRef(Some(_)) => println!("<exnref>"),
             }
         }
 
