@@ -1,5 +1,3 @@
-#[allow(unused)]
-use crate::ir::LibCall;
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::FpuOPWidth;
 use std::borrow::Cow;

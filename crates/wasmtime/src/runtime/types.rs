@@ -380,6 +380,13 @@ impl ValType {
             }
         }
     }
+
+    pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
+        match self {
+            ValType::Ref(ty) => ty.into_registered_type(),
+            _ => None,
+        }
+    }
 }
 
 /// Opaque references to data in the Wasm heap or to host data.
@@ -565,6 +572,10 @@ impl RefType {
 
     pub(crate) fn is_vmgcref_type_and_points_to_object(&self) -> bool {
         self.heap_type().is_vmgcref_type_and_points_to_object()
+    }
+
+    pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
+        self.heap_type.into_registered_type()
     }
 }
 
@@ -1278,6 +1289,18 @@ impl HeapType {
                 self,
                 HeapType::I31 | HeapType::NoExtern | HeapType::NoFunc | HeapType::None
             )
+    }
+
+    pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
+        use HeapType::*;
+        match self {
+            ConcreteFunc(ty) => Some(ty.registered_type),
+            ConcreteArray(ty) => Some(ty.registered_type),
+            ConcreteStruct(ty) => Some(ty.registered_type),
+            ConcreteCont(ty) => Some(ty.registered_type),
+            Extern | NoExtern | Func | NoFunc | Any | Eq | I31 | Array | Struct | Cont | NoCont
+            | None => Option::None,
+        }
     }
 }
 
@@ -2502,12 +2525,6 @@ impl FuncType {
         self.registered_type.index()
     }
 
-    #[cfg(feature = "gc")]
-    #[inline]
-    pub(crate) fn as_wasm_func_type(&self) -> &WasmFuncType {
-        self.registered_type.unwrap_func()
-    }
-
     pub(crate) fn into_registered_type(self) -> RegisteredType {
         self.registered_type
     }
@@ -2660,13 +2677,20 @@ impl GlobalType {
         };
         GlobalType::new(ty, mutability)
     }
+    /// Construct a new global import with this type’s default value.
     ///
+    /// This creates a host `Global` in the given store initialized to the
+    /// type’s zero/null default (e.g. `0` for numeric globals, `null_ref` for refs).
     pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeGlobal> {
         let val = self
             .content()
             .default_value()
             .ok_or_else(|| anyhow!("global type has no default value"))?;
         RuntimeGlobal::new(store, self.clone(), val)
+    }
+
+    pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
+        self.content.into_registered_type()
     }
 }
 
@@ -2798,7 +2822,10 @@ impl TableType {
     pub(crate) fn wasmtime_table(&self) -> &Table {
         &self.ty
     }
+    /// Construct a new table import whose entries are filled with this type’s default.
     ///
+    /// Creates a host `Table` in the store with its initial size and element
+    /// type’s default (e.g. `null_ref` for nullable refs).
     pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeTable> {
         let val: ValType = self.element().clone().into();
         let init_val = val
@@ -3139,7 +3166,10 @@ impl MemoryType {
     pub(crate) fn wasmtime_memory(&self) -> &Memory {
         &self.ty
     }
+    /// Construct a new memory import initialized to this memory type’s default state
     ///
+    /// Returns a host `Memory` in the given store with the configured initial
+    /// page size and zeroed contents.
     pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeMemory> {
         RuntimeMemory::new(store, self.clone())
     }

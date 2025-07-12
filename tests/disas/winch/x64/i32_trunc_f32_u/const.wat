@@ -14,7 +14,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x85
+;;       ja      0x84
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -24,23 +24,24 @@
 ;;       movd    %r11d, %xmm15
 ;;       ucomiss %xmm15, %xmm1
 ;;       jae     0x61
-;;       jp      0x87
+;;       jp      0x86
 ;;   52: cvttss2si %xmm1, %eax
 ;;       cmpl    $0, %eax
-;;       jge     0x7c
+;;       jge     0x7b
 ;;   5f: ud2
 ;;       movaps  %xmm1, %xmm0
 ;;       subss   %xmm15, %xmm0
 ;;       cvttss2si %xmm0, %eax
 ;;       cmpl    $0, %eax
-;;       jl      0x89
+;;       jl      0x88
 ;;   76: addl    $0x80000000, %eax
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   85: ud2
-;;   87: ud2
-;;   89: ud2
-;;   8b: addb    %al, (%rax)
-;;   8d: addb    %al, (%rax)
-;;   8f: addb    %al, (%rax)
+;;   84: ud2
+;;   86: ud2
+;;   88: ud2
+;;   8a: addb    %al, (%rax)
+;;   8c: addb    %al, (%rax)
+;;   8e: addb    %al, (%rax)
+;;   90: addb    %al, (%rax)

@@ -3,7 +3,7 @@
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::instructions::{AllInstructions, Instruction};
-use crate::cdsl::operands::Operand;
+use crate::cdsl::operands::{Operand, OperandKindFields};
 use crate::cdsl::typevar::{TypeSet, TypeVar};
 use crate::unique_table::{UniqueSeqTable, UniqueTable};
 use cranelift_codegen_shared::constant_hash;
@@ -63,7 +63,7 @@ fn gen_formats(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter) {
 fn gen_instruction_data(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter) {
     fmt.line("#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]");
     fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
-    fmt.line("#[allow(missing_docs)]");
+    fmt.line("#[allow(missing_docs, reason = \"generated code\")]");
     fmt.add_block("pub enum InstructionData", |fmt| {
         for format in formats {
             fmt.add_block(&format!("{}", format.name), |fmt| {
@@ -159,7 +159,7 @@ fn gen_arguments_method(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter, 
 /// - `pub fn eq(&self, &other: Self, &pool) -> bool`
 /// - `pub fn hash<H: Hasher>(&self, state: &mut H, &pool)`
 fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter) {
-    fmt.add_block("impl InstructionData",|fmt| {
+    fmt.add_block("impl InstructionData", |fmt| {
         fmt.doc_comment("Get the opcode of this instruction.");
         fmt.add_block("pub fn opcode(&self) -> Opcode",|fmt| {
             let mut m = Match::new("*self");
@@ -413,8 +413,98 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                     });
                 }
             });
+        });
+        fmt.doc_comment(r#"
+            Map some functions, described by the given `InstructionMapper`, over each of the
+            entities within this instruction, producing a new `InstructionData`.
+        "#);
+        fmt.add_block("pub fn map(&self, mut mapper: impl crate::ir::instructions::InstructionMapper) -> Self", |fmt| {
+            fmt.add_block("match *self",|fmt| {
+                for format in formats {
+                    let name = format!("Self::{}", format.name);
+                    let mut members = vec!["opcode"];
+
+                    if format.has_value_list {
+                        members.push("args");
+                    } else if format.num_value_operands == 1 {
+                        members.push("arg");
+                    } else if format.num_value_operands > 0 {
+                        members.push("args");
+                    }
+
+                    match format.num_block_operands {
+                        0 => {}
+                        1 => {
+                            members.push("destination");
+                        }
+                        _ => {
+                            members.push("blocks");
+                        }
+                    };
+
+                    for field in &format.imm_fields {
+                        members.push(field.member);
+                    }
+                    let members = members.join(", ");
+
+                    fmt.add_block(&format!("{name}{{{members}}} => "), |fmt| {
+                        fmt.add_block(&format!("Self::{}", format.name), |fmt| {
+                            fmtln!(fmt, "opcode,");
+
+                            if format.has_value_list {
+                                fmtln!(fmt, "args: mapper.map_value_list(args),");
+                            } else if format.num_value_operands == 1 {
+                                fmtln!(fmt, "arg: mapper.map_value(arg),");
+                            } else if format.num_value_operands > 0 {
+                                let maps = (0..format.num_value_operands)
+                                    .map(|i| format!("mapper.map_value(args[{i}])"))
+                                    .collect::<Box<[_]>>()
+                                    .join(", ");
+                                fmtln!(fmt, "args: [{maps}],");
+                            }
+
+                            match format.num_block_operands {
+                                0 => {}
+                                1 => {
+                                    fmtln!(fmt, "destination: mapper.map_block_call(destination),");
+                                }
+                                2 => {
+                                    fmtln!(fmt, "blocks: [mapper.map_block_call(blocks[0]), mapper.map_block_call(blocks[1])],");
+                                }
+                                _ => panic!("Too many block targets in instruction"),
+                            }
+
+                            for field in &format.imm_fields {
+                                let member = field.member;
+                                match &field.kind.fields {
+                                    OperandKindFields::EntityRef => {
+                                        let mut kind = heck::ToSnakeCase::to_snake_case(
+                                            field
+                                                .kind
+                                                .rust_type
+                                                .split("::")
+                                                .last()
+                                                .unwrap_or(field.kind.rust_type),
+                                        );
+                                        if kind == "block" {
+                                            kind.push_str("_call");
+                                        }
+                                        fmtln!(fmt, "{member}: mapper.map_{kind}({member}),");
+                                    }
+                                    OperandKindFields::VariableArgs => {
+                                        fmtln!(fmt, "{member}: mapper.map_value_list({member}),");
+                                    }
+                                    OperandKindFields::ImmValue |
+                                    OperandKindFields::ImmEnum(_) |
+                                    OperandKindFields::TypeVar(_) => fmtln!(fmt, "{member},"),
+                                }
+                            }
+                        });
                     });
+                }
             });
+        });
+    });
 }
 
 fn gen_bool_accessor<T: Fn(&Instruction) -> bool>(
@@ -914,7 +1004,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
         .any(|f| f.kind.rust_type == "ir::immediates::Imm64");
 
     fmt.doc_comment(format.to_string());
-    fmt.line("#[allow(non_snake_case)]");
+    fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
     fmt.add_block(&format!("fn {proto}"), |fmt| {
         // Generate the instruction data.
         fmt.add_block(&format!(
@@ -1048,7 +1138,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         }
     }
 
-    fmt.line("#[allow(non_snake_case)]");
+    fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
     fmt.add_block(&format!("fn {proto}"), |fmt| {
         // Convert all of the `Into<>` arguments.
         for arg in into_args {

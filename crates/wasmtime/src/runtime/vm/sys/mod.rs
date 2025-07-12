@@ -6,7 +6,10 @@
 //! needed is an extra block below and a new platform should be good to go after
 //! filling out the implementation.
 
-#![allow(clippy::cast_sign_loss)] // platforms too fiddly to worry about this
+#![allow(
+    clippy::cast_sign_loss,
+    reason = "platforms too fiddly to worry about this"
+)]
 
 use crate::runtime::vm::SendSyncPtr;
 use core::ptr::{self, NonNull};
@@ -50,6 +53,9 @@ cfg_if::cfg_if! {
     if #[cfg(miri)] {
         mod miri;
         pub use miri::*;
+    } else if #[cfg(not(feature = "std"))] {
+        mod custom;
+        pub use custom::*;
     } else if #[cfg(windows)] {
         mod windows;
         pub use windows::*;

@@ -4,13 +4,6 @@ use core::ops::Range;
 use crate::runtime::vm::stack_switching::VMHostArray;
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
-#[allow(dead_code)]
-#[derive(Debug, PartialEq, Eq)]
-pub enum Allocator {
-    Mmap,
-    Custom,
-}
-
 /// Making sure that this has the same size as the non-dummy version, to
 /// make some tests happy.
 #[derive(Debug)]
@@ -18,7 +11,7 @@ pub enum Allocator {
 pub struct VMContinuationStack {
     _top: *mut u8,
     _len: usize,
-    _allocator: Allocator,
+    _match_size_on_unix: u8,
 }
 
 impl VMContinuationStack {
@@ -34,7 +27,6 @@ impl VMContinuationStack {
         panic!("Stack switching disabled or not implemented on this platform")
     }
 
-    #[allow(clippy::missing_safety_doc)]
     pub unsafe fn from_raw_parts(_base: *mut u8, _guard_size: usize, _len: usize) -> Result<Self> {
         anyhow::bail!("Stack switching disabled or not implemented on this platform")
     }

@@ -13,7 +13,7 @@ block0(v0: i8):
 ; block0:
 ;   movq %rdi, %rax
 ;   negb %al
-;   cmovsl  %edi, %eax, %eax
+;   cmovsl %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -42,7 +42,7 @@ block0(v0: i16):
 ; block0:
 ;   movq %rdi, %rax
 ;   negw %ax
-;   cmovsl  %edi, %eax, %eax
+;   cmovsl %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -71,7 +71,7 @@ block0(v0: i32):
 ; block0:
 ;   movq %rdi, %rax
 ;   negl %eax
-;   cmovsl  %edi, %eax, %eax
+;   cmovsl %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -100,7 +100,7 @@ block0(v0: i64):
 ; block0:
 ;   movq %rdi, %rax
 ;   negq %rax
-;   cmovsq  %rdi, %rax, %rax
+;   cmovsq %rdi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

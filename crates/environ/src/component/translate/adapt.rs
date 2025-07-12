@@ -220,8 +220,8 @@ impl<'data> Translator<'_, 'data> {
             let wasm = &*self.scope_vec.push(wasm);
             if log::log_enabled!(log::Level::Trace) {
                 match wasmprinter::print_bytes(wasm) {
-                    Ok(s) => log::trace!("generated adapter module:\n{}", s),
-                    Err(e) => log::trace!("failed to print adapter module: {}", e),
+                    Ok(s) => log::trace!("generated adapter module:\n{s}"),
+                    Err(e) => log::trace!("failed to print adapter module: {e}"),
                 }
             }
 

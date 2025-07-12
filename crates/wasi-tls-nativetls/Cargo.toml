@@ -1,0 +1,26 @@
+[package]
+name = "wasmtime-wasi-tls-nativetls"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository = "https://github.com/bytecodealliance/wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "Wasmtime implementation of the wasi-tls API, using native-tls for TLS support."
+
+[lints]
+workspace = true
+
+[dependencies]
+wasmtime-wasi-tls = { workspace = true }
+tokio = { workspace = true }
+tokio-native-tls = { workspace = true }
+native-tls = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+test-programs-artifacts = { workspace = true }
+wasmtime = { workspace = true, features = ["runtime", "component-model"] }
+wasmtime-wasi = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+futures = { workspace = true }

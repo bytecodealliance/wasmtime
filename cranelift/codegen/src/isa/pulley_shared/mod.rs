@@ -11,7 +11,7 @@ use crate::{
     MachTextSectionBuilder, TextSectionBuilder,
     dominator_tree::DominatorTree,
     ir,
-    isa::{self, OwnedTargetIsa, TargetIsa},
+    isa::{self, IsaFlagsHashKey, OwnedTargetIsa, TargetIsa},
     machinst::{self, CompiledCodeStencil, MachInst, SigSet, VCode},
     result::CodegenResult,
     settings::{self as shared_settings, Flags},
@@ -155,6 +155,10 @@ where
         self.isa_flags.iter().collect()
     }
 
+    fn isa_flags_hash_key(&self) -> IsaFlagsHashKey<'_> {
+        IsaFlagsHashKey(self.isa_flags.hash_key())
+    }
+
     fn dynamic_vector_bytes(&self, _dynamic_ty: ir::Type) -> u32 {
         512
     }
@@ -183,7 +187,7 @@ where
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
         if let Some(disasm) = emit_result.disasm.as_ref() {
-            log::debug!("disassembly:\n{}", disasm);
+            log::debug!("disassembly:\n{disasm}");
         }
 
         Ok(CompiledCodeStencil {

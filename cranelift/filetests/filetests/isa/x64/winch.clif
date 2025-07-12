@@ -298,7 +298,7 @@ block0(v0:i64):
 ;   movq %r14, 0x38(%rsp)
 ;   movq %r15, 0x40(%rsp)
 ; block0:
-;   lea     0(%rsp), %rdi
+;   leaq (%rsp), %rdi
 ;   load_ext_name %g+0, %r10
 ;   call    *%r10
 ;   movq <offset:1>+(%rsp), %rax

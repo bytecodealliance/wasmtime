@@ -1,0 +1,37 @@
+;; Test that `ir::Immediate` entities, used by `shuffle`, are properly inlined.
+
+test inline precise-output
+target x86_64
+
+function %f0(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, 0x01010101010101010101010101010101
+    return v2
+}
+
+; (no functions inlined into %f0)
+
+function %f1(i8x16, i8x16) -> i8x16 {
+    fn0 = %f0(i8x16, i8x16) -> i8x16
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, 0x02020202020202020202020202020202
+    v3 = call fn0(v1, v2)
+    return v3
+}
+
+; function %f1(i8x16, i8x16) -> i8x16 fast {
+;     sig0 = (i8x16, i8x16) -> i8x16 fast
+;     fn0 = %f0 sig0
+;
+; block0(v0: i8x16, v1: i8x16):
+;     v2 = shuffle v0, v1, 0x02020202020202020202020202020202
+;     jump block1
+;
+; block1:
+;     v5 = shuffle v1, v2, 0x01010101010101010101010101010101
+;     jump block2(v5)
+;
+; block2(v4: i8x16):
+;     v3 -> v4
+;     return v3
+; }

@@ -70,7 +70,7 @@ impl SubTest for TestCompile {
 
         let vcode = compiled_code.vcode.as_ref().unwrap();
 
-        info!("Generated {} bytes of code:\n{}", total_size, vcode);
+        info!("Generated {total_size} bytes of code:\n{vcode}");
 
         if self.precise_output {
             let dis = match isa.triple().architecture {

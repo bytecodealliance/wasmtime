@@ -139,7 +139,6 @@ impl From<ManuallyRooted<ArrayRef>> for ManuallyRooted<AnyRef> {
 }
 
 unsafe impl GcRefImpl for AnyRef {
-    #[allow(private_interfaces)]
     fn transmute_ref(index: &GcRootIndex) -> &Self {
         // Safety: `AnyRef` is a newtype of a `GcRootIndex`.
         let me: &Self = unsafe { mem::transmute(index) };

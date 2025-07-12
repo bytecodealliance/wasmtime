@@ -985,12 +985,12 @@
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; z15 version using a single instruction (NOR).
-(rule 2 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bnot x)))
+(rule 2 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bnot x)))
       (let ((rx Reg x))
         (not_or_reg ty rx rx)))
 
 ;; z14 version using XOR with -1.
-(rule 1 (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bnot x)))
+(rule 1 (lower (has_type (and (mie3_disabled) (fits_in_64 ty)) (bnot x)))
       (not_reg ty x))
 
 ;; Vector version using vector NOR.
@@ -999,7 +999,7 @@
 
 ;; With z15 (bnot (bxor ...)) can be a single instruction, similar to the
 ;; (bxor _ (bnot _)) lowering.
-(rule 3 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bnot (bxor x y))))
+(rule 3 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bnot (bxor x y))))
       (not_xor_reg ty x y))
 
 ;; Combine a not/xor operation of vector types into one.
@@ -1038,9 +1038,9 @@
 ;; forms early on.
 
 ;; z15 version using a single instruction.
-(rule 7 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (band x (bnot y))))
+(rule 7 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (band x (bnot y))))
       (and_not_reg ty x y))
-(rule 8 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (band (bnot y) x)))
+(rule 8 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (band (bnot y) x)))
       (and_not_reg ty x y))
 
 ;; And-not two vector registers.
@@ -1080,9 +1080,9 @@
 ;; forms early on.
 
 ;; z15 version using a single instruction.
-(rule 7 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bor x (bnot y))))
+(rule 7 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bor x (bnot y))))
       (or_not_reg ty x y))
-(rule 8 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bor (bnot y) x)))
+(rule 8 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bor (bnot y) x)))
       (or_not_reg ty x y))
 
 ;; Or-not two vector registers.
@@ -1119,9 +1119,9 @@
 ;; forms early on.
 
 ;; z15 version using a single instruction.
-(rule 5 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bxor x (bnot y))))
+(rule 5 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bxor x (bnot y))))
       (not_xor_reg ty x y))
-(rule 6 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bxor (bnot y) x)))
+(rule 6 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bxor (bnot y) x)))
       (not_xor_reg ty x y))
 
 ;; Xor-not two vector registers.
@@ -1134,14 +1134,14 @@
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; z15 version using a NAND instruction.
-(rule 2 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (bitselect x y z)))
+(rule 2 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bitselect x y z)))
       (let ((rx Reg x)
             (if_true Reg (and_reg ty y rx))
             (if_false Reg (and_not_reg ty z rx)))
         (or_reg ty if_false if_true)))
 
 ;; z14 version using XOR with -1.
-(rule 1 (lower (has_type (and (mie2_disabled) (fits_in_64 ty)) (bitselect x y z)))
+(rule 1 (lower (has_type (and (mie3_disabled) (fits_in_64 ty)) (bitselect x y z)))
       (let ((rx Reg x)
             (if_true Reg (and_reg ty y rx))
             (if_false Reg (and_reg ty z (not_reg ty rx))))
@@ -1329,7 +1329,7 @@
 
 ;; On z15, the POPCNT instruction has a variant to compute a full 64-bit
 ;; population count, which we also use for 16- and 32-bit types.
-(rule -1 (lower (has_type (and (mie2_enabled) (fits_in_64 ty)) (popcnt x)))
+(rule -1 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (popcnt x)))
       (popcnt_reg (put_in_reg_zext64 x)))
 
 ;; On z14, we use the regular POPCNT, which computes the population count
@@ -1340,18 +1340,18 @@
 ;; $I16, where we instead accumulate in the low byte and clear high bits
 ;; via an explicit and operation.)
 
-(rule (lower (has_type (and (mie2_disabled) $I16) (popcnt x)))
+(rule (lower (has_type (and (mie3_disabled) $I16) (popcnt x)))
       (let ((cnt2 Reg (popcnt_byte x))
             (cnt1 Reg (add_reg $I32 cnt2 (lshr_imm $I32 cnt2 8))))
         (and_uimm16shifted $I32 cnt1 (uimm16shifted 255 0))))
 
-(rule (lower (has_type (and (mie2_disabled) $I32) (popcnt x)))
+(rule (lower (has_type (and (mie3_disabled) $I32) (popcnt x)))
       (let ((cnt4 Reg (popcnt_byte x))
             (cnt2 Reg (add_reg $I32 cnt4 (lshl_imm $I32 cnt4 16)))
             (cnt1 Reg (add_reg $I32 cnt2 (lshl_imm $I32 cnt2 8))))
         (lshr_imm $I32 cnt1 24)))
 
-(rule (lower (has_type (and (mie2_disabled) $I64) (popcnt x)))
+(rule (lower (has_type (and (mie3_disabled) $I64) (popcnt x)))
       (let ((cnt8 Reg (popcnt_byte x))
             (cnt4 Reg (add_reg $I64 cnt8 (lshl_imm $I64 cnt8 32)))
             (cnt2 Reg (add_reg $I64 cnt4 (lshl_imm $I64 cnt4 16)))
@@ -3054,17 +3054,17 @@
 ;; On z15 this can use the NN(G)RK instruction.  On z14, perform an And
 ;; operation and invert the result.  In the little-endian case, we can
 ;; simply byte-swap the source operand.
-(rule 4 (atomic_rmw_body ib (and (mie2_enabled) (ty_32_or_64 ty)) (bigendian)
+(rule 4 (atomic_rmw_body ib (and (mie3_enabled) (ty_32_or_64 ty)) (bigendian)
                        (AtomicRmwOp.Nand) tmp val src)
       (push_alu_reg ib (aluop_not_and ty) tmp val src))
-(rule 3 (atomic_rmw_body ib (and (mie2_enabled) (ty_32_or_64 ty)) (littleendian)
+(rule 3 (atomic_rmw_body ib (and (mie3_enabled) (ty_32_or_64 ty)) (littleendian)
                        (AtomicRmwOp.Nand) tmp val src)
       (push_alu_reg ib (aluop_not_and ty) tmp val (bswap_reg ty src)))
-(rule 2 (atomic_rmw_body ib (and (mie2_disabled) (ty_32_or_64 ty)) (bigendian)
+(rule 2 (atomic_rmw_body ib (and (mie3_disabled) (ty_32_or_64 ty)) (bigendian)
                        (AtomicRmwOp.Nand) tmp val src)
       (push_not_reg ib ty tmp
         (push_alu_reg ib (aluop_and ty) tmp val src)))
-(rule 1 (atomic_rmw_body ib (and (mie2_disabled) (ty_32_or_64 ty)) (littleendian)
+(rule 1 (atomic_rmw_body ib (and (mie3_disabled) (ty_32_or_64 ty)) (littleendian)
                        (AtomicRmwOp.Nand) tmp val src)
       (push_not_reg ib ty tmp
         (push_alu_reg ib (aluop_and ty) tmp val (bswap_reg ty src))))

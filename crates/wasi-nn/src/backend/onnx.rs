@@ -1,6 +1,8 @@
 //! Implements a `wasi-nn` [`BackendInner`] using ONNX via the `ort` crate.
 
-use super::{BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner};
+use super::{
+    BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, NamedTensor,
+};
 use crate::backend::{Id, read};
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
@@ -131,25 +133,99 @@ impl BackendExecutionContext for OnnxExecutionContext {
         Ok(())
     }
 
-    fn compute(&mut self) -> Result<(), BackendError> {
-        let mut session_inputs: Vec<ort::SessionInputValue<'_>> = vec![];
-        for i in &self.inputs {
-            session_inputs.extend(to_input_value(i)?);
+    fn compute(
+        &mut self,
+        inputs: Option<Vec<NamedTensor>>,
+    ) -> Result<Option<Vec<NamedTensor>>, BackendError> {
+        match inputs {
+            // WIT
+            Some(inputs) => {
+                for slot in &mut self.inputs {
+                    slot.tensor = None;
+                }
+                for input in &inputs {
+                    let index = self
+                        .inputs
+                        .iter()
+                        .position(|slot| slot.shape.name == input.name);
+                    let index = match index {
+                        Some(idx) => idx,
+                        None => {
+                            // Try to convert name to index
+                            if let Ok(idx) = input.name.parse::<usize>() {
+                                if idx < self.inputs.len() {
+                                    idx
+                                } else {
+                                    return Err(BackendError::BackendAccess(anyhow::anyhow!(
+                                        "Input index out of range: {}",
+                                        idx
+                                    )));
+                                }
+                            } else {
+                                return Err(BackendError::BackendAccess(anyhow::anyhow!(
+                                    "Unknown input tensor name: {}",
+                                    input.name
+                                )));
+                            }
+                        }
+                    };
+
+                    let input_slot = &mut self.inputs[index];
+                    if let Err(e) = input_slot.shape.matches(&input.tensor) {
+                        return Err(e.into());
+                    }
+                    input_slot.tensor.replace(input.tensor.clone());
+                }
+
+                let mut session_inputs: Vec<ort::SessionInputValue<'_>> = vec![];
+                for i in &self.inputs {
+                    session_inputs.extend(to_input_value(i)?);
+                }
+                let session = self.session.lock().unwrap();
+                let session_outputs = session.run(session_inputs.as_slice())?;
+
+                let mut output_tensors = Vec::new();
+                for i in 0..self.outputs.len() {
+                    // TODO: fix preexisting gap--this only handles f32 tensors.
+                    let raw: (Vec<i64>, &[f32]) = session_outputs[i].try_extract_raw_tensor()?;
+                    let f32s = raw.1.to_vec();
+                    let output = &mut self.outputs[i];
+                    let tensor = Tensor {
+                        dimensions: output.shape.dimensions_as_u32()?,
+                        ty: output.shape.ty,
+                        data: f32_vec_to_bytes(f32s),
+                    };
+                    output.tensor.replace(tensor.clone());
+                    output_tensors.push(NamedTensor {
+                        name: output.shape.name.clone(),
+                        tensor,
+                    });
+                }
+                Ok(Some(output_tensors))
+            }
+
+            // WITX
+            None => {
+                let mut session_inputs: Vec<ort::SessionInputValue<'_>> = vec![];
+                for i in &self.inputs {
+                    session_inputs.extend(to_input_value(i)?);
+                }
+                let session = self.session.lock().unwrap();
+                let session_outputs = session.run(session_inputs.as_slice())?;
+                for i in 0..self.outputs.len() {
+                    // TODO: fix preexisting gap--this only handles f32 tensors.
+                    let raw: (Vec<i64>, &[f32]) = session_outputs[i].try_extract_raw_tensor()?;
+                    let f32s = raw.1.to_vec();
+                    let output = &mut self.outputs[i];
+                    output.tensor.replace(Tensor {
+                        dimensions: output.shape.dimensions_as_u32()?,
+                        ty: output.shape.ty,
+                        data: f32_vec_to_bytes(f32s),
+                    });
+                }
+                Ok(None)
+            }
         }
-        let session = self.session.lock().unwrap();
-        let session_outputs = session.run(session_inputs.as_slice())?;
-        for i in 0..self.outputs.len() {
-            // TODO: fix preexisting gap--this only handles f32 tensors.
-            let raw: (Vec<i64>, &[f32]) = session_outputs[i].try_extract_raw_tensor()?;
-            let f32s = raw.1.to_vec();
-            let output = &mut self.outputs[i];
-            output.tensor.replace(Tensor {
-                dimensions: output.shape.dimensions_as_u32()?,
-                ty: output.shape.ty,
-                data: f32_vec_to_bytes(f32s),
-            });
-        }
-        Ok(())
     }
 
     fn get_output(&mut self, id: Id) -> Result<Tensor, BackendError> {

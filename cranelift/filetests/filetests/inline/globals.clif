@@ -1,0 +1,45 @@
+test inline precise-output
+target x86_64
+
+function %f0() -> i64 {
+    gv0 = symbol %sym
+    gv1 = load.i64 notrap aligned gv0+8
+block0:
+    v0 = symbol_value.i64 gv0
+    v1 = global_value.i64 gv1
+    v2 = iadd v0, v1
+    return v2
+}
+
+; (no functions inlined into %f0)
+
+function %f1() -> i64 {
+    gv0 = symbol %other_sym
+    fn0 = %f0() -> i64
+block0:
+    v1 = call fn0()
+    return v1
+}
+
+; function %f1() -> i64 fast {
+;     gv0 = symbol %other_sym
+;     gv1 = symbol %sym
+;     gv2 = load.i64 notrap aligned gv1+8
+;     sig0 = () -> i64 fast
+;     fn0 = %f0 sig0
+;
+; block0:
+;     jump block1
+;
+; block1:
+;     v3 = symbol_value.i64 gv1
+;     v4 = symbol_value.i64 gv1
+;     v5 = load.i64 notrap aligned v4+8
+;     v6 = iadd v3, v5
+;     jump block2(v6)
+;
+; block2(v2: i64):
+;     v1 -> v2
+;     return v1
+; }
+

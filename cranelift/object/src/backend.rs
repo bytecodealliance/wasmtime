@@ -15,8 +15,8 @@ use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
 };
 use object::{
-    RelocationEncoding, RelocationFlags, RelocationKind, SectionKind, SymbolFlags, SymbolKind,
-    SymbolScope,
+    RelocationEncoding, RelocationFlags, RelocationKind, SectionFlags, SectionKind, SymbolFlags,
+    SymbolKind, SymbolScope, elf,
 };
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -394,6 +394,7 @@ impl Module for ObjectModule {
             data_relocs: _,
             ref custom_segment_section,
             align,
+            used,
         } = data;
 
         let pointer_reloc = match self.isa.triple().pointer_width().unwrap() {
@@ -422,7 +423,7 @@ impl Module for ObjectModule {
             } else {
                 StandardSection::ReadOnlyDataWithRel
             };
-            if self.per_data_object_section {
+            if self.per_data_object_section || used {
                 // FIXME pass empty symbol name once add_subsection produces `.text` as section name
                 // instead of `.text.` when passed an empty symbol name. (object#748) Until then
                 // pass `subsection` to produce `.text.subsection` as section name to reduce
@@ -450,6 +451,47 @@ impl Module for ObjectModule {
                 },
             )
         };
+
+        if used {
+            match self.object.format() {
+                object::BinaryFormat::Elf => {
+                    let section = self.object.section_mut(section);
+                    match &mut section.flags {
+                        SectionFlags::None => {
+                            // Explicitly specify default flags as SectionFlags::Elf overwrites them
+                            let sh_flags = if decl.tls {
+                                elf::SHF_ALLOC | elf::SHF_WRITE | elf::SHF_TLS
+                            } else if decl.writable || !relocs.is_empty() {
+                                elf::SHF_ALLOC | elf::SHF_WRITE
+                            } else {
+                                elf::SHF_ALLOC
+                            };
+                            section.flags = SectionFlags::Elf {
+                                sh_flags: u64::from(sh_flags | elf::SHF_GNU_RETAIN),
+                            }
+                        }
+                        SectionFlags::Elf { sh_flags } => {
+                            *sh_flags |= u64::from(elf::SHF_GNU_RETAIN)
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                object::BinaryFormat::Coff => {}
+                object::BinaryFormat::MachO => {
+                    let symbol = self.object.symbol_mut(symbol);
+                    assert!(matches!(symbol.flags, SymbolFlags::None));
+                    let n_desc = if decl.linkage == Linkage::Preemptible {
+                        object::macho::N_WEAK_DEF
+                    } else {
+                        0
+                    };
+                    symbol.flags = SymbolFlags::MachO {
+                        n_desc: n_desc | object::macho::N_NO_DEAD_STRIP,
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
 
         let align = std::cmp::max(align.unwrap_or(1), self.isa.symbol_alignment());
         let offset = match *init {
@@ -482,7 +524,7 @@ impl ObjectModule {
         bytes: &[u8],
         relocs: Vec<ObjectRelocRecord>,
     ) -> Result<(), ModuleError> {
-        info!("defining function {} with bytes", func_id);
+        info!("defining function {func_id} with bytes");
         let decl = self.declarations.get_function_decl(func_id);
         let decl_name = decl.linkage_name(func_id);
         if !decl.linkage.is_definable() {

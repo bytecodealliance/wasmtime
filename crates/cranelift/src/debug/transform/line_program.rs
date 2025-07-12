@@ -75,6 +75,7 @@ where
             out_encoding,
             line_encoding,
             out_comp_dir,
+            None,
             out_comp_name,
             None,
         );

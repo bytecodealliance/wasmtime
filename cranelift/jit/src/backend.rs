@@ -543,7 +543,7 @@ impl Module for JITModule {
         bytes: &[u8],
         relocs: &[ModuleReloc],
     ) -> ModuleResult<()> {
-        info!("defining function {} with bytes", id);
+        info!("defining function {id} with bytes");
         let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(
@@ -611,6 +611,7 @@ impl Module for JITModule {
             data_relocs: _,
             custom_segment_section: _,
             align,
+            used: _,
         } = data;
 
         // Make sure to allocate at least 1 byte. Allocating 0 bytes is UB. Previously a dummy

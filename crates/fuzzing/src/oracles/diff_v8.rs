@@ -139,7 +139,7 @@ impl DiffEngine for V8Engine {
                     "divide result unrepresentable",
                 ]);
             }
-            other => log::debug!("unknown code {:?}", other),
+            other => log::debug!("unknown code {other:?}"),
         }
 
         verify_wasmtime("not possibly present in an error, just panic please");

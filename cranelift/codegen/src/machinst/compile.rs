@@ -73,10 +73,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
         regalloc2::run(&vcode, vcode.abi.machine_env(), &options)
             .map_err(|err| {
                 log::error!(
-                    "Register allocation error for vcode\n{:?}\nError: {:?}\nCLIF for error:\n{:?}",
-                    vcode,
-                    err,
-                    f,
+                    "Register allocation error for vcode\n{vcode:?}\nError: {err:?}\nCLIF for error:\n{f:?}",
                 );
                 err
             })
@@ -91,11 +88,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
         checker
             .run()
             .map_err(|err| {
-                log::error!(
-                    "Register allocation checker errors:\n{:?}\nfor vcode:\n{:?}",
-                    err,
-                    vcode
-                );
+                log::error!("Register allocation checker errors:\n{err:?}\nfor vcode:\n{vcode:?}");
                 err
             })
             .expect("register allocation checker");

@@ -21,8 +21,8 @@
 //! the above three primitives to form a full incremental caching system.
 
 use core::fmt;
+use core::hash::{Hash, Hasher};
 
-use crate::alloc::string::String;
 use crate::alloc::vec::Vec;
 use crate::ir::Function;
 use crate::ir::function::{FunctionStencil, VersionMarker};
@@ -30,8 +30,7 @@ use crate::machinst::{CompiledCode, CompiledCodeStencil};
 use crate::result::CompileResult;
 use crate::{CompileError, Context, trace};
 use crate::{isa::TargetIsa, timing};
-use alloc::borrow::{Cow, ToOwned as _};
-use alloc::string::ToString as _;
+use alloc::borrow::Cow;
 use cranelift_control::ControlPlane;
 
 impl Context {
@@ -100,7 +99,7 @@ impl Context {
 /// Backing storage for an incremental compilation cache, when enabled.
 pub trait CacheKvStore {
     /// Given a cache key hash, retrieves the associated opaque serialized data.
-    fn get(&self, key: &[u8]) -> Option<Cow<[u8]>>;
+    fn get(&self, key: &[u8]) -> Option<Cow<'_, [u8]>>;
 
     /// Given a new cache key and a serialized blob obtained from `serialize_compiled`, stores it
     /// in the cache store.
@@ -133,32 +132,18 @@ struct CachedFunc {
 ///
 /// Note: the key will be invalidated across different versions of cranelift, as the
 /// `FunctionStencil` contains a `VersionMarker` itself.
-#[derive(Hash)]
 struct CacheKey<'a> {
     stencil: &'a FunctionStencil,
-    parameters: CompileParameters,
+    isa: &'a dyn TargetIsa,
 }
 
-#[derive(Clone, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
-struct CompileParameters {
-    isa: String,
-    triple: String,
-    flags: String,
-    isa_flags: Vec<String>,
-}
-
-impl CompileParameters {
-    fn from_isa(isa: &dyn TargetIsa) -> Self {
-        Self {
-            isa: isa.name().to_owned(),
-            triple: isa.triple().to_string(),
-            flags: isa.flags().to_string(),
-            isa_flags: isa
-                .isa_flags()
-                .into_iter()
-                .map(|v| v.value_string())
-                .collect(),
-        }
+impl<'a> Hash for CacheKey<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.stencil.hash(state);
+        self.isa.name().hash(state);
+        self.isa.triple().hash(state);
+        self.isa.flags().hash(state);
+        self.isa.isa_flags_hash_key().hash(state);
     }
 }
 
@@ -166,10 +151,10 @@ impl<'a> CacheKey<'a> {
     /// Creates a new cache store key for a function.
     ///
     /// This is a bit expensive to compute, so it should be cached and reused as much as possible.
-    fn new(isa: &dyn TargetIsa, f: &'a Function) -> Self {
+    fn new(isa: &'a dyn TargetIsa, f: &'a Function) -> Self {
         CacheKey {
             stencil: &f.stencil,
-            parameters: CompileParameters::from_isa(isa),
+            isa,
         }
     }
 }

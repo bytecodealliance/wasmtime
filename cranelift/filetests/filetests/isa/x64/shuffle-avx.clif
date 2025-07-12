@@ -14,7 +14,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpunpckldq %xmm0, %xmm1, %xmm0
+;   vpunpckldq %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -42,7 +42,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpunpckhdq %xmm0, %xmm1, %xmm0
+;   vpunpckhdq %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -70,7 +70,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpunpcklqdq %xmm0, %xmm1, %xmm0
+;   vpunpcklqdq %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -98,7 +98,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpunpckhqdq %xmm0, %xmm1, %xmm0
+;   vpunpckhqdq %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -126,7 +126,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpblendw $153, %xmm0, %xmm1, %xmm0
+;   vpblendw $0x99, %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

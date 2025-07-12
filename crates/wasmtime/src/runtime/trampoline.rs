@@ -12,36 +12,10 @@ pub(crate) use memory::MemoryCreatorProxy;
 use self::memory::create_memory;
 use self::table::create_table;
 use crate::prelude::*;
-use crate::runtime::vm::{
-    Imports, ModuleRuntimeInfo, OnDemandInstanceAllocator, SharedMemory, VMFunctionImport,
-};
-use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque};
+use crate::runtime::vm::SharedMemory;
+use crate::store::StoreOpaque;
 use crate::{MemoryType, TableType};
-use alloc::sync::Arc;
-use wasmtime_environ::{MemoryIndex, Module, TableIndex, VMSharedTypeIndex};
-
-fn create_handle(
-    module: Module,
-    store: &mut StoreOpaque,
-    func_imports: &[VMFunctionImport],
-    one_signature: Option<VMSharedTypeIndex>,
-) -> Result<InstanceId> {
-    let mut imports = Imports::default();
-    imports.functions = func_imports;
-
-    unsafe {
-        let allocator =
-            OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
-        let module = Arc::new(module);
-        store.allocate_instance(
-            AllocateInstanceKind::Dummy {
-                allocator: &allocator,
-            },
-            &ModuleRuntimeInfo::bare_maybe_imported_func(module, one_signature),
-            imports,
-        )
-    }
-}
+use wasmtime_environ::{MemoryIndex, TableIndex};
 
 pub fn generate_memory_export(
     store: &mut StoreOpaque,

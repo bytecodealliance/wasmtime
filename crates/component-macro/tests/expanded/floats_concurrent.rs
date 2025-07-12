@@ -409,10 +409,11 @@ pub mod exports {
                                 (f32,),
                             >::new_unchecked(self.f32_result)
                         };
-                        wasmtime::component::__internal::FutureExt::map(
-                            callee.call_concurrent(store.as_context_mut(), ()),
-                            |v| v.map(|(v,)| v),
-                        )
+                        let future = callee.call_concurrent(store.as_context_mut(), ());
+                        async move {
+                            let (ret0,) = future.await?;
+                            Ok(ret0)
+                        }
                     }
                     pub fn call_f64_result<S: wasmtime::AsContextMut>(
                         &self,
@@ -429,10 +430,11 @@ pub mod exports {
                                 (f64,),
                             >::new_unchecked(self.f64_result)
                         };
-                        wasmtime::component::__internal::FutureExt::map(
-                            callee.call_concurrent(store.as_context_mut(), ()),
-                            |v| v.map(|(v,)| v),
-                        )
+                        let future = callee.call_concurrent(store.as_context_mut(), ());
+                        async move {
+                            let (ret0,) = future.await?;
+                            Ok(ret0)
+                        }
                     }
                 }
             }

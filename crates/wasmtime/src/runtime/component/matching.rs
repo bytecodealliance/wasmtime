@@ -2,6 +2,7 @@ use crate::Module;
 use crate::component::ResourceType;
 use crate::component::func::HostFunc;
 use crate::component::linker::{Definition, Strings};
+use crate::component::types::{FutureType, StreamType};
 use crate::runtime::vm::component::ComponentInstance;
 use crate::types::matching;
 use crate::{Engine, prelude::*};
@@ -9,7 +10,7 @@ use alloc::sync::Arc;
 use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, NameMap, ResourceIndex, TypeComponentInstance, TypeDef, TypeFuncIndex,
-    TypeModule, TypeResourceTableIndex,
+    TypeFutureTableIndex, TypeModule, TypeResourceTableIndex, TypeStreamTableIndex,
 };
 
 pub struct TypeChecker<'a> {
@@ -197,5 +198,13 @@ impl<'a> InstanceType<'a> {
             .get(index)
             .copied()
             .unwrap_or_else(|| ResourceType::uninstantiated(&self.types, index))
+    }
+
+    pub fn future_type(&self, index: TypeFutureTableIndex) -> FutureType {
+        FutureType::from(self.types[index].ty, self)
+    }
+
+    pub fn stream_type(&self, index: TypeStreamTableIndex) -> StreamType {
+        StreamType::from(self.types[index].ty, self)
     }
 }

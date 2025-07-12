@@ -19,6 +19,13 @@ use crate::settings::Flags;
 use std::boxed::Box;
 use target_lexicon::Triple;
 
+/// Identifier for a particular input of an instruction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct InsnInput {
+    insn: IRInst,
+    input: usize,
+}
+
 //=============================================================================
 // Helpers for instruction lowering.
 
@@ -188,7 +195,7 @@ fn emit_vm_call(
     } else {
         let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
         ctx.emit(Inst::LoadExtName {
-            dst: tmp,
+            dst: tmp.map(Gpr::unwrap_new),
             name: Box::new(extname),
             offset: 0,
             distance: RelocDistance::Far,

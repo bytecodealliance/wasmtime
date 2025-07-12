@@ -22,20 +22,23 @@
 //! `VMGcRef`s inside Wasm activations. Then we take the difference between this
 //! precise set and our over-approximation, and decrement the reference count
 //! for each of the `VMGcRef`s that are in our over-approximation but not in the
-//! precise set. Finally, the over-approximation is replaced with the precise
-//! set.
+//! precise set. Finally, the over-approximation is reset to the precise set.
 //!
-//! The `VMGcRefActivationsTable` implements the over-approximized set of
-//! `VMGcRef`s referenced by Wasm activations. Calling a Wasm function and
-//! passing it a `VMGcRef` moves the `VMGcRef` into the table, and the compiled
-//! Wasm function logically "borrows" the `VMGcRef` from the table. Similarly,
-//! `global.get` and `table.get` operations clone the gotten `VMGcRef` into the
-//! `VMGcRefActivationsTable` and then "borrow" the reference out of the table.
+//! An intrusive, singly-linked list in the object header implements the
+//! over-approximated set of `VMGcRef`s referenced by Wasm activations. Calling
+//! a Wasm function and passing it a `VMGcRef` inserts the `VMGcRef` into that
+//! list if it is not already present, and the compiled Wasm function logically
+//! "borrows" the `VMGcRef` from the list. Similarly, `global.get` and
+//! `table.get` operations logically clone the gotten `VMGcRef` into that list
+//! and then "borrow" the reference out of the list.
 //!
 //! When a `VMGcRef` is returned to host code from a Wasm function, the host
 //! increments the reference count (because the reference is logically
-//! "borrowed" from the `VMGcRefActivationsTable` and the reference count from
+//! "borrowed" from the list and the reference count from
 //! the table will be dropped at the next GC).
+//!
+//! The precise set of stack roots is implemented with a mark bit in the object
+//! header. See the `trace` and `sweep` methods for more details.
 //!
 //! For more general information on deferred reference counting, see *An
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
@@ -49,13 +52,13 @@ use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
     GcProgress, GcRootsIter, GcRuntime, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
 };
-use crate::vm::{SendSyncPtr, VMMemoryDefinition};
+use crate::vm::VMMemoryDefinition;
 use crate::{Engine, EngineWeak, prelude::*};
+use core::sync::atomic::AtomicUsize;
 use core::{
     alloc::Layout,
     any::Any,
     mem,
-    num::NonZeroUsize,
     ops::{Deref, DerefMut},
     ptr::NonNull,
 };
@@ -64,7 +67,7 @@ use wasmtime_environ::{
     GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
 };
 
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "known to not overflow")]
 const GC_REF_ARRAY_ELEMS_OFFSET: u32 = ARRAY_LENGTH_OFFSET + (mem::size_of::<u32>() as u32);
 
 /// The deferred reference-counting (DRC) collector.
@@ -117,18 +120,21 @@ struct DrcHeap {
     /// Count of how many no-gc scopes we are currently within.
     no_gc_count: u64,
 
-    /// This heap's bump table for GC refs entering the Wasm stack. This is
-    /// mutated directly by Wasm and a pointer to it is stored inside the
-    /// `VMContext`.
+    /// The head of the over-approximated-stack-roots list.
     ///
-    /// NB: this box isn't strictly necessary (because the `DrcHeap` is itself
-    /// boxed up) but it makes upholding the safety invariants of the
-    /// `vmctx_gc_heap_data` more-obviously correct without needing to reason
-    /// about less-local system properties.
-    activations_table: Box<VMGcRefActivationsTable>,
+    /// Note that this is exposed directly to compiled Wasm code through the
+    /// vmctx, so must not move.
+    over_approximated_stack_roots: Box<Option<VMGcRef>>,
 
     /// The storage for the GC heap itself.
     memory: Option<crate::vm::Memory>,
+
+    /// The cached `VMMemoryDefinition` for `self.memory` so that we don't have
+    /// to make indirect calls through a `dyn RuntimeLinearMemory` object.
+    ///
+    /// Must be updated and kept in sync with `self.memory`, cleared when the
+    /// memory is taken and updated when the memory is replaced.
+    vmmemory: Option<VMMemoryDefinition>,
 
     /// A free list describing which ranges of the heap are available for use.
     free_list: Option<FreeList>,
@@ -153,12 +159,13 @@ impl DrcHeap {
         log::trace!("allocating new DRC heap");
         Ok(Self {
             engine: engine.weak(),
-            trace_infos: HashMap::default(),
+            trace_infos: HashMap::with_capacity(1),
             no_gc_count: 0,
-            activations_table: Box::new(VMGcRefActivationsTable::default()),
+            over_approximated_stack_roots: Box::new(None),
             memory: None,
+            vmmemory: None,
             free_list: None,
-            dec_ref_stack: Some(vec![]),
+            dec_ref_stack: Some(Vec::with_capacity(1)),
         })
     }
 
@@ -310,6 +317,7 @@ impl DrcHeap {
             .expect("should have inserted trace info for every GC type allocated in this heap")
         {
             TraceInfo::Struct { gc_ref_offsets } => {
+                stack.reserve(gc_ref_offsets.len());
                 let data = self.gc_object_data(gc_ref);
                 for offset in gc_ref_offsets {
                     let raw = data.read_u32(*offset);
@@ -325,6 +333,7 @@ impl DrcHeap {
 
                 let data = self.gc_object_data(gc_ref);
                 let len = self.array_len(gc_ref.as_arrayref_unchecked());
+                stack.reserve(usize::try_from(len).unwrap());
                 for i in 0..len {
                     let elem_offset = GC_REF_ARRAY_ELEMS_OFFSET
                         + i * u32::try_from(mem::size_of::<u32>()).unwrap();
@@ -337,25 +346,28 @@ impl DrcHeap {
         }
     }
 
-    fn trace(&mut self, roots: &mut GcRootsIter<'_>) {
-        debug_assert!({
-            // This set is only non-empty during collection. It is built up when
-            // tracing roots, and then drained back into the activations table's
-            // bump-allocated space at the end. Therefore, it should always be
-            // empty upon beginning tracing, which is the start of collection.
-            self.activations_table.precise_stack_roots.is_empty()
-        });
+    /// Iterate over the over-approximated-stack-roots list.
+    fn iter_over_approximated_stack_roots(&self) -> impl Iterator<Item = VMGcRef> + '_ {
+        let mut link = (*self.over_approximated_stack_roots)
+            .as_ref()
+            .map(|r| r.unchecked_copy());
 
-        // The `activations_table_set` is used for `debug_assert!`s checking that
-        // every reference we read out from the stack via stack maps is actually in
-        // the table. If that weren't true, than either we forgot to insert a
+        core::iter::from_fn(move || {
+            let r = link.as_ref()?.unchecked_copy();
+            link = self.index(drc_ref(&r)).next_over_approximated_stack_root();
+            Some(r)
+        })
+    }
+
+    fn trace(&mut self, roots: &mut GcRootsIter<'_>) {
+        // The `over_approx_set` is used for `debug_assert!`s checking that
+        // every reference we read out from the stack via stack maps is actually
+        // in the table. If that weren't true, than either we forgot to insert a
         // reference in the table when passing it into Wasm (a bug) or we are
         // reading invalid references from the stack (another bug).
-        let mut activations_table_set: DebugOnly<HashSet<_>> = Default::default();
+        let mut over_approx_set: DebugOnly<HashSet<_>> = Default::default();
         if cfg!(debug_assertions) {
-            self.activations_table.elements(|elem| {
-                activations_table_set.insert(elem.unchecked_copy());
-            });
+            over_approx_set.extend(self.iter_over_approximated_stack_roots());
         }
 
         for root in roots {
@@ -369,42 +381,35 @@ impl DrcHeap {
             }
 
             let gc_ref = root.get();
-            debug_assert!(
-                gc_ref.is_i31() || activations_table_set.contains(&gc_ref),
-                "every on-stack gc_ref inside a Wasm frame should \
-                 have an entry in the VMGcRefActivationsTable; \
-                 {gc_ref:#p} is not in the table",
-            );
+
             if gc_ref.is_i31() {
                 continue;
             }
 
+            log::trace!("Found GC reference on the stack: {gc_ref:#p}");
+
+            debug_assert!(
+                over_approx_set.contains(&gc_ref),
+                "every on-stack gc ref inside a Wasm frame should \
+                 have be in our over-approximated stack roots set, \
+                 but {gc_ref:#p} is not in the set",
+            );
+            debug_assert!(
+                self.index(drc_ref(&gc_ref))
+                    .is_in_over_approximated_stack_roots(),
+                "every on-stack gc ref inside a Wasm frame should have \
+                 its in-the-over-approximated-stack-roots-list bit set",
+            );
             debug_assert_ne!(
                 self.index_mut(drc_ref(&gc_ref)).ref_count,
                 0,
                 "{gc_ref:#p} is on the Wasm stack and therefore should be held \
-                 by the activations table; should have nonzero ref count",
+                 alive by the over-approximated-stack-roots set; should have \
+                 nonzero ref count",
             );
 
-            log::trace!("Found GC reference on the stack: {:#p}", gc_ref);
-            let is_new = self
-                .activations_table
-                .precise_stack_roots
-                .insert(gc_ref.unchecked_copy());
-            if is_new {
-                self.inc_ref(&gc_ref);
-            }
+            self.index_mut(drc_ref(&gc_ref)).set_marked();
         }
-    }
-
-    fn iter_bump_chunk(&mut self) -> impl Iterator<Item = VMGcRef> + '_ {
-        let num_filled = self.activations_table.num_filled_in_bump_chunk();
-        self.activations_table
-            .alloc
-            .chunk
-            .iter_mut()
-            .take(num_filled)
-            .map(|slot| VMGcRef::from_raw_u32(*slot).expect("non-null"))
     }
 
     #[inline(never)]
@@ -424,93 +429,100 @@ impl DrcHeap {
         log::trace!("{prefix}: {set}");
     }
 
-    fn drain_bump_chunk(&mut self, mut f: impl FnMut(&mut Self, VMGcRef)) {
-        let num_filled = self.activations_table.num_filled_in_bump_chunk();
-
-        // Temporarily take the allocation out of `self` to avoid conflicting
-        // borrows.
-        let mut alloc = mem::take(&mut self.activations_table.alloc);
-        for slot in alloc.chunk.iter_mut().take(num_filled) {
-            let raw = mem::take(slot);
-            let gc_ref = VMGcRef::from_raw_u32(raw).expect("non-null");
-            f(self, gc_ref);
-            *slot = 0;
-        }
-
-        debug_assert!(
-            alloc.chunk.iter().all(|slot| *slot == 0),
-            "after sweeping the bump chunk, all slots should be empty",
-        );
-
-        debug_assert!(self.activations_table.alloc.chunk.is_empty());
-        self.activations_table.alloc = alloc;
-    }
-
     /// Sweep the bump allocation table after we've discovered our precise stack
     /// roots.
     fn sweep(&mut self, host_data_table: &mut ExternRefHostDataTable) {
         if log::log_enabled!(log::Level::Trace) {
-            Self::log_gc_ref_set("bump chunk before sweeping", self.iter_bump_chunk());
-        }
-
-        // Sweep our bump chunk.
-        log::trace!("Begin sweeping bump chunk");
-        self.drain_bump_chunk(|heap, gc_ref| {
-            heap.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref);
-        });
-        log::trace!("Done sweeping bump chunk");
-
-        if self.activations_table.alloc.chunk.is_empty() {
-            // If this is the first collection, then the bump chunk is empty
-            // since we lazily allocate it. Force that lazy allocation now so we
-            // have fast bump-allocation in the future.
-            self.activations_table.alloc.force_allocation();
-        } else {
-            // Reset our `next` finger to the start of the bump allocation chunk.
-            self.activations_table.alloc.reset();
-        }
-
-        if log::log_enabled!(log::Level::Trace) {
             Self::log_gc_ref_set(
-                "hash set before sweeping",
-                self.activations_table
-                    .over_approximated_stack_roots
-                    .iter()
-                    .map(|r| r.unchecked_copy()),
+                "over-approximated-stack-roots set before sweeping",
+                self.iter_over_approximated_stack_roots(),
             );
         }
 
-        // The current `precise_stack_roots` becomes our new over-appoximated
-        // set for the next GC cycle.
-        mem::swap(
-            &mut self.activations_table.precise_stack_roots,
-            &mut self.activations_table.over_approximated_stack_roots,
-        );
-
-        // And finally, the new `precise_stack_roots` should be cleared and
-        // remain empty until the next GC cycle.
+        // Logically, we are taking the difference between
+        // over-approximated-stack-roots set and the precise-stack-roots set,
+        // decrementing the ref count for each object in that difference
+        // (because they are no longer live on the stack), and then resetting
+        // the over-approximated-stack-roots set to the precise set. In our
+        // actual implementation, the over-approximated-stack-roots set is
+        // implemented as an intrusive, singly-linked list in the object
+        // headers, and the precise-stack-roots set is implemented via the mark
+        // bits in the object headers. Therefore, we walk the
+        // over-approximated-stack-roots list, checking whether each object has
+        // its mark bit set.
         //
-        // Note that this may run arbitrary code as we run gc_ref
-        // destructors. Because of our `&mut` borrow above on this table,
-        // though, we're guaranteed that nothing will touch this table.
-        log::trace!("Begin sweeping hash set");
-        let mut precise_stack_roots = mem::take(&mut self.activations_table.precise_stack_roots);
-        for gc_ref in precise_stack_roots.drain() {
+        // * If the mark bit is set, then it is in the precise-stack-roots set
+        //   and is still on the stack, so we keep it in the
+        //   over-approximated-stack-roots list and do not modify its ref count.
+        //
+        // * If the mark bit is not set, then it is not in the
+        //   precise-stack-roots set and is no longer on the stack, so we remove
+        //   it from the over-approximated-stack-roots set and decrement its ref
+        //   count.
+        //
+        // We also clear the mark bits as we do this traversal.
+        //
+        // Finally, note that decrementing ref counts may run `Drop`
+        // implementations, which may run arbitrary user code. However, because
+        // of our `&mut` borrow on this heap (which ultimately comes from a
+        // `&mut Store`) we're guaranteed that nothing will reentrantly touch
+        // this heap or run Wasm code in this store.
+        log::trace!("Begin sweeping");
+
+        // The `VMGcRef` of the previous object in the
+        // over-approximated-stack-roots list, if any.
+        let mut prev = None;
+
+        // The `VMGcRef` of the next object in the over-approximated-stack-roots
+        // list, if any.
+        let mut next = (*self.over_approximated_stack_roots)
+            .as_ref()
+            .map(|r| r.unchecked_copy());
+
+        while let Some(gc_ref) = next {
+            log::trace!("sweeping gc ref: {gc_ref:#p}");
+
+            let header = self.index_mut(drc_ref(&gc_ref));
+            debug_assert!(header.is_in_over_approximated_stack_roots());
+
+            if header.clear_marked() {
+                // This GC ref was marked, meaning it is still on the stack, so
+                // keep it in the over-approximated-stack-roots list and move on
+                // to the next object in the list.
+                log::trace!(
+                    "  -> {gc_ref:#p} is marked, leaving it in the over-approximated-\
+                     stack-roots list"
+                );
+                next = header.next_over_approximated_stack_root();
+                prev = Some(gc_ref);
+                continue;
+            }
+
+            // This GC ref was not marked, meaning it is no longer on the stack,
+            // so remove it from the over-approximated-stack-roots list and
+            // decrement its reference count.
+            log::trace!(
+                "  -> {gc_ref:#p} is not marked, removing it from over-approximated-\
+                 stack-roots list and decrementing its ref count"
+            );
+            next = header.next_over_approximated_stack_root();
+            let prev_next = header.next_over_approximated_stack_root();
+            header.set_in_over_approximated_stack_roots_bit(false);
+            match &prev {
+                None => *self.over_approximated_stack_roots = prev_next,
+                Some(prev) => self
+                    .index_mut(drc_ref(prev))
+                    .set_next_over_approximated_stack_root(prev_next),
+            }
             self.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref);
         }
-        log::trace!("Done sweeping hash set");
 
-        // Make sure to replace the `precise_stack_roots` so that we reuse any
-        // allocated capacity.
-        self.activations_table.precise_stack_roots = precise_stack_roots;
+        log::trace!("Done sweeping");
 
         if log::log_enabled!(log::Level::Trace) {
             Self::log_gc_ref_set(
-                "hash set after sweeping",
-                self.activations_table
-                    .over_approximated_stack_roots
-                    .iter()
-                    .map(|r| r.unchecked_copy()),
+                "over-approximated-stack-roots set after sweeping",
+                self.iter_over_approximated_stack_roots(),
             );
         }
     }
@@ -540,6 +552,8 @@ fn externref_to_drc(externref: &VMExternRef) -> &TypedGcRef<VMDrcExternRef> {
 struct VMDrcHeader {
     header: VMGcHeader,
     ref_count: u64,
+    next_over_approximated_stack_root: Option<VMGcRef>,
+    object_size: u32,
 }
 
 unsafe impl GcHeapObject for VMDrcHeader {
@@ -552,8 +566,79 @@ unsafe impl GcHeapObject for VMDrcHeader {
 
 impl VMDrcHeader {
     /// The size of this header's object.
+    #[inline]
     fn object_size(&self) -> usize {
-        usize::try_from(self.header.reserved_u27()).unwrap()
+        usize::try_from(self.object_size).unwrap()
+    }
+
+    /// Is this object in the over-approximated stack roots list?
+    #[inline]
+    fn is_in_over_approximated_stack_roots(&self) -> bool {
+        self.header.reserved_u27() & wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT != 0
+    }
+
+    /// Set whether this object is in the over-approximated stack roots list.
+    #[inline]
+    fn set_in_over_approximated_stack_roots_bit(&mut self, bit: bool) {
+        let reserved = self.header.reserved_u27();
+        let new_reserved = if bit {
+            reserved | wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT
+        } else {
+            reserved & !wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT
+        };
+        self.header.set_reserved_u27(new_reserved);
+    }
+
+    /// Get the next object after this one in the over-approximated-stack-roots
+    /// list, if any.
+    #[inline]
+    fn next_over_approximated_stack_root(&self) -> Option<VMGcRef> {
+        debug_assert!(self.is_in_over_approximated_stack_roots());
+        self.next_over_approximated_stack_root
+            .as_ref()
+            .map(|r| r.unchecked_copy())
+    }
+
+    /// Set the next object after this one in the over-approximated-stack-roots
+    /// list.
+    #[inline]
+    fn set_next_over_approximated_stack_root(&mut self, next: Option<VMGcRef>) {
+        debug_assert!(self.is_in_over_approximated_stack_roots());
+        self.next_over_approximated_stack_root = next;
+    }
+
+    /// Is this object marked?
+    #[inline]
+    fn is_marked(&self) -> bool {
+        self.header.reserved_u27() & wasmtime_environ::drc::HEADER_MARK_BIT != 0
+    }
+
+    /// Mark this object.
+    ///
+    /// Returns `true` if this object was newly marked (i.e. `is_marked()` would
+    /// have returned `false` before this call was made).
+    #[inline]
+    fn set_marked(&mut self) {
+        let reserved = self.header.reserved_u27();
+        self.header
+            .set_reserved_u27(reserved | wasmtime_environ::drc::HEADER_MARK_BIT);
+    }
+
+    /// Clear the mark bit for this object.
+    ///
+    /// Returns `true` if this object was marked before the mark bit was
+    /// cleared.
+    #[inline]
+    fn clear_marked(&mut self) -> bool {
+        if self.is_marked() {
+            let reserved = self.header.reserved_u27();
+            self.header
+                .set_reserved_u27(reserved & !wasmtime_environ::drc::HEADER_MARK_BIT);
+            debug_assert!(!self.is_marked());
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -588,13 +673,17 @@ unsafe impl GcHeapObject for VMDrcExternRef {
 unsafe impl GcHeap for DrcHeap {
     fn is_attached(&self) -> bool {
         debug_assert_eq!(self.memory.is_some(), self.free_list.is_some());
+        debug_assert_eq!(self.memory.is_some(), self.vmmemory.is_some());
         self.memory.is_some()
     }
 
     fn attach(&mut self, memory: crate::vm::Memory) {
         assert!(!self.is_attached());
+        assert!(!memory.is_shared_memory());
+        debug_assert!(self.over_approximated_stack_roots.is_none());
         let len = memory.vmmemory().current_length();
         self.free_list = Some(FreeList::new(len));
+        self.vmmemory = Some(memory.vmmemory());
         self.memory = Some(memory);
     }
 
@@ -604,10 +693,11 @@ unsafe impl GcHeap for DrcHeap {
         let DrcHeap {
             engine: _,
             no_gc_count,
-            activations_table,
+            over_approximated_stack_roots,
             free_list,
             dec_ref_stack,
             memory,
+            vmmemory,
 
             // NB: we will only ever be reused with the same engine, so no need
             // to clear out our tracing info just to fill it back in with the
@@ -616,8 +706,9 @@ unsafe impl GcHeap for DrcHeap {
         } = self;
 
         *no_gc_count = 0;
-        activations_table.reset();
+        **over_approximated_stack_roots = None;
         *free_list = None;
+        *vmmemory = None;
         debug_assert!(dec_ref_stack.as_ref().is_some_and(|s| s.is_empty()));
 
         memory.take().unwrap()
@@ -666,11 +757,22 @@ unsafe impl GcHeap for DrcHeap {
     }
 
     fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) {
-        self.activations_table.insert_without_gc(gc_ref);
-    }
+        let header = self.index_mut(drc_ref(&gc_ref));
+        if header.is_in_over_approximated_stack_roots() {
+            // Already in the over-approximated-stack-roots list, nothing more
+            // to do here.
+            return;
+        }
 
-    fn need_gc_before_entering_wasm(&self, num_gc_refs: NonZeroUsize) -> bool {
-        num_gc_refs.get() > self.activations_table.bump_capacity_remaining()
+        // Push this object onto the head of the over-approximated-stack-roots
+        // list.
+        header.set_in_over_approximated_stack_roots_bit(true);
+        let next = (*self.over_approximated_stack_roots)
+            .as_ref()
+            .map(|r| r.unchecked_copy());
+        self.index_mut(drc_ref(&gc_ref))
+            .set_next_over_approximated_stack_root(next);
+        *self.over_approximated_stack_roots = Some(gc_ref);
     }
 
     fn alloc_externref(
@@ -704,11 +806,7 @@ unsafe impl GcHeap for DrcHeap {
         self.index(drc_ref(gc_ref)).object_size()
     }
 
-    fn alloc_raw(
-        &mut self,
-        mut header: VMGcHeader,
-        layout: Layout,
-    ) -> Result<Result<VMGcRef, u64>> {
+    fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>> {
         debug_assert!(layout.size() >= core::mem::size_of::<VMDrcHeader>());
         debug_assert!(layout.align() >= core::mem::align_of::<VMDrcHeader>());
         debug_assert_eq!(header.reserved_u27(), 0);
@@ -723,12 +821,7 @@ unsafe impl GcHeap for DrcHeap {
             debug_assert_eq!(header.kind(), VMGcKind::ExternRef);
         }
 
-        // The size must fit in the unused bits of the GC header.
-        let size = u32::try_from(layout.size()).unwrap();
-        if !VMGcKind::value_fits_in_unused_bits(size) {
-            return Err(crate::Trap::AllocationTooLarge.into());
-        }
-        header.set_reserved_u27(size);
+        let object_size = u32::try_from(layout.size()).unwrap();
 
         let gc_ref = match self.free_list.as_mut().unwrap().alloc(layout)? {
             None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
@@ -738,6 +831,8 @@ unsafe impl GcHeap for DrcHeap {
         *self.index_mut(drc_ref(&gc_ref)) = VMDrcHeader {
             header,
             ref_count: 1,
+            next_over_approximated_stack_root: None,
+            object_size,
         };
         log::trace!("new object: increment {gc_ref:#p} ref count -> 1");
         Ok(Ok(gc_ref))
@@ -808,17 +903,20 @@ unsafe impl GcHeap for DrcHeap {
     }
 
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
-        let ptr: NonNull<VMGcRefActivationsTable> = NonNull::from(&*self.activations_table);
+        let ptr: NonNull<Option<VMGcRef>> = NonNull::from(&*self.over_approximated_stack_roots);
         ptr.cast()
     }
 
     unsafe fn take_memory(&mut self) -> crate::vm::Memory {
         debug_assert!(self.is_attached());
+        self.vmmemory.take();
         self.memory.take().unwrap()
     }
 
     unsafe fn replace_memory(&mut self, memory: crate::vm::Memory, delta_bytes_grown: u64) {
         debug_assert!(self.memory.is_none());
+        debug_assert!(!memory.is_shared_memory());
+        self.vmmemory = Some(memory.vmmemory());
         self.memory = Some(memory);
 
         self.free_list
@@ -827,9 +925,15 @@ unsafe impl GcHeap for DrcHeap {
             .add_capacity(usize::try_from(delta_bytes_grown).unwrap())
     }
 
+    #[inline]
     fn vmmemory(&self) -> VMMemoryDefinition {
         debug_assert!(self.is_attached());
-        self.memory.as_ref().unwrap().vmmemory()
+        debug_assert!(!self.memory.as_ref().unwrap().is_shared_memory());
+        let vmmemory = self.vmmemory.as_ref().unwrap();
+        VMMemoryDefinition {
+            base: vmmemory.base,
+            current_length: AtomicUsize::new(vmmemory.current_length()),
+        }
     }
 }
 
@@ -864,215 +968,6 @@ impl<'a> GarbageCollection<'a> for DrcCollection<'a> {
                 GcProgress::Complete
             }
             DrcCollectionPhase::Done => GcProgress::Complete,
-        }
-    }
-}
-
-/// The type of `VMGcRefActivationsTable`'s bump region's elements.
-///
-/// These are written to by Wasm.
-type TableElem = u32;
-
-/// A table that over-approximizes the set of `VMGcRef`s that any Wasm
-/// activation on this thread is currently using.
-///
-/// Under the covers, this is a simple bump allocator that allows duplicate
-/// entries. Deduplication happens at GC time.
-//
-// `alloc` must be the first member, it's accessed from JIT code.
-#[repr(C)]
-struct VMGcRefActivationsTable {
-    /// Structures used to perform fast bump allocation of storage of externref
-    /// values.
-    ///
-    /// This is the only member of this structure accessed from JIT code.
-    alloc: VMGcRefTableAlloc,
-
-    /// When unioned with `chunk`, this is an over-approximation of the GC roots
-    /// on the stack, inside Wasm frames.
-    ///
-    /// This is used by slow-path insertion, and when a GC cycle finishes, is
-    /// re-initialized to the just-discovered precise set of stack roots (which
-    /// immediately becomes an over-approximation again as soon as Wasm runs and
-    /// potentially drops references).
-    over_approximated_stack_roots: HashSet<VMGcRef>,
-
-    /// The precise set of on-stack, inside-Wasm GC roots that we discover via
-    /// walking the stack and interpreting stack maps.
-    ///
-    /// This is *only* used inside the `gc` function, and is empty otherwise. It
-    /// is just part of this struct so that we can reuse the allocation, rather
-    /// than create a new hash set every GC.
-    precise_stack_roots: HashSet<VMGcRef>,
-}
-
-/// The chunk of memory that we bump-allocate into for the fast path of
-/// inserting into the `VMGcRefActivationsTable`.
-///
-/// This is accessed from compiled Wasm code.
-#[repr(C)]
-struct VMGcRefTableAlloc {
-    /// Bump-allocation finger within the `chunk`.
-    ///
-    /// NB: this is written to by compiled Wasm code.
-    next: SendSyncPtr<TableElem>,
-
-    /// Pointer to just after the `chunk`.
-    ///
-    /// This is *not* within the current chunk and therefore is not a valid
-    /// place to insert a reference!
-    end: SendSyncPtr<TableElem>,
-
-    /// Bump allocation chunk that stores fast-path insertions.
-    ///
-    /// This is not accessed from JIT code.
-    chunk: Box<[TableElem]>,
-}
-
-impl Default for VMGcRefTableAlloc {
-    fn default() -> Self {
-        // Start with an empty chunk, just in case this activations table isn't
-        // ever used. This means that there's no space in the bump-allocation
-        // area which will force any path trying to use this to the slow GC
-        // path. The first time this happens, though, the slow GC path will
-        // allocate a new chunk for actual fast-bumping.
-        let mut chunk: Box<[TableElem]> = Box::new([]);
-        let next = chunk.as_mut_ptr();
-        let end = unsafe { next.add(chunk.len()) };
-        VMGcRefTableAlloc {
-            next: SendSyncPtr::new(NonNull::new(next).unwrap()),
-            end: SendSyncPtr::new(NonNull::new(end).unwrap()),
-            chunk,
-        }
-    }
-}
-
-impl VMGcRefTableAlloc {
-    /// Create a new, empty bump region.
-    const CHUNK_SIZE: usize = 4096 / mem::size_of::<TableElem>();
-
-    /// Force the lazy allocation of this bump region.
-    fn force_allocation(&mut self) {
-        assert!(self.chunk.is_empty());
-        self.chunk = (0..Self::CHUNK_SIZE).map(|_| 0).collect();
-        self.reset();
-    }
-
-    /// Reset this bump region, retaining any underlying allocation, but moving
-    /// the bump pointer and limit to their default positions.
-    fn reset(&mut self) {
-        let len = self.chunk.len();
-        let next = NonNull::new(self.chunk.as_mut_ptr()).unwrap();
-        let end = unsafe { next.add(len) };
-        self.next = SendSyncPtr::new(next);
-        self.end = SendSyncPtr::new(end);
-    }
-}
-
-fn _assert_send_sync() {
-    fn _assert<T: Send + Sync>() {}
-    _assert::<VMGcRefActivationsTable>();
-}
-
-impl Default for VMGcRefActivationsTable {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl VMGcRefActivationsTable {
-    /// Create a new `VMGcRefActivationsTable`.
-    fn new() -> Self {
-        VMGcRefActivationsTable {
-            alloc: VMGcRefTableAlloc::default(),
-            over_approximated_stack_roots: HashSet::new(),
-            precise_stack_roots: HashSet::new(),
-        }
-    }
-
-    fn reset(&mut self) {
-        let VMGcRefActivationsTable {
-            alloc,
-            over_approximated_stack_roots,
-            precise_stack_roots,
-        } = self;
-
-        alloc.reset();
-        over_approximated_stack_roots.clear();
-        precise_stack_roots.clear();
-    }
-
-    /// Get the available capacity in the bump allocation chunk.
-    #[inline]
-    fn bump_capacity_remaining(&self) -> usize {
-        let end = self.alloc.end.as_ptr() as usize;
-        let next = self.alloc.next.as_ptr() as usize;
-        end - next
-    }
-
-    /// Try and insert a `VMGcRef` into this table.
-    ///
-    /// This is a fast path that only succeeds when the bump chunk has the
-    /// capacity for the requested insertion.
-    ///
-    /// If the insertion fails, then the `VMGcRef` is given back. Callers
-    /// may attempt a GC to free up space and try again, or may call
-    /// `insert_slow_path` to infallibly insert the reference (potentially
-    /// allocating additional space in the table to hold it).
-    #[inline]
-    fn try_insert(&mut self, gc_ref: VMGcRef) -> Result<(), VMGcRef> {
-        unsafe {
-            if self.alloc.next == self.alloc.end {
-                return Err(gc_ref);
-            }
-
-            debug_assert_eq!(
-                self.alloc.next.as_non_null().read(),
-                0,
-                "slots >= the `next` bump finger are always `None`"
-            );
-            self.alloc.next.as_non_null().write(gc_ref.as_raw_u32());
-
-            let next = SendSyncPtr::new(NonNull::new(self.alloc.next.as_ptr().add(1)).unwrap());
-            debug_assert!(next.as_ptr() <= self.alloc.end.as_ptr());
-            self.alloc.next = next;
-
-            Ok(())
-        }
-    }
-
-    /// Insert a reference into the table, without ever performing GC.
-    #[inline]
-    fn insert_without_gc(&mut self, gc_ref: VMGcRef) {
-        if let Err(gc_ref) = self.try_insert(gc_ref) {
-            self.insert_slow_without_gc(gc_ref);
-        }
-    }
-
-    #[inline(never)]
-    fn insert_slow_without_gc(&mut self, gc_ref: VMGcRef) {
-        self.over_approximated_stack_roots.insert(gc_ref);
-    }
-
-    fn num_filled_in_bump_chunk(&self) -> usize {
-        let next = self.alloc.next;
-        let bytes_unused = (self.alloc.end.as_ptr() as usize) - (next.as_ptr() as usize);
-        let slots_unused = bytes_unused / mem::size_of::<TableElem>();
-        self.alloc.chunk.len().saturating_sub(slots_unused)
-    }
-
-    fn elements(&self, mut f: impl FnMut(&VMGcRef)) {
-        for elem in self.over_approximated_stack_roots.iter() {
-            f(elem);
-        }
-
-        // The bump chunk is not all the way full, so we only iterate over its
-        // filled-in slots.
-        let num_filled = self.num_filled_in_bump_chunk();
-        for slot in self.alloc.chunk.iter().take(num_filled) {
-            if let Some(elem) = VMGcRef::from_raw_u32(*slot) {
-                f(&elem);
-            }
         }
     }
 }
@@ -1140,6 +1035,8 @@ mod tests {
         let extern_data = VMDrcHeader {
             header: VMGcHeader::externref(),
             ref_count: 0,
+            next_over_approximated_stack_root: None,
+            object_size: 0,
         };
 
         let extern_data_ptr = &extern_data as *const _;
@@ -1165,64 +1062,6 @@ mod tests {
         assert_eq!(
             offsets.vm_drc_header_ref_count(),
             u32::try_from(actual_offset).unwrap(),
-        );
-    }
-
-    #[test]
-    fn table_next_is_at_correct_offset() {
-        let table = VMGcRefActivationsTable::new();
-
-        let table_ptr = &table as *const _;
-        let next_ptr = &table.alloc.next as *const _;
-
-        let actual_offset = (next_ptr as usize) - (table_ptr as usize);
-
-        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
-            ptr: HostPtr,
-            num_imported_functions: 0,
-            num_imported_tables: 0,
-            num_imported_memories: 0,
-            num_imported_globals: 0,
-            num_imported_tags: 0,
-            num_defined_tables: 0,
-            num_defined_memories: 0,
-            num_owned_memories: 0,
-            num_defined_globals: 0,
-            num_defined_tags: 0,
-            num_escaped_funcs: 0,
-        });
-        assert_eq!(
-            offsets.vm_gc_ref_activation_table_next() as usize,
-            actual_offset
-        );
-    }
-
-    #[test]
-    fn table_end_is_at_correct_offset() {
-        let table = VMGcRefActivationsTable::new();
-
-        let table_ptr = &table as *const _;
-        let end_ptr = &table.alloc.end as *const _;
-
-        let actual_offset = (end_ptr as usize) - (table_ptr as usize);
-
-        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
-            ptr: HostPtr,
-            num_imported_functions: 0,
-            num_imported_tables: 0,
-            num_imported_memories: 0,
-            num_imported_globals: 0,
-            num_imported_tags: 0,
-            num_defined_tables: 0,
-            num_defined_memories: 0,
-            num_owned_memories: 0,
-            num_defined_globals: 0,
-            num_defined_tags: 0,
-            num_escaped_funcs: 0,
-        });
-        assert_eq!(
-            offsets.vm_gc_ref_activation_table_end() as usize,
-            actual_offset
         );
     }
 }

@@ -69,7 +69,10 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
 use core::time::Duration;
-use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap};
+use wasmtime_environ::{
+    DataIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, FuncIndex, MemoryIndex,
+    TableIndex, Trap,
+};
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
     DoubleMalloc, InvalidFree, InvalidRead, InvalidWrite, OutOfBounds,
@@ -93,10 +96,6 @@ use wasmtime_wmemcheck::AccessError::{
 /// For more information on converting from host-defined values to Cranelift ABI
 /// values see the `catch_unwind_and_record_trap` function.
 pub mod raw {
-    // Allow these things because of the macro and how we can't differentiate
-    // between doc comments and `cfg`s.
-    #![allow(unused_doc_comments, unused_attributes)]
-
     use crate::runtime::vm::{InstanceAndStore, VMContext, f32x4, f64x2, i8x16};
     use core::ptr::NonNull;
 
@@ -114,10 +113,7 @@ pub mod raw {
                 // This will delegate to the outer module to the actual
                 // implementation and automatically perform `catch_unwind` along
                 // with conversion of the return value in the face of traps.
-                //
-                // Ignore improper ctypes to permit `__m128i` on x86_64.
-                #[allow(unused_variables, missing_docs)]
-                #[allow(improper_ctypes_definitions)]
+                #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
                 pub unsafe extern "C" fn $name(
                     vmctx: NonNull<VMContext>,
                     $( $pname : libcall!(@ty $param), )*
@@ -133,19 +129,19 @@ pub mod raw {
                     }
                     $(
                         #[cfg(not($attr))]
-                        unreachable!();
+                        {
+                            let _ = vmctx;
+                            unreachable!();
+                        }
                     )?
                 }
 
                 // This works around a `rustc` bug where compiling with LTO
                 // will sometimes strip out some of these symbols resulting
                 // in a linking failure.
-                //
-                // Ignore improper ctypes to permit `__m128i` on x86_64.
-                #[allow(non_upper_case_globals)]
+                #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
                 const _: () = {
                     #[used]
-                    #[allow(improper_ctypes_definitions)]
                     static I_AM_USED: unsafe extern "C" fn(
                         NonNull<VMContext>,
                         $( $pname : libcall!(@ty $param), )*
@@ -169,19 +165,20 @@ pub mod raw {
     wasmtime_environ::foreach_builtin_function!(libcall);
 }
 
-fn memory32_grow(
+fn memory_grow(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
     delta: u64,
     memory_index: u32,
 ) -> Result<Option<AllocationSize>, TrapReason> {
-    let memory_index = MemoryIndex::from_u32(memory_index);
+    let memory_index = DefinedMemoryIndex::from_u32(memory_index);
+    let module = instance.env_module();
+    let page_size_log2 = module.memories[module.memory_index(memory_index)].page_size_log2;
+
     let result = instance
         .as_mut()
         .memory_grow(store, memory_index, delta)?
-        .map(|size_in_bytes| {
-            AllocationSize(size_in_bytes / instance.memory_page_size(memory_index))
-        });
+        .map(|size_in_bytes| AllocationSize(size_in_bytes >> page_size_log2));
 
     Ok(result)
 }
@@ -227,20 +224,19 @@ unsafe impl HostResultHasUnwindSentinel for Option<AllocationSize> {
 unsafe fn table_grow_func_ref(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
-    table_index: u32,
+    defined_table_index: u32,
     delta: u64,
     init_value: *mut u8,
 ) -> Result<Option<AllocationSize>> {
-    let table_index = TableIndex::from_u32(table_index);
-
-    let element = match instance.as_mut().table_element_type(table_index) {
-        TableElementType::Func => NonNull::new(init_value.cast::<VMFuncRef>()).into(),
-        TableElementType::GcRef => unreachable!(),
-        TableElementType::Cont => unreachable!(),
-    };
-
+    let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
+    let table_index = instance.env_module().table_index(defined_table_index);
+    debug_assert!(matches!(
+        instance.as_mut().table_element_type(table_index),
+        TableElementType::Func,
+    ));
+    let element = NonNull::new(init_value.cast::<VMFuncRef>()).into();
     let result = instance
-        .table_grow(store, table_index, delta, element)?
+        .defined_table_grow(store, defined_table_index, delta, element)?
         .map(AllocationSize);
     Ok(result)
 }
@@ -250,27 +246,28 @@ unsafe fn table_grow_func_ref(
 unsafe fn table_grow_gc_ref(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
-    table_index: u32,
+    defined_table_index: u32,
     delta: u64,
     init_value: u32,
 ) -> Result<Option<AllocationSize>> {
-    let table_index = TableIndex::from_u32(table_index);
+    let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
+    let table_index = instance.env_module().table_index(defined_table_index);
+    debug_assert!(matches!(
+        instance.as_mut().table_element_type(table_index),
+        TableElementType::GcRef,
+    ));
 
-    let element = match instance.as_mut().table_element_type(table_index) {
-        TableElementType::Func => unreachable!(),
-        TableElementType::GcRef => VMGcRef::from_raw_u32(init_value)
-            .map(|r| {
-                store
-                    .store_opaque_mut()
-                    .unwrap_gc_store_mut()
-                    .clone_gc_ref(&r)
-            })
-            .into(),
-        TableElementType::Cont => unreachable!(),
-    };
+    let element = VMGcRef::from_raw_u32(init_value)
+        .map(|r| {
+            store
+                .store_opaque_mut()
+                .unwrap_gc_store_mut()
+                .clone_gc_ref(&r)
+        })
+        .into();
 
     let result = instance
-        .table_grow(store, table_index, delta, element)?
+        .defined_table_grow(store, defined_table_index, delta, element)?
         .map(AllocationSize);
     Ok(result)
 }
@@ -279,24 +276,22 @@ unsafe fn table_grow_gc_ref(
 unsafe fn table_grow_cont_obj(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
-    table_index: u32,
+    defined_table_index: u32,
     delta: u64,
-    // The following two values together form the intitial Option<VMContObj>.
+    // The following two values together form the initial Option<VMContObj>.
     // A None value is indicated by the pointer being null.
     init_value_contref: *mut u8,
     init_value_revision: u64,
 ) -> Result<Option<AllocationSize>> {
-    let init_value = VMContObj::from_raw_parts(init_value_contref, init_value_revision);
-
-    let table_index = TableIndex::from_u32(table_index);
-
-    let element = match instance.as_mut().table_element_type(table_index) {
-        TableElementType::Cont => init_value.into(),
-        _ => panic!("Wrong table growing function"),
-    };
-
+    let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
+    let table_index = instance.env_module().table_index(defined_table_index);
+    debug_assert!(matches!(
+        instance.as_mut().table_element_type(table_index),
+        TableElementType::Cont,
+    ));
+    let element = VMContObj::from_raw_parts(init_value_contref, init_value_revision).into();
     let result = instance
-        .table_grow(store, table_index, delta, element)?
+        .defined_table_grow(store, defined_table_index, delta, element)?
         .map(AllocationSize);
     Ok(result)
 }
@@ -444,8 +439,8 @@ fn memory_fill(
     val: u32,
     len: u64,
 ) -> Result<(), Trap> {
-    let memory_index = MemoryIndex::from_u32(memory_index);
-    #[allow(clippy::cast_possible_truncation)]
+    let memory_index = DefinedMemoryIndex::from_u32(memory_index);
+    #[expect(clippy::cast_possible_truncation, reason = "known to truncate here")]
     instance.memory_fill(memory_index, dst, val as u8, len)
 }
 
@@ -537,43 +532,6 @@ unsafe fn grow_gc_heap(
     }
 
     Ok(())
-}
-
-/// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
-/// reference.
-#[cfg(feature = "gc-drc")]
-unsafe fn gc(store: &mut dyn VMStore, _instance: Pin<&mut Instance>, gc_ref: u32) -> Result<u32> {
-    let gc_ref = VMGcRef::from_raw_u32(gc_ref);
-    let gc_ref = gc_ref.map(|r| {
-        store
-            .store_opaque_mut()
-            .unwrap_gc_store_mut()
-            .clone_gc_ref(&r)
-    });
-
-    if let Some(gc_ref) = &gc_ref {
-        // It is possible that we are GC'ing because the DRC's activation
-        // table's bump region is full, and we failed to insert `gc_ref` into
-        // the bump region. But it is an invariant for DRC collection that all
-        // GC references on the stack are in the DRC's activations table at the
-        // time of a GC. So make sure to "expose" this GC reference to Wasm (aka
-        // insert it into the DRC's activation table) before we do the actual
-        // GC.
-        let gc_store = store.store_opaque_mut().unwrap_gc_store_mut();
-        let gc_ref = gc_store.clone_gc_ref(gc_ref);
-        let _ = gc_store.expose_gc_ref_to_wasm(gc_ref);
-    }
-
-    match store.maybe_async_grow_or_collect_gc_heap(gc_ref, None)? {
-        None => Ok(0),
-        Some(r) => {
-            let raw = store
-                .store_opaque_mut()
-                .unwrap_gc_store_mut()
-                .expose_gc_ref_to_wasm(r);
-            Ok(raw.get())
-        }
-    }
 }
 
 /// Allocate a raw, unininitialized GC object for Wasm code.
@@ -1100,9 +1058,9 @@ fn memory_atomic_notify(
     addr_index: u64,
     count: u32,
 ) -> Result<u32, Trap> {
-    let memory = MemoryIndex::from_u32(memory_index);
+    let memory = DefinedMemoryIndex::from_u32(memory_index);
     instance
-        .get_runtime_memory(memory)
+        .get_defined_memory(memory)
         .atomic_notify(addr_index, count)
 }
 
@@ -1117,9 +1075,9 @@ fn memory_atomic_wait32(
     timeout: u64,
 ) -> Result<u32, Trap> {
     let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
-    let memory = MemoryIndex::from_u32(memory_index);
+    let memory = DefinedMemoryIndex::from_u32(memory_index);
     Ok(instance
-        .get_runtime_memory(memory)
+        .get_defined_memory(memory)
         .atomic_wait32(addr_index, expected, timeout)? as u32)
 }
 
@@ -1134,9 +1092,9 @@ fn memory_atomic_wait64(
     timeout: u64,
 ) -> Result<u32, Trap> {
     let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
-    let memory = MemoryIndex::from_u32(memory_index);
+    let memory = DefinedMemoryIndex::from_u32(memory_index);
     Ok(instance
-        .get_runtime_memory(memory)
+        .get_defined_memory(memory)
         .atomic_wait64(addr_index, expected, timeout)? as u32)
 }
 

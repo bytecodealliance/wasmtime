@@ -1,4 +1,4 @@
-use crate::dsl::{Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{Eflags::*, Feature::*, Inst, Location::*, VexLength::*};
 use crate::dsl::{fmt, implicit, inst, r, rex, rw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
@@ -23,6 +23,13 @@ pub fn list() -> Vec<Inst> {
         inst("popcntw", fmt("RM", [w(r16), r(rm16)]), rex([0x66, 0xF3, 0x0F, 0xB8]).r(), _64b | compat | popcnt),
         inst("popcntl", fmt("RM", [w(r32), r(rm32)]), rex([0xF3, 0x0F, 0xB8]).r(), _64b | compat | popcnt),
         inst("popcntq", fmt("RM", [w(r64), r(rm64)]), rex([0xF3, 0x0F, 0xB8]).r().w(), _64b | popcnt),
+
+        inst("btw", fmt("MR", [r(rm16), r(r16)]).flags(W), rex([0x66, 0x0F, 0xA3]).r(), _64b | compat),
+        inst("btl", fmt("MR", [r(rm32), r(r32)]).flags(W), rex([0x0F, 0xA3]).r(), _64b | compat),
+        inst("btq", fmt("MR", [r(rm64), r(r64)]).flags(W), rex([0x0F, 0xA3]).w().r(), _64b),
+        inst("btw", fmt("MI", [r(rm16), r(imm8)]).flags(W), rex([0x66, 0x0F, 0xBA]).digit(4).ib(), _64b | compat),
+        inst("btl", fmt("MI", [r(rm32), r(imm8)]).flags(W), rex([0x0F, 0xBA]).digit(4).ib(), _64b | compat),
+        inst("btq", fmt("MI", [r(rm64), r(imm8)]).flags(W), rex([0x0F, 0xBA]).w().digit(4).ib(), _64b),
 
         // Note that the Intel manual calls has different names for these
         // instructions than Capstone gives them:

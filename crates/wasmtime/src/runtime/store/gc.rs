@@ -39,12 +39,7 @@ impl StoreOpaque {
 
         if scope.async_support() {
             #[cfg(feature = "async")]
-            {
-                scope
-                    .async_cx()
-                    .expect("attempted to access async context during shutdown")
-                    .block_on(scope.grow_or_collect_gc_heap_async(bytes_needed))?;
-            }
+            scope.block_on(|scope| Box::pin(scope.grow_or_collect_gc_heap_async(bytes_needed)))?;
         } else {
             scope.grow_or_collect_gc_heap(bytes_needed);
         }

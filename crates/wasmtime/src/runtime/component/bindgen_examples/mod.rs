@@ -40,7 +40,10 @@
 //! [`wit_parser::Resolve::push_dir`]: https://docs.rs/wit-parser/latest/wit_parser/struct.Resolve.html#method.push_dir
 //! [open an issue]: https://github.com/bytecodealliance/wasmtime/issues/new
 
-#![allow(missing_docs)]
+#![expect(
+    missing_docs,
+    reason = "bindgen-generated types known to not have docs"
+)]
 
 // This "hack" will shadow the `bindgen` macro in general and be inherited to
 // following modules by default. This enables documenting sources as-is while

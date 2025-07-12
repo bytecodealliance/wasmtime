@@ -148,7 +148,7 @@ fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) {
     };
 
     for (type_instantiation, expected_result) in instantiations {
-        log::debug!("Expected result: {:?}", expected_result);
+        log::debug!("Expected result: {expected_result:?}");
         let type_sols = type_rules_with_term_and_types(
             &termenv,
             &typeenv,

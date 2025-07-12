@@ -1,0 +1,126 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %sdiv32_pow2(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; function %sdiv32_pow2(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 2
+;     v4 = sshr v0, v3  ; v3 = 2
+;     v5 = iconst.i32 29
+;     v6 = ushr v4, v5  ; v5 = 29
+;     v7 = iadd v0, v6
+;     v8 = iconst.i32 3
+;     v9 = sshr v7, v8  ; v8 = 3
+;     v2 -> v9
+;     return v9
+; }
+
+function %sdiv32_neg_pow2(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -32
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; function %sdiv32_neg_pow2(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 4
+;     v4 = sshr v0, v3  ; v3 = 4
+;     v5 = iconst.i32 27
+;     v6 = ushr v4, v5  ; v5 = 27
+;     v7 = iadd v0, v6
+;     v8 = iconst.i32 5
+;     v9 = sshr v7, v8  ; v8 = 5
+;     v10 = ineg v9
+;     v2 -> v10
+;     return v10
+; }
+
+function %sdiv32_by_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -1337
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; function %sdiv32_by_const(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 -1644744395
+;     v4 = smulhi v0, v3  ; v3 = -1644744395
+;     v5 = iconst.i32 9
+;     v6 = sshr v4, v5  ; v5 = 9
+;     v7 = iconst.i32 31
+;     v8 = ushr v6, v7  ; v7 = 31
+;     v9 = iadd v6, v8
+;     v2 -> v9
+;     return v9
+; }
+
+function %sdiv64_pow2(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 8
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; function %sdiv64_pow2(i64) -> i64 fast {
+; block0(v0: i64):
+;     v3 = iconst.i64 2
+;     v4 = sshr v0, v3  ; v3 = 2
+;     v5 = iconst.i64 61
+;     v6 = ushr v4, v5  ; v5 = 61
+;     v7 = iadd v0, v6
+;     v8 = iconst.i64 3
+;     v9 = sshr v7, v8  ; v8 = 3
+;     v2 -> v9
+;     return v9
+; }
+
+function %sdiv64_neg_pow2(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -64
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; function %sdiv64_neg_pow2(i64) -> i64 fast {
+; block0(v0: i64):
+;     v3 = iconst.i64 5
+;     v4 = sshr v0, v3  ; v3 = 5
+;     v5 = iconst.i64 58
+;     v6 = ushr v4, v5  ; v5 = 58
+;     v7 = iadd v0, v6
+;     v8 = iconst.i64 6
+;     v9 = sshr v7, v8  ; v8 = 6
+;     v10 = ineg v9
+;     v2 -> v10
+;     return v10
+; }
+
+function %sdiv64_by_const(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1337
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; function %sdiv64_by_const(i64) -> i64 fast {
+; block0(v0: i64):
+;     v3 = iconst.i64 -7064123384995729565
+;     v4 = smulhi v0, v3  ; v3 = -7064123384995729565
+;     v5 = iconst.i64 9
+;     v6 = sshr v4, v5  ; v5 = 9
+;     v7 = iconst.i64 63
+;     v8 = ushr v6, v7  ; v7 = 63
+;     v9 = iadd v6, v8
+;     v2 -> v9
+;     return v9
+; }
+

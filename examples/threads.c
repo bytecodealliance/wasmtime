@@ -2,21 +2,7 @@
 Example of instantiating of the WebAssembly module and invoking its exported
 function in a separate thread.
 
-You can compile and run this example on Linux with:
-
-   cargo build --release -p wasmtime-c-api
-   cc examples/threads.c \
-       -I crates/c-api/include \
-       target/release/libwasmtime.a \
-       -lpthread -ldl -lm \
-       -o threads
-   ./threads
-
-Note that on Windows and macOS the command will be similar, but you'll need
-to tweak the `-lpthread` and such annotations as well as the name of the
-`libwasmtime.a` file on Windows.
-
-You can also build using cmake:
+You can build using cmake:
 
 mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-threads
 */
@@ -40,10 +26,24 @@ static void exit_with_error(const char *message, wasmtime_error_t *error,
 const int N_THREADS = 10;
 const int N_REPS = 3;
 
+#if defined(__linux__)
+#define _GNU_SOURCE
+#include <sys/syscall.h>
+uint64_t get_thread_id() { return (uint64_t)syscall(SYS_gettid); }
+
+#elif defined(__APPLE__)
+#include <pthread.h>
+uint64_t get_thread_id() {
+  uint64_t tid;
+  pthread_threadid_np(NULL, &tid);
+  return tid;
+}
+
+#endif
+
 // A function to be called from Wasm code.
 own wasm_trap_t *callback(const wasm_val_vec_t *args, wasm_val_vec_t *results) {
-  assert(args->data[0].kind == WASM_I32);
-  printf("> Thread %d running\n", args->data[0].of.i32);
+  printf("> Thread %lu running\n", (uint64_t)get_thread_id());
   return NULL;
 }
 
@@ -65,21 +65,13 @@ void *run(void *args_abs) {
     usleep(100000);
 
     // Create imports.
-    own wasm_functype_t *func_type =
-        wasm_functype_new_1_0(wasm_valtype_new_i32());
+    own wasm_functype_t *func_type = wasm_functype_new_0_0();
     own wasm_func_t *func = wasm_func_new(store, func_type, callback);
     wasm_functype_delete(func_type);
-
-    wasm_val_t val = {.kind = WASM_I32, .of = {.i32 = (int32_t)args->id}};
-    own wasm_globaltype_t *global_type =
-        wasm_globaltype_new(wasm_valtype_new_i32(), WASM_CONST);
-    own wasm_global_t *global = wasm_global_new(store, global_type, &val);
-    wasm_globaltype_delete(global_type);
 
     // Instantiate.
     wasm_extern_t *imports[] = {
         wasm_func_as_extern(func),
-        wasm_global_as_extern(global),
     };
     wasm_extern_vec_t imports_vec = WASM_ARRAY_VEC(imports);
     own wasm_instance_t *instance =
@@ -90,7 +82,6 @@ void *run(void *args_abs) {
     }
 
     wasm_func_delete(func);
-    wasm_global_delete(global);
 
     // Extract export.
     own wasm_extern_vec_t exports;
@@ -173,7 +164,6 @@ int main(int argc, const char *argv[]) {
   pthread_t threads[N_THREADS];
   for (int i = 0; i < N_THREADS; i++) {
     thread_args *args = malloc(sizeof(thread_args));
-    args->id = i;
     args->engine = engine;
     args->module = shared;
     printf("Initializing thread %d...\n", i);

@@ -6,7 +6,7 @@
 
 const ubuntu = 'ubuntu-24.04';
 const windows = 'windows-2025';
-const macos = 'macos-14';
+const macos = 'macos-15';
 
 const array = [
   {

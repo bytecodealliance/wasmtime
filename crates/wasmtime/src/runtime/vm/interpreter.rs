@@ -159,7 +159,7 @@ impl InterpreterRef<'_> {
         // that pointer originates from a `StoreBox<VM>` in the store itself.
         // One level of safety here relies on that never being deallocated or
         // overwritten, which this file upholds as it's a private field only
-        // this module can acccess.
+        // this module can access.
         //
         // Another aspect upheld by `InterpreterRef` is that it transfers, to
         // the compiler, a mutable borrow of the store (e.g `struct Interpreter`
@@ -290,11 +290,9 @@ impl InterpreterRef<'_> {
         /// `call(@host Ty(ty1, ty2, ...) -> retty)` - invoke a host function
         /// with the type `Ty`. The other types in the macro are checked by
         /// rustc to match the actual `Ty` definition in Rust.
-        ///
-        /// Ignore improper ctypes to permit `__m128i` on x86_64.
         macro_rules! call {
             (@builtin($($param:ident),*) $(-> $result:ident)?) => {{
-                #[allow(improper_ctypes_definitions)]
+                #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
                 type T = unsafe extern "C" fn($(call!(@ty $param)),*) $(-> call!(@ty $result))?;
                 call!(@host T($($param),*) $(-> $result)?);
             }};

@@ -1,7 +1,6 @@
 //! ISLE integration glue code for riscv64 lowering.
 
 // Pull in the ISLE generated code.
-#[allow(unused)]
 pub mod generated_code;
 use generated_code::MInst;
 

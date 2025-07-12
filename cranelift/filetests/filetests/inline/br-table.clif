@@ -1,0 +1,57 @@
+test inline precise-output
+target x86_64
+
+function %f0(i32, i32) -> i32 tail {
+    fn0 = %whatever(i32, i32) -> i32 tail
+block0(v0: i32, v1: i32):
+    br_table v0, block3, [block1(v1), block2]
+block1(v2: i32):
+    return v2
+block2:
+    v3 = iconst.i32 0
+    return v3
+block3:
+    return v0
+}
+
+; (no functions inlined into %f0)
+
+function %f1() -> i32 tail {
+    fn0 = %f0(i32, i32) -> i32 tail
+block0:
+    v0 = iconst.i32 42
+    v1 = call fn0(v0, v0)
+    v2 = iconst.i32 1
+    v3 = iadd v1, v2
+    return v3
+}
+
+; function %f1() -> i32 tail {
+;     sig0 = (i32, i32) -> i32 tail
+;     sig1 = (i32, i32) -> i32 tail
+;     fn0 = %f0 sig0
+;     fn1 = %whatever sig1
+;
+; block0:
+;     v0 = iconst.i32 42
+;     jump block1
+;
+; block1:
+;     br_table v0, block4, [block2(v0), block3]  ; v0 = 42, v0 = 42
+;
+; block2(v4: i32):
+;     jump block5(v4)
+;
+; block3:
+;     v6 = iconst.i32 0
+;     jump block5(v6)  ; v6 = 0
+;
+; block4:
+;     jump block5(v0)  ; v0 = 42
+;
+; block5(v5: i32):
+;     v1 -> v5
+;     v2 = iconst.i32 1
+;     v3 = iadd v1, v2  ; v2 = 1
+;     return v3
+; }

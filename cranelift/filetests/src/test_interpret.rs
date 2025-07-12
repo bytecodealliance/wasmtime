@@ -79,7 +79,7 @@ impl SubTest for TestInterpret {
 fn run_test(func_store: &FunctionStore, func: &Function, details: &Details) -> anyhow::Result<()> {
     for comment in details.comments.iter() {
         if let Some(command) = parse_run_command(comment.text, &func.signature)? {
-            trace!("Parsed run command: {}", command);
+            trace!("Parsed run command: {command}");
 
             command
                 .run(|func_name, run_args| {

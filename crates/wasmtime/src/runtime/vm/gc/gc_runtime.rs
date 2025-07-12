@@ -8,7 +8,7 @@ use crate::runtime::vm::{
 use crate::vm::VMMemoryDefinition;
 use core::ptr::NonNull;
 use core::slice;
-use core::{alloc::Layout, any::Any, marker, mem, num::NonZeroUsize, ops::Range, ptr};
+use core::{alloc::Layout, any::Any, marker, mem, ops::Range, ptr};
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMSharedTypeIndex};
 
 /// Trait for integrating a garbage collector with the runtime.
@@ -187,13 +187,6 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// heap. Failure to do so is memory safe, but may result in general
     /// failures such as panics or incorrect results.
     fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef);
-
-    /// Predicate invoked before calling into or returning to Wasm to determine
-    /// whether we should GC first.
-    ///
-    /// `num_gc_refs` is the number of non-`i31ref` GC references that will be
-    /// passed into Wasm.
-    fn need_gc_before_entering_wasm(&self, num_gc_refs: NonZeroUsize) -> bool;
 
     ////////////////////////////////////////////////////////////////////////////
     // `externref` Methods
@@ -411,6 +404,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     fn vmmemory(&self) -> VMMemoryDefinition;
 
     /// Get a slice of the raw bytes of the GC heap.
+    #[inline]
     fn heap_slice(&self) -> &[u8] {
         let vmmemory = self.vmmemory();
         let ptr = vmmemory.base.as_ptr().cast_const();
@@ -419,6 +413,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     }
 
     /// Get a mutable slice of the raw bytes of the GC heap.
+    #[inline]
     fn heap_slice_mut(&mut self) -> &mut [u8] {
         let vmmemory = self.vmmemory();
         let ptr = vmmemory.base.as_ptr();
@@ -435,6 +430,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// # Panics
     ///
     /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
+    #[inline]
     fn index<T>(&self, gc_ref: &TypedGcRef<T>) -> &T
     where
         Self: Sized,
@@ -455,6 +451,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// # Panics
     ///
     /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
+    #[inline]
     fn index_mut<T>(&mut self, gc_ref: &TypedGcRef<T>) -> &mut T
     where
         Self: Sized,

@@ -646,7 +646,7 @@ impl NumericOp<'_> {
             },
             NumericOp {
                 name: "add",
-                body: "a.checked_add(b).unwrap()",
+                body: r#"a.checked_add(b).unwrap_or_else(|| panic!("addition overflow: {a} + {b}"))"#,
                 ..binop.clone()
             },
             NumericOp {
@@ -661,7 +661,7 @@ impl NumericOp<'_> {
             },
             NumericOp {
                 name: "sub",
-                body: "a.checked_sub(b).unwrap()",
+                body: r#"a.checked_sub(b).unwrap_or_else(|| panic!("subtraction overflow: {a} - {b}"))"#,
                 ..binop.clone()
             },
             NumericOp {
@@ -676,7 +676,7 @@ impl NumericOp<'_> {
             },
             NumericOp {
                 name: "mul",
-                body: "a.checked_mul(b).unwrap()",
+                body: r#"a.checked_mul(b).unwrap_or_else(|| panic!("multiplication overflow: {a} * {b}"))"#,
                 ..binop.clone()
             },
             NumericOp {
@@ -691,7 +691,17 @@ impl NumericOp<'_> {
             },
             NumericOp {
                 name: "div",
-                body: "a.checked_div(b).unwrap()",
+                body: r#"a.checked_div(b).unwrap_or_else(|| panic!("div failure: {a} / {b}"))"#,
+                ..binop.clone()
+            },
+            NumericOp {
+                name: "checked_rem",
+                body: "a.checked_rem(b)",
+                ..partial_binop.clone()
+            },
+            NumericOp {
+                name: "rem",
+                body: r#"a.checked_rem(b).unwrap_or_else(|| panic!("rem failure: {a} % {b}"))"#,
                 ..binop.clone()
             },
             // Bitwise operations.
@@ -730,7 +740,7 @@ impl NumericOp<'_> {
             },
             NumericOp {
                 name: "shl",
-                body: "a.checked_shl(b).unwrap()",
+                body: r#"a.checked_shl(b).unwrap_or_else(|| panic!("shl overflow: {a} << {b}"))"#,
                 ..shift.clone()
             },
             NumericOp {
@@ -745,7 +755,7 @@ impl NumericOp<'_> {
             },
             NumericOp {
                 name: "shr",
-                body: "a.checked_shr(b).unwrap()",
+                body: r#"a.checked_shr(b).unwrap_or_else(|| panic!("shr overflow: {a} >> {b}"))"#,
                 ..shift.clone()
             },
             // Predicates.
@@ -782,7 +792,7 @@ impl NumericOp<'_> {
             },
             NumericOp {
                 name: "ilog2",
-                body: "a.checked_ilog2().unwrap()",
+                body: r#"a.checked_ilog2().unwrap_or_else(|| panic!("ilog2 overflow: {a}"))"#,
                 ret: "u32",
                 ..unop.clone()
             },
@@ -826,7 +836,7 @@ impl NumericOp<'_> {
             },
             NumericOp {
                 name: "neg",
-                body: "a.checked_neg().unwrap()",
+                body: r#"a.checked_neg().unwrap_or_else(|| panic!("negation overflow: {a}"))"#,
                 ..unop.clone()
             },
         ];

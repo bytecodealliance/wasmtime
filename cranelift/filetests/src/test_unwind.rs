@@ -561,9 +561,6 @@ mod systemv {
                     Nop => {
                         writeln!(w, "                DW_CFA_nop")?;
                     }
-                    _ => {
-                        writeln!(w, "                DW_CFA_<unknown>")?;
-                    }
                 },
             }
         }

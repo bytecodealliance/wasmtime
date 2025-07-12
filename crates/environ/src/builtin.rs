@@ -4,7 +4,7 @@ macro_rules! foreach_builtin_function {
     ($mac:ident) => {
         $mac! {
             // Returns an index for wasm's `memory.grow` builtin function.
-            memory32_grow(vmctx: vmctx, delta: u64, index: u32) -> pointer;
+            memory_grow(vmctx: vmctx, delta: u64, index: u32) -> pointer;
             // Returns an index for wasm's `table.copy` when both tables are locally
             // defined.
             table_copy(vmctx: vmctx, dst_index: u32, src_index: u32, dst: u64, src: u64, len: u64) -> bool;
@@ -79,12 +79,6 @@ macro_rules! foreach_builtin_function {
             // Traps if growing the GC heap fails.
             #[cfg(feature = "gc-null")]
             grow_gc_heap(vmctx: vmctx, bytes_needed: u64) -> bool;
-
-            // Do a GC, treating the optional `root` as a GC root and returning
-            // the updated `root` (so that, in the case of moving collectors,
-            // callers have a valid version of `root` again).
-            #[cfg(feature = "gc-drc")]
-            gc(vmctx: vmctx, root: u32) -> u64;
 
             // Allocate a new, uninitialized GC object and return a reference to
             // it.
@@ -383,7 +377,7 @@ impl BuiltinFunctionIndex {
             }};
 
             // Growth-related functions return -2 as a sentinel.
-            (@get memory32_grow pointer) => (TrapSentinel::NegativeTwo);
+            (@get memory_grow pointer) => (TrapSentinel::NegativeTwo);
             (@get table_grow_func_ref pointer) => (TrapSentinel::NegativeTwo);
             (@get table_grow_gc_ref pointer) => (TrapSentinel::NegativeTwo);
             (@get table_grow_cont_obj pointer) => (TrapSentinel::NegativeTwo);

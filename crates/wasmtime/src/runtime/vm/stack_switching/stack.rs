@@ -1,8 +1,6 @@
 //! This module contains a modified version of the `wasmtime_fiber` crate,
 //! specialized for executing stack switching continuations.
 
-#![allow(missing_docs)]
-
 use anyhow::Result;
 use core::ops::Range;
 

@@ -13,9 +13,9 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   palignr $8, %xmm0, %xmm0, %xmm0
+;   palignr $0x8, %xmm0, %xmm0
 ;   pmovsxbw %xmm0, %xmm0
-;   palignr $8, %xmm1, %xmm1, %xmm1
+;   palignr $0x8, %xmm1, %xmm1
 ;   pmovsxbw %xmm1, %xmm1
 ;   pmullw %xmm1, %xmm0
 ;   movq %rbp, %rsp

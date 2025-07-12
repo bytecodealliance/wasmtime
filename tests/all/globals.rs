@@ -433,3 +433,35 @@ fn instantiate_global_with_subtype() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn host_globals_keep_type_registration() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    let ty = FuncType::new(&engine, [], []);
+
+    let g = Global::new(
+        &mut store,
+        GlobalType::new(
+            RefType::new(true, HeapType::ConcreteFunc(ty)).into(),
+            Mutability::Const,
+        ),
+        Val::FuncRef(None),
+    )?;
+
+    {
+        let _ty2 = FuncType::new(&engine, [ValType::I32], [ValType::I32]);
+        let ty = g.ty(&store);
+        let fty = ty.content().unwrap_ref().heap_type().unwrap_concrete_func();
+        assert!(fty.params().len() == 0);
+        assert!(fty.results().len() == 0);
+    }
+
+    let ty = g.ty(&store);
+    let fty = ty.content().unwrap_ref().heap_type().unwrap_concrete_func();
+    assert!(fty.params().len() == 0);
+    assert!(fty.results().len() == 0);
+
+    Ok(())
+}

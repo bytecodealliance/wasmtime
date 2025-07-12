@@ -18,8 +18,8 @@ block0:
 ;   uninit  %xmm0
 ;   pxor %xmm0, %xmm0
 ;   movdqu (%rip), %xmm3
-;   pshufb  %xmm0, const(0), %xmm0
-;   pshufb  %xmm3, const(1), %xmm3
+;   pshufb (%rip), %xmm0
+;   pshufb (%rip), %xmm3
 ;   por %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -71,7 +71,7 @@ block0:
 ;   movq %rsp, %rbp
 ; block0:
 ;   movdqu (%rip), %xmm0
-;   pshufb  %xmm0, const(0), %xmm0
+;   pshufb (%rip), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -121,7 +121,7 @@ block0:
 ;   movdqu (%rip), %xmm0
 ;   movdqu (%rip), %xmm1
 ;   paddusb (%rip), %xmm1
-;   pshufb  %xmm0, %xmm1, %xmm0
+;   pshufb %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -160,7 +160,7 @@ block0(v0: i8):
 ;   movd %edi, %xmm0
 ;   uninit  %xmm5
 ;   pxor %xmm5, %xmm5
-;   pshufb  %xmm0, %xmm5, %xmm0
+;   pshufb %xmm5, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

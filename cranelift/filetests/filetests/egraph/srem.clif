@@ -1,0 +1,92 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %srem32_pow2(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = srem v0, v1
+    return v2
+}
+
+; function %srem32_pow2(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 2
+;     v4 = sshr v0, v3  ; v3 = 2
+;     v5 = iconst.i32 29
+;     v6 = ushr v4, v5  ; v5 = 29
+;     v7 = iadd v0, v6
+;     v8 = iconst.i32 -8
+;     v9 = band v7, v8  ; v8 = -8
+;     v10 = isub v0, v9
+;     v2 -> v10
+;     return v10
+; }
+
+function %srem32_by_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1337
+    v2 = srem v0, v1
+    return v2
+}
+
+; function %srem32_by_const(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 0x6208_cecb
+;     v4 = smulhi v0, v3  ; v3 = 0x6208_cecb
+;     v5 = iconst.i32 9
+;     v6 = sshr v4, v5  ; v5 = 9
+;     v7 = iconst.i32 31
+;     v8 = ushr v6, v7  ; v7 = 31
+;     v9 = iadd v6, v8
+;     v1 = iconst.i32 1337
+;     v10 = imul v9, v1  ; v1 = 1337
+;     v11 = isub v0, v10
+;     v2 -> v11
+;     return v11
+; }
+
+function %srem64_pow2(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 16
+    v2 = srem v0, v1
+    return v2
+}
+
+; function %srem64_pow2(i64) -> i64 fast {
+; block0(v0: i64):
+;     v3 = iconst.i64 3
+;     v4 = sshr v0, v3  ; v3 = 3
+;     v5 = iconst.i64 60
+;     v6 = ushr v4, v5  ; v5 = 60
+;     v7 = iadd v0, v6
+;     v8 = iconst.i64 -16
+;     v9 = band v7, v8  ; v8 = -16
+;     v10 = isub v0, v9
+;     v2 -> v10
+;     return v10
+; }
+
+function %srem64_by_const(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 12345
+    v2 = srem v0, v1
+    return v2
+}
+
+; function %srem64_by_const(i64) -> i64 fast {
+; block0(v0: i64):
+;     v3 = iconst.i64 0x54f0_77c7_18e7_c21f
+;     v4 = smulhi v0, v3  ; v3 = 0x54f0_77c7_18e7_c21f
+;     v5 = iconst.i64 12
+;     v6 = sshr v4, v5  ; v5 = 12
+;     v7 = iconst.i64 63
+;     v8 = ushr v6, v7  ; v7 = 63
+;     v9 = iadd v6, v8
+;     v1 = iconst.i64 0x3039
+;     v10 = imul v9, v1  ; v1 = 0x3039
+;     v11 = isub v0, v10
+;     v2 -> v11
+;     return v11
+; }
+

@@ -309,28 +309,6 @@ impl fmt::Display for SetError {
 /// A result returned when changing a setting.
 pub type SetResult<T> = Result<T, SetError>;
 
-/// A reference to just the boolean predicates of a settings object.
-///
-/// The settings objects themselves are generated and appear in the `isa/*/settings.rs` modules.
-/// Each settings object provides a `predicate_view()` method that makes it possible to query
-/// ISA predicates by number.
-#[derive(Clone, Copy, Hash)]
-pub struct PredicateView<'a>(&'a [u8]);
-
-impl<'a> PredicateView<'a> {
-    /// Create a new view of a precomputed predicate vector.
-    ///
-    /// See the `predicate_view()` method on the various `Flags` types defined for each ISA.
-    pub fn new(bits: &'a [u8]) -> Self {
-        PredicateView(bits)
-    }
-
-    /// Check a numbered predicate.
-    pub fn test(self, p: usize) -> bool {
-        self.0[p / 8] & (1 << (p % 8)) != 0
-    }
-}
-
 /// Implementation details for generated code.
 ///
 /// This module holds definitions that need to be public so the can be instantiated by generated

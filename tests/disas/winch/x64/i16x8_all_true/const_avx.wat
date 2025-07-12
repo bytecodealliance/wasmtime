@@ -21,7 +21,7 @@
 ;;       movq    %rsi, (%rsp)
 ;;       movdqu  0x29(%rip), %xmm0
 ;;       vpxor   %xmm15, %xmm15, %xmm15
-;;       vpcmpeqw %xmm0, %xmm15, %xmm0
+;;       vpcmpeqw %xmm15, %xmm0, %xmm0
 ;;       vptest  %xmm0, %xmm0
 ;;       movl    $0, %eax
 ;;       sete    %al

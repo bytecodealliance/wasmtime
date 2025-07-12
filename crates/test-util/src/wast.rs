@@ -367,7 +367,7 @@ impl Compiler {
                         || config.threads();
                 }
 
-                false
+                true
             }
 
             Compiler::CraneliftPulley => {

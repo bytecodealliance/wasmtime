@@ -29,20 +29,14 @@ pub unsafe fn resume_to_exception_handler(
 ) -> ! {
     unsafe {
         core::arch::asm!(
-            "lgr %r6, {}",
-            "lgr %r7, {}",
             "lgr %r15, {}",
             "br {}",
-            in(reg) payload1,
-            in(reg) payload2,
             in(reg) sp,
-            in(reg) pc,
-            out("r6") _,
-            out("r7") _,
-            options(nostack, nomem),
+            in(reg_addr) pc,
+            in("r6") payload1,
+            in("r7") payload2,
+            options(nostack, nomem, noreturn),
         );
-
-        core::hint::unreachable_unchecked()
     }
 }
 

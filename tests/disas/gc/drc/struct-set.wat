@@ -35,8 +35,8 @@
 ;; @0034                               v5 = load.i64 notrap aligned readonly can_move v9+24
 ;; @0034                               v4 = uextend.i64 v2
 ;; @0034                               v6 = iadd v5, v4
-;; @0034                               v7 = iconst.i64 16
-;; @0034                               v8 = iadd v6, v7  ; v7 = 16
+;; @0034                               v7 = iconst.i64 24
+;; @0034                               v8 = iadd v6, v7  ; v7 = 24
 ;; @0034                               store notrap aligned little v3, v8
 ;; @0038                               jump block1
 ;;
@@ -60,8 +60,8 @@
 ;; @003f                               v5 = load.i64 notrap aligned readonly can_move v9+24
 ;; @003f                               v4 = uextend.i64 v2
 ;; @003f                               v6 = iadd v5, v4
-;; @003f                               v7 = iconst.i64 20
-;; @003f                               v8 = iadd v6, v7  ; v7 = 20
+;; @003f                               v7 = iconst.i64 28
+;; @003f                               v8 = iadd v6, v7  ; v7 = 28
 ;; @003f                               istore8 notrap aligned little v3, v8
 ;; @0043                               jump block1
 ;;
@@ -87,8 +87,8 @@
 ;; @004a                               v5 = load.i64 notrap aligned readonly can_move v59+24
 ;; @004a                               v4 = uextend.i64 v2
 ;; @004a                               v6 = iadd v5, v4
-;; @004a                               v7 = iconst.i64 24
-;; @004a                               v8 = iadd v6, v7  ; v7 = 24
+;; @004a                               v7 = iconst.i64 32
+;; @004a                               v8 = iadd v6, v7  ; v7 = 32
 ;; @004a                               v9 = load.i32 notrap aligned little v8
 ;;                                     v58 = iconst.i32 1
 ;; @004a                               v10 = band v3, v58  ; v58 = 1
@@ -110,7 +110,7 @@
 ;; @004a                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v74 = iadd.i64 v6, v7  ; v7 = 24
+;;                                     v74 = iadd.i64 v6, v7  ; v7 = 32
 ;; @004a                               store.i32 notrap aligned little v3, v74
 ;;                                     v75 = iconst.i32 1
 ;;                                     v76 = band.i32 v9, v75  ; v75 = 1

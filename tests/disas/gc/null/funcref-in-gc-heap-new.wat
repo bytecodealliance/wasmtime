@@ -20,7 +20,7 @@
 ;;     sig0 = (i64 vmctx, i64) -> i8 tail
 ;;     sig1 = (i64 vmctx, i64) -> i64 tail
 ;;     fn0 = colocated u1:26 sig0
-;;     fn1 = colocated u1:29 sig1
+;;     fn1 = colocated u1:28 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):

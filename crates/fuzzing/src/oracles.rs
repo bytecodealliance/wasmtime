@@ -51,7 +51,7 @@ pub fn log_wasm(wasm: &[u8]) {
     let i = CNT.fetch_add(1, SeqCst);
     let name = format!("testcase{i}.wasm");
     std::fs::write(&name, wasm).expect("failed to write wasm file");
-    log::debug!("wrote wasm file to `{}`", name);
+    log::debug!("wrote wasm file to `{name}`");
     let wat = format!("testcase{i}.wat");
     match wasmprinter::print_bytes(wasm) {
         Ok(s) => std::fs::write(&wat, s).expect("failed to write wat file"),
@@ -282,7 +282,7 @@ pub fn instantiate_many(
         match command {
             Command::Instantiate(index) => {
                 let index = *index % modules.len();
-                log::info!("instantiating {}", index);
+                log::info!("instantiating {index}");
                 let module = &modules[index];
                 let mut store = Store::new(&engine, limits.clone());
                 config.configure_store(&mut store);
@@ -299,7 +299,7 @@ pub fn instantiate_many(
                 }
                 let index = *index % stores.len();
 
-                log::info!("dropping {}", index);
+                log::info!("dropping {index}");
                 stores.swap_remove(index);
             }
         }
@@ -452,7 +452,7 @@ pub fn differential(
     args: &[DiffValue],
     result_tys: &[DiffValueType],
 ) -> anyhow::Result<bool> {
-    log::debug!("Evaluating: `{}` with {:?}", name, args);
+    log::debug!("Evaluating: `{name}` with {args:?}");
     let lhs_results = match lhs.evaluate(name, args, result_tys) {
         Ok(Some(results)) => Ok(results),
         Err(e) => Err(e),
@@ -617,7 +617,7 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
             }
 
             ApiCall::ModuleNew { id, wasm } => {
-                log::debug!("creating module: {}", id);
+                log::debug!("creating module: {id}");
                 log_wasm(&wasm);
                 let module = match Module::new(store.as_ref().unwrap().engine(), &wasm) {
                     Ok(m) => m,
@@ -628,12 +628,12 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
             }
 
             ApiCall::ModuleDrop { id } => {
-                log::trace!("dropping module: {}", id);
+                log::trace!("dropping module: {id}");
                 drop(modules.remove(&id));
             }
 
             ApiCall::InstanceNew { id, module } => {
-                log::trace!("instantiating module {} as {}", module, id);
+                log::trace!("instantiating module {module} as {id}");
                 let module = match modules.get(&module) {
                     Some(m) => m,
                     None => continue,
@@ -646,12 +646,12 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
             }
 
             ApiCall::InstanceDrop { id } => {
-                log::trace!("dropping instance {}", id);
+                log::trace!("dropping instance {id}");
                 instances.remove(&id);
             }
 
             ApiCall::CallExportedFunc { instance, nth } => {
-                log::trace!("calling instance export {} / {}", instance, nth);
+                log::trace!("calling instance export {instance} / {nth}");
                 let instance = match instances.get(&instance) {
                     Some(i) => i,
                     None => {
@@ -702,11 +702,12 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
 
     let mut fuzz_config: generators::Config = u.arbitrary()?;
     let test: generators::WastTest = u.arbitrary()?;
-    if u.arbitrary()? {
-        fuzz_config.enable_async(u)?;
-    }
 
     let test = &test.test;
+
+    if test.config.component_model_async() || u.arbitrary()? {
+        fuzz_config.enable_async(u)?;
+    }
 
     // Discard tests that allocate a lot of memory as we don't want to OOM the
     // fuzzer and we also limit memory growth which would cause the test to
@@ -826,7 +827,7 @@ pub fn table_ops(
                     CountDrops::new(&expected_drops, num_dropped.clone()),
                 )?;
 
-                log::info!("table_ops: gc() -> ({:?}, {:?}, {:?})", a, b, c);
+                log::info!("table_ops: gc() -> ({a:?}, {b:?}, {c:?})");
                 results[0] = Some(a).into();
                 results[1] = Some(b).into();
                 results[2] = Some(c).into();
@@ -902,7 +903,7 @@ pub fn table_ops(
                     CountDrops::new(&expected_drops, num_dropped.clone()),
                 )?;
 
-                log::info!("table_ops: make_refs() -> ({:?}, {:?}, {:?})", a, b, c);
+                log::info!("table_ops: make_refs() -> ({a:?}, {b:?}, {c:?})");
 
                 results[0] = Some(a).into();
                 results[1] = Some(b).into();
@@ -1161,7 +1162,7 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
                     let ty = ty.clone();
                     Box::new(async move {
                         caller.engine().increment_epoch();
-                        log::info!("yielding {} times in import", poll_amt);
+                        log::info!("yielding {poll_amt} times in import");
                         YieldN(poll_amt).await;
                         for (ret_ty, result) in ty.results().zip(results) {
                             *result = ret_ty.default_value().unwrap();
@@ -1229,7 +1230,7 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
             .map(|ty| ty.default_value().unwrap())
             .collect::<Vec<_>>();
 
-        log::info!("invoking export {:?}", name);
+        log::info!("invoking export {name:?}");
         let future = func.call_async(&mut store, &params, &mut results);
         match run(Timeout {
             future,

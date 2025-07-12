@@ -1972,8 +1972,7 @@ block0:
         let one = builder.ins().iconst(I32, 1);
         builder.def_var(my_var, one);
 
-        let normal_return =
-            BlockCall::new(block3, [].into_iter(), &mut builder.func.dfg.value_lists);
+        let normal_return = BlockCall::new(block3, [], &mut builder.func.dfg.value_lists);
         let exception_table = builder
             .func
             .dfg
@@ -1985,8 +1984,7 @@ block0:
         let two = builder.ins().iconst(I32, 2);
         builder.def_var(my_var, two);
 
-        let normal_return =
-            BlockCall::new(block3, [].into_iter(), &mut builder.func.dfg.value_lists);
+        let normal_return = BlockCall::new(block3, [], &mut builder.func.dfg.value_lists);
         let exception_table = builder
             .func
             .dfg

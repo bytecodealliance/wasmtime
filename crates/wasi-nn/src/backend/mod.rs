@@ -78,9 +78,15 @@ pub trait BackendGraph: Send + Sync {
 /// A [BackendExecutionContext] performs the actual inference; this is the
 /// backing implementation for a user-facing execution context.
 pub trait BackendExecutionContext: Send + Sync {
+    // WITX functions
     fn set_input(&mut self, id: Id, tensor: &Tensor) -> Result<(), BackendError>;
-    fn compute(&mut self) -> Result<(), BackendError>;
     fn get_output(&mut self, id: Id) -> Result<Tensor, BackendError>;
+
+    // Functions which work for both WIT and WITX
+    fn compute(
+        &mut self,
+        inputs: Option<Vec<NamedTensor>>,
+    ) -> Result<Option<Vec<NamedTensor>>, BackendError>;
 }
 
 /// An identifier for a tensor in a [Graph].
@@ -127,4 +133,9 @@ fn read(path: &Path) -> anyhow::Result<Vec<u8>> {
     let mut buffer = vec![];
     file.read_to_end(&mut buffer)?;
     Ok(buffer)
+}
+
+pub struct NamedTensor {
+    pub name: String,
+    pub tensor: Tensor,
 }

@@ -1,4 +1,4 @@
-//! Defines `DataContext`.
+//! Defines `DataDescription`.
 
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::PrimaryMap;
@@ -62,9 +62,12 @@ pub struct DataDescription {
     pub data_relocs: Vec<(CodeOffset, ir::GlobalValue, Addend)>,
     /// Object file section
     pub custom_segment_section: Option<(String, String)>,
-    /// Alignment in bytes. `None` means that the default alignment of the respective module should
-    /// be used.
+    /// Alignment in bytes. `None` means that the default alignment of the
+    /// respective module should be used.
     pub align: Option<u64>,
+    /// Whether or not to request the linker to preserve this data object even
+    /// if not referenced.
+    pub used: bool,
 }
 
 impl DataDescription {
@@ -78,6 +81,7 @@ impl DataDescription {
             data_relocs: vec![],
             custom_segment_section: None,
             align: None,
+            used: false,
         }
     }
 
@@ -90,6 +94,7 @@ impl DataDescription {
         self.data_relocs.clear();
         self.custom_segment_section = None;
         self.align = None;
+        self.used = false;
     }
 
     /// Define a zero-initialized object with the given size.
@@ -115,6 +120,12 @@ impl DataDescription {
     pub fn set_align(&mut self, align: u64) {
         assert!(align.is_power_of_two());
         self.align = Some(align);
+    }
+
+    /// Set whether or not the linker should preserve this data object even if
+    /// not referenced.
+    pub fn set_used(&mut self, used: bool) {
+        self.used = used;
     }
 
     /// Declare an external function import.

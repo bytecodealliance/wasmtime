@@ -67,7 +67,7 @@ pub(crate) enum InternalError {
     /// Expects a specific state in the value stack.
     #[error("Unexpected value in value stack")]
     UnexpectedValueInValueStack,
-    /// A mismatch occured in the control frame state.
+    /// A mismatch occurred in the control frame state.
     #[error("Mismatch in control frame state")]
     ControlFrameStateMismatch,
     /// Expected a specific table element value.

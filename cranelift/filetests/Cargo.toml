@@ -14,7 +14,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-cranelift-codegen = { workspace = true, features = ["disas"] }
+cranelift-codegen = { workspace = true, features = ["disas", "timing"] }
 cranelift-frontend = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-native = { workspace = true }

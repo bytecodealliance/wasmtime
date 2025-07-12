@@ -28,7 +28,7 @@
 ;;       movl    $0, %esi
 ;;       movq    8(%rsp), %rdx
 ;;       movl    4(%rsp), %ecx
-;;       callq   0x182
+;;       callq   0x181
 ;;       addq    $4, %rsp
 ;;       addq    $0xc, %rsp
 ;;       movq    8(%rsp), %r14

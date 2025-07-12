@@ -328,7 +328,7 @@ block0(v0: i32):
 ;   andq $0x7, %rdi
 ;   movd %edi, %xmm5
 ;   psllw %xmm5, %xmm0
-;   lea     const(0), %rsi
+;   leaq (%rip), %rsi
 ;   shlq $0x4, %rdi
 ;   movdqu (%rsi, %rdi), %xmm5
 ;   pand %xmm5, %xmm0

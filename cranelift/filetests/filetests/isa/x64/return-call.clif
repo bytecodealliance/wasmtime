@@ -14,7 +14,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   lea     10(%rdi), %rax
+;   leaq 0xa(%rdi), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -158,7 +158,7 @@ block0(v0: i8):
 ;   movq %rsp, %rbp
 ; block0:
 ;   testb %dil, %dil
-;   setz    %al
+;   sete %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

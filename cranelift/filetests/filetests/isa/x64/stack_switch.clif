@@ -217,27 +217,27 @@ block0(v0: i64, v1: i64):
 ;   movq (%rdx), %rdx
 ;   movq <offset:1>+8(%rsp), %rdi
 ;   movq <offset:1>+0x18(%rsp), %r9
-;   lea     0(%r9,%rdi,1), %rdi
+;   leaq (%r9, %rdi), %rdi
 ;   movq <offset:1>+0x10(%rsp), %r9
 ;   movq %rdi, <offset:1>+8(%rsp)
-;   lea     0(%r9,%r10,1), %r9
-;   lea     0(%r11,%rsi,1), %r10
-;   lea     0(%rax,%rbx,1), %r11
-;   lea     0(%r12,%r14,1), %rsi
-;   lea     0(%r15,%r8,1), %r8
-;   lea     0(%rsi,%r8,1), %r8
-;   lea     0(%r11,%r8,1), %r8
-;   lea     0(%r10,%r8,1), %r8
-;   lea     0(%rcx,%r13,1), %r10
+;   leaq (%r9, %r10), %r9
+;   leaq (%r11, %rsi), %r10
+;   leaq (%rax, %rbx), %r11
+;   leaq (%r12, %r14), %rsi
+;   leaq (%r15, %r8), %r8
+;   leaq (%rsi, %r8), %r8
+;   leaq (%r11, %r8), %r8
+;   leaq (%r10, %r8), %r8
+;   leaq (%rcx, %r13), %r10
 ;   movq <offset:1>+0x20(%rsp), %rcx
 ;   addq (%rcx), %rdx
 ;   movq <offset:1>+(%rsp), %rdi
-;   lea     0(%rdx,%rdi,1), %r11
-;   lea     0(%r10,%r11,1), %r10
-;   lea     0(%r8,%r10,1), %r8
-;   lea     0(%r9,%r8,1), %r8
+;   leaq (%rdx, %rdi), %r11
+;   leaq (%r10, %r11), %r10
+;   leaq (%r8, %r10), %r8
+;   leaq (%r9, %r8), %r8
 ;   movq <offset:1>+8(%rsp), %r9
-;   lea     0(%r9,%r8,1), %rax
+;   leaq (%r9, %r8), %rax
 ;   movq 0x90(%rsp), %rbx
 ;   movq 0x98(%rsp), %r12
 ;   movq 0xa0(%rsp), %r13

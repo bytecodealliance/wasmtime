@@ -11,8 +11,10 @@
 
 use crate::alias_analysis::AliasAnalysis;
 use crate::dominator_tree::DominatorTree;
+use crate::dominator_tree::DominatorTreePreorder;
 use crate::egraph::EgraphPass;
 use crate::flowgraph::ControlFlowGraph;
+use crate::inline::{Inline, do_inlining};
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::legalizer::simple_legalize;
@@ -46,6 +48,9 @@ pub struct Context {
     /// Dominator tree for `func`.
     pub domtree: DominatorTree,
 
+    /// Dominator tree with dominance stored implicitly via visit-order indices for `func`
+    domtree_preorder: DominatorTreePreorder,
+
     /// Loop analysis of `func`.
     pub loop_analysis: LoopAnalysis,
 
@@ -74,6 +79,7 @@ impl Context {
             func,
             cfg: ControlFlowGraph::new(),
             domtree: DominatorTree::new(),
+            domtree_preorder: DominatorTreePreorder::new(),
             loop_analysis: LoopAnalysis::new(),
             compiled_code: None,
             want_disasm: false,
@@ -186,6 +192,13 @@ impl Context {
         }
 
         Ok(())
+    }
+
+    /// Perform function call inlining.
+    ///
+    /// Returns `true` if any function call was inlined, `false` otherwise.
+    pub fn inline(&mut self, inliner: impl Inline) -> CodegenResult<bool> {
+        do_inlining(&mut self.func, inliner)
     }
 
     /// Compile the function,
@@ -305,7 +318,8 @@ impl Context {
 
     /// Compute dominator tree.
     pub fn compute_domtree(&mut self) {
-        self.domtree.compute(&self.func, &self.cfg)
+        self.domtree.compute(&self.func, &self.cfg);
+        self.domtree_preorder.compute(&self.domtree);
     }
 
     /// Compute the loop analysis.
@@ -335,7 +349,7 @@ impl Context {
     /// by a store instruction to the same instruction (so-called
     /// "store-to-load forwarding").
     pub fn replace_redundant_loads(&mut self) -> CodegenResult<()> {
-        let mut analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        let mut analysis = AliasAnalysis::new(&self.func, &self.domtree_preorder);
         analysis.compute_and_update_aliases(&mut self.func);
         Ok(())
     }
@@ -367,7 +381,7 @@ impl Context {
         );
         let fisa = fisa.into();
         self.compute_loop_analysis();
-        let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree_preorder);
         let mut pass = EgraphPass::new(
             &mut self.func,
             &self.domtree,

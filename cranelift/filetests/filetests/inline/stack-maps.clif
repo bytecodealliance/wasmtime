@@ -1,0 +1,245 @@
+test inline precise-output
+target x86_64
+
+;; Stack map in the callee, but not the caller: the callee's stack map should be
+;; preserved.
+
+function %f0(i64) -> i64 tail {
+    ss0 = explicit_slot 16
+    fn0 = %whatever(i64)
+block0(v0: i64):
+    stack_store v0, ss0+8
+    call fn0(v0), stack_map=[i64 @ ss0+8]
+    v1 = stack_load.i64 ss0+8
+    return v1
+}
+
+; (no functions inlined into %f0)
+
+function %f1() -> i64 tail {
+    fn0 = %f0(i64) -> i64 tail
+block0:
+    v0 = iconst.i64 0
+    v1 = call fn0(v0)
+    return v1
+}
+
+; function %f1() -> i64 tail {
+;     ss0 = explicit_slot 16
+;     sig0 = (i64) -> i64 tail
+;     sig1 = (i64) fast
+;     fn0 = %f0 sig0
+;     fn1 = %whatever sig1
+;
+; block0:
+;     v0 = iconst.i64 0
+;     jump block1
+;
+; block1:
+;     v3 = stack_addr.i64 ss0+8
+;     store.i64 notrap v0, v3  ; v0 = 0
+;     call fn1(v0), stack_map=[i64 @ ss0+8]  ; v0 = 0
+;     v4 = stack_addr.i64 ss0+8
+;     v5 = load.i64 notrap v4
+;     jump block2(v5)
+;
+; block2(v2: i64):
+;     v1 -> v2
+;     return v1
+; }
+
+;; Stack map in the caller, but not the callee: caller's stack map should be
+;; used for the callee's calls.
+
+function %f2(i64) -> i64 tail {
+    fn0 = %whatever(i64) -> i64
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; (no functions inlined into %f2)
+
+function %f3(i64) -> i64 tail {
+    ss0 = explicit_slot 16
+    fn0 = %f2(i64) -> i64 tail
+block0(v0: i64):
+    stack_store v0, ss0+8
+    v1 = call fn0(v0), stack_map=[i64 @ ss0+8]
+    v2 = stack_load.i64 ss0+8
+    v3 = iadd v1, v2
+    return v3
+}
+
+; function %f3(i64) -> i64 tail {
+;     ss0 = explicit_slot 16
+;     sig0 = (i64) -> i64 tail
+;     sig1 = (i64) -> i64 fast
+;     fn0 = %f2 sig0
+;     fn1 = %whatever sig1
+;
+; block0(v0: i64):
+;     v5 = stack_addr.i64 ss0+8
+;     store notrap v0, v5
+;     jump block1
+;
+; block1:
+;     v7 = call fn1(v0), stack_map=[i64 @ ss0+8]
+;     jump block2(v7)
+;
+; block2(v6: i64):
+;     v1 -> v6
+;     v4 = stack_addr.i64 ss0+8
+;     v2 = load.i64 notrap v4
+;     v3 = iadd v1, v2
+;     return v3
+; }
+
+;; Stack map in both the caller and the callee: the caller's stack map should be
+;; appended onto the callee's stack maps.
+
+function %f4(i64) -> i64 tail {
+    ss0 = explicit_slot 8
+    fn0 = %whatever(i64)
+block0(v0: i64):
+    stack_store v0, ss0
+    call fn0(v0), stack_map=[i64 @ ss0+0]
+    v1 = stack_load.i64 ss0
+    return v1
+}
+
+; (no functions inlined into %f4)
+
+function %f5(i64) -> i64 tail {
+    ss0 = explicit_slot 16
+    fn0 = %f4(i64) -> i64 tail
+block0(v0: i64):
+    stack_store v0, ss0+8
+    v1 = call fn0(v0), stack_map=[i64 @ ss0+8]
+    v2 = stack_load.i64 ss0+8
+    v3 = iadd v1, v2
+    return v3
+}
+
+; function %f5(i64) -> i64 tail {
+;     ss0 = explicit_slot 16
+;     ss1 = explicit_slot 8
+;     sig0 = (i64) -> i64 tail
+;     sig1 = (i64) fast
+;     fn0 = %f4 sig0
+;     fn1 = %whatever sig1
+;
+; block0(v0: i64):
+;     v5 = stack_addr.i64 ss0+8
+;     store notrap v0, v5
+;     jump block1
+;
+; block1:
+;     v7 = stack_addr.i64 ss1
+;     store.i64 notrap v0, v7
+;     call fn1(v0), stack_map=[i64 @ ss0+8, i64 @ ss1+0]
+;     v8 = stack_addr.i64 ss1
+;     v9 = load.i64 notrap v8
+;     jump block2(v9)
+;
+; block2(v6: i64):
+;     v1 -> v6
+;     v4 = stack_addr.i64 ss0+8
+;     v2 = load.i64 notrap v4
+;     v3 = iadd v1, v2
+;     return v3
+; }
+
+;; Stack map in the caller, callee ends with `return_call`: the caller's stack
+;; map should be attached to the `call` in the `call; jump` sequence that the
+;; `return_call` is translated into.
+
+function %f6(i64) -> i64 tail {
+    fn0 = %whatever(i64) -> i64 tail
+block0(v0: i64):
+    return_call fn0(v0)
+}
+
+; (no functions inlined into %f6)
+
+function %f7(i64) -> i64 tail {
+    ss0 = explicit_slot 16
+    fn0 = %f6(i64) -> i64 tail
+block0(v0: i64):
+    stack_store v0, ss0+8
+    v1 = call fn0(v0), stack_map=[i64 @ ss0+8]
+    v2 = stack_load.i64 ss0+8
+    v3 = iadd v1, v2
+    return v3
+}
+
+; function %f7(i64) -> i64 tail {
+;     ss0 = explicit_slot 16
+;     sig0 = (i64) -> i64 tail
+;     sig1 = (i64) -> i64 tail
+;     fn0 = %f6 sig0
+;     fn1 = %whatever sig1
+;
+; block0(v0: i64):
+;     v5 = stack_addr.i64 ss0+8
+;     store notrap v0, v5
+;     jump block1
+;
+; block1:
+;     v7 = call fn1(v0), stack_map=[i64 @ ss0+8]
+;     jump block2(v7)
+;
+; block2(v6: i64):
+;     v1 -> v6
+;     v4 = stack_addr.i64 ss0+8
+;     v2 = load.i64 notrap v4
+;     v3 = iadd v1, v2
+;     return v3
+; }
+
+;; Stack map in the caller, callee ends with `return_call_indirect`: the
+;; caller's stack map should be attached to the `call_indirect` in the
+;; `call_indirect; jump` sequence that the `return_call` is translated into.
+
+function %f8(i64, i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+block0(v0: i64, v1: i64):
+    return_call_indirect sig0, v1(v0)
+}
+
+; (no functions inlined into %f8)
+
+function %f9(i64, i64) -> i64 tail {
+    ss0 = explicit_slot 16
+    fn0 = %f8(i64, i64) -> i64 tail
+block0(v0: i64, v1: i64):
+    stack_store v0, ss0+8
+    v2 = call fn0(v0, v1), stack_map=[i64 @ ss0+8]
+    v3 = stack_load.i64 ss0+8
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %f9(i64, i64) -> i64 tail {
+;     ss0 = explicit_slot 16
+;     sig0 = (i64, i64) -> i64 tail
+;     sig1 = (i64) -> i64 tail
+;     fn0 = %f8 sig0
+;
+; block0(v0: i64, v1: i64):
+;     v6 = stack_addr.i64 ss0+8
+;     store notrap v0, v6
+;     jump block1
+;
+; block1:
+;     v8 = call_indirect.i64 sig1, v1(v0), stack_map=[i64 @ ss0+8]
+;     jump block2(v8)
+;
+; block2(v7: i64):
+;     v2 -> v7
+;     v5 = stack_addr.i64 ss0+8
+;     v3 = load.i64 notrap v5
+;     v4 = iadd v2, v3
+;     return v4
+; }
+

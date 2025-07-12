@@ -94,10 +94,7 @@ impl Switch {
             last_index = Some(index);
         }
 
-        log::trace!(
-            "build_contiguous_case_ranges after: {:#?}",
-            contiguous_case_ranges
-        );
+        log::trace!("build_contiguous_case_ranges after: {contiguous_case_ranges:#?}");
 
         contiguous_case_ranges
     }

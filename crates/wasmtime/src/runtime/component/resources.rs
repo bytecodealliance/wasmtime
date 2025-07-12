@@ -849,35 +849,43 @@ unsafe impl<T: 'static> ComponentType for Resource<T> {
 }
 
 unsafe impl<T: 'static> Lower for Resource<T> {
-    fn lower<U>(
+    fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
         self.lower_to_index(cx, ty)?
-            .lower(cx, InterfaceType::U32, dst)
+            .linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
-    fn store<U>(
+    fn linear_lower_to_memory<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
         self.lower_to_index(cx, ty)?
-            .store(cx, InterfaceType::U32, offset)
+            .linear_lower_to_memory(cx, InterfaceType::U32, offset)
     }
 }
 
 unsafe impl<T: 'static> Lift for Resource<T> {
-    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
-        let index = u32::lift(cx, InterfaceType::U32, src)?;
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
+        let index = u32::linear_lift_from_flat(cx, InterfaceType::U32, src)?;
         Resource::lift_from_index(cx, ty, index)
     }
 
-    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
-        let index = u32::load(cx, InterfaceType::U32, bytes)?;
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
+        let index = u32::linear_lift_from_memory(cx, InterfaceType::U32, bytes)?;
         Resource::lift_from_index(cx, ty, index)
     }
 }
@@ -1130,35 +1138,43 @@ unsafe impl ComponentType for ResourceAny {
 }
 
 unsafe impl Lower for ResourceAny {
-    fn lower<T>(
+    fn linear_lower_to_flat<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
         self.lower_to_index(cx, ty)?
-            .lower(cx, InterfaceType::U32, dst)
+            .linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
-    fn store<T>(
+    fn linear_lower_to_memory<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
         self.lower_to_index(cx, ty)?
-            .store(cx, InterfaceType::U32, offset)
+            .linear_lower_to_memory(cx, InterfaceType::U32, offset)
     }
 }
 
 unsafe impl Lift for ResourceAny {
-    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
-        let index = u32::lift(cx, InterfaceType::U32, src)?;
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
+        let index = u32::linear_lift_from_flat(cx, InterfaceType::U32, src)?;
         ResourceAny::lift_from_index(cx, ty, index)
     }
 
-    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
-        let index = u32::load(cx, InterfaceType::U32, bytes)?;
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
+        let index = u32::linear_lift_from_memory(cx, InterfaceType::U32, bytes)?;
         ResourceAny::lift_from_index(cx, ty, index)
     }
 }

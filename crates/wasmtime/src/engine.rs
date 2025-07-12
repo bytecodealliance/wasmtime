@@ -508,7 +508,9 @@ impl Engine {
 
             // s390x features to detect
             "has_vxrs_ext2" => "vxrs_ext2",
-            "has_mie2" => "mie2",
+            "has_vxrs_ext3" => "vxrs_ext3",
+            "has_mie3" => "mie3",
+            "has_mie4" => "mie4",
 
             // x64 features to detect
             "has_cmpxchg16b" => "cmpxchg16b",
@@ -759,25 +761,6 @@ impl Engine {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn precompile_compatibility_hash(&self) -> impl std::hash::Hash + '_ {
         crate::compile::HashedEngineCompileEnv(self)
-    }
-
-    /// Executes `f1` and `f2` in parallel if parallel compilation is enabled at
-    /// both runtime and compile time, otherwise runs them synchronously.
-    #[allow(dead_code)] // only used for the component-model feature right now
-    pub(crate) fn join_maybe_parallel<T, U>(
-        &self,
-        f1: impl FnOnce() -> T + Send,
-        f2: impl FnOnce() -> U + Send,
-    ) -> (T, U)
-    where
-        T: Send,
-        U: Send,
-    {
-        if self.config().parallel_compilation {
-            #[cfg(feature = "parallel-compilation")]
-            return rayon::join(f1, f2);
-        }
-        (f1(), f2())
     }
 
     /// Returns the required alignment for a code image, if we

@@ -919,14 +919,12 @@ impl Ref {
             (Ref::Any(Some(a)), HeapType::Struct) => a._is_struct(store)?,
             (Ref::Any(Some(a)), HeapType::ConcreteStruct(_ty)) => match a._as_struct(store)? {
                 None => false,
-                #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                 Some(s) => s._matches_ty(store, _ty)?,
             },
             (Ref::Any(Some(a)), HeapType::Eq) => a._is_eqref(store)?,
             (Ref::Any(Some(a)), HeapType::Array) => a._is_array(store)?,
             (Ref::Any(Some(a)), HeapType::ConcreteArray(_ty)) => match a._as_array(store)? {
                 None => false,
-                #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                 Some(a) => a._matches_ty(store, _ty)?,
             },
             (
@@ -996,7 +994,6 @@ impl Ref {
                     assert!(ty.is_nullable());
                     Ok(TableElement::GcRef(None))
                 }
-                #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                 Some(e) => {
                     let gc_ref = e.try_clone_gc_ref(&mut store)?;
                     Ok(TableElement::GcRef(Some(gc_ref)))
@@ -1008,7 +1005,6 @@ impl Ref {
                     assert!(ty.is_nullable());
                     Ok(TableElement::GcRef(None))
                 }
-                #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                 Some(a) => {
                     let gc_ref = a.try_clone_gc_ref(&mut store)?;
                     Ok(TableElement::GcRef(Some(gc_ref)))

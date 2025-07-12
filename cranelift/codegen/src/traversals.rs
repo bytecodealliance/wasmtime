@@ -92,34 +92,41 @@ impl Iterator for DfsIter<'_> {
     type Item = (Event, ir::Block);
 
     fn next(&mut self) -> Option<(Event, ir::Block)> {
-        let (event, block) = self.dfs.stack.pop()?;
+        loop {
+            let (event, block) = self.dfs.stack.pop()?;
 
-        if event == Event::Enter && self.dfs.seen.insert(block) {
-            self.dfs.stack.push((Event::Exit, block));
-            self.dfs.stack.extend(
-                self.func
-                    .block_successors(block)
-                    // Heuristic: chase the children in reverse. This puts
-                    // the first successor block first in the postorder, all
-                    // other things being equal, which tends to prioritize
-                    // loop backedges over out-edges, putting the edge-block
-                    // closer to the loop body and minimizing live-ranges in
-                    // linear instruction space. This heuristic doesn't have
-                    // any effect on the computation of dominators, and is
-                    // purely for other consumers of the postorder we cache
-                    // here.
-                    .rev()
-                    // This is purely an optimization to avoid additional
-                    // iterations of the loop, and is not required; it's
-                    // merely inlining the check from the outer conditional
-                    // of this case to avoid the extra loop iteration. This
-                    // also avoids potential excess stack growth.
-                    .filter(|block| !self.dfs.seen.contains(*block))
-                    .map(|block| (Event::Enter, block)),
-            );
+            if event == Event::Enter {
+                let first_time_seeing = self.dfs.seen.insert(block);
+                if !first_time_seeing {
+                    continue;
+                }
+
+                self.dfs.stack.push((Event::Exit, block));
+                self.dfs.stack.extend(
+                    self.func
+                        .block_successors(block)
+                        // Heuristic: chase the children in reverse. This puts
+                        // the first successor block first in the postorder, all
+                        // other things being equal, which tends to prioritize
+                        // loop backedges over out-edges, putting the edge-block
+                        // closer to the loop body and minimizing live-ranges in
+                        // linear instruction space. This heuristic doesn't have
+                        // any effect on the computation of dominators, and is
+                        // purely for other consumers of the postorder we cache
+                        // here.
+                        .rev()
+                        // This is purely an optimization to avoid additional
+                        // iterations of the loop, and is not required; it's
+                        // merely inlining the check from the outer conditional
+                        // of this case to avoid the extra loop iteration. This
+                        // also avoids potential excess stack growth.
+                        .filter(|block| !self.dfs.seen.contains(*block))
+                        .map(|block| (Event::Enter, block)),
+                );
+            }
+
+            return Some((event, block));
         }
-
-        Some((event, block))
     }
 }
 
@@ -213,6 +220,60 @@ mod tests {
                 (Event::Exit, block3),
                 (Event::Exit, block0)
             ],
+        );
+    }
+
+    #[test]
+    fn multiple_successors_to_the_same_block() {
+        let _ = env_logger::try_init();
+
+        let mut func = Function::new();
+
+        let block0 = func.dfg.make_block();
+        let block1 = func.dfg.make_block();
+
+        let mut cur = FuncCursor::new(&mut func);
+
+        // block0(v0):
+        //   v1 = iconst.i32 36
+        //   v2 = iconst.i32 42
+        //   br_if v0, block1(v1), block1(v2)
+        cur.insert_block(block0);
+        let v0 = cur.func.dfg.append_block_param(block0, I32);
+        let v1 = cur.ins().iconst(ir::types::I32, 36);
+        let v2 = cur.ins().iconst(ir::types::I32, 42);
+        cur.ins()
+            .brif(v0, block1, &[v1.into()], block1, &[v2.into()]);
+
+        // block1(v3: i32):
+        //   return v3
+        cur.insert_block(block1);
+        let v3 = cur.func.dfg.append_block_param(block1, I32);
+        cur.ins().return_(&[v3]);
+
+        let mut dfs = Dfs::new();
+
+        // We should only enter `block1` once.
+        assert_eq!(
+            dfs.iter(&func).collect::<Vec<_>>(),
+            vec![
+                (Event::Enter, block0),
+                (Event::Enter, block1),
+                (Event::Exit, block1),
+                (Event::Exit, block0),
+            ],
+        );
+
+        // We should only iterate over `block1` once in a pre-order traversal.
+        assert_eq!(
+            dfs.pre_order_iter(&func).collect::<Vec<_>>(),
+            vec![block0, block1],
+        );
+
+        // We should only iterate over `block1` once in a post-order traversal.
+        assert_eq!(
+            dfs.post_order_iter(&func).collect::<Vec<_>>(),
+            vec![block1, block0],
         );
     }
 }

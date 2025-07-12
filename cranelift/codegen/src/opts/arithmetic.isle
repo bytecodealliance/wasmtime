@@ -75,18 +75,102 @@
 (rule (simplify (bnot ty (iadd ty x (iconst_s ty -1))))
       (ineg ty x))
 
-;; x/1 == x.
+;; x / 1 == x.
 (rule (simplify_skeleton (sdiv x (iconst_s ty 1))) x)
 (rule (simplify_skeleton (udiv x (iconst_u ty 1))) x)
 
-;; TODO: strength reduction: div to shifts
-;; TODO: div/rem by constants -> magic multiplications
+;; Unsigned `x / d == x >> ilog2(d)` when d is a power of two.
+(rule (simplify_skeleton (udiv x (iconst_u ty (u64_extract_power_of_two d))))
+      (ushr ty x (iconst_u ty (u64_ilog2 d))))
+
+;; Signed `x / d` when d is a power of two is a bit more involved...
+(rule (simplify_skeleton (sdiv x (iconst_u ty (u64_extract_power_of_two d))))
+      (if-let true (u64_gt d 1))
+      (let ((k u32 (u64_trailing_zeros d))
+            (t1 Value (sshr ty x (iconst_u ty (u32_sub k 1))))
+            (t2 Value (ushr ty t1 (iconst_u ty (u32_sub (ty_bits ty) k))))
+            (t3 Value (iadd ty x t2))
+            (t4 Value (sshr ty t3 (iconst_s ty k))))
+        t4))
+
+;; And signed `x / d` when d is a negative power of two is the same, but with a
+;; negation.
+(rule (simplify_skeleton (sdiv x (iconst_s ty d)))
+      (if-let true (i64_is_negative_power_of_two d))
+      (if-let true (i64_ne d -1))
+      (let ((k u32 (i64_trailing_zeros d))
+            (t1 Value (sshr ty x (iconst_u ty (u32_sub k 1))))
+            (t2 Value (ushr ty t1 (iconst_u ty (u32_sub (ty_bits ty) k))))
+            (t3 Value (iadd ty x t2))
+            (t4 Value (sshr ty t3 (iconst_s ty k)))
+            (t5 Value (ineg ty t4)))
+        t5))
+
+;; General cases for `udiv` with constant divisors.
+(rule (simplify_skeleton (udiv x (iconst_u $I32 (u64_extract_non_zero (u32_from_u64 d)))))
+      (if-let false (u32_is_power_of_two d))
+      (apply_div_const_magic_u32 (Opcode.Udiv) x d))
+(rule (simplify_skeleton (udiv x (iconst_u $I64 (u64_extract_non_zero d))))
+      (if-let false (u64_is_power_of_two d))
+      (apply_div_const_magic_u64 (Opcode.Udiv) x d))
+
+;; General cases for `sdiv` with constant divisors.
+(rule (simplify_skeleton (sdiv x (iconst_s $I32 (i64_extract_non_zero (i32_from_i64 d)))))
+      (if-let false (i64_is_any_sign_power_of_two d))
+      (apply_div_const_magic_s32 (Opcode.Sdiv) x d))
+(rule (simplify_skeleton (sdiv x (iconst_s $I64 (i64_extract_non_zero d))))
+      (if-let false (i64_is_any_sign_power_of_two d))
+      (apply_div_const_magic_s64 (Opcode.Sdiv) x d))
+
+;; x % 1 == 0
+(rule (simplify_skeleton (urem x (iconst_u ty 1))) (iconst_u ty 0))
+(rule (simplify_skeleton (srem x (iconst_u ty 1))) (iconst_u ty 0))
+(rule (simplify_skeleton (srem x (iconst_s ty -1))) (iconst_u ty 0))
+
+;; Unsigned `x % d == x & ((1 << ilog2(d)) - 1)` when `d` is a power of two.
+(rule (simplify_skeleton (urem x (iconst_u ty (u64_extract_power_of_two d))))
+      (if-let true (u64_gt d 1))
+      (let ((mask Value (iconst_u ty (u64_sub (u64_shl 1 (u64_ilog2 d)) 1))))
+        (band ty x mask)))
+
+;; Signed `x % d` when `d` is a (possibly negative) power of two is a little
+;; more complicated.
+(rule (simplify_skeleton (srem x d_val @ (iconst_s ty d)))
+      ;; Interestingly, this same sequence works for both positive and negative
+      ;; powers of two.
+      (if-let true (i64_is_any_sign_power_of_two d))
+      (if-let true (i64_ne d 1))
+      (if-let true (i64_ne d -1))
+      (let ((k u32 (i64_trailing_zeros d))
+            (t1 Value (sshr ty x (iconst_u ty (u32_sub k 1))))
+            (t2 Value (ushr ty t1 (iconst_u ty (u32_sub (ty_bits ty) k))))
+            (t3 Value (iadd ty x t2))
+            (t4 Value (band ty t3 (iconst_s ty (i64_wrapping_neg (i64_shl 1 k)))))
+            (t5 Value (isub ty x t4)))
+        t5))
+
+;; General cases for `urem` with constant divisors.
+(rule (simplify_skeleton (urem x (iconst_u $I32 (u64_extract_non_zero (u32_from_u64 d)))))
+      (if-let false (u32_is_power_of_two d))
+      (apply_div_const_magic_u32 (Opcode.Urem) x d))
+(rule (simplify_skeleton (urem x (iconst_u $I64 (u64_extract_non_zero d))))
+      (if-let false (u64_is_power_of_two d))
+      (apply_div_const_magic_u64 (Opcode.Urem) x d))
+
+;; General cases for `srem` with constant divisors.
+(rule (simplify_skeleton (srem x (iconst_s $I32 (i64_extract_non_zero (i32_from_i64 d)))))
+      (if-let false (i64_is_any_sign_power_of_two d))
+      (apply_div_const_magic_s32 (Opcode.Srem) x d))
+(rule (simplify_skeleton (srem x (iconst_s $I64 (i64_extract_non_zero d))))
+      (if-let false (i64_is_any_sign_power_of_two d))
+      (apply_div_const_magic_s64 (Opcode.Srem) x d))
 
 ;; x*2 == x+x.
 (rule (simplify (imul ty x (iconst_u _ 2)))
       (iadd ty x x))
 
 ;; x*c == x<<log2(c) when c is a power of two.
+;;
 ;; Note that the type of `iconst` must be the same as the type of `imul`,
 ;; so these rules can only fire in situations where it's safe to construct an
 ;; `iconst` of that type.

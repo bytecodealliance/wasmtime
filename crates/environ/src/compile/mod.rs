@@ -91,7 +91,7 @@ pub enum RelocationTarget {
 pub trait CacheStore: Send + Sync + std::fmt::Debug {
     /// Try to retrieve an arbitrary cache key entry, and returns a reference to bytes that were
     /// inserted via `Self::insert` before.
-    fn get(&self, key: &[u8]) -> Option<Cow<[u8]>>;
+    fn get(&self, key: &[u8]) -> Option<Cow<'_, [u8]>>;
 
     /// Given an arbitrary key and bytes, stores them in the cache.
     ///

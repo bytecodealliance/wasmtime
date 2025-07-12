@@ -70,7 +70,7 @@ pub struct InstanceAllocationRequest<'a> {
     pub store: StorePtr,
 
     /// Indicates '--wmemcheck' flag.
-    #[cfg_attr(not(feature = "wmemcheck"), allow(dead_code))]
+    #[cfg(feature = "wmemcheck")]
     pub wmemcheck: bool,
 
     /// Request that the instance's memories be protected by a specific
@@ -613,31 +613,31 @@ fn initialize_tables(
                         .expect("const expression should be valid")
                 };
                 let idx = module.table_index(table);
-                let table = unsafe {
-                    store
-                        .instance_mut(context.instance)
-                        .get_defined_table(table)
-                        .as_mut()
-                        .unwrap()
-                };
                 match module.tables[idx].ref_type.heap_type.top() {
                     WasmHeapTopType::Extern => {
+                        let (gc_store, instance) =
+                            store.gc_store_and_instance_mut(context.instance)?;
+                        let table = instance.get_defined_table(table);
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
-                        let gc_store = store.gc_store_mut()?;
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
                         table.init_gc_refs(0, items)?;
                     }
 
                     WasmHeapTopType::Any => {
+                        let (gc_store, instance) =
+                            store.gc_store_and_instance_mut(context.instance)?;
+                        let table = instance.get_defined_table(table);
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
-                        let gc_store = store.gc_store_mut()?;
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
                         table.init_gc_refs(0, items)?;
                     }
 
                     WasmHeapTopType::Func => {
+                        let table = store
+                            .instance_mut(context.instance)
+                            .get_defined_table(table);
                         let funcref = NonNull::new(raw.get_funcref().cast::<VMFuncRef>());
                         let items = (0..table.size()).map(|_| funcref);
                         table.init_func(0, items)?;

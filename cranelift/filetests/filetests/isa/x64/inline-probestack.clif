@@ -20,7 +20,7 @@ block0:
 ;   movq %rsp, %rbp
 ;   subq $0x800, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %rax
+;   leaq <offset:1>+(%rsp), %rax
 ;   addq $0x800, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -58,7 +58,7 @@ block0:
 ;   addq $0x3000, %rsp
 ;   subq $0x3000, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %rax
+;   leaq <offset:1>+(%rsp), %rax
 ;   addq $0x3000, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -97,7 +97,7 @@ block0:
 ;   stack_probe_loop %r11, frame_size=100000, guard_size=4096
 ;   subq $0x186a0, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %rax
+;   leaq <offset:1>+(%rsp), %rax
 ;   addq $0x186a0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

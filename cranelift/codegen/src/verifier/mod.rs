@@ -65,6 +65,7 @@
 
 use crate::dbg::DisplayList;
 use crate::dominator_tree::DominatorTree;
+use crate::dominator_tree::DominatorTreePreorder;
 use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::entities::AnyEntity;
@@ -301,6 +302,7 @@ enum BlockCallTargetType {
 struct Verifier<'a> {
     func: &'a Function,
     expected_cfg: ControlFlowGraph,
+    expected_domtree_preorder: DominatorTreePreorder,
     expected_domtree: DominatorTree,
     isa: Option<&'a dyn TargetIsa>,
 }
@@ -309,10 +311,13 @@ impl<'a> Verifier<'a> {
     pub fn new(func: &'a Function, fisa: FlagsOrIsa<'a>) -> Self {
         let expected_cfg = ControlFlowGraph::with_function(func);
         let expected_domtree = DominatorTree::with_function(func, &expected_cfg);
+        let mut expected_domtree_preorder = DominatorTreePreorder::new();
+        expected_domtree_preorder.compute(&expected_domtree);
         Self {
             func,
             expected_cfg,
             expected_domtree,
+            expected_domtree_preorder,
             isa: fisa.isa,
         }
     }
@@ -1000,10 +1005,11 @@ impl<'a> Verifier<'a> {
                 }
                 // Defining instruction dominates the instruction that uses the value.
                 if is_reachable {
-                    if !self
-                        .expected_domtree
-                        .dominates(def_inst, loc_inst, &self.func.layout)
-                    {
+                    if !self.expected_domtree_preorder.dominates_inst(
+                        def_inst,
+                        loc_inst,
+                        &self.func.layout,
+                    ) {
                         return errors.fatal((
                             loc_inst,
                             self.context(loc_inst),
@@ -1036,12 +1042,9 @@ impl<'a> Verifier<'a> {
                         format!("{v} is defined by {block} which is not in the layout"),
                     ));
                 }
+                let user_block = self.func.layout.inst_block(loc_inst).expect("Expected instruction to be in a block as we're traversing code already in layout");
                 // The defining block dominates the instruction using this value.
-                if is_reachable
-                    && !self
-                        .expected_domtree
-                        .dominates(block, loc_inst, &self.func.layout)
-                {
+                if is_reachable && !self.expected_domtree_preorder.dominates(block, user_block) {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),

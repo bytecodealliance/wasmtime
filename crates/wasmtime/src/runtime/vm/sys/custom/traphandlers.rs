@@ -7,7 +7,6 @@ use core::{mem, ptr::NonNull};
 #[cfg(has_host_compiler_backend)]
 pub use crate::runtime::vm::sys::capi::{self, wasmtime_longjmp};
 
-#[allow(missing_docs)]
 pub type SignalHandler = Box<dyn Fn() + Send + Sync>;
 
 #[cfg(has_host_compiler_backend)]

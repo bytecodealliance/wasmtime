@@ -74,9 +74,7 @@
 //!
 //! [ARM Community - Caches and Self-Modifying Code]: https://community.arm.com/arm-community-blogs/b/architectures-and-processors-blog/posts/caches-and-self-modifying-code
 
-#![no_std]
-
-use core::ffi::c_void;
+use std::ffi::c_void;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "windows")] {

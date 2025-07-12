@@ -1,6 +1,6 @@
 test compile precise-output
 set opt_level=speed
-target s390x has_mie2
+target s390x has_mie3
 
 function %band_not_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):

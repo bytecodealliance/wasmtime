@@ -1,0 +1,70 @@
+test inline precise-output
+target x86_64
+
+function %f0(i32, i32) -> i32 tail {
+    fn0 = %whatever(i32, i32) -> i32 tail
+block0(v0: i32, v1: i32):
+    ;; This should become a `call; jump` upon inlining into a regular call. It
+    ;; can remain a `return_call` when inlined at a `return_call` site.
+    return_call fn0(v0, v1)
+}
+
+; (no functions inlined into %f0)
+
+function %f1() -> i32 tail {
+    fn0 = %f0(i32, i32) -> i32 tail
+block0:
+    v0 = iconst.i32 42
+    v1 = iconst.i32 10
+    v2 = call fn0(v0, v1)
+    v3 = iconst.i32 1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %f1() -> i32 tail {
+;     sig0 = (i32, i32) -> i32 tail
+;     sig1 = (i32, i32) -> i32 tail
+;     fn0 = %f0 sig0
+;     fn1 = %whatever sig1
+;
+; block0:
+;     v0 = iconst.i32 42
+;     v1 = iconst.i32 10
+;     jump block1
+;
+; block1:
+;     v6 = call fn1(v0, v1)  ; v0 = 42, v1 = 10
+;     jump block2(v6)
+;
+; block2(v5: i32):
+;     v2 -> v5
+;     v3 = iconst.i32 1
+;     v4 = iadd v2, v3  ; v3 = 1
+;     return v4
+; }
+
+function %f2() -> i32 tail {
+    gv0 = symbol %foo
+    fn0 = %f0(i32, i32) -> i32 tail
+block0:
+    v0 = iconst.i32 42
+    v1 = iconst.i32 10
+    return_call fn0(v0, v1)
+}
+
+; function %f2() -> i32 tail {
+;     gv0 = symbol %foo
+;     sig0 = (i32, i32) -> i32 tail
+;     sig1 = (i32, i32) -> i32 tail
+;     fn0 = %f0 sig0
+;     fn1 = %whatever sig1
+;
+; block0:
+;     v0 = iconst.i32 42
+;     v1 = iconst.i32 10
+;     jump block1
+;
+; block1:
+;     return_call fn1(v0, v1)  ; v0 = 42, v1 = 10
+; }

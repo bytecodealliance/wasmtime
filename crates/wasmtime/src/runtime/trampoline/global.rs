@@ -1,5 +1,6 @@
 use crate::runtime::vm::{ExportGlobalKind, StoreBox, VMGlobalDefinition};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
+use crate::type_registry::RegisteredType;
 use crate::{GlobalType, Mutability, Result, RootedGcRefImpl, Val};
 use core::ptr::{self, NonNull};
 use wasmtime_environ::{DefinedGlobalIndex, EntityRef, Global};
@@ -8,6 +9,8 @@ use wasmtime_environ::{DefinedGlobalIndex, EntityRef, Global};
 pub struct VMHostGlobalContext {
     pub(crate) ty: Global,
     pub(crate) global: VMGlobalDefinition,
+
+    _registered_type: Option<RegisteredType>,
 }
 
 pub fn generate_global_export(
@@ -25,6 +28,7 @@ pub fn generate_global_export(
     let ctx = StoreBox::new(VMHostGlobalContext {
         ty: global,
         global: VMGlobalDefinition::new(),
+        _registered_type: ty.into_registered_type(),
     });
 
     let mut store = AutoAssertNoGc::new(store);
@@ -43,7 +47,6 @@ pub fn generate_global_export(
             Val::ExternRef(x) => {
                 let new = match x {
                     None => None,
-                    #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                     Some(x) => Some(x.try_gc_ref(&store)?.unchecked_copy()),
                 };
                 let new = new.as_ref();
@@ -52,7 +55,6 @@ pub fn generate_global_export(
             Val::AnyRef(a) => {
                 let new = match a {
                     None => None,
-                    #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                     Some(a) => Some(a.try_gc_ref(&store)?.unchecked_copy()),
                 };
                 let new = new.as_ref();

@@ -25,8 +25,8 @@
 ;; @0027                               v7 = load.i64 notrap aligned readonly can_move v41+24
 ;; @0027                               v6 = uextend.i64 v2
 ;; @0027                               v8 = iadd v7, v6
-;; @0027                               v9 = iconst.i64 16
-;; @0027                               v10 = iadd v8, v9  ; v9 = 16
+;; @0027                               v9 = iconst.i64 24
+;; @0027                               v10 = iadd v8, v9  ; v9 = 24
 ;; @0027                               v11 = load.i32 notrap aligned readonly v10
 ;; @0027                               v12 = uadd_overflow_trap v3, v5, user17
 ;; @0027                               v13 = icmp ugt v12, v11
@@ -39,13 +39,13 @@
 ;; @0027                               trapnz v17, user1
 ;;                                     v53 = iconst.i32 3
 ;;                                     v54 = ishl v11, v53  ; v53 = 3
-;; @0027                               v19 = iconst.i32 24
-;; @0027                               v20 = uadd_overflow_trap v54, v19, user1  ; v19 = 24
+;; @0027                               v19 = iconst.i32 32
+;; @0027                               v20 = uadd_overflow_trap v54, v19, user1  ; v19 = 32
 ;; @0027                               v24 = uadd_overflow_trap v2, v20, user1
 ;; @0027                               v25 = uextend.i64 v24
 ;; @0027                               v27 = iadd v7, v25
 ;;                                     v60 = ishl v3, v53  ; v53 = 3
-;;                                     v62 = iadd v60, v19  ; v19 = 24
+;;                                     v62 = iadd v60, v19  ; v19 = 32
 ;; @0027                               v28 = isub v20, v62
 ;; @0027                               v29 = uextend.i64 v28
 ;; @0027                               v30 = isub v27, v29

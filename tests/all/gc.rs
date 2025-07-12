@@ -107,8 +107,6 @@ fn wasm_dropping_refs() -> Result<()> {
 
     let num_refs_dropped = Arc::new(AtomicUsize::new(0));
 
-    // NB: 4096 is greater than the initial `VMExternRefActivationsTable`
-    // capacity, so this will trigger at least one GC.
     for _ in 0..4096 {
         let mut scope = RootScope::new(&mut store);
         let r = ExternRef::new(&mut scope, CountDrops(num_refs_dropped.clone()))?;
@@ -116,9 +114,7 @@ fn wasm_dropping_refs() -> Result<()> {
         drop_ref.call(&mut scope, &args, &mut [])?;
     }
 
-    assert!(num_refs_dropped.load(SeqCst) > 0);
-
-    // And after doing a final GC, all the refs should have been dropped.
+    // After doing a GC, all the refs should have been dropped.
     store.gc(None);
     assert_eq!(num_refs_dropped.load(SeqCst), 4096);
 

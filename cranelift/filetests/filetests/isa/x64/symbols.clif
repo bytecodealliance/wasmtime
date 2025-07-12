@@ -82,3 +82,138 @@ block0:
 ;   popq %rbp
 ;   retq
 
+function %symbol_value_plus_offset() -> i64 {
+    gv0 = symbol %global0+123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   load_ext_name %global0+123, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0, %rax ; reloc_external Abs8 %global0 123
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %symbol_value_minus_offset() -> i64 {
+    gv0 = symbol %global0-123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   load_ext_name %global0+-123, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0, %rax ; reloc_external Abs8 %global0 -123
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %colocated_symbol_value() -> i64 {
+    gv0 = symbol colocated %global0
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   load_ext_name %global0+0, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq (%rip), %rax ; reloc_external CallPCRel4 %global0 -4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %colocated_symbol_value_plus_offset() -> i64 {
+    gv0 = symbol colocated %global0+123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   load_ext_name %global0+123, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq (%rip), %rax ; reloc_external CallPCRel4 %global0 119
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %colocated_symbol_value_minus_offset() -> i64 {
+    gv0 = symbol colocated %global0-123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   load_ext_name %global0+-123, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq (%rip), %rax ; reloc_external CallPCRel4 %global0 -127
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

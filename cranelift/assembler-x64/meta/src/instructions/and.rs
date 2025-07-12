@@ -44,11 +44,17 @@ pub fn list() -> Vec<Inst> {
         inst("lock_andl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x21]).r(), _64b | compat).custom(Mnemonic),
         inst("lock_andq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x21]).w().r(), _64b).custom(Mnemonic),
         // Vector instructions.
-        inst("andps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x54]).r(), _64b | compat | sse),
-        inst("andpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x54]).r(), _64b | compat | sse2),
-        inst("andnps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x55]).r(), _64b | compat | sse),
-        inst("andnpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x55]).r(), _64b | compat | sse2),
-        inst("pand", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDB]).r(), _64b | compat | sse2),
-        inst("pandn", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDF]).r(), _64b | compat | sse2),//.custom(Visit|Display),
+        inst("andps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x54]).r(), _64b | compat | sse).alt(avx, "vandps_b"),
+        inst("andpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x54]).r(), _64b | compat | sse2).alt(avx, "vandpd_b"),
+        inst("andnps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x55]).r(), _64b | compat | sse).alt(avx, "vandnps_b"),
+        inst("andnpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x55]).r(), _64b | compat | sse2).alt(avx, "vandnpd_b"),
+        inst("pand", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDB]).r(), _64b | compat | sse2).alt(avx, "vpand_b"),
+        inst("pandn", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDF]).r(), _64b | compat | sse2).alt(avx, "vpandn_b"),
+        inst("vandps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._0f().op(0x54).r(), _64b | compat | avx),
+        inst("vandpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0x54).r(), _64b | compat | avx),
+        inst("vandnps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._0f().op(0x55).r(), _64b | compat | avx),
+        inst("vandnpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0x55).r(), _64b | compat | avx),
+        inst("vpand", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xDB).r(), _64b | compat | avx),
+        inst("vpandn", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xDF).r(), _64b | compat | avx),
     ]
 }

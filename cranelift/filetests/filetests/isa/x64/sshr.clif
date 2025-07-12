@@ -30,14 +30,14 @@ block0(v0: i128, v1: i8):
 ;   uninit  %rax
 ;   xorq %rax, %rax
 ;   testq $0x7f, %rdx
-;   cmovzq  %rax, %r11, %r11
+;   cmoveq %rax, %r11
 ;   orq %r11, %rdi
 ;   sarq $0x3f, %rsi
 ;   testq $0x40, %rdx
 ;   movq %r10, %rax
-;   cmovzq  %rdi, %rax, %rax
+;   cmoveq %rdi, %rax
 ;   movq %rsi, %rdx
-;   cmovzq  %r10, %rdx, %rdx
+;   cmoveq %r10, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -95,14 +95,14 @@ block0(v0: i128, v1: i64):
 ;   uninit  %r11
 ;   xorq %r11, %r11
 ;   testq $0x7f, %rax
-;   cmovzq  %r11, %r10, %r10
+;   cmoveq %r11, %r10
 ;   orq %r10, %rdi
 ;   sarq $0x3f, %rsi
 ;   testq $0x40, %rax
 ;   movq %r9, %rax
-;   cmovzq  %rdi, %rax, %rax
+;   cmoveq %rdi, %rax
 ;   movq %rsi, %rdx
-;   cmovzq  %r9, %rdx, %rdx
+;   cmoveq %r9, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -161,14 +161,14 @@ block0(v0: i128, v1: i32):
 ;   uninit  %r11
 ;   xorq %r11, %r11
 ;   testq $0x7f, %rax
-;   cmovzq  %r11, %r10, %r10
+;   cmoveq %r11, %r10
 ;   orq %r10, %rdi
 ;   sarq $0x3f, %rsi
 ;   testq $0x40, %rax
 ;   movq %r9, %rax
-;   cmovzq  %rdi, %rax, %rax
+;   cmoveq %rdi, %rax
 ;   movq %rsi, %rdx
-;   cmovzq  %r9, %rdx, %rdx
+;   cmoveq %r9, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -227,14 +227,14 @@ block0(v0: i128, v1: i16):
 ;   uninit  %r11
 ;   xorq %r11, %r11
 ;   testq $0x7f, %rax
-;   cmovzq  %r11, %r10, %r10
+;   cmoveq %r11, %r10
 ;   orq %r10, %rdi
 ;   sarq $0x3f, %rsi
 ;   testq $0x40, %rax
 ;   movq %r9, %rax
-;   cmovzq  %rdi, %rax, %rax
+;   cmoveq %rdi, %rax
 ;   movq %rsi, %rdx
-;   cmovzq  %r9, %rdx, %rdx
+;   cmoveq %r9, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -293,14 +293,14 @@ block0(v0: i128, v1: i8):
 ;   uninit  %r11
 ;   xorq %r11, %r11
 ;   testq $0x7f, %rax
-;   cmovzq  %r11, %r10, %r10
+;   cmoveq %r11, %r10
 ;   orq %r10, %rdi
 ;   sarq $0x3f, %rsi
 ;   testq $0x40, %rax
 ;   movq %r9, %rax
-;   cmovzq  %rdi, %rax, %rax
+;   cmoveq %rdi, %rax
 ;   movq %rsi, %rdx
-;   cmovzq  %r9, %rdx, %rdx
+;   cmoveq %r9, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

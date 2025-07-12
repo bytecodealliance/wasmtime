@@ -1,0 +1,45 @@
+test inline precise-output optimize
+set opt_level=speed_and_size
+target x86_64
+
+;; Test that, after inlining, alias analysis can boil away some GC ref stack
+;; reloads.
+
+function %f0() -> i32 {
+block0:
+    v0 = iconst.i32 1234
+    return v0
+}
+
+; (no functions inlined into %f0)
+
+function %f1(i32) -> i32 {
+    ss0 = explicit_slot 4
+    fn0 = %f0() -> i32
+block0(v0: i32):
+    stack_store v0, ss0
+    v1 = call fn0(), stack_map=[i32 @ ss0+0]
+    v2 = stack_load.i32 ss0
+    v3 = iadd v2, v1
+    return v3
+}
+
+; function %f1(i32) -> i32 fast {
+;     ss0 = explicit_slot 4
+;     sig0 = () -> i32 fast
+;     fn0 = %f0 sig0
+;
+; block0(v0: i32):
+;     v5 = stack_addr.i64 ss0
+;     store notrap v0, v5
+;     jump block1
+;
+; block1:
+;     jump block2
+;
+; block2:
+;     v7 = iconst.i32 1234
+;     v3 = iadd.i32 v0, v7  ; v7 = 1234
+;     return v3
+; }
+

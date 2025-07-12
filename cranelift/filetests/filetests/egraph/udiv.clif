@@ -2,6 +2,77 @@ test optimize precise-output
 set opt_level=speed
 target x86_64
 
+function %udiv32_pow2(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = udiv v0, v1
+    return v2
+}
+
+; function %udiv32_pow2(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 3
+;     v4 = ushr v0, v3  ; v3 = 3
+;     v2 -> v4
+;     return v4
+; }
+
+function %udiv32_by_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1337
+    v2 = udiv v0, v1
+    return v2
+}
+
+; function %udiv32_by_const(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 -2010957013
+;     v4 = umulhi v0, v3  ; v3 = -2010957013
+;     v5 = isub v0, v4
+;     v6 = iconst.i32 1
+;     v7 = ushr v5, v6  ; v6 = 1
+;     v8 = iadd v4, v7
+;     v9 = iconst.i32 10
+;     v10 = ushr v8, v9  ; v9 = 10
+;     v2 -> v10
+;     return v10
+; }
+
+function %udiv64_pow2(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 128
+    v2 = udiv v0, v1
+    return v2
+}
+
+; function %udiv64_pow2(i64) -> i64 fast {
+; block0(v0: i64):
+;     v3 = iconst.i64 7
+;     v4 = ushr v0, v3  ; v3 = 7
+;     v2 -> v4
+;     return v4
+; }
+
+function %udiv64_by_const(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 789
+    v2 = udiv v0, v1
+    return v2
+}
+
+; function %udiv64_by_const(i64) -> i64 fast {
+; block0(v0: i64):
+;     v3 = iconst.i64 0x4c3f_982c_2072_35dd
+;     v4 = umulhi v0, v3  ; v3 = 0x4c3f_982c_2072_35dd
+;     v5 = isub v0, v4
+;     v6 = iconst.i64 1
+;     v7 = ushr v5, v6  ; v6 = 1
+;     v8 = iadd v4, v7
+;     v9 = iconst.i64 9
+;     v10 = ushr v8, v9  ; v9 = 9
+;     v2 -> v10
+;     return v10
+; }
 
 ;; Case 1: i32 type, different powers of two
 function %udiv_select_pow2_to_ushr_select_exp_i32(i32, i8) -> i32 {
@@ -41,4 +112,3 @@ block0(v0: i64, v1: i8):
 ;     v5 -> v9
 ;     return v9
 ; }
-

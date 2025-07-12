@@ -1511,13 +1511,13 @@ fn add_rule_constraints(
             let term_name = typeenv.syms[term.name.index()].clone();
 
             // Print term for debugging
-            log::trace!(" {}", term_name);
+            log::trace!(" {term_name}");
 
             tree.quantified_vars
                 .insert((curr.ident.clone(), curr.type_var));
             let a = annotation_env.get_annotation_for_term(term_id);
             if a.is_none() {
-                log::error!("\nSkipping rule with unannotated term: {}", term_name);
+                log::error!("\nSkipping rule with unannotated term: {term_name}");
                 return None;
             }
             let annotation = a.unwrap();

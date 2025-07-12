@@ -88,8 +88,10 @@ impl VMGcHeader {
     pub fn set_reserved_u27(&mut self, value: u32) {
         assert!(
             VMGcKind::value_fits_in_unused_bits(value),
-            "VMGcHeader::set_reserved_u26 with value using more than 26 bits"
+            "VMGcHeader::set_reserved_u27 with value using more than 27 bits: \
+             {value:#034b} ({value}, {value:#010x})"
         );
+        self.kind &= VMGcKind::MASK;
         self.kind |= value;
     }
 
@@ -99,8 +101,9 @@ impl VMGcHeader {
     ///
     /// The given `value` must only use the lower 27 bits; its upper 5 bits must
     /// be unset.
-    pub unsafe fn unchecked_set_reserved_u26(&mut self, value: u32) {
+    pub unsafe fn unchecked_set_reserved_u27(&mut self, value: u32) {
         debug_assert_eq!(value & VMGcKind::MASK, 0);
+        self.kind &= VMGcKind::MASK;
         self.kind |= value;
     }
 
@@ -310,6 +313,7 @@ impl VMGcRef {
 
     /// Borrow `self` as a typed GC reference, checking that `self` actually is
     /// a `T`.
+    #[inline]
     pub fn as_typed<T>(&self, gc_heap: &impl GcHeap) -> Option<&TypedGcRef<T>>
     where
         T: GcHeapObject,
@@ -481,5 +485,40 @@ impl<T> TypedGcRef<T> {
     /// Get the untyped version of this GC reference.
     pub fn as_untyped(&self) -> &VMGcRef {
         &self.gc_ref
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reserved_bits() {
+        let kind = VMGcKind::StructRef;
+        let ty = VMSharedTypeIndex::new(1234);
+        let mut header = VMGcHeader::from_kind_and_index(kind, ty);
+
+        assert_eq!(header.reserved_u27(), 0);
+        assert_eq!(header.kind(), kind);
+        assert_eq!(header.ty(), Some(ty));
+
+        header.set_reserved_u27(36);
+        assert_eq!(header.reserved_u27(), 36);
+        assert_eq!(header.kind(), kind);
+        assert_eq!(header.ty(), Some(ty));
+
+        let max = (1 << 27) - 1;
+        header.set_reserved_u27(max);
+        assert_eq!(header.reserved_u27(), max);
+        assert_eq!(header.kind(), kind);
+        assert_eq!(header.ty(), Some(ty));
+
+        header.set_reserved_u27(0);
+        assert_eq!(header.reserved_u27(), 0);
+        assert_eq!(header.kind(), kind);
+        assert_eq!(header.ty(), Some(ty));
+
+        let result = std::panic::catch_unwind(move || header.set_reserved_u27(max + 1));
+        assert!(result.is_err());
     }
 }

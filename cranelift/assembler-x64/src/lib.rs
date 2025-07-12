@@ -29,10 +29,9 @@
 //! // Now we can encode this sequence into a code buffer, checking that each
 //! // instruction is valid in 64-bit mode.
 //! let mut buffer = vec![];
-//! let offsets = vec![];
 //! for inst in seq {
 //!     if inst.features().contains(&Feature::_64b) {
-//!         inst.encode(&mut buffer, &offsets);
+//!         inst.encode(&mut buffer);
 //!     }
 //! }
 //! assert_eq!(buffer, vec![0x24, 0b10101010]);
@@ -79,8 +78,7 @@ pub use inst::Inst;
 pub use inst::Feature;
 
 pub use api::{
-    AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, RegisterVisitor, Registers,
-    TrapCode,
+    AsReg, CodeSink, Constant, KnownOffset, Label, RegisterVisitor, Registers, TrapCode,
 };
 pub use fixed::Fixed;
 pub use gpr::{Gpr, NonRspGpr, Size};

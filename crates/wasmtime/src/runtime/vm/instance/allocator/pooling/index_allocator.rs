@@ -31,7 +31,6 @@ impl SimpleIndexAllocator {
         SimpleIndexAllocator(ModuleAffinityIndexAllocator::new(capacity, 0))
     }
 
-    #[allow(unused)] // some cfgs don't use this
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -45,7 +44,6 @@ impl SimpleIndexAllocator {
     }
 
     #[cfg(test)]
-    #[allow(unused)]
     pub(crate) fn testing_freelist(&self) -> Vec<SlotId> {
         self.0.testing_freelist()
     }
@@ -176,7 +174,6 @@ impl ModuleAffinityIndexAllocator {
     }
 
     /// Are zero slots in use right now?
-    #[allow(unused)] // some cfgs don't use this
     pub fn is_empty(&self) -> bool {
         let inner = self.0.lock().unwrap();
         !inner
@@ -319,7 +316,6 @@ impl ModuleAffinityIndexAllocator {
     /// For testing only, we want to be able to assert what is on the single
     /// freelist, for the policies that keep just one.
     #[cfg(test)]
-    #[allow(unused)]
     pub(crate) fn testing_freelist(&self) -> Vec<SlotId> {
         let inner = self.0.lock().unwrap();
         inner
@@ -456,7 +452,6 @@ impl List {
     }
 
     #[cfg(test)]
-    #[allow(unused)]
     fn iter<'a>(
         &'a self,
         states: &'a [SlotState],
@@ -702,5 +697,23 @@ mod test {
 
         // for good measure make sure id3 is still affine
         assert_eq!(state.alloc(Some(id3)), Some(SlotId(0)));
+    }
+
+    #[test]
+    fn test_freelist() {
+        let allocator = SimpleIndexAllocator::new(10);
+        assert_eq!(allocator.testing_freelist(), []);
+        let a = allocator.alloc().unwrap();
+        assert_eq!(allocator.testing_freelist(), []);
+        allocator.free(a);
+        assert_eq!(allocator.testing_freelist(), [a]);
+        assert_eq!(allocator.alloc(), Some(a));
+        assert_eq!(allocator.testing_freelist(), []);
+        let b = allocator.alloc().unwrap();
+        assert_eq!(allocator.testing_freelist(), []);
+        allocator.free(b);
+        assert_eq!(allocator.testing_freelist(), [b]);
+        allocator.free(a);
+        assert_eq!(allocator.testing_freelist(), [b, a]);
     }
 }

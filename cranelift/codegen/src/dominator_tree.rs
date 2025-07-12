@@ -2,7 +2,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::{Block, Function, Layout, ProgramPoint};
+use crate::ir::{Block, Function, Inst, Layout, ProgramPoint};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
@@ -581,6 +581,20 @@ impl DominatorTreePreorder {
         let na = &self.nodes[a];
         let nb = &self.nodes[b];
         na.pre_number <= nb.pre_number && na.pre_max >= nb.pre_max
+    }
+
+    /// Checks if one instruction dominates another.
+    pub fn dominates_inst(&self, a: Inst, b: Inst, layout: &Layout) -> bool {
+        match (layout.inst_block(a), layout.inst_block(b)) {
+            (Some(block_a), Some(block_b)) => {
+                if block_a == block_b {
+                    layout.pp_cmp(a, b) != Ordering::Greater
+                } else {
+                    self.dominates(block_a, block_b)
+                }
+            }
+            _ => false,
+        }
     }
 
     /// Compare two blocks according to the dominator pre-order.

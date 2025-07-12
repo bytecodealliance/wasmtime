@@ -16,10 +16,10 @@ use crate::ir::{
 };
 use crate::isa::x64::X64Backend;
 use crate::isa::x64::inst::{ReturnCallInfo, args::*, regs};
-use crate::isa::x64::lower::emit_vm_call;
+use crate::isa::x64::lower::{InsnInput, emit_vm_call};
 use crate::machinst::isle::*;
 use crate::machinst::{
-    ArgPair, CallArgList, CallInfo, CallRetList, InsnInput, InstOutput, MachInst, VCodeConstant,
+    ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, MachInst, VCodeConstant,
     VCodeConstantData,
 };
 use alloc::vec::Vec;
@@ -1052,6 +1052,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn is_mem(&mut self, src: &XmmMem) -> Option<SyntheticAmode> {
+        match src.clone().to_reg_mem() {
+            RegMem::Reg { .. } => None,
+            RegMem::Mem { addr } => Some(addr),
+        }
+    }
+
     // Custom constructors for `mulx` which only calculates the high half of the
     // result meaning that the same output operand is used in both destination
     // registers. This is in contrast to the assembler-generated version of this
@@ -1072,6 +1079,14 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         let inst = asm::inst::mulxq_rvm::new(ret, ret, src1, src2);
         self.emit(&MInst::External { inst: inst.into() });
         ret.to_reg()
+    }
+
+    fn bt_imm(&mut self, val: u64) -> Option<u8> {
+        if val.count_ones() == 1 {
+            Some(u8::try_from(val.trailing_zeros()).unwrap())
+        } else {
+            None
+        }
     }
 }
 

@@ -1765,7 +1765,7 @@ fn resolve_dynamic_widths(
                     }
 
                     if unresolved_widths.contains(&width_name) {
-                        log::debug!("\tResolved width: {}, {}", width_name, width_int);
+                        log::debug!("\tResolved width: {width_name}, {width_int}");
                         width_resolutions.insert(width_name, width_int);
                         cur_tyctx
                             .tymap
@@ -1940,12 +1940,12 @@ pub fn run_solver_with_static_widths(
         }
         (None, None) => (),
         (Some(_), None) => {
-            log::error!("Verification failed for {}, {}", rulename, widthname);
+            log::error!("Verification failed for {rulename}, {widthname}");
             log::error!("Left hand side has load statement but right hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
         (None, Some(_)) => {
-            log::error!("Verification failed for {}, {}", rulename, widthname);
+            log::error!("Verification failed for {rulename}, {widthname}");
             log::error!("Right hand side has load statement but left hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
@@ -1967,12 +1967,12 @@ pub fn run_solver_with_static_widths(
         }
         (None, None) => (),
         (Some(_), None) => {
-            log::error!("Verification failed for {}, {}", rulename, widthname);
+            log::error!("Verification failed for {rulename}, {widthname}");
             log::error!("Left hand side has store statement but right hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }
         (None, Some(_)) => {
-            log::error!("Verification failed for {}, {}", rulename, widthname);
+            log::error!("Verification failed for {rulename}, {widthname}");
             log::error!("Right hand side has store statement but left hand side does not.");
             return VerificationResult::Failure(Counterexample {});
         }

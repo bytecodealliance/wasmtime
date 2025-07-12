@@ -47,13 +47,13 @@ macro_rules! define_registers {
     ) => {
         $(
             #[inline]
-            #[allow(dead_code)]
+            #[allow(dead_code, reason = "generated code")]
             pub fn $readable() -> Reg {
                 $reg
             }
 
             #[inline]
-            #[allow(dead_code)]
+            #[allow(dead_code, reason = "generated code")]
             pub fn $writable() -> Writable<Reg> {
                 Writable::from_reg($readable())
             }

@@ -1,0 +1,192 @@
+test interpret
+test run
+target aarch64
+target s390x
+target riscv64
+target riscv64 has_zbb
+target riscv64 has_c has_zcb
+target x86_64
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
+function %sdiv_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv_i32(0, 100) == 0
+; run: %sdiv_i32(2, 1) == 2
+; run: %sdiv_i32(16, 2) == 8
+; run: %sdiv_i32(123456, 789) == 156
+; run: %sdiv_i32(-2, 1) == -2
+; run: %sdiv_i32(-16, 2) == -8
+; run: %sdiv_i32(-123456, 789) == -156
+; run: %sdiv_i32(-2, -1) == 2
+; run: %sdiv_i32(-16, -2) == 8
+; run: %sdiv_i32(-123456, -789) == 156
+
+function %sdiv_pow2_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv_pow2_i32(0) == 0
+; run: %sdiv_pow2_i32(8) == 1
+; run: %sdiv_pow2_i32(9) == 1
+; run: %sdiv_pow2_i32(16) == 2
+; run: %sdiv_pow2_i32(17) == 2
+; run: %sdiv_pow2_i32(-8) == -1
+; run: %sdiv_pow2_i32(-9) == -1
+; run: %sdiv_pow2_i32(-16) == -2
+; run: %sdiv_pow2_i32(-17) == -2
+
+function %sdiv_neg_pow2_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -4
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv_neg_pow2_i32(0) == 0
+; run: %sdiv_neg_pow2_i32(8) == -2
+; run: %sdiv_neg_pow2_i32(9) == -2
+; run: %sdiv_neg_pow2_i32(16) == -4
+; run: %sdiv_neg_pow2_i32(17) == -4
+; run: %sdiv_neg_pow2_i32(-8) == 2
+; run: %sdiv_neg_pow2_i32(-9) == 2
+; run: %sdiv_neg_pow2_i32(-16) == 4
+; run: %sdiv_neg_pow2_i32(-17) == 4
+
+function %sdiv_by_const_1337_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1337
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; run: %sdiv_by_const_1337_i32(0) == 0
+; run: %sdiv_by_const_1337_i32(1337) == 1
+; run: %sdiv_by_const_1337_i32(1338) == 1
+; run: %sdiv_by_const_1337_i32(56154) == 42
+; run: %sdiv_by_const_1337_i32(56155) == 42
+; run: %sdiv_by_const_1337_i32(57490) == 42
+; run: %sdiv_by_const_1337_i32(57491) == 43
+; run: %sdiv_by_const_1337_i32(-1337) == -1
+; run: %sdiv_by_const_1337_i32(-1338) == -1
+; run: %sdiv_by_const_1337_i32(-56154) == -42
+; run: %sdiv_by_const_1337_i32(-56155) == -42
+; run: %sdiv_by_const_1337_i32(-57490) == -42
+; run: %sdiv_by_const_1337_i32(-57491) == -43
+
+function %sdiv_by_const_neg_1337_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -1337
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; run: %sdiv_by_const_neg_1337_i32(0) == 0
+; run: %sdiv_by_const_neg_1337_i32(1337) == -1
+; run: %sdiv_by_const_neg_1337_i32(1338) == -1
+; run: %sdiv_by_const_neg_1337_i32(56154) == -42
+; run: %sdiv_by_const_neg_1337_i32(56155) == -42
+; run: %sdiv_by_const_neg_1337_i32(57490) == -42
+; run: %sdiv_by_const_neg_1337_i32(57491) == -43
+; run: %sdiv_by_const_neg_1337_i32(-1337) == 1
+; run: %sdiv_by_const_neg_1337_i32(-1338) == 1
+; run: %sdiv_by_const_neg_1337_i32(-56154) == 42
+; run: %sdiv_by_const_neg_1337_i32(-56155) == 42
+; run: %sdiv_by_const_neg_1337_i32(-57490) == 42
+; run: %sdiv_by_const_neg_1337_i32(-57491) == 43
+
+function %sdiv_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv_i64(0, 100) == 0
+; run: %sdiv_i64(2, 1) == 2
+; run: %sdiv_i64(16, 2) == 8
+; run: %sdiv_i64(123456, 789) == 156
+; run: %sdiv_i64(-2, 1) == -2
+; run: %sdiv_i64(-16, 2) == -8
+; run: %sdiv_i64(-123456, 789) == -156
+; run: %sdiv_i64(-2, -1) == 2
+; run: %sdiv_i64(-16, -2) == 8
+; run: %sdiv_i64(-123456, -789) == 156
+
+function %sdiv_pow2_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 8
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv_pow2_i64(0) == 0
+; run: %sdiv_pow2_i64(8) == 1
+; run: %sdiv_pow2_i64(9) == 1
+; run: %sdiv_pow2_i64(16) == 2
+; run: %sdiv_pow2_i64(17) == 2
+; run: %sdiv_pow2_i64(-8) == -1
+; run: %sdiv_pow2_i64(-9) == -1
+; run: %sdiv_pow2_i64(-16) == -2
+; run: %sdiv_pow2_i64(-17) == -2
+
+function %sdiv_neg_pow2_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -4
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv_neg_pow2_i64(0) == 0
+; run: %sdiv_neg_pow2_i64(8) == -2
+; run: %sdiv_neg_pow2_i64(9) == -2
+; run: %sdiv_neg_pow2_i64(16) == -4
+; run: %sdiv_neg_pow2_i64(17) == -4
+; run: %sdiv_neg_pow2_i64(-8) == 2
+; run: %sdiv_neg_pow2_i64(-9) == 2
+; run: %sdiv_neg_pow2_i64(-16) == 4
+; run: %sdiv_neg_pow2_i64(-17) == 4
+
+function %sdiv_by_const_1337_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 1337
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; run: %sdiv_by_const_1337_i64(0) == 0
+; run: %sdiv_by_const_1337_i64(1337) == 1
+; run: %sdiv_by_const_1337_i64(1338) == 1
+; run: %sdiv_by_const_1337_i64(56154) == 42
+; run: %sdiv_by_const_1337_i64(56155) == 42
+; run: %sdiv_by_const_1337_i64(57490) == 42
+; run: %sdiv_by_const_1337_i64(57491) == 43
+; run: %sdiv_by_const_1337_i64(-1337) == -1
+; run: %sdiv_by_const_1337_i64(-1338) == -1
+; run: %sdiv_by_const_1337_i64(-56154) == -42
+; run: %sdiv_by_const_1337_i64(-56155) == -42
+; run: %sdiv_by_const_1337_i64(-57490) == -42
+; run: %sdiv_by_const_1337_i64(-57491) == -43
+
+function %sdiv_by_const_neg_1337_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1337
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; run: %sdiv_by_const_neg_1337_i64(0) == 0
+; run: %sdiv_by_const_neg_1337_i64(1337) == -1
+; run: %sdiv_by_const_neg_1337_i64(1338) == -1
+; run: %sdiv_by_const_neg_1337_i64(56154) == -42
+; run: %sdiv_by_const_neg_1337_i64(56155) == -42
+; run: %sdiv_by_const_neg_1337_i64(57490) == -42
+; run: %sdiv_by_const_neg_1337_i64(57491) == -43
+; run: %sdiv_by_const_neg_1337_i64(-1337) == 1
+; run: %sdiv_by_const_neg_1337_i64(-1338) == 1
+; run: %sdiv_by_const_neg_1337_i64(-56154) == 42
+; run: %sdiv_by_const_neg_1337_i64(-56155) == 42
+; run: %sdiv_by_const_neg_1337_i64(-57490) == 42
+; run: %sdiv_by_const_neg_1337_i64(-57491) == 43

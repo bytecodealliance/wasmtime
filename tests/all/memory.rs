@@ -250,6 +250,7 @@ fn guards_present_pooling(config: &mut Config) -> Result<()> {
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
 #[cfg_attr(asan, ignore)]
+#[cfg(target_arch = "x86_64")] // only platform with mpk
 fn guards_present_pooling_mpk(config: &mut Config) -> Result<()> {
     if !wasmtime::PoolingAllocationConfig::are_memory_protection_keys_available() {
         println!("skipping `guards_present_pooling_mpk` test; mpk is not supported");
@@ -676,8 +677,8 @@ fn shared_memory_wait_notify() -> Result<()> {
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
 #[cfg(target_pointer_width = "64")] // requires large VM reservation
-fn init_with_negative_segment(_: &mut Config) -> Result<()> {
-    let engine = Engine::default();
+fn init_with_negative_segment(cfg: &mut Config) -> Result<()> {
+    let engine = Engine::new(cfg)?;
     let module = Module::new(
         &engine,
         r#"

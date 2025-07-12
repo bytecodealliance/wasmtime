@@ -84,6 +84,9 @@ pub(crate) enum Callee {
     FuncRef(TypeIndex),
     /// A built-in function.
     Builtin(BuiltinFunction),
+    /// A built-in function, but the vmctx argument is located at the static
+    /// offset provided from the current function's vmctx.
+    BuiltinWithDifferentVmctx(BuiltinFunction, u32),
 }
 
 /// The function environment.
@@ -345,7 +348,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     Ok(self.resolved_sigs.get(idx).unwrap())
                 }
             }
-            Callee::Builtin(b) => Ok(b.sig()),
+            Callee::Builtin(b) | Callee::BuiltinWithDifferentVmctx(b, _) => Ok(b.sig()),
         }
     }
 

@@ -49,6 +49,10 @@ impl Drop for TrapHandler {
     }
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "too fiddly to handle and wouldn't help much anyway"
+)]
 unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINTERS) -> i32 {
     // Check the kind of exception, since we only handle a subset within
     // wasm code. If anything else happens we want to defer to whatever

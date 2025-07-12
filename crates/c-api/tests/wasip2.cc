@@ -16,7 +16,10 @@ TEST(wasip2, smoke) {
   const auto context = wasmtime_store_context(store);
 
   const auto cfg = wasmtime_wasip2_config_new();
+  wasmtime_wasip2_config_inherit_stdin(cfg);
   wasmtime_wasip2_config_inherit_stdout(cfg);
+  wasmtime_wasip2_config_inherit_stderr(cfg);
+  wasmtime_wasip2_config_arg(cfg, "hello", strlen("hello"));
   wasmtime_context_set_wasip2(context, cfg);
 
   wasmtime_component_t *component = nullptr;

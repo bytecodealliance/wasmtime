@@ -7,10 +7,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
-fn build_engine(config: &mut Config) -> Arc<Engine> {
+fn build_engine(config: &mut Config) -> Result<Arc<Engine>> {
     config.async_support(true);
     config.epoch_interruption(true);
-    Arc::new(Engine::new(&config).unwrap())
+    Ok(Arc::new(Engine::new(&config)?))
 }
 
 fn make_env<T: 'static>(engine: &Engine) -> Linker<T> {
@@ -51,10 +51,10 @@ async fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     initial: u64,
     delta: InterruptMode,
     setup_func: F,
-) -> Option<(usize, usize)> {
-    let engine = build_engine(config);
+) -> Result<Option<(usize, usize)>> {
+    let engine = build_engine(config)?;
     let linker = make_env::<usize>(&engine);
-    let module = Module::new(&engine, wasm).unwrap();
+    let module = Module::new(&engine, wasm)?;
     let mut store = Store::new(&engine, 0);
     store.set_epoch_deadline(initial);
     match delta {
@@ -72,12 +72,12 @@ async fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     let engine_clone = engine.clone();
     setup_func(engine_clone);
 
-    let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
+    let instance = linker.instantiate_async(&mut store, &module).await?;
     let f = instance.get_func(&mut store, "run").unwrap();
     let (result, yields) =
         CountPending::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
     let store = store.data();
-    return result.ok().map(|_| (yields, *store));
+    Ok(result.ok().map(|_| (yields, *store)))
 }
 
 #[wasmtime_test(with = "#[tokio::test]")]
@@ -99,7 +99,7 @@ async fn epoch_yield_at_func_entry(config: &mut Config) -> Result<()> {
             InterruptMode::Yield(1),
             |_| {},
         )
-        .await
+        .await?
     );
     Ok(())
 }
@@ -125,7 +125,7 @@ async fn epoch_yield_at_loop_header(config: &mut Config) -> Result<()> {
             InterruptMode::Yield(5),
             |_| {},
         )
-        .await
+        .await?
     );
     Ok(())
 }
@@ -147,7 +147,7 @@ async fn epoch_yield_immediate(config: &mut Config) -> Result<()> {
             InterruptMode::Yield(1),
             |_| {},
         )
-        .await
+        .await?
     );
     Ok(())
 }
@@ -179,7 +179,7 @@ async fn epoch_yield_only_once(config: &mut Config) -> Result<()> {
             InterruptMode::Yield(1),
             |_| {},
         )
-        .await
+        .await?
     );
     Ok(())
 }
@@ -206,7 +206,7 @@ async fn epoch_interrupt_infinite_loop(config: &mut Config) -> Result<()> {
                 });
             },
         )
-        .await
+        .await?
     );
     Ok(())
 }
@@ -330,7 +330,7 @@ async fn epoch_interrupt_function_entries(config: &mut Config) -> Result<()> {
                 });
             },
         )
-        .await
+        .await?
     );
     Ok(())
 }
@@ -357,7 +357,7 @@ async fn epoch_callback_continue(config: &mut Config) -> Result<()> {
             }),
             |_| {},
         )
-        .await
+        .await?
     );
     Ok(())
 }
@@ -384,7 +384,7 @@ async fn epoch_callback_yield(config: &mut Config) -> Result<()> {
             }),
             |_| {},
         )
-        .await
+        .await?
     );
 
     Ok(())
@@ -413,7 +413,7 @@ async fn epoch_callback_yield_custom(config: &mut Config) -> Result<()> {
             }),
             |_| {},
         )
-        .await
+        .await?
     );
     Ok(())
 }
@@ -436,7 +436,7 @@ async fn epoch_callback_trap(config: &mut Config) -> Result<()> {
             InterruptMode::Callback(|_| Err(anyhow!("Failing in callback"))),
             |_| {},
         )
-        .await
+        .await?
     );
     Ok(())
 }
@@ -456,7 +456,7 @@ async fn drop_future_on_epoch_yield(config: &mut Config) -> Result<()> {
       (func $subfunc))
     ";
 
-    let engine = build_engine(config);
+    let engine = build_engine(config)?;
     let mut linker = make_env::<()>(&engine);
 
     // Create a few helpers for the Wasm to call.

@@ -41,7 +41,7 @@ pub fn pkey_alloc(flags: u32, access_rights: u32) -> Result<u32> {
 /// Free a kernel protection key ([docs]).
 ///
 /// [docs]: https://man7.org/linux/man-pages/man2/pkey_alloc.2.html
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn pkey_free(key: u32) -> Result<()> {
     let result = unsafe { libc::syscall(libc::SYS_pkey_free, key) };
     if result == 0 {

@@ -48,6 +48,19 @@ pub(crate) struct EntityRefs {
 
     /// A variable-sized list of value operands. Use for Block and function call arguments.
     pub(crate) varargs: OperandKind,
+
+    /// A constant stored in the constant pool.
+    ///
+    /// This operand is used to pass constants to instructions like `vconst`
+    /// while storing the actual bytes in the constant pool.
+    pub(crate) pool_constant: OperandKind,
+
+    /// An unsigned 128-bit immediate integer operand, stored out-of-line in the
+    /// `DataFlowGraph::immediates` pool.
+    ///
+    /// This operand is used to pass entire 128-bit vectors as immediates to instructions like
+    /// `shuffle` and `mask`.
+    pub(crate) uimm128: OperandKind,
 }
 
 impl EntityRefs {
@@ -100,6 +113,18 @@ impl EntityRefs {
                         passed to a basic block, or a variable number of results
                         returned from an instruction.
                     "#,
+            ),
+
+            pool_constant: new(
+                "constant_handle",
+                "ir::Constant",
+                "A constant stored in the constant pool.",
+            ),
+
+            uimm128: new(
+                "imm",
+                "ir::Immediate",
+                "A 128-bit immediate unsigned integer.",
             ),
         }
     }

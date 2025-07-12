@@ -155,7 +155,6 @@ pub struct StructRef {
 }
 
 unsafe impl GcRefImpl for StructRef {
-    #[allow(private_interfaces)]
     fn transmute_ref(index: &GcRootIndex) -> &Self {
         // Safety: `StructRef` is a newtype of a `GcRootIndex`.
         let me: &Self = unsafe { mem::transmute(index) };

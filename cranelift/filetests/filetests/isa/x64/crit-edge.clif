@@ -23,7 +23,7 @@ function %f(i32) -> i32 {
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   lea     1(%rdi), %eax
+;   leal 1(%rdi), %eax
 ;   testl %edi, %edi
 ;   jnz     label4; j label1
 ; block1:

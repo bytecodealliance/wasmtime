@@ -557,6 +557,12 @@
         (ConsumesFlags.ConsumesFlagsSideEffect inst2))
       (ConsumesFlags.ConsumesFlagsSideEffect2 inst1 inst2))
 
+;; Get the produced register out of a ConsumesFlags.
+(decl consumes_flags_get_reg (ConsumesFlags) Reg)
+(rule (consumes_flags_get_reg (ConsumesFlags.ConsumesFlagsReturnsReg _ reg)) reg)
+(decl consumes_flags_get_regs (ConsumesFlags) ValueRegs)
+(rule (consumes_flags_get_regs (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs _ _ regs)) regs)
+
 ;; Combine flags-producing and -consuming instructions together, ensuring that
 ;; they are emitted back-to-back and no other instructions can be emitted
 ;; between them and potentially clobber the flags.

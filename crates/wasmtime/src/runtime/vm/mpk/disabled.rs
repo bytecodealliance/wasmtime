@@ -1,8 +1,6 @@
 //! Noop implementations of MPK primitives for environments that do not support
 //! the feature.
 
-#![allow(missing_docs)]
-
 #[cfg(feature = "pooling-allocator")]
 use crate::prelude::*;
 

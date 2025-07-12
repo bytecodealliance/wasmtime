@@ -1435,8 +1435,8 @@ impl Inst {
             match iset_requirement {
                 // Baseline ISA is z14
                 InstructionSet::Base => true,
-                // Miscellaneous-Instruction-Extensions Facility 2 (z15)
-                InstructionSet::MIE2 => emit_info.isa_flags.has_mie2(),
+                // Miscellaneous-Instruction-Extensions Facility 3 (z15)
+                InstructionSet::MIE3 => emit_info.isa_flags.has_mie3(),
                 // Vector-Enhancements Facility 2 (z15)
                 InstructionSet::VXRS_EXT2 => emit_info.isa_flags.has_vxrs_ext2(),
             }

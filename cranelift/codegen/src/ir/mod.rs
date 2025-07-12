@@ -68,6 +68,7 @@ pub use crate::ir::stackslot::{
 };
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
+pub(crate) use crate::ir::user_stack_maps::UserStackMapEntryVec;
 pub use crate::ir::user_stack_maps::{UserStackMap, UserStackMapEntry};
 
 use crate::entity::{PrimaryMap, SecondaryMap, entity_impl};

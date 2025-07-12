@@ -243,7 +243,7 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   lea     0(%rsi,%rdx,1), %r8d
+;   leal (%rsi, %rdx), %r8d
 ;   shll $0x2, %r8d
 ;   movq -1(%rdi, %r8), %rax
 ;   movq %rbp, %rsp

@@ -87,35 +87,119 @@ impl DrcCompiler {
         new_ref_count
     }
 
-    /// Load the `*mut VMGcRefActivationsTable` from the vmctx, its `next` bump
-    /// finger, and its `end` bump boundary.
-    fn load_bump_region(
+    /// Push `gc_ref` onto the over-approximated-stack-roots list.
+    ///
+    /// `gc_ref` must not already be in the list.
+    ///
+    /// `reserved` must be the current reserved bits for this `gc_ref`.
+    fn push_onto_over_approximated_stack_roots(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        gc_ref: ir::Value,
+        reserved: ir::Value,
+    ) {
+        debug_assert_eq!(builder.func.dfg.value_type(gc_ref), ir::types::I32);
+        debug_assert_eq!(builder.func.dfg.value_type(reserved), ir::types::I32);
+
+        let head = self.load_over_approximated_stack_roots_head(func_env, builder);
+
+        // Load the current first list element, which will be our new next list
+        // element.
+        let next = builder
+            .ins()
+            .load(ir::types::I32, ir::MemFlags::trusted(), head, 0);
+
+        // Update our object's header to point to `next` and consider itself part of the list.
+        self.set_next_over_approximated_stack_root(func_env, builder, gc_ref, next);
+        self.set_in_over_approximated_stack_roots_bit(func_env, builder, gc_ref, reserved);
+
+        // Increment our ref count because the list is logically holding a strong reference.
+        self.mutate_ref_count(func_env, builder, gc_ref, 1);
+
+        // Commit this object as the new head of the list.
+        builder
+            .ins()
+            .store(ir::MemFlags::trusted(), gc_ref, head, 0);
+    }
+
+    /// Load a pointer to the first element of the DRC heap's
+    /// over-approximated-stack-roots list.
+    fn load_over_approximated_stack_roots_head(
         &mut self,
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder,
-    ) -> (ir::Value, ir::Value, ir::Value) {
+    ) -> ir::Value {
         let ptr_ty = func_env.pointer_type();
         let vmctx = func_env.vmctx(&mut builder.func);
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);
-        let activations_table = builder.ins().load(
+        builder.ins().load(
             ptr_ty,
             ir::MemFlags::trusted().with_readonly(),
             vmctx,
             i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
+        )
+    }
+
+    /// Set the `VMDrcHeader::next_over_approximated_stack_root` field.
+    fn set_next_over_approximated_stack_root(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        gc_ref: ir::Value,
+        next: ir::Value,
+    ) {
+        debug_assert_eq!(builder.func.dfg.value_type(gc_ref), ir::types::I32);
+        debug_assert_eq!(builder.func.dfg.value_type(next), ir::types::I32);
+        let ptr = func_env.prepare_gc_ref_access(
+            builder,
+            gc_ref,
+            BoundsCheck::StaticOffset {
+                offset: func_env
+                    .offsets
+                    .vm_drc_header_next_over_approximated_stack_root(),
+                access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
+            },
         );
-        let next = builder.ins().load(
-            ptr_ty,
-            ir::MemFlags::trusted(),
-            activations_table,
-            i32::try_from(func_env.offsets.vm_gc_ref_activation_table_next()).unwrap(),
+        builder.ins().store(ir::MemFlags::trusted(), next, ptr, 0);
+    }
+
+    /// Set the in-over-approximated-stack-roots list bit in a `VMDrcHeader`'s
+    /// reserved bits.
+    fn set_in_over_approximated_stack_roots_bit(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        gc_ref: ir::Value,
+        old_reserved_bits: ir::Value,
+    ) {
+        let in_set_bit = builder.ins().iconst(
+            ir::types::I32,
+            i64::from(wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT),
         );
-        let end = builder.ins().load(
-            ptr_ty,
-            ir::MemFlags::trusted(),
-            activations_table,
-            i32::try_from(func_env.offsets.vm_gc_ref_activation_table_end()).unwrap(),
+        let new_reserved = builder.ins().bor(old_reserved_bits, in_set_bit);
+        self.set_reserved_bits(func_env, builder, gc_ref, new_reserved);
+    }
+
+    /// Update the reserved bits in a `VMDrcHeader`.
+    fn set_reserved_bits(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        gc_ref: ir::Value,
+        new_reserved: ir::Value,
+    ) {
+        let ptr = func_env.prepare_gc_ref_access(
+            builder,
+            gc_ref,
+            BoundsCheck::StaticOffset {
+                offset: func_env.offsets.vm_gc_header_reserved_bits(),
+                access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
+            },
         );
-        (activations_table, next, end)
+        builder
+            .ins()
+            .store(ir::MemFlags::trusted(), new_reserved, ptr, 0);
     }
 
     /// Write to an uninitialized field or element inside a GC object.
@@ -381,8 +465,6 @@ impl GcCompiler for DrcCompiler {
         let field_offsets: SmallVec<[_; 8]> = struct_layout.fields.iter().copied().collect();
         assert_eq!(field_vals.len(), field_offsets.len());
 
-        assert_eq!(VMGcKind::MASK & struct_size, 0);
-        assert_eq!(VMGcKind::UNUSED_MASK & struct_size, struct_size);
         let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
         let struct_ref = emit_gc_raw_alloc(
@@ -480,44 +562,36 @@ impl GcCompiler for DrcCompiler {
         //     brif gc_ref_is_null_or_i31, continue_block, non_null_gc_ref_block
         //
         // non_null_gc_ref_block:
-        //     let (next, end) = load VMGcRefActivationsTable bump region
-        //     let bump_region_is_full = icmp eq next, end
-        //     brif bump_region_is_full, gc_block, no_gc_block
+        //     let reserved = load reserved bits from gc_ref's header
+        //     let in_set_bit = iconst OVER_APPROX_SET_BIT
+        //     let in_set = band reserved, in_set_bit
+        //     br_if in_set, continue_block, insert_block
         //
-        // no_gc_block:
-        //     let ref_count = load gc_ref.ref_count
-        //     let new_ref_count = iadd_imm ref_count, 1
-        //     store new_ref_count, gc_ref.ref_count
-        //     let new_next = iadd_imm next, size_of(reference_type)
-        //     store new_next, activations_table.next
-        //     jump continue_block
-        //
-        // cold gc_block:
-        //     ;; NB: The DRC collector is not a moving GC, so we can reuse
-        //     ;; `gc_ref`. This lets us avoid a block parameter for the
-        //     ;; `continue_block`.
-        //     let _moved_gc_ref = call gc(gc_ref)
+        // insert_block:
+        //     let next = load over-approximated-stack-roots head from DRC heap
+        //     store gc_ref to over-approximated-stack-roots head in DRC heap
+        //     store next to gc_ref's header's next_over_approximated_stack_root field
+        //     let new_reserved = bor reserved, in_set_bit
+        //     store new_reserved to gc_ref's headers reserved bits
+        //     inc_ref(gc_ref)
         //     jump continue_block
         //
         // continue_block:
         //     ...
         // ```
         //
-        // This ensures that all GC references entering the Wasm stack are held
-        // alive by the `VMGcRefActivationsTable`.
+        // This ensures that all GC references entering the Wasm stack are in
+        // the over-approximated-stack-roots list.
 
         let current_block = builder.current_block().unwrap();
         let non_null_gc_ref_block = builder.create_block();
-        let gc_block = builder.create_block();
-        let no_gc_block = builder.create_block();
+        let insert_block = builder.create_block();
         let continue_block = builder.create_block();
 
-        builder.set_cold_block(gc_block);
         builder.ensure_inserted_block();
         builder.insert_block_after(non_null_gc_ref_block, current_block);
-        builder.insert_block_after(no_gc_block, non_null_gc_ref_block);
-        builder.insert_block_after(gc_block, no_gc_block);
-        builder.insert_block_after(continue_block, gc_block);
+        builder.insert_block_after(insert_block, non_null_gc_ref_block);
+        builder.insert_block_after(continue_block, insert_block);
 
         log::trace!("DRC read barrier: load the gc reference and check for null or i31");
         let gc_ref = unbarriered_load_gc_ref(builder, ty.heap_type, src, flags)?;
@@ -532,48 +606,42 @@ impl GcCompiler for DrcCompiler {
 
         // Block for when the GC reference is not null and is not an `i31ref`.
         //
-        // Load the `VMGcRefActivationsTable::next` bump finger and the
-        // `VMGcRefActivationsTable::end` bump boundary and check whether the
-        // bump region is full or not.
+        // Tests whether the object is already in the
+        // over-approximated-stack-roots list or not.
         builder.switch_to_block(non_null_gc_ref_block);
         builder.seal_block(non_null_gc_ref_block);
-        log::trace!("DRC read barrier: load bump region and check capacity");
-        let (activations_table, next, end) = self.load_bump_region(func_env, builder);
-        let bump_region_is_full = builder.ins().icmp(IntCC::Equal, next, end);
-        builder
-            .ins()
-            .brif(bump_region_is_full, gc_block, &[], no_gc_block, &[]);
-
-        // Block for when the bump region is not full. We should:
-        //
-        // * increment this reference's ref count,
-        // * store the reference into the bump table at `*next`,
-        // * and finally increment the `next` bump finger.
-        builder.switch_to_block(no_gc_block);
-        builder.seal_block(no_gc_block);
-        log::trace!("DRC read barrier: increment ref count and inline insert into bump region");
-        self.mutate_ref_count(func_env, builder, gc_ref, 1);
-        builder
-            .ins()
-            .store(ir::MemFlags::trusted(), gc_ref, next, 0);
-        let new_next = builder
-            .ins()
-            .iadd_imm(next, i64::from(reference_type.bytes()));
-        builder.ins().store(
-            ir::MemFlags::trusted(),
-            new_next,
-            activations_table,
-            i32::try_from(func_env.offsets.vm_gc_ref_activation_table_next()).unwrap(),
+        log::trace!(
+            "DRC read barrier: check whether this object is already in the \
+             over-approximated-stack-roots list"
         );
-        builder.ins().jump(continue_block, &[]);
+        let ptr = func_env.prepare_gc_ref_access(
+            builder,
+            gc_ref,
+            BoundsCheck::StaticOffset {
+                offset: func_env.offsets.vm_gc_header_reserved_bits(),
+                access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
+            },
+        );
+        let reserved = builder
+            .ins()
+            .load(ir::types::I32, ir::MemFlags::trusted(), ptr, 0);
+        let in_set_bit = builder.ins().iconst(
+            ir::types::I32,
+            i64::from(wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT),
+        );
+        let in_set = builder.ins().band(reserved, in_set_bit);
+        builder
+            .ins()
+            .brif(in_set, continue_block, &[], insert_block, &[]);
 
-        // Block for when the bump region is full and we need to do a GC.
-        builder.switch_to_block(gc_block);
-        builder.seal_block(gc_block);
-        log::trace!("DRC read barrier: slow path for when the bump region is full; do a gc");
-        let gc_libcall = func_env.builtin_functions.gc(builder.func);
-        let vmctx = func_env.vmctx_val(&mut builder.cursor());
-        builder.ins().call(gc_libcall, &[vmctx, gc_ref]);
+        // Block for when the object needs to be inserted into the
+        // over-approximated-stack-roots list.
+        builder.switch_to_block(insert_block);
+        builder.seal_block(insert_block);
+        log::trace!(
+            "DRC read barrier: push the object onto the over-approximated-stack-roots list"
+        );
+        self.push_onto_over_approximated_stack_roots(func_env, builder, gc_ref, reserved);
         builder.ins().jump(continue_block, &[]);
 
         // Join point after we're done with the GC barrier.
@@ -598,8 +666,8 @@ impl GcCompiler for DrcCompiler {
         debug_assert!(needs_stack_map);
 
         // Special case for references to uninhabited bottom types: either the
-        // reference must either be nullable and we can just eagerly store null
-        // into `dst`, or we are in unreachable code and should just trap.
+        // reference is nullable and we can just eagerly store null into `dst`
+        // or we are in unreachable code and should just trap.
         if let WasmHeapType::None = ty.heap_type {
             if ty.nullable {
                 let null = builder.ins().iconst(ref_ty, 0);

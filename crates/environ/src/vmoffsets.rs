@@ -706,6 +706,18 @@ impl<P: PtrSize> VMOffsets<P> {
         0 * self.pointer_size()
     }
 
+    /// The offset of the `vmctx` field.
+    #[inline]
+    pub fn vmtable_import_vmctx(&self) -> u8 {
+        1 * self.pointer_size()
+    }
+
+    /// The offset of the `index` field.
+    #[inline]
+    pub fn vmtable_import_index(&self) -> u8 {
+        2 * self.pointer_size()
+    }
+
     /// Return the size of `VMTableImport`.
     #[inline]
     pub fn size_of_vmtable_import(&self) -> u8 {
@@ -745,6 +757,18 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmmemory_import_from(&self) -> u8 {
         0 * self.pointer_size()
+    }
+
+    /// The offset of the `vmctx` field.
+    #[inline]
+    pub fn vmmemory_import_vmctx(&self) -> u8 {
+        1 * self.pointer_size()
+    }
+
+    /// The offset of the `index` field.
+    #[inline]
+    pub fn vmmemory_import_index(&self) -> u8 {
+        2 * self.pointer_size()
     }
 
     /// Return the size of `VMMemoryImport`.
@@ -1023,6 +1047,28 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
+/// Offsets for `VMGcHeader`.
+impl<P: PtrSize> VMOffsets<P> {
+    /// Return the offset for the `VMGcHeader::kind` field.
+    #[inline]
+    pub fn vm_gc_header_kind(&self) -> u32 {
+        0
+    }
+
+    /// Return the offset for the `VMGcHeader`'s reserved bits.
+    #[inline]
+    pub fn vm_gc_header_reserved_bits(&self) -> u32 {
+        // NB: The reserved bits are the unused `VMGcKind` bits.
+        self.vm_gc_header_kind()
+    }
+
+    /// Return the offset for the `VMGcHeader::ty` field.
+    #[inline]
+    pub fn vm_gc_header_ty(&self) -> u32 {
+        self.vm_gc_header_kind() + 4
+    }
+}
+
 /// Offsets for `VMDrcHeader`.
 ///
 /// Should only be used when the DRC collector is enabled.
@@ -1032,22 +1078,11 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn vm_drc_header_ref_count(&self) -> u32 {
         8
     }
-}
 
-/// Offsets for `VMGcRefActivationsTable`.
-///
-/// These should only be used when the DRC collector is enabled.
-impl<P: PtrSize> VMOffsets<P> {
-    /// Return the offset for `VMGcRefActivationsTable::next`.
+    /// Return the offset for `VMDrcHeader::next_over_approximated_stack_root`.
     #[inline]
-    pub fn vm_gc_ref_activation_table_next(&self) -> u32 {
-        0
-    }
-
-    /// Return the offset for `VMGcRefActivationsTable::end`.
-    #[inline]
-    pub fn vm_gc_ref_activation_table_end(&self) -> u32 {
-        self.pointer_size().into()
+    pub fn vm_drc_header_next_over_approximated_stack_root(&self) -> u32 {
+        self.vm_drc_header_ref_count() + 8
     }
 }
 

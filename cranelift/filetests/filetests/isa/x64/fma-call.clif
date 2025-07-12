@@ -101,11 +101,11 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movdqa %xmm0, %xmm2
 ;   movdqu <offset:1>+0x30(%rsp), %xmm1
 ;   movdqu <offset:1>+0x50(%rsp), %xmm0
-;   insertps $16, %xmm0, %xmm1, %xmm0
+;   insertps $0x10, %xmm1, %xmm0
 ;   movdqu <offset:1>+0x40(%rsp), %xmm6
-;   insertps $32, %xmm0, %xmm6, %xmm0
+;   insertps $0x20, %xmm6, %xmm0
 ;   movdqa %xmm2, %xmm3
-;   insertps $48, %xmm0, %xmm3, %xmm0
+;   insertps $0x30, %xmm3, %xmm0
 ;   addq $0x60, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

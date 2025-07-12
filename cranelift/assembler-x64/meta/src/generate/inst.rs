@@ -118,18 +118,11 @@ impl dsl::Inst {
     fn generate_encode_function(&self, f: &mut Formatter) {
         use dsl::Customization::*;
 
-        let off = if self.format.uses_memory().is_some() || self.custom.contains(Encode) {
-            "off"
-        } else {
-            "_"
-        };
         f.add_block(
-            &format!(
-                "pub fn encode(&self, buf: &mut impl CodeSink, {off}: &impl KnownOffsetTable)"
-            ),
+            &format!("pub fn encode(&self, buf: &mut impl CodeSink)"),
             |f| {
                 if self.custom.contains(Encode) {
-                    fmtln!(f, "crate::custom::encode::{}(self, buf, off);", self.name());
+                    fmtln!(f, "crate::custom::encode::{}(self, buf);", self.name());
                 } else {
                     self.generate_possible_trap(f);
                     match &self.encoding {

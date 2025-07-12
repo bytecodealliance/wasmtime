@@ -82,6 +82,10 @@ fn provenance_test_config() -> Config {
     config.memory_reservation(1 << 20);
     config.memory_guard_size(0);
     config.signals_based_traps(false);
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_async_stackful(true);
+    config.wasm_component_model_async_builtins(true);
+    config.wasm_component_model_error_context(true);
     config
 }
 
@@ -227,6 +231,7 @@ fn pulley_provenance_test_components() -> Result<()> {
 
         let mut store = Store::new(&engine, ());
         let mut linker = component::Linker::new(&engine);
+        linker.root().func_wrap("host-empty", |_, (): ()| Ok(()))?;
         linker
             .root()
             .func_wrap("host-u32", |_, (value,): (u32,)| Ok((value,)))?;
@@ -249,6 +254,7 @@ fn pulley_provenance_test_components() -> Result<()> {
             .func_wrap("host-list", |_, (value,): (Vec<String>,)| Ok((value,)))?;
         let instance = linker.instantiate(&mut store, &component)?;
 
+        let guest_empty = instance.get_typed_func::<(), ()>(&mut store, "guest-empty")?;
         let guest_u32 = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "guest-u32")?;
         let guest_enum = instance.get_typed_func::<(E,), (E,)>(&mut store, "guest-enum")?;
         let guest_option =
@@ -261,6 +267,9 @@ fn pulley_provenance_test_components() -> Result<()> {
             instance.get_typed_func::<(&str,), (String,)>(&mut store, "guest-string")?;
         let guest_list =
             instance.get_typed_func::<(&[&str],), (Vec<String>,)>(&mut store, "guest-list")?;
+
+        guest_empty.call(&mut store, ())?;
+        guest_empty.post_return(&mut store)?;
 
         let (result,) = guest_u32.call(&mut store, (42,))?;
         assert_eq!(result, 42);
@@ -306,6 +315,9 @@ fn pulley_provenance_test_components() -> Result<()> {
         use wasmtime::component::Val;
         let mut store = Store::new(&engine, ());
         let mut linker = component::Linker::new(&engine);
+        linker
+            .root()
+            .func_new("host-empty", |_, _args, _results| Ok(()))?;
         linker.root().func_new("host-u32", |_, args, results| {
             results[0] = args[0].clone();
             Ok(())
@@ -332,12 +344,17 @@ fn pulley_provenance_test_components() -> Result<()> {
         })?;
         let instance = linker.instantiate(&mut store, &component)?;
 
+        let guest_empty = instance.get_func(&mut store, "guest-empty").unwrap();
         let guest_u32 = instance.get_func(&mut store, "guest-u32").unwrap();
         let guest_enum = instance.get_func(&mut store, "guest-enum").unwrap();
         let guest_option = instance.get_func(&mut store, "guest-option").unwrap();
         let guest_result = instance.get_func(&mut store, "guest-result").unwrap();
         let guest_string = instance.get_func(&mut store, "guest-string").unwrap();
         let guest_list = instance.get_func(&mut store, "guest-list").unwrap();
+
+        let mut results = [];
+        guest_empty.call(&mut store, &[], &mut results)?;
+        guest_empty.post_return(&mut store)?;
 
         let mut results = [Val::U32(0)];
         guest_u32.call(&mut store, &[Val::U32(42)], &mut results)?;
@@ -387,6 +404,101 @@ fn pulley_provenance_test_components() -> Result<()> {
         guest_list.call(&mut store, &[Val::List(Vec::new())], &mut results)?;
         assert_eq!(results[0], Val::List(Vec::new()));
         guest_list.post_return(&mut store)?;
+    }
+
+    Ok(())
+}
+
+async fn sleep(duration: std::time::Duration) {
+    // TODO: We should be able to use `tokio::time::sleep` here, but as of this
+    // writing the miri-compatible version of `wasmtime-fiber` uses threads
+    // behind the scenes, which means thread-local storage is not preserved when
+    // we switch fibers, and that confuses Tokio.  If we ever fix that we can
+    // stop using our own, special version of `sleep` and switch back to the
+    // Tokio version.
+
+    use std::{
+        future,
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicU32, Ordering::SeqCst},
+        },
+        task::Poll,
+        thread,
+    };
+
+    let state = Arc::new(AtomicU32::new(0));
+    let waker = Arc::new(Mutex::new(None));
+    future::poll_fn(move |cx| match state.load(SeqCst) {
+        0 => {
+            state.store(1, SeqCst);
+            let state = state.clone();
+            *waker.lock().unwrap() = Some(cx.waker().clone());
+            let waker = waker.clone();
+            thread::spawn(move || {
+                thread::sleep(duration);
+                state.store(2, SeqCst);
+                let waker = waker.lock().unwrap().clone().unwrap();
+                waker.wake();
+            });
+            Poll::Pending
+        }
+        1 => {
+            *waker.lock().unwrap() = Some(cx.waker().clone());
+            Poll::Pending
+        }
+        2 => Poll::Ready(()),
+        _ => unreachable!(),
+    })
+    .await;
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn pulley_provenance_test_async_components() -> Result<()> {
+    let mut config = provenance_test_config();
+    config.async_support(true);
+    let engine = Engine::new(&config)?;
+    let component = if cfg!(miri) {
+        unsafe {
+            Component::deserialize_file(
+                &engine,
+                "./tests/all/pulley_provenance_test_async_component.cwasm",
+            )?
+        }
+    } else {
+        Component::from_file(
+            &engine,
+            "./tests/all/pulley_provenance_test_async_component.wat",
+        )?
+    };
+    {
+        let mut store = Store::new(&engine, ());
+        let mut linker = component::Linker::new(&engine);
+        linker.root().func_wrap_concurrent("sleep", |_, ()| {
+            Box::pin(async {
+                sleep(std::time::Duration::from_millis(10)).await;
+                Ok(())
+            })
+        })?;
+
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+
+        let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackless")?;
+        let run = run.call_concurrent(&mut store, ());
+        instance.run(&mut store, run).await??;
+
+        let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackful")?;
+        let run = run.call_concurrent(&mut store, ());
+        instance.run(&mut store, run).await??;
+
+        let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackless-stackless")?;
+        let run = run.call_concurrent(&mut store, ());
+        instance.run(&mut store, run).await??;
+
+        let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackful-stackful")?;
+        let run = run.call_concurrent(&mut store, ());
+        instance.run(&mut store, run).await??;
     }
 
     Ok(())

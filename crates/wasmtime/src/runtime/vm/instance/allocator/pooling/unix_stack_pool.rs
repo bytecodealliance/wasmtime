@@ -85,7 +85,6 @@ impl StackPool {
     }
 
     /// Are there zero slots in use right now?
-    #[allow(unused)] // some cfgs don't use this
     pub fn is_empty(&self) -> bool {
         self.index_allocator.is_empty()
     }

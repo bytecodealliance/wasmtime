@@ -20,25 +20,25 @@
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+24
 ;;     gv6 = load.i64 notrap aligned gv4+32
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
-;;     fn0 = colocated u1:28 sig0
+;;     fn0 = colocated u1:27 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0021                               v8 = iconst.i32 -1342177280
 ;; @0021                               v4 = iconst.i32 0
-;; @0021                               v6 = iconst.i32 32
+;; @0021                               v6 = iconst.i32 40
 ;; @0021                               v10 = iconst.i32 8
-;; @0021                               v11 = call fn0(v0, v8, v4, v6, v10)  ; v8 = -1342177280, v4 = 0, v6 = 32, v10 = 8
+;; @0021                               v11 = call fn0(v0, v8, v4, v6, v10)  ; v8 = -1342177280, v4 = 0, v6 = 40, v10 = 8
 ;; @0021                               v3 = f32const 0.0
 ;; @0021                               v44 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0021                               v12 = load.i64 notrap aligned readonly can_move v44+24
 ;; @0021                               v13 = uextend.i64 v11
 ;; @0021                               v14 = iadd v12, v13
-;;                                     v43 = iconst.i64 16
-;; @0021                               v15 = iadd v14, v43  ; v43 = 16
+;;                                     v43 = iconst.i64 24
+;; @0021                               v15 = iadd v14, v43  ; v43 = 24
 ;; @0021                               store notrap aligned little v3, v15  ; v3 = 0.0
-;;                                     v42 = iconst.i64 20
-;; @0021                               v16 = iadd v14, v42  ; v42 = 20
+;;                                     v42 = iconst.i64 28
+;; @0021                               v16 = iadd v14, v42  ; v42 = 28
 ;; @0021                               istore8 notrap aligned little v4, v16  ; v4 = 0
 ;;                                     v40 = iconst.i32 1
 ;; @0021                               brif v40, block3, block2  ; v40 = 1
@@ -54,8 +54,8 @@
 ;;
 ;;                                 block3:
 ;;                                     v66 = iconst.i32 0
-;;                                     v41 = iconst.i64 24
-;; @0021                               v17 = iadd.i64 v14, v41  ; v41 = 24
+;;                                     v41 = iconst.i64 32
+;; @0021                               v17 = iadd.i64 v14, v41  ; v41 = 32
 ;; @0021                               store notrap aligned little v66, v17  ; v66 = 0
 ;; @0024                               jump block1
 ;;

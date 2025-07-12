@@ -265,7 +265,7 @@ impl<'cache> ModuleCacheEntryInner<'cache> {
         trace!("get_data() for path: {}", mod_cache_path.display());
         let compressed_cache_bytes = fs::read(&mod_cache_path).ok()?;
         let cache_bytes = zstd::decode_all(&compressed_cache_bytes[..])
-            .map_err(|err| warn!("Failed to decompress cached code: {}", err))
+            .map_err(|err| warn!("Failed to decompress cached code: {err}"))
             .ok()?;
         Some(cache_bytes)
     }
@@ -277,7 +277,7 @@ impl<'cache> ModuleCacheEntryInner<'cache> {
             &serialized_data[..],
             self.cache.baseline_compression_level(),
         )
-        .map_err(|err| warn!("Failed to compress cached code: {}", err))
+        .map_err(|err| warn!("Failed to compress cached code: {err}"))
         .ok()?;
 
         // Optimize syscalls: first, try writing to disk. It should succeed in most cases.

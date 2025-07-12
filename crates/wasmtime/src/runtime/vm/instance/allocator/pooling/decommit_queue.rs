@@ -16,11 +16,11 @@ use smallvec::SmallVec;
 use wasmtime_fiber::FiberStack;
 
 #[cfg(unix)]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching libc naming")]
 type iovec = libc::iovec;
 
 #[cfg(not(unix))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching libc naming")]
 struct iovec {
     iov_base: *mut libc::c_void,
     iov_len: libc::size_t,

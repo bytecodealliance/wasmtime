@@ -169,7 +169,6 @@ impl GcStore {
     ) -> Result<Result<VMExternRef, (Box<dyn Any + Send + Sync>, u64)>> {
         let host_data_id = self.host_data_table.alloc(value);
         match self.gc_heap.alloc_externref(host_data_id)? {
-            #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
             Ok(x) => Ok(Ok(x)),
             Err(n) => Ok(Err((self.host_data_table.dealloc(host_data_id), n))),
         }

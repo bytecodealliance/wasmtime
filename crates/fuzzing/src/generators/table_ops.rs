@@ -1,6 +1,7 @@
 //! Generating series of `table.get` and `table.set` operations.
-
-use arbitrary::{Arbitrary, Result, Unstructured};
+use mutatis::mutators as m;
+use mutatis::{Candidates, Context, DefaultMutate, Generate, Mutate, Result as MutResult};
+use smallvec::SmallVec;
 use std::ops::RangeInclusive;
 use wasm_encoder::{
     CodeSection, ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection,
@@ -10,7 +11,7 @@ use wasm_encoder::{
 
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TableOps {
     pub(crate) num_params: u32,
     pub(crate) num_globals: u32,
@@ -135,34 +136,149 @@ impl TableOps {
 
         module.finish()
     }
+
+    /// Computes the abstract stack depth after executing all operations
+    pub fn abstract_stack_depth(&self, index: usize) -> usize {
+        debug_assert!(index <= self.ops.len());
+        let mut stack: usize = 0;
+        for op in self.ops.iter().take(index) {
+            let pop = op.operands_len();
+            let push = op.results_len();
+            stack = stack.saturating_sub(pop);
+            stack += push;
+        }
+        stack
+    }
+
+    /// Fixes the stack after mutating the `idx`th op.
+    ///
+    /// The abstract stack depth starting at the `idx`th opcode must be `stack`.
+    fn fixup(&mut self, idx: usize, mut stack: usize) {
+        let mut new_ops = Vec::with_capacity(self.ops.len());
+        new_ops.extend_from_slice(&self.ops[..idx]);
+
+        // Iterate through all ops including and after `idx`, inserting a null
+        // ref for any missing operands when they want to pop more operands than
+        // exist on the stack.
+        new_ops.extend(self.ops[idx..].iter().copied().flat_map(|op| {
+            let mut temp = SmallVec::<[_; 4]>::new();
+
+            while stack < op.operands_len() {
+                temp.push(TableOp::Null());
+                stack += 1;
+            }
+
+            temp.push(op);
+            stack = stack - op.operands_len() + op.results_len();
+
+            temp
+        }));
+
+        // Now make sure that the stack is empty at the end of the ops by
+        // inserting drops as necessary.
+        for _ in 0..stack {
+            new_ops.push(TableOp::Drop());
+        }
+
+        self.ops = new_ops;
+    }
 }
 
-impl<'a> Arbitrary<'a> for TableOps {
-    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-        let mut result = TableOps {
-            num_params: u.int_in_range(NUM_PARAMS_RANGE)?,
-            num_globals: u.int_in_range(NUM_GLOBALS_RANGE)?,
-            table_size: u.int_in_range(TABLE_SIZE_RANGE)?,
-            ops: Vec::new(),
+/// A mutator for the table ops
+#[derive(Debug)]
+pub struct TableOpsMutator;
+
+impl Mutate<TableOps> for TableOpsMutator {
+    fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut TableOps) -> mutatis::Result<()> {
+        // Insert
+        if !c.shrink() {
+            c.mutation(|ctx| {
+                if let Some(idx) = ctx.rng().gen_index(ops.ops.len() + 1) {
+                    let stack = ops.abstract_stack_depth(idx);
+                    let (op, _new_stack_size) = TableOp::generate(ctx, &ops, stack)?;
+                    ops.ops.insert(idx, op);
+                    ops.fixup(idx, stack);
+                }
+                Ok(())
+            })?;
+        }
+
+        // Remove
+        if !ops.ops.is_empty() {
+            c.mutation(|ctx| {
+                let idx = ctx
+                    .rng()
+                    .gen_index(ops.ops.len())
+                    .expect("ops is not empty");
+                let stack = ops.abstract_stack_depth(idx);
+                ops.ops.remove(idx);
+                ops.fixup(idx, stack);
+                Ok(())
+            })?;
+        }
+
+        Ok(())
+    }
+}
+
+impl DefaultMutate for TableOps {
+    type DefaultMutate = TableOpsMutator;
+}
+
+impl Default for TableOpsMutator {
+    fn default() -> Self {
+        TableOpsMutator
+    }
+}
+
+impl<'a> arbitrary::Arbitrary<'a> for TableOps {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let mut session = mutatis::Session::new().seed(u.arbitrary()?);
+        session
+            .generate()
+            .map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
+
+impl Generate<TableOps> for TableOpsMutator {
+    fn generate(&mut self, ctx: &mut Context) -> MutResult<TableOps> {
+        let num_params = m::range(NUM_PARAMS_RANGE).generate(ctx)?;
+        let num_globals = m::range(NUM_GLOBALS_RANGE).generate(ctx)?;
+        let table_size = m::range(TABLE_SIZE_RANGE).generate(ctx)?;
+
+        let mut ops = TableOps {
+            num_params,
+            num_globals,
+            table_size,
+            ops: vec![
+                TableOp::Null(),
+                TableOp::Drop(),
+                TableOp::Gc(),
+                TableOp::LocalSet(0),
+                TableOp::LocalGet(0),
+                TableOp::GlobalSet(0),
+                TableOp::GlobalGet(0),
+            ],
         };
 
-        let mut stack = 0;
-        let mut choices = vec![];
-        while result.ops.len() < MAX_OPS && !u.is_empty() {
-            add_table_op(&mut result, u, &mut stack, &mut choices)?;
+        let mut stack: usize = 0;
+        while ops.ops.len() < MAX_OPS {
+            let (op, new_stack_len) = TableOp::generate(ctx, &ops, stack)?;
+            ops.ops.push(op);
+            stack = new_stack_len;
         }
 
-        // Drop any extant refs on the stack.
+        // Drop any leftover refs on the stack.
         for _ in 0..stack {
-            result.ops.push(TableOp::Drop);
+            ops.ops.push(TableOp::Drop());
         }
 
-        Ok(result)
+        Ok(ops)
     }
 }
 
 macro_rules! define_table_ops {
-	(
+    (
         $(
             $op:ident $( ( $($limit:expr => $ty:ty),* ) )? : $params:expr => $results:expr ,
         )*
@@ -170,35 +286,99 @@ macro_rules! define_table_ops {
         #[derive(Copy, Clone, Debug)]
         pub(crate) enum TableOp {
             $(
-                $op $( ( $($ty),* ) )? ,
+                $op ( $( $($ty),* )? ),
             )*
         }
-
-        #[expect(unused_comparisons, reason = "macro-generated code")]
-        fn add_table_op(
-            ops: &mut TableOps,
-            u: &mut Unstructured,
-            stack: &mut u32,
-            choices: &mut Vec<fn(&TableOps, &mut Unstructured, &mut u32) -> Result<TableOp>>,
-        ) -> Result<()> {
-            choices.clear();
-
-            // Add all the choices of valid `TableOp`s we could generate.
+        #[cfg(test)]
+        const OP_NAMES: &'static[&'static str] = &[
             $(
-                if $( $(($limit as fn(&TableOps) -> $ty)(&*ops) > 0 &&)* )? *stack >= $params {
-                    choices.push(|_ops, _u, stack| {
-                        *stack = *stack - $params + $results;
-                        Ok(TableOp::$op $( ( $(_u.int_in_range(0..=($limit as fn(&TableOps) -> $ty)(_ops) - 1)?),* ) )? )
-                    });
-                }
+                stringify!($op),
             )*
+        ];
 
-            // Choose a table op to insert.
-            let f = u.choose(&choices)?;
-            let v = f(ops, u, stack)?;
-            Ok(ops.ops.push(v))
+        impl TableOp {
+            #[cfg(test)]
+            fn name(&self) -> &'static str  {
+                match self {
+                    $(
+                        Self::$op (..) => stringify!($op),
+                    )*
+                }
+            }
+
+            pub fn operands_len(&self) -> usize {
+                match self {
+                    $(
+                        Self::$op (..) => $params,
+                    )*
+                }
+            }
+
+            pub fn results_len(&self) -> usize {
+                match self {
+                    $(
+                        Self::$op (..) => $results,
+                    )*
+                }
+            }
         }
-	};
+
+        $(
+            #[allow(non_snake_case, reason = "macro-generated code")]
+            fn $op(
+                _ctx: &mut mutatis::Context,
+                _ops: &TableOps,
+                stack: usize,
+            ) -> mutatis::Result<(TableOp, usize)> {
+                #[allow(unused_comparisons, reason = "macro-generated code")]
+                {
+                    debug_assert!(stack >= $params);
+                }
+
+                let op = TableOp::$op(
+                    $($({
+                        let limit_fn = $limit as fn(&TableOps) -> $ty;
+                        let limit = (limit_fn)(_ops);
+                        debug_assert!(limit > 0);
+                        m::range(0..=limit - 1).generate(_ctx)?
+                    })*)?
+                );
+                let new_stack = stack - $params + $results;
+                Ok((op, new_stack))
+            }
+        )*
+
+        impl TableOp {
+            fn generate(
+                ctx: &mut mutatis::Context,
+                ops: &TableOps,
+                stack: usize,
+            ) -> mutatis::Result<(TableOp, usize)> {
+                let mut valid_choices: Vec<
+                    fn (&mut mutatis::Context, &TableOps, usize) -> mutatis::Result<(TableOp, usize)>
+                > = vec![];
+
+                $(
+                    #[allow(unused_comparisons, reason = "macro-generated code")]
+                    if stack >= $params $($(
+                        && {
+                            let limit_fn: fn(&TableOps) -> $ty = $limit;
+                            let limit = (limit_fn)(ops);
+                            limit > 0
+                        }
+                    )*)? {
+                        valid_choices.push($op);
+                    }
+                )*
+
+                let f = *ctx.rng()
+                    .choose(&valid_choices)
+                    .expect("should always have a valid op choice");
+
+                (f)(ctx, ops, stack)
+            }
+        }
+    };
 }
 
 define_table_ops! {
@@ -229,13 +409,13 @@ impl TableOp {
         let make_refs_func_idx = 2;
 
         match self {
-            Self::Gc => {
+            Self::Gc() => {
                 func.instruction(&Instruction::Call(gc_func_idx));
             }
-            Self::MakeRefs => {
+            Self::MakeRefs() => {
                 func.instruction(&Instruction::Call(make_refs_func_idx));
             }
-            Self::TakeRefs => {
+            Self::TakeRefs() => {
                 func.instruction(&Instruction::Call(take_refs_func_idx));
             }
             Self::TableGet(x) => {
@@ -260,10 +440,10 @@ impl TableOp {
             Self::LocalSet(x) => {
                 func.instruction(&Instruction::LocalSet(x));
             }
-            Self::Drop => {
+            Self::Drop() => {
                 func.instruction(&Instruction::Drop);
             }
-            Self::Null => {
+            Self::Null() => {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
         }
@@ -273,100 +453,156 @@ impl TableOp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::rngs::SmallRng;
-    use rand::{RngCore, SeedableRng};
 
-    #[test]
-    fn test_valid() {
-        let mut rng = SmallRng::seed_from_u64(0);
-        let mut buf = vec![0; 2048];
-        for _ in 0..1024 {
-            rng.fill_bytes(&mut buf);
-            let u = Unstructured::new(&buf);
-            if let Ok(ops) = TableOps::arbitrary_take_rest(u) {
-                let wasm = ops.to_wasm_binary();
-                let mut validator = wasmparser::Validator::new();
-                let result = validator.validate_all(&wasm);
-                assert!(result.is_ok());
-            }
+    /// Creates empty TableOps
+    fn empty_test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
+        TableOps {
+            num_params,
+            num_globals,
+            table_size,
+            ops: vec![],
+        }
+    }
+
+    /// Creates TableOps with all default opcodes
+    fn test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
+        TableOps {
+            num_params,
+            num_globals,
+            table_size,
+            ops: vec![
+                TableOp::Null(),
+                TableOp::Drop(),
+                TableOp::Gc(),
+                TableOp::LocalSet(0),
+                TableOp::LocalGet(0),
+                TableOp::GlobalSet(0),
+                TableOp::GlobalGet(0),
+            ],
         }
     }
 
     #[test]
-    fn test_wat_string() {
-        let ops = TableOps {
-            num_params: 10,
-            num_globals: 10,
-            table_size: 20,
-            ops: vec![
-                TableOp::Gc,
-                TableOp::MakeRefs,
-                TableOp::TakeRefs,
-                TableOp::TableGet(0),
-                TableOp::TableSet(1),
-                TableOp::GlobalGet(2),
-                TableOp::GlobalSet(3),
-                TableOp::LocalGet(4),
-                TableOp::LocalSet(5),
-                TableOp::Drop,
-                TableOp::Null,
-            ],
-        };
+    fn mutate_table_ops_with_default_mutator() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
+        use mutatis::Session;
+        use wasmparser::Validator;
+        let mut res = test_ops(5, 5, 5);
+        let mut session = Session::new();
 
-        let expected = r#"
-(module
-  (type (;0;) (func (result externref externref externref)))
-  (type (;1;) (func (param externref externref externref externref externref externref externref externref externref externref)))
-  (type (;2;) (func (param externref externref externref)))
-  (type (;3;) (func (result externref externref externref)))
-  (import "" "gc" (func (;0;) (type 0)))
-  (import "" "take_refs" (func (;1;) (type 2)))
-  (import "" "make_refs" (func (;2;) (type 3)))
-  (table (;0;) 20 externref)
-  (global (;0;) (mut externref) ref.null extern)
-  (global (;1;) (mut externref) ref.null extern)
-  (global (;2;) (mut externref) ref.null extern)
-  (global (;3;) (mut externref) ref.null extern)
-  (global (;4;) (mut externref) ref.null extern)
-  (global (;5;) (mut externref) ref.null extern)
-  (global (;6;) (mut externref) ref.null extern)
-  (global (;7;) (mut externref) ref.null extern)
-  (global (;8;) (mut externref) ref.null extern)
-  (global (;9;) (mut externref) ref.null extern)
-  (export "run" (func 3))
-  (func (;3;) (type 1) (param externref externref externref externref externref externref externref externref externref externref)
-    (local externref)
-    loop ;; label = @1
-      call 0
-      call 2
-      call 1
-      i32.const 0
-      table.get 0
-      local.set 10
-      i32.const 1
-      local.get 10
-      table.set 0
-      global.get 2
-      global.set 3
-      local.get 4
-      local.set 5
-      drop
-      ref.null extern
-      br 0 (;@1;)
-    end
-  )
-)
-"#;
-        eprintln!("expected WAT = {expected}");
-
-        let actual = ops.to_wasm_binary();
-        if let Err(e) = wasmparser::validate(&actual) {
-            panic!("TableOps should generate valid Wasm; got error: {e}");
+        for _ in 0..1024 {
+            session.mutate(&mut res)?;
+            let wasm = res.to_wasm_binary();
+            let mut validator = Validator::new();
+            let wat = wasmprinter::print_bytes(&wasm).expect("[-] Failed .print_bytes(&wasm).");
+            let result = validator.validate_all(&wasm);
+            log::debug!("{wat}");
+            assert!(
+                result.is_ok(),
+                "\n[-] Invalid wat: {}\n\t\t==== Failed Wat ====\n{}",
+                result.err().expect("[-] Failed .err() in assert macro."),
+                wat
+            );
         }
+        Ok(())
+    }
 
-        let actual = wasmprinter::print_bytes(&actual).unwrap();
-        eprintln!("actual WAT = {actual}");
+    #[test]
+    fn every_op_generated() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
+        let mut unseen_ops: std::collections::HashSet<_> = OP_NAMES.iter().copied().collect();
 
-        assert_eq!(actual.trim(), expected.trim());
+        let mut res = empty_test_ops(5, 5, 5);
+        let mut generator = TableOpsMutator;
+        let mut session = mutatis::Session::new();
+
+        'outer: for _ in 0..=1024 {
+            session.mutate_with(&mut generator, &mut res)?;
+            for op in &res.ops {
+                unseen_ops.remove(op.name());
+                if unseen_ops.is_empty() {
+                    break 'outer;
+                }
+            }
+        }
+        assert!(unseen_ops.is_empty(), "Failed to generate {unseen_ops:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_wat_string() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
+
+        let mut table_ops = test_ops(2, 2, 5);
+        table_ops.ops.extend([
+            TableOp::Null(),
+            TableOp::Drop(),
+            TableOp::Gc(),
+            TableOp::LocalSet(0),
+            TableOp::LocalGet(0),
+            TableOp::GlobalSet(0),
+            TableOp::GlobalGet(0),
+            TableOp::Null(),
+            TableOp::Drop(),
+            TableOp::Gc(),
+            TableOp::LocalSet(0),
+            TableOp::LocalGet(0),
+            TableOp::GlobalSet(0),
+            TableOp::GlobalGet(0),
+            TableOp::Null(),
+            TableOp::Drop(),
+        ]);
+        let wasm = table_ops.to_wasm_binary();
+        let wat = wasmprinter::print_bytes(&wasm).expect("Failed to convert to WAT");
+        let expected = r#"
+        (module
+        (type (;0;) (func (result externref externref externref)))
+        (type (;1;) (func (param externref externref)))
+        (type (;2;) (func (param externref externref externref)))
+        (type (;3;) (func (result externref externref externref)))
+        (import "" "gc" (func (;0;) (type 0)))
+        (import "" "take_refs" (func (;1;) (type 2)))
+        (import "" "make_refs" (func (;2;) (type 3)))
+        (table (;0;) 5 externref)
+        (global (;0;) (mut externref) ref.null extern)
+        (global (;1;) (mut externref) ref.null extern)
+        (export "run" (func 3))
+        (func (;3;) (type 1) (param externref externref)
+            (local externref)
+            loop ;; label = @1
+            ref.null extern
+            drop
+            call 0
+            local.set 0
+            local.get 0
+            global.set 0
+            global.get 0
+            ref.null extern
+            drop
+            call 0
+            local.set 0
+            local.get 0
+            global.set 0
+            global.get 0
+            ref.null extern
+            drop
+            call 0
+            local.set 0
+            local.get 0
+            global.set 0
+            global.get 0
+            ref.null extern
+            drop
+            br 0 (;@1;)
+            end
+        )
+        )
+        "#;
+
+        let generated = wat.split_whitespace().collect::<Vec<_>>().join(" ");
+        let expected = expected.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert_eq!(generated, expected, "WAT does not match expected");
+
+        Ok(())
     }
 }

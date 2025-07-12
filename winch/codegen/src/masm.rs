@@ -1212,6 +1212,9 @@ pub(crate) enum VMContextLoc {
     Reg(Reg),
     /// The pinned [VMContext] register.
     Pinned,
+    /// A different VMContext is loaded at the provided offset from the current
+    /// VMContext.
+    OffsetFromPinned(u32),
 }
 
 /// The maximum number of context arguments currently used across the compiler.
@@ -1250,6 +1253,13 @@ impl ContextArgs {
     /// [VMContext] register as the only context argument.
     pub fn pinned_vmctx() -> Self {
         Self::VMContext([VMContextLoc::Pinned])
+    }
+
+    /// Construct a [ContextArgs] that declares the usage of a [VMContext] loaded
+    /// indirectly from the pinned [VMContext] register as the only context
+    /// argument.
+    pub fn offset_from_pinned_vmctx(offset: u32) -> Self {
+        Self::VMContext([VMContextLoc::OffsetFromPinned(offset)])
     }
 
     /// Construct a [ContextArgs] that declares a dynamic callee context and the

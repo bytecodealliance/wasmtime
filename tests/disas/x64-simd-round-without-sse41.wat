@@ -17,7 +17,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u1:39 sig0
+;;     fn0 = colocated u1:38 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -49,7 +49,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u1:41 sig0
+;;     fn0 = colocated u1:40 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -81,7 +81,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u1:43 sig0
+;;     fn0 = colocated u1:42 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -113,7 +113,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u1:45 sig0
+;;     fn0 = colocated u1:44 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -145,7 +145,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u1:40 sig0
+;;     fn0 = colocated u1:39 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -171,7 +171,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u1:42 sig0
+;;     fn0 = colocated u1:41 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -197,7 +197,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u1:44 sig0
+;;     fn0 = colocated u1:43 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -223,7 +223,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u1:46 sig0
+;;     fn0 = colocated u1:45 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;

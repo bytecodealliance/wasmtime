@@ -1,4 +1,7 @@
-#![cfg_attr(not(asan), allow(dead_code))]
+#![cfg_attr(
+    all(unix, not(miri), not(asan)),
+    expect(dead_code, reason = "not used, but typechecked")
+)]
 
 use crate::PoolConcurrencyLimitError;
 use crate::prelude::*;
@@ -34,7 +37,6 @@ impl StackPool {
         })
     }
 
-    #[allow(unused)] // some cfgs don't use this
     pub fn is_empty(&self) -> bool {
         self.live_stacks.load(Ordering::Acquire) == 0
     }

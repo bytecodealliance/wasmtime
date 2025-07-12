@@ -61,9 +61,9 @@ pub fn check_stacks(stacks: Stacks) -> usize {
 
     let mut max_stack_depth = 0;
     for input in stacks.inputs().iter().copied() {
-        log::debug!("input: {}", input);
+        log::debug!("input: {input}");
         if let Err(trap) = run.call(&mut store, (input.into(),)) {
-            log::debug!("trap: {:?}", trap);
+            log::debug!("trap: {trap:?}");
             let get_stack = instance
                 .get_typed_func::<(), (u32, u32)>(&mut store, "get_stack")
                 .expect("should export `get_stack` function as expected");
@@ -120,7 +120,7 @@ fn assert_stack_matches(
         host_trace
     };
 
-    log::debug!("Wasm thinks its stack is: {:?}", wasm_trace);
+    log::debug!("Wasm thinks its stack is: {wasm_trace:?}");
     log::debug!(
         "Host thinks the stack is: {:?}",
         host_trace

@@ -58,7 +58,6 @@ fn using_libunwind() -> bool {
 }
 
 impl UnwindRegistration {
-    #[allow(missing_docs)]
     pub const SECTION_NAME: &'static str = ".eh_frame";
 
     /// Registers precompiled unwinding information with the system.

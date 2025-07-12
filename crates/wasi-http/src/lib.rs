@@ -27,7 +27,7 @@
 //!
 //! All `bindgen!`-generated `Host` traits are implemented in terms of a
 //! [`WasiHttpView`] trait which provides basic access to [`WasiHttpCtx`],
-//! configuration for WASI HTTP, and a [`wasmtime_wasi::p2::ResourceTable`], the
+//! configuration for WASI HTTP, and a [`wasmtime_wasi::ResourceTable`], the
 //! state for all host-defined component model resources.
 //!
 //! The [`WasiHttpView`] trait additionally offers a few other configuration
@@ -55,7 +55,7 @@
 //!      no others. This is useful when working with
 //!      [`wasmtime_wasi::p2::add_to_linker_async`] for example.
 //!    * Add individual interfaces such as with the
-//!      [`bindings::http::outgoing_handler::add_to_linker_get_host`] function.
+//!      [`bindings::http::outgoing_handler::add_to_linker`] function.
 //! 3. Use [`ProxyPre`](bindings::ProxyPre) to pre-instantiate a component
 //!    before serving requests.
 //! 4. When serving requests use
@@ -94,7 +94,8 @@
 //!     // component that we have. This will make per-request instantiation
 //!     // much quicker.
 //!     let mut linker = Linker::new(&engine);
-//!     wasmtime_wasi_http::add_to_linker_async(&mut linker)?;
+//!     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+//!     wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
 //!     let pre = ProxyPre::new(linker.instantiate_pre(&component)?)?;
 //!
 //!     // Prepare our server state and start listening for connections.

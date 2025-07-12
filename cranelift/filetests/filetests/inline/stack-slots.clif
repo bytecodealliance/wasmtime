@@ -1,0 +1,48 @@
+test inline precise-output
+target x86_64
+
+function %f0(i64) -> i64 tail {
+    ss0 = explicit_slot 8
+block0(v0: i64):
+    stack_store v0, ss0
+    v1 = stack_load.i64 ss0
+    return v1
+}
+
+; (no functions inlined into %f0)
+
+function %f1() -> i64 tail {
+    ss0 = explicit_slot 4
+    fn0 = %f0(i64) -> i64 tail
+block0:
+    v0 = stack_addr.i64 ss0
+    v1 = call fn0(v0)
+    v2 = iconst.i64 1
+    v3 = iadd v1, v2
+    return v3
+}
+
+; function %f1() -> i64 tail {
+;     ss0 = explicit_slot 4
+;     ss1 = explicit_slot 8
+;     sig0 = (i64) -> i64 tail
+;     fn0 = %f0 sig0
+;
+; block0:
+;     v0 = stack_addr.i64 ss0
+;     jump block1
+;
+; block1:
+;     v5 = stack_addr.i64 ss1
+;     store.i64 notrap v0, v5
+;     v6 = stack_addr.i64 ss1
+;     v7 = load.i64 notrap v6
+;     jump block2(v7)
+;
+; block2(v4: i64):
+;     v1 -> v4
+;     v2 = iconst.i64 1
+;     v3 = iadd v1, v2  ; v2 = 1
+;     return v3
+; }
+
