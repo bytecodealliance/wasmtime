@@ -1984,7 +1984,9 @@ fn emit_return_call_common_sequence<T>(
                  but the current implementation relies on them being present"
     );
 
-    let tmp = call_info.tmp.to_writable_reg();
+    // Hard-coded register which doesn't conflict with function arguments or
+    // callee-saved registers.
+    let tmp = Writable::from_reg(regs::r11());
 
     for inst in
         X64ABIMachineSpec::gen_clobber_restore(CallConv::Tail, &info.flags, state.frame_layout())

@@ -482,6 +482,7 @@ impl WasmtimeOptionValue for wasmtime::RegallocAlgorithm {
     fn parse(val: Option<&str>) -> Result<Self> {
         match String::parse(val)?.as_str() {
             "backtracking" => Ok(wasmtime::RegallocAlgorithm::Backtracking),
+            "regalloc3" => Ok(wasmtime::RegallocAlgorithm::Regalloc3),
             other => bail!(
                 "unknown regalloc algorithm`{}`, only backtracking,single-pass accepted",
                 other
