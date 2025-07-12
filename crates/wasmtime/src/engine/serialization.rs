@@ -208,7 +208,37 @@ impl Metadata<'_> {
         let engine_target = engine.target();
         let module_target =
             target_lexicon::Triple::from_str(&self.target).map_err(|e| anyhow!(e))?;
+
+        if module_target.architecture != engine_target.architecture {
+            bail!(
+                "Module was compiled for architecture '{}'",
+                module_target.architecture
+            );
+        }
+
+        if module_target.operating_system != engine_target.operating_system {
+            bail!(
+                "Module was compiled for operating system '{}'",
+                module_target.operating_system
+            );
+        }
+
+        Ok(())
+    }
+
+    fn check_shared_flags(&mut self, engine: &Engine) -> Result<()> {
+        for (name, val) in self.shared_flags.iter() {
+            engine
+                .check_compatible_with_shared_flag(name, val)
+                .map_err(|s| anyhow::Error::msg(s))
+                .context("compilation settings of module incompatible with native host")?;
+        }
+        Ok(())
+    }
+
+    fn check_isa_flags(&mut self, engine: &Engine) -> Result<()> {
         for (name, val) in self.isa_flags.iter() {
+            engine
                 .check_compatible_with_isa_flag(name, val)
                 .map_err(|s| anyhow::Error::msg(s))
                 .context("compilation settings of module incompatible with native host")?;
