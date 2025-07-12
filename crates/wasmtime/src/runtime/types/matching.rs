@@ -190,7 +190,8 @@ fn match_heap(
         (H::ConcreteArray(actual), H::ConcreteArray(expected))
         | (H::ConcreteFunc(actual), H::ConcreteFunc(expected))
         | (H::ConcreteStruct(actual), H::ConcreteStruct(expected))
-        | (H::ConcreteCont(actual), H::ConcreteCont(expected)) => {
+        | (H::ConcreteCont(actual), H::ConcreteCont(expected))
+        | (H::ConcreteExn(actual), H::ConcreteExn(expected)) => {
             let actual = actual.unwrap_engine_type_index();
             let expected = expected.unwrap_engine_type_index();
             engine.signatures().is_subtype(actual, expected)
@@ -259,6 +260,15 @@ fn match_heap(
 
         (_, H::NoCont) => false,
         (_, H::ConcreteCont(_)) => false,
+
+        (H::NoExn | H::ConcreteExn(_) | H::Exn, H::Exn) => true,
+        (_, H::Exn) => false,
+
+        (H::NoExn, H::ConcreteExn(_)) => true,
+        (H::NoExn, H::NoExn) => true,
+
+        (_, H::NoExn) => false,
+        (_, H::ConcreteExn(_)) => false,
 
         (H::None, H::None) => true,
         (_, H::None) => false,

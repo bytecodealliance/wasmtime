@@ -567,6 +567,10 @@ impl VMGlobalDefinition {
                 }
                 WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
                 WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
+                WasmHeapTopType::Exn => {
+                    let r = VMGcRef::from_raw_u32(raw.get_exnref());
+                    global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
+                }
             },
         }
         Ok(global)
@@ -594,6 +598,12 @@ impl VMGlobalDefinition {
                     None => 0,
                 }),
                 WasmHeapTopType::Any => ValRaw::anyref({
+                    match self.as_gc_ref() {
+                        Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
+                        None => 0,
+                    }
+                }),
+                WasmHeapTopType::Exn => ValRaw::exnref({
                     match self.as_gc_ref() {
                         Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
                         None => 0,
@@ -1357,6 +1367,17 @@ pub union ValRaw {
     ///
     /// This value is always stored in a little-endian format.
     anyref: u32,
+
+    /// A WebAssembly `exnref` value (or one of its subtypes).
+    ///
+    /// The payload here is a compressed pointer value which is
+    /// runtime-defined. This is one of the main points of unsafety about the
+    /// `ValRaw` type as the validity of the pointer here is not easily verified
+    /// and must be preserved by carefully calling the correct functions
+    /// throughout the runtime.
+    ///
+    /// This value is always stored in a little-endian format.
+    exnref: u32,
 }
 
 // The `ValRaw` type is matched as `wasmtime_val_raw_t` in the C API so these
@@ -1394,6 +1415,7 @@ impl fmt::Debug for ValRaw {
                 .field("funcref", &self.funcref)
                 .field("externref", &Hex(self.externref))
                 .field("anyref", &Hex(self.anyref))
+                .field("exnref", &Hex(self.exnref))
                 .finish()
         }
     }
@@ -1401,11 +1423,12 @@ impl fmt::Debug for ValRaw {
 
 impl ValRaw {
     /// Create a null reference that is compatible with any of
-    /// `{any,extern,func}ref`.
+    /// `{any,extern,func,exn}ref`.
     pub fn null() -> ValRaw {
         unsafe {
             let raw = mem::MaybeUninit::<Self>::zeroed().assume_init();
             debug_assert_eq!(raw.get_anyref(), 0);
+            debug_assert_eq!(raw.get_exnref(), 0);
             debug_assert_eq!(raw.get_externref(), 0);
             debug_assert_eq!(raw.get_funcref(), ptr::null_mut());
             raw
@@ -1490,6 +1513,13 @@ impl ValRaw {
         ValRaw { anyref: r.to_le() }
     }
 
+    /// Creates a WebAssembly `exnref` value
+    #[inline]
+    pub fn exnref(r: u32) -> ValRaw {
+        assert!(cfg!(feature = "gc") || r == 0);
+        ValRaw { exnref: r.to_le() }
+    }
+
     /// Gets the WebAssembly `i32` value
     #[inline]
     pub fn get_i32(&self) -> i32 {
@@ -1552,6 +1582,14 @@ impl ValRaw {
         let anyref = u32::from_le(unsafe { self.anyref });
         assert!(cfg!(feature = "gc") || anyref == 0);
         anyref
+    }
+
+    /// Gets the WebAssembly `exnref` value
+    #[inline]
+    pub fn get_exnref(&self) -> u32 {
+        let exnref = u32::from_le(unsafe { self.exnref });
+        assert!(cfg!(feature = "gc") || exnref == 0);
+        exnref
     }
 }
 

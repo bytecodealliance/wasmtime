@@ -2,6 +2,7 @@
 
 mod arrayref;
 mod data;
+mod exnref;
 mod externref;
 #[cfg(feature = "gc-drc")]
 mod free_list;
@@ -9,6 +10,7 @@ mod structref;
 
 pub use arrayref::*;
 pub use data::*;
+pub use exnref::*;
 pub use externref::*;
 pub use structref::*;
 

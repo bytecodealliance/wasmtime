@@ -543,7 +543,6 @@ impl Instance {
         self.get_export(store, name)?.into_tag()
     }
 
-    #[cfg(feature = "component-model")]
     pub(crate) fn id(&self) -> InstanceId {
         self.id.instance()
     }

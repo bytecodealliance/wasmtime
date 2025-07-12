@@ -175,13 +175,17 @@ impl Global {
                         | HeapType::Struct
                         | HeapType::ConcreteStruct(_)
                         | HeapType::Array
-                        | HeapType::ConcreteArray(_) => definition
+                        | HeapType::ConcreteArray(_)
+                        | HeapType::Exn
+                        | HeapType::ConcreteExn(_) => definition
                             .as_gc_ref()
                             .map(|r| {
                                 let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
                                 AnyRef::from_cloned_gc_ref(&mut store, r)
                             })
                             .into(),
+
+                        HeapType::NoExn => Ref::Exn(None),
 
                         HeapType::None => Ref::Any(None),
                     };
@@ -238,6 +242,14 @@ impl Global {
                     let new = match a {
                         None => None,
                         Some(a) => Some(a.try_gc_ref(&store)?.unchecked_copy()),
+                    };
+                    let new = new.as_ref();
+                    definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
+                }
+                Val::ExnRef(e) => {
+                    let new = match e {
+                        None => None,
+                        Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
                     definition.write_gc_ref(store.unwrap_gc_store_mut(), new);

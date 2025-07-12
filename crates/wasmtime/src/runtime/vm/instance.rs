@@ -673,7 +673,12 @@ impl Instance {
         }
     }
 
-    fn get_exported_tag(&self, store: StoreId, index: TagIndex) -> crate::Tag {
+    /// Get an exported tag by index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out-of-range.
+    pub fn get_exported_tag(&self, store: StoreId, index: TagIndex) -> crate::Tag {
         let (id, def_index) = if let Some(def_index) = self.env_module().defined_tag_index(index) {
             (self.id, def_index)
         } else {
@@ -1020,6 +1025,9 @@ impl Instance {
                             )
                         }),
                     )?,
+                    WasmHeapTopType::Exn => {
+                        unreachable!("Cannot initialize exception objects from an element segment")
+                    }
                     WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
                 }
             }

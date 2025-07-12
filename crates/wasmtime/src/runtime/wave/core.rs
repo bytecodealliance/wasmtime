@@ -39,6 +39,7 @@ impl WasmValue for crate::Val {
             Self::FuncRef(_) => WasmTypeKind::Unsupported,
             Self::ExternRef(_) => WasmTypeKind::Unsupported,
             Self::AnyRef(_) => WasmTypeKind::Unsupported,
+            Self::ExnRef(_) => WasmTypeKind::Unsupported,
         }
     }
 

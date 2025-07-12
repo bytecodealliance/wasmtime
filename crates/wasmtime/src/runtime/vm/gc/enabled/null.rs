@@ -17,8 +17,7 @@ use crate::{
 use core::ptr::NonNull;
 use core::{alloc::Layout, any::Any, num::NonZeroU32};
 use wasmtime_environ::{
-    GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
-    null::NullTypeLayouts,
+    null::NullTypeLayouts, GcArrayLayout, GcExceptionLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex
 };
 
 /// The null collector.
@@ -325,6 +324,20 @@ unsafe impl GcHeap for NullHeap {
         let arrayref = VMNullArrayHeader::typed_ref(self, arrayref);
         self.index(arrayref).length
     }
+
+    fn alloc_uninit_exn(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        layout: &GcExceptionLayout,
+    ) -> Result<Result<VMExnRef, u64>> {
+        self.alloc(
+            VMGcHeader::from_kind_and_index(VMGcKind::ExnRef, ty),
+            layout.layout(),
+        )
+        .map(|r| r.map(|r| r.into_exnref_unchecked()))
+    }
+
+    fn dealloc_uninit_exn(&mut self, _exnref: VMExnRef) {}
 
     fn gc<'a>(
         &'a mut self,

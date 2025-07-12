@@ -62,6 +62,14 @@ pub fn generate_global_export(
                 let new = new.as_ref();
                 global.write_gc_ref(store.gc_store_mut()?, new);
             }
+            Val::ExnRef(e) => {
+                let new = match e {
+                    None => None,
+                    Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
+                };
+                let new = new.as_ref();
+                global.write_gc_ref(store.gc_store_mut()?, new);
+            }
         }
     }
 
