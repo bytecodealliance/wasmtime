@@ -91,7 +91,15 @@ unsafe fn test_renumber(dir_fd: wasip1::Fd) {
         "file descriptor range check",
     );
 
-    wasip1::fd_renumber(fd_file3, u32::MAX).expect("renumbering file FD to `u32::MAX`");
+    wasip1::fd_renumber(fd_file3, 127).expect("renumbering FD to 127");
+    match wasip1::fd_renumber(127, u32::MAX) {
+        Err(wasip1::ERRNO_NOMEM) => {
+            // The preview1 adapter cannot handle more than 128 descriptors
+            eprintln!("fd_renumber({fd_file3}, {}) returned NOMEM", u32::MAX)
+        }
+        res => res.expect("renumbering FD to `u32::MAX`"),
+    }
+
     let fd_file4 = wasip1::path_open(
         dir_fd,
         0,
