@@ -17,7 +17,8 @@ use crate::{
 use core::ptr::NonNull;
 use core::{alloc::Layout, any::Any, num::NonZeroU32};
 use wasmtime_environ::{
-    null::NullTypeLayouts, GcArrayLayout, GcExceptionLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex
+    GcArrayLayout, GcExceptionLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
+    null::NullTypeLayouts,
 };
 
 /// The null collector.

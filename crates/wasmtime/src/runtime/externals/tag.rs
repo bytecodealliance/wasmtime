@@ -1,12 +1,14 @@
 use crate::Result;
 use crate::runtime::types::TagType;
-use crate::store::InstanceId;
 use crate::trampoline::generate_tag_export;
 use crate::{
     AsContext, AsContextMut,
     store::{StoreInstanceId, StoreOpaque},
 };
 use wasmtime_environ::DefinedTagIndex;
+
+#[cfg(feature = "gc")]
+use crate::store::InstanceId;
 
 /// A WebAssembly `tag`.
 #[derive(Copy, Clone, Debug)]
@@ -109,6 +111,7 @@ impl Tag {
     /// used to "serialize" the tag as safe (tamper-proof,
     /// bounds-checked) values, e.g. within the GC store for an
     /// exception object.
+    #[cfg(feature = "gc")]
     pub(crate) fn to_raw_indices(&self) -> (InstanceId, DefinedTagIndex) {
         (self.instance.instance(), self.index)
     }
@@ -119,6 +122,7 @@ impl Tag {
     /// # Panics
     ///
     /// Panics if the indices are out-of-bounds in the given store.
+    #[cfg(feature = "gc")]
     pub(crate) fn from_raw_indices(
         store: &StoreOpaque,
         instance: InstanceId,

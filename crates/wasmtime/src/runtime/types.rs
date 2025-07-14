@@ -2930,7 +2930,6 @@ impl ExnType {
         self.type_index() == other.type_index()
     }
 
-    #[cfg(feature = "gc")]
     pub(crate) fn registered_type(&self) -> &RegisteredType {
         &self.registered_type
     }

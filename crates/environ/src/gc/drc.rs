@@ -38,6 +38,6 @@ impl GcTypeLayouts for DrcTypeLayouts {
     }
 
     fn exn_layout(&self, ty: &WasmExnType) -> GcExceptionLayout {
-       common_exn_layout(ty, HEADER_SIZE, HEADER_ALIGN)
+        common_exn_layout(ty, HEADER_SIZE, HEADER_ALIGN)
     }
 }
