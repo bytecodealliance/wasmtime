@@ -1,5 +1,3 @@
-#![cfg(feature = "p3")]
-
 use std::path::Path;
 
 use anyhow::{Context as _, anyhow};
@@ -19,26 +17,28 @@ macro_rules! assert_test_exists {
 }
 
 struct Ctx {
-    ctx: WasiCtx,
+    table: ResourceTable,
+    p2: wasmtime_wasi::p2::WasiCtx,
+    p3: WasiCtx,
 }
 
 impl WasiView for Ctx {
     fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.ctx
+        &mut self.p3
     }
 }
 
 // TODO: Remove once test components are not built for `wasm32-wasip1`
 impl wasmtime_wasi::p2::WasiView for Ctx {
     fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
-        panic!("should not use wasip2")
+        &mut self.p2
     }
 }
 
 // TODO: Remove once test components are not built for `wasm32-wasip1`
 impl wasmtime_wasi::p2::IoView for Ctx {
     fn table(&mut self) -> &mut ResourceTable {
-        panic!("should not use wasip2")
+        &mut self.table
     }
 }
 
@@ -70,8 +70,10 @@ async fn run(path: &str) -> anyhow::Result<()> {
     for (var, val) in test_programs_artifacts::wasi_tests_environment() {
         builder.env(var, val);
     }
-    let ctx = builder.build();
-    let mut store = Store::new(&engine, Ctx { ctx });
+    let table = ResourceTable::default();
+    let p2 = wasmtime_wasi::p2::WasiCtx::builder().build();
+    let p3 = builder.build();
+    let mut store = Store::new(&engine, Ctx { table, p2, p3 });
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let command =
         Command::new(&mut store, &instance).context("failed to instantiate `wasi:cli/command`")?;
@@ -86,13 +88,11 @@ async fn run(path: &str) -> anyhow::Result<()> {
 
 foreach_p3!(assert_test_exists);
 
-#[ignore = "not yet implemented"]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_clocks_sleep() -> anyhow::Result<()> {
     run(P3_CLOCKS_SLEEP_COMPONENT).await
 }
 
-#[ignore = "not yet implemented"]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_random_imports() -> anyhow::Result<()> {
     run(P3_RANDOM_IMPORTS_COMPONENT).await
