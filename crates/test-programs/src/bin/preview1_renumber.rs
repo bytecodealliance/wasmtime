@@ -72,6 +72,38 @@ unsafe fn test_renumber(dir_fd: wasi::Fd) {
     );
 
     wasi::fd_close(fd_to).expect("closing a file");
+
+    wasi::fd_renumber(0, 0).expect("renumbering 0 to 0");
+    let fd_file3 = wasi::path_open(
+        dir_fd,
+        0,
+        "file3",
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("opening a file");
+    assert!(
+        fd_file3 > libc::STDERR_FILENO as wasi::Fd,
+        "file descriptor range check",
+    );
+
+    wasi::fd_renumber(fd_file3, u32::MAX).expect("renumbering file FD to `u32::MAX`");
+    let fd_file4 = wasi::path_open(
+        dir_fd,
+        0,
+        "file4",
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("opening a file");
+    assert!(
+        fd_file4 > libc::STDERR_FILENO as wasi::Fd,
+        "file descriptor range check",
+    );
 }
 
 fn main() {
