@@ -21,4 +21,5 @@ log = { workspace = true }
 tokio = { workspace = true, features = ['rt'] }
 
 [features]
-component-model = ['wasmtime/component-model', 'wasmtime/component-model-async']
+component-model = ['wasmtime/component-model']
+component-model-async = ['wasmtime/component-model-async']
