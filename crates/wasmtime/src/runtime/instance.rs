@@ -544,6 +544,10 @@ impl Instance {
     }
 
     #[cfg(feature = "gc")]
+    #[allow(
+        dead_code,
+        reason = "c-api crate does not yet support exnrefs and causes this method to be dead."
+    )]
     pub(crate) fn id(&self) -> InstanceId {
         self.id.instance()
     }
