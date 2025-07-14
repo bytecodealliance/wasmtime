@@ -13,8 +13,7 @@ pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
 
     debug_assert!(
         func_ty.is_canonicalized_for_runtime_usage(),
-        "should be canonicalized for runtime usage: {:?}",
-        func_ty
+        "should be canonicalized for runtime usage: {func_ty:?}",
     );
 
     let tag_id = module.tags.push(Tag {

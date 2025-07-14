@@ -622,11 +622,11 @@ impl ExnRef {
     /// Panics if this reference is associated with a different store.
     pub fn tag(&self, mut store: impl AsContextMut) -> Result<Tag> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        assert!(self.comes_from_same_store(&mut store));
-        let exnref = self.exnref(&mut store)?.unchecked_copy();
-        let layout = self.layout(&mut store)?;
+        assert!(self.comes_from_same_store(&store));
+        let exnref = self.exnref(&store)?.unchecked_copy();
+        let layout = self.layout(&store)?;
         let (instance, index) = exnref.tag(&mut store, &layout)?;
-        Ok(Tag::from_raw_indices(&mut *store, instance, index))
+        Ok(Tag::from_raw_indices(&*store, instance, index))
     }
 }
 
