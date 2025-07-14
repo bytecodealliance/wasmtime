@@ -32,7 +32,8 @@ pub fn generate_global_export(
     });
 
     let mut store = AutoAssertNoGc::new(store);
-    // TODO
+    // SAFETY: the global that this is pointing to is rooted in `ctx` above and
+    // is safe to initialize.
     unsafe {
         let global = &mut ctx.get().as_mut().global;
         match val {
