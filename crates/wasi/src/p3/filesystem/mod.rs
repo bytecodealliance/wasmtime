@@ -4,7 +4,7 @@ use crate::{DirPerms, FilePerms, OpenMode};
 pub struct Dir;
 
 impl Dir {
-    #[allow(unused)]
+    #[expect(unused)]
     pub fn new(
         dir: cap_std::fs::Dir,
         perms: DirPerms,
