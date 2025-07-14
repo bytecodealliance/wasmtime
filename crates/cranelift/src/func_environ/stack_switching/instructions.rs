@@ -307,14 +307,13 @@ pub(crate) mod stack_switching_helpers {
             let required_size = required_capacity * entry_size;
 
             match existing_slot {
-                Some(slot) if builder.func.get_stack_slot_data(slot).size >= required_size => {
-                    let slot_data = builder.func.get_stack_slot_data(slot).clone();
+                Some(slot) if builder.func.sized_stack_slots[slot].size >= required_size => {
+                    let slot_data = &builder.func.sized_stack_slots[slot];
+                    debug_assert!(align <= slot_data.align_shift);
+                    debug_assert_eq!(slot_data.kind, ExplicitSlot);
                     let existing_capacity = slot_data.size / entry_size;
 
                     let capacity_value = builder.ins().iconst(I32, i64::from(existing_capacity));
-                    debug_assert!(align <= builder.func.get_stack_slot_data(slot).align_shift);
-                    debug_assert_eq!(builder.func.get_stack_slot_data(slot).kind, ExplicitSlot);
-
                     let existing_data = builder.ins().stack_addr(env.pointer_type(), slot, 0);
 
                     self.set_capacity(env, builder, capacity_value);
