@@ -1290,6 +1290,7 @@ impl StoreOpaque {
     /// Note that if you have a `StoreInstanceId` you should use
     /// `StoreInstanceId::get` instead. This assumes that `id` has been
     /// validated to already belong to this store.
+    #[inline]
     pub fn instance(&self, id: InstanceId) -> &vm::Instance {
         self.instances[id].handle.get()
     }
@@ -1299,6 +1300,7 @@ impl StoreOpaque {
     /// Note that if you have a `StoreInstanceId` you should use
     /// `StoreInstanceId::get_mut` instead. This assumes that `id` has been
     /// validated to already belong to this store.
+    #[inline]
     pub fn instance_mut(&mut self, id: InstanceId) -> Pin<&mut vm::Instance> {
         self.instances[id].handle.get_mut()
     }

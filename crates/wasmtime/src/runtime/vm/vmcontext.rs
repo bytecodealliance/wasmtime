@@ -388,12 +388,14 @@ impl VMMemoryDefinition {
     /// `current_length` potentially smaller than what some other thread
     /// observes. Since Wasm memory only grows, this under-estimation may be
     /// acceptable in certain cases.
+    #[inline]
     pub fn current_length(&self) -> usize {
         self.current_length.load(Ordering::Relaxed)
     }
 
     /// Return a copy of the [`VMMemoryDefinition`] using the relaxed value of
     /// `current_length`; see [`VMMemoryDefinition::current_length()`].
+    #[inline]
     pub unsafe fn load(ptr: *mut Self) -> Self {
         let other = &*ptr;
         VMMemoryDefinition {
