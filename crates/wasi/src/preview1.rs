@@ -74,9 +74,8 @@ use crate::p2::bindings::{
 use crate::p2::{FsError, IsATTY, WasiCtx, WasiImpl, WasiView};
 use crate::ResourceTable;
 use anyhow::{bail, Context};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::mem::{self, size_of, size_of_val};
-use std::ops::{Deref, DerefMut};
 use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -286,21 +285,7 @@ struct WasiPreview1Adapter {
 #[derive(Debug, Default)]
 struct Descriptors {
     used: BTreeMap<u32, Descriptor>,
-    free: Vec<u32>,
-}
-
-impl Deref for Descriptors {
-    type Target = BTreeMap<u32, Descriptor>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.used
-    }
-}
-
-impl DerefMut for Descriptors {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.used
-    }
+    free: BTreeSet<u32>,
 }
 
 impl Descriptors {
@@ -377,18 +362,18 @@ impl Descriptors {
 
     /// Returns next descriptor number, which was never assigned
     fn unused(&self) -> Result<u32> {
-        match self.last_key_value() {
+        match self.used.last_key_value() {
             Some((fd, _)) => {
                 if let Some(fd) = fd.checked_add(1) {
                     return Ok(fd);
                 }
-                if self.len() == u32::MAX as usize {
+                if self.used.len() == u32::MAX as usize {
                     return Err(types::Errno::Loop.into());
                 }
                 // TODO: Optimize
                 Ok((0..u32::MAX)
                     .rev()
-                    .find(|fd| !self.contains_key(fd))
+                    .find(|fd| !self.used.contains_key(fd))
                     .expect("failed to find an unused file descriptor"))
             }
             None => Ok(0),
@@ -399,7 +384,7 @@ impl Descriptors {
     fn remove(&mut self, fd: types::Fd) -> Option<Descriptor> {
         let fd = fd.into();
         let desc = self.used.remove(&fd)?;
-        self.free.push(fd);
+        self.free.insert(fd);
         Some(desc)
     }
 
@@ -407,12 +392,12 @@ impl Descriptors {
     /// This operation will try to reuse numbers previously removed via [`Self::remove`]
     /// and rely on [`Self::unused`] if no free numbers are recorded
     fn push(&mut self, desc: Descriptor) -> Result<u32> {
-        let fd = if let Some(fd) = self.free.pop() {
+        let fd = if let Some(fd) = self.free.pop_last() {
             fd
         } else {
             self.unused()?
         };
-        assert!(self.insert(fd, desc).is_none());
+        assert!(self.used.insert(fd, desc).is_none());
         Ok(fd)
     }
 }
@@ -453,7 +438,7 @@ impl Transaction<'_> {
     /// Returns [`types::Errno::Badf`] if no [`Descriptor`] is found
     fn get_descriptor(&self, fd: types::Fd) -> Result<&Descriptor> {
         let fd = fd.into();
-        let desc = self.descriptors.get(&fd).ok_or(types::Errno::Badf)?;
+        let desc = self.descriptors.used.get(&fd).ok_or(types::Errno::Badf)?;
         Ok(desc)
     }
 
@@ -461,7 +446,7 @@ impl Transaction<'_> {
     /// if it describes a [`Descriptor::File`]
     fn get_file(&self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
-        match self.descriptors.get(&fd) {
+        match self.descriptors.used.get(&fd) {
             Some(Descriptor::File(file)) => Ok(file),
             _ => Err(types::Errno::Badf.into()),
         }
@@ -471,7 +456,7 @@ impl Transaction<'_> {
     /// if it describes a [`Descriptor::File`]
     fn get_file_mut(&mut self, fd: types::Fd) -> Result<&mut File> {
         let fd = fd.into();
-        match self.descriptors.get_mut(&fd) {
+        match self.descriptors.used.get_mut(&fd) {
             Some(Descriptor::File(file)) => Ok(file),
             _ => Err(types::Errno::Badf.into()),
         }
@@ -485,7 +470,7 @@ impl Transaction<'_> {
     /// Returns [`types::Errno::Spipe`] if the descriptor corresponds to stdio
     fn get_seekable(&self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
-        match self.descriptors.get(&fd) {
+        match self.descriptors.used.get(&fd) {
             Some(Descriptor::File(file)) => Ok(file),
             Some(
                 Descriptor::Stdin { .. } | Descriptor::Stdout { .. } | Descriptor::Stderr { .. },
@@ -518,7 +503,7 @@ impl Transaction<'_> {
     /// if it describes a [`Descriptor::Directory`]
     fn get_dir_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         let fd = fd.into();
-        match self.descriptors.get(&fd) {
+        match self.descriptors.used.get(&fd) {
             Some(Descriptor::Directory { fd, .. }) => Ok(fd.borrowed()),
             _ => Err(types::Errno::Badf.into()),
         }
@@ -1832,7 +1817,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     ) -> Result<(), types::Error> {
         let mut st = self.transact()?;
         let desc = st.descriptors.remove(from).ok_or(types::Errno::Badf)?;
-        st.descriptors.insert(to.into(), desc);
+
+        let to = to.into();
+        st.descriptors.free.remove(&to);
+        st.descriptors.used.insert(to, desc);
         Ok(())
     }
 
