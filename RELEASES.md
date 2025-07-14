@@ -163,6 +163,11 @@ Unreleased.
 * An instance of `gdb` crashing on DWARF emitted by Wasmtime has been fixed.
   [#11077](https://github.com/bytecodealliance/wasmtime/pull/11077)
 
+* Fix a panic in the host caused by preview1 guests using `fd_renumber`.
+  [GHSA-fm79-3f68-h2fc](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-fm79-3f68-h2fc).
+
+* Fix a panic in the preview1 adapter caused by guests using `fd_renumber`.
+
 --------------------------------------------------------------------------------
 
 Release notes for previous releases of Wasmtime can be found on the respective
