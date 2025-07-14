@@ -209,11 +209,19 @@ impl TablePool {
 
         // `memset` the first `keep_resident` bytes.
         let size_to_memset = size.min(self.keep_resident);
-        std::ptr::write_bytes(base, 0, size_to_memset.byte_count());
+
+        // SAFETY: the contract of this function requires that the table is not
+        // actively in use so it's safe to pave over its allocation with zero
+        // bytes.
+        unsafe {
+            std::ptr::write_bytes(base, 0, size_to_memset.byte_count());
+        }
 
         // And decommit the rest of it.
         decommit(
-            base.add(size_to_memset.byte_count()),
+            // SAFETY: `size_to_memset` is less than the size of the allocation,
+            // so it's safe to use the `add` intrinsic.
+            unsafe { base.add(size_to_memset.byte_count()) },
             size.checked_sub(size_to_memset)
                 .expect("size_to_memset <= size")
                 .byte_count(),
