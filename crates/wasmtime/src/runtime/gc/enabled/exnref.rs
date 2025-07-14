@@ -644,11 +644,13 @@ unsafe impl WasmTy for Rooted<ExnRef> {
     #[inline]
     fn dynamic_concrete_type_check(
         &self,
-        store: &StoreOpaque,
+        _store: &StoreOpaque,
         _nullable: bool,
-        ty: &HeapType,
+        _ty: &HeapType,
     ) -> Result<()> {
-        self.ensure_matches_ty(store, ty)
+        // Wasm can't specify a concrete exn type, so there are no
+        // dynamic checks.
+        Ok(())
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {

@@ -205,9 +205,10 @@ impl WasmCoreDump {
                         wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::ANY)
                     }
                     Val::ExnRef(_) => {
-                        todo!(
-                            "Cannot encode a core dump with an exception object global because the wasm_encoder::HeapType does not exist"
-                        )
+                        wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Abstract {
+                            shared: false,
+                            ty: wasm_encoder::AbstractHeapType::Exn,
+                        })
                     }
                 };
                 globals.global(

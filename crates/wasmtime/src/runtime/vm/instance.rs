@@ -1004,7 +1004,7 @@ impl Instance {
                             VMGcRef::from_raw_u32(raw.get_externref())
                         }),
                     )?,
-                    WasmHeapTopType::Any => table.init_gc_refs(
+                    WasmHeapTopType::Any | WasmHeapTopType::Exn => table.init_gc_refs(
                         dst,
                         exprs.iter().map(|expr| unsafe {
                             let raw = const_evaluator
@@ -1025,9 +1025,6 @@ impl Instance {
                             )
                         }),
                     )?,
-                    WasmHeapTopType::Exn => {
-                        unreachable!("Cannot initialize exception objects from an element segment")
-                    }
                     WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
                 }
             }

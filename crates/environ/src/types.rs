@@ -883,7 +883,7 @@ impl TypeTrace for WasmContType {
 /// type-level *signature*. When a particular *exception object* is
 /// created in a store, it can be associated with a particular *tag
 /// instance* also in that store, and the compatibility is checked
-/// (the tag's function type must match teh function type in the
+/// (the tag's function type must match the function type in the
 /// associated WasmExnType).
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmExnType {

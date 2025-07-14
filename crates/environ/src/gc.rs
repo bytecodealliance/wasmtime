@@ -455,7 +455,7 @@ impl GcExceptionLayout {
 /// VMGcKind::EqRef`.
 ///
 /// Furthermore, this type only uses the highest 6 bits of its `u32`
-/// representation, allowing the lower 27 bytes to be bitpacked with other stuff
+/// representation, allowing the lower 26 bits to be bitpacked with other stuff
 /// as users see fit.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

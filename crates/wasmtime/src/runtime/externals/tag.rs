@@ -33,29 +33,7 @@ impl Tag {
     /// When using an async resource limiter, use [`Tag::new_async`]
     /// instead.
     pub fn new(mut store: impl AsContextMut, ty: &TagType) -> Result<Tag> {
-        Tag::_new(store.as_context_mut().0, ty)
-    }
-
-    /// Async variant of [`Tag::new`]. You must use this variant with
-    /// [`Store`](`crate::Store`)s which have a
-    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
-    ///
-    /// # Panics
-    ///
-    /// This function will panic when used with a non-async
-    /// [`Store`](`crate::Store`).
-    #[cfg(feature = "async")]
-    pub async fn new_async(mut store: impl AsContextMut<Data: Send>, ty: &TagType) -> Result<Tag> {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `new_async` without enabling async support on the config"
-        );
-        store.on_fiber(|store| Tag::_new(store.0, ty)).await?
-    }
-
-    fn _new(store: &mut StoreOpaque, ty: &TagType) -> Result<Tag> {
-        generate_tag_export(store, ty)
+        generate_tag_export(store.as_context_mut().0, ty)
     }
 
     /// Returns the underlying type of this `tag`.
