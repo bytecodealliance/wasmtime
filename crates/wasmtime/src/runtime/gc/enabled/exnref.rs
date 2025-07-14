@@ -43,7 +43,7 @@ use wasmtime_environ::{GcExceptionLayout, GcLayout, VMGcKind, VMSharedTypeIndex}
 /// )?;
 ///
 /// // Create an allocator for the exn type.
-/// let allocator = ExnRefPre::new(&mut store, exn_ty);
+/// let allocator = ExnRefPre::new(&mut store, exn_ty.clone());
 ///
 /// // Create a tag instance to associate with our exception objects.
 /// let tag = Tag::new(&mut store, &exn_ty.tag_type()).unwrap();
