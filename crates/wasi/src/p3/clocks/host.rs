@@ -7,38 +7,6 @@ use wasmtime::component::Accessor;
 use crate::p3::bindings::clocks::{monotonic_clock, wall_clock};
 use crate::p3::clocks::{WasiClocks, WasiClocksImpl, WasiClocksView};
 
-// TODO: Remove once `Accessor::with` is implemented
-trait AccessorWith<T, D>
-where
-    D: wasmtime::component::HasData,
-{
-    fn with<R: 'static>(
-        &mut self,
-        _fun: impl FnOnce(wasmtime::component::Access<'_, T, D>) -> R,
-    ) -> R {
-        todo!()
-    }
-}
-
-// TODO: Remove once `Accessor::with` is implemented
-impl<T, D> AccessorWith<T, D> for Accessor<T, D> where D: wasmtime::component::HasData {}
-
-// TODO: Remove once `Access::get` is implemented
-trait AccessGet<D>
-where
-    D: wasmtime::component::HasData,
-{
-    fn get(&mut self) -> D::Data<'_> {
-        todo!()
-    }
-}
-
-// TODO: Remove once `Access::get` is implemented
-impl<T, D> AccessGet<D> for wasmtime::component::Access<'_, T, D> where
-    D: wasmtime::component::HasData
-{
-}
-
 impl TryFrom<SystemTime> for wall_clock::Datetime {
     type Error = wasmtime::Error;
 
