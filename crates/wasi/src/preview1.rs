@@ -76,7 +76,7 @@ use crate::{
     FsError, IsATTY, ResourceTable, StreamError, StreamResult, WasiCtx, WasiImpl, WasiView,
 };
 use anyhow::{bail, Context};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet, btree_map};
 use std::mem::{self, size_of, size_of_val};
 use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -410,14 +410,6 @@ impl Descriptors {
             }
             None => Ok(0),
         }
-    }
-
-    /// Removes the [Descriptor] corresponding to `fd`
-    fn remove(&mut self, fd: types::Fd) -> Option<Descriptor> {
-        let fd = fd.into();
-        let desc = self.used.remove(&fd)?;
-        self.free.insert(fd);
-        Some(desc)
     }
 
     /// Pushes the [Descriptor] returning corresponding number.
@@ -1345,11 +1337,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         _memory: &mut GuestMemory<'_>,
         fd: types::Fd,
     ) -> Result<(), types::Error> {
-        let desc = self
-            .transact()?
-            .descriptors
-            .remove(fd)
-            .ok_or(types::Errno::Badf)?;
+        let desc = {
+            let fd = fd.into();
+            let mut st = self.transact()?;
+            let desc = st.descriptors.used.remove(&fd).ok_or(types::Errno::Badf)?;
+            st.descriptors.free.insert(fd);
+            desc
+        };
         match desc {
             Descriptor::Stdin { stream, .. } => {
                 streams::HostInputStream::drop(&mut self.as_wasi_impl(), stream)
@@ -1885,11 +1879,17 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         to: types::Fd,
     ) -> Result<(), types::Error> {
         let mut st = self.transact()?;
-        let desc = st.descriptors.remove(from).ok_or(types::Errno::Badf)?;
-
+        let from = from.into();
+        let btree_map::Entry::Occupied(desc) = st.descriptors.used.entry(from) else {
+            return Err(types::Errno::Badf.into());
+        };
         let to = to.into();
-        st.descriptors.free.remove(&to);
-        st.descriptors.used.insert(to, desc);
+        if from != to {
+            let desc = desc.remove();
+            st.descriptors.free.insert(from);
+            st.descriptors.free.remove(&to);
+            st.descriptors.used.insert(to, desc);
+        }
         Ok(())
     }
 
