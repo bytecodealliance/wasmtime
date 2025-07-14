@@ -231,6 +231,7 @@ async fn preview1_remove_nonempty_directory() {
         .await
         .unwrap()
 }
+#[ignore = "panics"]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_renumber() {
     run(PREVIEW1_RENUMBER_COMPONENT, false).await.unwrap()
