@@ -1828,7 +1828,7 @@ impl FuncEnvironment<'_> {
             self.table_vmctx_and_defined_index(&mut pos, table_index);
         let index_type = table.idx_type;
         let delta = self.cast_index_to_i64(&mut pos, delta, index_type);
-        
+
         let mut args: SmallVec<[_; 6]> = smallvec![table_vmctx, defined_table_index, delta];
         let grow = match ty.top() {
             WasmHeapTopType::Extern | WasmHeapTopType::Any => {
@@ -1837,15 +1837,11 @@ impl FuncEnvironment<'_> {
             }
             WasmHeapTopType::Func => {
                 args.push(init_value);
-                self.builtin_functions
-                    .table_grow_func_ref(pos.func)
+                self.builtin_functions.table_grow_func_ref(pos.func)
             }
             WasmHeapTopType::Cont => {
-                let (revision, contref) = stack_switching::fatpointer::deconstruct(
-                    self,
-                    &mut pos,
-                    init_value,
-                );
+                let (revision, contref) =
+                    stack_switching::fatpointer::deconstruct(self, &mut pos, init_value);
                 args.extend_from_slice(&[contref, revision]);
                 stack_switching::builtins::table_grow_cont_obj(self, pos.func)?
             }
