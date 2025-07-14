@@ -72,36 +72,36 @@ impl VMGcHeader {
         VMGcKind::from_high_bits_of_u32(self.kind)
     }
 
-    /// Get the reserved 27 bits in this header.
+    /// Get the reserved 26 bits in this header.
     ///
     /// These are bits are reserved for `GcRuntime` implementations to make use
     /// of however they see fit.
-    pub fn reserved_u27(&self) -> u32 {
+    pub fn reserved_u26(&self) -> u32 {
         self.kind & VMGcKind::UNUSED_MASK
     }
 
-    /// Set the 27-bit reserved value.
+    /// Set the 26-bit reserved value.
     ///
     /// # Panics
     ///
     /// Panics if the given `value` has any of the upper 6 bits set.
-    pub fn set_reserved_u27(&mut self, value: u32) {
+    pub fn set_reserved_u26(&mut self, value: u32) {
         assert!(
             VMGcKind::value_fits_in_unused_bits(value),
-            "VMGcHeader::set_reserved_u27 with value using more than 27 bits: \
+            "VMGcHeader::set_reserved_u26 with value using more than 26 bits: \
              {value:#034b} ({value}, {value:#010x})"
         );
         self.kind &= VMGcKind::MASK;
         self.kind |= value;
     }
 
-    /// Set the 27-bit reserved value.
+    /// Set the 26-bit reserved value.
     ///
     /// # Safety
     ///
-    /// The given `value` must only use the lower 27 bits; its upper 5 bits must
+    /// The given `value` must only use the lower 26 bits; its upper 6 bits must
     /// be unset.
-    pub unsafe fn unchecked_set_reserved_u27(&mut self, value: u32) {
+    pub unsafe fn unchecked_set_reserved_u26(&mut self, value: u32) {
         debug_assert_eq!(value & VMGcKind::MASK, 0);
         self.kind &= VMGcKind::MASK;
         self.kind |= value;
@@ -498,27 +498,27 @@ mod tests {
         let ty = VMSharedTypeIndex::new(1234);
         let mut header = VMGcHeader::from_kind_and_index(kind, ty);
 
-        assert_eq!(header.reserved_u27(), 0);
+        assert_eq!(header.reserved_u26(), 0);
         assert_eq!(header.kind(), kind);
         assert_eq!(header.ty(), Some(ty));
 
-        header.set_reserved_u27(36);
-        assert_eq!(header.reserved_u27(), 36);
+        header.set_reserved_u26(36);
+        assert_eq!(header.reserved_u26(), 36);
         assert_eq!(header.kind(), kind);
         assert_eq!(header.ty(), Some(ty));
 
-        let max = (1 << 27) - 1;
-        header.set_reserved_u27(max);
-        assert_eq!(header.reserved_u27(), max);
+        let max = (1 << 26) - 1;
+        header.set_reserved_u26(max);
+        assert_eq!(header.reserved_u26(), max);
         assert_eq!(header.kind(), kind);
         assert_eq!(header.ty(), Some(ty));
 
-        header.set_reserved_u27(0);
-        assert_eq!(header.reserved_u27(), 0);
+        header.set_reserved_u26(0);
+        assert_eq!(header.reserved_u26(), 0);
         assert_eq!(header.kind(), kind);
         assert_eq!(header.ty(), Some(ty));
 
-        let result = std::panic::catch_unwind(move || header.set_reserved_u27(max + 1));
+        let result = std::panic::catch_unwind(move || header.set_reserved_u26(max + 1));
         assert!(result.is_err());
     }
 }
