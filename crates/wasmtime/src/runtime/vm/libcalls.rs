@@ -837,7 +837,7 @@ unsafe fn array_new_elem(
                         .iter()
                         .map(|f| {
                             let raw_func_ref = instance.as_mut().get_func_ref(*f);
-                            let func = raw_func_ref.map(|p| Func::from_vm_func_ref(store, p));
+                            let func = raw_func_ref.map(|p| Func::from_vm_func_ref(store.id(), p));
                             Val::FuncRef(func)
                         }),
                 );
@@ -930,7 +930,7 @@ unsafe fn array_init_elem(
             .iter()
             .map(|f| {
                 let raw_func_ref = instance.as_mut().get_func_ref(*f);
-                let func = raw_func_ref.map(|p| Func::from_vm_func_ref(&store, p));
+                let func = raw_func_ref.map(|p| Func::from_vm_func_ref(store.id(), p));
                 Val::FuncRef(func)
             })
             .collect::<Vec<_>>(),
@@ -1060,7 +1060,7 @@ fn memory_atomic_notify(
 ) -> Result<u32, Trap> {
     let memory = DefinedMemoryIndex::from_u32(memory_index);
     instance
-        .get_defined_memory(memory)
+        .get_defined_memory_mut(memory)
         .atomic_notify(addr_index, count)
 }
 
@@ -1077,7 +1077,7 @@ fn memory_atomic_wait32(
     let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
     let memory = DefinedMemoryIndex::from_u32(memory_index);
     Ok(instance
-        .get_defined_memory(memory)
+        .get_defined_memory_mut(memory)
         .atomic_wait32(addr_index, expected, timeout)? as u32)
 }
 
@@ -1094,7 +1094,7 @@ fn memory_atomic_wait64(
     let timeout = (timeout as i64 >= 0).then(|| Duration::from_nanos(timeout));
     let memory = DefinedMemoryIndex::from_u32(memory_index);
     Ok(instance
-        .get_defined_memory(memory)
+        .get_defined_memory_mut(memory)
         .atomic_wait64(addr_index, expected, timeout)? as u32)
 }
 

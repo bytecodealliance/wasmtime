@@ -1338,17 +1338,14 @@ impl StoreOpaque {
     }
 
     /// Get all memories (host- or Wasm-defined) within this store.
-    pub fn all_memories<'a>(&'a mut self) -> impl Iterator<Item = Memory> + 'a {
+    pub fn all_memories<'a>(&'a self) -> impl Iterator<Item = Memory> + 'a {
         // NB: Host-created memories have dummy instances. Therefore, we can get
         // all memories in the store by iterating over all instances (including
         // dummy instances) and getting each of their defined memories.
-        let mems = self
-            .instances
-            .iter_mut()
-            .flat_map(|(_, instance)| instance.handle.get().defined_memories())
-            .collect::<Vec<_>>();
-        mems.into_iter()
-            .map(|memory| unsafe { Memory::from_wasmtime_memory(memory, self) })
+        let id = self.id();
+        self.instances
+            .iter()
+            .flat_map(move |(_, instance)| instance.handle.get().defined_memories(id))
     }
 
     /// Iterate over all tables (host- or Wasm-defined) within this store.
@@ -2100,18 +2097,6 @@ at https://bytecodealliance.org/security.
         assert_eq!(id, actual);
 
         Ok(id)
-    }
-
-    /// Returns the `StoreInstanceId` that can be used to re-acquire access to
-    /// `vmctx` from a store later on.
-    ///
-    /// # Safety
-    ///
-    /// This method is unsafe as it cannot validate that `vmctx` is a valid
-    /// allocation that lives within this store.
-    pub(crate) unsafe fn vmctx_id(&self, vmctx: NonNull<VMContext>) -> StoreInstanceId {
-        let instance_id = vm::Instance::from_vmctx(vmctx, |i| i.id());
-        StoreInstanceId::new(self.id(), instance_id)
     }
 }
 

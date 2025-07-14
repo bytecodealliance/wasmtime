@@ -3,7 +3,7 @@ use crate::{
     AsContext,
     store::{StoreInstanceId, StoreOpaque},
 };
-use wasmtime_environ::{DefinedTagIndex, VMSharedTypeIndex};
+use wasmtime_environ::DefinedTagIndex;
 
 /// A WebAssembly `tag`.
 #[derive(Copy, Clone, Debug)]
@@ -14,18 +14,8 @@ pub struct Tag {
 }
 
 impl Tag {
-    pub(crate) unsafe fn from_wasmtime_tag(
-        wasmtime_export: crate::runtime::vm::ExportTag,
-        store: &StoreOpaque,
-    ) -> Self {
-        debug_assert!(
-            wasmtime_export.tag.signature.unwrap_engine_type_index()
-                != VMSharedTypeIndex::default()
-        );
-        Tag {
-            instance: store.vmctx_id(wasmtime_export.vmctx),
-            index: wasmtime_export.index,
-        }
+    pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedTagIndex) -> Tag {
+        Tag { instance, index }
     }
 
     /// Returns the underlying type of this `tag`.

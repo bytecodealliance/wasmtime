@@ -4,7 +4,7 @@ use crate::store::{AutoAssertNoGc, StoreInstanceId, StoreOpaque};
 use crate::trampoline::generate_table_export;
 use crate::{AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, Ref, TableType};
 use core::iter;
-use wasmtime_environ::{DefinedTableIndex, TypeTrace};
+use wasmtime_environ::DefinedTableIndex;
 
 /// A WebAssembly `table`, or an array of values.
 ///
@@ -115,10 +115,9 @@ impl Table {
     }
 
     fn _new(store: &mut StoreOpaque, ty: TableType, init: Ref) -> Result<Table> {
-        let wasmtime_export = generate_table_export(store, &ty)?;
+        let table = generate_table_export(store, &ty)?;
         let init = init.into_table_element(store, ty.element())?;
         unsafe {
-            let table = Table::from_wasmtime_table(wasmtime_export, store);
             let wasmtime_table = table.wasmtime_table(store, iter::empty());
             (*wasmtime_table).fill(store.optional_gc_store_mut(), 0, init, ty.minimum())?;
             Ok(table)
@@ -167,7 +166,7 @@ impl Table {
         unsafe {
             match (*table).get(gc_store, index)? {
                 runtime::TableElement::FuncRef(f) => {
-                    let func = f.map(|f| Func::from_vm_func_ref(&store, f));
+                    let func = f.map(|f| Func::from_vm_func_ref(store.id(), f));
                     Some(func.into())
                 }
 
@@ -413,22 +412,6 @@ impl Table {
 
     pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedTableIndex) -> Table {
         Table { instance, index }
-    }
-
-    pub(crate) unsafe fn from_wasmtime_table(
-        wasmtime_export: crate::runtime::vm::ExportTable,
-        store: &StoreOpaque,
-    ) -> Table {
-        debug_assert!(
-            wasmtime_export
-                .table
-                .ref_type
-                .is_canonicalized_for_runtime_usage()
-        );
-        Table {
-            instance: store.vmctx_id(wasmtime_export.vmctx),
-            index: wasmtime_export.index,
-        }
     }
 
     pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreOpaque) -> &'a wasmtime_environ::Table {

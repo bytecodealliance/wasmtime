@@ -11,9 +11,9 @@ use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::{
-    SendSyncPtr, VMArrayCallFunction, VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction,
-    ValRaw, VmPtr, VmSafe,
+    SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
+    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableImport, VMWasmCallFunction, ValRaw, VmPtr,
+    VmSafe,
 };
 use crate::store::InstanceId;
 use alloc::alloc::Layout;
@@ -23,7 +23,7 @@ use core::mem::offset_of;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{DefinedTableIndex, HostPtr, PrimaryMap, VMSharedTypeIndex};
+use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
 #[allow(
     clippy::cast_possible_truncation,
@@ -234,6 +234,22 @@ impl ComponentInstance {
         let store = &mut *reference.store.0.as_ptr();
         let instance = Instance::from_wasmtime(store, reference.id);
         f(store, instance)
+    }
+
+    /// Returns the `InstanceId` associated with the `vmctx` provided.
+    ///
+    /// # Safety
+    ///
+    /// The `vmctx` pointer must be a valid pointer to read the
+    /// `ComponentInstanceId` from.
+    pub(crate) unsafe fn vmctx_instance_id(
+        vmctx: NonNull<VMComponentContext>,
+    ) -> ComponentInstanceId {
+        vmctx
+            .byte_sub(mem::size_of::<ComponentInstance>())
+            .cast::<ComponentInstance>()
+            .as_ref()
+            .id
     }
 
     /// Returns the layout corresponding to what would be an allocation of a
@@ -477,23 +493,13 @@ impl ComponentInstance {
     ///
     /// Note that it should be a property of the component model that the `ptr`
     /// here is never needed prior to it being configured here in the instance.
-    pub fn set_runtime_table(
-        self: Pin<&mut Self>,
-        idx: RuntimeTableIndex,
-        ptr: NonNull<VMTableDefinition>,
-        vmctx: NonNull<VMContext>,
-        index: DefinedTableIndex,
-    ) {
+    pub fn set_runtime_table(self: Pin<&mut Self>, idx: RuntimeTableIndex, import: VMTableImport) {
         unsafe {
             let offset = self.offsets.runtime_table(idx);
             let storage = self.vmctx_plus_offset_mut::<VMTableImport>(offset);
             debug_assert!((*storage).vmctx.as_ptr() as usize == INVALID_PTR);
             debug_assert!((*storage).from.as_ptr() as usize == INVALID_PTR);
-            *storage = VMTableImport {
-                vmctx: vmctx.into(),
-                from: ptr.into(),
-                index,
-            };
+            *storage = import;
         }
     }
 

@@ -1,9 +1,8 @@
 use crate::prelude::*;
 use crate::runtime::Uninhabited;
 use crate::runtime::vm::{
-    ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
-    VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
-    VMStoreContext,
+    InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMCommonStackInformation,
+    VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext, VMStoreContext,
 };
 use crate::store::{AutoAssertNoGc, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
@@ -528,13 +527,16 @@ impl Func {
         );
     }
 
-    pub(crate) unsafe fn from_vm_func_ref(
-        store: &StoreOpaque,
-        func_ref: NonNull<VMFuncRef>,
-    ) -> Func {
+    /// Creates a new `Func` from a store and a funcref within that store.
+    ///
+    /// # Safety
+    ///
+    /// The safety of this function requires that `func_ref` is a valid function
+    /// pointer owned by `store`.
+    pub(crate) unsafe fn from_vm_func_ref(store: StoreId, func_ref: NonNull<VMFuncRef>) -> Func {
         debug_assert!(func_ref.as_ref().type_index != VMSharedTypeIndex::default());
         Func {
-            store: store.id(),
+            store,
             unsafe_func_ref: func_ref.into(),
         }
     }
@@ -1025,7 +1027,10 @@ impl Func {
     }
 
     pub(crate) unsafe fn _from_raw(store: &mut StoreOpaque, raw: *mut c_void) -> Option<Func> {
-        Some(Func::from_vm_func_ref(store, NonNull::new(raw.cast())?))
+        Some(Func::from_vm_func_ref(
+            store.id(),
+            NonNull::new(raw.cast())?,
+        ))
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
@@ -1175,13 +1180,6 @@ impl Func {
     pub(crate) fn vm_func_ref(&self, store: &StoreOpaque) -> NonNull<VMFuncRef> {
         self.store.assert_belongs_to(store.id());
         self.unsafe_func_ref.as_non_null()
-    }
-
-    pub(crate) unsafe fn from_wasmtime_function(
-        export: ExportFunction,
-        store: &StoreOpaque,
-    ) -> Self {
-        Self::from_vm_func_ref(store, export.func_ref)
     }
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> VMFunctionImport {
@@ -2466,7 +2464,7 @@ impl HostFunc {
         self.validate_store(store);
         let (funcrefs, modules) = store.func_refs_and_modules();
         let funcref = funcrefs.push_arc_host(self.clone(), modules);
-        Func::from_vm_func_ref(store, funcref)
+        Func::from_vm_func_ref(store.id(), funcref)
     }
 
     /// Inserts this `HostFunc` into a `Store`, returning the `Func` pointing to
@@ -2500,11 +2498,11 @@ impl HostFunc {
         match rooted_func_ref {
             Some(funcref) => {
                 debug_assert!(funcref.as_ref().wasm_call.is_some());
-                Func::from_vm_func_ref(store, funcref)
+                Func::from_vm_func_ref(store.id(), funcref)
             }
             None => {
                 debug_assert!(self.func_ref().wasm_call.is_some());
-                Func::from_vm_func_ref(store, self.func_ref().into())
+                Func::from_vm_func_ref(store.id(), self.func_ref().into())
             }
         }
     }
@@ -2514,7 +2512,7 @@ impl HostFunc {
         self.validate_store(store);
         let (funcrefs, modules) = store.func_refs_and_modules();
         let funcref = funcrefs.push_box_host(Box::new(self), modules);
-        Func::from_vm_func_ref(store, funcref)
+        Func::from_vm_func_ref(store.id(), funcref)
     }
 
     fn validate_store(&self, store: &mut StoreOpaque) {
