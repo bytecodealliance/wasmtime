@@ -260,8 +260,10 @@ pub fn abort_stack_overflow() -> ! {
     }
 }
 
-#[allow(clippy::cast_possible_truncation)] // too fiddly to handle and wouldn't
-// help much anyway
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "too fiddly to handle and wouldn't help much anyway"
+)]
 unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> TrapRegisters {
     cfg_if::cfg_if! {
         if #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "illumos"), target_arch = "x86_64"))] {

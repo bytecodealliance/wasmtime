@@ -1,10 +1,6 @@
 //! Copy-on-write initialization support: creation of backing images for
 //! modules, and logic to support mapping these backing images into memory.
 
-// `MemoryImageSource` is an empty enum on some platforms which triggers some
-// warnings
-#![cfg_attr(any(not(unix), miri), allow(unreachable_patterns))]
-
 use super::sys::DecommitBehavior;
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
@@ -497,7 +493,7 @@ impl MemoryImageSlot {
     /// argument is the maximum amount of memory to keep resident in this
     /// process's memory on Linux. Up to that much memory will be `memset` to
     /// zero where the rest of it will be reset or released with `madvise`.
-    #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
+    #[allow(dead_code, reason = "only used in some cfgs")]
     pub(crate) fn clear_and_remain_ready(
         &mut self,
         keep_resident: HostAlignedByteCount,
@@ -513,7 +509,7 @@ impl MemoryImageSlot {
         Ok(())
     }
 
-    #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
+    #[allow(dead_code, reason = "only used in some cfgs")]
     unsafe fn reset_all_memory_contents(
         &mut self,
         keep_resident: HostAlignedByteCount,
@@ -536,7 +532,7 @@ impl MemoryImageSlot {
         }
     }
 
-    #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
+    #[allow(dead_code, reason = "only used in some cfgs")]
     unsafe fn reset_with_original_mapping(
         &mut self,
         keep_resident: HostAlignedByteCount,
@@ -672,7 +668,7 @@ impl MemoryImageSlot {
         }
     }
 
-    #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
+    #[allow(dead_code, reason = "only used in some cfgs")]
     unsafe fn restore_original_mapping(
         &self,
         base: HostAlignedByteCount,
@@ -722,7 +718,7 @@ impl MemoryImageSlot {
         self.image.is_some()
     }
 
-    #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
+    #[allow(dead_code, reason = "only used in some cfgs")]
     pub(crate) fn is_dirty(&self) -> bool {
         self.dirty
     }

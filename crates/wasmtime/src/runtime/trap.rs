@@ -184,8 +184,7 @@ pub struct WasmBacktrace {
     hint_wasm_backtrace_details_env: bool,
     // This is currently only present for the `Debug` implementation for extra
     // context.
-    #[allow(dead_code)]
-    runtime_trace: crate::runtime::vm::Backtrace,
+    _runtime_trace: crate::runtime::vm::Backtrace,
 }
 
 impl WasmBacktrace {
@@ -244,7 +243,7 @@ impl WasmBacktrace {
             WasmBacktrace {
                 wasm_trace: Vec::new(),
                 hint_wasm_backtrace_details_env: false,
-                runtime_trace: crate::runtime::vm::Backtrace::empty(),
+                _runtime_trace: crate::runtime::vm::Backtrace::empty(),
             }
         }
     }
@@ -334,7 +333,7 @@ impl WasmBacktrace {
 
         Self {
             wasm_trace,
-            runtime_trace,
+            _runtime_trace: runtime_trace,
             hint_wasm_backtrace_details_env,
         }
     }

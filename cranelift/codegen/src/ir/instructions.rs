@@ -74,12 +74,12 @@ impl BlockCall {
     /// Construct a BlockCall with the given block and arguments.
     pub fn new(
         block: Block,
-        args: impl Iterator<Item = BlockArg>,
+        args: impl IntoIterator<Item = BlockArg>,
         pool: &mut ValueListPool,
     ) -> Self {
         let mut values = ValueList::default();
         values.push(Self::block_to_value(block), pool);
-        values.extend(args.map(|arg| arg.encode_as_value()), pool);
+        values.extend(args.into_iter().map(|arg| arg.encode_as_value()), pool);
         Self { values }
     }
 
@@ -1027,10 +1027,110 @@ pub enum ResolvedConstraint {
     Free(ValueTypeSet),
 }
 
+/// A trait to map some functions over each of the entities within an
+/// instruction, when paired with `InstructionData::map`.
+pub trait InstructionMapper {
+    /// Map a function over a `Value`.
+    fn map_value(&mut self, value: Value) -> Value;
+
+    /// Map a function over a `ValueList`.
+    fn map_value_list(&mut self, value_list: ValueList) -> ValueList;
+
+    /// Map a function over a `GlobalValue`.
+    fn map_global_value(&mut self, global_value: ir::GlobalValue) -> ir::GlobalValue;
+
+    /// Map a function over a `JumpTable`.
+    fn map_jump_table(&mut self, jump_table: ir::JumpTable) -> ir::JumpTable;
+
+    /// Map a function over an `ExceptionTable`.
+    fn map_exception_table(&mut self, exception_table: ExceptionTable) -> ExceptionTable;
+
+    /// Map a function over a `BlockCall`.
+    fn map_block_call(&mut self, block_call: BlockCall) -> BlockCall;
+
+    /// Map a function over a `FuncRef`.
+    fn map_func_ref(&mut self, func_ref: FuncRef) -> FuncRef;
+
+    /// Map a function over a `SigRef`.
+    fn map_sig_ref(&mut self, sig_ref: SigRef) -> SigRef;
+
+    /// Map a function over a `StackSlot`.
+    fn map_stack_slot(&mut self, stack_slot: StackSlot) -> StackSlot;
+
+    /// Map a function over a `DynamicStackSlot`.
+    fn map_dynamic_stack_slot(
+        &mut self,
+        dynamic_stack_slot: ir::DynamicStackSlot,
+    ) -> ir::DynamicStackSlot;
+
+    /// Map a function over a `Constant`.
+    fn map_constant(&mut self, constant: ir::Constant) -> ir::Constant;
+
+    /// Map a function over an `Immediate`.
+    fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate;
+}
+
+impl<'a, T> InstructionMapper for &'a mut T
+where
+    T: InstructionMapper,
+{
+    fn map_value(&mut self, value: Value) -> Value {
+        (**self).map_value(value)
+    }
+
+    fn map_value_list(&mut self, value_list: ValueList) -> ValueList {
+        (**self).map_value_list(value_list)
+    }
+
+    fn map_global_value(&mut self, global_value: ir::GlobalValue) -> ir::GlobalValue {
+        (**self).map_global_value(global_value)
+    }
+
+    fn map_jump_table(&mut self, jump_table: ir::JumpTable) -> ir::JumpTable {
+        (**self).map_jump_table(jump_table)
+    }
+
+    fn map_exception_table(&mut self, exception_table: ExceptionTable) -> ExceptionTable {
+        (**self).map_exception_table(exception_table)
+    }
+
+    fn map_block_call(&mut self, block_call: BlockCall) -> BlockCall {
+        (**self).map_block_call(block_call)
+    }
+
+    fn map_func_ref(&mut self, func_ref: FuncRef) -> FuncRef {
+        (**self).map_func_ref(func_ref)
+    }
+
+    fn map_sig_ref(&mut self, sig_ref: SigRef) -> SigRef {
+        (**self).map_sig_ref(sig_ref)
+    }
+
+    fn map_stack_slot(&mut self, stack_slot: StackSlot) -> StackSlot {
+        (**self).map_stack_slot(stack_slot)
+    }
+
+    fn map_dynamic_stack_slot(
+        &mut self,
+        dynamic_stack_slot: ir::DynamicStackSlot,
+    ) -> ir::DynamicStackSlot {
+        (**self).map_dynamic_stack_slot(dynamic_stack_slot)
+    }
+
+    fn map_constant(&mut self, constant: ir::Constant) -> ir::Constant {
+        (**self).map_constant(constant)
+    }
+
+    fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate {
+        (**self).map_immediate(immediate)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloc::string::ToString;
+    use ir::{DynamicStackSlot, GlobalValue, JumpTable};
 
     #[test]
     fn inst_data_is_copy() {
@@ -1183,5 +1283,220 @@ mod tests {
         };
         assert!(vts.contains(I32));
         assert!(vts.contains(I32X4));
+    }
+
+    #[test]
+    fn instruction_data_map() {
+        struct TestMapper;
+
+        impl InstructionMapper for TestMapper {
+            fn map_value(&mut self, value: Value) -> Value {
+                Value::from_u32(value.as_u32() + 1)
+            }
+
+            fn map_value_list(&mut self, _value_list: ValueList) -> ValueList {
+                ValueList::new()
+            }
+
+            fn map_global_value(&mut self, global_value: ir::GlobalValue) -> ir::GlobalValue {
+                GlobalValue::from_u32(global_value.as_u32() + 1)
+            }
+
+            fn map_jump_table(&mut self, jump_table: ir::JumpTable) -> ir::JumpTable {
+                JumpTable::from_u32(jump_table.as_u32() + 1)
+            }
+
+            fn map_exception_table(&mut self, exception_table: ExceptionTable) -> ExceptionTable {
+                ExceptionTable::from_u32(exception_table.as_u32() + 1)
+            }
+
+            fn map_block_call(&mut self, _block_call: BlockCall) -> BlockCall {
+                let block = Block::from_u32(42);
+                let mut pool = ValueListPool::new();
+                BlockCall::new(block, [], &mut pool)
+            }
+
+            fn map_func_ref(&mut self, func_ref: FuncRef) -> FuncRef {
+                FuncRef::from_u32(func_ref.as_u32() + 1)
+            }
+
+            fn map_sig_ref(&mut self, sig_ref: SigRef) -> SigRef {
+                SigRef::from_u32(sig_ref.as_u32() + 1)
+            }
+
+            fn map_stack_slot(&mut self, stack_slot: StackSlot) -> StackSlot {
+                StackSlot::from_u32(stack_slot.as_u32() + 1)
+            }
+
+            fn map_dynamic_stack_slot(
+                &mut self,
+                dynamic_stack_slot: ir::DynamicStackSlot,
+            ) -> ir::DynamicStackSlot {
+                DynamicStackSlot::from_u32(dynamic_stack_slot.as_u32() + 1)
+            }
+
+            fn map_constant(&mut self, constant: ir::Constant) -> ir::Constant {
+                ir::Constant::from_u32(constant.as_u32() + 1)
+            }
+
+            fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate {
+                ir::Immediate::from_u32(immediate.as_u32() + 1)
+            }
+        }
+
+        let mut pool = ValueListPool::new();
+        let map = |inst: InstructionData| inst.map(TestMapper);
+
+        // Mapping `Value`s.
+        assert_eq!(
+            map(InstructionData::Binary {
+                opcode: Opcode::Iadd,
+                args: [Value::from_u32(10), Value::from_u32(20)]
+            }),
+            InstructionData::Binary {
+                opcode: Opcode::Iadd,
+                args: [Value::from_u32(11), Value::from_u32(21)]
+            }
+        );
+
+        // Mapping `ValueList`s and `FuncRef`s.
+        let mut args = ValueList::new();
+        args.push(Value::from_u32(42), &mut pool);
+        let func_ref = FuncRef::from_u32(99);
+        let inst = map(InstructionData::Call {
+            opcode: Opcode::Call,
+            args,
+            func_ref,
+        });
+        let InstructionData::Call {
+            opcode: Opcode::Call,
+            args,
+            func_ref,
+        } = inst
+        else {
+            panic!()
+        };
+        assert!(args.is_empty());
+        assert_eq!(func_ref, FuncRef::from_u32(100));
+
+        // Mapping `GlobalValue`s.
+        assert_eq!(
+            map(InstructionData::UnaryGlobalValue {
+                opcode: Opcode::GlobalValue,
+                global_value: GlobalValue::from_u32(4),
+            }),
+            InstructionData::UnaryGlobalValue {
+                opcode: Opcode::GlobalValue,
+                global_value: GlobalValue::from_u32(5),
+            }
+        );
+
+        // Mapping `JumpTable`s.
+        assert_eq!(
+            map(InstructionData::BranchTable {
+                opcode: Opcode::BrTable,
+                arg: Value::from_u32(0),
+                table: JumpTable::from_u32(1),
+            }),
+            InstructionData::BranchTable {
+                opcode: Opcode::BrTable,
+                arg: Value::from_u32(1),
+                table: JumpTable::from_u32(2),
+            }
+        );
+
+        // Mapping `ExceptionTable`s.
+        assert_eq!(
+            map(InstructionData::TryCall {
+                opcode: Opcode::TryCall,
+                args,
+                func_ref: FuncRef::from_u32(0),
+                exception: ExceptionTable::from_u32(1),
+            }),
+            InstructionData::TryCall {
+                opcode: Opcode::TryCall,
+                args,
+                func_ref: FuncRef::from_u32(1),
+                exception: ExceptionTable::from_u32(2),
+            }
+        );
+
+        // Mapping `BlockCall`s.
+        assert_eq!(
+            map(InstructionData::Jump {
+                opcode: Opcode::Jump,
+                destination: BlockCall::new(Block::from_u32(99), [], &mut pool),
+            }),
+            map(InstructionData::Jump {
+                opcode: Opcode::Jump,
+                destination: BlockCall::new(Block::from_u32(42), [], &mut pool),
+            })
+        );
+
+        // Mapping `SigRef`s.
+        assert_eq!(
+            map(InstructionData::CallIndirect {
+                opcode: Opcode::CallIndirect,
+                args,
+                sig_ref: SigRef::from_u32(11)
+            }),
+            InstructionData::CallIndirect {
+                opcode: Opcode::CallIndirect,
+                args: ValueList::new(),
+                sig_ref: SigRef::from_u32(12)
+            }
+        );
+
+        // Mapping `StackSlot`s.
+        assert_eq!(
+            map(InstructionData::StackLoad {
+                opcode: Opcode::StackLoad,
+                stack_slot: StackSlot::from_u32(0),
+                offset: 0.into()
+            }),
+            InstructionData::StackLoad {
+                opcode: Opcode::StackLoad,
+                stack_slot: StackSlot::from_u32(1),
+                offset: 0.into()
+            },
+        );
+
+        // Mapping `DynamicStackSlot`s.
+        assert_eq!(
+            map(InstructionData::DynamicStackLoad {
+                opcode: Opcode::DynamicStackLoad,
+                dynamic_stack_slot: DynamicStackSlot::from_u32(0),
+            }),
+            InstructionData::DynamicStackLoad {
+                opcode: Opcode::DynamicStackLoad,
+                dynamic_stack_slot: DynamicStackSlot::from_u32(1),
+            },
+        );
+
+        // Mapping `Constant`s
+        assert_eq!(
+            map(InstructionData::UnaryConst {
+                opcode: ir::Opcode::Vconst,
+                constant_handle: ir::Constant::from_u32(2)
+            }),
+            InstructionData::UnaryConst {
+                opcode: ir::Opcode::Vconst,
+                constant_handle: ir::Constant::from_u32(3)
+            },
+        );
+
+        // Mapping `Immediate`s
+        assert_eq!(
+            map(InstructionData::Shuffle {
+                opcode: ir::Opcode::Shuffle,
+                args: [Value::from_u32(0), Value::from_u32(1)],
+                imm: ir::Immediate::from_u32(41),
+            }),
+            InstructionData::Shuffle {
+                opcode: ir::Opcode::Shuffle,
+                args: [Value::from_u32(1), Value::from_u32(2)],
+                imm: ir::Immediate::from_u32(42),
+            },
+        );
     }
 }

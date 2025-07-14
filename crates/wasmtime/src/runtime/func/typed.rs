@@ -101,11 +101,6 @@ where
             "must use `call_async` with async stores"
         );
 
-        #[cfg(feature = "gc")]
-        if Self::need_gc_before_call_raw(store.0, &params) {
-            store.gc(None);
-        }
-
         let func = self.func.vm_func_ref(store.0);
         unsafe { Self::call_raw(&mut store, &self.ty, func, params) }
     }
@@ -143,11 +138,6 @@ where
             "must use `call` with non-async stores"
         );
 
-        #[cfg(feature = "gc")]
-        if Self::need_gc_before_call_raw(store.0, &params) {
-            store.gc_async(None).await?;
-        }
-
         store
             .on_fiber(|store| {
                 let func = self.func.vm_func_ref(store.0);
@@ -156,31 +146,11 @@ where
             .await?
     }
 
-    #[inline]
-    #[cfg(feature = "gc")]
-    pub(crate) fn need_gc_before_call_raw(_store: &StoreOpaque, _params: &Params) -> bool {
-        {
-            // See the comment in `Func::call_impl_check_args`.
-            let num_gc_refs = _params.vmgcref_pointing_to_object_count();
-            if let Some(num_gc_refs) = core::num::NonZeroUsize::new(num_gc_refs) {
-                return _store
-                    .unwrap_gc_store()
-                    .gc_heap
-                    .need_gc_before_entering_wasm(num_gc_refs);
-            }
-        }
-
-        false
-    }
-
     /// Do a raw call of a typed function.
     ///
     /// # Safety
     ///
     /// `func` must be of the given type.
-    ///
-    /// If `Self::need_gc_before_call_raw`, then the caller must have done a GC
-    /// just before calling this method.
     pub(crate) unsafe fn call_raw<T>(
         store: &mut StoreContextMut<'_, T>,
         ty: &FuncType,
@@ -691,7 +661,7 @@ where
 
 macro_rules! impl_wasm_params {
     ($n:tt $($t:ident)*) => {
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t: WasmTy,)*> WasmParams for ($($t,)*) {
             type ValRawStorage = [ValRaw; $n];
 
@@ -783,11 +753,11 @@ unsafe impl<T: WasmTy> WasmResults for T {
 
 macro_rules! impl_wasm_results {
     ($n:tt $($t:ident)*) => {
-        #[allow(non_snake_case, unused_variables)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t: WasmTy,)*> WasmResults for ($($t,)*) {
-            unsafe fn load(store: &mut AutoAssertNoGc<'_>, abi: &Self::ValRawStorage) -> Self {
+            unsafe fn load(_store: &mut AutoAssertNoGc<'_>, abi: &Self::ValRawStorage) -> Self {
                 let [$($t,)*] = abi;
-                ($($t::load(store, $t),)*)
+                ($($t::load(_store, $t),)*)
             }
         }
     };

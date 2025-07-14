@@ -87,7 +87,7 @@ where
     K: Clone,
 {
     /// Creates an empty `ScopedHashMap`.
-    #[allow(dead_code)] // Used in testing.
+    #[cfg(test)]
     pub fn new() -> Self {
         Self::with_capacity(16)
     }

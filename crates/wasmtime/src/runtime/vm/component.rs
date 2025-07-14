@@ -25,16 +25,23 @@ use core::ptr::NonNull;
 use wasmtime_environ::component::*;
 use wasmtime_environ::{DefinedTableIndex, HostPtr, PrimaryMap, VMSharedTypeIndex};
 
-#[allow(clippy::cast_possible_truncation)] // it's intended this is truncated on
-// 32-bit platforms
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "it's intended this is truncated on 32-bit platforms"
+)]
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
 mod libcalls;
 mod resources;
 
+#[cfg(feature = "component-model-async")]
+pub use self::resources::CallContext;
 pub use self::resources::{
     CallContexts, ResourceTable, ResourceTables, TypedResource, TypedResourceIndex,
 };
+
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent;
 
 /// Runtime representation of a component instance and all state necessary for
 /// the instance itself.
@@ -76,6 +83,11 @@ pub struct ComponentInstance {
     /// This is paired with other information to create a `ResourceTables` which
     /// is how this field is manipulated.
     instance_resource_tables: PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
+
+    /// State related to async for this component, e.g. futures, streams, tasks,
+    /// etc.
+    #[cfg(feature = "component-model-async")]
+    concurrent_state: concurrent::ConcurrentState,
 
     /// What all compile-time-identified core instances are mapped to within the
     /// `Store` that this component belongs to.
@@ -253,6 +265,7 @@ impl ComponentInstance {
         for _ in 0..num_instances {
             instance_resource_tables.push(ResourceTable::default());
         }
+
         let mut ret = OwnedInstance::new(ComponentInstance {
             id,
             offsets,
@@ -269,6 +282,8 @@ impl ComponentInstance {
             imports: imports.clone(),
             store: VMStoreRawPtr(store),
             post_return_arg: None,
+            #[cfg(feature = "component-model-async")]
+            concurrent_state: concurrent::ConcurrentState::new(component),
             vmctx: OwnedVMContext::new(),
         });
         unsafe {
@@ -327,6 +342,18 @@ impl ComponentInstance {
     pub fn runtime_realloc(&self, idx: RuntimeReallocIndex) -> NonNull<VMFuncRef> {
         unsafe {
             let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_realloc(idx));
+            debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
+            ret.as_non_null()
+        }
+    }
+
+    /// Returns the async callback pointer corresponding to the index provided.
+    ///
+    /// This can only be called after `idx` has been initialized at runtime
+    /// during the instantiation process of a component.
+    pub fn runtime_callback(&self, idx: RuntimeCallbackIndex) -> NonNull<VMFuncRef> {
+        unsafe {
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_callback(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
             ret.as_non_null()
         }
@@ -771,6 +798,13 @@ impl ComponentInstance {
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().post_return_arg }
     }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_state_mut(self: Pin<&mut Self>) -> &mut concurrent::ConcurrentState {
+        // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
+        // the map returned.
+        unsafe { &mut self.get_unchecked_mut().concurrent_state }
+    }
 }
 
 // SAFETY: `layout` should describe this accurately and `OwnedVMContext` is the
@@ -831,12 +865,10 @@ impl VMOpaqueContext {
     }
 }
 
-#[allow(missing_docs)]
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct InstanceFlags(SendSyncPtr<VMGlobalDefinition>);
 
-#[allow(missing_docs)]
 impl InstanceFlags {
     /// Wraps the given pointer as an `InstanceFlags`
     ///

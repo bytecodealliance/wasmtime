@@ -26,8 +26,8 @@
 ;; @0024                               v8 = load.i64 notrap aligned readonly can_move v65+24
 ;; @0024                               v7 = uextend.i64 v2
 ;; @0024                               v9 = iadd v8, v7
-;; @0024                               v10 = iconst.i64 16
-;; @0024                               v11 = iadd v9, v10  ; v10 = 16
+;; @0024                               v10 = iconst.i64 24
+;; @0024                               v11 = iadd v9, v10  ; v10 = 24
 ;; @0024                               v12 = load.i32 notrap aligned readonly v11
 ;; @0024                               v13 = icmp ult v3, v12
 ;; @0024                               trapz v13, user17
@@ -39,13 +39,13 @@
 ;; @0024                               trapnz v17, user1
 ;;                                     v77 = iconst.i32 3
 ;;                                     v78 = ishl v12, v77  ; v77 = 3
-;; @0024                               v19 = iconst.i32 24
-;; @0024                               v20 = uadd_overflow_trap v78, v19, user1  ; v19 = 24
+;; @0024                               v19 = iconst.i32 32
+;; @0024                               v20 = uadd_overflow_trap v78, v19, user1  ; v19 = 32
 ;; @0024                               v24 = uadd_overflow_trap v2, v20, user1
 ;; @0024                               v25 = uextend.i64 v24
 ;; @0024                               v27 = iadd v8, v25
 ;;                                     v84 = ishl v3, v77  ; v77 = 3
-;; @0024                               v23 = iadd v84, v19  ; v19 = 24
+;; @0024                               v23 = iadd v84, v19  ; v19 = 32
 ;; @0024                               v28 = isub v20, v23
 ;; @0024                               v29 = uextend.i64 v28
 ;; @0024                               v30 = isub v27, v29
@@ -53,7 +53,7 @@
 ;; @002b                               v38 = icmp ult v4, v12
 ;; @002b                               trapz v38, user17
 ;;                                     v86 = ishl v4, v77  ; v77 = 3
-;; @002b                               v48 = iadd v86, v19  ; v19 = 24
+;; @002b                               v48 = iadd v86, v19  ; v19 = 32
 ;; @002b                               v53 = isub v20, v48
 ;; @002b                               v54 = uextend.i64 v53
 ;; @002b                               v55 = isub v27, v54

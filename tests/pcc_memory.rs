@@ -79,8 +79,8 @@ mod pcc_memory_tests {
                 for guard_size in [2 * GIB] {
                     for enable_spectre in [true /* not yet supported by PCC: false */] {
                         for _memory_bits in [32 /* not yet supported by PCC: 64 */] {
-                            log::trace!("test:\n{}\n", test);
-                            log::trace!("static {:x} guard {:x}", memory_reservation, guard_size);
+                            log::trace!("test:\n{test}\n");
+                            log::trace!("static {memory_reservation:x} guard {guard_size:x}");
                             let mut cfg = Config::new();
                             cfg.memory_reservation(memory_reservation);
                             cfg.memory_guard_size(guard_size);

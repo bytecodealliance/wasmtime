@@ -179,7 +179,10 @@ impl Table {
                     Some(Ref::null(self._ty(&store).element().heap_type()))
                 }
 
-                #[cfg_attr(not(feature = "gc"), allow(unreachable_code, unused_variables))]
+                #[cfg_attr(
+                    not(feature = "gc"),
+                    expect(unreachable_code, unused_variables, reason = "definitions cfg'd off")
+                )]
                 runtime::TableElement::GcRef(Some(x)) => {
                     match self._ty(&store).element().heap_type().top() {
                         HeapType::Any => {
@@ -452,7 +455,10 @@ impl Table {
     /// Even if the same underlying table definition is added to the
     /// `StoreData` multiple times and becomes multiple `wasmtime::Table`s,
     /// this hash key will be consistent across all of these tables.
-    #[allow(dead_code)] // Not used yet, but added for consistency.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Not used yet, but added for consistency")
+    )]
     pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<'_> {
         store[self.instance].table_ptr(self.index).as_ptr().addr()
     }

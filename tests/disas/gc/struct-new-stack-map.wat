@@ -29,7 +29,7 @@
 ;;       movl    %ecx, (%r14)
 ;;       movl    $0xb0000000, %esi
 ;;       xorl    %edx, %edx
-;;       movl    $0x20, %ecx
+;;       movl    $0x28, %ecx
 ;;       movl    $8, %r8d
 ;;       movq    %rdi, %r13
 ;;       callq   0x15f
@@ -39,9 +39,9 @@
 ;;       movq    %rax, %r10
 ;;       movl    %r10d, %r9d
 ;;       movdqu  8(%rsp), %xmm0
-;;       movss   %xmm0, 0x10(%r8, %r9)
+;;       movss   %xmm0, 0x18(%r8, %r9)
 ;;       movq    %r12, %rdx
-;;       movb    %dl, 0x14(%r8, %r9)
+;;       movb    %dl, 0x1c(%r8, %r9)
 ;;       movl    (%r14), %r11d
 ;;       movq    %r11, %rdx
 ;;       andl    $1, %edx
@@ -55,7 +55,7 @@
 ;;       leaq    (%r8, %rcx), %rax
 ;;       addq    $1, 8(%r8, %rcx)
 ;;       movl    (%r14), %edx
-;;       movl    %edx, 0x18(%r8, %r9)
+;;       movl    %edx, 0x20(%r8, %r9)
 ;;       movq    %r10, %rax
 ;;       movq    0x20(%rsp), %r12
 ;;       movq    0x28(%rsp), %r13

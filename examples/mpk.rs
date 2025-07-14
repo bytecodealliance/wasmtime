@@ -41,7 +41,7 @@ use wasmtime::*;
 fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
-    info!("{:?}", args);
+    info!("{args:?}");
 
     let without_mpk = probe_engine_size(&args, MpkEnabled::Disable)?;
     println!("without MPK:\t{}", without_mpk.to_string());
@@ -101,7 +101,7 @@ fn probe_engine_size(args: &Args, mpk: MpkEnabled) -> Result<Pool> {
                 search.record(true)
             }
             Err(e) => {
-                warn!("failed engine allocation, continuing search: {:?}", e);
+                warn!("failed engine allocation, continuing search: {e:?}");
                 search.record(false)
             }
         }
@@ -210,10 +210,7 @@ fn build_engine(args: &Args, num_memories: u32, enable_mpk: MpkEnabled) -> Resul
     engine.increment_epoch();
 
     let mapped_bytes = mapped_bytes_after - mapped_bytes_before;
-    info!(
-        "{}-slot pool ({:?}): {} bytes mapped",
-        num_memories, enable_mpk, mapped_bytes
-    );
+    info!("{num_memories}-slot pool ({enable_mpk:?}): {mapped_bytes} bytes mapped");
     Ok(mapped_bytes)
 }
 

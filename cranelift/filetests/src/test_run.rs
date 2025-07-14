@@ -180,7 +180,7 @@ fn run_test(
 ) -> anyhow::Result<()> {
     for comment in context.details.comments.iter() {
         if let Some(command) = parse_run_command(comment.text, &func.signature)? {
-            trace!("Parsed run command: {}", command);
+            trace!("Parsed run command: {command}");
 
             command
                 .run(|_, run_args| {
@@ -237,7 +237,7 @@ impl SubTest for TestRun {
         // Check that the host machine can run this test case (i.e. has all extensions)
         let host_isa = build_host_isa(true, flags.clone(), vec![]).ok();
         if let Err(e) = is_isa_compatible(file_path, host_isa.as_deref(), isa.unwrap()) {
-            log::info!("{}", e);
+            log::info!("{e}");
             return Ok(());
         }
 

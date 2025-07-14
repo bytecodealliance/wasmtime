@@ -160,7 +160,7 @@ fn worker_thread(
                     });
 
                 if let Err(ref msg) = result {
-                    error!("FAIL: {}", msg);
+                    error!("FAIL: {msg}");
                 }
 
                 replies.send(Reply::Done { jobid, result }).unwrap();

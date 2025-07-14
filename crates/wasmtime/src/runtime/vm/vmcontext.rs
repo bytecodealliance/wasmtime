@@ -179,6 +179,14 @@ mod test_vmtable {
             offset_of!(VMTableImport, from),
             usize::from(offsets.vmtable_import_from())
         );
+        assert_eq!(
+            offset_of!(VMTableImport, vmctx),
+            usize::from(offsets.vmtable_import_vmctx())
+        );
+        assert_eq!(
+            offset_of!(VMTableImport, index),
+            usize::from(offsets.vmtable_import_index())
+        );
     }
 
     #[test]
@@ -233,6 +241,14 @@ mod test_vmmemory_import {
         assert_eq!(
             offset_of!(VMMemoryImport, from),
             usize::from(offsets.vmmemory_import_from())
+        );
+        assert_eq!(
+            offset_of!(VMMemoryImport, vmctx),
+            usize::from(offsets.vmmemory_import_vmctx())
+        );
+        assert_eq!(
+            offset_of!(VMMemoryImport, index),
+            usize::from(offsets.vmmemory_import_index())
         );
     }
 }
@@ -372,12 +388,14 @@ impl VMMemoryDefinition {
     /// `current_length` potentially smaller than what some other thread
     /// observes. Since Wasm memory only grows, this under-estimation may be
     /// acceptable in certain cases.
+    #[inline]
     pub fn current_length(&self) -> usize {
         self.current_length.load(Ordering::Relaxed)
     }
 
     /// Return a copy of the [`VMMemoryDefinition`] using the relaxed value of
     /// `current_length`; see [`VMMemoryDefinition::current_length()`].
+    #[inline]
     pub unsafe fn load(ptr: *mut Self) -> Self {
         let other = &*ptr;
         VMMemoryDefinition {
@@ -969,12 +987,10 @@ macro_rules! define_builtin_array {
     ) => {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
-        ///
-        /// Ignore improper ctypes to permit `__m128i` on x86_64.
         #[repr(C)]
+        #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
         pub struct VMBuiltinFunctionsArray {
             $(
-                #[allow(improper_ctypes_definitions)]
                 $name: unsafe extern "C" fn(
                     $(define_builtin_array!(@ty $param)),*
                 ) $( -> define_builtin_array!(@ty $result))?,
@@ -982,7 +998,6 @@ macro_rules! define_builtin_array {
         }
 
         impl VMBuiltinFunctionsArray {
-            #[allow(unused_doc_comments)]
             pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
                 $(
                     $name: crate::runtime::vm::libcalls::raw::$name,
@@ -1220,7 +1235,9 @@ mod test_vmstore_context {
 /// allocated at runtime.
 #[derive(Debug)]
 #[repr(C, align(16))] // align 16 since globals are aligned to that and contained inside
-pub struct VMContext;
+pub struct VMContext {
+    _magic: u32,
+}
 
 impl VMContext {
     /// Helper function to cast between context types using a debug assertion to
@@ -1257,7 +1274,6 @@ impl VMContext {
 /// instead use `Val` where possible. An important note about this union is that
 /// fields are all stored in little-endian format, regardless of the endianness
 /// of the host system.
-#[allow(missing_docs)]
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union ValRaw {

@@ -284,7 +284,7 @@
 // here to get warnings in all configurations of Wasmtime.
 #![cfg_attr(
     any(not(feature = "runtime"), not(feature = "std")),
-    allow(dead_code, unused_imports)
+    expect(dead_code, unused_imports, reason = "list not burned down yet")
 )]
 // Allow broken links when the default features is disabled because most of our
 // documentation is written for the "one build" of the `main` branch which has
@@ -292,10 +292,9 @@
 // and will prevent the doc build from failing.
 #![cfg_attr(feature = "default", warn(rustdoc::broken_intra_doc_links))]
 #![no_std]
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 #![expect(unsafe_op_in_unsafe_fn, reason = "crate isn't migrated yet")]
 
-#[cfg(any(feature = "std", unix, windows))]
+#[cfg(feature = "std")]
 #[macro_use]
 extern crate std;
 extern crate alloc;
@@ -333,7 +332,7 @@ pub(crate) use hashbrown::{hash_map, hash_set};
 #[macro_export]
 macro_rules! map_maybe_uninit {
     ($maybe_uninit:ident $($field:tt)*) => ({
-        #[allow(unused_unsafe)]
+        #[allow(unused_unsafe, reason = "macro-generated code")]
         {
             unsafe {
                 use $crate::MaybeUninitExt;
@@ -391,7 +390,6 @@ mod sync_std;
 #[cfg(feature = "std")]
 use sync_std as sync;
 
-#[cfg_attr(feature = "std", allow(dead_code))]
 mod sync_nostd;
 #[cfg(not(feature = "std"))]
 use sync_nostd as sync;

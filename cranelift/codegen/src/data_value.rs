@@ -9,7 +9,7 @@ use core::fmt::{self, Display, Formatter};
 /// that would be referred to by a [Value].
 ///
 /// [Value]: crate::ir::Value
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing variants")]
 #[derive(Clone, Debug, PartialOrd)]
 pub enum DataValue {
     I8(i8),
@@ -282,7 +282,7 @@ impl DataValue {
 
 /// Record failures to cast [DataValue].
 #[derive(Debug, PartialEq)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum DataValueCastFailure {
     TryInto(Type, Type),
     FromInteger(i128, Type),

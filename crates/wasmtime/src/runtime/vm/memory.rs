@@ -432,6 +432,11 @@ impl Memory {
         }
     }
 
+    /// Is this a shared memory?
+    pub fn is_shared_memory(&self) -> bool {
+        matches!(self, Memory::Shared(_))
+    }
+
     /// If the [Memory] is a [SharedMemory], unwrap it and return a clone to
     /// that shared memory.
     pub fn as_shared_memory(&mut self) -> Option<&mut SharedMemory> {

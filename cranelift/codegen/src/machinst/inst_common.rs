@@ -10,15 +10,7 @@ use crate::ir::Inst as IRInst;
 
 /// Identifier for a particular input of an instruction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct InsnInput {
+pub struct InsnInput {
     pub(crate) insn: IRInst,
     pub(crate) input: usize,
-}
-
-/// Identifier for a particular output of an instruction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(dead_code)]
-pub(crate) struct InsnOutput {
-    pub(crate) insn: IRInst,
-    pub(crate) output: usize,
 }

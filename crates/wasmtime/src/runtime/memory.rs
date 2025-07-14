@@ -603,7 +603,9 @@ impl Memory {
     /// ```
     pub fn grow(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut().0;
-        let mem = self.wasmtime_memory(store);
+        // FIXME(#11179) shouldn't use a raw pointer to work around the borrow
+        // checker here.
+        let mem: *mut _ = self.wasmtime_memory(store);
         unsafe {
             match (*mem).grow(delta, Some(store))? {
                 Some(size) => {
@@ -638,7 +640,10 @@ impl Memory {
         store.on_fiber(|store| self.grow(store, delta)).await?
     }
 
-    fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut crate::runtime::vm::Memory {
+    fn wasmtime_memory<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> &'a mut crate::runtime::vm::Memory {
         self.instance.get_mut(store).get_defined_memory(self.index)
     }
 
@@ -1031,17 +1036,20 @@ impl SharedMemory {
         wasmtime_export: crate::runtime::vm::ExportMemory,
         store: &StoreOpaque,
     ) -> Self {
-        #[cfg_attr(not(feature = "threads"), allow(unused_variables, unreachable_code))]
+        #[cfg_attr(
+            not(feature = "threads"),
+            expect(
+                unused_variables,
+                unreachable_code,
+                reason = "definitions cfg'd to dummy",
+            )
+        )]
         crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
-            let memory_index = handle.env_module().memory_index(wasmtime_export.index);
-            let page_size = handle.memory_page_size(memory_index);
-            debug_assert!(page_size.is_power_of_two());
-            let page_size_log2 = u8::try_from(page_size.ilog2()).unwrap();
+            let module = handle.env_module();
+            let memory_index = module.memory_index(wasmtime_export.index);
+            let page_size_log2 = module.memories[memory_index].page_size_log2;
 
-            let memory = handle
-                .get_defined_memory(wasmtime_export.index)
-                .as_mut()
-                .unwrap();
+            let memory = handle.get_defined_memory(wasmtime_export.index);
             match memory.as_shared_memory() {
                 Some(mem) => Self {
                     vm: mem.clone(),

@@ -10,8 +10,7 @@ struct TrampolineState<F> {
     func: F,
 
     // Need to keep our `VMSharedTypeIndex` registered in the engine.
-    #[allow(dead_code)]
-    sig: RegisteredType,
+    _sig: RegisteredType,
 }
 
 /// Shim to call a host-defined function that uses the array calling convention.
@@ -60,7 +59,7 @@ where
         Ok(VMArrayCallHostFuncContext::new(
             array_call,
             sig.index(),
-            Box::new(TrampolineState { func, sig }),
+            Box::new(TrampolineState { func, _sig: sig }),
         ))
     }
 }

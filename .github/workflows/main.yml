@@ -613,7 +613,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-2025]
+        os: [ubuntu-24.04, macos-15, windows-2025]
 
     steps:
     - uses: actions/checkout@v4

@@ -17,6 +17,10 @@ use wasmtime_environ::component::{
 };
 
 #[cfg(feature = "component-model-async")]
+use crate::component::concurrent::{self, PreparedCall};
+#[cfg(feature = "component-model-async")]
+use core::future::Future;
+#[cfg(feature = "component-model-async")]
 use core::pin::Pin;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
@@ -178,17 +182,71 @@ where
         params: Params,
     ) -> Result<Return>
     where
-        Params: Send + Sync,
-        Return: Send + Sync + 'static,
+        Return: 'static,
     {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "cannot use `call_async` when async support is not enabled on the config"
         );
-        store
-            .on_fiber(|store| self.call_impl(store, params))
-            .await?
+        #[cfg(feature = "component-model-async")]
+        {
+            use crate::component::concurrent::TaskId;
+            use crate::runtime::vm::SendSyncPtr;
+            use core::ptr::NonNull;
+
+            let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
+            let prepared =
+                self.prepare_call(store.as_context_mut(), false, false, move |cx, ty, dst| {
+                    // SAFETY: The goal here is to get `Params`, a non-`'static`
+                    // value, to live long enough to the lowering of the
+                    // parameters. We're guaranteed that `Params` lives in the
+                    // future of the outer function (we're in an `async fn`) so it'll
+                    // stay alive as long as the future itself. That is distinct,
+                    // for example, from the signature of `call_concurrent` below.
+                    //
+                    // Here a pointer to `Params` is smuggled to this location
+                    // through a `SendSyncPtr<u8>` to thwart the `'static` check
+                    // of rustc and the signature of `prepare_call`.
+                    //
+                    // Note the use of `RemoveOnDrop` in the code that follows
+                    // this closure, which ensures that the task will be removed
+                    // from the concurrent state to which it belongs when the
+                    // containing `Future` is dropped, thereby ensuring that
+                    // this closure will never be called if it hasn't already,
+                    // meaning it will never see a dangling pointer.
+                    let params = unsafe { ptr.cast::<Params>().as_ref() };
+                    Self::lower_args(cx, ty, dst, params)
+                })?;
+
+            struct RemoveOnDrop<'a, T: 'static> {
+                store: StoreContextMut<'a, T>,
+                task: TaskId,
+            }
+
+            impl<'a, T> Drop for RemoveOnDrop<'a, T> {
+                fn drop(&mut self) {
+                    self.task.remove(self.store.as_context_mut()).unwrap();
+                }
+            }
+
+            let mut wrapper = RemoveOnDrop {
+                store,
+                task: prepared.task_id(),
+            };
+
+            let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
+            self.func
+                .instance
+                .run(wrapper.store.as_context_mut(), result)
+                .await?
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            store
+                .on_fiber(|store| self.call_impl(store, params))
+                .await?
+        }
     }
 
     /// Start a concurrent call to this function.
@@ -196,29 +254,153 @@ where
     /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
-    /// instance.
+    /// instance.  In addition, the runtime will call the `post-return` function
+    /// (if any) automatically when the guest task completes -- no need to
+    /// explicitly call `Func::post_return` afterward.
     ///
     /// Note that the `Future` returned by this method will panic if polled or
     /// `.await`ed outside of the event loop of the component instance this
     /// function belongs to; use `Instance::run`, `Instance::run_with`, or
     /// `Instance::spawn` to poll it from within the event loop.  See
     /// [`Instance::run`] for examples.
+    //
+    // FIXME: this function should return `impl Future` but that forces
+    // capturing all type parameters in scope at this time. The future
+    // intentionally does not close over `store` but returning `impl Future`
+    // implicitly does so. In a future version of Rust maybe this limitation
+    // will be lifted? Maybe rust-lang/rust#130043. Unsure.
     #[cfg(feature = "component-model-async")]
     pub fn call_concurrent(
         self,
-        store: impl AsContextMut<Data: Send>,
+        mut store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + 'static>>
+    ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send>>
     where
-        Params: Send + Sync + 'static,
-        Return: Send + Sync + 'static,
+        Params: 'static,
+        Return: 'static,
     {
-        let _ = (self, store, params);
-        todo!()
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_concurrent` when async support is not enabled on the config"
+        );
+
+        let result = (|| {
+            let prepared =
+                self.prepare_call(store.as_context_mut(), true, true, move |cx, ty, dst| {
+                    Self::lower_args(cx, ty, dst, &params)
+                })?;
+            concurrent::queue_call(store, prepared)
+        })();
+
+        Box::pin(async move { result?.await })
+    }
+
+    fn lower_args<T>(
+        cx: &mut LowerContext<T>,
+        ty: InterfaceType,
+        dst: &mut [MaybeUninit<ValRaw>],
+        params: &Params,
+    ) -> Result<()> {
+        use crate::component::storage::slice_to_storage_mut;
+
+        if Params::flatten_count() <= MAX_FLAT_PARAMS {
+            // SAFETY: the safety of `slice_to_storage_mut` relies on
+            // `Params::Lower` being represented by a sequence of
+            // `ValRaw`, and that's a guarantee upheld by the `Lower`
+            // trait itself.
+            let dst: &mut MaybeUninit<Params::Lower> = unsafe { slice_to_storage_mut(dst) };
+            Self::lower_stack_args(cx, &params, ty, dst)
+        } else {
+            Self::lower_heap_args(cx, &params, ty, &mut dst[0])
+        }
+    }
+
+    /// Calls `concurrent::prepare_call` with monomorphized functions for
+    /// lowering the parameters and lifting the result according to the number
+    /// of core Wasm parameters and results in the signature of the function to
+    /// be called.
+    #[cfg(feature = "component-model-async")]
+    fn prepare_call<T>(
+        self,
+        store: StoreContextMut<'_, T>,
+        remove_task_automatically: bool,
+        call_post_return_automatically: bool,
+        lower: impl FnOnce(
+            &mut LowerContext<T>,
+            InterfaceType,
+            &mut [MaybeUninit<ValRaw>],
+        ) -> Result<()>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Result<PreparedCall<Return>>
+    where
+        Return: 'static,
+    {
+        use crate::component::storage::slice_to_storage;
+
+        let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
+            Params::flatten_count()
+        } else {
+            1
+        };
+        let max_results = if self.func.abi_async(store.0) {
+            MAX_FLAT_PARAMS
+        } else {
+            MAX_FLAT_RESULTS
+        };
+        concurrent::prepare_call(
+            store,
+            self.func,
+            param_count,
+            remove_task_automatically,
+            call_post_return_automatically,
+            move |func, store, params_out| {
+                func.with_lower_context(store, call_post_return_automatically, |cx, ty| {
+                    lower(cx, ty, params_out)
+                })
+            },
+            move |func, store, results| {
+                let result = if Return::flatten_count() <= max_results {
+                    func.with_lift_context(store, |cx, ty| {
+                        // SAFETY: Per the safety requiments documented for the
+                        // `ComponentType` trait, `Return::Lower` must be
+                        // compatible at the binary level with a `[ValRaw; N]`,
+                        // where `N` is `mem::size_of::<Return::Lower>() /
+                        // mem::size_of::<ValRaw>()`.  And since this function
+                        // is only used when `Return::flatten_count() <=
+                        // MAX_FLAT_RESULTS` and `MAX_FLAT_RESULTS == 1`, `N`
+                        // can only either be 0 or 1.
+                        //
+                        // See `ComponentInstance::exit_call` for where we use
+                        // the result count passed from
+                        // `wasmtime_environ::fact::trampoline`-generated code
+                        // to ensure the slice has the correct length, and also
+                        // `concurrent::start_call` for where we conservatively
+                        // use a slice length of 1 unconditionally.  Also note
+                        // that, as of this writing `slice_to_storage`
+                        // double-checks the slice length is sufficient.
+                        let results: &Return::Lower = unsafe { slice_to_storage(results) };
+                        Self::lift_stack_result(cx, ty, results)
+                    })?
+                } else {
+                    func.with_lift_context(store, |cx, ty| {
+                        Self::lift_heap_result(cx, ty, &results[0])
+                    })?
+                };
+                Ok(Box::new(result))
+            },
+        )
     }
 
     fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
-        let store = &mut store.as_context_mut();
+        let store = store.as_context_mut();
+
+        if self.func.abi_async(store.0) {
+            bail!("must enable the `component-model-async` feature to call async-lifted exports")
+        }
+
         // Note that this is in theory simpler than it might read at this time.
         // Here we're doing a runtime dispatch on the `flatten_count` for the
         // params/results to see whether they're inbounds. This creates 4 cases
@@ -229,35 +411,42 @@ where
         // space reserved for the params/results is always of the appropriate
         // size (as the params/results needed differ depending on the "flatten"
         // count)
-        if Params::flatten_count() <= MAX_FLAT_PARAMS {
-            if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                self.func.call_raw(
-                    store,
-                    &params,
-                    Self::lower_stack_args,
-                    Self::lift_stack_result,
-                )
-            } else {
-                self.func.call_raw(
-                    store,
-                    &params,
-                    Self::lower_stack_args,
-                    Self::lift_heap_result,
-                )
+        //
+        // SAFETY: the safety of these invocations of `call_raw` depends on the
+        // correctness of the ascription of the `LowerParams` and `LowerReturn`
+        // types on the `call_raw` function. That's upheld here through the
+        // safety requirements of `Lift` and `Lower` on `Params` and `Return` in
+        // combination with checking the various possible branches here and
+        // dispatching to appropriately typed functions.
+        unsafe {
+            // This type is used as `LowerParams` for `call_raw` which is either
+            // `Params::Lower` or `ValRaw` representing it's either on the stack
+            // or it's on the heap. This allocates 1 extra `ValRaw` on the stack
+            // if `Params` is empty and `Return` is also empty, but that's a
+            // reasonable enough price to pay for now given the current code
+            // organization.
+            #[derive(Copy, Clone)]
+            union Union<T: Copy, U: Copy> {
+                _a: T,
+                _b: U,
             }
-        } else {
+
             if Return::flatten_count() <= MAX_FLAT_RESULTS {
                 self.func.call_raw(
                     store,
-                    &params,
-                    Self::lower_heap_args,
+                    |cx, ty, dst: &mut MaybeUninit<Union<Params::Lower, ValRaw>>| {
+                        let dst = storage_as_slice_mut(dst);
+                        Self::lower_args(cx, ty, dst, &params)
+                    },
                     Self::lift_stack_result,
                 )
             } else {
                 self.func.call_raw(
                     store,
-                    &params,
-                    Self::lower_heap_args,
+                    |cx, ty, dst: &mut MaybeUninit<Union<Params::Lower, ValRaw>>| {
+                        let dst = storage_as_slice_mut(dst);
+                        Self::lower_args(cx, ty, dst, &params)
+                    },
                     Self::lift_heap_result,
                 )
             }
@@ -293,8 +482,6 @@ where
         ty: InterfaceType,
         dst: &mut MaybeUninit<ValRaw>,
     ) -> Result<()> {
-        assert!(Params::flatten_count() > MAX_FLAT_PARAMS);
-
         // Memory must exist via validation if the arguments are stored on the
         // heap, so we can create a `MemoryMut` at this point. Afterwards
         // `realloc` is used to allocate space for all the arguments and then
@@ -329,7 +516,6 @@ where
         ty: InterfaceType,
         dst: &Return::Lower,
     ) -> Result<Return> {
-        assert!(Return::flatten_count() <= MAX_FLAT_RESULTS);
         Return::linear_lift_from_flat(cx, ty, dst)
     }
 
@@ -422,7 +608,7 @@ pub unsafe trait ComponentNamedList: ComponentType {}
 /// [d-cm]: macro@crate::component::ComponentType
 /// [f-m]: crate::component::flags
 ///
-/// Rust standard library pointers such as `&T`, `Box<T>`, `Rc<T>`, and `Arc<T>`
+/// Rust standard library pointers such as `&T`, `Box<T>`, and `Arc<T>`
 /// additionally represent whatever type `T` represents in the component model.
 /// Note that types such as `record`, `variant`, `enum`, and `flags` are
 /// generated by the embedder at compile time. These macros derive
@@ -437,34 +623,60 @@ pub unsafe trait ComponentNamedList: ComponentType {}
 /// The contents of this trait are hidden as it's intended to be an
 /// implementation detail of Wasmtime. The contents of this trait are not
 /// covered by Wasmtime's stability guarantees.
-//
-// Note that this is an `unsafe` trait as `TypedFunc`'s safety heavily relies on
-// the correctness of the implementations of this trait. Some ways in which this
-// trait must be correct to be safe are:
-//
-// * The `Lower` associated type must be a `ValRaw` sequence. It doesn't have to
-//   literally be `[ValRaw; N]` but when laid out in memory it must be adjacent
-//   `ValRaw` values and have a multiple of the size of `ValRaw` and the same
-//   alignment.
-//
-// * The `lower` function must initialize the bits within `Lower` that are going
-//   to be read by the trampoline that's used to enter core wasm. A trampoline
-//   is passed `*mut Lower` and will read the canonical abi arguments in
-//   sequence, so all of the bits must be correctly initialized.
-//
-// * The `size` and `align` functions must be correct for this value stored in
-//   the canonical ABI. The `Cursor<T>` iteration of these bytes rely on this
-//   for correctness as they otherwise eschew bounds-checking.
-//
-// There are likely some other correctness issues which aren't documented as
-// well, this isn't intended to be an exhaustive list. It suffices to say,
-// though, that correctness bugs in this trait implementation are highly likely
-// to lead to security bugs, which again leads to the `unsafe` in the trait.
-//
-// Also note that this trait specifically is not sealed because we have a proc
-// macro that generates implementations of this trait for external types in a
-// `#[derive]`-like fashion.
-pub unsafe trait ComponentType {
+///
+/// # Safety
+///
+/// Note that this is an `unsafe` trait as `TypedFunc`'s safety heavily relies on
+/// the correctness of the implementations of this trait. Some ways in which this
+/// trait must be correct to be safe are:
+///
+/// * The `Lower` associated type must be a `ValRaw` sequence. It doesn't have to
+///   literally be `[ValRaw; N]` but when laid out in memory it must be adjacent
+///   `ValRaw` values and have a multiple of the size of `ValRaw` and the same
+///   alignment.
+///
+/// * The `lower` function must initialize the bits within `Lower` that are going
+///   to be read by the trampoline that's used to enter core wasm. A trampoline
+///   is passed `*mut Lower` and will read the canonical abi arguments in
+///   sequence, so all of the bits must be correctly initialized.
+///
+/// * The `size` and `align` functions must be correct for this value stored in
+///   the canonical ABI. The `Cursor<T>` iteration of these bytes rely on this
+///   for correctness as they otherwise eschew bounds-checking.
+///
+/// There are likely some other correctness issues which aren't documented as
+/// well, this isn't currently an exhaustive list. It suffices to say, though,
+/// that correctness bugs in this trait implementation are highly likely to
+/// lead to security bugs, which again leads to the `unsafe` in the trait.
+///
+/// Note that this trait specifically is not sealed because `bindgen!`-generated
+/// types must be able to implement this trait using a `#[derive]` macro. For
+/// users it's recommended to not implement this trait manually given the
+/// non-exhaustive list of safety requirements that must be upheld. This trait
+/// is implemented at your own risk if you do so.
+///
+/// # Send and Sync
+///
+/// While on the topic of safety it's worth discussing the `Send` and `Sync`
+/// bounds here as well. These bounds might naively seem like they shouldn't be
+/// required for all component types as they're host-level types not guest-level
+/// types persisted anywhere. Various subtleties lead to these bounds, however:
+///
+/// * Fibers require that all stack-local variables are `Send` and `Sync` for
+///   fibers themselves to be send/sync. Unfortunately we have no help from the
+///   compiler on this one so it's up to Wasmtime's discipline to maintain this.
+///   One instance of this is that return values are placed on the stack as
+///   they're lowered into guest memory. This lowering operation can involve
+///   malloc and context switches, so return values must be Send/Sync.
+///
+/// * In the implementation of component model async it's not uncommon for types
+///   to be "buffered" in the store temporarily. For example parameters might
+///   reside in a store temporarily while wasm has backpressure turned on.
+///
+/// Overall it's generally easiest to require `Send` and `Sync` for all
+/// component types. There additionally aren't known use case for non-`Send` or
+/// non-`Sync` types at this time.
+pub unsafe trait ComponentType: Send + Sync {
     /// Representation of the "lowered" form of this component value.
     ///
     /// Lowerings lower into core wasm values which are represented by `ValRaw`.
@@ -670,10 +882,6 @@ pub unsafe trait Lift: Sized + ComponentType {
     ) -> Result<Self>;
 
     /// Converts `list` into a `Vec<T>`, used in `Lift for Vec<T>`.
-    ///
-    /// This is primarily here to get overridden for implementations of integers
-    /// which can avoid some extra fluff and use a pattern that's more easily
-    /// optimizable by LLVM.
     #[doc(hidden)]
     fn linear_lift_list_from_memory(
         cx: &mut LiftContext<'_>,
@@ -682,9 +890,29 @@ pub unsafe trait Lift: Sized + ComponentType {
     where
         Self: Sized,
     {
-        (0..list.len)
-            .map(|index| list.get_from_store(cx, index).unwrap())
-            .collect()
+        let mut dst = Vec::with_capacity(list.len);
+        Self::linear_lift_into_from_memory(cx, list, &mut dst)?;
+        Ok(dst)
+    }
+
+    /// Load no more than `max_count` items from `list` into `dst`.
+    ///
+    /// This is primarily here to get overridden for implementations of integers
+    /// which can avoid some extra fluff and use a pattern that's more easily
+    /// optimizable by LLVM.
+    #[doc(hidden)]
+    fn linear_lift_into_from_memory(
+        cx: &mut LiftContext<'_>,
+        list: &WasmList<Self>,
+        dst: &mut impl Extend<Self>,
+    ) -> Result<()>
+    where
+        Self: Sized,
+    {
+        for i in 0..list.len {
+            dst.extend(Some(list.get_from_store(cx, i).unwrap()?));
+        }
+        Ok(())
     }
 }
 
@@ -710,7 +938,6 @@ macro_rules! forward_type_impls {
 forward_type_impls! {
     (T: ComponentType + ?Sized) &'_ T => T,
     (T: ComponentType + ?Sized) Box<T> => T,
-    (T: ComponentType + ?Sized) alloc::rc::Rc<T> => T,
     (T: ComponentType + ?Sized) alloc::sync::Arc<T> => T,
     () String => str,
     (T: ComponentType) Vec<T> => [T],
@@ -743,7 +970,6 @@ macro_rules! forward_lowers {
 forward_lowers! {
     (T: Lower + ?Sized) &'_ T => T,
     (T: Lower + ?Sized) Box<T> => T,
-    (T: Lower + ?Sized) alloc::rc::Rc<T> => T,
     (T: Lower + ?Sized) alloc::sync::Arc<T> => T,
     () String => str,
     (T: Lower) Vec<T> => [T],
@@ -767,7 +993,6 @@ macro_rules! forward_string_lifts {
 
 forward_string_lifts! {
     Box<str>,
-    alloc::rc::Rc<str>,
     alloc::sync::Arc<str>,
     String,
 }
@@ -790,7 +1015,6 @@ macro_rules! forward_list_lifts {
 
 forward_list_lifts! {
     Box<[T]>,
-    alloc::rc::Rc<[T]>,
     alloc::sync::Arc<[T]>,
     Vec<T>,
 }
@@ -814,7 +1038,7 @@ macro_rules! integers {
 
         unsafe impl Lower for $primitive {
             #[inline]
-            #[allow(trivial_numeric_casts)]
+            #[allow(trivial_numeric_casts, reason = "macro-generated code")]
             fn linear_lower_to_flat<T>(
                 &self,
                 _cx: &mut LowerContext<'_, T>,
@@ -879,7 +1103,11 @@ macro_rules! integers {
 
         unsafe impl Lift for $primitive {
             #[inline]
-            #[allow(trivial_numeric_casts, clippy::cast_possible_truncation)]
+            #[allow(
+                trivial_numeric_casts,
+                clippy::cast_possible_truncation,
+                reason = "macro-generated code"
+            )]
             fn linear_lift_from_flat(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 Ok(src.$get() as $primitive)
@@ -892,13 +1120,18 @@ macro_rules! integers {
                 Ok($primitive::from_le_bytes(bytes.try_into().unwrap()))
             }
 
-            fn linear_lift_list_from_memory(cx: &mut LiftContext<'_>, list: &WasmList<Self>) -> Result<Vec<Self>> {
-                Ok(
-                    list._as_le_slice(cx.memory())
-                        .iter()
-                        .map(|i| Self::from_le(*i))
-                        .collect(),
-                )
+            fn linear_lift_into_from_memory(
+                cx: &mut LiftContext<'_>,
+                list: &WasmList<Self>,
+                dst: &mut impl Extend<Self>,
+            ) -> Result<()>
+            where
+                Self: Sized,
+            {
+                dst.extend(list._as_le_slice(cx.memory())
+                           .iter()
+                           .map(|i| Self::from_le(*i)));
+                Ok(())
             }
         }
     )*)
@@ -1368,7 +1601,7 @@ pub struct WasmStr {
 }
 
 impl WasmStr {
-    fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
+    pub(crate) fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
         let byte_len = match cx.options.string_encoding() {
             StringEncoding::Utf8 => Some(len),
             StringEncoding::Utf16 => len.checked_mul(2),
@@ -1421,7 +1654,7 @@ impl WasmStr {
         self.to_str_from_memory(memory)
     }
 
-    fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
+    pub(crate) fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         match self.options.string_encoding() {
             StringEncoding::Utf8 => self.decode_utf8(memory),
             StringEncoding::Utf16 => self.decode_utf16(memory, self.len),
@@ -1627,7 +1860,7 @@ pub struct WasmList<T> {
 }
 
 impl<T: Lift> WasmList<T> {
-    fn new(
+    pub(crate) fn new(
         ptr: usize,
         len: usize,
         cx: &mut LiftContext<'_>,
@@ -2191,7 +2424,7 @@ pub unsafe fn lower_payload<P, T>(
     let typed_len = storage_as_slice(typed).len();
     let payload = storage_as_slice_mut(payload);
     for slot in payload[typed_len..].iter_mut() {
-        *slot = ValRaw::u64(0);
+        slot.write(ValRaw::u64(0));
     }
     Ok(())
 }
@@ -2448,7 +2681,7 @@ where
 ///
 /// Uses default type parameters to have fields be zero-sized and not present
 /// in memory for smaller tuple values.
-#[allow(non_snake_case)]
+#[expect(non_snake_case, reason = "more amenable to macro-generated code")]
 #[doc(hidden)]
 #[derive(Clone, Copy)]
 #[repr(C)]
@@ -2494,7 +2727,7 @@ pub struct TupleLower<
 
 macro_rules! impl_component_ty_for_tuples {
     ($n:tt $($t:ident)*) => {
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t,)*> ComponentType for ($($t,)*)
             where $($t: ComponentType),*
         {
@@ -2521,7 +2754,7 @@ macro_rules! impl_component_ty_for_tuples {
             }
         }
 
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t,)*> Lower for ($($t,)*)
             where $($t: Lower),*
         {
@@ -2565,7 +2798,7 @@ macro_rules! impl_component_ty_for_tuples {
             }
         }
 
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t,)*> Lift for ($($t,)*)
             where $($t: Lift),*
         {
@@ -2602,7 +2835,7 @@ macro_rules! impl_component_ty_for_tuples {
             }
         }
 
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t,)*> ComponentNamedList for ($($t,)*)
             where $($t: ComponentType),*
         {}

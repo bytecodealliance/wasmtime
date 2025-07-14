@@ -610,12 +610,15 @@ async fn drop_suspended_async_hook() -> Result<()> {
         times: u32,
     }
 
-    impl<F: Future + Unpin> Future for PollNTimes<F> {
+    impl<F: Future + Unpin> Future for PollNTimes<F>
+    where
+        F::Output: std::fmt::Debug,
+    {
         type Output = ();
         fn poll(mut self: Pin<&mut Self>, task: &mut task::Context<'_>) -> Poll<()> {
             for i in 0..self.times {
                 match Pin::new(&mut self.future).poll(task) {
-                    Poll::Ready(_) => panic!("future should not be ready at {i}"),
+                    Poll::Ready(v) => panic!("future should not be ready at {i}; result is {v:?}"),
                     Poll::Pending => {}
                 }
             }

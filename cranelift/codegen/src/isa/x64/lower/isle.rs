@@ -16,10 +16,10 @@ use crate::ir::{
 };
 use crate::isa::x64::X64Backend;
 use crate::isa::x64::inst::{ReturnCallInfo, args::*, regs};
-use crate::isa::x64::lower::emit_vm_call;
+use crate::isa::x64::lower::{InsnInput, emit_vm_call};
 use crate::machinst::isle::*;
 use crate::machinst::{
-    ArgPair, CallArgList, CallInfo, CallRetList, InsnInput, InstOutput, MachInst, VCodeConstant,
+    ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, MachInst, VCodeConstant,
     VCodeConstantData,
 };
 use alloc::vec::Vec;

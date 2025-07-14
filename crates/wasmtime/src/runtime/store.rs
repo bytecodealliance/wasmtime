@@ -79,6 +79,8 @@
 use crate::RootSet;
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentStoreData;
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent;
 #[cfg(feature = "async")]
 use crate::fiber;
 use crate::module::RegisteredModuleId;
@@ -240,9 +242,9 @@ pub struct StoreInner<T: 'static> {
 }
 
 enum ResourceLimiterInner<T> {
-    Sync(Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync>),
+    Sync(Box<dyn (FnMut(&mut T) -> &mut dyn crate::ResourceLimiter) + Send + Sync>),
     #[cfg(feature = "async")]
-    Async(Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync) + Send + Sync>),
+    Async(Box<dyn (FnMut(&mut T) -> &mut dyn crate::ResourceLimiterAsync) + Send + Sync>),
 }
 
 enum CallHookInner<T: 'static> {
@@ -250,7 +252,10 @@ enum CallHookInner<T: 'static> {
     Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
     #[cfg(all(feature = "async", feature = "call-hook"))]
     Async(Box<dyn CallHookHandler<T> + Send + Sync>),
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "forcing, regardless of cfg, the type param to be used"
+    )]
     ForceTypeParameterToBeUsed {
         uninhabited: Uninhabited,
         _marker: marker::PhantomData<T>,
@@ -395,6 +400,9 @@ pub struct StoreOpaque {
     component_calls: vm::component::CallContexts,
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
+
+    #[cfg(feature = "component-model-async")]
+    concurrent_async_state: concurrent::AsyncState,
 
     /// State related to the executor of wasm code.
     ///
@@ -591,6 +599,8 @@ impl<T> Store<T> {
             #[cfg(feature = "component-model")]
             host_resource_data: Default::default(),
             executor: Executor::new(engine),
+            #[cfg(feature = "component-model-async")]
+            concurrent_async_state: Default::default(),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -750,7 +760,7 @@ impl<T> Store<T> {
     /// [`ResourceLimiter`]: crate::ResourceLimiter
     pub fn limiter(
         &mut self,
-        mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync + 'static,
+        mut limiter: impl (FnMut(&mut T) -> &mut dyn crate::ResourceLimiter) + Send + Sync + 'static,
     ) {
         // Apply the limits on instances, tables, and memory given by the limiter:
         let inner = &mut self.inner;
@@ -1103,7 +1113,6 @@ impl<T> StoreInner<T> {
 
         // Temporarily take the configured behavior to avoid mutably borrowing
         // multiple times.
-        #[cfg_attr(not(feature = "call-hook"), allow(unreachable_patterns))]
         if let Some(mut call_hook) = self.call_hook.take() {
             let result = self.invoke_call_hook(&mut call_hook, s);
             self.call_hook = Some(call_hook);
@@ -1281,6 +1290,7 @@ impl StoreOpaque {
     /// Note that if you have a `StoreInstanceId` you should use
     /// `StoreInstanceId::get` instead. This assumes that `id` has been
     /// validated to already belong to this store.
+    #[inline]
     pub fn instance(&self, id: InstanceId) -> &vm::Instance {
         self.instances[id].handle.get()
     }
@@ -1290,8 +1300,23 @@ impl StoreOpaque {
     /// Note that if you have a `StoreInstanceId` you should use
     /// `StoreInstanceId::get_mut` instead. This assumes that `id` has been
     /// validated to already belong to this store.
+    #[inline]
     pub fn instance_mut(&mut self, id: InstanceId) -> Pin<&mut vm::Instance> {
         self.instances[id].handle.get_mut()
+    }
+
+    /// Pair of `Self::gc_store_mut` and `Self::instance_mut`
+    pub fn gc_store_and_instance_mut(
+        &mut self,
+        id: InstanceId,
+    ) -> Result<(&mut GcStore, Pin<&mut vm::Instance>)> {
+        // Fill in `self.gc_store`, then proceed below to the point where we
+        // convince the borrow checker that we're accessing disjoint fields.
+        self.gc_store_mut()?;
+        Ok((
+            self.gc_store.as_mut().unwrap(),
+            self.instances[id].handle.get_mut(),
+        ))
     }
 
     /// Get all instances (ignoring dummy instances) within this store.
@@ -1358,7 +1383,7 @@ impl StoreOpaque {
         }
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms
+    #[cfg(all(feature = "std", any(unix, windows)))]
     pub fn set_signal_handler(&mut self, handler: Option<SignalHandler>) {
         self.signal_handler = handler;
     }
@@ -1411,6 +1436,7 @@ impl StoreOpaque {
                 )),
                 imports: vm::Imports::default(),
                 store: StorePtr::new(vmstore),
+                #[cfg(feature = "wmemcheck")]
                 wmemcheck: false,
                 pkey,
                 tunables: engine.tunables(),
@@ -1473,19 +1499,6 @@ impl StoreOpaque {
             None
         } else {
             self.gc_store.as_mut()
-        }
-    }
-
-    /// If this store is configured with a GC heap, return a shared reference to
-    /// it. Otherwise, return `None`.
-    #[inline]
-    #[cfg(feature = "gc")]
-    pub(crate) fn optional_gc_store(&self) -> Option<&GcStore> {
-        if cfg!(not(feature = "gc")) || !self.engine.features().gc_types() {
-            debug_assert!(self.gc_store.is_none());
-            None
-        } else {
-            self.gc_store.as_ref()
         }
     }
 
@@ -1860,7 +1873,7 @@ impl StoreOpaque {
         }
 
         cfg_if::cfg_if! {
-            if #[cfg(any(feature = "std", unix, windows))] {
+            if #[cfg(feature = "std")] {
                 // With the standard library a rich error can be printed here
                 // to stderr and the native abort path is used.
                 eprintln!(
@@ -1892,14 +1905,23 @@ at https://bytecodealliance.org/security.
                 let _ = pc;
                 panic!("invalid fault");
             } else {
-                // Without `std` and with `panic = "unwind"` there's no way to
-                // abort the process portably, so flag a compile time error.
-                //
-                // NB: if this becomes a problem in the future one option would
-                // be to extend the `capi.rs` module for no_std platforms, but
-                // it remains yet to be seen at this time if this is hit much.
-                compile_error!("either `std` or `panic=abort` must be enabled");
-                None
+                // Without `std` and with `panic = "unwind"` there's no
+                // dedicated API to abort the process portably, so manufacture
+                // this with a double-panic.
+                let _ = pc;
+
+                struct PanicAgainOnDrop;
+
+                impl Drop for PanicAgainOnDrop {
+                    fn drop(&mut self) {
+                        panic!("panicking again to trigger a process abort");
+                    }
+
+                }
+
+                let _bomb = PanicAgainOnDrop;
+
+                panic!("invalid fault");
             }
         }
     }
@@ -1936,6 +1958,7 @@ at https://bytecodealliance.org/security.
         self.num_component_instances += 1;
     }
 
+    #[inline]
     #[cfg(feature = "component-model")]
     pub(crate) fn component_resource_state_with_instance(
         &mut self,
@@ -1957,6 +1980,11 @@ at https://bytecodealliance.org/security.
     #[cfg(feature = "async")]
     pub(crate) fn fiber_async_state_mut(&mut self) -> &mut fiber::AsyncState {
         &mut self.async_state
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_async_state_mut(&mut self) -> &mut concurrent::AsyncState {
+        &mut self.concurrent_async_state
     }
 
     #[cfg(feature = "async")]
@@ -2038,6 +2066,7 @@ at https://bytecodealliance.org/security.
             runtime_info,
             imports,
             store: StorePtr::new(self.traitobj()),
+            #[cfg(feature = "wmemcheck")]
             wmemcheck: self.engine().config().wmemcheck,
             pkey: self.get_pkey(),
             tunables: self.engine().tunables(),

@@ -975,6 +975,12 @@ criteria = "safe-to-deploy"
 delta = "0.22.0 -> 0.24.1"
 notes = "Lots of internal code refactorings and code movement. Nothing out of place however."
 
+[[audits.addr2line]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.24.1 -> 0.25.0"
+notes = "All minor changes, even a net reduction of `unsafe`."
+
 [[audits.adler]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -2034,6 +2040,12 @@ criteria = "safe-to-deploy"
 delta = "0.31.0 -> 0.31.1"
 notes = "No fundmanetally new `unsafe` code, some small refactoring of existing code. Lots of changes in tests, not as many changes in the rest of the crate. More dwarf!"
 
+[[audits.gimli]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.31.1 -> 0.32.0"
+notes = "Ever more DWARF to parse, but also no new `unsafe` and everything looks like gimli."
+
 [[audits.glob]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -2175,6 +2187,17 @@ This is a crate without unsafe code or usage of the standard library. The large
 size of this crate comes from the large generated unicode tables file. This
 crate is broadly used throughout the ecosystem and does not contain anything
 suspicious.
+"""
+
+[[audits.im-rc]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-run"
+version = "15.1.0"
+notes = """
+This library has a few `unsafe` blocks for performance reasons, but most of them
+are unreachable from `wasm-compose` because it only uses the `HashMap` type.
+The `unsafe` blocks reachable from the `HashMap` type are narrowly scoped, well
+commented, and easy to reason about.
 """
 
 [[audits.indexmap-nostd]]
@@ -2470,6 +2493,12 @@ criteria = "safe-to-deploy"
 delta = "0.4.20 -> 0.4.22"
 notes = "Mostly updates around the key-value implementation of this crate, but nothing out of place."
 
+[[audits.log]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.22 -> 0.4.27"
+notes = "Lots of minor updates to macros and such, nothing touching `unsafe`"
+
 [[audits.mach2]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -2579,6 +2608,12 @@ idioms. No new `unsafe` code and everything looks like what you'd expect a
 compression library to be doing.
 """
 
+[[audits.miniz_oxide]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.5 -> 0.8.9"
+notes = "No new unsafe code, just refactorings."
+
 [[audits.mio]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -2655,6 +2690,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.36.0 -> 0.36.5"
 notes = "No new unsafe code, lots of new relocations/objects support, everything looks nominal"
+
+[[audits.object]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.36.5 -> 0.37.1"
+notes = "New object file formats, new formatting, new other minor changes, no new `unsafe`."
 
 [[audits.once_cell]]
 who = "Chris Fallin <chris@cfallin.org>"
@@ -3508,6 +3549,12 @@ notes = "This crate contains `unsafe` code due to its purpose: it wraps up `witx
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.2.83 -> 0.2.80"
+
+[[audits.wasm-compose]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-run"
+version = "0.235.0"
+notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.wasm-coredump-builder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -4368,6 +4415,12 @@ criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2023-06-29"
 end = "2024-07-14"
+
+[[trusted.backtrace]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2025-05-06"
+end = "2026-07-08"
 
 [[trusted.bstr]]
 criteria = "safe-to-deploy"

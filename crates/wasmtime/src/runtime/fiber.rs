@@ -343,9 +343,7 @@ impl<T> StoreContextMut<'_, T> {
         self,
         f: impl FnOnce(StoreContextMut<'_, T>) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
     ) -> Result<R> {
-        BlockingContext::with(self.0, |store, cx| {
-            cx.block_on(f(StoreContextMut(store)).as_mut())
-        })
+        self.with_blocking(|store, cx| cx.block_on(f(store).as_mut()))
     }
 
     /// Creates a `BlockingContext` suitable for blocking on futures or
@@ -397,7 +395,7 @@ impl StoreOpaque {
     /// # Panics
     ///
     /// Panics if this is invoked outside the context of a fiber.
-    #[expect(dead_code, reason = "will be used by async things soon")]
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn with_blocking<R>(
         &mut self,
         f: impl FnOnce(&mut Self, &mut BlockingContext<'_, '_>) -> R,
@@ -422,7 +420,7 @@ pub(crate) enum StoreFiberYield {
     /// Indicates the fiber does _not_ need exclusive access across the
     /// suspend/resume interval, meaning the store may be used as needed until
     /// the fiber is resumed.
-    #[expect(dead_code, reason = "will be used by async thing soon")]
+    #[cfg(feature = "component-model-async")]
     ReleaseStore,
 }
 
@@ -867,6 +865,7 @@ pub(crate) async fn on_fiber<R: Send + Sync>(
         let fiber = FiberFuture {
             store,
             fiber: Some(fiber),
+            #[cfg(feature = "component-model-async")]
             on_release: OnRelease::ReturnPending,
         }
         .await
@@ -884,7 +883,6 @@ pub(crate) async fn on_fiber<R: Send + Sync>(
 /// This will return `Some` if the fiber suspends with
 /// `StoreFiberYield::ReleaseStore` or else `None` if it resolves.
 #[cfg(feature = "component-model-async")]
-#[expect(dead_code, reason = "will be used by async thing soon")]
 pub(crate) async fn resolve_or_release<'a>(
     store: &mut StoreOpaque,
     fiber: StoreFiber<'a>,
@@ -899,12 +897,12 @@ pub(crate) async fn resolve_or_release<'a>(
 
 /// Tells a `FiberFuture` what to do if `poll_fiber` returns
 /// `Err(StoreFiberYield::ReleaseStore)`.
+#[cfg(feature = "component-model-async")]
 enum OnRelease {
     /// Return `Poll::Pending` from `FiberFuture::poll`
     ReturnPending,
     /// Return `Poll::Ready` from `FiberFuture::poll`, handing ownership of the
     /// `StoreFiber` to the caller.
-    #[cfg(feature = "component-model-async")]
     ReturnReady,
 }
 
@@ -913,6 +911,7 @@ enum OnRelease {
 struct FiberFuture<'a, 'b> {
     store: &'a mut StoreOpaque,
     fiber: Option<StoreFiber<'b>>,
+    #[cfg(feature = "component-model-async")]
     on_release: OnRelease,
 }
 
@@ -941,9 +940,9 @@ impl<'b> Future for FiberFuture<'_, 'b> {
             Ok(Ok(())) => Poll::Ready(Ok(None)),
             Ok(Err(e)) => Poll::Ready(Err(e)),
             Err(StoreFiberYield::KeepStore) => Poll::Pending,
+            #[cfg(feature = "component-model-async")]
             Err(StoreFiberYield::ReleaseStore) => match &me.on_release {
                 OnRelease::ReturnPending => Poll::Pending,
-                #[cfg(feature = "component-model-async")]
                 OnRelease::ReturnReady => Poll::Ready(Ok(me.fiber.take())),
             },
         }

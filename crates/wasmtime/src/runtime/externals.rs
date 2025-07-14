@@ -41,6 +41,7 @@ impl Extern {
     /// Returns the underlying `Func`, if this external is a function.
     ///
     /// Returns `None` if this is not a function.
+    #[inline]
     pub fn into_func(self) -> Option<Func> {
         match self {
             Extern::Func(func) => Some(func),
@@ -51,6 +52,7 @@ impl Extern {
     /// Returns the underlying `Global`, if this external is a global.
     ///
     /// Returns `None` if this is not a global.
+    #[inline]
     pub fn into_global(self) -> Option<Global> {
         match self {
             Extern::Global(global) => Some(global),
@@ -61,6 +63,7 @@ impl Extern {
     /// Returns the underlying `Table`, if this external is a table.
     ///
     /// Returns `None` if this is not a table.
+    #[inline]
     pub fn into_table(self) -> Option<Table> {
         match self {
             Extern::Table(table) => Some(table),
@@ -71,6 +74,7 @@ impl Extern {
     /// Returns the underlying `Memory`, if this external is a memory.
     ///
     /// Returns `None` if this is not a memory.
+    #[inline]
     pub fn into_memory(self) -> Option<Memory> {
         match self {
             Extern::Memory(memory) => Some(memory),
@@ -82,6 +86,7 @@ impl Extern {
     /// memory.
     ///
     /// Returns `None` if this is not a shared memory.
+    #[inline]
     pub fn into_shared_memory(self) -> Option<SharedMemory> {
         match self {
             Extern::SharedMemory(memory) => Some(memory),
@@ -92,6 +97,7 @@ impl Extern {
     /// Returns the underlying `Tag`, if this external is a tag.
     ///
     /// Returns `None` if this is not a tag.
+    #[inline]
     pub fn into_tag(self) -> Option<Tag> {
         match self {
             Extern::Tag(tag) => Some(tag),

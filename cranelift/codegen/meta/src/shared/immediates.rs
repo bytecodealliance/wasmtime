@@ -14,18 +14,6 @@ pub(crate) struct Immediates {
     /// counts on shift instructions.
     pub uimm8: OperandKind,
 
-    /// An unsigned 128-bit immediate integer operand.
-    ///
-    /// This operand is used to pass entire 128-bit vectors as immediates to instructions like
-    /// const.
-    pub uimm128: OperandKind,
-
-    /// A constant stored in the constant pool.
-    ///
-    /// This operand is used to pass constants to instructions like vconst while storing the
-    /// actual bytes in the constant pool.
-    pub pool_constant: OperandKind,
-
     /// A 32-bit immediate signed offset.
     ///
     /// This is used to represent an immediate address offset in load/store instructions.
@@ -108,16 +96,6 @@ impl Immediates {
                 "imm",
                 "ir::immediates::Uimm8",
                 "An 8-bit immediate unsigned integer.",
-            ),
-            uimm128: new_imm(
-                "imm",
-                "ir::Immediate",
-                "A 128-bit immediate unsigned integer.",
-            ),
-            pool_constant: new_imm(
-                "constant_handle",
-                "ir::Constant",
-                "A constant stored in the constant pool.",
             ),
             offset32: new_imm(
                 "offset",

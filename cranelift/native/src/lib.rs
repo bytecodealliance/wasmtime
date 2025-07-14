@@ -124,17 +124,35 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
         }
     }
 
-    // There is no is_s390x_feature_detected macro yet, so for now
-    // we use getauxval from the libc crate directly.
-    #[cfg(all(target_arch = "s390x", target_os = "linux"))]
+    // `is_s390x_feature_detected` is nightly only for now, so use the
+    // STORE FACILITY LIST EXTENDED instruction as a temporary measure.
+    #[cfg(target_arch = "s390x")]
     {
-        let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
-        const HWCAP_S390X_VXRS_EXT2: libc::c_ulong = 32768;
-        if (v & HWCAP_S390X_VXRS_EXT2) != 0 {
+        let mut facility_list: [u64; 4] = [0; 4];
+        unsafe {
+            core::arch::asm!(
+                "stfle 0({})",
+                in(reg_addr) facility_list.as_mut_ptr() ,
+                inout("r0") facility_list.len() as u64 - 1 => _,
+                options(nostack)
+            );
+        }
+        let get_facility_bit = |n: usize| {
+            // NOTE: bits are numbered from the left.
+            facility_list[n / 64] & (1 << (63 - (n % 64))) != 0
+        };
+
+        if get_facility_bit(61) {
+            isa_builder.enable("has_mie3").unwrap();
+        }
+        if get_facility_bit(84) {
+            isa_builder.enable("has_mie4").unwrap();
+        }
+        if get_facility_bit(148) {
             isa_builder.enable("has_vxrs_ext2").unwrap();
-            // There is no separate HWCAP bit for mie2, so assume
-            // that any machine with vxrs_ext2 also has mie2.
-            isa_builder.enable("has_mie2").unwrap();
+        }
+        if get_facility_bit(198) {
+            isa_builder.enable("has_vxrs_ext3").unwrap();
         }
     }
 

@@ -47,7 +47,6 @@ pub fn generate_global_export(
             Val::ExternRef(x) => {
                 let new = match x {
                     None => None,
-                    #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                     Some(x) => Some(x.try_gc_ref(&store)?.unchecked_copy()),
                 };
                 let new = new.as_ref();
@@ -56,7 +55,6 @@ pub fn generate_global_export(
             Val::AnyRef(a) => {
                 let new = match a {
                     None => None,
-                    #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                     Some(a) => Some(a.try_gc_ref(&store)?.unchecked_copy()),
                 };
                 let new = new.as_ref();

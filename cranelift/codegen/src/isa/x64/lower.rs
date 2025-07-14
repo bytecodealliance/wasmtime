@@ -19,6 +19,13 @@ use crate::settings::Flags;
 use std::boxed::Box;
 use target_lexicon::Triple;
 
+/// Identifier for a particular input of an instruction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct InsnInput {
+    insn: IRInst,
+    input: usize,
+}
+
 //=============================================================================
 // Helpers for instruction lowering.
 

@@ -1787,7 +1787,7 @@ impl MachInstLabelUse for LabelUse {
 }
 
 impl LabelUse {
-    #[allow(dead_code)] // in case it's needed in the future
+    #[expect(dead_code, reason = "in case it's needed in the future")]
     fn offset_in_range(self, offset: i64) -> bool {
         let min = -(self.max_neg_range() as i64);
         let max = self.max_pos_range() as i64;

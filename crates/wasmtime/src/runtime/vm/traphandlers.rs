@@ -380,7 +380,7 @@ impl From<wasmtime_environ::Trap> for TrapReason {
 /// longjmp'd over and none of its destructors on the stack may be run.
 pub unsafe fn catch_traps<T, F>(
     store: &mut StoreContextMut<'_, T>,
-    old_state: &EntryStoreContext,
+    old_state: &mut EntryStoreContext,
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
@@ -485,7 +485,7 @@ mod call_thread_state {
         // same store and `self.vm_store_context == self.prev.vm_store_context`) and we must to
         // maintain the list of contiguous-Wasm-frames stack regions for
         // backtracing purposes.
-        old_state: *const EntryStoreContext,
+        old_state: *mut EntryStoreContext,
     }
 
     impl Drop for CallThreadState {
@@ -502,7 +502,7 @@ mod call_thread_state {
         #[inline]
         pub(super) fn new(
             store: &mut StoreOpaque,
-            old_state: *const EntryStoreContext,
+            old_state: *mut EntryStoreContext,
         ) -> CallThreadState {
             CallThreadState {
                 unwind: Cell::new(None),
@@ -574,6 +574,38 @@ mod call_thread_state {
             let prev = self.prev.replace(ptr::null());
             let head = tls::raw::replace(prev);
             assert!(core::ptr::eq(head, self));
+        }
+
+        /// Swaps the state in this `CallThreadState`'s `VMStoreContext` with
+        /// the state in `EntryStoreContext` that was saved when this
+        /// activation was created.
+        ///
+        /// This method is using during suspension of a fiber to restore the
+        /// store back to what it originally was and prepare it to be resumed
+        /// later on. This takes various fields of `VMStoreContext` and swaps
+        /// them with what was saved in `EntryStoreContext`. That restores
+        /// a store to just before this activation was called but saves off the
+        /// fields of this activation to get restored/resumed at a later time.
+        #[cfg(feature = "async")]
+        pub(super) unsafe fn swap(&self) {
+            unsafe fn swap<T>(a: &core::cell::UnsafeCell<T>, b: &mut T) {
+                core::mem::swap(&mut *a.get(), b)
+            }
+
+            let cx = self.vm_store_context.as_ref();
+            swap(
+                &cx.last_wasm_exit_fp,
+                &mut (*self.old_state).last_wasm_exit_fp,
+            );
+            swap(
+                &cx.last_wasm_exit_pc,
+                &mut (*self.old_state).last_wasm_exit_pc,
+            );
+            swap(
+                &cx.last_wasm_entry_fp,
+                &mut (*self.old_state).last_wasm_entry_fp,
+            );
+            swap(&cx.stack_chain, &mut (*self.old_state).stack_chain);
         }
     }
 }
@@ -977,10 +1009,28 @@ pub(crate) mod tls {
         /// that this doesn't push stale data and the data is popped
         /// appropriately.
         pub unsafe fn push(self) -> PreviousAsyncWasmCallState {
+            // First save the state of TLS as-is so when this state is popped
+            // off later on we know where to stop.
+            let ret = PreviousAsyncWasmCallState { state: raw::get() };
+
+            // The oldest activation, if present, has various `VMStoreContext`
+            // fields saved within it. These fields were the state for the
+            // *youngest* activation when a suspension previously happened. By
+            // swapping them back into the store this is an O(1) way of
+            // restoring the state of a store's metadata fields at the time of
+            // the suspension.
+            //
+            // The store's previous values before this function will all get
+            // saved in the oldest activation's state on the stack. The store's
+            // current state then describes the youngest activation which is
+            // restored via the loop below.
+            if let Some(state) = self.state.as_ref() {
+                state.swap();
+            }
+
             // Our `state` pointer is a linked list of oldest-to-youngest so by
             // pushing in order of the list we restore the youngest-to-oldest
             // list as stored in the state of this current thread.
-            let ret = PreviousAsyncWasmCallState { state: raw::get() };
             let mut ptr = self.state;
             while let Some(state) = ptr.as_ref() {
                 ptr = state.prev.replace(core::ptr::null_mut());
@@ -1040,16 +1090,37 @@ pub(crate) mod tls {
             loop {
                 // If the current TLS state is as we originally found it, then
                 // this loop is finished.
+                //
+                // Note, though, that before exiting, if the oldest
+                // `CallThreadState` is present, the current state of
+                // `VMStoreContext` is saved off within it. This will save the
+                // current state, before this function, of `VMStoreContext`
+                // into the `EntryStoreContext` stored with the oldest
+                // activation. This is a bit counter-intuitive where the state
+                // for the youngest activation is stored in the "old" state
+                // of the oldest activation.
+                //
+                // What this does is restores the state of the store to just
+                // before this async fiber was started. The fiber's state will
+                // be entirely self-contained in the fiber itself and the
+                // returned `AsyncWasmCallState`. Resumption above in
+                // `AsyncWasmCallState::push` will perform the swap back into
+                // the store to hook things up again.
                 let ptr = raw::get();
                 if ptr == thread_head {
+                    if let Some(state) = ret.state.as_ref() {
+                        state.swap();
+                    }
+
                     break ret;
                 }
 
                 // Pop this activation from the current thread's TLS state, and
                 // then afterwards push it onto our own linked list within this
-                // `AsyncWasmCallState`. Note that the linked list in `AsyncWasmCallState` is stored
-                // in reverse order so a subsequent `push` later on pushes
-                // everything in the right order.
+                // `AsyncWasmCallState`. Note that the linked list in
+                // `AsyncWasmCallState` is stored in reverse order so a
+                // subsequent `push` later on pushes everything in the right
+                // order.
                 (*ptr).pop();
                 if let Some(state) = ret.state.as_ref() {
                     (*ptr).prev.set(state);

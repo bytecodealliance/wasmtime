@@ -1,0 +1,55 @@
+test inline precise-output
+target x86_64
+
+function %f0(i32) {
+    gv0 = dyn_scale_target_const.i32x4
+    dt0 = i32x4*gv0
+    dss0 = explicit_dynamic_slot dt0
+block0(v0: i32):
+    v1 = splat.dt0 v0
+    dynamic_stack_store.dt0 v1, dss0
+    return
+}
+
+; (no functions inlined into %f0)
+
+function %f1() {
+    gv0 = dyn_scale_target_const.i64x2
+    dt0 = i64x2*gv0
+    dss0 = explicit_dynamic_slot dt0
+    fn0 = %f0(i32)
+block0:
+    v0 = iconst.i64 99
+    v1 = splat.dt0 v0
+    dynamic_stack_store.dt0 v1, dss0
+    v2 = iconst.i32 1
+    call fn0(v2)
+    return
+}
+
+; function %f1() fast {
+;     dss0 = explicit_dynamic_slot dt0
+;     dss1 = explicit_dynamic_slot dt1
+;     gv0 = dyn_scale_target_const.i64x2
+;     gv1 = dyn_scale_target_const.i32x4
+;     sig0 = (i32) fast
+;     fn0 = %f0 sig0
+;
+; block0:
+;     v0 = iconst.i64 99
+;     v1 = splat.types::I64x2xN v0  ; v0 = 99
+;     v3 = dynamic_stack_addr.i64 dss0
+;     store notrap aligned v1, v3
+;     v2 = iconst.i32 1
+;     jump block1
+;
+; block1:
+;     v4 = splat.types::I32x4xN v2  ; v2 = 1
+;     v5 = dynamic_stack_addr.i64 dss1
+;     store notrap aligned v4, v5
+;     jump block2
+;
+; block2:
+;     return
+; }
+

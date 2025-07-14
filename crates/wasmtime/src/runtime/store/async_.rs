@@ -40,7 +40,7 @@ impl<T> Store<T> {
     /// [`Config::async_support`](crate::Config::async_support).
     pub fn limiter_async(
         &mut self,
-        mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync)
+        mut limiter: impl (FnMut(&mut T) -> &mut dyn crate::ResourceLimiterAsync)
         + Send
         + Sync
         + 'static,

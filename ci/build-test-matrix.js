@@ -17,7 +17,7 @@ const SINGLE_CRATE_BUCKETS = ["wasmtime", "wasmtime-cli", "wasmtime-wasi"];
 
 const ubuntu = 'ubuntu-24.04';
 const windows = 'windows-2025';
-const macos = 'macos-14';
+const macos = 'macos-15';
 
 // This is the small, fast-to-execute matrix we use for PRs before they enter
 // the merge queue. Same schema as `FULL_MATRIX`.

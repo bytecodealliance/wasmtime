@@ -211,8 +211,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn mie2_enabled(&mut self, _: Type) -> Option<()> {
-        if self.backend.isa_flags.has_mie2() {
+    fn mie3_enabled(&mut self, _: Type) -> Option<()> {
+        if self.backend.isa_flags.has_mie3() {
             Some(())
         } else {
             None
@@ -220,8 +220,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn mie2_disabled(&mut self, _: Type) -> Option<()> {
-        if !self.backend.isa_flags.has_mie2() {
+    fn mie3_disabled(&mut self, _: Type) -> Option<()> {
+        if !self.backend.isa_flags.has_mie3() {
             Some(())
         } else {
             None
