@@ -573,12 +573,21 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds for this instance.
-    pub fn get_exported_func(
+    ///
+    /// # Safety
+    ///
+    /// The `store` parameter must be the store that owns this instance and the
+    /// functions that this instance can reference.
+    pub unsafe fn get_exported_func(
         self: Pin<&mut Self>,
         store: StoreId,
         index: FuncIndex,
     ) -> crate::Func {
         let func_ref = self.get_func_ref(index).unwrap();
+
+        // SAFETY: the validity of `func_ref` is guaranteed by the validity of
+        // `self`, and the contract that `store` must own `func_ref` is a
+        // contract of this function itself.
         unsafe { crate::Func::from_vm_func_ref(store, func_ref) }
     }
 
@@ -1495,13 +1504,22 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `export` is not valid for this instance.
-    pub fn get_export_by_index_mut(
+    ///
+    /// # Safety
+    ///
+    /// This function requires that `store` is the correct store which owns this
+    /// instance.
+    pub unsafe fn get_export_by_index_mut(
         self: Pin<&mut Self>,
         store: StoreId,
         export: EntityIndex,
     ) -> Export {
         match export {
-            EntityIndex::Function(i) => Export::Function(self.get_exported_func(store, i)),
+            // SAFETY: the contract of `store` owning the this instance is a
+            // safety requirement of this function itself.
+            EntityIndex::Function(i) => {
+                Export::Function(unsafe { self.get_exported_func(store, i) })
+            }
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(store, i)),
             EntityIndex::Table(i) => Export::Table(self.get_exported_table(store, i)),
             EntityIndex::Memory(i) => Export::Memory {

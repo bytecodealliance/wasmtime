@@ -516,7 +516,9 @@ where
         // investigated if this becomes a performance issue though.
         ExportItem::Name(name) => instance.env_module().exports[name],
     };
-    instance.get_export_by_index_mut(store_id, idx)
+    // SAFETY: the `store_id` owns this instance and all exports contained
+    // within.
+    unsafe { instance.get_export_by_index_mut(store_id, idx) }
 }
 
 fn resource_tables<'a>(

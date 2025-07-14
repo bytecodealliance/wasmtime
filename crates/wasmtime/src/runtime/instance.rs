@@ -328,7 +328,9 @@ impl Instance {
         // trap-handling configuration in `store` as well.
         let store_id = store.0.id();
         let mut instance = self.id.get_mut(store.0);
-        let f = instance.as_mut().get_exported_func(store_id, start);
+        // SAFETY: the `store_id` is the id of the store that owns this
+        // instance and any function stored within the instance.
+        let f = unsafe { instance.as_mut().get_exported_func(store_id, start) };
         let caller_vmctx = instance.vmctx();
         unsafe {
             let funcref = f.vm_func_ref(store.0);
@@ -430,7 +432,9 @@ impl Instance {
 
     fn _get_export(&self, store: &mut StoreOpaque, entity: EntityIndex) -> Extern {
         let id = store.id();
-        let export = self.id.get_mut(store).get_export_by_index_mut(id, entity);
+        // SAFETY: the store `id` owns this instance and all exports contained
+        // within.
+        let export = unsafe { self.id.get_mut(store).get_export_by_index_mut(id, entity) };
         unsafe { Extern::from_wasmtime_export(export, store) }
     }
 
