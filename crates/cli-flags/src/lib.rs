@@ -394,6 +394,9 @@ wasmtime_option_group! {
         pub exceptions: Option<bool>,
         /// DEPRECATED: Configure support for the legacy exceptions proposal.
         pub legacy_exceptions: Option<bool>,
+        /// Component model support for fixed size lists: this corresponds
+        /// to the 🔧 emoji in the component model specification
+        pub component_model_fixed_size_list: Option<bool>,
     }
 
     enum Wasm {
@@ -1038,6 +1041,7 @@ impl CommonOptions {
             ("component-model-async", component_model_async, wasm_component_model_async)
             ("component-model-async", component_model_async_builtins, wasm_component_model_async_builtins)
             ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
+            ("component-model", component_model_fixed_size_list, wasm_component_model_fixed_size_lists)
             ("component-model", component_model_error_context, wasm_component_model_error_context)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
