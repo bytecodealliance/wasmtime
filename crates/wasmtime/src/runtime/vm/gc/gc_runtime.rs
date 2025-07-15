@@ -200,7 +200,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// Return values:
     ///
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
     /// * `Ok(Err(n))`: There is currently not enough available space for this
     ///   allocation of size `n`. The caller should either grow the heap or run
@@ -257,7 +257,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// Return values:
     ///
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
     /// * `Ok(Err(n))`: There is currently not enough available space for this
     ///   allocation of size `n`. The caller should either grow the heap or run
@@ -282,7 +282,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// Return values:
     ///
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
     /// * `Ok(Err(n))`: There is currently not enough available space for this
     ///   allocation of size `n`. The caller should either grow the heap or run
@@ -357,7 +357,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// Return values:
     ///
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
     /// * `Ok(Err(n))`: There is currently not enough available space for this
     ///   allocation of size `n`. The caller should either grow the heap or run

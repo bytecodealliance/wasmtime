@@ -271,7 +271,7 @@ impl GcStore {
         self.gc_heap.array_len(arrayref)
     }
 
-    /// Allocate an uninitialized exceptino object with the given type
+    /// Allocate an uninitialized exception object with the given type
     /// index.
     ///
     /// This does NOT check that the index is currently allocated in the types
