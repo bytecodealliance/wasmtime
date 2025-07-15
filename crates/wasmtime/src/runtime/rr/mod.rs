@@ -103,7 +103,7 @@ rr_event! {
 }
 
 /// Error type signalling failures during a replay run
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ReplayError {
     EmptyBuffer,
     FailedFuncValidation,

@@ -20,6 +20,57 @@ use wasmtime_environ::component::{
     StringEncoding, TypeFuncIndex, TypeTuple,
 };
 
+/// Record/replay stubs for host function entry events
+macro_rules! rr_host_func_entry_event {
+    { $args:expr, $param_types:expr => $store:expr } => {{
+        $store.record_event_if(
+            |r| r.add_validation,
+            |_| {
+                HostFuncEntryEvent::new(
+                    $args,
+                    // Don't need to check validation here since it is
+                    // covered by the predicate in this case
+                    Some($param_types),
+                )
+            },
+        );
+        $store.next_replay_event_if(
+            |r| r.validate,
+            |event: HostFuncEntryEvent, _| event.validate($param_types),
+        )?;
+    }};
+}
+
+/// Record stubs for host function return events
+macro_rules! record_host_func_return_event {
+    { $args:expr, $return_types:expr => $store:expr } => {{
+        $store.record_event(|r| {
+            HostFuncReturnEvent::new(
+                $args,
+                r.add_validation.then_some($return_types),
+            )
+        });
+    }};
+}
+
+/// Record stubs for store events of component types
+macro_rules! record_lower_store_event_wrapper {
+    { $lower_store:expr => $store:expr } => {{
+        let store_result = $lower_store;
+        $store.record_event(|_| LowerStoreReturnEvent::new(&store_result));
+        store_result
+    }};
+}
+
+/// Record stubs for lower events of component types
+macro_rules! record_lower_event_wrapper {
+    { $lower:expr => $store:expr } => {{
+        let lower_result = $lower;
+        $store.record_event(|_| LowerReturnEvent::new(&lower_result));
+        lower_result
+    }};
+}
+
 pub struct HostFunc {
     entrypoint: VMLoweringCallee,
     typecheck: Box<dyn (Fn(TypeFuncIndex, &InstanceType<'_>) -> Result<()>) + Send + Sync>,
@@ -206,21 +257,7 @@ where
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
 
-    cx.0.record_event_if(
-        |r| r.add_validation,
-        |_| {
-            HostFuncEntryEvent::new(
-                storage,
-                // Don't need to check validation here since it is
-                // covered by the predicate in this case
-                Some(&types[ty.params]),
-            )
-        },
-    );
-    cx.0.next_replay_event_if(
-        |r| r.validate,
-        |event: HostFuncEntryEvent, _| event.validate(&types[ty.params]),
-    )?;
+    rr_host_func_entry_event! { storage, &types[ty.params] => cx.0 };
 
     // There's a 2x2 matrix of whether parameters and results are stored on the
     // stack or on the heap. Each of the 4 branches here have a different
@@ -308,33 +345,22 @@ where
                  dst: &mut MaybeUninit<<R as ComponentType>::Lower>| {
                     let res = if let Some(retval) = &ret {
                         // Normal execution path
-                        let lower_result = retval.lower(cx, ty, dst);
-                        cx.store
-                            .0
-                            .record_event(|_| LowerReturnEvent::new(&lower_result));
-                        lower_result
+                        record_lower_event_wrapper! { retval.lower(cx, ty, dst) => cx.store.0 }
                     } else {
                         // Replay execution path
                         // This path also stores the final return values in resulting storage
                         cx.replay_lowering(rr_tys, Some(storage_as_slice_mut(dst)))
                     };
-                    cx.store.0.record_event(|rmeta| {
-                        HostFuncReturnEvent::new(
-                            storage_as_slice(dst),
-                            rmeta.add_validation.then_some(rr_tys),
-                        )
-                    });
+                    record_host_func_return_event! {
+                        storage_as_slice(dst), rr_tys => cx.store.0
+                    };
                     res
                 };
             let indirect_results_lower = |cx: &mut LowerContext<'_, T>, dst: &ValRaw| {
                 let ptr = validate_inbounds::<R>(cx.as_slice(), dst)?;
                 let res = if let Some(retval) = &ret {
                     // Normal execution path
-                    let store_result = retval.store(cx, ty, ptr);
-                    cx.store
-                        .0
-                        .record_event(|_| LowerStoreReturnEvent::new(&store_result));
-                    store_result
+                    record_lower_store_event_wrapper! { retval.store(cx, ty, ptr) => cx.store.0 }
                 } else {
                     // Replay execution path
                     //
@@ -344,9 +370,9 @@ where
                     cx.replay_lowering(rr_tys, None)
                 };
                 // Recording here is just for marking the return event
-                cx.store.0.record_event(|rmeta| {
-                    HostFuncReturnEvent::new(&[], rmeta.add_validation.then_some(rr_tys))
-                });
+                record_host_func_return_event! {
+                    &[], rr_tys => cx.store.0
+                };
                 res
             };
             match self {
@@ -448,21 +474,7 @@ where
 
     let replay_enabled = store.0.replay_enabled();
 
-    store.0.record_event_if(
-        |r| r.add_validation,
-        |_| {
-            HostFuncEntryEvent::new(
-                storage,
-                // Don't need to check validation here since it is
-                // covered by the predicate in this case
-                Some(&types[func_ty.params]),
-            )
-        },
-    );
-    store.0.next_replay_event_if(
-        |r| r.validate,
-        |event: HostFuncEntryEvent, _| event.validate(&types[func_ty.params]),
-    )?;
+    rr_host_func_entry_event! { storage, &types[func_ty.params] => store.0 };
 
     let results = if replay_enabled {
         None
@@ -517,7 +529,9 @@ where
             // Normal execution path
             let mut dst = storage[..cnt].iter_mut();
             for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-                val.lower(&mut cx, *ty, &mut dst)?;
+                record_lower_event_wrapper! {
+                    val.lower(&mut cx, *ty, &mut dst) => cx.store.0
+                }?;
             }
             assert!(dst.next().is_none());
         } else {
@@ -530,12 +544,9 @@ where
                 )),
             )?;
         }
-        cx.store.0.record_event(|rmeta| {
-            HostFuncReturnEvent::new(
-                mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(storage),
-                rmeta.add_validation.then_some(result_tys),
-            )
-        });
+        record_host_func_return_event! {
+            mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(storage), result_tys => cx.store.0
+        };
     } else {
         if let Some((result_vals, ret_index)) = results {
             // Normal execution path
@@ -543,7 +554,9 @@ where
             let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice(), ret_ptr)?;
             for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
                 let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
-                val.store(&mut cx, *ty, offset)?;
+                record_lower_store_event_wrapper! {
+                    val.store(&mut cx, *ty, offset) => cx.store.0
+                }?;
             }
         } else {
             // Replay execution path
@@ -554,9 +567,9 @@ where
             cx.replay_lowering(result_tys, None)?;
         }
         // Recording here is just for marking the return event
-        cx.store.0.record_event(|rmeta| {
-            HostFuncReturnEvent::new(&[], rmeta.add_validation.then_some(result_tys))
-        });
+        record_host_func_return_event! {
+            &[], result_tys => cx.store.0
+        };
     }
 
     flags.set_may_leave(true);

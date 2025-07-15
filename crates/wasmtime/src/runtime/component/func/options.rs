@@ -577,11 +577,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
                     }
                     complete = true;
                 }
-                RREvent::ComponentLowerReturn(e) => e.ret()?,
-                RREvent::ComponentLowerStoreReturn(e) => e.ret()?,
                 RREvent::ComponentReallocEntry(e) => {
                     let _ = self.realloc_inner(e.old_addr, e.old_size, e.old_align, e.new_size);
                 }
+                RREvent::ComponentLowerReturn(e) => e.ret()?,
+                RREvent::ComponentLowerStoreReturn(e) => e.ret()?,
                 RREvent::ComponentMemorySliceWrite(e) => {
                     // The bounds check is performed here is required here (in the absence of
                     // trace validation) to protect against malicious out-of-bounds slice writes

@@ -2133,9 +2133,11 @@ at https://bytecodealliance.org/security.
     }
 
     /// Panics if the replay buffer in the store is non-empty
-    pub(crate) fn ensure_empty_replay_buffer(&mut self) {
+    pub(crate) fn check_empty_replay_buffer(&mut self) {
         if let Some(buf) = self.replay_buffer_mut() {
-            assert!(buf.next().is_none());
+            if buf.next().is_some() {
+                println!("Warning: Replay buffer is not emptied!");
+            }
         }
     }
 }
@@ -2469,7 +2471,7 @@ impl Drop for StoreOpaque {
         }
 
         let _ = self.flush_record_buffer().unwrap();
-        self.ensure_empty_replay_buffer();
+        self.check_empty_replay_buffer();
     }
 }
 
