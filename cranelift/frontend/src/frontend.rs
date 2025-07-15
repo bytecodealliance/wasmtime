@@ -1,6 +1,7 @@
 //! A frontend for building Cranelift IR from other languages.
 use crate::ssa::{SSABuilder, SideEffects};
 use crate::variable::Variable;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::{self, Debug};
 use cranelift_codegen::cursor::{Cursor, CursorPosition, FuncCursor};
@@ -351,6 +352,19 @@ impl<'a> FunctionBuilder<'a> {
     /// when lowered to machine code.
     pub fn set_cold_block(&mut self, block: Block) {
         self.func.layout.set_cold(block);
+    }
+
+    /// Set the block name which is used only in the textual IR representation.
+    ///
+    /// It's recommended to set the block name only for debugging purposes.
+    /// The current implementation is memory inefficient and allocates a [`String'] for each block name.
+    pub fn set_block_name(&mut self, block: Block, name: String) {
+        self.func.dfg.set_block_name(block, name);
+    }
+
+    /// Clear the block name.
+    pub fn clear_block_name(&mut self, block: Block) {
+        self.func.dfg.clear_block_name(block);
     }
 
     /// Insert `block` in the layout *after* the existing block `after`.

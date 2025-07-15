@@ -234,7 +234,10 @@ pub fn write_block_header(
     };
 
     // The `indent` is the instruction indentation. block headers are 4 spaces out from that.
-    write!(w, "{1:0$}{2}", indent - 4, "", block)?;
+    match func.dfg.block_name(block) {
+        Some(block_name) => write!(w, "{1:0$}{2}", indent - 4, "", block_name)?,
+        None => write!(w, "{1:0$}{2}", indent - 4, "", block)?,
+    }
 
     let mut args = func.dfg.block_params(block).iter().cloned();
     match args.next() {
@@ -661,6 +664,23 @@ mod tests {
             f.to_string(),
             "function u0:0() fast {\n    ss0 = explicit_slot 4, align = 4\n}\n"
         );
+    }
+
+    #[test]
+    fn block_name() {
+        let mut f = Function::new();
+        f.name = UserFuncName::testcase("foo");
+
+        let block = f.dfg.make_block();
+        f.layout.append_block(block);
+
+        assert_eq!(f.to_string(), "function %foo() fast {\nblock0:\n}\n");
+
+        f.dfg.set_block_name(block, "entry".to_string());
+        assert_eq!(f.to_string(), "function %foo() fast {\nentry:\n}\n");
+
+        f.dfg.clear_block_name(block);
+        assert_eq!(f.to_string(), "function %foo() fast {\nblock0:\n}\n");
     }
 
     #[test]

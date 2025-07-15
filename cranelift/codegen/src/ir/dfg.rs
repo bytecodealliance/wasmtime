@@ -21,6 +21,7 @@ use core::ops::{Index, IndexMut};
 use core::u16;
 
 use alloc::collections::BTreeMap;
+use alloc::string::String;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -1460,6 +1461,24 @@ impl DataFlowGraph {
             }
         }
     }
+
+    /// Get the block name.
+    pub fn block_name(&self, block: Block) -> Option<&str> {
+        self.blocks[block].name.as_deref()
+    }
+
+    /// Set the block name which is used only in the textual IR representation.
+    ///
+    /// It's recommended to set the block name only for debugging purposes.
+    /// The current implementation is memory inefficient and allocates a [`String'] for each block name.
+    pub fn set_block_name(&mut self, block: Block, name: String) {
+        self.blocks[block].name = Some(name);
+    }
+
+    /// Clear the block name.
+    pub fn clear_block_name(&mut self, block: Block) {
+        self.blocks[block].name = None;
+    }
 }
 
 /// Contents of a basic block.
@@ -1472,12 +1491,16 @@ impl DataFlowGraph {
 pub struct BlockData {
     /// List of parameters to this block.
     params: ValueList,
+
+    /// Block name.
+    name: Option<String>,
 }
 
 impl BlockData {
     fn new() -> Self {
         Self {
             params: ValueList::new(),
+            name: None,
         }
     }
 
