@@ -46,6 +46,8 @@ where
         F: Fn(Node) -> S,
         S: Iterator<Item = Node>,
     {
+        let nodes = nodes.into_iter();
+
         // The resulting components and their nodes.
         let mut component_nodes = vec![];
         let mut components = PrimaryMap::<Component, Range<u32>>::new();
@@ -55,8 +57,10 @@ where
 
         // The DFS index and the earliest on-stack node reachable from each
         // node.
-        let mut indices = SecondaryMap::<Node, Option<NonMaxU32>>::new();
-        let mut lowlinks = SecondaryMap::<Node, Option<NonMaxU32>>::new();
+        let (min, max) = nodes.size_hint();
+        let capacity = max.unwrap_or_else(|| 2 * min);
+        let mut indices = SecondaryMap::<Node, Option<NonMaxU32>>::with_capacity(capacity);
+        let mut lowlinks = SecondaryMap::<Node, Option<NonMaxU32>>::with_capacity(capacity);
 
         // The stack of nodes we are currently finding an SCC for. Not the same
         // as the DFS stack: we only pop from this stack once we find the root
@@ -150,17 +154,21 @@ where
         self.components.len()
     }
 
+    fn node_range(&self, range: Range<u32>) -> &[Node] {
+        let start = usize::try_from(range.start).unwrap();
+        let end = usize::try_from(range.end).unwrap();
+        &self.component_nodes[start..end]
+    }
+
     /// Iterate over each strongly-connnected component and the `Node`s that are
     /// members of it.
     ///
     /// Iteration happens in reverse-topological order (successors are visited
     /// before predecessors in the resulting SCC DAG).
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (Component, &[Node])> + '_ {
-        self.components.iter().map(|(component, range)| {
-            let start = usize::try_from(range.start).unwrap();
-            let end = usize::try_from(range.end).unwrap();
-            (component, &self.component_nodes[start..end])
-        })
+        self.components
+            .iter()
+            .map(|(component, range)| (component, self.node_range(range.clone())))
     }
 
     /// Iterate over each strongly-connected component.
@@ -176,19 +184,15 @@ where
     /// Iteration happens in reverse-topological order (successors are visited
     /// before predecessors in the resulting SCC DAG).
     pub fn values(&self) -> impl ExactSizeIterator<Item = &[Node]> + '_ {
-        self.components.values().map(|range| {
-            let start = usize::try_from(range.start).unwrap();
-            let end = usize::try_from(range.end).unwrap();
-            &self.component_nodes[start..end]
-        })
+        self.components
+            .values()
+            .map(|range| self.node_range(range.clone()))
     }
 
     /// Get the `Node`s that make up the given strongly-connected component.
     pub fn nodes(&self, component: Component) -> &[Node] {
         let range = self.components[component].clone();
-        let start = usize::try_from(range.start).unwrap();
-        let end = usize::try_from(range.end).unwrap();
-        &self.component_nodes[start..end]
+        self.node_range(range)
     }
 }
 
@@ -238,14 +242,24 @@ where
                     continue;
                 }
 
+                let successors = successors(node);
+
+                let (min, max) = successors.size_hint();
+                let estimated_successors_len = max.unwrap_or_else(|| 2 * min);
+                self.stack.reserve(
+                    // We push an after-edge and pre event for each successor.
+                    2 * estimated_successors_len
+                        // And we push one post event for this node.
+                        + 1,
+                );
+
                 self.stack.push(DfsEvent::Post(node));
-                self.stack.extend(successors(node).flat_map(|v| {
-                    std::iter::once(DfsEvent::AfterEdge(node, v)).chain(if seen(v) {
-                        None
-                    } else {
-                        Some(DfsEvent::Pre(v))
-                    })
-                }));
+                for succ in successors {
+                    self.stack.push(DfsEvent::AfterEdge(node, succ));
+                    if !seen(succ) {
+                        self.stack.push(DfsEvent::Pre(succ));
+                    }
+                }
             }
 
             return Some(event);
