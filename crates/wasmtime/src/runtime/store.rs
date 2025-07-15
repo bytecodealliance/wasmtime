@@ -1369,7 +1369,7 @@ impl StoreOpaque {
     #[inline]
     pub(crate) fn record_event<T, F>(&mut self, f: F)
     where
-        T: Into<RREvent> + fmt::Debug,
+        T: Into<RREvent>,
         F: FnOnce(&RecordMetadata) -> T,
     {
         if let Some(buf) = self.record_buffer_mut() {
@@ -1379,31 +1379,31 @@ impl StoreOpaque {
 
     /// Conditionally record the given event into the store's record buffer
     ///
-    /// Convenience wrapper around [`Recorder::record_event_when`]
+    /// Convenience wrapper around [`Recorder::record_event_if`]
     #[inline]
-    pub(crate) fn record_event_when<T, P, F>(&mut self, pred: P, f: F)
+    pub(crate) fn record_event_if<T, P, F>(&mut self, pred: P, f: F)
     where
-        T: Into<RREvent> + fmt::Debug,
+        T: Into<RREvent>,
         P: FnOnce(&RecordMetadata) -> bool,
         F: FnOnce(&RecordMetadata) -> T,
     {
         if let Some(buf) = self.record_buffer_mut() {
-            buf.record_event_when(pred, f);
+            buf.record_event_if(pred, f);
         }
     }
 
     /// Process the next replay event from the store's replay buffer
     ///
-    /// Convenience wrapper around [`Replayer::replay_event`]
+    /// Convenience wrapper around [`Replayer::next_event_and`]
     #[inline]
-    pub(crate) fn replay_event<T, F>(&mut self, f: F) -> Result<(), ReplayError>
+    pub(crate) fn next_replay_event_and<T, F>(&mut self, f: F) -> Result<(), ReplayError>
     where
-        T: TryFrom<RREvent> + fmt::Debug,
+        T: TryFrom<RREvent>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
         F: FnOnce(T, &ReplayMetadata) -> Result<(), ReplayError>,
     {
         if let Some(buf) = self.replay_buffer_mut() {
-            buf.replay_event(f)
+            buf.next_event_and(f)
         } else {
             Ok(())
         }
@@ -1411,17 +1411,17 @@ impl StoreOpaque {
 
     /// Conditionally process the next replay event from the store's replay buffer
     ///
-    /// Convenience wrapper around [`Replayer::replay_event_when`]
+    /// Convenience wrapper around [`Replayer::next_event_if`]
     #[inline]
-    pub(crate) fn replay_event_when<T, P, F>(&mut self, pred: P, f: F) -> Result<(), ReplayError>
+    pub(crate) fn next_replay_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<(), ReplayError>
     where
-        T: TryFrom<RREvent> + fmt::Debug,
+        T: TryFrom<RREvent>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
         P: FnOnce(&ReplayMetadata) -> bool,
         F: FnOnce(T, &ReplayMetadata) -> Result<(), ReplayError>,
     {
         if let Some(buf) = self.replay_buffer_mut() {
-            buf.replay_event_when(pred, f)
+            buf.next_event_if(pred, f)
         } else {
             Ok(())
         }

@@ -206,18 +206,18 @@ where
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
 
-    cx.0.record_event_when(
+    cx.0.record_event_if(
         |r| r.add_validation,
         |_| {
             HostFuncEntryEvent::new(
                 storage,
                 // Don't need to check validation here since it is
-                // covered by the push predicate in this case
+                // covered by the predicate in this case
                 Some(&types[ty.params]),
             )
         },
     );
-    cx.0.replay_event_when(
+    cx.0.next_replay_event_if(
         |r| r.validate,
         |event: HostFuncEntryEvent, _| event.validate(&types[ty.params]),
     )?;
@@ -448,18 +448,18 @@ where
 
     let replay_enabled = store.0.replay_enabled();
 
-    store.0.record_event_when(
+    store.0.record_event_if(
         |r| r.add_validation,
         |_| {
             HostFuncEntryEvent::new(
                 storage,
                 // Don't need to check validation here since it is
-                // covered by the push predicate in this case
+                // covered by the predicate in this case
                 Some(&types[func_ty.params]),
             )
         },
     );
-    store.0.replay_event_when(
+    store.0.next_replay_event_if(
         |r| r.validate,
         |event: HostFuncEntryEvent, _| event.validate(&types[func_ty.params]),
     )?;

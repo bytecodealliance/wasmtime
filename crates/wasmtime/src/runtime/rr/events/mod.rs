@@ -113,8 +113,7 @@ where
         }
     } else {
         println!(
-            "Warning: Replay typechecking cannot be performed 
-                            since recorded trace is missing validation data"
+            "Warning: Replay typechecking cannot be performed since recorded trace is missing validation data"
         );
         Ok(())
     }
