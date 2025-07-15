@@ -148,6 +148,14 @@ where
         self.bitset.insert(index)
     }
 
+    /// Remove `k` from this bitset.
+    ///
+    /// Returns whether `k` was previously in this set or not.
+    pub fn remove(&mut self, k: K) -> bool {
+        let index = k.index();
+        self.bitset.remove(index)
+    }
+
     /// Removes and returns the entity from the set if it exists.
     pub fn pop(&mut self) -> Option<K> {
         let index = self.bitset.pop()?;
