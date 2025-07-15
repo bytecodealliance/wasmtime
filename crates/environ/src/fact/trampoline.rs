@@ -494,7 +494,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // callback) or zero (if there's no callback).  We conservatively use
         // one here to ensure the host provides room for the result, if any.
         self.instruction(I32Const(1));
-        self.instruction(I32Const(super::START_FLAG_ASYNC_CALLEE));
+        self.instruction(I32Const(crate::START_FLAG_ASYNC_CALLEE));
         self.instruction(Call(start_call.as_u32()));
 
         self.finish()

@@ -78,3 +78,10 @@ pub use cranelift_entity::*;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Bit flag for indicating async-lifted exports
+///
+/// This flag may be passed to the `async-start` built-in function (which is
+/// called from both async->async and async->sync adapters) to indicate that the
+/// callee is an async-lifted export.
+pub const START_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
