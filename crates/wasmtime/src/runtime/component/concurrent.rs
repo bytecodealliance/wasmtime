@@ -79,13 +79,13 @@ use std::sync::Mutex;
 use std::task::{Context, Poll, Waker};
 use std::vec::Vec;
 use table::{Table, TableDebug, TableError, TableId};
+use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ExportIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, PREPARE_ASYNC_NO_RESULT,
     PREPARE_ASYNC_WITH_RESULT, RuntimeComponentInstanceIndex, StringEncoding,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
     TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
 };
-use wasmtime_environ::{PrimaryMap, fact};
 
 pub use abort::AbortHandle;
 pub use futures_and_streams::{
@@ -194,7 +194,7 @@ mod callback_code {
 /// A flag indicating that the callee is an async-lowered export.
 ///
 /// This may be passed to the `async-start` intrinsic from a fused adapter.
-const START_FLAG_ASYNC_CALLEE: u32 = fact::START_FLAG_ASYNC_CALLEE as u32;
+const START_FLAG_ASYNC_CALLEE: u32 = wasmtime_environ::component::START_FLAG_ASYNC_CALLEE as u32;
 
 /// Provides access to either store data (via the `get` method) or the store
 /// itself (via [`AsContext`]/[`AsContextMut`]), as well as the component

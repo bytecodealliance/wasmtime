@@ -327,6 +327,7 @@ jobs:
               -p wasmtime --no-default-features --features pooling-allocator
               -p wasmtime --no-default-features --features cranelift
               -p wasmtime --no-default-features --features component-model
+              -p wasmtime --no-default-features --features component-model-async
               -p wasmtime --no-default-features --features runtime,component-model
               -p wasmtime --no-default-features --features cranelift,wat,async,std,cache
               -p wasmtime --no-default-features --features winch

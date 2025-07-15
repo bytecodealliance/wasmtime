@@ -36,13 +36,6 @@ mod trampoline;
 mod transcode;
 mod traps;
 
-/// Bit flag for indicating async-lifted exports
-///
-/// This flag may be passed to the `async-start` built-in function (which is
-/// called from both async->async and async->sync adapters) to indicate that the
-/// callee is an async-lifted export.
-pub const START_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
-
 /// Fixed parameter types for the `prepare_call` built-in function.
 ///
 /// Note that `prepare_call` also takes a variable number of parameters in
