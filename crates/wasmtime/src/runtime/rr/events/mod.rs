@@ -5,8 +5,6 @@ use core::fmt;
 use core::mem::{self, MaybeUninit};
 use serde::{Deserialize, Serialize};
 
-const VAL_RAW_SIZE: usize = mem::size_of::<ValRaw>();
-
 /// A serde compatible representation of errors produced by actions during
 /// initial recording for specific events
 ///
@@ -35,38 +33,38 @@ impl std::error::Error for EventActionError {}
 /// Transmutable byte array used to serialize [`ValRaw`] union
 ///
 /// Maintaining the exact layout is crucial for zero-copy transmutations
-/// between [`ValRawSer`] and [`ValRaw`] as currently assumed. However,
+/// between [`ValRawBytes`] and [`ValRaw`] as currently assumed. However,
 /// in the future, this type could be represented with LEB128s
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[repr(C)]
-pub(super) struct ValRawSer([u8; VAL_RAW_SIZE]);
+pub(super) struct ValRawBytes([u8; mem::size_of::<ValRaw>()]);
 
-impl From<ValRaw> for ValRawSer {
+impl From<ValRaw> for ValRawBytes {
     fn from(value: ValRaw) -> Self {
-        unsafe { Self(mem::transmute(value)) }
+        Self(value.as_bytes())
     }
 }
 
-impl From<ValRawSer> for ValRaw {
-    fn from(value: ValRawSer) -> Self {
-        unsafe { mem::transmute(value.0) }
+impl From<ValRawBytes> for ValRaw {
+    fn from(value: ValRawBytes) -> Self {
+        ValRaw::from_bytes(value.0)
     }
 }
 
-impl From<MaybeUninit<ValRaw>> for ValRawSer {
+impl From<MaybeUninit<ValRaw>> for ValRawBytes {
     /// Uninitialized data is assumed, and serialized
     fn from(value: MaybeUninit<ValRaw>) -> Self {
-        unsafe { Self::from(value.assume_init()) }
+        Self::from(unsafe { value.assume_init() })
     }
 }
 
-impl From<ValRawSer> for MaybeUninit<ValRaw> {
-    fn from(value: ValRawSer) -> Self {
+impl From<ValRawBytes> for MaybeUninit<ValRaw> {
+    fn from(value: ValRawBytes) -> Self {
         MaybeUninit::new(value.into())
     }
 }
 
-impl fmt::Debug for ValRawSer {
+impl fmt::Debug for ValRawBytes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let hex_digits_per_byte = 2;
         let _ = write!(f, "0x..");
@@ -77,21 +75,21 @@ impl fmt::Debug for ValRawSer {
     }
 }
 
-type RRFuncArgVals = Vec<ValRawSer>;
+type RRFuncArgVals = Vec<ValRawBytes>;
 
 /// Construct [`RRFuncArgVals`] from raw value buffer
 fn func_argvals_from_raw_slice<T>(args: &[T]) -> RRFuncArgVals
 where
-    ValRawSer: From<T>,
+    ValRawBytes: From<T>,
     T: Copy,
 {
-    args.iter().map(|x| ValRawSer::from(*x)).collect::<Vec<_>>()
+    args.iter().map(|x| ValRawBytes::from(*x)).collect()
 }
 
 /// Encode [`RRFuncArgVals`] back into raw value buffer
 fn func_argvals_into_raw_slice<T>(rr_args: RRFuncArgVals, raw_args: &mut [T])
 where
-    ValRawSer: Into<T>,
+    ValRawBytes: Into<T>,
 {
     for (src, dst) in rr_args.into_iter().zip(raw_args.iter_mut()) {
         *dst = src.into();
