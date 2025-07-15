@@ -5,17 +5,19 @@ use crate::prelude::*;
 use crate::runtime::rr::events::component_wasm::{
     MemorySliceWriteEvent, ReallocEntryEvent, ReallocReturnEvent,
 };
-use crate::runtime::rr::{RREvent, RecordBuffer, Recorder, ReplayError};
+use crate::runtime::rr::{RREvent, RecordBuffer, Recorder, Replayer};
 use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
 };
 use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
-use crate::{FuncType, StoreContextMut};
+use crate::{FuncType, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
-use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
+use wasmtime_environ::component::{
+    ComponentTypes, StringEncoding, TypeResourceTableIndex, TypeTuple,
+};
 
 /// Same as [`ConstMemorySliceCell`] except allows for dynamically sized slices.
 ///
@@ -44,9 +46,7 @@ impl Drop for MemorySliceCell<'_> {
     /// Drop serves as a recording hook for stores to the memory slice
     fn drop(&mut self) {
         if let Some(buf) = &mut self.recorder {
-            buf.push_event(RREvent::ComponentMemorySliceWrite(
-                MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()),
-            ));
+            buf.record_event(|_| MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()));
         }
     }
 }
@@ -99,9 +99,10 @@ impl<'a, const N: usize> Drop for ConstMemorySliceCell<'a, N> {
     /// Drops serves as a recording hook for stores to the memory slice
     fn drop(&mut self) {
         if let Some(buf) = &mut self.recorder {
-            buf.push_event(RREvent::ComponentMemorySliceWrite(
-                MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()),
-            ));
+            buf.record_event_when(
+                |_| true,
+                |_| MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()),
+            );
         }
     }
 }
@@ -237,7 +238,7 @@ impl Options {
         }
     }
 
-    /// Same as above, just `_mut`
+    /// Same as [`memory`](Self::memory), just `_mut`
     pub fn memory_mut<'a>(&self, store: &'a mut StoreOpaque) -> &'a mut [u8] {
         self.store_id.assert_belongs_to(store.id());
 
@@ -248,7 +249,7 @@ impl Options {
         }
     }
 
-    /// Same as above, but also obtain the record buffer from the encapsulating store
+    /// Same as [`memory_mut`](Self::memory_mut), but with the record buffer from the encapsulating store
     fn memory_mut_with_recorder<'a>(
         &self,
         store: &'a mut StoreOpaque,
@@ -332,15 +333,24 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         }
     }
 
-    /// Returns a view into memory as a mutable slice of bytes along with the
+    /// Returns a view into memory as a mutable slice of bytes + the
     /// record buffer to record state.
     ///
     /// # Panics
     ///
-    /// This will panic if memory has not been configured for this lowering
-    /// (e.g. it wasn't present during the specification of canonical options).
+    /// See [`as_slice`](Self::as_slice)
     fn as_slice_mut_with_recorder(&mut self) -> (&mut [u8], Option<&mut RecordBuffer>) {
         self.options.memory_mut_with_recorder(self.store.0)
+    }
+
+    /// Returns a view into memory as a mutable slice of bytes
+    ///
+    /// # Panics
+    ///
+    /// See [`as_slice`](Self::as_slice)
+    #[inline]
+    fn as_slice_mut(&mut self) -> &mut [u8] {
+        self.options.memory_mut(self.store.0)
     }
 
     /// Returns a view into memory as an immutable slice of bytes.
@@ -353,6 +363,12 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         self.options.memory(self.store.0)
     }
 
+    /// Inner invocation of realloc, without record/replay scaffolding
+    ///
+    /// # Panics
+    ///
+    /// This will panic if realloc hasn't been configured for this lowering via
+    /// its canonical options.
     fn realloc_inner(
         &mut self,
         old: usize,
@@ -387,14 +403,13 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         old_align: u32,
         new_size: usize,
     ) -> Result<usize> {
-        self.store.0.record_event(
-            |_| true,
-            |_| ReallocEntryEvent::new(old, old_size, old_align, new_size),
-        );
+        self.store
+            .0
+            .record_event(|_| ReallocEntryEvent::new(old, old_size, old_align, new_size));
         let result = self.realloc_inner(old, old_size, old_align, new_size);
         self.store
             .0
-            .record_event(|r| r.add_validation, |_| ReallocReturnEvent::new(&result));
+            .record_event_when(|r| r.add_validation, |_| ReallocReturnEvent::new(&result));
         result
     }
 
@@ -536,23 +551,51 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// Perform a replay of all the type lowering-associated events for this context
     ///
     /// These typically include all `Lower*` and `Realloc*` event, along with relevant
-    /// `HostFunctionReturnEvent` if it exists
-    pub fn replay_lowering(&mut self) -> Result<()> {
-        ///// Get and execute `F` on the events from the replay buffer iteratively
-        /////
-        ///// Iteration continues as long as `F` returns `Ok(true)` or buffer ends
-        //pub(crate) fn replay_events_while<F>(&mut self, mut f: F) -> Result<()>
-        //where
-        //    F: FnMut(RREvent, &ReplayMetadata) -> Result<bool>,
-        //{
-        //    if let Some(buf) = self.replay_buffer_mut() {
-        //        while f(buf.next().ok_or(ReplayError::EmptyBuffer)?, buf.metadata())? {}
-        //    } else {
-        //    }
-        //    Ok(())
-        //}
-
-        todo!();
+    /// `HostFunctionReturnEvent`.
+    ///
+    /// ## Important Notes
+    ///
+    /// * It is assumed that this is only invoked at the root lower/store calls
+    pub fn replay_lowering(
+        &mut self,
+        result_tys: &TypeTuple,
+        mut result_storage: Option<&mut [ValRaw]>,
+    ) -> Result<()> {
+        if self.store.0.replay_buffer_mut().is_none() {
+            return Ok(());
+        }
+        let mut complete = false;
+        while !complete {
+            let event = self.store.0.replay_buffer_mut().unwrap().next_event()?;
+            let _ = match event {
+                RREvent::ComponentHostFuncReturn(e) => {
+                    // End of lowering process
+                    if let Some(storage) = result_storage.as_deref_mut() {
+                        e.move_into_slice(storage, Some(&result_tys))?;
+                    } else {
+                        e.validate(result_tys)?;
+                    }
+                    complete = true;
+                }
+                RREvent::ComponentLowerReturn(e) => e.ret()?,
+                RREvent::ComponentLowerStoreReturn(e) => e.ret()?,
+                RREvent::ComponentReallocEntry(e) => {
+                    let _ = self.realloc_inner(e.old_addr, e.old_size, e.old_align, e.new_size);
+                }
+                RREvent::ComponentMemorySliceWrite(e) => {
+                    // The bounds check is performed here is required here (in the absence of
+                    // trace validation) to protect against malicious out-of-bounds slice writes
+                    self.as_slice_mut()[e.offset..e.offset + e.bytes.len()]
+                        .copy_from_slice(e.bytes.as_slice());
+                }
+                // Realloc or any lowering methods cannot call back to the host. Hence, you cannot
+                // have host calls entries during this method
+                RREvent::ComponentHostFuncEntry(_) => {
+                    bail!("Cannot call back into host during lowering")
+                }
+                _ => {}
+            };
+        }
         Ok(())
     }
 

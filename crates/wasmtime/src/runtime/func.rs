@@ -2354,11 +2354,11 @@ impl HostContext {
                 // (only when validation is enabled).
                 // Function type unwraps should never panic since they are
                 // lazily evaluated
-                store.replay_event_typed(
+                store.replay_event_when(
                     |r| r.validate,
                     |event: HostFuncEntryEvent, _| event.validate(wasm_func_type.unwrap()),
                 )?;
-                store.record_event(
+                store.record_event_when(
                     |r| r.add_validation,
                     |_| {
                         let wasm_func_type = wasm_func_type.unwrap();
@@ -2403,29 +2403,25 @@ impl HostContext {
 
             // Record/replay interceptions of raw return args
             let ret = if store.replay_enabled() {
-                store.replay_event_typed(
-                    |_| true,
-                    |event: HostFuncReturnEvent, rmeta| {
+                store
+                    .replay_event(|event: HostFuncReturnEvent, rmeta| {
                         event.move_into_slice(
                             args.as_mut(),
                             rmeta.validate.then_some(wasm_func_type.unwrap()),
                         )
-                    },
-                )
+                    })
+                    .map_err(Into::into)
             } else {
                 returns.unwrap().store(&mut store, args.as_mut())
             }?;
-            store.record_event(
-                |_| true,
-                |rmeta| {
-                    let wasm_func_type = wasm_func_type.unwrap();
-                    let num_results = wasm_func_type.params().len();
-                    HostFuncReturnEvent::new(
-                        unsafe { &args.as_ref()[..num_results] },
-                        rmeta.add_validation.then_some(wasm_func_type.clone()),
-                    )
-                },
-            );
+            store.record_event(|rmeta| {
+                let wasm_func_type = wasm_func_type.unwrap();
+                let num_results = wasm_func_type.params().len();
+                HostFuncReturnEvent::new(
+                    unsafe { &args.as_ref()[..num_results] },
+                    rmeta.add_validation.then_some(wasm_func_type.clone()),
+                )
+            });
 
             Ok(ret)
         };
