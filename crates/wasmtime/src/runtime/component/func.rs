@@ -16,9 +16,7 @@ use wasmtime_environ::component::{
 };
 
 #[cfg(feature = "component-model-async")]
-use crate::component::HasData;
-#[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, Accessor, PreparedCall};
+use crate::component::concurrent::{self, AsAccessor, PreparedCall};
 #[cfg(feature = "component-model-async")]
 use core::future::Future;
 #[cfg(feature = "component-model-async")]
@@ -329,15 +327,12 @@ impl Func {
     /// `Instance::spawn` to poll it from within the event loop.  See
     /// [`Instance::run`] for examples.
     #[cfg(feature = "component-model-async")]
-    pub async fn call_concurrent<T, D>(
+    pub async fn call_concurrent(
         self,
-        accessor: &Accessor<T, D>,
+        accessor: impl AsAccessor<Data: Send>,
         params: Vec<Val>,
-    ) -> Result<Vec<Val>>
-    where
-        T: Send,
-        D: HasData,
-    {
+    ) -> Result<Vec<Val>> {
+        let accessor = accessor.as_accessor();
         let result = accessor.with(|mut access| {
             let store = access.as_context_mut();
             assert!(

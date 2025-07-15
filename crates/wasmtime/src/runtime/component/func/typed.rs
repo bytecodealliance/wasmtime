@@ -17,9 +17,7 @@ use wasmtime_environ::component::{
 };
 
 #[cfg(feature = "component-model-async")]
-use crate::component::HasData;
-#[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, Accessor, PreparedCall};
+use crate::component::concurrent::{self, AsAccessor, PreparedCall};
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -262,17 +260,16 @@ where
     /// `Instance::spawn` to poll it from within the event loop.  See
     /// [`Instance::run`] for examples.
     #[cfg(feature = "component-model-async")]
-    pub async fn call_concurrent<T, D>(
+    pub async fn call_concurrent(
         self,
-        accessor: &Accessor<T, D>,
+        accessor: impl AsAccessor<Data: Send>,
         params: Params,
     ) -> Result<Return>
     where
-        T: Send,
-        D: HasData,
         Params: 'static,
         Return: 'static,
     {
+        let accessor = accessor.as_accessor();
         let result = accessor.with(|mut store| {
             let mut store = store.as_context_mut();
             assert!(

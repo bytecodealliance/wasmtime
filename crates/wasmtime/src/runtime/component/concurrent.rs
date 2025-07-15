@@ -332,6 +332,51 @@ where
     instance: Instance,
 }
 
+/// A helper trait to take any type of accessor-with-data in functions.
+///
+/// This trait is similar to [`AsContextMut`] except that it's used when
+/// working with an [`Accessor`] instead of a [`StoreContextMut`]. The
+/// [`Accessor`] is the main type used in concurrent settings and is passed to
+/// functions such as [`Func::call_concurrent`] or [`FutureWriter::write`].
+///
+/// This trait is implemented for [`Accessor`] and `&T` where `T` implements
+/// this trait. This effectively means that regardless of the `D` in
+/// `Accessor<T, D>` it can still be passed to a function which just needs a
+/// store accessor.
+///
+/// Acquiring an [`Accessor`] can be done through [`Instance::run_with`] for
+/// example or in a host function through
+/// [`Linker::func_wrap_concurrent`](crate::component::Linker::func_wrap_concurrent).
+pub trait AsAccessor {
+    /// The `T` in `Store<T>` that this accessor refers to.
+    type Data: 'static;
+
+    /// The `D` in `Accessor<T, D>`, or the projection out of
+    /// `Self::Data`.
+    type AccessorData: HasData;
+
+    /// Returns the accessor that this is referring to.
+    fn as_accessor(&self) -> &Accessor<Self::Data, Self::AccessorData>;
+}
+
+impl<T: AsAccessor + ?Sized> AsAccessor for &T {
+    type Data = T::Data;
+    type AccessorData = T::AccessorData;
+
+    fn as_accessor(&self) -> &Accessor<Self::Data, Self::AccessorData> {
+        T::as_accessor(self)
+    }
+}
+
+impl<T, D: HasData> AsAccessor for Accessor<T, D> {
+    type Data = T;
+    type AccessorData = D;
+
+    fn as_accessor(&self) -> &Accessor<T, D> {
+        self
+    }
+}
+
 // Note that it is intentional at this time that `Accessor` does not actually
 // store `&mut T` or anything similar. This distinctly enables the `Accessor`
 // structure to be both `Send` and `Sync` regardless of what `T` is (or `D` for
@@ -1205,54 +1250,6 @@ impl Instance {
     /// must use either this function, `Instance::run_with`, or
     /// `Instance::spawn` to ensure they are polled as part of the correct event
     /// loop.
-    ///
-    /// Consider the following examples:
-    ///
-    /// ```
-    /// # use {
-    /// #   anyhow::{anyhow, Result},
-    /// #   wasmtime::{
-    /// #     component::{ Component, Linker, HostFuture },
-    /// #     Config, Engine, Store
-    /// #   },
-    /// # };
-    /// #
-    /// # async fn foo() -> Result<()> {
-    /// # let mut config = Config::new();
-    /// # let engine = Engine::new(&config)?;
-    /// # let mut store = Store::new(&engine, ());
-    /// # let mut linker = Linker::new(&engine);
-    /// # let component = Component::new(&engine, "")?;
-    /// linker.root().func_wrap_concurrent("foo", |accessor, (future,): (HostFuture<bool>,)| Box::pin(async move {
-    ///     let future = accessor.with(|view| future.into_reader(view));
-    ///     // We can `.await` this directly (i.e. without using
-    ///     // `Instance::{run,run_with,spawn}`) since we're running in a host
-    ///     // function:
-    ///     Ok((future.read().await.ok_or_else(|| anyhow!("read failed"))?,))
-    /// }))?;
-    /// let instance = linker.instantiate_async(&mut store, &component).await?;
-    /// let bar = instance.get_typed_func::<(), (HostFuture<bool>,)>(&mut store, "bar")?;
-    ///
-    /// let (future,) = instance.run_with(&mut store, async |store| {
-    ///     bar.call_concurrent(store, ()).await
-    /// }).await??;
-    ///
-    /// let future = future.into_reader(&mut store);
-    ///
-    /// // // NOT OK; this will panic if polled outside the event loop:
-    /// // let _result = future.read().await;
-    ///
-    /// // OK, since we use `Instance::run` to poll the `Future` returned by
-    /// // `FutureReader::read`. Here we wrap that future in an async block for
-    /// // illustration, although it's redundant for a simple case like this. In
-    /// // a more complex scenario, we could use composition, loops, conditionals,
-    /// // etc.
-    /// let _result = instance.run(&mut store, Box::pin(async move {
-    ///     future.read().await
-    /// })).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
     ///
     /// Note that this function will return a "deadlock" error in either of the
     /// following scenarios:

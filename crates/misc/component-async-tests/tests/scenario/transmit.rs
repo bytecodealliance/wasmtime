@@ -377,14 +377,14 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
 
             futures.push(
                 control_tx
-                    .write_all(Some(Control::ReadStream("a".into())))
+                    .write_all(accessor, Some(Control::ReadStream("a".into())))
                     .map(|(w, _)| Ok(Event::ControlWriteA(w)))
                     .boxed(),
             );
 
             futures.push(
                 caller_stream_tx
-                    .write_all(Some(String::from("a")))
+                    .write_all(accessor, Some(String::from("a")))
                     .map(|_| Ok(Event::WriteA))
                     .boxed(),
             );
@@ -417,7 +417,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                     Event::ControlWriteA(tx) => {
                         futures.push(
                             tx.unwrap()
-                                .write_all(Some(Control::ReadFuture("b".into())))
+                                .write_all(accessor, Some(Control::ReadFuture("b".into())))
                                 .map(|(w, _)| Ok(Event::ControlWriteB(w)))
                                 .boxed(),
                         );
@@ -427,7 +427,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                             caller_future1_tx
                                 .take()
                                 .unwrap()
-                                .write("b".into())
+                                .write(accessor, "b".into())
                                 .map(Event::WriteB)
                                 .map(Ok)
                                 .boxed(),
@@ -436,7 +436,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                     Event::ControlWriteB(tx) => {
                         futures.push(
                             tx.unwrap()
-                                .write_all(Some(Control::WriteStream("c".into())))
+                                .write_all(accessor, Some(Control::WriteStream("c".into())))
                                 .map(|(w, _)| Ok(Event::ControlWriteC(w)))
                                 .boxed(),
                         );
@@ -447,7 +447,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                             callee_stream_rx
                                 .take()
                                 .unwrap()
-                                .read(None)
+                                .read(accessor, None)
                                 .map(|(r, b)| Ok(Event::ReadC(r, b)))
                                 .boxed(),
                         );
@@ -455,7 +455,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                     Event::ControlWriteC(tx) => {
                         futures.push(
                             tx.unwrap()
-                                .write_all(Some(Control::WriteFuture("d".into())))
+                                .write_all(accessor, Some(Control::WriteFuture("d".into())))
                                 .map(|_| Ok(Event::ControlWriteD))
                                 .boxed(),
                         );
@@ -467,7 +467,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                             callee_future1_rx
                                 .take()
                                 .unwrap()
-                                .read()
+                                .read(accessor)
                                 .map(Event::ReadD)
                                 .map(Ok)
                                 .boxed(),
@@ -482,7 +482,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                             callee_stream_rx
                                 .take()
                                 .unwrap()
-                                .read(None)
+                                .read(accessor, None)
                                 .map(|(r, _)| Ok(Event::ReadNone(r)))
                                 .boxed(),
                         );
