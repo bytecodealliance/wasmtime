@@ -251,35 +251,48 @@ async fn test_round_trip_many(
         )?;
 
         if call_style == 0 {
-            // Start concurrent calls and then join them all:
-            let mut futures = FuturesUnordered::new();
-            for (input, output) in inputs_and_outputs {
-                let output = (*output).to_owned();
-                futures.push(
-                    round_trip_many
-                        .local_local_many()
-                        .call_foo(
-                            &mut store,
-                            (*input).to_owned(),
-                            b,
-                            c.clone(),
-                            d,
-                            e.clone(),
-                            f.clone(),
-                            g.clone(),
-                        )
-                        .map(move |v| v.map(move |v| (v, output))),
-                );
-            }
+            instance
+                .run_with(&mut store, {
+                    let c = c.clone();
+                    let e = e.clone();
+                    let f = f.clone();
+                    let g = g.clone();
+                    let inputs_and_outputs = inputs_and_outputs
+                        .iter()
+                        .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+                        .collect::<Vec<_>>();
+                    async move |accessor| {
+                        // Start concurrent calls and then join them all:
+                        let mut futures = FuturesUnordered::new();
+                        for (input, output) in inputs_and_outputs {
+                            futures.push(
+                                round_trip_many
+                                    .local_local_many()
+                                    .call_foo(
+                                        accessor,
+                                        input,
+                                        b,
+                                        c.clone(),
+                                        d,
+                                        e.clone(),
+                                        f.clone(),
+                                        g.clone(),
+                                    )
+                                    .map(move |v| v.map(move |v| (v, output))),
+                            );
+                        }
 
-            while let Some((actual, expected)) =
-                instance.run(&mut store, futures.try_next()).await??
-            {
-                assert_eq!(
-                    (expected, b, c.clone(), d, e.clone(), f.clone(), g.clone()),
-                    actual
-                );
-            }
+                        while let Some((actual, expected)) = futures.try_next().await? {
+                            assert_eq!(
+                                (expected, b, c.clone(), d, e.clone(), f.clone(), g.clone()),
+                                actual
+                            );
+                        }
+
+                        anyhow::Ok(())
+                    }
+                })
+                .await??;
 
             instance.assert_concurrent_state_empty(&mut store);
         }
@@ -388,25 +401,28 @@ async fn test_round_trip_many(
         };
 
         if call_style == 2 {
-            // Start three concurrent calls and then join them all:
-            let mut futures = FuturesUnordered::new();
-            for (input, output) in inputs_and_outputs {
-                let output = (*output).to_owned();
-                futures.push(
-                    foo_function
-                        .call_concurrent(&mut store, make(input))
-                        .map(move |v| v.map(move |v| (v, output))),
-                );
-            }
+            instance
+                .run_with(&mut store, async |store| -> wasmtime::Result<_> {
+                    // Start three concurrent calls and then join them all:
+                    let mut futures = FuturesUnordered::new();
+                    for (input, output) in inputs_and_outputs {
+                        let output = (*output).to_owned();
+                        futures.push(
+                            foo_function
+                                .call_concurrent(store, make(input))
+                                .map(move |v| v.map(move |v| (v, output))),
+                        );
+                    }
 
-            while let Some((actual, expected)) =
-                instance.run(&mut store, futures.try_next()).await??
-            {
-                let Some(Val::Tuple(actual)) = actual.into_iter().next() else {
-                    unreachable!()
-                };
-                assert_eq!(make(&expected), actual);
-            }
+                    while let Some((actual, expected)) = futures.try_next().await? {
+                        let Some(Val::Tuple(actual)) = actual.into_iter().next() else {
+                            unreachable!()
+                        };
+                        assert_eq!(make(&expected), actual);
+                    }
+                    Ok(())
+                })
+                .await??;
 
             instance.assert_concurrent_state_empty(&mut store);
         }

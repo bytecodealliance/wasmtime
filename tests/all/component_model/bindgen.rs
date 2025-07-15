@@ -125,22 +125,16 @@ mod no_imports_concurrent {
         let mut store = Store::new(&engine, ());
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let no_imports = NoImports::new(&mut store, &instance)?;
-        let mut futures = FuturesUnordered::new();
-        futures.push(no_imports.call_bar(&mut store).boxed());
-        futures.push(no_imports.foo().call_foo(&mut store).boxed());
-        assert!(
-            instance
-                .run(&mut store, futures.try_next())
-                .await??
-                .is_some()
-        );
-        assert!(
-            instance
-                .run(&mut store, futures.try_next())
-                .await??
-                .is_some()
-        );
-        Ok(())
+        instance
+            .run_with(&mut store, async move |accessor| {
+                let mut futures = FuturesUnordered::new();
+                futures.push(no_imports.call_bar(accessor).boxed());
+                futures.push(no_imports.foo().call_foo(accessor).boxed());
+                assert!(futures.try_next().await?.is_some());
+                assert!(futures.try_next().await?.is_some());
+                Ok(())
+            })
+            .await?
     }
 }
 
@@ -287,7 +281,7 @@ mod one_import_concurrent {
         }
 
         impl foo::HostConcurrent for MyImports {
-            async fn foo<T>(accessor: &mut Accessor<T, Self>) {
+            async fn foo<T>(accessor: &Accessor<T, Self>) {
                 accessor.with(|mut view| view.get().hit = true);
             }
         }
@@ -299,8 +293,11 @@ mod one_import_concurrent {
         let mut store = Store::new(&engine, MyImports::default());
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let no_imports = NoImports::new(&mut store, &instance)?;
-        let call = no_imports.call_bar(&mut store);
-        instance.run(&mut store, call).await??;
+        instance
+            .run_with(&mut store, async move |accessor| {
+                no_imports.call_bar(accessor).await
+            })
+            .await??;
         assert!(store.data().hit);
         Ok(())
     }

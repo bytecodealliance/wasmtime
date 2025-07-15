@@ -247,7 +247,7 @@ pub mod http_fetch {
     #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
     pub trait HostConcurrent: wasmtime::component::HasData + Send {
         fn fetch_request<T: 'static>(
-            accessor: &mut wasmtime::component::Accessor<T, Self>,
+            accessor: &wasmtime::component::Accessor<T, Self>,
             request: Request,
         ) -> impl ::core::future::Future<Output = Response> + Send
         where
@@ -268,7 +268,7 @@ pub mod http_fetch {
         let mut inst = linker.instance("http-fetch")?;
         inst.func_wrap_concurrent(
             "fetch-request",
-            move |caller: &mut wasmtime::component::Accessor<T>, (arg0,): (Request,)| {
+            move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Request,)| {
                 wasmtime::component::__internal::Box::pin(async move {
                     let accessor = &mut unsafe { caller.with_data(host_getter) };
                     let r = <D as HostConcurrent>::fetch_request(accessor, arg0).await;
@@ -352,15 +352,14 @@ pub mod exports {
             }
         }
         impl Guest {
-            pub fn call_handle_request<S: wasmtime::AsContextMut>(
+            pub async fn call_handle_request<_T, _D>(
                 &self,
-                mut store: S,
+                accessor: &wasmtime::component::Accessor<_T, _D>,
                 arg0: Request,
-            ) -> impl wasmtime::component::__internal::Future<
-                Output = wasmtime::Result<Response>,
-            > + Send + 'static + use<S>
+            ) -> wasmtime::Result<Response>
             where
-                <S as wasmtime::AsContext>::Data: Send + 'static,
+                _T: Send,
+                _D: wasmtime::component::HasData,
             {
                 let callee = unsafe {
                     wasmtime::component::TypedFunc::<
@@ -368,11 +367,8 @@ pub mod exports {
                         (Response,),
                     >::new_unchecked(self.handle_request)
                 };
-                let future = callee.call_concurrent(store.as_context_mut(), (arg0,));
-                async move {
-                    let (ret0,) = future.await?;
-                    Ok(ret0)
-                }
+                let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                Ok(ret0)
             }
         }
     }

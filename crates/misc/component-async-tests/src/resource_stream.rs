@@ -21,7 +21,7 @@ pub mod bindings {
 pub struct ResourceStreamX;
 
 impl bindings::local::local::resource_stream::HostXConcurrent for Ctx {
-    async fn foo<T>(accessor: &mut Accessor<T, Self>, x: Resource<ResourceStreamX>) -> Result<()> {
+    async fn foo<T>(accessor: &Accessor<T, Self>, x: Resource<ResourceStreamX>) -> Result<()> {
         accessor.with(|mut view| {
             _ = view.get().table().get(&x)?;
             Ok(())
@@ -38,7 +38,7 @@ impl bindings::local::local::resource_stream::HostX for Ctx {
 
 impl bindings::local::local::resource_stream::HostConcurrent for Ctx {
     async fn foo<T: 'static>(
-        accessor: &mut Accessor<T, Self>,
+        accessor: &Accessor<T, Self>,
         count: u32,
     ) -> wasmtime::Result<HostStream<Resource<ResourceStreamX>>> {
         struct Task {
@@ -48,7 +48,7 @@ impl bindings::local::local::resource_stream::HostConcurrent for Ctx {
         }
 
         impl<T> AccessorTask<T, Ctx, Result<()>> for Task {
-            async fn run(self, accessor: &mut Accessor<T, Ctx>) -> Result<()> {
+            async fn run(self, accessor: &Accessor<T, Ctx>) -> Result<()> {
                 let mut tx = Some(self.tx);
                 for _ in 0..self.count {
                     tx = accessor

@@ -72,7 +72,7 @@ impl HostFunc {
     pub(crate) fn from_concurrent<T: 'static, F, P, R>(func: F) -> Arc<HostFunc>
     where
         T: 'static,
-        F: Fn(&mut Accessor<T>, P) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
+        F: Fn(&Accessor<T>, P) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
             + Send
             + Sync
             + 'static,
@@ -168,7 +168,7 @@ impl HostFunc {
     where
         T: 'static,
         F: for<'a> Fn(
-                &'a mut Accessor<T>,
+                &'a Accessor<T>,
                 &'a [Val],
                 &'a mut [Val],
             ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>

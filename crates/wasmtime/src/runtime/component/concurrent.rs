@@ -202,7 +202,7 @@ const START_FLAG_ASYNC_CALLEE: u32 = fact::START_FLAG_ASYNC_CALLEE as u32;
 ///
 /// See [`Accessor::with`] for details.
 pub struct Access<'a, T: 'static, D: HasData = HasSelf<T>> {
-    accessor: &'a mut Accessor<T, D>,
+    accessor: &'a Accessor<T, D>,
     store: StoreContextMut<'a, T>,
 }
 
@@ -345,7 +345,7 @@ where
 // `Accessor` and functions like `Linker::func_wrap_concurrent` are
 // intentionally made to ensure that `Accessor` is ideally only used in the
 // context that TLS variables are actually set. For example host functions are
-// given `&mut Accessor`, not `Accessor`, and this prevents them from persisting
+// given `&Accessor`, not `Accessor`, and this prevents them from persisting
 // the value outside of a future. Within the future the TLS variables are all
 // guaranteed to be set while the future is being polled.
 //
@@ -384,13 +384,24 @@ impl<T, D> Accessor<T, D>
 where
     D: HasData,
 {
-    /// Run the specified closure, passing it mutable access to the store data.
+    /// Run the specified closure, passing it mutable access to the store.
     ///
-    /// Note that the return value of the closure must be `'static`, meaning it
-    /// cannot borrow from the store or its associated data.  If you need shared
-    /// access to something in the store data, it must be cloned (using
-    /// e.g. `Arc::clone` if appropriate).
-    pub fn with<R: 'static>(&mut self, fun: impl FnOnce(Access<'_, T, D>) -> R) -> R {
+    /// This function is one of the main building blocks of the [`Accessor`]
+    /// type. This yields synchronous, blocking, access to store via an
+    /// [`Access`]. The [`Access`] implements [`AsContextMut`] in addition to
+    /// providing the ability to access `D` via [`Access::get`]. Note that the
+    /// `fun` here is given only temporary access to the store and `T`/`D`
+    /// meaning that the return value `R` here is not allowed to capture borrows
+    /// into the two. If access is needed to data within `T` or `D` outside of
+    /// this closure then it must be `clone`d out, for example.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if it is call recursively with any other
+    /// accessor already in scope. For example if `with` is called within `fun`,
+    /// then this function will panic. It is up to the embedder to ensure that
+    /// this does not happen.
+    pub fn with<R>(&self, fun: impl FnOnce(Access<'_, T, D>) -> R) -> R {
         tls::get(|vmstore| {
             fun(Access {
                 store: self.token.as_context_mut(vmstore),
@@ -424,10 +435,7 @@ where
     /// In short, this works, but must be treated with care. The current main
     /// user, bindings generation, treats this with care.
     #[doc(hidden)]
-    pub fn with_data<D2: HasData>(
-        &mut self,
-        get_data: fn(&mut T) -> D2::Data<'_>,
-    ) -> Accessor<T, D2> {
+    pub fn with_data<D2: HasData>(&self, get_data: fn(&mut T) -> D2::Data<'_>) -> Accessor<T, D2> {
         Accessor {
             token: self.token,
             get_data,
@@ -435,7 +443,7 @@ where
         }
     }
 
-    /// Spawn a background task which will receive an `&mut Accessor<T, D>` and
+    /// Spawn a background task which will receive an `&Accessor<T, D>` and
     /// run concurrently with any other tasks in progress for the current
     /// instance.
     ///
@@ -444,7 +452,13 @@ where
     /// `stream` or `future` must run after the function returns.
     ///
     /// The returned [`AbortHandle`] may be used to cancel the task.
-    pub fn spawn(&mut self, task: impl AccessorTask<T, D, Result<()>>) -> AbortHandle
+    ///
+    /// # Panics
+    ///
+    /// Panics if called within a closure provided to the [`Accessor::with`]
+    /// function. This can only be called outside an active invocation of
+    /// [`Accessor::with`].
+    pub fn spawn(&self, task: impl AccessorTask<T, D, Result<()>>) -> AbortHandle
     where
         T: 'static,
     {
@@ -478,7 +492,7 @@ where
 // writing (1.84.1), and even with 1.85.0-beta it's not possible to specify
 // e.g. `Send` and `Sync` bounds on the `Future` type returned by an
 // `AsyncFnOnce`.  Also, using `F: Future<Output = Result<()>> + Send + Sync,
-// FN: FnOnce(&mut Accessor<T>) -> F + Send + Sync + 'static` fails with a type
+// FN: FnOnce(&Accessor<T>) -> F + Send + Sync + 'static` fails with a type
 // mismatch error when we try to pass it an async closure (e.g. `async move |_|
 // { ... }`).  So this seems to be the best we can do for the time being.
 pub trait AccessorTask<T, D, R>: Send + 'static
@@ -486,7 +500,7 @@ where
     D: HasData,
 {
     /// Run the task.
-    fn run(self, accessor: &mut Accessor<T, D>) -> impl Future<Output = R> + Send;
+    fn run(self, accessor: &Accessor<T, D>) -> impl Future<Output = R> + Send;
 }
 
 /// Represents the state of a waitable handle.
@@ -1218,13 +1232,10 @@ impl Instance {
     /// }))?;
     /// let instance = linker.instantiate_async(&mut store, &component).await?;
     /// let bar = instance.get_typed_func::<(), (HostFuture<bool>,)>(&mut store, "bar")?;
-    /// let call = bar.call_concurrent(&mut store, ());
     ///
-    /// // // NOT OK; this will panic if polled outside the event loop:
-    /// // let (future,) = call.await?;
-    ///
-    /// // OK, since we use `Instance::run` to poll `call` inside the event loop:
-    /// let (future,) = instance.run(&mut store, call).await??;
+    /// let (future,) = instance.run_with(&mut store, async |store| {
+    ///     bar.call_concurrent(store, ()).await
+    /// }).await??;
     ///
     /// let future = future.into_reader(&mut store);
     ///
@@ -1264,29 +1275,24 @@ impl Instance {
         self.poll_until(store.as_context_mut(), fut).await
     }
 
-    /// Run the specified task as part of this instance's event loop.
+    /// Run the specified closure `fun` to completion as part of this instance's
+    /// event loop.
     ///
-    /// Like [`Self::run`], this will poll a specified future as part of this
-    /// instance's event loop until it yields a result _or_ there are no more
-    /// tasks to run.  Unlike [`Self::run`], the future may close over an
-    /// [`Accessor`], which provides controlled access to the `Store` and its
-    /// data.
+    /// Like [`Self::run`], this will run `fun` as part of this instance's event
+    /// loop until it yields a result _or_ there are no more tasks to run.
+    /// Unlike [`Self::run`], `fun` is provided an [`Accessor`], which provides
+    /// controlled access to the `Store` and its data.
     ///
-    /// This enables a different control flow model than `Self::run` in that the
-    /// future has arbitrary access to the `Store` between `await` operations,
-    /// whereas with `run` the future has no access to the `Store`.  Either one
-    /// can be used to interleave `await` operations and `Store` access;
-    /// i.e. you can either:
+    /// This function can be used to invoke [`Func::call_concurrent`] for
+    /// example within the async closure provided here.
     ///
-    /// - Call `run` multiple times with access to the `Store` in between,
-    /// possibly moving resources, streams, etc. between the `Store` and the
-    /// futures passed to `run`.
+    /// # Example
     ///
     /// ```
     /// # use {
-    /// #   anyhow::Result,
+    /// #   anyhow::{Result},
     /// #   wasmtime::{
-    /// #     component::{ Component, Linker, Resource, ResourceTable },
+    /// #     component::{ Component, Linker, Resource, ResourceTable},
     /// #     Config, Engine, Store
     /// #   },
     /// # };
@@ -1303,90 +1309,37 @@ impl Instance {
     /// # let instance = linker.instantiate_async(&mut store, &component).await?;
     /// # let foo = instance.get_typed_func::<(Resource<MyResource>,), (Resource<MyResource>,)>(&mut store, "foo")?;
     /// # let bar = instance.get_typed_func::<(u32,), ()>(&mut store, "bar")?;
-    /// let resource = store.data_mut().table.push(MyResource(42))?;
-    /// let call = foo.call_concurrent(&mut store, (resource,));
-    /// let (another_resource,) = instance.run(&mut store, call).await??;
-    /// let value = store.data_mut().table.delete(another_resource)?;
-    /// let call = bar.call_concurrent(&mut store, (value.0,));
-    /// instance.run(&mut store, call).await??;
+    /// instance.run_with(&mut store, async |accessor| -> wasmtime::Result<_> {
+    ///    let resource = accessor.with(|mut access| access.get().table.push(MyResource(42)))?;
+    ///    let (another_resource,) = foo.call_concurrent(accessor, (resource,)).await?;
+    ///    let value = accessor.with(|mut access| access.get().table.delete(another_resource))?;
+    ///    bar.call_concurrent(accessor, (value.0,)).await?;
+    ///    Ok(())
+    /// }).await??;
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// - Call `run_with` once and use `Accessor::with` to access the store from
-    /// within the future.
-    ///
-    /// ```
-    /// # use {
-    /// #   anyhow::{Result, Error},
-    /// #   wasmtime::{
-    /// #     component::{ Component, Linker, Resource, ResourceTable, Accessor },
-    /// #     Config, Engine, Store
-    /// #   },
-    /// # };
-    /// #
-    /// # struct MyResource(u32);
-    /// # struct Ctx { table: ResourceTable }
-    /// #
-    /// # async fn foo() -> Result<()> {
-    /// # let mut config = Config::new();
-    /// # let engine = Engine::new(&config)?;
-    /// # let mut store = Store::new(&engine, Ctx { table: ResourceTable::new() });
-    /// # let mut linker = Linker::new(&engine);
-    /// # let component = Component::new(&engine, "")?;
-    /// # let instance = linker.instantiate_async(&mut store, &component).await?;
-    /// # let foo = instance.get_typed_func::<(Resource<MyResource>,), (Resource<MyResource>,)>(&mut store, "foo")?;
-    /// # let bar = instance.get_typed_func::<(u32,), ()>(&mut store, "bar")?;
-    /// instance.run_with(&mut store, move |accessor: &mut Accessor<_>| Box::pin(async move {
-    ///    let (another_resource,) = accessor.with(|mut access| {
-    ///        let resource = access.get().table.push(MyResource(42))?;
-    ///        Ok::<_, Error>(foo.call_concurrent(access, (resource,)))
-    ///    })?.await?;
-    ///    accessor.with(|mut access| {
-    ///        let value = access.get().table.delete(another_resource)?;
-    ///        Ok::<_, Error>(bar.call_concurrent(access, (value.0,)))
-    ///    })?.await
-    /// })).await??;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn run_with<U, V, F>(
-        &self,
-        mut store: impl AsContextMut<Data = U>,
-        fun: F,
-    ) -> Result<V>
+    pub async fn run_with<T, R>(
+        self,
+        mut store: impl AsContextMut<Data = T>,
+        fun: impl AsyncFnOnce(&Accessor<T>) -> R,
+    ) -> Result<R>
     where
-        U: 'static,
-        F: FnOnce(&mut Accessor<U>) -> Pin<Box<dyn Future<Output = V> + Send + '_>>
-            + Send
-            + 'static,
+        T: 'static,
     {
         check_recursive_run();
-        let future = self.run_with_raw(&mut store, fun);
-        self.run(store, future).await
-    }
-
-    fn run_with_raw<U, V, F>(
-        self,
-        mut store: impl AsContextMut<Data = U>,
-        fun: F,
-    ) -> impl Future<Output = V> + 'static
-    where
-        U: 'static,
-        F: FnOnce(&mut Accessor<U>) -> Pin<Box<dyn Future<Output = V> + Send + '_>>
-            + Send
-            + 'static,
-    {
+        let mut store = store.as_context_mut();
         let token = StoreToken::new(store.as_context_mut());
-        async move {
-            let mut accessor = Accessor::new(token, self);
-            fun(&mut accessor).await
-        }
+        let future = async move {
+            let accessor = Accessor::new(token, self);
+            fun(&accessor).await
+        };
+        self.run(store, future).await
     }
 
     /// Spawn a background task to run as part of this instance's event loop.
     ///
-    /// The task will receive an `&mut Accessor<U>` and run concurrently with
+    /// The task will receive an `&Accessor<U>` and run concurrently with
     /// any other tasks in progress for the instance.
     ///
     /// Note that the task will only make progress if and when the event loop
@@ -1408,7 +1361,7 @@ impl Instance {
     fn spawn_with_accessor<T, D>(
         self,
         mut store: StoreContextMut<T>,
-        mut accessor: Accessor<T, D>,
+        accessor: Accessor<T, D>,
         task: impl AccessorTask<T, D, Result<()>>,
     ) -> AbortHandle
     where
@@ -1421,7 +1374,7 @@ impl Instance {
         // hook calls to poll and possibly spawn more background tasks on each
         // iteration.
         let (handle, future) =
-            AbortHandle::run(async move { HostTaskOutput::Result(task.run(&mut accessor).await) });
+            AbortHandle::run(async move { HostTaskOutput::Result(task.run(&accessor).await) });
         self.concurrent_state_mut(store.0)
             .push_future(Box::pin(async move {
                 future.await.unwrap_or(HostTaskOutput::Result(Ok(())))
@@ -2512,7 +2465,7 @@ impl Instance {
     }
 
     /// Wrap the specified host function in a future which will call it, passing
-    /// it an `&mut Accessor<T>`.
+    /// it an `&Accessor<T>`.
     ///
     /// See the `Accessor` documentation for details.
     pub(crate) fn wrap_call<T: 'static, F, R>(
@@ -2522,7 +2475,7 @@ impl Instance {
     ) -> impl Future<Output = Result<R>> + 'static
     where
         T: 'static,
-        F: FnOnce(&mut Accessor<T>) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
+        F: FnOnce(&Accessor<T>) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
             + Send
             + Sync
             + 'static,

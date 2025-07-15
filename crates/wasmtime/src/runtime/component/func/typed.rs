@@ -17,11 +17,9 @@ use wasmtime_environ::component::{
 };
 
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, PreparedCall};
+use crate::component::HasData;
 #[cfg(feature = "component-model-async")]
-use core::future::Future;
-#[cfg(feature = "component-model-async")]
-use core::pin::Pin;
+use crate::component::concurrent::{self, Accessor, PreparedCall};
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -263,37 +261,33 @@ where
     /// function belongs to; use `Instance::run`, `Instance::run_with`, or
     /// `Instance::spawn` to poll it from within the event loop.  See
     /// [`Instance::run`] for examples.
-    //
-    // FIXME: this function should return `impl Future` but that forces
-    // capturing all type parameters in scope at this time. The future
-    // intentionally does not close over `store` but returning `impl Future`
-    // implicitly does so. In a future version of Rust maybe this limitation
-    // will be lifted? Maybe rust-lang/rust#130043. Unsure.
     #[cfg(feature = "component-model-async")]
-    pub fn call_concurrent(
+    pub async fn call_concurrent<T, D>(
         self,
-        mut store: impl AsContextMut<Data: Send>,
+        accessor: &Accessor<T, D>,
         params: Params,
-    ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send>>
+    ) -> Result<Return>
     where
+        T: Send,
+        D: HasData,
         Params: 'static,
         Return: 'static,
     {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_concurrent` when async support is not enabled on the config"
-        );
+        let result = accessor.with(|mut store| {
+            let mut store = store.as_context_mut();
+            assert!(
+                store.0.async_support(),
+                "cannot use `call_concurrent` when async support is not enabled on the config"
+            );
 
-        let result = (|| {
             let prepared =
                 self.prepare_call(store.as_context_mut(), true, true, move |cx, ty, dst| {
                     Self::lower_args(cx, ty, dst, &params)
                 })?;
             concurrent::queue_call(store, prepared)
-        })();
+        });
 
-        Box::pin(async move { result?.await })
+        result?.await
     }
 
     fn lower_args<T>(

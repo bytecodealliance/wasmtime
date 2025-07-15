@@ -506,7 +506,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// The `F` function here is intended to be:
     ///
     /// ```ignore
-    /// F: AsyncFn(&mut Accessor<T>, Params) -> Result<Return>
+    /// F: AsyncFn(&Accessor<T>, Params) -> Result<Return>
     /// ```
     ///
     /// however the returned future must be `Send` which is not possible to
@@ -548,10 +548,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     pub fn func_wrap_concurrent<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
     where
         T: 'static,
-        F: Fn(
-                &mut Accessor<T>,
-                Params,
-            ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + '_>>
+        F: Fn(&Accessor<T>, Params) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + '_>>
             + Send
             + Sync
             + 'static,
@@ -714,7 +711,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     where
         T: 'static,
         F: for<'a> Fn(
-                &'a mut Accessor<T>,
+                &'a Accessor<T>,
                 &'a [Val],
                 &'a mut [Val],
             ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>

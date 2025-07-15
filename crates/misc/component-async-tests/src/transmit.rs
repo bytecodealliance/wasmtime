@@ -3,6 +3,6 @@ pub mod bindings {
         path: "wit",
         world: "transmit-callee",
         concurrent_exports: true,
-        async: true,
+        async: true
     });
 }

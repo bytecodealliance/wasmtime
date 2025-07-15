@@ -93,7 +93,7 @@ pub struct Host_ {}
 #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
 pub trait Host_ImportsConcurrent: wasmtime::component::HasData + Send {
     fn foo<T: 'static>(
-        accessor: &mut wasmtime::component::Accessor<T, Self>,
+        accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send
     where
         Self: Sized;
@@ -168,7 +168,7 @@ const _: () = {
             linker
                 .func_wrap_concurrent(
                     "foo",
-                    move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
+                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &mut unsafe { caller.with_data(host_getter) };
                             let r = <D as Host_ImportsConcurrent>::foo(accessor).await;

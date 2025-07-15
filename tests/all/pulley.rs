@@ -485,20 +485,32 @@ async fn pulley_provenance_test_async_components() -> Result<()> {
         let instance = linker.instantiate_async(&mut store, &component).await?;
 
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackless")?;
-        let run = run.call_concurrent(&mut store, ());
-        instance.run(&mut store, run).await??;
+        instance
+            .run_with(&mut store, async move |accessor| {
+                run.call_concurrent(accessor, ()).await
+            })
+            .await??;
 
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackful")?;
-        let run = run.call_concurrent(&mut store, ());
-        instance.run(&mut store, run).await??;
+        instance
+            .run_with(&mut store, async move |accessor| {
+                run.call_concurrent(accessor, ()).await
+            })
+            .await??;
 
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackless-stackless")?;
-        let run = run.call_concurrent(&mut store, ());
-        instance.run(&mut store, run).await??;
+        instance
+            .run_with(&mut store, async move |accessor| {
+                run.call_concurrent(accessor, ()).await
+            })
+            .await??;
 
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackful-stackful")?;
-        let run = run.call_concurrent(&mut store, ());
-        instance.run(&mut store, run).await??;
+        instance
+            .run_with(&mut store, async move |accessor| {
+                run.call_concurrent(accessor, ()).await
+            })
+            .await??;
     }
 
     Ok(())

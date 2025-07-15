@@ -16,7 +16,9 @@ use wasmtime_environ::component::{
 };
 
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, PreparedCall};
+use crate::component::HasData;
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent::{self, Accessor, PreparedCall};
 #[cfg(feature = "component-model-async")]
 use core::future::Future;
 #[cfg(feature = "component-model-async")]
@@ -327,18 +329,25 @@ impl Func {
     /// `Instance::spawn` to poll it from within the event loop.  See
     /// [`Instance::run`] for examples.
     #[cfg(feature = "component-model-async")]
-    pub fn call_concurrent<T: Send + 'static>(
+    pub async fn call_concurrent<T, D>(
         self,
-        mut store: impl AsContextMut<Data = T>,
+        accessor: &Accessor<T, D>,
         params: Vec<Val>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Val>>> + Send + 'static>> {
-        let store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_concurrent` when async support is not enabled on the config"
-        );
+    ) -> Result<Vec<Val>>
+    where
+        T: Send,
+        D: HasData,
+    {
+        let result = accessor.with(|mut access| {
+            let store = access.as_context_mut();
+            assert!(
+                store.0.async_support(),
+                "cannot use `call_concurrent` when async support is not enabled on the config"
+            );
 
-        self.call_concurrent_dynamic(store, params, true)
+            self.call_concurrent_dynamic(store, params, true)
+        });
+        result.await
     }
 
     /// Internal helper function for `call_async` and `call_concurrent`.
