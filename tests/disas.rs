@@ -232,7 +232,6 @@ impl Test {
                     .path()
                     .read_dir()
                     .context("failed to read tempdir")?
-                    .into_iter()
                     .map(|e| Ok(e.context("failed to iterate over tempdir")?.path()))
                     .collect::<Result<Vec<_>>>()?;
                 entries.sort();
