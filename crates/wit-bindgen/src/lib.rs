@@ -2723,13 +2723,12 @@ impl<'a> InterfaceGenerator<'a> {
         // that get to be optionally async/sync.
         let style = self.generator.opts.call_style();
         let (async_, async__, await_, concurrent) = match &style {
-            CallStyle::Async | CallStyle::Concurrent => {
-                if self.generator.opts.concurrent_exports {
-                    ("async", "_async", ".await", true)
-                } else {
-                    ("async", "_async", ".await", false)
-                }
-            }
+            CallStyle::Async | CallStyle::Concurrent => (
+                "async",
+                "_async",
+                ".await",
+                self.generator.opts.concurrent_exports,
+            ),
             CallStyle::Sync => ("", "", "", false),
         };
 
