@@ -6,6 +6,8 @@ pub enum VMStructRef {}
 
 pub enum VMArrayRef {}
 
+pub enum VMExnRef {}
+
 pub struct VMGcObjectData {
     _inner: VMStructRef,
     _phantom: core::marker::PhantomData<[u8]>,

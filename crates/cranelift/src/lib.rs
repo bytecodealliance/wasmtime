@@ -212,7 +212,7 @@ fn wasm_call_signature(
 fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht.top() {
         WasmHeapTopType::Func => pointer_type,
-        WasmHeapTopType::Any | WasmHeapTopType::Extern => ir::types::I32,
+        WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => ir::types::I32,
         WasmHeapTopType::Cont =>
         // TODO(10248) This is added in a follow-up PR
         {

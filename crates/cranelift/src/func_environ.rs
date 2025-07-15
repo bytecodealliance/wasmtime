@@ -1514,6 +1514,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             | WasmHeapType::ConcreteArray(_)
             | WasmHeapType::Struct
             | WasmHeapType::ConcreteStruct(_)
+            | WasmHeapType::Exn
+            | WasmHeapType::ConcreteExn(_)
+            | WasmHeapType::NoExn
             | WasmHeapType::None => {
                 unreachable!()
             }
@@ -1741,7 +1744,7 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     fn reference_type(&self, wasm_ty: WasmHeapType) -> (ir::Type, bool) {
         let ty = crate::reference_type(wasm_ty, self.pointer_type());
         let needs_stack_map = match wasm_ty.top() {
-            WasmHeapTopType::Extern | WasmHeapTopType::Any => true,
+            WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => true,
             WasmHeapTopType::Func => false,
             WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
         };
@@ -1838,7 +1841,7 @@ impl FuncEnvironment<'_> {
         let heap_ty = table.ref_type.heap_type;
         match heap_ty.top() {
             // GC-managed types.
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
                 let (src, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::gc_compiler(self)?.translate_read_gc_reference(
                     self,
@@ -1872,7 +1875,7 @@ impl FuncEnvironment<'_> {
         let heap_ty = table.ref_type.heap_type;
         match heap_ty.top() {
             // GC-managed types.
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
                 let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::gc_compiler(self)?.translate_write_gc_reference(
                     self,
@@ -2254,7 +2257,9 @@ impl FuncEnvironment<'_> {
         Ok(match ht.top() {
             WasmHeapTopType::Func => pos.ins().iconst(self.pointer_type(), 0),
             // NB: null GC references don't need to be in stack maps.
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => pos.ins().iconst(types::I32, 0),
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
+                pos.ins().iconst(types::I32, 0)
+            }
             WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
         })
     }

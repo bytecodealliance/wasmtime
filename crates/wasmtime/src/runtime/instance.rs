@@ -543,7 +543,10 @@ impl Instance {
         self.get_export(store, name)?.into_tag()
     }
 
-    #[cfg(feature = "component-model")]
+    #[allow(
+        dead_code,
+        reason = "c-api crate does not yet support exnrefs and causes this method to be dead."
+    )]
     pub(crate) fn id(&self) -> InstanceId {
         self.id.instance()
     }

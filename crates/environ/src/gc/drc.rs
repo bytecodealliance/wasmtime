@@ -36,4 +36,8 @@ impl GcTypeLayouts for DrcTypeLayouts {
     fn struct_layout(&self, ty: &WasmStructType) -> GcStructLayout {
         common_struct_layout(ty, HEADER_SIZE, HEADER_ALIGN)
     }
+
+    fn exn_layout(&self, ty: &WasmExnType) -> GcExceptionLayout {
+        common_exn_layout(ty, HEADER_SIZE, HEADER_ALIGN)
+    }
 }

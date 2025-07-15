@@ -564,7 +564,7 @@ unsafe fn gc_alloc_raw(
         .expect("should have engine type index for module type index");
 
     let mut header = VMGcHeader::from_kind_and_index(kind, shared_type_index);
-    header.set_reserved_u27(kind_and_reserved & VMGcKind::UNUSED_MASK);
+    header.set_reserved_u26(kind_and_reserved & VMGcKind::UNUSED_MASK);
 
     let size = usize::try_from(size).unwrap();
     let align = usize::try_from(align).unwrap();

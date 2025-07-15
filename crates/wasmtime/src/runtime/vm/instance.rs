@@ -673,7 +673,12 @@ impl Instance {
         }
     }
 
-    fn get_exported_tag(&self, store: StoreId, index: TagIndex) -> crate::Tag {
+    /// Get an exported tag by index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out-of-range.
+    pub fn get_exported_tag(&self, store: StoreId, index: TagIndex) -> crate::Tag {
         let (id, def_index) = if let Some(def_index) = self.env_module().defined_tag_index(index) {
             (self.id, def_index)
         } else {
@@ -999,7 +1004,7 @@ impl Instance {
                             VMGcRef::from_raw_u32(raw.get_externref())
                         }),
                     )?,
-                    WasmHeapTopType::Any => table.init_gc_refs(
+                    WasmHeapTopType::Any | WasmHeapTopType::Exn => table.init_gc_refs(
                         dst,
                         exprs.iter().map(|expr| unsafe {
                             let raw = const_evaluator

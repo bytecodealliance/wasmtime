@@ -204,6 +204,12 @@ impl WasmCoreDump {
                     Val::AnyRef(_) => {
                         wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::ANY)
                     }
+                    Val::ExnRef(_) => {
+                        wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Abstract {
+                            shared: false,
+                            ty: wasm_encoder::AbstractHeapType::Exn,
+                        })
+                    }
                 };
                 globals.global(
                     wasm_encoder::GlobalType {

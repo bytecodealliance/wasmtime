@@ -96,6 +96,7 @@ impl wasm_val_t {
             },
             Val::AnyRef(_) => crate::abort("creating a wasm_val_t from an anyref"),
             Val::ExternRef(_) => crate::abort("creating a wasm_val_t from an externref"),
+            Val::ExnRef(_) => crate::abort("creating a wasm_val_t from  an exnref"),
             Val::V128(_) => crate::abort("creating a wasm_val_t from a v128"),
         }
     }
@@ -251,6 +252,7 @@ impl wasmtime_val_t {
                     funcref: func.into(),
                 },
             },
+            Val::ExnRef(_) => crate::abort("exnrefs not yet supported in C API"),
             Val::V128(val) => wasmtime_val_t {
                 kind: crate::WASMTIME_V128,
                 of: wasmtime_val_union {
