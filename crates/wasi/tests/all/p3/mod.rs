@@ -77,9 +77,10 @@ async fn run(path: &str) -> anyhow::Result<()> {
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let command =
         Command::new(&mut store, &instance).context("failed to instantiate `wasi:cli/command`")?;
-    let run = command.wasi_cli_run().call_run(&mut store);
     instance
-        .run(&mut store, run)
+        .run_with(&mut store, async move |store| {
+            command.wasi_cli_run().call_run(store).await
+        })
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?

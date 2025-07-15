@@ -220,8 +220,11 @@ pub use self::generated::wasi::*;
 ///     );
 ///
 ///     // Instantiate the component and we're off to the races.
-///     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
-///     let program_result = command.wasi_cli_run().call_run(&mut store).await?;
+///     let instance = linker.instantiate_async(&mut store, &component).await?;
+///     let command = Command::new(&mut store, &instance)?;
+///     let program_result = instance.run_with(&mut store, async move |store| {
+///         command.wasi_cli_run().call_run(store).await
+///     }).await??;
 ///     match program_result {
 ///         Ok(()) => Ok(()),
 ///         Err(()) => std::process::exit(1),
@@ -286,7 +289,10 @@ pub use self::generated::Command;
 ///
 ///     // Instantiate the component and we're off to the races.
 ///     let command = pre.instantiate_async(&mut store).await?;
-///     let program_result = command.wasi_cli_run().call_run(&mut store).await?;
+///     // TODO: Construct an accessor from `store` to call `run`
+///     // https://github.com/bytecodealliance/wasmtime/issues/11249
+///     //let program_result = command.wasi_cli_run().call_run(&mut store).await?;
+///     let program_result = todo!();
 ///     match program_result {
 ///         Ok(()) => Ok(()),
 ///         Err(()) => std::process::exit(1),
@@ -303,6 +309,10 @@ pub use self::generated::Command;
 /// ```
 ///
 /// ---
+// TODO: Make this public, once `CommandPre` can be used for
+// calling exports
+// https://github.com/bytecodealliance/wasmtime/issues/11249
+#[doc(hidden)]
 pub use self::generated::CommandPre;
 
 pub use self::generated::CommandIndices;

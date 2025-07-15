@@ -47,7 +47,7 @@ where
     T: WasiClocksView + 'static,
 {
     async fn wait_until<U>(
-        store: &mut Accessor<U, Self>,
+        store: &Accessor<U, Self>,
         when: monotonic_clock::Instant,
     ) -> wasmtime::Result<()> {
         let clock_now = store.with(|mut view| view.get().clocks().monotonic_clock.now());
@@ -58,7 +58,7 @@ where
     }
 
     async fn wait_for<U>(
-        _store: &mut Accessor<U, Self>,
+        _store: &Accessor<U, Self>,
         duration: monotonic_clock::Duration,
     ) -> wasmtime::Result<()> {
         if duration > 0 {
