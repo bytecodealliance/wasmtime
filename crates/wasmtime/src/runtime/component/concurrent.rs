@@ -194,7 +194,7 @@ mod callback_code {
 /// A flag indicating that the callee is an async-lowered export.
 ///
 /// This may be passed to the `async-start` intrinsic from a fused adapter.
-const START_FLAG_ASYNC_CALLEE: u32 = wasmtime_environ::START_FLAG_ASYNC_CALLEE as u32;
+const START_FLAG_ASYNC_CALLEE: u32 = wasmtime_environ::component::START_FLAG_ASYNC_CALLEE as u32;
 
 /// Provides access to either store data (via the `get` method) or the store
 /// itself (via [`AsContext`]/[`AsContextMut`]), as well as the component
