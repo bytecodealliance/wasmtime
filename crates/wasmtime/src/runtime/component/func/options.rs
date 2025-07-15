@@ -566,14 +566,17 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         }
         let mut complete = false;
         while !complete {
-            let event = self.store.0.replay_buffer_mut().unwrap().next_event()?;
+            let buf = self.store.0.replay_buffer_mut().unwrap();
+            let event = buf.next_event()?;
+            let replay_metadata = buf.metadata();
             let _ = match event {
                 RREvent::ComponentHostFuncReturn(e) => {
                     // End of lowering process
+                    if replay_metadata.validate {
+                        e.validate(result_tys)?
+                    }
                     if let Some(storage) = result_storage.as_deref_mut() {
-                        e.move_into_slice(storage, Some(&result_tys))?;
-                    } else {
-                        e.validate(result_tys)?;
+                        e.move_into_slice(storage);
                     }
                     complete = true;
                 }

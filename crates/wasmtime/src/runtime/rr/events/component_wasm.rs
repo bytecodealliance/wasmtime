@@ -61,16 +61,8 @@ impl HostFuncReturnEvent {
 
     /// Consume the caller event and encode it back into the slice with an optional
     /// typechecking validation of the event.
-    pub fn move_into_slice(
-        self,
-        args: &mut [ValRaw],
-        expect_types: Option<&TypeTuple>,
-    ) -> Result<(), ReplayError> {
-        if let Some(e) = expect_types {
-            self.validate(e)?;
-        }
+    pub fn move_into_slice(self, args: &mut [ValRaw]) {
         func_argvals_into_raw_slice(self.args, args);
-        Ok(())
     }
 }
 

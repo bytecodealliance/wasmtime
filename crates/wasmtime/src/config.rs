@@ -3,6 +3,7 @@ use alloc::sync::Arc;
 use bitflags::Flags;
 use core::fmt;
 use core::str::FromStr;
+use serde::{Deserialize, Serialize};
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 use wasmparser::WasmFeatures;
@@ -221,7 +222,7 @@ impl Default for CompilerConfig {
 }
 
 /// Metadata for specifying recording strategy
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordMetadata {
     /// Flag to include additional signatures for replay validation
     pub add_validation: bool,

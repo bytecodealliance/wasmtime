@@ -1,3 +1,4 @@
+use crate::config::ReplayMetadata;
 use crate::prelude::*;
 use crate::rr::events::core_wasm::{HostFuncEntryEvent, HostFuncReturnEvent};
 use crate::runtime::Uninhabited;
@@ -2354,10 +2355,6 @@ impl HostContext {
                 // (only when validation is enabled).
                 // Function type unwraps should never panic since they are
                 // lazily evaluated
-                store.next_replay_event_if(
-                    |r| r.validate,
-                    |event: HostFuncEntryEvent, _| event.validate(wasm_func_type.unwrap()),
-                )?;
                 store.record_event_if(
                     |r| r.add_validation,
                     |_| {
@@ -2371,6 +2368,16 @@ impl HostContext {
                         )
                     },
                 );
+                store.next_replay_event_if(
+                    |_, r| r.add_validation,
+                    |event: HostFuncEntryEvent, r: &ReplayMetadata| {
+                        if r.validate {
+                            event.validate(wasm_func_type.unwrap())
+                        } else {
+                            Ok(())
+                        }
+                    },
+                )?;
 
                 P::load(&mut store, args.as_mut())
                 // Drop on store is necessary here; scope closure makes this implicit

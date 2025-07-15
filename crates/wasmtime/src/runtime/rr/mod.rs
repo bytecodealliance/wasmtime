@@ -186,6 +186,9 @@ pub trait Replayer: Iterator<Item = RREvent> {
     /// Get metadata associated with the replay process
     fn metadata(&self) -> &ReplayMetadata;
 
+    /// Get the metadata embedded within the trace during recording
+    fn trace_metadata(&self) -> &RecordMetadata;
+
     // Provided Methods
 
     /// Pop the next replay event
@@ -222,8 +225,8 @@ pub trait Replayer: Iterator<Item = RREvent> {
     ///
     /// ## Errors
     ///
-    /// Returns a `ReplayError::EmptyBuffer` if the buffer is empty or a
-    /// `ReplayError::IncorrectEventVariant` if it failed to convert type safely
+    /// Returns a [`ReplayError::EmptyBuffer`] if the buffer is empty or a
+    /// [`ReplayError::IncorrectEventVariant`] if it failed to convert type safely
     #[inline]
     fn next_event_and<T, F>(&mut self, f: F) -> Result<(), ReplayError>
     where
@@ -235,16 +238,16 @@ pub trait Replayer: Iterator<Item = RREvent> {
         Ok(f(call_event, self.metadata())?)
     }
 
-    /// Conditionally [`replay_event`](Self::replay_event) when `pred` is true
+    /// Conditionally execute [`next_event_and`](Self::next_event_and) when `pred` is true
     #[inline]
     fn next_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<(), ReplayError>
     where
         T: TryFrom<RREvent>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
-        P: FnOnce(&ReplayMetadata) -> bool,
+        P: FnOnce(&ReplayMetadata, &RecordMetadata) -> bool,
         F: FnOnce(T, &ReplayMetadata) -> Result<(), ReplayError>,
     {
-        if pred(self.metadata()) {
+        if pred(self.metadata(), self.trace_metadata()) {
             self.next_event_and(f)
         } else {
             Ok(())
@@ -279,6 +282,11 @@ impl RecordBuffer {
     fn push_event(&mut self, event: RREvent) -> () {
         self.data.buf.push_back(event)
     }
+
+    /// Generate indepedent references to data and metadata
+    fn split(&mut self) -> (&mut RRDataCommon, &RecordMetadata) {
+        (&mut self.data, &self.metadata)
+    }
 }
 
 impl Recorder for RecordBuffer {
@@ -304,9 +312,11 @@ impl Recorder for RecordBuffer {
     }
 
     fn flush_to_file(&mut self) -> Result<()> {
+        let (data, metadata) = self.split();
+        // Replay requires the RecordMetadata configuration
+        postcard::to_io(metadata, &mut data.rw)?;
         // Seralizing each event independently prevents checking for vector sizes
         // during deserialization
-        let data = &mut self.data;
         for v in &data.buf {
             postcard::to_io(&v, &mut data.rw)?;
         }
@@ -330,6 +340,7 @@ impl Recorder for RecordBuffer {
 pub struct ReplayBuffer {
     data: RRDataCommon,
     metadata: ReplayMetadata,
+    trace_metadata: RecordMetadata,
 }
 
 impl Iterator for ReplayBuffer {
@@ -345,6 +356,7 @@ impl Replayer for ReplayBuffer {
         let mut file = File::open(cfg.path)?;
         let mut events = VecDeque::<RREvent>::new();
         // Read till EOF
+        let (trace_metadata, _) = postcard::from_io((&mut file, &mut [0; 0]))?;
         while file.stream_position()? != file.metadata()?.len() {
             let (event, _): (RREvent, _) = postcard::from_io((&mut file, &mut [0; 0]))?;
             events.push_back(event);
@@ -355,12 +367,18 @@ impl Replayer for ReplayBuffer {
                 rw: file,
             },
             metadata: cfg.metadata,
+            trace_metadata: trace_metadata,
         })
     }
 
     #[inline]
     fn metadata(&self) -> &ReplayMetadata {
         &self.metadata
+    }
+
+    #[inline]
+    fn trace_metadata(&self) -> &RecordMetadata {
+        &self.trace_metadata
     }
 }
 

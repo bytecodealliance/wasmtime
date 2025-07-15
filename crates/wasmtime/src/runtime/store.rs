@@ -1417,7 +1417,7 @@ impl StoreOpaque {
     where
         T: TryFrom<RREvent>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
-        P: FnOnce(&ReplayMetadata) -> bool,
+        P: FnOnce(&ReplayMetadata, &RecordMetadata) -> bool,
         F: FnOnce(T, &ReplayMetadata) -> Result<(), ReplayError>,
     {
         if let Some(buf) = self.replay_buffer_mut() {

@@ -2,6 +2,7 @@ use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{slice_to_storage_mut, storage_as_slice, storage_as_slice_mut};
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
+use crate::config::ReplayMetadata;
 use crate::prelude::*;
 use crate::runtime::rr::events::component_wasm::{
     HostFuncEntryEvent, HostFuncReturnEvent, LowerReturnEvent, LowerStoreReturnEvent,
@@ -28,15 +29,19 @@ macro_rules! rr_host_func_entry_event {
             |_| {
                 HostFuncEntryEvent::new(
                     $args,
-                    // Don't need to check validation here since it is
-                    // covered by the predicate in this case
                     Some($param_types),
                 )
             },
         );
         $store.next_replay_event_if(
-            |r| r.validate,
-            |event: HostFuncEntryEvent, _| event.validate($param_types),
+            |_, r| r.add_validation,
+            |event: HostFuncEntryEvent, r: &ReplayMetadata| {
+                if r.validate {
+                    event.validate($param_types)
+                } else {
+                    Ok(())
+                }
+            },
         )?;
     }};
 }
