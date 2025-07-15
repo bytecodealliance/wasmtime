@@ -1,4 +1,5 @@
 use crate::ScopeVec;
+use crate::component::dfg::AbstractInstantiations;
 use crate::component::*;
 use crate::prelude::*;
 use crate::{
@@ -8,6 +9,8 @@ use crate::{
 };
 use anyhow::anyhow;
 use anyhow::{Result, bail};
+use cranelift_entity::SecondaryMap;
+use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::mem;
@@ -492,10 +495,131 @@ impl<'a, 'data> Translator<'a, 'data> {
             &self.static_modules,
             &self.static_components,
         )?;
+
         self.partition_adapter_modules(&mut component);
+
         let translation =
             component.finish(self.types.types_mut_for_inlining(), self.result.types_ref())?;
+
+        self.analyze_function_imports(&translation);
+
         Ok((translation, self.static_modules))
+    }
+
+    fn analyze_function_imports(&mut self, translation: &ComponentTranslation) {
+        // First, abstract interpret the initializers to create a map from each
+        // static module to its abstract set of instantiations.
+        let mut instantiations = SecondaryMap::<StaticModuleIndex, AbstractInstantiations>::new();
+        let mut instance_to_module =
+            PrimaryMap::<RuntimeInstanceIndex, PackedOption<StaticModuleIndex>>::new();
+        for init in &translation.component.initializers {
+            match init {
+                GlobalInitializer::InstantiateModule(instantiation) => match instantiation {
+                    InstantiateModule::Static(module, args) => {
+                        instantiations[*module].join(AbstractInstantiations::One(&*args));
+                        instance_to_module.push(Some(*module).into());
+                    }
+                    _ => {
+                        instance_to_module.push(None.into());
+                    }
+                },
+                _ => continue,
+            }
+        }
+
+        // Second, make sure to mark exported modules as instantiated many
+        // times, since they could be linked with who-knows-what at runtime.
+        for item in translation.component.export_items.values() {
+            if let Export::ModuleStatic { index, .. } = item {
+                instantiations[*index].join(AbstractInstantiations::Many)
+            }
+        }
+
+        // Finally, iterate over our instantiations and record statically-known
+        // function imports so that they can get translated into direct calls
+        // (and eventually get inlined) rather than indirect calls through the
+        // imports table.
+        for (module, instantiations) in instantiations.iter() {
+            let args = match instantiations {
+                dfg::AbstractInstantiations::Many | dfg::AbstractInstantiations::None => continue,
+                dfg::AbstractInstantiations::One(args) => args,
+            };
+
+            let mut imported_func_counter = 0_u32;
+            for (i, arg) in args.iter().enumerate() {
+                // Only consider function imports.
+                let (_, _, crate::types::EntityType::Function(_)) =
+                    self.static_modules[module].module.import(i).unwrap()
+                else {
+                    continue;
+                };
+
+                let imported_func = FuncIndex::from_u32(imported_func_counter);
+                imported_func_counter += 1;
+                debug_assert!(
+                    self.static_modules[module]
+                        .module
+                        .defined_func_index(imported_func)
+                        .is_none()
+                );
+
+                match arg {
+                    CoreDef::InstanceFlags(_) => unreachable!("instance flags are not a function"),
+
+                    // We could in theory inline these trampolines, so it could
+                    // potentially make sense to record that we know this
+                    // imported function is this particular trampoline. However,
+                    // everything else is based around (module,
+                    // defined-function) pairs and these trampolines don't fit
+                    // that paradigm. Also, inlining trampolines gets really
+                    // tricky when we consider the stack pointer, frame pointer,
+                    // and return address note-taking that they do for the
+                    // purposes of stack walking. We could, with enough effort,
+                    // turn them into direct calls even though we probably
+                    // wouldn't ever inline them, but it just doesn't seem worth
+                    // the effort.
+                    CoreDef::Trampoline(_) => continue,
+
+                    // This imported function is an export from another
+                    // instance, a perfect candidate for becoming an inlinable
+                    // direct call!
+                    CoreDef::Export(export) => {
+                        let Some(arg_module) = &instance_to_module[export.instance].expand() else {
+                            // Instance of a dynamic module that is not part of
+                            // this component, not a statically-known module
+                            // inside this component. We have to do an indirect
+                            // call.
+                            continue;
+                        };
+
+                        let ExportItem::Index(EntityIndex::Function(arg_func)) = &export.item
+                        else {
+                            unreachable!("function imports must be functions")
+                        };
+
+                        let Some(arg_module_def_func) = self.static_modules[*arg_module]
+                            .module
+                            .defined_func_index(*arg_func)
+                        else {
+                            // TODO: we should ideally follow re-export chains
+                            // to bottom out the instantiation argument in
+                            // either a definition or an import at the root
+                            // component boundary. In practice, this pattern is
+                            // rare, so following these chains is left for the
+                            // Future.
+                            continue;
+                        };
+
+                        assert!(
+                            self.static_modules[module].known_imported_functions[imported_func]
+                                .is_none()
+                        );
+                        self.static_modules[module].known_imported_functions[imported_func] =
+                            Some((*arg_module, arg_module_def_func));
+                    }
+                }
+            }
+        }
     }
 
     fn translate_payload(
