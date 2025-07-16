@@ -961,7 +961,7 @@ impl fmt::Display for VexW {
 /// The VEX encoding, introduced for AVX instructions.
 ///
 /// ```
-/// # use cranelift_assembler_x64_meta::dsl::{vex, VexLength::L128};
+/// # use cranelift_assembler_x64_meta::dsl::{vex, Length::L128};
 /// // To encode a BLENDPD instruction in the manual: VEX.128.66.0F3A.WIG 0D /r ib
 /// let enc = vex(L128)._66()._0f3a().wig().op(0x0D).r().ib();
 /// assert_eq!(enc.to_string(), "VEX.128.66.0F3A.WIG 0x0D /r ib");
