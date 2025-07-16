@@ -378,7 +378,9 @@ unsafe fn table_copy(
     let dst_table_index = TableIndex::from_u32(dst_table_index);
     let src_table_index = TableIndex::from_u32(src_table_index);
     let store = store.store_opaque_mut();
-    let dst_table = instance.as_mut().get_table(dst_table_index);
+    // FIXME(#11179) shouldn't use a raw pointer to subvert the borrow checker
+    // here.
+    let dst_table: *mut Table = instance.as_mut().get_table(dst_table_index);
     // Lazy-initialize the whole range in the source table first.
     let src_range = src..(src.checked_add(len).unwrap_or(u64::MAX));
     let src_table = instance.get_table_with_lazy_init(src_table_index, src_range);

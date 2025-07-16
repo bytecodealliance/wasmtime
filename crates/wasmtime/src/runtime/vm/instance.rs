@@ -315,39 +315,39 @@ impl Instance {
         ret
     }
 
-    /// Converts the provided `*mut VMContext` to an `Instance` pointer and runs
-    /// the provided closure with the instance.
+    /// Converts the provided `*mut VMContext` to an `Instance` pointer and
+    /// returns it with the same lifetime as `self`.
     ///
-    /// This method will move the `vmctx` pointer backwards to point to the
-    /// original `Instance` that precedes it. The closure is provided a
-    /// temporary version of the `Instance` pointer with a constrained lifetime
-    /// to the closure to ensure it doesn't accidentally escape.
-    ///
-    /// # Unsafety
-    ///
-    /// Callers must validate that the `vmctx` pointer is a valid allocation
-    /// and that it's valid to acquire `Pin<&mut Instance>` at this time. For example
-    /// this can't be called twice on the same `VMContext` to get two active
-    /// pointers to the same `Instance`.
-    #[inline]
-    pub unsafe fn from_vmctx<R>(
-        vmctx: NonNull<VMContext>,
-        f: impl FnOnce(Pin<&mut Instance>) -> R,
-    ) -> R {
-        let mut ptr = vmctx
-            .byte_sub(mem::size_of::<Instance>())
-            .cast::<Instance>();
-        f(Pin::new_unchecked(ptr.as_mut()))
-    }
-
-    /// Returns the `InstanceId` associated with the `vmctx` provided.
+    /// This function can be used when traversing a `VMContext` to reach into
+    /// the context needed for imports, optionally.
     ///
     /// # Safety
     ///
-    /// The `vmctx` pointer must be a valid pointer to read the `InstanceId`
-    /// from.
-    unsafe fn vmctx_instance_id(vmctx: NonNull<VMContext>) -> InstanceId {
-        Instance::from_vmctx(vmctx, |i| i.id)
+    /// This function requires that the `vmctx` pointer is indeed valid and
+    /// from the store that `self` belongs to.
+    #[inline]
+    unsafe fn sibling_vmctx<'a>(&'a self, vmctx: NonNull<VMContext>) -> &'a Instance {
+        let ptr = vmctx
+            .byte_sub(mem::size_of::<Instance>())
+            .cast::<Instance>();
+        ptr.as_ref()
+    }
+
+    /// Same as [`Self::sibling_vmctx`], but the mutable version.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the `vmctx` pointer is indeed valid and
+    /// from the store that `self` belongs to.
+    #[inline]
+    unsafe fn sibling_vmctx_mut<'a>(
+        self: Pin<&'a mut Self>,
+        vmctx: NonNull<VMContext>,
+    ) -> Pin<&'a mut Instance> {
+        let mut ptr = vmctx
+            .byte_sub(mem::size_of::<Instance>())
+            .cast::<Instance>();
+        Pin::new_unchecked(ptr.as_mut())
     }
 
     pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
@@ -607,7 +607,7 @@ impl Instance {
             // SAFETY: validity of this `Instance` guarantees validity of the
             // `vmctx` pointer being read here to find the transitive
             // `InstanceId` that the import is associated with.
-            let id = unsafe { Instance::vmctx_instance_id(import.vmctx.as_non_null()) };
+            let id = unsafe { self.sibling_vmctx(import.vmctx.as_non_null()).id };
             (id, import.index)
         };
         crate::Table::from_raw(StoreInstanceId::new(store, id), def_index)
@@ -627,7 +627,7 @@ impl Instance {
             // SAFETY: validity of this `Instance` guarantees validity of the
             // `vmctx` pointer being read here to find the transitive
             // `InstanceId` that the import is associated with.
-            let id = unsafe { Instance::vmctx_instance_id(import.vmctx.as_non_null()) };
+            let id = unsafe { self.sibling_vmctx(import.vmctx.as_non_null()).id };
             (id, import.index)
         };
         crate::Memory::from_raw(StoreInstanceId::new(store, id), def_index)
@@ -651,7 +651,7 @@ impl Instance {
                 // imports meaning we can read the id of the vmctx within.
                 let id = unsafe {
                     let vmctx = VMContext::from_opaque(import.vmctx.unwrap().as_non_null());
-                    Instance::vmctx_instance_id(vmctx)
+                    self.sibling_vmctx(vmctx).id
                 };
                 crate::Global::from_core(StoreInstanceId::new(store, id), index)
             }
@@ -686,7 +686,7 @@ impl Instance {
             // SAFETY: validity of this `Instance` guarantees validity of the
             // `vmctx` pointer being read here to find the transitive
             // `InstanceId` that the import is associated with.
-            let id = unsafe { Instance::vmctx_instance_id(import.vmctx.as_non_null()) };
+            let id = unsafe { self.sibling_vmctx(import.vmctx.as_non_null()).id };
             (id, import.index)
         };
         crate::Tag::from_raw(StoreInstanceId::new(store, id), def_index)
@@ -699,19 +699,6 @@ impl Instance {
     /// resolved `lookup_by_declaration`.
     pub fn exports(&self) -> wasmparser::collections::index_map::Iter<'_, String, EntityIndex> {
         self.env_module().exports.iter()
-    }
-
-    /// Return the table index for the given `VMTableDefinition`.
-    pub unsafe fn table_index(&self, table: &VMTableDefinition) -> DefinedTableIndex {
-        let index = DefinedTableIndex::new(
-            usize::try_from(
-                (table as *const VMTableDefinition)
-                    .offset_from(self.table_ptr(DefinedTableIndex::new(0)).as_ptr()),
-            )
-            .unwrap(),
-        );
-        assert!(index.index() < self.tables.len());
-        index
     }
 
     /// Grow memory by the specified amount of pages.
@@ -743,7 +730,7 @@ impl Instance {
         self: Pin<&mut Self>,
         table_index: TableIndex,
     ) -> TableElementType {
-        unsafe { (*self.get_table(table_index)).element_type() }
+        self.get_table(table_index).element_type()
     }
 
     /// Grow table by the specified amount of elements, filling them with
@@ -958,7 +945,7 @@ impl Instance {
 
     pub(crate) fn table_init_segment(
         store: &mut StoreOpaque,
-        id: InstanceId,
+        elements_instance_id: InstanceId,
         const_evaluator: &mut ConstExprEvaluator,
         table_index: TableIndex,
         elements: &TableSegmentElements,
@@ -968,14 +955,56 @@ impl Instance {
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
-        let mut instance = store.instance_mut(id);
-        let table = unsafe { &mut *instance.as_mut().get_table(table_index) };
+        let elements_instance = store.instance_mut(elements_instance_id);
+        let elements_module = elements_instance.env_module();
+        let top = elements_module.tables[table_index].ref_type.heap_type.top();
+        let (defined_table_index, mut table_instance) =
+            elements_instance.defined_table_index_and_instance(table_index);
+        let table_instance_id = table_instance.id;
+
         let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
         let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
-        let module = instance.env_module().clone();
+
+        // In the initialization below we need to simultaneously have a mutable
+        // borrow on the `Table` that we're initializing and the `StoreOpaque`
+        // that it comes from. To solve this the tables are temporarily removed
+        // from the instance at `id` to be re-inserted at the end of this
+        // function via a `Drop` helper. The table and the store are then
+        // accessed through the drop helper below.
+        //
+        // This will cause a runtime panic if the table is actually accessed
+        // during the lifetime of the functions below, but that's a bug if that
+        // happens which needs to be fixed anyway.
+        let tables = mem::replace(table_instance.as_mut().tables_mut(), PrimaryMap::new());
+        let mut replace = ReplaceTables {
+            tables,
+            id: table_instance_id,
+            store,
+        };
+
+        struct ReplaceTables<'a> {
+            tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+            id: InstanceId,
+            store: &'a mut StoreOpaque,
+        }
+
+        impl Drop for ReplaceTables<'_> {
+            fn drop(&mut self) {
+                mem::swap(
+                    self.store.instance_mut(self.id).tables_mut(),
+                    &mut self.tables,
+                );
+                debug_assert!(self.tables.is_empty());
+            }
+        }
+
+        // Reborrow the table/store from `replace` for the below code.
+        let table = &mut replace.tables[defined_table_index].1;
+        let store = &mut *replace.store;
 
         match elements {
             TableSegmentElements::Functions(funcs) => {
+                let mut instance = store.instance_mut(elements_instance_id);
                 let elements = funcs
                     .get(src..)
                     .and_then(|s| s.get(..len))
@@ -992,8 +1021,7 @@ impl Instance {
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                let top = module.tables[table_index].ref_type.heap_type.top();
-                let mut context = ConstEvalContext::new(id);
+                let mut context = ConstEvalContext::new(elements_instance_id);
                 match top {
                     WasmHeapTopType::Extern => table.init_gc_refs(
                         dst,
@@ -1216,12 +1244,9 @@ impl Instance {
         self: Pin<&mut Self>,
         table_index: TableIndex,
         range: impl Iterator<Item = u64>,
-    ) -> *mut Table {
-        self.with_defined_table_index_and_instance(table_index, |idx, instance| {
-            // FIXME(#11179) shouldn't need to subvert the borrow checker
-            let ret: *mut Table = instance.get_defined_table_with_lazy_init(idx, range);
-            ret
-        })
+    ) -> &mut Table {
+        let (idx, instance) = self.defined_table_index_and_instance(table_index);
+        instance.get_defined_table_with_lazy_init(idx, range)
     }
 
     /// Gets the raw runtime table data structure owned by this instance
@@ -1279,12 +1304,9 @@ impl Instance {
 
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
-    pub(crate) fn get_table(self: Pin<&mut Self>, table_index: TableIndex) -> *mut Table {
-        self.with_defined_table_index_and_instance(table_index, |idx, instance| unsafe {
-            // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
-            // `*mut A`, which should be a safe operation to do.
-            &raw mut (*instance.tables_mut().get_raw_mut(idx).unwrap()).1
-        })
+    pub(crate) fn get_table(self: Pin<&mut Self>, table_index: TableIndex) -> &mut Table {
+        let (idx, instance) = self.defined_table_index_and_instance(table_index);
+        instance.get_defined_table(idx)
     }
 
     /// Get a locally-defined table.
@@ -1292,22 +1314,22 @@ impl Instance {
         &mut self.tables_mut()[index].1
     }
 
-    pub(crate) fn with_defined_table_index_and_instance<R>(
-        self: Pin<&mut Self>,
+    pub(crate) fn defined_table_index_and_instance<'a>(
+        self: Pin<&'a mut Self>,
         index: TableIndex,
-        f: impl FnOnce(DefinedTableIndex, Pin<&mut Instance>) -> R,
-    ) -> R {
+    ) -> (DefinedTableIndex, Pin<&'a mut Instance>) {
         if let Some(defined_table_index) = self.env_module().defined_table_index(index) {
-            f(defined_table_index, self)
+            (defined_table_index, self)
         } else {
             let import = self.imported_table(index);
-            unsafe {
-                Instance::from_vmctx(import.vmctx.as_non_null(), |foreign_instance| {
-                    let foreign_table_def = import.from.as_ptr();
-                    let foreign_table_index = foreign_instance.table_index(&*foreign_table_def);
-                    f(foreign_table_index, foreign_instance)
-                })
-            }
+            let index = import.index;
+            let vmctx = import.vmctx.as_non_null();
+            // SAFETY: the validity of `self` means that the reachable instances
+            // should also all be owned by the same store and fully initialized,
+            // so it's safe to laterally move from a mutable borrow of this
+            // instance to a mutable borrow of a sibling instance.
+            let foreign_instance = unsafe { self.sibling_vmctx_mut(vmctx) };
+            (index, foreign_instance)
         }
     }
 

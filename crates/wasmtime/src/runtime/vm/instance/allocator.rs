@@ -572,7 +572,6 @@ fn check_table_init_bounds(
     let mut const_evaluator = ConstExprEvaluator::default();
 
     for segment in module.table_initialization.segments.iter() {
-        let table = unsafe { &*store.instance_mut(instance).get_table(segment.table_index) };
         let mut context = ConstEvalContext::new(instance);
         let start = unsafe {
             const_evaluator
@@ -582,6 +581,7 @@ fn check_table_init_bounds(
         let start = usize::try_from(start.get_u32()).unwrap();
         let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
 
+        let table = store.instance_mut(instance).get_table(segment.table_index);
         match end {
             Some(end) if end <= table.size() => {
                 // Initializer is in bounds
