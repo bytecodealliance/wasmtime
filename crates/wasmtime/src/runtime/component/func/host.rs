@@ -559,13 +559,10 @@ where
                 };
             }
             ReturnMode::Replay => {
+                let result_storage =
+                    mem::transmute::<&mut [MaybeUninit<ValRaw>], &mut [ValRaw]>(storage);
                 // This path also stores the final return values in resulting storage
-                cx.replay_lowering(
-                    result_tys,
-                    Some(mem::transmute::<&mut [MaybeUninit<ValRaw>], &mut [ValRaw]>(
-                        storage,
-                    )),
-                )?;
+                cx.replay_lowering(result_tys, Some(result_storage))?;
             }
         };
     } else {
