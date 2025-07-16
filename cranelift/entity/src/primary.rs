@@ -7,7 +7,6 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
-use core::mem;
 use core::ops::{Index, IndexMut};
 use core::slice;
 #[cfg(feature = "enable-serde")]
@@ -163,35 +162,11 @@ where
     ///
     /// Returns an error if an element does not exist, or if the same key was passed more than
     /// once.
-    // This implementation is taken from the unstable `get_many_mut`.
-    //
-    // Once it has been stabilised we can call that method directly.
-    pub fn get_many_mut<const N: usize>(
+    pub fn get_disjoint_mut<const N: usize>(
         &mut self,
         indices: [K; N],
-    ) -> Result<[&mut V; N], GetManyMutError<K>> {
-        for (i, &idx) in indices.iter().enumerate() {
-            if idx.index() >= self.len() {
-                return Err(GetManyMutError::DoesNotExist(idx));
-            }
-            for &idx2 in &indices[..i] {
-                if idx == idx2 {
-                    return Err(GetManyMutError::MultipleOf(idx));
-                }
-            }
-        }
-
-        let slice: *mut V = self.elems.as_mut_ptr();
-        let mut arr: mem::MaybeUninit<[&mut V; N]> = mem::MaybeUninit::uninit();
-        let arr_ptr = arr.as_mut_ptr();
-
-        unsafe {
-            for i in 0..N {
-                let idx = *indices.get_unchecked(i);
-                *(*arr_ptr).get_unchecked_mut(i) = &mut *slice.add(idx.index());
-            }
-            Ok(arr.assume_init())
-        }
+    ) -> Result<[&mut V; N], slice::GetDisjointMutError> {
+        self.elems.get_disjoint_mut(indices.map(|k| k.index()))
     }
 
     /// Performs a binary search on the values with a key extraction function.
@@ -234,12 +209,6 @@ where
             None
         }
     }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum GetManyMutError<K> {
-    DoesNotExist(K),
-    MultipleOf(K),
 }
 
 impl<K, V> Default for PrimaryMap<K, V>

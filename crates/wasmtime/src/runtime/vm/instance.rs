@@ -1571,7 +1571,7 @@ impl Instance {
         unsafe { &mut self.get_unchecked_mut().memories }
     }
 
-    fn tables_mut(
+    pub(crate) fn tables_mut(
         self: Pin<&mut Self>,
     ) -> &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)> {
         // SAFETY: see `store_mut` above.

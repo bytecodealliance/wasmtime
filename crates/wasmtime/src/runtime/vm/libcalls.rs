@@ -57,9 +57,10 @@
 #[cfg(feature = "stack-switching")]
 use super::stack_switching::VMContObj;
 use crate::prelude::*;
+use crate::runtime::store::StoreInstanceId;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
-use crate::runtime::vm::table::{Table, TableElementType};
+use crate::runtime::vm::table::TableElementType;
 use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{
     HostResultHasUnwindSentinel, Instance, TrapReason, VMStore, f32x4, f64x2, i8x16,
@@ -366,7 +367,7 @@ unsafe fn table_fill_cont_obj(
 }
 
 // Implementation of `table.copy`.
-unsafe fn table_copy(
+fn table_copy(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
     dst_table_index: u32,
@@ -374,19 +375,34 @@ unsafe fn table_copy(
     dst: u64,
     src: u64,
     len: u64,
-) -> Result<()> {
+) -> Result<(), Trap> {
     let dst_table_index = TableIndex::from_u32(dst_table_index);
     let src_table_index = TableIndex::from_u32(src_table_index);
     let store = store.store_opaque_mut();
-    // FIXME(#11179) shouldn't use a raw pointer to subvert the borrow checker
-    // here.
-    let dst_table: *mut Table = instance.as_mut().get_table(dst_table_index);
-    // Lazy-initialize the whole range in the source table first.
-    let src_range = src..(src.checked_add(len).unwrap_or(u64::MAX));
-    let src_table = instance.get_table_with_lazy_init(src_table_index, src_range);
-    let gc_store = store.optional_gc_store_mut();
-    Table::copy(gc_store, dst_table, src_table, dst, src, len)?;
-    Ok(())
+
+    // Convert the two table indices relative to `instance` into two
+    // defining instances and the defined table index within that instance.
+    let (dst_def_index, dst_instance) = instance
+        .as_mut()
+        .defined_table_index_and_instance(dst_table_index);
+    let dst_instance_id = dst_instance.id();
+    let (src_def_index, src_instance) = instance
+        .as_mut()
+        .defined_table_index_and_instance(src_table_index);
+    let src_instance_id = src_instance.id();
+
+    let src_table = crate::Table::from_raw(
+        StoreInstanceId::new(store.id(), src_instance_id),
+        src_def_index,
+    );
+    let dst_table = crate::Table::from_raw(
+        StoreInstanceId::new(store.id(), dst_instance_id),
+        dst_def_index,
+    );
+
+    // SAFETY: this is only safe if the two tables have the same type, and that
+    // was validated during wasm-validation time.
+    unsafe { crate::Table::copy_raw(store, &dst_table, dst, &src_table, src, len) }
 }
 
 // Implementation of `table.init`.
