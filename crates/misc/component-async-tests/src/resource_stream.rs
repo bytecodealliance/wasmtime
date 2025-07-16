@@ -51,13 +51,9 @@ impl bindings::local::local::resource_stream::HostConcurrent for Ctx {
             async fn run(self, accessor: &Accessor<T, Ctx>) -> Result<()> {
                 let mut tx = Some(self.tx);
                 for _ in 0..self.count {
-                    tx = accessor
-                        .with(|mut view| {
-                            let item = view.get().table().push(ResourceStreamX)?;
-                            Ok::<_, anyhow::Error>(tx.take().unwrap().write_all(Some(item)))
-                        })?
-                        .await
-                        .0;
+                    let item =
+                        accessor.with(|mut view| view.get().table().push(ResourceStreamX))?;
+                    tx = tx.take().unwrap().write_all(accessor, Some(item)).await.0;
                 }
                 Ok(())
             }

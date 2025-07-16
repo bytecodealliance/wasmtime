@@ -12,7 +12,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-futures = { workspace = true }
+futures = { workspace = true, features = ['async-await'] }
 env_logger = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [
