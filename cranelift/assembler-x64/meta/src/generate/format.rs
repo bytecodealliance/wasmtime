@@ -334,7 +334,7 @@ impl dsl::Format {
     }
 
     fn generate_evex_prefix(&self, f: &mut Formatter, evex: &dsl::Evex) -> ModRmStyle {
-        use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
+        use dsl::OperandKind::{Reg, RegMem};
 
         f.empty_line();
         f.comment("Emit EVEX prefix.");
@@ -347,72 +347,12 @@ impl dsl::Format {
         let bits = format!("ll, pp, mmmmm, w, bcast");
 
         let style = match self.operands_by_kind().as_slice() {
-            [Reg(reg), Reg(vvvv), Reg(rm)] => {
-                fmtln!(f, "let reg = self.{reg}.enc();");
-                fmtln!(f, "let vvvv = self.{vvvv}.enc();");
-                fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                fmtln!(f, "let evex = EvexPrefix::new(reg, vvvv, rm, {bits});");
-                ModRmStyle::Reg {
-                    reg: ModRmReg::Reg(*reg),
-                    rm: *rm,
-                }
-            }
-            [Reg(reg), Reg(vvvv), RegMem(rm)]
-            | [Reg(reg), Reg(vvvv), Mem(rm)]
-            | [Reg(reg), Reg(vvvv), RegMem(rm), Imm(_) | FixedReg(_)]
-            | [Reg(reg), RegMem(rm), Reg(vvvv)] => {
+            [Reg(reg), Reg(vvvv), RegMem(rm)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let vvvv = self.{vvvv}.enc();");
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(f, "let evex = EvexPrefix::new(reg, vvvv, rm, {bits});");
                 ModRmStyle::RegMem {
-                    reg: ModRmReg::Reg(*reg),
-                    rm: *rm,
-                }
-            }
-            [Reg(reg), Reg(vvvv), RegMem(rm), Reg(is4)] => {
-                fmtln!(f, "let reg = self.{reg}.enc();");
-                fmtln!(f, "let vvvv = self.{vvvv}.enc();");
-                fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                fmtln!(f, "let evex = EvexPrefix::new(reg, vvvv, rm, {bits});");
-                ModRmStyle::RegMemIs4 {
-                    reg: ModRmReg::Reg(*reg),
-                    rm: *rm,
-                    is4: *is4,
-                }
-            }
-            [Reg(reg_or_vvvv), RegMem(rm)]
-            | [RegMem(rm), Reg(reg_or_vvvv)]
-            | [Reg(reg_or_vvvv), RegMem(rm), Imm(_)] => match evex.unwrap_digit() {
-                Some(digit) => {
-                    let vvvv = reg_or_vvvv;
-                    fmtln!(f, "let reg = {digit:#x};");
-                    fmtln!(f, "let vvvv = self.{vvvv}.enc();");
-                    fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                    fmtln!(f, "let evex = EvexPrefix::new(reg, vvvv, rm, {bits});");
-                    ModRmStyle::RegMem {
-                        reg: ModRmReg::Digit(digit),
-                        rm: *rm,
-                    }
-                }
-                None => {
-                    let reg = reg_or_vvvv;
-                    fmtln!(f, "let reg = self.{reg}.enc();");
-                    fmtln!(f, "let vvvv = {};", "0b0");
-                    fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                    fmtln!(f, "let evex = EvexPrefix::new(reg, vvvv, rm, {bits});");
-                    ModRmStyle::RegMem {
-                        reg: ModRmReg::Reg(*reg),
-                        rm: *rm,
-                    }
-                }
-            },
-            [Reg(reg), Reg(rm)] => {
-                fmtln!(f, "let reg = self.{reg}.enc();");
-                fmtln!(f, "let vvvv = 0;");
-                fmtln!(f, "let rm = (Some(self.{rm}.enc()), None);");
-                fmtln!(f, "let evex = EvexPrefix::new(reg, vvvv, rm, {bits});");
-                ModRmStyle::Reg {
                     reg: ModRmReg::Reg(*reg),
                     rm: *rm,
                 }
