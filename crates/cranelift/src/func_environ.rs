@@ -1938,11 +1938,10 @@ impl FuncEnvironment<'_> {
             self.builtin_functions.table_fill_func_ref(&mut pos.func)
         };
 
-        let vmctx = self.vmctx_val(&mut pos);
+        let (table_vmctx, table_index) = self.table_vmctx_and_defined_index(&mut pos, table_index);
 
-        let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
         pos.ins()
-            .call(libcall, &[vmctx, table_index_arg, dst, val, len]);
+            .call(libcall, &[table_vmctx, table_index, dst, val, len]);
 
         Ok(())
     }
