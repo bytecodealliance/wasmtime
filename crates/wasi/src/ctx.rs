@@ -17,6 +17,7 @@ use std::sync::Arc;
 /// [p2::WasiCtxBuilder](crate::p2::WasiCtxBuilder)
 ///
 /// [`Store`]: wasmtime::Store
+#[derive(Default)]
 pub(crate) struct WasiCtxBuilder<I, O> {
     pub(crate) random: WasiRandomCtx,
     pub(crate) clocks: WasiClocksCtx,
