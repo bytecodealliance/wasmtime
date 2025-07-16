@@ -288,7 +288,10 @@ impl Func {
         {
             let future =
                 self.call_concurrent_dynamic(store.as_context_mut(), params.to_vec(), false);
-            let run_results = self.instance.run(store, future).await??;
+            let run_results = self
+                .instance
+                .run_concurrent(store, async |_| future.await)
+                .await??;
             assert_eq!(run_results.len(), results.len());
             for (result, slot) in run_results.into_iter().zip(results) {
                 *slot = result;
@@ -321,11 +324,10 @@ impl Func {
     /// (if any) automatically when the guest task completes -- no need to
     /// explicitly call `Func::post_return` afterward.
     ///
-    /// Note that the `Future` returned by this method will panic if polled or
-    /// `.await`ed outside of the event loop of the component instance this
-    /// function belongs to; use `Instance::run`, `Instance::run_with`, or
-    /// `Instance::spawn` to poll it from within the event loop.  See
-    /// [`Instance::run`] for examples.
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this function.
     #[cfg(feature = "component-model-async")]
     pub async fn call_concurrent(
         self,

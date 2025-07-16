@@ -232,7 +232,7 @@ where
             let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
             self.func
                 .instance
-                .run(wrapper.store.as_context_mut(), result)
+                .run_concurrent(wrapper.store.as_context_mut(), async |_| result.await)
                 .await?
         }
         #[cfg(not(feature = "component-model-async"))]
@@ -250,13 +250,12 @@ where
     /// made using this method may run concurrently with other calls to the same
     /// instance.  In addition, the runtime will call the `post-return` function
     /// (if any) automatically when the guest task completes -- no need to
-    /// explicitly call `Func::post_return` afterward.
+    /// explicitly cll `Func::post_return` afterward.
     ///
-    /// Note that the `Future` returned by this method will panic if polled or
-    /// `.await`ed outside of the event loop of the component instance this
-    /// function belongs to; use `Instance::run`, `Instance::run_with`, or
-    /// `Instance::spawn` to poll it from within the event loop.  See
-    /// [`Instance::run`] for examples.
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this function.
     #[cfg(feature = "component-model-async")]
     pub async fn call_concurrent(
         self,

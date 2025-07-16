@@ -834,7 +834,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
 
     if concurrent {
         instance
-            .run_with(&mut store, async move |accessor| {
+            .run_concurrent(&mut store, async move |accessor| {
                 run.call_concurrent(accessor, ()).await
             })
             .await??;
@@ -958,7 +958,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
 
     if concurrent {
         instance
-            .run_with(&mut store, async |store| {
+            .run_concurrent(&mut store, async |store| {
                 run.call_concurrent(store, Vec::new()).await
             })
             .await??;

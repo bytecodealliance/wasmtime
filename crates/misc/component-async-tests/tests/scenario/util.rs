@@ -215,7 +215,7 @@ pub async fn test_run_with_count(components: &[&str], count: usize) -> Result<()
 
     // Start `count` concurrent calls and then join them all:
     instance
-        .run_with(&mut store, async |store| {
+        .run_concurrent(&mut store, async |store| {
             let mut futures = FuturesUnordered::new();
             for _ in 0..count {
                 futures.push(yield_host.local_local_run().call_run(store));

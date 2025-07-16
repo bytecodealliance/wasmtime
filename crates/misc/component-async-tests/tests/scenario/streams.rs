@@ -48,7 +48,7 @@ pub async fn async_watch_streams() -> Result<()> {
     // Test watching and then dropping the read end of a stream.
     let (mut tx, rx) = instance.stream::<u8, Option<_>, Option<_>>(&mut store)?;
     instance
-        .run_with(&mut store, async |store| {
+        .run_concurrent(&mut store, async |store| {
             futures::join!(tx.watch_reader(store), async {
                 drop(rx);
             });
@@ -59,13 +59,13 @@ pub async fn async_watch_streams() -> Result<()> {
     let (mut tx, rx) = instance.stream::<u8, Option<_>, Option<_>>(&mut store)?;
     drop(rx);
     instance
-        .run_with(&mut store, async |store| tx.watch_reader(store).await)
+        .run_concurrent(&mut store, async |store| tx.watch_reader(store).await)
         .await?;
 
     // Test watching and then dropping the write end of a stream.
     let (tx, mut rx) = instance.stream::<u8, Option<_>, Option<_>>(&mut store)?;
     instance
-        .run_with(&mut store, async |store| {
+        .run_concurrent(&mut store, async |store| {
             futures::join!(rx.watch_writer(store), async {
                 drop(tx);
             });
@@ -76,13 +76,13 @@ pub async fn async_watch_streams() -> Result<()> {
     let (tx, mut rx) = instance.stream::<u8, Option<_>, Option<_>>(&mut store)?;
     drop(tx);
     instance
-        .run_with(&mut store, async |store| rx.watch_writer(store).await)
+        .run_concurrent(&mut store, async |store| rx.watch_writer(store).await)
         .await?;
 
     // Test watching and then dropping the read end of a future.
     let (mut tx, rx) = instance.future::<u8>(|| 42, &mut store)?;
     instance
-        .run_with(&mut store, async |store| {
+        .run_concurrent(&mut store, async |store| {
             futures::join!(tx.watch_reader(store), async {
                 drop(rx);
             });
@@ -93,13 +93,13 @@ pub async fn async_watch_streams() -> Result<()> {
     let (mut tx, rx) = instance.future::<u8>(|| 42, &mut store)?;
     drop(rx);
     instance
-        .run_with(&mut store, async |store| tx.watch_reader(store).await)
+        .run_concurrent(&mut store, async |store| tx.watch_reader(store).await)
         .await?;
 
     // Test watching and then dropping the write end of a future.
     let (tx, mut rx) = instance.future::<u8>(|| 42, &mut store)?;
     instance
-        .run_with(&mut store, async |store| {
+        .run_concurrent(&mut store, async |store| {
             futures::join!(rx.watch_writer(store), async {
                 drop(tx);
             });
@@ -110,7 +110,7 @@ pub async fn async_watch_streams() -> Result<()> {
     let (tx, mut rx) = instance.future::<u8>(|| 42, &mut store)?;
     drop(tx);
     instance
-        .run_with(&mut store, async |store| rx.watch_writer(store).await)
+        .run_concurrent(&mut store, async |store| rx.watch_writer(store).await)
         .await?;
 
     enum Event {
@@ -121,7 +121,7 @@ pub async fn async_watch_streams() -> Result<()> {
     // Test watching, then writing to, then dropping, then writing again to the
     // read end of a stream.
     instance
-        .run_with(&mut store, async |store| -> wasmtime::Result<_> {
+        .run_concurrent(&mut store, async |store| -> wasmtime::Result<_> {
             let mut futures = FuturesUnordered::new();
             let (mut tx, rx) = store.with(|s| instance.stream(s))?;
             assert!(
@@ -215,7 +215,7 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
 
     // First, test stream host->host
     instance
-        .run_with(&mut store, async |store| -> wasmtime::Result<_> {
+        .run_concurrent(&mut store, async |store| -> wasmtime::Result<_> {
             let (tx, rx) = store.with(|mut s| instance.stream(&mut s))?;
 
             let mut futures = FuturesUnordered::new();
@@ -277,7 +277,7 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
         let (mut tx_ignored, rx_ignored) = instance.future(|| 42u8, &mut store)?;
 
         instance
-            .run_with(&mut store, async |store| {
+            .run_concurrent(&mut store, async |store| {
                 let mut futures = FuturesUnordered::new();
                 futures.push(tx.write(store, value).map(FutureEvent::Write).boxed());
                 futures.push(rx.read(store).map(FutureEvent::Read).boxed());
@@ -329,7 +329,7 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
         let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
 
         instance
-            .run_with(&mut store, async move |accessor| {
+            .run_concurrent(&mut store, async move |accessor| {
                 let mut futures = FuturesUnordered::new();
                 futures.push(
                     closed_streams
@@ -392,7 +392,7 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
         let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
 
         instance
-            .run_with(&mut store, async move |accessor| {
+            .run_concurrent(&mut store, async move |accessor| {
                 let mut futures = FuturesUnordered::new();
                 futures.push(
                     closed_streams

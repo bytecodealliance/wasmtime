@@ -237,9 +237,9 @@ pub async fn test_round_trip(
             component_async_tests::round_trip::bindings::RoundTrip::new(&mut store, &instance)?;
 
         if call_style == 0 || !cfg!(miri) {
-            // Now do it again using `Instance::run_with`:
+            // Now do it again using `Instance::run_concurrent`:
             instance
-                .run_with(&mut store, {
+                .run_concurrent(&mut store, {
                     let inputs_and_outputs = inputs_and_outputs
                         .iter()
                         .map(|(a, b)| (String::from(*a), String::from(*b)))
@@ -322,7 +322,9 @@ pub async fn test_round_trip(
                 },
             );
 
-            instance.run(&mut store, rx).await??;
+            instance
+                .run_concurrent(&mut store, async |_| rx.await)
+                .await??;
 
             instance.assert_concurrent_state_empty(&mut store);
         }
@@ -382,7 +384,7 @@ pub async fn test_round_trip(
 
         if call_style == 3 || !cfg!(miri) {
             instance
-                .run_with(&mut store, async |store| {
+                .run_concurrent(&mut store, async |store| {
                     // Start three concurrent calls and then join them all:
                     let mut futures = FuturesUnordered::new();
                     for (input, output) in inputs_and_outputs {

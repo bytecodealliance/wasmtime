@@ -66,7 +66,7 @@ async fn test_round_trip_direct(
         )?;
 
         instance
-            .run_with(&mut store, {
+            .run_concurrent(&mut store, {
                 let input = input.to_owned();
                 let expected_output = expected_output.to_owned();
                 async move |accessor| {
@@ -116,7 +116,7 @@ async fn test_round_trip_direct(
 
         // Start three concurrent calls and then join them all:
         instance
-            .run_with(&mut store, async |store| -> wasmtime::Result<_> {
+            .run_concurrent(&mut store, async |store| -> wasmtime::Result<_> {
                 let mut futures = FuturesUnordered::new();
                 for _ in 0..3 {
                     futures.push(
