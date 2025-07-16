@@ -341,10 +341,10 @@ impl dsl::Format {
         let ll = evex.length.evex_bits();
         fmtln!(f, "let ll = {ll:#04b};");
         fmtln!(f, "let pp = {:#04b};", evex.pp.map_or(0b00, |pp| pp.bits()));
-        fmtln!(f, "let mmmmm = {:#07b};", evex.mmmmm.unwrap().bits());
+        fmtln!(f, "let mmm = {:#07b};", evex.mmm.unwrap().bits());
         fmtln!(f, "let w = {};", evex.w.as_bool());
         fmtln!(f, "let bcast = false;");
-        let bits = format!("ll, pp, mmmmm, w, bcast");
+        let bits = format!("ll, pp, mmm, w, bcast");
 
         let style = match self.operands_by_kind().as_slice() {
             [Reg(reg), Reg(vvvv), RegMem(rm)] => {

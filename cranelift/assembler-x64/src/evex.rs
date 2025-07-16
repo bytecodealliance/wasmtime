@@ -32,7 +32,7 @@ impl EvexPrefix {
         (b, x): (Option<u8>, Option<u8>),
         ll: u8,
         pp: u8,
-        mmmmm: u8,
+        mmm: u8,
         w: bool,
         broadcast: bool,
     ) -> Self {
@@ -44,8 +44,8 @@ impl EvexPrefix {
         let v_prime = !(vvvv >> 4) & 0b1;
 
         // byte1
-        debug_assert!(mmmmm >= 0b01 && mmmmm <= 0b11);
-        let byte1 = r << 7 | x << 6 | b << 5 | r_prime << 4 | mmmmm;
+        debug_assert!(mmm <= 0b111);
+        let byte1 = r << 7 | x << 6 | b << 5 | r_prime << 4 | mmm;
 
         // byte2
         debug_assert!(vvvv <= 0b11111);

@@ -51,7 +51,7 @@ pub fn evex(length: Length) -> Evex {
     Evex {
         length,
         pp: None,
-        mmmmm: None,
+        mmm: None,
         w: VexW::WIG,
         opcode: u8::MAX,
         modrm: None,
@@ -969,9 +969,9 @@ impl fmt::Display for VexW {
 pub struct Vex {
     /// The length of the operand (e.g., 128-bit or 256-bit).
     pub length: Length,
-    /// Map the `PP` field encodings.
+    /// Any SIMD prefixes, but encoded in the `VEX.pp` bit field.
     pub pp: Option<VexPrefix>,
-    /// Map the `MMMMM` field encodings.
+    /// Any leading map bytes, but encoded in the `VEX.mmmmm` bit field.
     pub mmmmm: Option<VexEscape>,
     /// The `W` bit.
     pub w: VexW,
@@ -1218,10 +1218,17 @@ impl fmt::Display for Vex {
 pub struct Evex {
     /// The vector length of the operand (e.g., 128-bit, 256-bit, or 512-bit).
     pub length: Length,
-    /// Map the `PP` field encodings.
+    /// Any SIMD prefixes, but encoded in the `EVEX.pp` bit field (see similar:
+    /// [`Vex::pp`]).
     pub pp: Option<VexPrefix>,
-    /// Map the `MMMMM` field encodings.
-    pub mmmmm: Option<VexEscape>,
+    /// The `mmm` bits.
+    ///
+    /// Bits `1:0` are identical to the lowest 2 bits of `VEX.mmmmm`; EVEX adds
+    /// one more bit here. From the reference manual: "provides access to up to
+    /// eight decoding maps. Currently, only the following decoding maps are
+    /// supported: 1, 2, 3, 5, and 6. Map ids 1, 2, and 3 are denoted by 0F,
+    /// 0F38, and 0F3A, respectively, in the instruction encoding descriptions."
+    pub mmm: Option<VexEscape>,
     /// The `W` bit.
     pub w: VexW,
     /// EVEX-encoded instructions opcode byte"
@@ -1266,9 +1273,9 @@ impl Evex {
     /// Set the `mmmmmm` field to use [`VexEscape::_0F`]; equivalent to `.0F` in
     /// the manual.
     pub fn _0f(self) -> Self {
-        assert!(self.mmmmm.is_none());
+        assert!(self.mmm.is_none());
         Self {
-            mmmmm: Some(VexEscape::_0F),
+            mmm: Some(VexEscape::_0F),
             ..self
         }
     }
@@ -1276,9 +1283,9 @@ impl Evex {
     /// Set the `mmmmmm` field to use [`VexEscape::_0F3A`]; equivalent to
     /// `.0F3A` in the manual.
     pub fn _0f3a(self) -> Self {
-        assert!(self.mmmmm.is_none());
+        assert!(self.mmm.is_none());
         Self {
-            mmmmm: Some(VexEscape::_0F3A),
+            mmm: Some(VexEscape::_0F3A),
             ..self
         }
     }
@@ -1286,9 +1293,9 @@ impl Evex {
     /// Set the `mmmmmm` field to use [`VexEscape::_0F38`]; equivalent to
     /// `.0F38` in the manual.
     pub fn _0f38(self) -> Self {
-        assert!(self.mmmmm.is_none());
+        assert!(self.mmm.is_none());
         Self {
-            mmmmm: Some(VexEscape::_0F38),
+            mmm: Some(VexEscape::_0F38),
             ..self
         }
     }
@@ -1337,7 +1344,7 @@ impl Evex {
 
     fn validate(&self, _operands: &[Operand]) {
         assert!(self.opcode != u8::MAX);
-        assert!(self.mmmmm.is_some());
+        assert!(self.mmm.is_some());
     }
 
     /// Retrieve the digit extending the opcode, if available.
@@ -1362,7 +1369,7 @@ impl fmt::Display for Evex {
         if let Some(pp) = self.pp {
             write!(f, ".{pp}")?;
         }
-        if let Some(mmmmm) = self.mmmmm {
+        if let Some(mmmmm) = self.mmm {
             write!(f, ".{mmmmm}")?;
         }
         write!(f, ".{} {:#04X}", self.w, self.opcode)?;
