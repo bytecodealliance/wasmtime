@@ -126,7 +126,7 @@ mod no_imports_concurrent {
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let no_imports = NoImports::new(&mut store, &instance)?;
         instance
-            .run_with(&mut store, async move |accessor| {
+            .run_concurrent(&mut store, async move |accessor| {
                 let mut futures = FuturesUnordered::new();
                 futures.push(no_imports.call_bar(accessor).boxed());
                 futures.push(no_imports.foo().call_foo(accessor).boxed());
@@ -294,7 +294,7 @@ mod one_import_concurrent {
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let no_imports = NoImports::new(&mut store, &instance)?;
         instance
-            .run_with(&mut store, async move |accessor| {
+            .run_concurrent(&mut store, async move |accessor| {
                 no_imports.call_bar(accessor).await
             })
             .await??;

@@ -252,7 +252,7 @@ async fn test_round_trip_many(
 
         if call_style == 0 {
             instance
-                .run_with(&mut store, {
+                .run_concurrent(&mut store, {
                     let c = c.clone();
                     let e = e.clone();
                     let f = f.clone();
@@ -402,7 +402,7 @@ async fn test_round_trip_many(
 
         if call_style == 2 {
             instance
-                .run_with(&mut store, async |store| -> wasmtime::Result<_> {
+                .run_concurrent(&mut store, async |store| -> wasmtime::Result<_> {
                     // Start three concurrent calls and then join them all:
                     let mut futures = FuturesUnordered::new();
                     for (input, output) in inputs_and_outputs {

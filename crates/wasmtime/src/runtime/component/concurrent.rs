@@ -12,9 +12,9 @@
 //! between guest tasks and any host tasks they create.  Each
 //! `ComponentInstance` will have at most one event loop running at any given
 //! time, and that loop may be suspended and resumed by the host embedder using
-//! e.g. `Instance::run`.  The `ComponentInstance::poll_until` function contains
-//! the loop itself, while the `ComponentInstance::concurrent_state` field holds
-//! its state.
+//! e.g. `Instance::run_concurrent`.  The `ComponentInstance::poll_until`
+//! function contains the loop itself, while the
+//! `ComponentInstance::concurrent_state` field holds its state.
 //!
 //! # Public API Overview
 //!
@@ -23,7 +23,7 @@
 //! - `[Typed]Func::call_concurrent`: Start a host->guest call to an
 //! async-lifted or sync-lifted import, creating a guest task.
 //!
-//! - `Instance::run[_with]`: Run the event loop for the specified instance,
+//! - `Instance::run_concurrent`: Run the event loop for the specified instance,
 //! allowing any and all tasks belonging to that instance to make progress.
 //!
 //! - `Instance::spawn`: Run a background task as part of the event loop for the
@@ -344,8 +344,8 @@ where
 /// `Accessor<T, D>` it can still be passed to a function which just needs a
 /// store accessor.
 ///
-/// Acquiring an [`Accessor`] can be done through [`Instance::run_with`] for
-/// example or in a host function through
+/// Acquiring an [`Accessor`] can be done through [`Instance::run_concurrent`]
+/// for example or in a host function through
 /// [`Linker::func_wrap_concurrent`](crate::component::Linker::func_wrap_concurrent).
 pub trait AsAccessor {
     /// The `T` in `Store<T>` that this accessor refers to.
@@ -1232,46 +1232,6 @@ impl Instance {
         assert!(state.global_error_context_ref_counts.is_empty());
     }
 
-    /// Poll the specified future as part of this instance's event loop until it
-    /// yields a result _or_ no further progress can be made.
-    ///
-    /// This is intended for use in the top-level code of a host embedding with
-    /// `Future`s which depend (directly or indirectly) on previously-started
-    /// concurrent tasks: e.g. the `Future`s returned by
-    /// `TypedFunc::call_concurrent`, `StreamReader::read`, etc., or `Future`s
-    /// derived from those.
-    ///
-    /// Such `Future`s can only usefully be polled in the context of the event
-    /// loop of the instance from which they originated; they will panic if
-    /// polled elsewhere.  `Future`s returned by host functions registered using
-    /// `LinkerInstance::func_wrap_concurrent` are always polled as part of the
-    /// event loop, so this function is not needed in that case.  However,
-    /// top-level code which needs to poll `Future`s involving concurrent tasks
-    /// must use either this function, `Instance::run_with`, or
-    /// `Instance::spawn` to ensure they are polled as part of the correct event
-    /// loop.
-    ///
-    /// Note that this function will return a "deadlock" error in either of the
-    /// following scenarios:
-    ///
-    /// - One or more guest tasks are still pending (i.e. have not yet returned,
-    /// or, in the case of async-lifted exports with callbacks, have not yet
-    /// returned `CALLBACK_CODE_EXIT`) even though all host tasks have completed
-    /// all host-owned stream and future handles have been dropped, etc.
-    ///
-    /// - Any and all guest tasks complete normally, but the future passed to
-    /// this function continues to return `Pending` when polled.  In that case,
-    /// the future presumably does not depend on any guest task making further
-    /// progress (since no futher progress can be made) and thus is not an
-    /// appropriate future to poll using this function.
-    pub async fn run<F>(&self, mut store: impl AsContextMut, fut: F) -> Result<F::Output>
-    where
-        F: Future,
-    {
-        check_recursive_run();
-        self.poll_until(store.as_context_mut(), fut).await
-    }
-
     /// Run the specified closure `fun` to completion as part of this instance's
     /// event loop.
     ///
@@ -1306,7 +1266,7 @@ impl Instance {
     /// # let instance = linker.instantiate_async(&mut store, &component).await?;
     /// # let foo = instance.get_typed_func::<(Resource<MyResource>,), (Resource<MyResource>,)>(&mut store, "foo")?;
     /// # let bar = instance.get_typed_func::<(u32,), ()>(&mut store, "bar")?;
-    /// instance.run_with(&mut store, async |accessor| -> wasmtime::Result<_> {
+    /// instance.run_concurrent(&mut store, async |accessor| -> wasmtime::Result<_> {
     ///    let resource = accessor.with(|mut access| access.get().table.push(MyResource(42)))?;
     ///    let (another_resource,) = foo.call_concurrent(accessor, (resource,)).await?;
     ///    let value = accessor.with(|mut access| access.get().table.delete(another_resource))?;
@@ -1316,7 +1276,7 @@ impl Instance {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn run_with<T, R>(
+    pub async fn run_concurrent<T, R>(
         self,
         mut store: impl AsContextMut<Data = T>,
         fun: impl AsyncFnOnce(&Accessor<T>) -> R,
@@ -1327,11 +1287,12 @@ impl Instance {
         check_recursive_run();
         let mut store = store.as_context_mut();
         let token = StoreToken::new(store.as_context_mut());
-        let future = async move {
+
+        self.poll_until(store.as_context_mut(), async move {
             let accessor = Accessor::new(token, self);
             fun(&accessor).await
-        };
-        self.run(store, future).await
+        })
+        .await
     }
 
     /// Spawn a background task to run as part of this instance's event loop.
@@ -1456,12 +1417,13 @@ impl Instance {
                             //
                             // Note that we'd also reach this point if the host
                             // embedder passed e.g. a `std::future::Pending` to
-                            // `Instance::run`, in which case we'd return a
-                            // "deadlock" error even when any and all tasks have
-                            // completed normally.  However, that's not how
-                            // `Instance::run` is intended (and documented) to
-                            // be used, so it seems reasonable to lump that case
-                            // in with "real" deadlocks.
+                            // `Instance::run_concurrent`, in which case we'd
+                            // return a "deadlock" error even when any and all
+                            // tasks have completed normally.  However, that's
+                            // not how `Instance::run_concurrent` is intended
+                            // (and documented) to be used, so it seems
+                            // reasonable to lump that case in with "real"
+                            // deadlocks.
                             //
                             // TODO: Once we've added host APIs for cancelling
                             // in-progress tasks, we can return some other,
@@ -4360,7 +4322,7 @@ fn for_any_lift<
 /// Wrap the specified future in a `poll_fn` which asserts that the future is
 /// only polled from the event loop of the specified `Instance`.
 ///
-/// See `Instance::run` for details.
+/// See `Instance::run_concurrent` for details.
 fn checked<F: Future + Send + 'static>(
     instance: Instance,
     fut: F,
@@ -4372,7 +4334,7 @@ fn checked<F: Future + Send + 'static>(
                 `Future`s which depend on asynchronous component tasks, streams, or \
                 futures to complete may only be polled from the event loop of the \
                 instance from which they originated.  Please use \
-                `Instance::{run,run_with,spawn}` to poll or await them.\
+                `Instance::{run_concurrent,spawn}` to poll or await them.\
             ";
             tls::try_get(|store| {
                 let matched = match store {
@@ -4393,12 +4355,12 @@ fn checked<F: Future + Send + 'static>(
     }
 }
 
-/// Assert that `Instance::run[_with]` has not been called from within an
+/// Assert that `Instance::run_concurrent` has not been called from within an
 /// instance's event loop.
 fn check_recursive_run() {
     tls::try_get(|store| {
         if !matches!(store, tls::TryGet::None) {
-            panic!("Recursive `Instance::run[_with]` calls not supported")
+            panic!("Recursive `Instance::run_concurrent` calls not supported")
         }
     });
 }
@@ -4567,8 +4529,8 @@ pub(crate) fn prepare_call<T, R>(
 /// the associated `ComponentInstance`'s event loop.
 ///
 /// The returned future will resolve to the result once it is available, but
-/// must only be polled via the instance's event loop.  See `Instance::run` for
-/// details.
+/// must only be polled via the instance's event loop. See
+/// `Instance::run_concurrent` for details.
 pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
     mut store: StoreContextMut<T>,
     prepared: PreparedCall<R>,

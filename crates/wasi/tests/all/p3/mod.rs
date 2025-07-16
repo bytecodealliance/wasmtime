@@ -78,7 +78,7 @@ async fn run(path: &str) -> anyhow::Result<()> {
     let command =
         Command::new(&mut store, &instance).context("failed to instantiate `wasi:cli/command`")?;
     instance
-        .run_with(&mut store, async move |store| {
+        .run_concurrent(&mut store, async move |store| {
             command.wasi_cli_run().call_run(store).await
         })
         .await

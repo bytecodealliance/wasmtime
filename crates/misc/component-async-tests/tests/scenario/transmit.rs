@@ -127,7 +127,7 @@ async fn test_cancel(mode: Mode) -> Result<()> {
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let cancel_host = cancel::CancelHost::new(&mut store, &instance)?;
     instance
-        .run_with(&mut store, async move |accessor| {
+        .run_concurrent(&mut store, async move |accessor| {
             cancel_host
                 .local_local_cancel()
                 .call_run(accessor, mode, cancel_delay())
@@ -366,7 +366,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
     let (_caller_future2_tx, caller_future2_rx) = instance.future(|| unreachable!(), &mut store)?;
 
     instance
-        .run_with(&mut store, async move |accessor| {
+        .run_concurrent(&mut store, async move |accessor| {
             let mut futures = FuturesUnordered::<
                 Pin<Box<dyn Future<Output = Result<Event<Test>>> + Send>>,
             >::new();

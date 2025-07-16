@@ -921,7 +921,7 @@ async fn async_reentrance() -> Result<()> {
     let func = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "export")?;
     let message = "cannot enter component instance";
     match instance
-        .run_with(&mut store, async move |accessor| {
+        .run_concurrent(&mut store, async move |accessor| {
             func.call_concurrent(accessor, (42,)).await
         })
         .await
@@ -1051,7 +1051,7 @@ async fn task_return_trap(component: &str, substring: &str) -> Result<()> {
 
     let func = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     match instance
-        .run_with(&mut store, async move |accessor| {
+        .run_concurrent(&mut store, async move |accessor| {
             func.call_concurrent(accessor, ()).await
         })
         .await
@@ -1249,7 +1249,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
 
         let mut results = if concurrent {
             instance
-                .run_with(&mut store, async |store| {
+                .run_concurrent(&mut store, async |store| {
                     func.call_concurrent(store, input).await
                 })
                 .await??
@@ -1296,7 +1296,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
 
         if concurrent {
             instance
-                .run_with(&mut store, async move |accessor| {
+                .run_concurrent(&mut store, async move |accessor| {
                     func.call_concurrent(accessor, input).await
                 })
                 .await??
@@ -1684,7 +1684,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
 
         let mut results = if concurrent {
             instance
-                .run_with(&mut store, async |store| {
+                .run_concurrent(&mut store, async |store| {
                     func.call_concurrent(store, Vec::new()).await
                 })
                 .await??
@@ -1775,7 +1775,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
 
         if concurrent {
             instance
-                .run_with(&mut store, async move |accessor| {
+                .run_concurrent(&mut store, async move |accessor| {
                     func.call_concurrent(accessor, ()).await
                 })
                 .await??

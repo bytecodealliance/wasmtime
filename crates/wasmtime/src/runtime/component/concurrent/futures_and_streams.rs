@@ -538,7 +538,7 @@ impl<T> FutureWriter<T> {
 
     /// Wait for the read end of this `future` is dropped.
     ///
-    /// The [`Accessor`] provided can be acquired from [`Instance::run_with`] or
+    /// The [`Accessor`] provided can be acquired from [`Instance::run_concurrent`] or
     /// from within a host function for example.
     ///
     /// # Panics
@@ -797,7 +797,7 @@ impl<T> FutureReader<T> {
     /// The returned `Future` will yield `None` if the guest has trapped
     /// before it could produce a result.
     ///
-    /// The [`Accessor`] provided can be acquired from [`Instance::run_with`] or
+    /// The [`Accessor`] provided can be acquired from [`Instance::run_concurrent`] or
     /// from within a host function for example.
     ///
     /// # Panics
@@ -833,8 +833,8 @@ impl<T> FutureReader<T> {
 
     /// Wait for the write end of this `future` to be dropped.
     ///
-    /// The [`Accessor`] provided can be acquired from [`Instance::run_with`] or
-    /// from within a host function for example.
+    /// The [`Accessor`] provided can be acquired from
+    /// [`Instance::run_concurrent`] or from within a host function for example.
     ///
     /// # Panics
     ///
