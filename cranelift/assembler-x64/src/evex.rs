@@ -35,7 +35,6 @@ impl EvexPrefix {
         mmmmm: u8,
         w: bool,
         broadcast: bool,
-        masking: Option<(u8, bool)>,
     ) -> Self {
         let r = invert_top_bit(reg);
         let r_prime = invert_top_bit(reg >> 1);
@@ -55,18 +54,9 @@ impl EvexPrefix {
 
         // byte3
         debug_assert!(ll < 0b11, "bits 11b are reserved (#UD); must fit in 2 bits");
-        let (z_bit, aaa_bits) = match masking {
-            Some((k_reg, zeroing)) => {
-                debug_assert!(
-                    k_reg >= 1 && k_reg <= 7,
-                    "k register must be between 1 and 7"
-                );
-                ((zeroing as u8) << 7, k_reg & 0b111)
-            }
-            None => (0, 0),
-        };
-
-        let byte3 = z_bit | ll << 5 | (broadcast as u8) << 4 | v_prime << 3 | aaa_bits;
+        let aaa = 0b000; // Force k0 masking register for now; eventually this should be configurable (TODO).
+        let z = 0; // Masking kind bit; not used yet (TODO) so we default to merge-masking.
+        let byte3 = z | ll << 5 | (broadcast as u8) << 4 | v_prime << 3 | aaa;
 
         Self {
             byte1,

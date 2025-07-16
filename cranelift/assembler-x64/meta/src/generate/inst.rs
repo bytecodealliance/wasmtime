@@ -256,10 +256,6 @@ impl dsl::Inst {
                             fmtln!(f, "f.write_str(&name)");
                             return;
                         }
-                        if let dsl::Encoding::Evex(_) = self.encoding {
-                            Self::display_evex(f, &self);
-                            return;
-                        }
                         for op in self.format.operands.iter() {
                             let location = op.location;
                             let to_string = location.generate_to_string(op.extension);
@@ -280,25 +276,6 @@ impl dsl::Inst {
                 );
             },
         );
-    }
-
-    fn display_evex(f: &mut Formatter, inst: &dsl::Inst) {
-        for op in inst.format.operands.iter() {
-            let location = op.location;
-            let to_string = location.generate_to_string(op.extension);
-            fmtln!(f, "let {location} = {to_string};");
-        }
-        let ordered_ops = inst.format.generate_att_evex_style_operands();
-        let mut implicit_ops = inst.format.generate_implicit_operands();
-        if inst.has_trap {
-            fmtln!(f, "let trap = self.trap;");
-            if implicit_ops.is_empty() {
-                implicit_ops.push_str(" ;; {trap}");
-            } else {
-                implicit_ops.push_str(", {trap}");
-            }
-        }
-        fmtln!(f, "write!(f, \"{{name}} {ordered_ops}{implicit_ops}\")");
     }
 
     /// `impl From<struct> for Inst { ... }`

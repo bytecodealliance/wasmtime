@@ -61,32 +61,6 @@ impl dsl::Format {
     }
 
     #[must_use]
-    pub(crate) fn generate_att_evex_style_operands(&self) -> String {
-        let ordered_ops: Vec<_> = self
-            .operands
-            .iter()
-            .filter(|o| !o.implicit)
-            .rev()
-            .map(|o| {
-                let mut formatted_operand = format!("{{{}}}", o.location);
-                if let Some(mask_op) = self.mask_register_operand() {
-                    if o == mask_op {
-                        formatted_operand.push_str(&format!(
-                            " {{{{%k{}}}}}",
-                            self.mask_register().expect("mask register not present")
-                        ));
-                        if self.zeroing() {
-                            formatted_operand.push_str(" {{z}}");
-                        }
-                    }
-                }
-                formatted_operand
-            })
-            .collect();
-        ordered_ops.join(", ")
-    }
-
-    #[must_use]
     pub(crate) fn generate_implicit_operands(&self) -> String {
         let ops: Vec<_> = self
             .operands
@@ -369,16 +343,8 @@ impl dsl::Format {
         fmtln!(f, "let pp = {:#04b};", evex.pp.map_or(0b00, |pp| pp.bits()));
         fmtln!(f, "let mmmmm = {:#07b};", evex.mmmmm.unwrap().bits());
         fmtln!(f, "let w = {};", evex.w.as_bool());
-
-        let bits = if let Some(aaa_bit) = self.mask_register() {
-            fmtln!(f, "let k_reg = {};", aaa_bit);
-            fmtln!(f, "let zeroing = {};", self.zeroing());
-            // Broadcast bit set to false till implemented.
-            fmtln!(f, "let b = false;");
-            format!("ll, pp, mmmmm, w, b, Some((k_reg, zeroing))")
-        } else {
-            format!("ll, pp, mmmmm, w, b, None")
-        };
+        fmtln!(f, "let bcast = false;");
+        let bits = format!("ll, pp, mmmmm, w, bcast");
 
         let style = match self.operands_by_kind().as_slice() {
             [Reg(reg), Reg(vvvv), Reg(rm)] => {
