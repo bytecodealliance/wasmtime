@@ -117,9 +117,7 @@ mod generated {
     wasmtime::component::bindgen!({
         path: "src/p3/wit",
         world: "wasi:cli/command",
-        // TODO: Enable `tracing` once fixed:
-        // https://github.com/bytecodealliance/wasmtime/issues/11245
-        //tracing: true,
+        tracing: true,
         trappable_imports: true,
         concurrent_exports: true,
         concurrent_imports: true,
