@@ -134,7 +134,7 @@ impl dsl::Format {
             |l: &dsl::Location| l.bits() == 8 && matches!(l.kind(), Reg(_) | RegMem(_));
         let uses_8bit = self.locations().any(find_8bit_registers);
         fmtln!(f, "let uses_8bit = {uses_8bit};");
-        fmtln!(f, "let w_bit = {};", rex.w);
+        fmtln!(f, "let w_bit = {};", rex.w.as_bool());
         let bits = "w_bit, uses_8bit";
 
         let style = match self.operands_by_kind().as_slice() {

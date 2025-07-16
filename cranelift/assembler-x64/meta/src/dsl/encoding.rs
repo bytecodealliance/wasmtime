@@ -23,7 +23,7 @@ use core::fmt;
 pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
     Rex {
         opcodes: opcode.into(),
-        w: false,
+        w: WBit::W0,
         modrm: None,
         imm: Imm::None,
         opcode_mod: None,
@@ -169,7 +169,7 @@ pub struct Rex {
     /// prefix and other optional/mandatory instruction prefixes are discussed
     /// in chapter 2. Note that REX prefixes that promote legacy instructions to
     /// 64-bit behavior are not listed explicitly in the opcode column."
-    pub w: bool,
+    pub w: WBit,
     /// Indicates modifications to the ModR/M byte.
     pub modrm: Option<ModRmKind>,
     /// The number of bits used as an immediate operand to the instruction.
@@ -193,7 +193,10 @@ impl Rex {
     /// Set the `REX.W` bit.
     #[must_use]
     pub fn w(self) -> Self {
-        Self { w: true, ..self }
+        Self {
+            w: WBit::W1,
+            ..self
+        }
     }
 
     /// Set the ModR/M byte to contain a register operand and an r/m operand;
@@ -358,6 +361,8 @@ impl Rex {
                 "the opcode modifier width must match the operand widths"
             );
         }
+
+        assert!(!matches!(self.w, WBit::WIG));
     }
 }
 
@@ -381,7 +386,7 @@ impl fmt::Display for Rex {
         if let Some(group4) = &self.opcodes.prefixes.group4 {
             write!(f, "{group4} + ")?;
         }
-        if self.w {
+        if self.w.as_bool() {
             write!(f, "REX.W + ")?;
         }
         if self.opcodes.escape {
