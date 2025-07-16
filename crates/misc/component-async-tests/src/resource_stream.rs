@@ -49,11 +49,11 @@ impl bindings::local::local::resource_stream::HostConcurrent for Ctx {
 
         impl<T> AccessorTask<T, Ctx, Result<()>> for Task {
             async fn run(self, accessor: &Accessor<T, Ctx>) -> Result<()> {
-                let mut tx = Some(self.tx);
+                let mut tx = self.tx;
                 for _ in 0..self.count {
                     let item =
                         accessor.with(|mut view| view.get().table().push(ResourceStreamX))?;
-                    tx = tx.take().unwrap().write_all(accessor, Some(item)).await.0;
+                    tx.write_all(accessor, Some(item)).await;
                 }
                 Ok(())
             }
