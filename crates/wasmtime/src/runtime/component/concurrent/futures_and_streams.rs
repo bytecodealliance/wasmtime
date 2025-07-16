@@ -671,6 +671,14 @@ impl<T> HostFuture<T> {
     }
 }
 
+impl<T> fmt::Debug for HostFuture<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HostFuture")
+            .field("rep", &self.rep)
+            .finish()
+    }
+}
+
 /// Transfer ownership of the read end of a future from the host to a guest.
 pub(crate) fn lower_future_to_index<U>(
     rep: u32,
@@ -1058,6 +1066,14 @@ impl<T> HostStream<T> {
             }
             _ => func::bad_type_info(),
         }
+    }
+}
+
+impl<T> fmt::Debug for HostStream<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HostStream")
+            .field("rep", &self.rep)
+            .finish()
     }
 }
 
