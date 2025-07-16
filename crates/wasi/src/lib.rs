@@ -12,6 +12,7 @@
 //!
 //! For WASIp3, see [`p3`]. WASIp3 support is experimental, unstable and incomplete.
 
+pub mod cli;
 pub mod clocks;
 mod ctx;
 mod error;

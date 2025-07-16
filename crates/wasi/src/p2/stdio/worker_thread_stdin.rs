@@ -23,9 +23,10 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
+use crate::cli::IsTerminal;
 use crate::p2::stdio::StdinStream;
 use bytes::{Bytes, BytesMut};
-use std::io::{IsTerminal, Read};
+use std::io::Read;
 use std::mem;
 use std::sync::{Condvar, Mutex, OnceLock};
 use tokio::sync::Notify;
@@ -114,8 +115,10 @@ impl StdinStream for Stdin {
     fn stream(&self) -> Box<dyn InputStream> {
         Box::new(Stdin)
     }
+}
 
-    fn isatty(&self) -> bool {
+impl IsTerminal for Stdin {
+    fn is_terminal(&self) -> bool {
         std::io::stdin().is_terminal()
     }
 }
