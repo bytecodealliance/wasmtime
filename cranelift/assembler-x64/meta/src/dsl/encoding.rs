@@ -1177,6 +1177,7 @@ impl Vex {
     fn validate(&self, _operands: &[Operand]) {
         assert!(self.opcode != u8::MAX);
         assert!(self.mmmmm.is_some());
+        assert!(!matches!(self.length, Length::L512));
     }
 
     /// Retrieve the digit extending the opcode, if available.
