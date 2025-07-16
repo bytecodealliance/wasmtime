@@ -32,6 +32,7 @@ use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
 use anyhow::Result;
 use indexmap::IndexMap;
+use info::LinearMemoryOptions;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
@@ -156,6 +157,40 @@ pub enum SideEffect {
     /// destructors. Destructors are loaded from core wasm instances (or
     /// lowerings) which are produced by prior side-effectful operations.
     Resource(DefinedResourceIndex),
+}
+
+/// A sound approximation of a particular module's set of instantiations.
+///
+/// This type forms a simple lattice that we can use in static analyses that in
+/// turn let us specialize a module's compilation to exactly the imports it is
+/// given.
+#[derive(Clone, Copy, Default)]
+pub enum AbstractInstantiations<'a> {
+    /// The associated module is instantiated many times.
+    Many,
+
+    /// The module is instantiated exactly once, with the given definitions as
+    /// arguments to that instantiation.
+    One(&'a [info::CoreDef]),
+
+    /// The module is never instantiated.
+    #[default]
+    None,
+}
+
+impl AbstractInstantiations<'_> {
+    /// Join two facts about a particular module's instantiation together.
+    ///
+    /// This is the least-upper-bound operation on the lattice.
+    pub fn join(&mut self, other: Self) {
+        *self = match (*self, other) {
+            (Self::Many, _) | (_, Self::Many) => Self::Many,
+            (Self::One(a), Self::One(b)) if a == b => Self::One(a),
+            (Self::One(_), Self::One(_)) => Self::Many,
+            (Self::One(a), Self::None) | (Self::None, Self::One(a)) => Self::One(a),
+            (Self::None, Self::None) => Self::None,
+        }
+    }
 }
 
 macro_rules! id {
@@ -414,17 +449,28 @@ pub struct StreamInfo {
     pub payload_type: InterfaceType,
 }
 
+/// Same as `info::CanonicalOptionsDataModel`.
+#[derive(Clone, Hash, Eq, PartialEq)]
+#[expect(missing_docs, reason = "self-describing fields")]
+pub enum CanonicalOptionsDataModel {
+    Gc {},
+    LinearMemory {
+        memory: Option<MemoryId>,
+        realloc: Option<ReallocId>,
+    },
+}
+
 /// Same as `info::CanonicalOptions`
 #[derive(Clone, Hash, Eq, PartialEq)]
 #[expect(missing_docs, reason = "self-describing fields")]
 pub struct CanonicalOptions {
     pub instance: RuntimeComponentInstanceIndex,
     pub string_encoding: StringEncoding,
-    pub memory: Option<MemoryId>,
-    pub realloc: Option<ReallocId>,
     pub callback: Option<CallbackId>,
     pub post_return: Option<PostReturnId>,
     pub async_: bool,
+    pub core_type: ModuleInternedTypeIndex,
+    pub data_model: CanonicalOptionsDataModel,
 }
 
 /// Same as `info::Resource`
@@ -686,18 +732,25 @@ impl LinearizeDfg<'_> {
     }
 
     fn options(&mut self, options: &CanonicalOptions) -> info::CanonicalOptions {
-        let memory = options.memory.map(|mem| self.runtime_memory(mem));
-        let realloc = options.realloc.map(|mem| self.runtime_realloc(mem));
+        let data_model = match options.data_model {
+            CanonicalOptionsDataModel::Gc {} => info::CanonicalOptionsDataModel::Gc {},
+            CanonicalOptionsDataModel::LinearMemory { memory, realloc } => {
+                info::CanonicalOptionsDataModel::LinearMemory(LinearMemoryOptions {
+                    memory: memory.map(|mem| self.runtime_memory(mem)),
+                    realloc: realloc.map(|mem| self.runtime_realloc(mem)),
+                })
+            }
+        };
         let callback = options.callback.map(|mem| self.runtime_callback(mem));
         let post_return = options.post_return.map(|mem| self.runtime_post_return(mem));
         info::CanonicalOptions {
             instance: options.instance,
             string_encoding: options.string_encoding,
-            memory,
-            realloc,
             callback,
             post_return,
             async_: options.async_,
+            core_type: options.core_type,
+            data_model,
         }
     }
 

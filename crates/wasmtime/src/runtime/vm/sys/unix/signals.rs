@@ -169,9 +169,8 @@ unsafe extern "C" fn trap_handler(
         let jmp_buf = match test {
             TrapTest::NotWasm => {
                 if let Some(faulting_addr) = faulting_addr {
-                    let start = info.async_guard_range.start;
-                    let end = info.async_guard_range.end;
-                    if start as usize <= faulting_addr && faulting_addr < end as usize {
+                    let range = &info.vm_store_context.as_ref().async_guard_range;
+                    if range.start.addr() <= faulting_addr && faulting_addr < range.end.addr() {
                         abort_stack_overflow();
                     }
                 }
@@ -261,8 +260,10 @@ pub fn abort_stack_overflow() -> ! {
     }
 }
 
-#[allow(clippy::cast_possible_truncation)] // too fiddly to handle and wouldn't
-// help much anyway
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "too fiddly to handle and wouldn't help much anyway"
+)]
 unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> TrapRegisters {
     cfg_if::cfg_if! {
         if #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "illumos"), target_arch = "x86_64"))] {

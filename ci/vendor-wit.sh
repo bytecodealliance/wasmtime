@@ -19,18 +19,18 @@ make_vendor() {
   mkdir -p $path
 
   for package in $packages; do
-    IFS='@' read -r repo tag <<< "$package"
-    mkdir -p $path/$repo
+    IFS='@' read -r repo tag subdir <<< "$package"
+    mkdir -p "$path/$repo"
     cached_extracted_dir="$cache_dir/$repo-$tag"
 
     if [[ ! -d $cached_extracted_dir ]]; then
       mkdir -p $cached_extracted_dir
       curl -sL https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz | \
         tar xzf - --strip-components=1 -C $cached_extracted_dir
-      rm -rf $cached_extracted_dir/wit/deps*
+      rm -rf $cached_extracted_dir/${subdir:-"wit"}/deps*
     fi
 
-    cp -r $cached_extracted_dir/wit/* $path/$repo
+    cp -r $cached_extracted_dir/${subdir:-"wit"}/* $path/$repo
   done
 }
 
@@ -68,11 +68,19 @@ make_vendor "wasi-config" "config@f4d699b"
 
 make_vendor "wasi-keyvalue" "keyvalue@219ea36"
 
+make_vendor "wasi/src/p3" "
+    cli@939bd6d@wit-0.3.0-draft
+    clocks@13d1c82@wit-0.3.0-draft
+    filesystem@e2a2ddc@wit-0.3.0-draft
+    random@4e94663@wit-0.3.0-draft
+    sockets@bb247e2@wit-0.3.0-draft
+"
+
 rm -rf $cache_dir
 
 # Separately (for now), vendor the `wasi-nn` WIT files since their retrieval is
 # slightly different than above.
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn
-revision=0.2.0-rc-2024-08-19
+revision=0.2.0-rc-2024-10-28
 curl -L $repo/$revision/wasi-nn.witx -o crates/wasi-nn/witx/wasi-nn.witx
 curl -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit

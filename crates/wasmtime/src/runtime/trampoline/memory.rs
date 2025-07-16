@@ -56,7 +56,7 @@ pub fn create_memory(
             AllocateInstanceKind::Dummy {
                 allocator: &allocator,
             },
-            &ModuleRuntimeInfo::bare_maybe_imported_func(Arc::new(module), None),
+            &ModuleRuntimeInfo::bare(Arc::new(module)),
             Default::default(),
         )
     }
@@ -81,6 +81,14 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
 
     fn base(&self) -> MemoryBase {
         MemoryBase::new_raw(self.mem.as_ptr())
+    }
+
+    fn vmmemory(&self) -> crate::vm::VMMemoryDefinition {
+        let base = core::ptr::NonNull::new(self.mem.as_ptr()).unwrap();
+        crate::vm::VMMemoryDefinition {
+            base: base.into(),
+            current_length: self.mem.byte_size().into(),
+        }
     }
 }
 

@@ -12,7 +12,7 @@ block0(v0: f32x4, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vorps   %xmm0, 0(%rdi), %xmm0
+;   vorps (%rdi), %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -41,9 +41,9 @@ block0(v0: i64):
 ; block0:
 ;   movl $0x80000000, %eax
 ;   vmovd %eax, %xmm4
-;   vandnps %xmm4, const(0), %xmm6
-;   vandps  %xmm4, 0(%rdi), %xmm0
-;   vorps   %xmm6, %xmm0, %xmm0
+;   vandnps (%rip), %xmm4, %xmm6
+;   vandps (%rdi), %xmm4, %xmm0
+;   vorps %xmm0, %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -87,7 +87,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vorps   %xmm0, %xmm1, %xmm0
+;   vorps %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -112,7 +112,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vandnps %xmm1, %xmm0, %xmm0
+;   vandnps %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -137,7 +137,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vandnpd %xmm1, %xmm0, %xmm0
+;   vandnpd %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -162,7 +162,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpandn  %xmm1, %xmm0, %xmm0
+;   vpandn %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -189,8 +189,8 @@ block0(v0: f32x4):
 ; block0:
 ;   uninit  %xmm2
 ;   vpcmpeqd %xmm2, %xmm2, %xmm4
-;   vpsrld  %xmm4, $1, %xmm6
-;   vandps  %xmm0, %xmm6, %xmm0
+;   vpsrld $0x1, %xmm4, %xmm6
+;   vandps %xmm6, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -217,7 +217,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpand   %xmm0, %xmm1, %xmm0
+;   vpand %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -242,7 +242,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vandps  %xmm0, %xmm1, %xmm0
+;   vandps %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -267,7 +267,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vandpd  %xmm0, %xmm1, %xmm0
+;   vandpd %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -292,7 +292,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpor    %xmm0, %xmm1, %xmm0
+;   vpor %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -317,7 +317,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vorps   %xmm0, %xmm1, %xmm0
+;   vorps %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -342,7 +342,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vorpd   %xmm0, %xmm1, %xmm0
+;   vorpd %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -367,7 +367,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpxor   %xmm0, %xmm1, %xmm0
+;   vpxor %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -392,7 +392,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vxorps  %xmm0, %xmm1, %xmm0
+;   vxorps %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -417,7 +417,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vxorpd  %xmm0, %xmm1, %xmm0
+;   vxorpd %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -442,9 +442,9 @@ block0(v0: i16x8, v1: i16x8, v2: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpand   %xmm1, %xmm0, %xmm4
-;   vpandn  %xmm0, %xmm2, %xmm6
-;   vpor    %xmm6, %xmm4, %xmm0
+;   vpand %xmm0, %xmm1, %xmm4
+;   vpandn %xmm2, %xmm0, %xmm6
+;   vpor %xmm4, %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -471,9 +471,9 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vandps  %xmm1, %xmm0, %xmm4
-;   vandnps %xmm0, %xmm2, %xmm6
-;   vorps   %xmm6, %xmm4, %xmm0
+;   vandps %xmm0, %xmm1, %xmm4
+;   vandnps %xmm2, %xmm0, %xmm6
+;   vorps %xmm4, %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -500,9 +500,9 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vandpd  %xmm1, %xmm0, %xmm4
-;   vandnpd %xmm0, %xmm2, %xmm6
-;   vorpd   %xmm6, %xmm4, %xmm0
+;   vandpd %xmm0, %xmm1, %xmm4
+;   vandnpd %xmm2, %xmm0, %xmm6
+;   vorpd %xmm4, %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -529,7 +529,7 @@ block0(v0: f32x4, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vinsertps $16, %xmm0, %xmm1, %xmm0
+;   vinsertps $0x10, %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

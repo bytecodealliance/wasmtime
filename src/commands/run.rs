@@ -33,7 +33,7 @@ use wasmtime_wasi_http::{
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
 #[cfg(feature = "wasi-tls")]
-use wasmtime_wasi_tls::WasiTlsCtx;
+use wasmtime_wasi_tls::{WasiTls, WasiTlsCtx};
 
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
@@ -719,6 +719,8 @@ impl RunCommand {
                 Val::FuncRef(Some(_)) => println!("<funcref>"),
                 Val::AnyRef(None) => println!("<null anyref>"),
                 Val::AnyRef(Some(_)) => println!("<anyref>"),
+                Val::ExnRef(None) => println!("<null exnref>"),
+                Val::ExnRef(Some(_)) => println!("<exnref>"),
             }
         }
 
@@ -993,8 +995,14 @@ impl RunCommand {
                                 h.preview2_ctx.as_mut().expect("wasip2 is not configured");
                             let preview2_ctx =
                                 Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
-                            WasiTlsCtx::new(preview2_ctx.table())
+                            WasiTls::new(
+                                Arc::get_mut(h.wasi_tls.as_mut().unwrap()).unwrap(),
+                                preview2_ctx.table(),
+                            )
                         })?;
+
+                        let ctx = wasmtime_wasi_tls::WasiTlsCtxBuilder::new().build();
+                        store.data_mut().wasi_tls = Some(Arc::new(ctx));
                     }
                 }
             }
@@ -1105,6 +1113,8 @@ struct Host {
     wasi_config: Option<Arc<WasiConfigVariables>>,
     #[cfg(feature = "wasi-keyvalue")]
     wasi_keyvalue: Option<Arc<WasiKeyValueCtx>>,
+    #[cfg(feature = "wasi-tls")]
+    wasi_tls: Option<Arc<WasiTlsCtx>>,
 }
 
 impl Host {

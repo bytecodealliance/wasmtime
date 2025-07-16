@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
+use crate::dsl::{Customization::*, Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -34,8 +34,11 @@ pub fn list() -> Vec<Inst> {
         inst("lock_xorl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x31]).r(), _64b | compat).custom(Mnemonic),
         inst("lock_xorq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x31]).w().r(), _64b).custom(Mnemonic),
         // Vector instructions.
-        inst("xorps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x57]).r(), _64b | compat | sse),
-        inst("xorpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x57]).r(), _64b | compat | sse2),
-        inst("pxor", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xEF]).r(), _64b | compat | sse2),
+        inst("xorps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x57]).r(), _64b | compat | sse).alt(avx, "vxorps_b"),
+        inst("xorpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x57]).r(), _64b | compat | sse2).alt(avx, "vxorpd_b"),
+        inst("pxor", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xEF]).r(), _64b | compat | sse2).alt(avx, "vpxor_b"),
+        inst("vxorps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._0f().op(0x57).r(), _64b | compat | avx),
+        inst("vxorpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0x57).r(), _64b | compat | avx),
+        inst("vpxor", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xEF).r(), _64b | compat | avx),
     ]
 }

@@ -97,8 +97,10 @@
 //!
 //! See the docs for [`bindgen!`] for more information on how to use it.
 
-// rustdoc appears to lie about a warning above, so squelch it for now.
-#![allow(rustdoc::redundant_explicit_links)]
+#![allow(
+    rustdoc::redundant_explicit_links,
+    reason = "rustdoc appears to lie about a warning above, so squelch it for now"
+)]
 
 mod component;
 #[cfg(feature = "component-model-async")]
@@ -111,14 +113,15 @@ mod matching;
 mod resource_table;
 mod resources;
 mod storage;
-mod store;
+pub(crate) mod store;
 pub mod types;
 mod values;
 pub use self::component::{Component, ComponentExportIndex};
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
-    Accessor, ErrorContext, FutureReader, Promise, PromisesUnordered, StreamReader,
-    VMComponentAsyncStore,
+    AbortHandle, Access, Accessor, AccessorTask, AsAccessor, ErrorContext, FutureReader,
+    FutureWriter, HostFuture, HostStream, ReadBuffer, StreamReader, StreamWriter,
+    VMComponentAsyncStore, VecBuffer, Watch, WriteBuffer,
 };
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
@@ -159,8 +162,6 @@ pub mod __internal {
     pub use core::cell::RefCell;
     pub use core::future::Future;
     pub use core::mem::transmute;
-    #[cfg(feature = "component-model-async")]
-    pub use futures::future::FutureExt;
     #[cfg(feature = "async")]
     pub use trait_variant::make as trait_variant_make;
     pub use wasmtime_environ;
@@ -683,3 +684,9 @@ pub mod bindgen_examples;
 #[cfg(not(any(docsrs, test, doctest)))]
 #[doc(hidden)]
 pub mod bindgen_examples {}
+
+#[cfg(not(feature = "component-model-async"))]
+pub(crate) mod concurrent_disabled;
+
+#[cfg(not(feature = "component-model-async"))]
+pub(crate) use concurrent_disabled as concurrent;

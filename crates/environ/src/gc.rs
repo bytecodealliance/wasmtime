@@ -15,11 +15,11 @@ pub mod drc;
 #[cfg(feature = "gc-null")]
 pub mod null;
 
-use crate::prelude::*;
 use crate::{
     WasmArrayType, WasmCompositeInnerType, WasmCompositeType, WasmStorageType, WasmStructType,
     WasmValType,
 };
+use crate::{WasmExnType, prelude::*};
 use core::alloc::Layout;
 
 /// Discriminant to check whether GC reference is an `i31ref` or not.
@@ -119,17 +119,15 @@ fn common_array_layout(
     }
 }
 
-/// Common code to define a GC struct's layout, given the size and alignment of
-/// the collector's GC header and its expected offset of the array length field.
+/// Shared layout code for structs and exception objects, which are
+/// identical except for the tag field (present in
+/// exceptions). Returns `(size, align, fields)`.
 #[cfg(any(feature = "gc-null", feature = "gc-drc"))]
-fn common_struct_layout(
-    ty: &WasmStructType,
+fn common_struct_or_exn_layout(
+    fields: &[crate::WasmFieldType],
     header_size: u32,
     header_align: u32,
-) -> GcStructLayout {
-    assert!(header_size >= crate::VM_GC_HEADER_SIZE);
-    assert!(header_align >= crate::VM_GC_HEADER_ALIGN);
-
+) -> (u32, u32, Vec<GcStructLayoutField>) {
     // Process each field, aligning it to its natural alignment.
     //
     // We don't try and do any fancy field reordering to minimize padding (yet?)
@@ -138,11 +136,11 @@ fn common_struct_layout(
     // subtyping where we need a subtype's fields to be assigned the same
     // offsets as its supertype's fields. We can come back and improve things
     // here if we find that (a) isn't actually holding true in practice.
+
     let mut size = header_size;
     let mut align = header_align;
 
-    let fields = ty
-        .fields
+    let fields = fields
         .iter()
         .map(|f| {
             let field_size = byte_size_of_wasm_ty_in_gc_heap(&f.element_type);
@@ -157,9 +155,49 @@ fn common_struct_layout(
     let align_size_to = align;
     align_up(&mut size, &mut align, align_size_to);
 
+    (size, align, fields)
+}
+
+/// Common code to define a GC struct's layout, given the size and alignment of
+/// the collector's GC header and its expected offset of the array length field.
+#[cfg(any(feature = "gc-null", feature = "gc-drc"))]
+fn common_struct_layout(
+    ty: &WasmStructType,
+    header_size: u32,
+    header_align: u32,
+) -> GcStructLayout {
+    assert!(header_size >= crate::VM_GC_HEADER_SIZE);
+    assert!(header_align >= crate::VM_GC_HEADER_ALIGN);
+
+    let (size, align, fields) = common_struct_or_exn_layout(&ty.fields, header_size, header_align);
+
     GcStructLayout {
         size,
         align,
+        fields,
+    }
+}
+
+/// Common code to define a GC exception object's layout, given the
+/// size and alignment of the collector's GC header and its expected
+/// offset of the array length field.
+#[cfg(any(feature = "gc-null", feature = "gc-drc"))]
+fn common_exn_layout(ty: &WasmExnType, header_size: u32, header_align: u32) -> GcExceptionLayout {
+    assert!(header_size >= crate::VM_GC_HEADER_SIZE);
+    assert!(header_align >= crate::VM_GC_HEADER_ALIGN);
+
+    // Compute a struct layout, with extra header size for the
+    // `(instance_idx, tag_idx)` fields.
+    let tag_offset = header_size;
+    assert!(header_align >= 8);
+    let header_size = header_size + 2 * u32::try_from(core::mem::size_of::<u32>()).unwrap();
+
+    let (size, align, fields) = common_struct_or_exn_layout(&ty.fields, header_size, header_align);
+
+    GcExceptionLayout {
+        size,
+        align,
+        tag_offset,
         fields,
     }
 }
@@ -186,6 +224,7 @@ pub trait GcTypeLayouts {
             WasmCompositeInnerType::Cont(_) => {
                 unimplemented!("Stack switching feature not compatbile with GC, yet")
             }
+            WasmCompositeInnerType::Exn(ty) => Some(self.exn_layout(ty).into()),
         }
     }
 
@@ -194,6 +233,9 @@ pub trait GcTypeLayouts {
 
     /// Get this collector's layout for the given struct type.
     fn struct_layout(&self, ty: &WasmStructType) -> GcStructLayout;
+
+    /// Get this collector's layout for the given exception type.
+    fn exn_layout(&self, ty: &WasmExnType) -> GcExceptionLayout;
 }
 
 /// The layout of a GC-managed object.
@@ -204,6 +246,9 @@ pub enum GcLayout {
 
     /// The layout of a GC-managed struct object.
     Struct(GcStructLayout),
+
+    /// The layout of a GC-managed exception object.
+    Exception(GcExceptionLayout),
 }
 
 impl From<GcArrayLayout> for GcLayout {
@@ -215,6 +260,12 @@ impl From<GcArrayLayout> for GcLayout {
 impl From<GcStructLayout> for GcLayout {
     fn from(layout: GcStructLayout) -> Self {
         Self::Struct(layout)
+    }
+}
+
+impl From<GcExceptionLayout> for GcLayout {
+    fn from(layout: GcExceptionLayout) -> Self {
+        Self::Exception(layout)
     }
 }
 
@@ -234,6 +285,15 @@ impl GcLayout {
         match self {
             Self::Array(a) => a,
             _ => panic!("GcLayout::unwrap_array on non-array GC layout"),
+        }
+    }
+
+    /// Get the underlying `GcExceptionLayout`, or panic.
+    #[track_caller]
+    pub fn unwrap_exception(&self) -> &GcExceptionLayout {
+        match self {
+            Self::Exception(e) => e,
+            _ => panic!("GcLayout::unwrap_exception on a non-exception GC layout"),
         }
     }
 }
@@ -337,6 +397,41 @@ pub struct GcStructLayoutField {
     pub is_gc_ref: bool,
 }
 
+/// The layout for a GC-managed exception object.
+///
+/// This layout is only valid for use with the GC runtime that created it. It is
+/// not valid to use one GC runtime's layout with another GC runtime, doing so
+/// is memory safe but will lead to general incorrectness like panics and wrong
+/// results.
+///
+/// All offsets are from the start of the object; that is, the size of the GC
+/// header (for example) is included in the offset.
+#[derive(Clone, Debug)]
+pub struct GcExceptionLayout {
+    /// The size (in bytes) of this struct.
+    pub size: u32,
+
+    /// The alignment (in bytes) of this struct.
+    pub align: u32,
+
+    /// The offset of the VMTagImport pointer.
+    pub tag_offset: u32,
+
+    /// The fields of this exception object. The `i`th entry contains
+    /// information about the `i`th parameter in the associated tag
+    /// type.
+    pub fields: Vec<GcStructLayoutField>,
+}
+
+impl GcExceptionLayout {
+    /// Get a `core::alloc::Layout` for an exception object of this type.
+    pub fn layout(&self) -> Layout {
+        let size = usize::try_from(self.size).unwrap();
+        let align = usize::try_from(self.align).unwrap();
+        Layout::from_size_align(size, align).unwrap()
+    }
+}
+
 /// The kind of an object in a GC heap.
 ///
 /// Note that this type is accessed from Wasm JIT code.
@@ -360,18 +455,19 @@ pub struct GcStructLayoutField {
 /// VMGcKind::EqRef`.
 ///
 /// Furthermore, this type only uses the highest 6 bits of its `u32`
-/// representation, allowing the lower 27 bytes to be bitpacked with other stuff
+/// representation, allowing the lower 26 bits to be bitpacked with other stuff
 /// as users see fit.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[rustfmt::skip]
 #[expect(missing_docs, reason = "self-describing variants")]
 pub enum VMGcKind {
-    ExternRef      = 0b01000 << 27,
-    AnyRef         = 0b10000 << 27,
-    EqRef          = 0b10100 << 27,
-    ArrayRef       = 0b10101 << 27,
-    StructRef      = 0b10110 << 27,
+    ExternRef      = 0b010000 << 26,
+    AnyRef         = 0b100000 << 26,
+    EqRef          = 0b101000 << 26,
+    ArrayRef       = 0b101010 << 26,
+    StructRef      = 0b101100 << 26,
+    ExnRef         = 0b000001 << 26,
 }
 
 /// The size of the `VMGcKind` in bytes.
@@ -381,7 +477,7 @@ const _: () = assert!(VM_GC_KIND_SIZE as usize == core::mem::size_of::<VMGcKind>
 
 impl VMGcKind {
     /// Mask this value with a `u32` to get just the bits that `VMGcKind` uses.
-    pub const MASK: u32 = 0b11111 << 27;
+    pub const MASK: u32 = 0b111111 << 26;
 
     /// Mask this value with a `u32` that potentially contains a `VMGcKind` to
     /// get the bits that `VMGcKind` doesn't use.
@@ -404,6 +500,7 @@ impl VMGcKind {
             x if x == Self::EqRef.as_u32() => Self::EqRef,
             x if x == Self::ArrayRef.as_u32() => Self::ArrayRef,
             x if x == Self::StructRef.as_u32() => Self::StructRef,
+            x if x == Self::ExnRef.as_u32() => Self::ExnRef,
             _ => panic!("invalid `VMGcKind`: {masked:#032b}"),
         }
     }
@@ -430,14 +527,16 @@ mod tests {
 
     #[test]
     fn kind_matches() {
-        let all = [ExternRef, AnyRef, EqRef, ArrayRef, StructRef];
+        let all = [ExternRef, AnyRef, EqRef, ArrayRef, StructRef, ExnRef];
 
         for (sup, subs) in [
             (ExternRef, vec![]),
             (AnyRef, vec![EqRef, ArrayRef, StructRef]),
+            // N.B.: exnref is not an eqref.
             (EqRef, vec![ArrayRef, StructRef]),
             (ArrayRef, vec![]),
             (StructRef, vec![]),
+            (ExnRef, vec![]),
         ] {
             assert!(sup.matches(sup));
             for sub in &subs {

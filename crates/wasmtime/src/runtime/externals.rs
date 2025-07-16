@@ -41,6 +41,7 @@ impl Extern {
     /// Returns the underlying `Func`, if this external is a function.
     ///
     /// Returns `None` if this is not a function.
+    #[inline]
     pub fn into_func(self) -> Option<Func> {
         match self {
             Extern::Func(func) => Some(func),
@@ -51,6 +52,7 @@ impl Extern {
     /// Returns the underlying `Global`, if this external is a global.
     ///
     /// Returns `None` if this is not a global.
+    #[inline]
     pub fn into_global(self) -> Option<Global> {
         match self {
             Extern::Global(global) => Some(global),
@@ -61,6 +63,7 @@ impl Extern {
     /// Returns the underlying `Table`, if this external is a table.
     ///
     /// Returns `None` if this is not a table.
+    #[inline]
     pub fn into_table(self) -> Option<Table> {
         match self {
             Extern::Table(table) => Some(table),
@@ -71,6 +74,7 @@ impl Extern {
     /// Returns the underlying `Memory`, if this external is a memory.
     ///
     /// Returns `None` if this is not a memory.
+    #[inline]
     pub fn into_memory(self) -> Option<Memory> {
         match self {
             Extern::Memory(memory) => Some(memory),
@@ -82,6 +86,7 @@ impl Extern {
     /// memory.
     ///
     /// Returns `None` if this is not a shared memory.
+    #[inline]
     pub fn into_shared_memory(self) -> Option<SharedMemory> {
         match self {
             Extern::SharedMemory(memory) => Some(memory),
@@ -92,6 +97,7 @@ impl Extern {
     /// Returns the underlying `Tag`, if this external is a tag.
     ///
     /// Returns `None` if this is not a tag.
+    #[inline]
     pub fn into_tag(self) -> Option<Tag> {
         match self {
             Extern::Tag(tag) => Some(tag),
@@ -124,23 +130,17 @@ impl Extern {
         store: &StoreOpaque,
     ) -> Extern {
         match wasmtime_export {
-            crate::runtime::vm::Export::Function(f) => {
-                Extern::Func(Func::from_wasmtime_function(f, store))
-            }
-            crate::runtime::vm::Export::Memory(m) => {
-                if m.memory.shared {
-                    Extern::SharedMemory(SharedMemory::from_wasmtime_memory(m, store))
+            crate::runtime::vm::Export::Function(f) => Extern::Func(f),
+            crate::runtime::vm::Export::Memory { memory, shared } => {
+                if shared {
+                    Extern::SharedMemory(SharedMemory::from_memory(memory, store))
                 } else {
-                    Extern::Memory(Memory::from_wasmtime_memory(m, store))
+                    Extern::Memory(memory)
                 }
             }
-            crate::runtime::vm::Export::Global(g) => {
-                Extern::Global(Global::from_wasmtime_global(g, store))
-            }
-            crate::runtime::vm::Export::Table(t) => {
-                Extern::Table(Table::from_wasmtime_table(t, store))
-            }
-            crate::runtime::vm::Export::Tag(t) => Extern::Tag(Tag::from_wasmtime_tag(t, store)),
+            crate::runtime::vm::Export::Global(g) => Extern::Global(g),
+            crate::runtime::vm::Export::Table(t) => Extern::Table(t),
+            crate::runtime::vm::Export::Tag(t) => Extern::Tag(t),
         }
     }
 

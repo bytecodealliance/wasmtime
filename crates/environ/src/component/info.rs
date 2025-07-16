@@ -480,6 +480,25 @@ pub enum Export {
     Type(TypeDef),
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+/// Data is stored in a linear memory.
+pub struct LinearMemoryOptions {
+    /// The memory used by these options, if specified.
+    pub memory: Option<RuntimeMemoryIndex>,
+    /// The realloc function used by these options, if specified.
+    pub realloc: Option<RuntimeReallocIndex>,
+}
+
+/// The data model for objects that are not unboxed in locals.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum CanonicalOptionsDataModel {
+    /// Data is stored in GC objects.
+    Gc {},
+
+    /// Data is stored in a linear memory.
+    LinearMemory(LinearMemoryOptions),
+}
+
 /// Canonical ABI options associated with a lifted or lowered function.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CanonicalOptions {
@@ -489,12 +508,6 @@ pub struct CanonicalOptions {
     /// The encoding used for strings.
     pub string_encoding: StringEncoding,
 
-    /// The memory used by these options, if specified.
-    pub memory: Option<RuntimeMemoryIndex>,
-
-    /// The realloc function used by these options, if specified.
-    pub realloc: Option<RuntimeReallocIndex>,
-
     /// The async callback function used by these options, if specified.
     pub callback: Option<RuntimeCallbackIndex>,
 
@@ -503,6 +516,13 @@ pub struct CanonicalOptions {
 
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
+
+    /// The core function type that is being lifted from / lowered to.
+    pub core_type: ModuleInternedTypeIndex,
+
+    /// The data model (GC objects or linear memory) used with these canonical
+    /// options.
+    pub data_model: CanonicalOptionsDataModel,
 }
 
 /// Possible encodings of strings within the component model.
@@ -836,14 +856,14 @@ pub enum Trampoline {
         async_: bool,
     },
 
-    /// A `stream.drop-readable` intrinsic to close the readable end of a
+    /// A `stream.drop-readable` intrinsic to drop the readable end of a
     /// `stream` of the specified type.
     StreamDropReadable {
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
     },
 
-    /// A `stream.drop-writable` intrinsic to close the writable end of a
+    /// A `stream.drop-writable` intrinsic to drop the writable end of a
     /// `stream` of the specified type.
     StreamDropWritable {
         /// The table index for the specific `stream` type and caller instance.
@@ -897,14 +917,14 @@ pub enum Trampoline {
         async_: bool,
     },
 
-    /// A `future.drop-readable` intrinsic to close the readable end of a
+    /// A `future.drop-readable` intrinsic to drop the readable end of a
     /// `future` of the specified type.
     FutureDropReadable {
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
     },
 
-    /// A `future.drop-writable` intrinsic to close the writable end of a
+    /// A `future.drop-writable` intrinsic to drop the writable end of a
     /// `future` of the specified type.
     FutureDropWritable {
         /// The table index for the specific `future` type and caller instance.
@@ -1061,15 +1081,15 @@ impl Trampoline {
             StreamWrite { .. } => format!("stream-write"),
             StreamCancelRead { .. } => format!("stream-cancel-read"),
             StreamCancelWrite { .. } => format!("stream-cancel-write"),
-            StreamDropReadable { .. } => format!("stream.drop-readable"),
-            StreamDropWritable { .. } => format!("stream.drop-writable"),
+            StreamDropReadable { .. } => format!("stream-drop-readable"),
+            StreamDropWritable { .. } => format!("stream-drop-writable"),
             FutureNew { .. } => format!("future-new"),
             FutureRead { .. } => format!("future-read"),
             FutureWrite { .. } => format!("future-write"),
             FutureCancelRead { .. } => format!("future-cancel-read"),
             FutureCancelWrite { .. } => format!("future-cancel-write"),
-            FutureDropReadable { .. } => format!("future.drop-readable"),
-            FutureDropWritable { .. } => format!("future.drop-writable"),
+            FutureDropReadable { .. } => format!("future-drop-readable"),
+            FutureDropWritable { .. } => format!("future-drop-writable"),
             ErrorContextNew { .. } => format!("error-context-new"),
             ErrorContextDebugMessage { .. } => format!("error-context-debug-message"),
             ErrorContextDrop { .. } => format!("error-context-drop"),

@@ -979,7 +979,7 @@ pub trait Module {
         relocs: &[ModuleReloc],
     ) -> ModuleResult<()>;
 
-    /// Define a data object, producing the data contents from the given `DataContext`.
+    /// Define a data object, producing the data contents from the given `DataDescription`.
     fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()>;
 }
 

@@ -1,9 +1,8 @@
 use crate::prelude::*;
 use crate::runtime::Uninhabited;
 use crate::runtime::vm::{
-    ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
-    VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
-    VMStoreContext,
+    InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMCommonStackInformation,
+    VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext, VMStoreContext,
 };
 use crate::store::{AutoAssertNoGc, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
@@ -13,10 +12,10 @@ use crate::{
 };
 use alloc::sync::Arc;
 use core::ffi::c_void;
+#[cfg(feature = "async")]
+use core::future::Future;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
-#[cfg(feature = "async")]
-use core::{future::Future, pin::Pin};
 use wasmtime_environ::VMSharedTypeIndex;
 
 /// A reference to the abstract `nofunc` heap value.
@@ -513,28 +512,31 @@ impl Func {
             "cannot use `new_async` without enabling async support in the config"
         );
         assert!(ty.comes_from_same_engine(store.as_context().engine()));
-        Func::new(store, ty, move |mut caller, params, results| {
-            let async_cx = caller
-                .store
-                .as_context_mut()
-                .0
-                .async_cx()
-                .expect("Attempt to spawn new action on dying fiber");
-            let future = func(caller, params, results);
-            match unsafe { async_cx.block_on(Pin::from(future)) } {
-                Ok(Ok(())) => Ok(()),
-                Ok(Err(trap)) | Err(trap) => Err(trap),
-            }
-        })
+        return Func::new(
+            store,
+            ty,
+            move |Caller { store, caller }, params, results| {
+                store.with_blocking(|store, cx| {
+                    cx.block_on(core::pin::Pin::from(func(
+                        Caller { store, caller },
+                        params,
+                        results,
+                    )))
+                })?
+            },
+        );
     }
 
-    pub(crate) unsafe fn from_vm_func_ref(
-        store: &StoreOpaque,
-        func_ref: NonNull<VMFuncRef>,
-    ) -> Func {
+    /// Creates a new `Func` from a store and a funcref within that store.
+    ///
+    /// # Safety
+    ///
+    /// The safety of this function requires that `func_ref` is a valid function
+    /// pointer owned by `store`.
+    pub(crate) unsafe fn from_vm_func_ref(store: StoreId, func_ref: NonNull<VMFuncRef>) -> Func {
         debug_assert!(func_ref.as_ref().type_index != VMSharedTypeIndex::default());
         Func {
-            store: store.id(),
+            store,
             unsafe_func_ref: func_ref.into(),
         }
     }
@@ -839,16 +841,8 @@ impl Func {
             store.as_context().async_support(),
             concat!("cannot use `wrap_async` without enabling async support on the config")
         );
-        Func::wrap_inner(store, move |mut caller: Caller<'_, T>, args| {
-            let async_cx = caller
-                .store
-                .as_context_mut()
-                .0
-                .async_cx()
-                .expect("Attempt to start async function on dying fiber");
-            let future = func(caller, args);
-
-            match unsafe { async_cx.block_on(Pin::from(future)) } {
+        Func::wrap_inner(store, move |Caller { store, caller }, args| {
+            match store.block_on(|store| func(Caller { store, caller }, args).into()) {
                 Ok(ret) => ret.into_fallible(),
                 Err(e) => R::fallible_from_error(e),
             }
@@ -957,12 +951,7 @@ impl Func {
         );
         let mut store = store.as_context_mut();
 
-        let _need_gc = self.call_impl_check_args(&mut store, params, results)?;
-
-        #[cfg(feature = "gc")]
-        if _need_gc {
-            store.gc(None);
-        }
+        self.call_impl_check_args(&mut store, params, results)?;
 
         unsafe { self.call_impl_do_call(&mut store, params, results) }
     }
@@ -1038,7 +1027,10 @@ impl Func {
     }
 
     pub(crate) unsafe fn _from_raw(store: &mut StoreOpaque, raw: *mut c_void) -> Option<Func> {
-        Some(Func::from_vm_func_ref(store, NonNull::new(raw.cast())?))
+        Some(Func::from_vm_func_ref(
+            store.id(),
+            NonNull::new(raw.cast())?,
+        ))
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
@@ -1094,12 +1086,7 @@ impl Func {
             "cannot use `call_async` without enabling async support in the config",
         );
 
-        let _need_gc = self.call_impl_check_args(&mut store, params, results)?;
-
-        #[cfg(feature = "gc")]
-        if _need_gc {
-            store.gc_async(None).await?;
-        }
+        self.call_impl_check_args(&mut store, params, results)?;
 
         let result = store
             .on_fiber(|store| unsafe { self.call_impl_do_call(store, params, results) })
@@ -1115,14 +1102,12 @@ impl Func {
     /// of arguments as well as making sure everything is from the same `Store`.
     ///
     /// This must be called just before `call_impl_do_call`.
-    ///
-    /// Returns whether we need to GC before calling `call_impl_do_call`.
     fn call_impl_check_args<T>(
         &self,
         store: &mut StoreContextMut<'_, T>,
         params: &[Val],
         results: &mut [Val],
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let ty = self.load_ty(store.0);
         if ty.params().len() != params.len() {
             bail!(
@@ -1147,25 +1132,7 @@ impl Func {
             }
         }
 
-        #[cfg(feature = "gc")]
-        {
-            // Check whether we need to GC before calling into Wasm.
-            //
-            // For example, with the DRC collector, whenever we pass GC refs
-            // from host code to Wasm code, they go into the
-            // `VMGcRefActivationsTable`. But the table might be at capacity
-            // already. If it is at capacity (unlikely) then we need to do a GC
-            // to free up space.
-            let num_gc_refs = ty.as_wasm_func_type().non_i31_gc_ref_params_count();
-            if let Some(num_gc_refs) = core::num::NonZeroUsize::new(num_gc_refs) {
-                return Ok(store
-                    .0
-                    .optional_gc_store()
-                    .is_some_and(|s| s.gc_heap.need_gc_before_entering_wasm(num_gc_refs)));
-            }
-        }
-
-        Ok(false)
+        Ok(())
     }
 
     /// Do the actual call into Wasm.
@@ -1213,13 +1180,6 @@ impl Func {
     pub(crate) fn vm_func_ref(&self, store: &StoreOpaque) -> NonNull<VMFuncRef> {
         self.store.assert_belongs_to(store.id());
         self.unsafe_func_ref.as_non_null()
-    }
-
-    pub(crate) unsafe fn from_wasmtime_function(
-        export: ExportFunction,
-        store: &StoreOpaque,
-    ) -> Self {
-        Self::from_vm_func_ref(store, export.func_ref)
     }
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> VMFunctionImport {
@@ -1496,7 +1456,10 @@ impl Func {
     /// Even if the same underlying function is added to the `StoreData`
     /// multiple times and becomes multiple `wasmtime::Func`s, this hash key
     /// will be consistent across all of these functions.
-    #[allow(dead_code)] // Not used yet, but added for consistency.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Not used yet, but added for consistency")
+    )]
     pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
         self.vm_func_ref(store).as_ptr().addr()
     }
@@ -1523,13 +1486,14 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         // restored upon exiting Wasm. Note that the `CallThreadState` that is
         // created by the `catch_traps` call below will store a pointer to this
         // stack-allocated `previous_runtime_state`.
-        let previous_runtime_state = EntryStoreContext::enter_wasm(store, &mut initial_stack_csi);
+        let mut previous_runtime_state =
+            EntryStoreContext::enter_wasm(store, &mut initial_stack_csi);
 
         if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
             // `previous_runtime_state` implicitly dropped here
             return Err(trap);
         }
-        let result = crate::runtime::vm::catch_traps(store, &previous_runtime_state, closure);
+        let result = crate::runtime::vm::catch_traps(store, &mut previous_runtime_state, closure);
         core::mem::drop(previous_runtime_state);
         store.0.call_hook(CallHook::ReturningFromWasm)?;
         result.map_err(|t| crate::trap::from_runtime_box(store.0, t))
@@ -1667,7 +1631,7 @@ impl EntryStoreContext {
     /// This function restores the values stored in this struct. We invoke this
     /// function through this type's `Drop` implementation. This ensures that we
     /// even restore the values if we unwind the stack (e.g., because we are
-    /// panicing out of a Wasm execution).
+    /// panicking out of a Wasm execution).
     #[inline]
     fn exit_wasm(&mut self) {
         unsafe {
@@ -1812,7 +1776,7 @@ where
 
 macro_rules! impl_wasm_host_results {
     ($n:tt $($t:ident)*) => (
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($t),*> WasmRet for ($($t,)*)
         where
             $($t: WasmTy,)*
@@ -1887,7 +1851,7 @@ macro_rules! impl_into_func {
         // Implement for functions without a leading `&Caller` parameter,
         // delegating to the implementation below which does have the leading
         // `Caller` parameter.
-        #[allow(non_snake_case)]
+        #[expect(non_snake_case, reason = "macro-generated code")]
         impl<T, F, $arg, R> IntoFunc<T, $arg, R> for F
         where
             F: Fn($arg) -> R + Send + Sync + 'static,
@@ -1904,7 +1868,7 @@ macro_rules! impl_into_func {
             }
         }
 
-        #[allow(non_snake_case)]
+        #[expect(non_snake_case, reason = "macro-generated code")]
         impl<T, F, $arg, R> IntoFunc<T, (Caller<'_, T>, $arg), R> for F
         where
             F: Fn(Caller<'_, T>, $arg) -> R + Send + Sync + 'static,
@@ -1923,7 +1887,7 @@ macro_rules! impl_into_func {
         // Implement for functions without a leading `&Caller` parameter,
         // delegating to the implementation below which does have the leading
         // `Caller` parameter.
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         impl<T, F, $($args,)* R> IntoFunc<T, ($($args,)*), R> for F
         where
             F: Fn($($args),*) -> R + Send + Sync + 'static,
@@ -1940,7 +1904,7 @@ macro_rules! impl_into_func {
             }
         }
 
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         impl<T, F, $($args,)* R> IntoFunc<T, (Caller<'_, T>, $($args,)*), R> for F
         where
             F: Fn(Caller<'_, T>, $($args),*) -> R + Send + Sync + 'static,
@@ -1981,7 +1945,7 @@ pub unsafe trait WasmTyList {
 
 macro_rules! impl_wasm_ty_list {
     ($num:tt $($args:ident)*) => (
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         unsafe impl<$($args),*> WasmTyList for ($($args,)*)
         where
             $($args: WasmTy,)*
@@ -2035,6 +1999,16 @@ pub struct Caller<'a, T: 'static> {
 }
 
 impl<T> Caller<'_, T> {
+    #[cfg(feature = "async")]
+    pub(crate) fn new(store: StoreContextMut<'_, T>, caller: Instance) -> Caller<'_, T> {
+        Caller { store, caller }
+    }
+
+    #[cfg(feature = "async")]
+    pub(crate) fn caller(&self) -> Instance {
+        self.caller
+    }
+
     unsafe fn with<F, R>(caller: NonNull<VMContext>, f: F) -> R
     where
         // The closure must be valid for any `Caller` it is given; it doesn't
@@ -2256,8 +2230,7 @@ struct HostFuncState<F> {
 
     // NB: We have to keep our `VMSharedTypeIndex` registered in the engine for
     // as long as this function exists.
-    #[allow(dead_code)]
-    ty: RegisteredType,
+    _ty: RegisteredType,
 }
 
 #[doc(hidden)]
@@ -2290,7 +2263,7 @@ impl HostContext {
                 type_index,
                 Box::new(HostFuncState {
                     func,
-                    ty: ty.into_registered_type(),
+                    _ty: ty.into_registered_type(),
                 }),
             )
         };
@@ -2344,6 +2317,7 @@ impl HostContext {
                 drop(store);
 
                 let r = func(caller.sub_caller(), params);
+
                 if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
                     break 'ret R::fallible_from_error(trap);
                 }
@@ -2490,7 +2464,7 @@ impl HostFunc {
         self.validate_store(store);
         let (funcrefs, modules) = store.func_refs_and_modules();
         let funcref = funcrefs.push_arc_host(self.clone(), modules);
-        Func::from_vm_func_ref(store, funcref)
+        Func::from_vm_func_ref(store.id(), funcref)
     }
 
     /// Inserts this `HostFunc` into a `Store`, returning the `Func` pointing to
@@ -2524,11 +2498,11 @@ impl HostFunc {
         match rooted_func_ref {
             Some(funcref) => {
                 debug_assert!(funcref.as_ref().wasm_call.is_some());
-                Func::from_vm_func_ref(store, funcref)
+                Func::from_vm_func_ref(store.id(), funcref)
             }
             None => {
                 debug_assert!(self.func_ref().wasm_call.is_some());
-                Func::from_vm_func_ref(store, self.func_ref().into())
+                Func::from_vm_func_ref(store.id(), self.func_ref().into())
             }
         }
     }
@@ -2538,7 +2512,7 @@ impl HostFunc {
         self.validate_store(store);
         let (funcrefs, modules) = store.func_refs_and_modules();
         let funcref = funcrefs.push_box_host(Box::new(self), modules);
-        Func::from_vm_func_ref(store, funcref)
+        Func::from_vm_func_ref(store.id(), funcref)
     }
 
     fn validate_store(&self, store: &mut StoreOpaque) {

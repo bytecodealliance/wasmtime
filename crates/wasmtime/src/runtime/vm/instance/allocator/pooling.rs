@@ -253,7 +253,7 @@ pub struct PoolConcurrencyLimitError {
     kind: Cow<'static, str>,
 }
 
-impl std::error::Error for PoolConcurrencyLimitError {}
+impl core::error::Error for PoolConcurrencyLimitError {}
 
 impl Display for PoolConcurrencyLimitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -305,9 +305,12 @@ pub struct PoolingInstanceAllocator {
     stacks: StackPool,
 }
 
-#[cfg(debug_assertions)]
 impl Drop for PoolingInstanceAllocator {
     fn drop(&mut self) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
+
         // NB: when cfg(not(debug_assertions)) it is okay that we don't flush
         // the queue, as the sub-pools will unmap those ranges anyways, so
         // there's no point in decommitting them. But we do need to flush the

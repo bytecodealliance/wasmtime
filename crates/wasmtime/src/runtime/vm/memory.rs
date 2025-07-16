@@ -169,6 +169,9 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// offset within it.
     fn base(&self) -> MemoryBase;
 
+    /// Get a `VMMemoryDefinition` for this linear memory.
+    fn vmmemory(&self) -> VMMemoryDefinition;
+
     /// Internal method for Wasmtime when used in conjunction with CoW images.
     /// This is used to inform the underlying memory that the size of memory has
     /// changed.
@@ -429,9 +432,14 @@ impl Memory {
         }
     }
 
+    /// Is this a shared memory?
+    pub fn is_shared_memory(&self) -> bool {
+        matches!(self, Memory::Shared(_))
+    }
+
     /// If the [Memory] is a [SharedMemory], unwrap it and return a clone to
     /// that shared memory.
-    pub fn as_shared_memory(&mut self) -> Option<&mut SharedMemory> {
+    pub fn as_shared_memory(&self) -> Option<&SharedMemory> {
         match self {
             Memory::Local(_) => None,
             Memory::Shared(mem) => Some(mem),
@@ -702,10 +710,7 @@ impl LocalMemory {
     }
 
     pub fn vmmemory(&self) -> VMMemoryDefinition {
-        VMMemoryDefinition {
-            base: self.alloc.base().as_non_null().into(),
-            current_length: self.alloc.byte_size().into(),
-        }
+        self.alloc.vmmemory()
     }
 
     pub fn byte_size(&self) -> usize {

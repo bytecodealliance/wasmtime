@@ -2,8 +2,6 @@
 //!
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
-#![cfg_attr(feature = "gc", allow(irrefutable_let_patterns))]
-
 use crate::prelude::*;
 use crate::runtime::vm::stack_switching::VMContObj;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
@@ -378,6 +376,7 @@ pub(crate) fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
         WasmHeapTopType::Func => TableElementType::Func,
         WasmHeapTopType::Any | WasmHeapTopType::Extern => TableElementType::GcRef,
         WasmHeapTopType::Cont => TableElementType::Cont,
+        WasmHeapTopType::Exn => TableElementType::GcRef,
     }
 }
 
@@ -764,9 +763,7 @@ impl Table {
         if delta == 0 {
             return Ok(Some(old_size));
         }
-        // Cannot return `Trap::TableOutOfBounds` here because `impl std::error::Error for Trap` is not available in no-std.
-        let delta =
-            usize::try_from(delta).map_err(|_| format_err!("delta exceeds host pointer size"))?;
+        let delta = usize::try_from(delta).map_err(|_| Trap::TableOutOfBounds)?;
 
         let new_size = match old_size.checked_add(delta) {
             Some(s) => s,

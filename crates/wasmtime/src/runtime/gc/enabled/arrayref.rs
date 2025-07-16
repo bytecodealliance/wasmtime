@@ -183,7 +183,6 @@ pub struct ArrayRef {
 }
 
 unsafe impl GcRefImpl for ArrayRef {
-    #[allow(private_interfaces)]
     fn transmute_ref(index: &GcRootIndex) -> &Self {
         // Safety: `ArrayRef` is a newtype of a `GcRootIndex`.
         let me: &Self = unsafe { mem::transmute(index) };
@@ -742,6 +741,7 @@ impl ArrayRef {
         match layout {
             GcLayout::Array(a) => Ok(a),
             GcLayout::Struct(_) => unreachable!(),
+            GcLayout::Exception(_) => unreachable!(),
         }
     }
 
@@ -895,6 +895,9 @@ unsafe impl WasmTy for Rooted<ArrayRef> {
             | HeapType::Cont
             | HeapType::NoCont
             | HeapType::ConcreteCont(_)
+            | HeapType::Exn
+            | HeapType::NoExn
+            | HeapType::ConcreteExn(_)
             | HeapType::None => bail!(
                 "type mismatch: expected `(ref {ty})`, got `(ref {})`",
                 self._ty(store)?,
@@ -992,6 +995,9 @@ unsafe impl WasmTy for ManuallyRooted<ArrayRef> {
             | HeapType::Cont
             | HeapType::NoCont
             | HeapType::ConcreteCont(_)
+            | HeapType::Exn
+            | HeapType::NoExn
+            | HeapType::ConcreteExn(_)
             | HeapType::None => bail!(
                 "type mismatch: expected `(ref {ty})`, got `(ref {})`",
                 self._ty(store)?,

@@ -21,7 +21,7 @@ block0(v0: i64, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i128
 ;   movq %rsp, %rbp
 ;   movq %rdi, %r10
 ;   addq $0x10, %r10
-;   cmpq    %rsp, %r10
+;   cmpq %rsp, %r10
 ;   jnbe #trap=stk_ovf
 ;   subq $0x10, %rsp
 ; block0:

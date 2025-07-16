@@ -57,7 +57,9 @@ impl Formats {
 
             unary_ieee64: Builder::new("UnaryIeee64").imm(&imm.ieee64).build(),
 
-            unary_const: Builder::new("UnaryConst").imm(&imm.pool_constant).build(),
+            unary_const: Builder::new("UnaryConst")
+                .imm(&entities.pool_constant)
+                .build(),
 
             unary_global_value: Builder::new("UnaryGlobalValue")
                 .imm(&entities.global_value)
@@ -94,7 +96,7 @@ impl Formats {
             shuffle: Builder::new("Shuffle")
                 .value()
                 .value()
-                .imm(&imm.uimm128)
+                .imm(&entities.uimm128)
                 .build(),
 
             int_compare: Builder::new("IntCompare")

@@ -1,14 +1,14 @@
 test compile
 set enable_pcc=true
 target aarch64
-target x86_64
+;; disabled until PCC is migrated to new assembler: target x86_64
 
 ;; Equivalent to a Wasm `i64.load` from a dynamic memory.
 function %f0(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned checked gv0+0 ;; base
     gv2 = load.i64 notrap aligned checked gv0+8 ;; size
-    
+
     ;; mock vmctx struct:
     mt0 = struct 16 {
         0: i64 readonly ! dynamic_mem(mt1, 0, 0),

@@ -15,7 +15,7 @@ block0:
 ;   movq %rsp, %rbp
 ; block0:
 ;   movq    %r15, %rdi
-;   lea     1(%rdi), %rdi
+;   leaq 1(%rdi), %rdi
 ;   movq    %rdi, %r15
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -48,7 +48,7 @@ block0:
 ;   movq %rdi, (%rsp)
 ; block0:
 ;   movq    %r15, %rdi
-;   lea     1(%rdi), %rdi
+;   leaq 1(%rdi), %rdi
 ;   movq    %rdi, %r15
 ;   movq (%rsp), %rdi
 ;   addq $0x10, %rsp

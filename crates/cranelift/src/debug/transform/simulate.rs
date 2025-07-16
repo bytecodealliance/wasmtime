@@ -47,6 +47,7 @@ fn generate_line_info(
         out_encoding,
         line_encoding,
         out_comp_dir,
+        None,
         out_comp_name,
         None,
     );
@@ -337,6 +338,10 @@ pub fn generate_simulated_dwarf(
 
         let id = out_strings.add(PRODUCER_NAME);
         root.set(gimli::DW_AT_producer, write::AttributeValue::StringRef(id));
+        root.set(
+            gimli::DW_AT_language,
+            write::AttributeValue::Language(gimli::DW_LANG_C11),
+        );
         root.set(gimli::DW_AT_name, write::AttributeValue::StringRef(name_id));
         root.set(
             gimli::DW_AT_stmt_list,

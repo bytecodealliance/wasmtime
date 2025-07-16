@@ -21,6 +21,7 @@ env_logger = { workspace = true }
 log = { workspace = true }
 mutatis = { workspace = true }
 rayon = "1.2.1"
+smallvec = { workspace = true }
 target-lexicon = { workspace = true }
 tempfile = "3.3.0"
 wasmparser = { workspace = true }
@@ -58,7 +59,7 @@ features = [
 # though, so we could use that if we wanted. For now though just simplify a bit
 # and don't depend on this on Windows.  The same applies on s390x and riscv.
 [target.'cfg(not(any(windows, target_arch = "s390x", target_arch = "riscv64")))'.dependencies]
-v8 = "134.5.0"
+v8 = "137.2.0"
 
 [dev-dependencies]
 wat = { workspace = true }

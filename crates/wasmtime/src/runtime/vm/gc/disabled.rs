@@ -1,12 +1,12 @@
 //! Dummy GC types for when the `gc` cargo feature is disabled.
 
-#![allow(missing_docs)]
-
 pub enum VMExternRef {}
 
 pub enum VMStructRef {}
 
 pub enum VMArrayRef {}
+
+pub enum VMExnRef {}
 
 pub struct VMGcObjectData {
     _inner: VMStructRef,

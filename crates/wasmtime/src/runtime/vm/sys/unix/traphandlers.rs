@@ -7,7 +7,6 @@ use core::ptr::NonNull;
 #[link(name = "wasmtime-helpers")]
 unsafe extern "C" {
     #[wasmtime_versioned_export_macros::versioned_link]
-    #[allow(improper_ctypes)]
     pub fn wasmtime_setjmp(
         jmp_buf: *mut *const u8,
         callback: extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,

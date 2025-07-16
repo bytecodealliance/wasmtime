@@ -1,8 +1,6 @@
 //! Generate various kinds of Wasm memory.
 
-use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
-use wasmtime::{LinearMemory, MemoryCreator, MemoryType};
 
 /// A description of a memory config, image, etc... that can be used to test
 /// memory accesses.
@@ -115,25 +113,11 @@ impl<'a> Arbitrary<'a> for HeapImage {
     }
 }
 
-/// Configuration for linear memories in Wasmtime.
-#[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum MemoryConfig {
-    /// Configuration for linear memories which correspond to normal
-    /// configuration settings in `wasmtime` itself. This will tweak various
-    /// parameters about static/dynamic memories.
-    Normal(NormalMemoryConfig),
-
-    /// Configuration to force use of a linear memory that's unaligned at its
-    /// base address to force all wasm addresses to be unaligned at the hardware
-    /// level, even if the wasm itself correctly aligns everything internally.
-    CustomUnaligned,
-}
-
 /// Represents a normal memory configuration for Wasmtime with the given
 /// static and dynamic memory sizes.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[expect(missing_docs, reason = "self-describing fields")]
-pub struct NormalMemoryConfig {
+pub struct MemoryConfig {
     pub memory_reservation: Option<u64>,
     pub memory_guard_size: Option<u64>,
     pub memory_reservation_for_growth: Option<u64>,
@@ -142,7 +126,7 @@ pub struct NormalMemoryConfig {
     pub memory_init_cow: bool,
 }
 
-impl<'a> Arbitrary<'a> for NormalMemoryConfig {
+impl<'a> Arbitrary<'a> for MemoryConfig {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Self {
             // Allow up to 8GiB reservations of the virtual address space for
@@ -190,7 +174,7 @@ fn interesting_virtual_memory_size(
     Ok(Some(size))
 }
 
-impl NormalMemoryConfig {
+impl MemoryConfig {
     /// Apply this memory configuration to the given config.
     pub fn configure(&self, cfg: &mut wasmtime_cli_flags::CommonOptions) {
         cfg.opts.memory_reservation = self.memory_reservation;
@@ -205,64 +189,5 @@ impl NormalMemoryConfig {
                 Some(enable.to_string()),
             ));
         }
-    }
-}
-
-/// A custom "linear memory allocator" for wasm which only works with the
-/// "dynamic" mode of configuration where wasm always does explicit bounds
-/// checks.
-///
-/// This memory attempts to always use unaligned host addresses for the base
-/// address of linear memory with wasm. This means that all jit loads/stores
-/// should be unaligned, which is a "big hammer way" of testing that all our JIT
-/// code works with unaligned addresses since alignment is not required for
-/// correctness in wasm itself.
-pub struct UnalignedMemory {
-    /// This memory is always one byte larger than the actual size of linear
-    /// memory.
-    src: Vec<u8>,
-}
-
-unsafe impl LinearMemory for UnalignedMemory {
-    fn byte_size(&self) -> usize {
-        // Chop off the extra byte reserved for the true byte size of this
-        // linear memory.
-        self.src.len() - 1
-    }
-
-    fn byte_capacity(&self) -> usize {
-        self.src.capacity() - 1
-    }
-
-    fn grow_to(&mut self, new_size: usize) -> Result<()> {
-        // Make sure to allocate an extra byte for our "unalignment"
-        self.src.resize(new_size + 1, 0);
-        Ok(())
-    }
-
-    fn as_ptr(&self) -> *mut u8 {
-        // Return our allocated memory, offset by one, so that the base address
-        // of memory is always unaligned.
-        self.src[1..].as_ptr() as *mut _
-    }
-}
-
-/// A mechanism to generate [`UnalignedMemory`] at runtime.
-pub struct UnalignedMemoryCreator;
-
-unsafe impl MemoryCreator for UnalignedMemoryCreator {
-    fn new_memory(
-        &self,
-        _ty: MemoryType,
-        minimum: usize,
-        _maximum: Option<usize>,
-        reserved_size_in_bytes: Option<usize>,
-        guard_size_in_bytes: usize,
-    ) -> Result<Box<dyn LinearMemory>, String> {
-        assert_eq!(guard_size_in_bytes, 0);
-        assert!(reserved_size_in_bytes.is_none() || reserved_size_in_bytes == Some(0));
-        Ok(Box::new(UnalignedMemory {
-            src: vec![0; minimum + 1],
-        }))
     }
 }

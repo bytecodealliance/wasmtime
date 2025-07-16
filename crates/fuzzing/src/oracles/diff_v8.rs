@@ -139,7 +139,7 @@ impl DiffEngine for V8Engine {
                     "divide result unrepresentable",
                 ]);
             }
-            other => log::debug!("unknown code {:?}", other),
+            other => log::debug!("unknown code {other:?}"),
         }
 
         verify_wasmtime("not possibly present in an error, just panic please");
@@ -190,6 +190,7 @@ impl DiffInstance for V8Instance {
                 // JS doesn't support v128 parameters
                 DiffValue::V128(_) => return Ok(None),
                 DiffValue::AnyRef { .. } => unimplemented!(),
+                DiffValue::ExnRef { .. } => unimplemented!(),
             });
         }
         // JS doesn't support v128 return values
@@ -313,6 +314,7 @@ fn get_diff_value(
             null: val.is_null(),
         },
         DiffValueType::AnyRef => unimplemented!(),
+        DiffValueType::ExnRef => unimplemented!(),
         DiffValueType::V128 => unreachable!(),
     }
 }

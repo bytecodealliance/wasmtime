@@ -73,19 +73,19 @@
 ;; stream.drop-readable
 (component
   (core module $m
-    (import "" "stream.drop-readable" (func $stream.drop-readable (param i32)))
+    (import "" "stream.drop-readable" (func $stream-drop-readable (param i32)))
   )
   (type $stream-type (stream u8))
-  (core func $stream.drop-readable (canon stream.drop-readable $stream-type))
-  (core instance $i (instantiate $m (with "" (instance (export "stream.drop-readable" (func $stream.drop-readable))))))
+  (core func $stream-drop-readable (canon stream.drop-readable $stream-type))
+  (core instance $i (instantiate $m (with "" (instance (export "stream.drop-readable" (func $stream-drop-readable))))))
 )
 
 ;; stream.drop-writable
 (component
   (core module $m
-    (import "" "stream.drop-writable" (func $stream.drop-writable (param i32)))
+    (import "" "stream.drop-writable" (func $stream-drop-writable (param i32)))
   )
   (type $stream-type (stream u8))
-  (core func $stream.drop-writable (canon stream.drop-writable $stream-type))
-  (core instance $i (instantiate $m (with "" (instance (export "stream.drop-writable" (func $stream.drop-writable))))))
+  (core func $stream-drop-writable (canon stream.drop-writable $stream-type))
+  (core instance $i (instantiate $m (with "" (instance (export "stream.drop-writable" (func $stream-drop-writable))))))
 )

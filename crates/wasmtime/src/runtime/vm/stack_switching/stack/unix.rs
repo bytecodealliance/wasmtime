@@ -58,8 +58,6 @@
 //! the example above, thus assuming args_capacity = 2) is saved as the `data`
 //! field of the VMContRef's `args` object.
 
-#![allow(unused_macros)]
-
 use core::ptr::NonNull;
 use std::io;
 use std::ops::Range;
@@ -134,7 +132,6 @@ impl VMContinuationStack {
         self.len == 0
     }
 
-    #[allow(clippy::missing_safety_doc)]
     pub unsafe fn from_raw_parts(
         base: *mut u8,
         _guard_size: usize,
@@ -297,7 +294,6 @@ impl Drop for VMContinuationStack {
 }
 
 unsafe extern "C" {
-    #[allow(dead_code)] // only used in inline assembly for some platforms
     fn wasmtime_continuation_start();
 }
 
@@ -322,7 +318,7 @@ unsafe extern "C" fn fiber_start(
 
         // NOTE(frank-emrich) The usage of the `caller_vmctx` is probably not
         // 100% correct here. Currently, we determine the "caller" vmctx when
-        // initilizing the fiber stack/continuation (i.e. as part of
+        // initializing the fiber stack/continuation (i.e. as part of
         // `cont.new`). However, we may subsequenly `resume` the continuation
         // from a different Wasm instance. The way to fix this would be to make
         // the currently active `VMContext` an additional parameter of
@@ -349,7 +345,7 @@ cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
         mod x86_64;
     } else {
-        // Note that this shoul be unreachable: In stack.rs, we currently select
+        // Note that this should be unreachable: In stack.rs, we currently select
         // the module defined in the current file only if we are on unix AND
         // x86_64.
         compile_error!("the stack switching feature is not supported on this CPU architecture");

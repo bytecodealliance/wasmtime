@@ -326,12 +326,16 @@ impl Instance {
     fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>, start: FuncIndex) -> Result<()> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
+        let store_id = store.0.id();
         let mut instance = self.id.get_mut(store.0);
-        let f = instance.as_mut().get_exported_func(start);
+        // SAFETY: the `store_id` is the id of the store that owns this
+        // instance and any function stored within the instance.
+        let f = unsafe { instance.as_mut().get_exported_func(store_id, start) };
         let caller_vmctx = instance.vmctx();
         unsafe {
+            let funcref = f.vm_func_ref(store.0);
             super::func::invoke_wasm_and_catch_traps(store, |_default_caller, vm| {
-                VMFuncRef::array_call(f.func_ref, vm, caller_vmctx, NonNull::from(&mut []))
+                VMFuncRef::array_call(funcref, vm, caller_vmctx, NonNull::from(&mut []))
             })?;
         }
         Ok(())
@@ -427,7 +431,10 @@ impl Instance {
     }
 
     fn _get_export(&self, store: &mut StoreOpaque, entity: EntityIndex) -> Extern {
-        let export = self.id.get_mut(store).get_export_by_index_mut(entity);
+        let id = store.id();
+        // SAFETY: the store `id` owns this instance and all exports contained
+        // within.
+        let export = unsafe { self.id.get_mut(store).get_export_by_index_mut(id, entity) };
         unsafe { Extern::from_wasmtime_export(export, store) }
     }
 
@@ -536,7 +543,10 @@ impl Instance {
         self.get_export(store, name)?.into_tag()
     }
 
-    #[cfg(feature = "component-model")]
+    #[allow(
+        dead_code,
+        reason = "c-api crate does not yet support exnrefs and causes this method to be dead."
+    )]
     pub(crate) fn id(&self) -> InstanceId {
         self.id.instance()
     }
@@ -553,11 +563,8 @@ impl Instance {
         &'a self,
         store: &'a mut StoreOpaque,
     ) -> impl ExactSizeIterator<Item = (GlobalIndex, Global)> + 'a {
-        store[self.id]
-            .all_globals()
-            .collect::<Vec<_>>()
-            .into_iter()
-            .map(|(i, g)| (i, unsafe { Global::from_wasmtime_global(g, store) }))
+        let store_id = store.id();
+        store[self.id].all_globals(store_id)
     }
 
     /// Get all memories within this instance.
@@ -570,13 +577,10 @@ impl Instance {
     #[cfg(feature = "coredump")]
     pub(crate) fn all_memories<'a>(
         &'a self,
-        store: &'a mut StoreOpaque,
+        store: &'a StoreOpaque,
     ) -> impl ExactSizeIterator<Item = (MemoryIndex, Memory)> + 'a {
-        store[self.id]
-            .all_memories()
-            .collect::<Vec<_>>()
-            .into_iter()
-            .map(|(i, m)| (i, unsafe { Memory::from_wasmtime_memory(m, store) }))
+        let store_id = store.id();
+        store[self.id].all_memories(store_id)
     }
 }
 
@@ -649,10 +653,12 @@ impl OwnedImports {
     /// Note that this is unsafe as the validity of `item` is not verified and
     /// it contains a bunch of raw pointers.
     #[cfg(feature = "component-model")]
-    pub(crate) unsafe fn push_export(&mut self, item: &crate::runtime::vm::Export) {
+    pub(crate) fn push_export(&mut self, store: &StoreOpaque, item: &crate::runtime::vm::Export) {
         match item {
             crate::runtime::vm::Export::Function(f) => {
-                let f = f.func_ref.as_ref();
+                // SAFETY: the funcref associated with a `Func` is valid to use
+                // under the `store` that owns the function.
+                let f = unsafe { f.vm_func_ref(store).as_ref() };
                 self.functions.push(VMFunctionImport {
                     wasm_call: f.wasm_call.unwrap(),
                     array_call: f.array_call,
@@ -660,28 +666,16 @@ impl OwnedImports {
                 });
             }
             crate::runtime::vm::Export::Global(g) => {
-                self.globals.push(g.vmimport());
+                self.globals.push(g.vmimport(store));
             }
             crate::runtime::vm::Export::Table(t) => {
-                self.tables.push(VMTableImport {
-                    from: t.definition.into(),
-                    vmctx: t.vmctx.into(),
-                    index: t.index,
-                });
+                self.tables.push(t.vmimport(store));
             }
-            crate::runtime::vm::Export::Memory(m) => {
-                self.memories.push(VMMemoryImport {
-                    from: m.definition.into(),
-                    vmctx: m.vmctx.into(),
-                    index: m.index,
-                });
+            crate::runtime::vm::Export::Memory { memory, .. } => {
+                self.memories.push(memory.vmimport(store));
             }
             crate::runtime::vm::Export::Tag(t) => {
-                self.tags.push(VMTagImport {
-                    from: t.definition.into(),
-                    vmctx: t.vmctx.into(),
-                    index: t.index,
-                });
+                self.tags.push(t.vmimport(store));
             }
         }
     }

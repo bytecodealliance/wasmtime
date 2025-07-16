@@ -988,12 +988,6 @@
 (rule (temp_writable_vreg) (temp_writable_reg $I8X16))
 
 
-;; Converters
-
-(convert u8 i32 u8_as_i32)
-(decl u8_as_i32 (u8) i32)
-(extern constructor u8_as_i32 u8_as_i32)
-
 ;; ISA Extension helpers
 
 (decl pure has_m () bool)
@@ -1922,7 +1916,7 @@
 (rule 0 (imm (ty_int ty) c)
   (if-let (i64_shift c_shifted shift) (i64_sextend_u64 ty c))  ;; constant to make
   (if-let (i64_generate_imm _ _) c_shifted)                    ;; can the smaller constant be made?
-  (rv_slli (imm ty (i64_as_u64 c_shifted)) shift))
+  (rv_slli (imm ty (i64_cast_unsigned c_shifted)) shift))
 
 ;; Otherwise we fall back to loading the immediate from the constant pool.
 (rule -1 (imm (ty_int ty) c)
@@ -1972,7 +1966,7 @@
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule
   (imm12_from_negated_value (has_type ty (iconst n)))
-  (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
+  (if-let (imm12_from_u64 imm) (i64_cast_unsigned (i64_wrapping_neg (i64_sextend_imm64 ty n))))
   imm)
 
 (decl imm12_from_u64 (Imm12) u64)
@@ -2019,7 +2013,7 @@
 ;; Like imm5_from_value, but first negates the `Value`.
 (decl pure partial imm5_from_negated_value (Value) Imm5)
 (rule (imm5_from_negated_value (has_type ty (iconst n)))
-  (if-let (imm5_from_i64 imm) (i64_neg (i64_sextend_imm64 ty n)))
+  (if-let (imm5_from_i64 imm) (i64_wrapping_neg (i64_sextend_imm64 ty n)))
   imm)
 
 ;; Constructor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
@@ -2030,7 +2024,7 @@
   (if-let (u64_replicated_u32 n32) n64)
   (if-let (u32_replicated_u16 n16) n32)
   (if-let (u16_replicated_u8 n8) n16)
-  (if-let n (i8_to_imm5 (u8_as_i8 n8)))
+  (if-let n (i8_to_imm5 (u8_cast_signed n8)))
   n)
 
 ;; Like replicated_imm5, but first negates the `Value`.
@@ -2043,7 +2037,7 @@
   (if-let (u64_replicated_u32 n32) n64)
   (if-let (u32_replicated_u16 n16) n32)
   (if-let (u16_replicated_u8 n8) n16)
-  (if-let n (i8_to_imm5 (i8_neg (u8_as_i8 n8))))
+  (if-let n (i8_to_imm5 (i8_wrapping_neg (u8_cast_signed n8))))
   n)
 
 ;; UImm5 Helpers
@@ -2223,7 +2217,7 @@
 
 ;; In the most generic case, we shift left and then shift right.
 (rule 0 (zext val @ (value_type (fits_in_32 ty)))
-  (let ((shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits ty)))))
+  (let ((shift Imm12 (imm_from_bits (u64_wrapping_sub 64 (ty_bits ty)))))
     (rv_srli (rv_slli val shift) shift)))
 
 ;; If we are zero extending a U8 we can use a `andi` instruction.
@@ -2264,7 +2258,7 @@
 
 ;; Same base case as `zext`, shift left-then-right.
 (rule 0 (sext val @ (value_type (fits_in_32 ty)))
-  (let ((shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits ty)))))
+  (let ((shift Imm12 (imm_from_bits (u64_wrapping_sub 64 (ty_bits ty)))))
     (rv_srai (rv_slli val shift) shift)))
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
@@ -2352,18 +2346,18 @@
 (decl gen_bseti (Reg u64) Reg)
 (rule (gen_bseti val bit)
   (if-let false (has_zbs))
-  (if-let false (u64_le bit 12))
-  (let ((const XReg (imm $I64 (u64_shl 1 bit))))
+  (if-let false (u64_lt_eq bit 12))
+  (let ((const XReg (imm $I64 (u64_wrapping_shl 1 (u64_unwrap_into_u32 bit)))))
     (rv_or val const)))
 
 (rule (gen_bseti val bit)
   (if-let false (has_zbs))
-  (if-let true (u64_le bit 12))
-  (rv_ori val (imm12_const (u64_as_i32 (u64_shl 1 bit)))))
+  (if-let true (u64_lt_eq bit 12))
+  (rv_ori val (imm12_const (u32_cast_signed (u32_wrapping_shl 1 (u64_unwrap_into_u32 bit))))))
 
 (rule (gen_bseti val bit)
   (if-let true (has_zbs))
-  (rv_bseti val (imm12_const (u64_as_i32 bit))))
+  (rv_bseti val (imm12_const (u32_cast_signed (u64_unwrap_into_u32 bit)))))
 
 
 (decl gen_popcnt (XReg) Reg)
@@ -2407,10 +2401,10 @@
 ;; We can't recurse into `amode` again since that could cause stack overflows.
 ;; See: https://github.com/bytecodealliance/wasmtime/pull/6968
 (rule 1 (amode (iadd addr (i32_from_iconst y)) offset)
-  (if-let new_offset (s32_add_fallible y offset))
+  (if-let new_offset (i32_checked_add y offset))
   (amode_inner addr new_offset))
 (rule 2 (amode (iadd (i32_from_iconst x) addr) offset)
-  (if-let new_offset (s32_add_fallible x offset))
+  (if-let new_offset (i32_checked_add x offset))
   (amode_inner addr new_offset))
 
 
@@ -2431,7 +2425,7 @@
 
 ;; Similarly if the value is a `stack_addr` we can also turn that into an sp offset.
 (rule 1 (amode_inner (stack_addr ss ss_offset) amode_offset)
-  (if-let combined_offset (s32_add_fallible ss_offset amode_offset))
+  (if-let combined_offset (i32_checked_add ss_offset amode_offset))
   (gen_stack_slot_amode ss combined_offset))
 
 
@@ -2778,9 +2772,9 @@
     (move_x_to_f tmp ty)))
 
 
-(decl i128_sub (ValueRegs ValueRegs) ValueRegs)
+(decl sub_i128 (ValueRegs ValueRegs) ValueRegs)
 (rule
-  (i128_sub x y )
+  (sub_i128 x y )
   (let (
       ;; low part.
       (low XReg (rv_sub (value_regs_get x 0) (value_regs_get y 0)))
@@ -3011,7 +3005,7 @@
     (rv_neg (value_regs_get val 0))))
 
 (rule 2 (neg $I128 val)
-  (i128_sub (value_regs_zero) val))
+  (sub_i128 (value_regs_zero) val))
 
 
 ;; Builds an instruction sequence that traps if the comparison succeeds.

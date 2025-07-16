@@ -677,7 +677,7 @@ enum FdWrite {
 /// This method will add WASIp1 functions to `linker`. Access to [`WasiP1Ctx`]
 /// is provided with `f` by projecting from the store-local state of `T` to
 /// [`WasiP1Ctx`]. The closure `f` is invoked every time a WASIp1 function is
-/// called to get access to [`WASIp1`] from `T`. The returned [`WasiP1Ctx`] is
+/// called to get access to [`WasiP1Ctx`] from `T`. The returned [`WasiP1Ctx`] is
 /// used to implement I/O and controls what each function will return.
 ///
 /// It's recommended that [`WasiP1Ctx`] is stored as a field in `T` or that `T =
@@ -751,7 +751,7 @@ pub fn add_to_linker_async<T: Send + 'static>(
 /// This method will add WASIp1 functions to `linker`. Access to [`WasiP1Ctx`]
 /// is provided with `f` by projecting from the store-local state of `T` to
 /// [`WasiP1Ctx`]. The closure `f` is invoked every time a WASIp1 function is
-/// called to get access to [`WASIp1`] from `T`. The returned [`WasiP1Ctx`] is
+/// called to get access to [`WasiP1Ctx`] from `T`. The returned [`WasiP1Ctx`] is
 /// used to implement I/O and controls what each function will return.
 ///
 /// It's recommended that [`WasiP1Ctx`] is stored as a field in `T` or that `T =

@@ -82,7 +82,7 @@ pub enum Baz {}
 #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
 pub trait HostBazConcurrent: wasmtime::component::HasData + Send {
     fn foo<T: 'static>(
-        accessor: &mut wasmtime::component::Accessor<T, Self>,
+        accessor: &wasmtime::component::Accessor<T, Self>,
         self_: wasmtime::component::Resource<Baz>,
     ) -> impl ::core::future::Future<Output = ()> + Send
     where
@@ -198,7 +198,7 @@ pub struct TheWorld {}
 #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
 pub trait TheWorldImportsConcurrent: wasmtime::component::HasData + Send + HostBazConcurrent {
     fn foo<T: 'static>(
-        accessor: &mut wasmtime::component::Accessor<T, Self>,
+        accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send
     where
         Self: Sized;
@@ -292,7 +292,7 @@ const _: () = {
                     linker
                         .func_wrap_concurrent(
                             "foo",
-                            move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
+                            move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                                 wasmtime::component::__internal::Box::pin(async move {
                                     let accessor = &mut unsafe {
                                         caller.with_data(host_getter)
@@ -309,7 +309,7 @@ const _: () = {
                         .func_wrap_concurrent(
                             "[method]baz.foo",
                             move |
-                                caller: &mut wasmtime::component::Accessor<T>,
+                                caller: &wasmtime::component::Accessor<T>,
                                 (arg0,): (wasmtime::component::Resource<Baz>,)|
                             {
                                 wasmtime::component::__internal::Box::pin(async move {
@@ -398,7 +398,7 @@ pub mod foo {
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostBarConcurrent: wasmtime::component::HasData + Send {
                 fn foo<T: 'static>(
-                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                    accessor: &wasmtime::component::Accessor<T, Self>,
                     self_: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = ()> + Send
                 where
@@ -422,7 +422,7 @@ pub mod foo {
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostConcurrent: wasmtime::component::HasData + Send + HostBarConcurrent {
                 fn foo<T: 'static>(
-                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                    accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send
                 where
                     Self: Sized;
@@ -460,7 +460,7 @@ pub mod foo {
                     if options.experimental_interface_function {
                         inst.func_wrap_concurrent(
                             "foo",
-                            move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
+                            move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                                 wasmtime::component::__internal::Box::pin(async move {
                                     let accessor = &mut unsafe {
                                         caller.with_data(host_getter)
@@ -475,7 +475,7 @@ pub mod foo {
                         inst.func_wrap_concurrent(
                             "[method]bar.foo",
                             move |
-                                caller: &mut wasmtime::component::Accessor<T>,
+                                caller: &wasmtime::component::Accessor<T>,
                                 (arg0,): (wasmtime::component::Resource<Bar>,)|
                             {
                                 wasmtime::component::__internal::Box::pin(async move {

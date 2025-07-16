@@ -44,6 +44,13 @@ pub const PREPARE_ASYNC_NO_RESULT: u32 = u32::MAX;
 /// pointer.
 pub const PREPARE_ASYNC_WITH_RESULT: u32 = u32::MAX - 1;
 
+/// Bit flag for indicating async-lifted exports
+///
+/// This flag may be passed to the `async-start` built-in function (which is
+/// called from both async->async and async->sync adapters) to indicate that the
+/// callee is an async-lifted export.
+pub const START_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
+
 mod artifacts;
 mod info;
 mod names;
@@ -124,7 +131,7 @@ macro_rules! foreach_builtin_component_function {
                 string_encoding: u32,
                 result_count_or_max_if_async: u32,
                 storage: ptr_u8,
-                torage_len: size
+                storage_len: size
             ) -> bool;
             #[cfg(feature = "component-model-async")]
             sync_start(vmctx: vmctx, callback: ptr_u8, callee: ptr_u8, param_count: u32, storage: ptr_u8, storage_len: size) -> bool;

@@ -11,9 +11,9 @@ use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::{
-    SendSyncPtr, VMArrayCallFunction, VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction,
-    ValRaw, VmPtr, VmSafe,
+    SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
+    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableImport, VMWasmCallFunction, ValRaw, VmPtr,
+    VmSafe,
 };
 use crate::store::InstanceId;
 use alloc::alloc::Layout;
@@ -23,18 +23,25 @@ use core::mem::offset_of;
 use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{DefinedTableIndex, HostPtr, PrimaryMap, VMSharedTypeIndex};
+use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
-#[allow(clippy::cast_possible_truncation)] // it's intended this is truncated on
-// 32-bit platforms
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "it's intended this is truncated on 32-bit platforms"
+)]
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
 mod libcalls;
 mod resources;
 
+#[cfg(feature = "component-model-async")]
+pub use self::resources::CallContext;
 pub use self::resources::{
     CallContexts, ResourceTable, ResourceTables, TypedResource, TypedResourceIndex,
 };
+
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent;
 
 /// Runtime representation of a component instance and all state necessary for
 /// the instance itself.
@@ -76,6 +83,11 @@ pub struct ComponentInstance {
     /// This is paired with other information to create a `ResourceTables` which
     /// is how this field is manipulated.
     instance_resource_tables: PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
+
+    /// State related to async for this component, e.g. futures, streams, tasks,
+    /// etc.
+    #[cfg(feature = "component-model-async")]
+    concurrent_state: concurrent::ConcurrentState,
 
     /// What all compile-time-identified core instances are mapped to within the
     /// `Store` that this component belongs to.
@@ -224,6 +236,22 @@ impl ComponentInstance {
         f(store, instance)
     }
 
+    /// Returns the `InstanceId` associated with the `vmctx` provided.
+    ///
+    /// # Safety
+    ///
+    /// The `vmctx` pointer must be a valid pointer to read the
+    /// `ComponentInstanceId` from.
+    pub(crate) unsafe fn vmctx_instance_id(
+        vmctx: NonNull<VMComponentContext>,
+    ) -> ComponentInstanceId {
+        vmctx
+            .byte_sub(mem::size_of::<ComponentInstance>())
+            .cast::<ComponentInstance>()
+            .as_ref()
+            .id
+    }
+
     /// Returns the layout corresponding to what would be an allocation of a
     /// `ComponentInstance` for the `offsets` provided.
     ///
@@ -253,6 +281,7 @@ impl ComponentInstance {
         for _ in 0..num_instances {
             instance_resource_tables.push(ResourceTable::default());
         }
+
         let mut ret = OwnedInstance::new(ComponentInstance {
             id,
             offsets,
@@ -269,6 +298,8 @@ impl ComponentInstance {
             imports: imports.clone(),
             store: VMStoreRawPtr(store),
             post_return_arg: None,
+            #[cfg(feature = "component-model-async")]
+            concurrent_state: concurrent::ConcurrentState::new(component),
             vmctx: OwnedVMContext::new(),
         });
         unsafe {
@@ -327,6 +358,18 @@ impl ComponentInstance {
     pub fn runtime_realloc(&self, idx: RuntimeReallocIndex) -> NonNull<VMFuncRef> {
         unsafe {
             let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_realloc(idx));
+            debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
+            ret.as_non_null()
+        }
+    }
+
+    /// Returns the async callback pointer corresponding to the index provided.
+    ///
+    /// This can only be called after `idx` has been initialized at runtime
+    /// during the instantiation process of a component.
+    pub fn runtime_callback(&self, idx: RuntimeCallbackIndex) -> NonNull<VMFuncRef> {
+        unsafe {
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_callback(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
             ret.as_non_null()
         }
@@ -450,23 +493,13 @@ impl ComponentInstance {
     ///
     /// Note that it should be a property of the component model that the `ptr`
     /// here is never needed prior to it being configured here in the instance.
-    pub fn set_runtime_table(
-        self: Pin<&mut Self>,
-        idx: RuntimeTableIndex,
-        ptr: NonNull<VMTableDefinition>,
-        vmctx: NonNull<VMContext>,
-        index: DefinedTableIndex,
-    ) {
+    pub fn set_runtime_table(self: Pin<&mut Self>, idx: RuntimeTableIndex, import: VMTableImport) {
         unsafe {
             let offset = self.offsets.runtime_table(idx);
             let storage = self.vmctx_plus_offset_mut::<VMTableImport>(offset);
             debug_assert!((*storage).vmctx.as_ptr() as usize == INVALID_PTR);
             debug_assert!((*storage).from.as_ptr() as usize == INVALID_PTR);
-            *storage = VMTableImport {
-                vmctx: vmctx.into(),
-                from: ptr.into(),
-                index,
-            };
+            *storage = import;
         }
     }
 
@@ -607,6 +640,20 @@ impl ComponentInstance {
         &self.component
     }
 
+    /// Same as [`Self::component`] but additionally returns the
+    /// `Pin<&mut Self>` with the same original lifetime.
+    pub fn component_and_self(self: Pin<&mut Self>) -> (&Component, Pin<&mut Self>) {
+        // SAFETY: this function is projecting both `&Component` and the same
+        // pointer both connected to the same lifetime. This is safe because
+        // it's a contract of `Pin<&mut Self>` that the `Component` field is
+        // never written, meaning it's effectively unsafe to have `&mut
+        // Component` projected from `Pin<&mut Self>`. Consequently it's safe to
+        // have a read-only view of the field while still retaining mutable
+        // access to all other fields.
+        let component = unsafe { &*(&raw const self.component) };
+        (component, self)
+    }
+
     /// Returns a reference to the resource type information.
     pub fn resource_types(&self) -> &Arc<PrimaryMap<ResourceIndex, ResourceType>> {
         &self.resource_types
@@ -732,7 +779,7 @@ impl ComponentInstance {
     /// the `arg` specified.
     ///
     /// This function is used in conjunction with function calls to record,
-    /// after a fuction call completes, the optional ABI return value. This
+    /// after a function call completes, the optional ABI return value. This
     /// return value is cached within this instance for future use when the
     /// `post_return` Rust-API-level function is invoked.
     ///
@@ -770,6 +817,13 @@ impl ComponentInstance {
         // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().post_return_arg }
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_state_mut(self: Pin<&mut Self>) -> &mut concurrent::ConcurrentState {
+        // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
+        // the map returned.
+        unsafe { &mut self.get_unchecked_mut().concurrent_state }
     }
 }
 
@@ -831,12 +885,10 @@ impl VMOpaqueContext {
     }
 }
 
-#[allow(missing_docs)]
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct InstanceFlags(SendSyncPtr<VMGlobalDefinition>);
 
-#[allow(missing_docs)]
 impl InstanceFlags {
     /// Wraps the given pointer as an `InstanceFlags`
     ///

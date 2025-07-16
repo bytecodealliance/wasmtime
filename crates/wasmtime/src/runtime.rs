@@ -34,6 +34,8 @@ pub(crate) mod code_memory;
 #[cfg(feature = "debug-builtins")]
 pub(crate) mod debug;
 pub(crate) mod externals;
+#[cfg(feature = "async")]
+pub(crate) mod fiber;
 pub(crate) mod gc;
 pub(crate) mod instance;
 pub(crate) mod instantiate;
@@ -58,6 +60,8 @@ pub mod component;
 cfg_if::cfg_if! {
     if #[cfg(miri)] {
         // no extensions on miri
+    } else if #[cfg(not(feature = "std"))] {
+        // no extensions on no-std
     } else if #[cfg(unix)] {
         pub mod unix;
     } else if #[cfg(windows)] {

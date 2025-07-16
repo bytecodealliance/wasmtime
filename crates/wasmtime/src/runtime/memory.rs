@@ -1,6 +1,5 @@
 use crate::Trap;
 use crate::prelude::*;
-use crate::runtime::vm::VMMemoryImport;
 use crate::store::{StoreInstanceId, StoreOpaque};
 use crate::trampoline::generate_memory_export;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
@@ -26,8 +25,7 @@ impl fmt::Display for MemoryAccessError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for MemoryAccessError {}
+impl core::error::Error for MemoryAccessError {}
 
 /// A WebAssembly linear memory.
 ///
@@ -287,10 +285,7 @@ impl Memory {
 
     /// Helper function for attaching the memory to a "frankenstein" instance
     fn _new(store: &mut StoreOpaque, ty: MemoryType) -> Result<Memory> {
-        unsafe {
-            let export = generate_memory_export(store, &ty, None)?;
-            Ok(Memory::from_wasmtime_memory(export, store))
-        }
+        generate_memory_export(store, &ty, None)
     }
 
     /// Returns the underlying type of this memory.
@@ -604,7 +599,9 @@ impl Memory {
     /// ```
     pub fn grow(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut().0;
-        let mem = self.wasmtime_memory(store);
+        // FIXME(#11179) shouldn't use a raw pointer to work around the borrow
+        // checker here.
+        let mem: *mut _ = self.wasmtime_memory(store);
         unsafe {
             match (*mem).grow(delta, Some(store))? {
                 Some(size) => {
@@ -639,18 +636,17 @@ impl Memory {
         store.on_fiber(|store| self.grow(store, delta)).await?
     }
 
-    fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut crate::runtime::vm::Memory {
-        self.instance.get_mut(store).get_defined_memory(self.index)
+    fn wasmtime_memory<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> &'a mut crate::runtime::vm::Memory {
+        self.instance
+            .get_mut(store)
+            .get_defined_memory_mut(self.index)
     }
 
-    pub(crate) unsafe fn from_wasmtime_memory(
-        wasmtime_export: crate::runtime::vm::ExportMemory,
-        store: &StoreOpaque,
-    ) -> Memory {
-        Memory {
-            instance: store.vmctx_id(wasmtime_export.vmctx),
-            index: wasmtime_export.index,
-        }
+    pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedMemoryIndex) -> Memory {
+        Memory { instance, index }
     }
 
     pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreOpaque) -> &'a wasmtime_environ::Memory {
@@ -1017,41 +1013,36 @@ impl SharedMemory {
     /// Construct a single-memory instance to provide a way to import
     /// [`SharedMemory`] into other modules.
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
-        let export_memory = generate_memory_export(store, &self.ty(), Some(&self.vm)).unwrap();
-        VMMemoryImport {
-            from: export_memory.definition.into(),
-            vmctx: export_memory.vmctx.into(),
-            index: export_memory.index,
-        }
+        generate_memory_export(store, &self.ty(), Some(&self.vm))
+            .unwrap()
+            .vmimport(store)
     }
 
     /// Create a [`SharedMemory`] from an [`ExportMemory`] definition. This
     /// function is available to handle the case in which a Wasm module exports
     /// shared memory and the user wants host-side access to it.
-    pub(crate) unsafe fn from_wasmtime_memory(
-        wasmtime_export: crate::runtime::vm::ExportMemory,
-        store: &StoreOpaque,
-    ) -> Self {
-        #[cfg_attr(not(feature = "threads"), allow(unused_variables, unreachable_code))]
-        crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
-            let memory_index = handle.env_module().memory_index(wasmtime_export.index);
-            let page_size = handle.memory_page_size(memory_index);
-            debug_assert!(page_size.is_power_of_two());
-            let page_size_log2 = u8::try_from(page_size.ilog2()).unwrap();
+    pub(crate) fn from_memory(mem: Memory, store: &StoreOpaque) -> Self {
+        #![cfg_attr(
+            not(feature = "threads"),
+            expect(
+                unused_variables,
+                unreachable_code,
+                reason = "definitions cfg'd to dummy",
+            )
+        )]
 
-            let memory = handle
-                .get_defined_memory(wasmtime_export.index)
-                .as_mut()
-                .unwrap();
-            match memory.as_shared_memory() {
-                Some(mem) => Self {
-                    vm: mem.clone(),
-                    engine: store.engine().clone(),
-                    page_size_log2,
-                },
-                None => panic!("unable to convert from a shared memory"),
-            }
-        })
+        let instance = mem.instance.get(store);
+        let memory = instance.get_defined_memory(mem.index);
+        let module = instance.env_module();
+        let page_size_log2 = module.memories[module.memory_index(mem.index)].page_size_log2;
+        match memory.as_shared_memory() {
+            Some(mem) => Self {
+                vm: mem.clone(),
+                engine: store.engine().clone(),
+                page_size_log2,
+            },
+            None => panic!("unable to convert from a shared memory"),
+        }
     }
 }
 

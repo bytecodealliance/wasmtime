@@ -41,7 +41,7 @@
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
-use cranelift_codegen::ir::{Function, UserExternalName, UserFuncName};
+use cranelift_codegen::ir::Function;
 use libtest_mimic::{Arguments, Trial};
 use serde_derive::Deserialize;
 use similar::TextDiff;
@@ -224,13 +224,19 @@ impl Test {
                 // Read all `*.clif` files from the clif directory that the
                 // compilation process just emitted.
                 let mut clifs = Vec::new();
-                for entry in tempdir
+
+                // Sort entries for determinism; multiple wasm modules can
+                // generate clif functions with the same names, so sorting the
+                // resulting clif functions alone isn't good enough.
+                let mut entries = tempdir
                     .path()
                     .read_dir()
                     .context("failed to read tempdir")?
-                {
-                    let entry = entry.context("failed to iterate over tempdir")?;
-                    let path = entry.path();
+                    .map(|e| Ok(e.context("failed to iterate over tempdir")?.path()))
+                    .collect::<Result<Vec<_>>>()?;
+                entries.sort();
+
+                for path in entries {
                     if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
                         let filter = self.config.filter.as_deref().unwrap_or("wasm[0]--function");
                         if !name.contains(filter) {
@@ -244,7 +250,7 @@ impl Test {
 
                 // Parse the text format CLIF which is emitted by Wasmtime back
                 // into in-memory data structures.
-                let mut functions = clifs
+                let functions = clifs
                     .iter()
                     .map(|clif| {
                         let mut funcs = cranelift_reader::parse_functions(clif)?;
@@ -254,10 +260,7 @@ impl Test {
                         Ok(funcs.remove(0))
                     })
                     .collect::<Result<Vec<_>>>()?;
-                functions.sort_by_key(|f| match f.name {
-                    UserFuncName::User(UserExternalName { namespace, index }) => (namespace, index),
-                    UserFuncName::Testcase(_) => unreachable!(),
-                });
+
                 Ok(CompileOutput::Clif(functions))
             }
             TestKind::Compile | TestKind::Winch => Ok(CompileOutput::Elf(elf)),

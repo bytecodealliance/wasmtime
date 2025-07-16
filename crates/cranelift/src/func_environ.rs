@@ -118,7 +118,6 @@ pub struct FuncEnvironment<'module_environment> {
     #[cfg(feature = "gc")]
     gc_heap_bound: Option<ir::GlobalValue>,
 
-    #[cfg(feature = "wmemcheck")]
     translation: &'module_environment ModuleTranslation<'module_environment>,
 
     /// Heaps implementing WebAssembly linear memories.
@@ -224,7 +223,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // functions should consume at least some fuel.
             fuel_consumed: 1,
 
-            #[cfg(feature = "wmemcheck")]
             translation,
 
             stack_limit_at_function_entry: None,
@@ -282,21 +280,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     #[cfg(feature = "threads")]
-    fn get_memory_atomic_wait(
-        &mut self,
-        func: &mut Function,
-        memory_index: MemoryIndex,
-        ty: ir::Type,
-    ) -> (ir::FuncRef, usize) {
+    fn get_memory_atomic_wait(&mut self, func: &mut Function, ty: ir::Type) -> ir::FuncRef {
         match ty {
-            I32 => (
-                self.builtin_functions.memory_atomic_wait32(func),
-                memory_index.index(),
-            ),
-            I64 => (
-                self.builtin_functions.memory_atomic_wait64(func),
-                memory_index.index(),
-            ),
+            I32 => self.builtin_functions.memory_atomic_wait32(func),
+            I64 => self.builtin_functions.memory_atomic_wait64(func),
             x => panic!("get_memory_atomic_wait unsupported type: {x:?}"),
         }
     }
@@ -767,7 +754,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         val: ir::Value,
         index_type: IndexType,
         // When it is a memory and the memory is using single-byte pages,
-        // we need to handle the tuncation differently. See comments below.
+        // we need to handle the truncation differently. See comments below.
         //
         // When it is a table, this should be set to false.
         single_byte_pages: bool,
@@ -1332,26 +1319,34 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 .vmctx_vmfunction_import_wasm_call(callee_index),
         )
         .unwrap();
-        let func_addr = self
-            .builder
-            .ins()
-            .load(pointer_type, mem_flags, base, body_offset);
 
         // First append the callee vmctx address.
         let vmctx_offset =
             i32::try_from(self.env.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
-        let vmctx = self
+        let callee_vmctx = self
             .builder
             .ins()
             .load(pointer_type, mem_flags, base, vmctx_offset);
-        real_call_args.push(vmctx);
+        real_call_args.push(callee_vmctx);
         real_call_args.push(caller_vmctx);
 
         // Then append the regular call arguments.
         real_call_args.extend_from_slice(call_args);
 
-        // Finally, make the indirect call!
-        Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+        // If we statically know the imported function (e.g. this is a
+        // component-to-component call where we statically know both components)
+        // then we can actually still make a direct call (although we do have to
+        // pass the callee's vmctx that we just loaded, not our own). Otherwise,
+        // we really do an indirect call.
+        if self.env.translation.known_imported_functions[callee_index].is_some() {
+            Ok(self.direct_call_inst(callee, &real_call_args))
+        } else {
+            let func_addr = self
+                .builder
+                .ins()
+                .load(pointer_type, mem_flags, base, body_offset);
+            Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+        }
     }
 
     /// Do an indirect call through the given funcref table.
@@ -1525,6 +1520,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             | WasmHeapType::ConcreteArray(_)
             | WasmHeapType::Struct
             | WasmHeapType::ConcreteStruct(_)
+            | WasmHeapType::Exn
+            | WasmHeapType::ConcreteExn(_)
+            | WasmHeapType::NoExn
             | WasmHeapType::None => {
                 unreachable!()
             }
@@ -1752,7 +1750,7 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     fn reference_type(&self, wasm_ty: WasmHeapType) -> (ir::Type, bool) {
         let ty = crate::reference_type(wasm_ty, self.pointer_type());
         let needs_stack_map = match wasm_ty.top() {
-            WasmHeapTopType::Extern | WasmHeapTopType::Any => true,
+            WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => true,
             WasmHeapTopType::Func => false,
             WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
         };
@@ -1825,14 +1823,14 @@ impl FuncEnvironment<'_> {
             self.builtin_functions.table_grow_func_ref(&mut pos.func)
         };
 
-        let vmctx = self.vmctx_val(&mut pos);
+        let (table_vmctx, defined_table_index) =
+            self.table_vmctx_and_defined_index(&mut pos, table_index);
 
         let index_type = table.idx_type;
         let delta = self.cast_index_to_i64(&mut pos, delta, index_type);
-        let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
         let call_inst = pos
             .ins()
-            .call(grow, &[vmctx, table_index_arg, delta, init_value]);
+            .call(grow, &[table_vmctx, defined_table_index, delta, init_value]);
         let result = pos.func.dfg.first_result(call_inst);
         Ok(self.convert_pointer_to_index_type(builder.cursor(), result, index_type, false))
     }
@@ -1849,7 +1847,7 @@ impl FuncEnvironment<'_> {
         let heap_ty = table.ref_type.heap_type;
         match heap_ty.top() {
             // GC-managed types.
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
                 let (src, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::gc_compiler(self)?.translate_read_gc_reference(
                     self,
@@ -1883,7 +1881,7 @@ impl FuncEnvironment<'_> {
         let heap_ty = table.ref_type.heap_type;
         match heap_ty.top() {
             // GC-managed types.
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
                 let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::gc_compiler(self)?.translate_write_gc_reference(
                     self,
@@ -1940,11 +1938,10 @@ impl FuncEnvironment<'_> {
             self.builtin_functions.table_fill_func_ref(&mut pos.func)
         };
 
-        let vmctx = self.vmctx_val(&mut pos);
+        let (table_vmctx, table_index) = self.table_vmctx_and_defined_index(&mut pos, table_index);
 
-        let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
         pos.ins()
-            .call(libcall, &[vmctx, table_index_arg, dst, val, len]);
+            .call(libcall, &[table_vmctx, table_index, dst, val, len]);
 
         Ok(())
     }
@@ -2265,7 +2262,9 @@ impl FuncEnvironment<'_> {
         Ok(match ht.top() {
             WasmHeapTopType::Func => pos.ins().iconst(self.pointer_type(), 0),
             // NB: null GC references don't need to be in stack maps.
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => pos.ins().iconst(types::I32, 0),
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
+                pos.ins().iconst(types::I32, 0)
+            }
             WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
         })
     }
@@ -2657,7 +2656,8 @@ impl FuncEnvironment<'_> {
             // wasm module (e.g. imports or libcalls) are either encoded through
             // the `vmcontext` as relative jumps (hence no relocations) or
             // they're libcalls with absolute relocations.
-            colocated: self.module.defined_func_index(index).is_some(),
+            colocated: self.module.defined_func_index(index).is_some()
+                || self.translation.known_imported_functions[index].is_some(),
         }))
     }
 
@@ -2744,6 +2744,81 @@ impl FuncEnvironment<'_> {
         Ok(())
     }
 
+    /// Returns two `ir::Value`s, the first of which is the vmctx for the memory
+    /// `index` and the second of which is the `DefinedMemoryIndex` for `index`.
+    ///
+    /// Handles internally whether `index` is an imported memory or not.
+    fn memory_vmctx_and_defined_index(
+        &mut self,
+        pos: &mut FuncCursor,
+        index: MemoryIndex,
+    ) -> (ir::Value, ir::Value) {
+        let cur_vmctx = self.vmctx_val(pos);
+        match self.module.defined_memory_index(index) {
+            // This is a defined memory, so the vmctx is our own and the defined
+            // index is `index` here.
+            Some(index) => (cur_vmctx, pos.ins().iconst(I32, i64::from(index.as_u32()))),
+
+            // This is an imported memory, so load the vmctx/defined index from
+            // the import definition itself.
+            None => {
+                let vmimport = self.offsets.vmctx_vmmemory_import(index);
+
+                let vmctx = pos.ins().load(
+                    self.isa.pointer_type(),
+                    ir::MemFlags::trusted(),
+                    cur_vmctx,
+                    i32::try_from(vmimport + u32::from(self.offsets.vmmemory_import_vmctx()))
+                        .unwrap(),
+                );
+                let index = pos.ins().load(
+                    ir::types::I32,
+                    ir::MemFlags::trusted(),
+                    cur_vmctx,
+                    i32::try_from(vmimport + u32::from(self.offsets.vmmemory_import_index()))
+                        .unwrap(),
+                );
+                (vmctx, index)
+            }
+        }
+    }
+
+    /// Returns two `ir::Value`s, the first of which is the vmctx for the table
+    /// `index` and the second of which is the `DefinedTableIndex` for `index`.
+    ///
+    /// Handles internally whether `index` is an imported table or not.
+    fn table_vmctx_and_defined_index(
+        &mut self,
+        pos: &mut FuncCursor,
+        index: TableIndex,
+    ) -> (ir::Value, ir::Value) {
+        // NB: the body of this method is similar to
+        // `memory_vmctx_and_defined_index` above.
+        let cur_vmctx = self.vmctx_val(pos);
+        match self.module.defined_table_index(index) {
+            Some(index) => (cur_vmctx, pos.ins().iconst(I32, i64::from(index.as_u32()))),
+            None => {
+                let vmimport = self.offsets.vmctx_vmtable_import(index);
+
+                let vmctx = pos.ins().load(
+                    self.isa.pointer_type(),
+                    ir::MemFlags::trusted(),
+                    cur_vmctx,
+                    i32::try_from(vmimport + u32::from(self.offsets.vmtable_import_vmctx()))
+                        .unwrap(),
+                );
+                let index = pos.ins().load(
+                    ir::types::I32,
+                    ir::MemFlags::trusted(),
+                    cur_vmctx,
+                    i32::try_from(vmimport + u32::from(self.offsets.vmtable_import_index()))
+                        .unwrap(),
+                );
+                (vmctx, index)
+            }
+        }
+    }
+
     pub fn translate_memory_grow(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -2752,15 +2827,16 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
     ) -> WasmResult<ir::Value> {
         let mut pos = builder.cursor();
-        let memory_grow = self.builtin_functions.memory32_grow(&mut pos.func);
-        let index_arg = index.index();
+        let memory_grow = self.builtin_functions.memory_grow(&mut pos.func);
 
-        let memory_index = pos.ins().iconst(I32, index_arg as i64);
-        let vmctx = self.vmctx_val(&mut pos);
+        let (memory_vmctx, defined_memory_index) =
+            self.memory_vmctx_and_defined_index(&mut pos, index);
 
         let index_type = self.memory(index).idx_type;
         let val = self.cast_index_to_i64(&mut pos, val, index_type);
-        let call_inst = pos.ins().call(memory_grow, &[vmctx, val, memory_index]);
+        let call_inst = pos
+            .ins()
+            .call(memory_grow, &[memory_vmctx, val, defined_memory_index]);
         let result = *pos.func.dfg.inst_results(call_inst).first().unwrap();
         let single_byte_pages = match self.memory(index).page_size_log2 {
             16 => false,
@@ -2910,12 +2986,13 @@ impl FuncEnvironment<'_> {
         let memory_fill = self.builtin_functions.memory_fill(&mut pos.func);
         let dst = self.cast_index_to_i64(&mut pos, dst, self.memory(memory_index).idx_type);
         let len = self.cast_index_to_i64(&mut pos, len, self.memory(memory_index).idx_type);
-        let memory_index_arg = pos.ins().iconst(I32, i64::from(memory_index.as_u32()));
+        let (memory_vmctx, defined_memory_index) =
+            self.memory_vmctx_and_defined_index(&mut pos, memory_index);
 
-        let vmctx = self.vmctx_val(&mut pos);
-
-        pos.ins()
-            .call(memory_fill, &[vmctx, memory_index_arg, dst, val, len]);
+        pos.ins().call(
+            memory_fill,
+            &[memory_vmctx, defined_memory_index, dst, val, len],
+        );
 
         Ok(())
     }
@@ -3056,16 +3133,14 @@ impl FuncEnvironment<'_> {
             let mut pos = builder.cursor();
             let addr = self.cast_index_to_i64(&mut pos, addr, self.memory(memory_index).idx_type);
             let implied_ty = pos.func.dfg.value_type(expected);
-            let (wait_func, memory_index) =
-                self.get_memory_atomic_wait(&mut pos.func, memory_index, implied_ty);
+            let wait_func = self.get_memory_atomic_wait(&mut pos.func, implied_ty);
 
-            let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
-
-            let vmctx = self.vmctx_val(&mut pos);
+            let (memory_vmctx, defined_memory_index) =
+                self.memory_vmctx_and_defined_index(&mut pos, memory_index);
 
             let call_inst = pos.ins().call(
                 wait_func,
-                &[vmctx, memory_index_arg, addr, expected, timeout],
+                &[memory_vmctx, defined_memory_index, addr, expected, timeout],
             );
             let ret = pos.func.dfg.inst_results(call_inst)[0];
             Ok(builder.ins().ireduce(ir::types::I32, ret))
@@ -3093,11 +3168,12 @@ impl FuncEnvironment<'_> {
             let addr = self.cast_index_to_i64(&mut pos, addr, self.memory(memory_index).idx_type);
             let atomic_notify = self.builtin_functions.memory_atomic_notify(&mut pos.func);
 
-            let memory_index_arg = pos.ins().iconst(I32, memory_index.index() as i64);
-            let vmctx = self.vmctx_val(&mut pos);
-            let call_inst = pos
-                .ins()
-                .call(atomic_notify, &[vmctx, memory_index_arg, addr, count]);
+            let (memory_vmctx, defined_memory_index) =
+                self.memory_vmctx_and_defined_index(&mut pos, memory_index);
+            let call_inst = pos.ins().call(
+                atomic_notify,
+                &[memory_vmctx, defined_memory_index, addr, count],
+            );
             let ret = pos.func.dfg.inst_results(call_inst)[0];
             Ok(builder.ins().ireduce(ir::types::I32, ret))
         }
@@ -3808,7 +3884,7 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
 #[cfg(feature = "stack-switching")]
 #[allow(
     dead_code,
-    reason = "Dummy function to supress more dead code warnings"
+    reason = "Dummy function to suppress more dead code warnings"
 )]
 pub fn use_stack_switching_libcalls() {
     let _ = BuiltinFunctions::cont_new;

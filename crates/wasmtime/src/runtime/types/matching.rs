@@ -70,7 +70,7 @@ fn type_reference(
     Err(concrete_type_mismatch(msg, &expected, &actual))
 }
 
-#[cfg_attr(not(feature = "component-model"), allow(dead_code))]
+#[cfg(feature = "component-model")]
 pub fn entity_ty(engine: &Engine, expected: &EntityType, actual: &EntityType) -> Result<()> {
     match expected {
         EntityType::Memory(expected) => match actual {
@@ -190,7 +190,8 @@ fn match_heap(
         (H::ConcreteArray(actual), H::ConcreteArray(expected))
         | (H::ConcreteFunc(actual), H::ConcreteFunc(expected))
         | (H::ConcreteStruct(actual), H::ConcreteStruct(expected))
-        | (H::ConcreteCont(actual), H::ConcreteCont(expected)) => {
+        | (H::ConcreteCont(actual), H::ConcreteCont(expected))
+        | (H::ConcreteExn(actual), H::ConcreteExn(expected)) => {
             let actual = actual.unwrap_engine_type_index();
             let expected = expected.unwrap_engine_type_index();
             engine.signatures().is_subtype(actual, expected)
@@ -259,6 +260,15 @@ fn match_heap(
 
         (_, H::NoCont) => false,
         (_, H::ConcreteCont(_)) => false,
+
+        (H::NoExn | H::ConcreteExn(_) | H::Exn, H::Exn) => true,
+        (_, H::Exn) => false,
+
+        (H::NoExn, H::ConcreteExn(_)) => true,
+        (H::NoExn, H::NoExn) => true,
+
+        (_, H::NoExn) => false,
+        (_, H::ConcreteExn(_)) => false,
 
         (H::None, H::None) => true,
         (_, H::None) => false,
@@ -404,6 +414,7 @@ fn match_limits(
     )
 }
 
+#[cfg(feature = "component-model")]
 fn entity_desc(ty: &EntityType) -> &'static str {
     match ty {
         EntityType::Global(_) => "global",

@@ -691,7 +691,7 @@ impl<'a> CodeGenContext<'a, Emission> {
         // To:
         //  - Verify that `maybe_pop_results` popped exactly the right
         //    amount relative to the base offset.
-        //  - Accomodate for multi-branch cases (i.e., `br_table`) in which
+        //  - Accommodate for multi-branch cases (i.e., `br_table`) in which
         //    result handling happens only once and _could_ happen outside of
         //    `maybe_pop_results` callback.
         //
@@ -733,7 +733,7 @@ impl<'a> CodeGenContext<'a, Emission> {
         // results by emitting a [`MacroAssembler::memmove`]
         // instruction, prior to claiming any excess stack space.
         //
-        // Depening on the branch state, the compiler might enter in an
+        // Depending on the branch state, the compiler might enter in an
         // unreachable state; instead of immediately truncating the value stack
         // to the expected length of the destination branch, we let the
         // reachability analysis code decide what should happen with the length

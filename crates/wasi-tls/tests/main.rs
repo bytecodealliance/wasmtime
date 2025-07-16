@@ -1,15 +1,15 @@
 use anyhow::{Result, anyhow};
-use test_programs_artifacts::{TLS_SAMPLE_APPLICATION_COMPONENT, foreach_tls};
 use wasmtime::{
     Store,
     component::{Component, Linker, ResourceTable},
 };
 use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView, bindings::Command};
-use wasmtime_wasi_tls::{LinkOptions, WasiTlsCtx};
+use wasmtime_wasi_tls::{LinkOptions, WasiTls, WasiTlsCtx, WasiTlsCtxBuilder};
 
 struct Ctx {
     table: ResourceTable,
     wasi_ctx: WasiCtx,
+    wasi_tls_ctx: WasiTlsCtx,
 }
 
 impl IoView for Ctx {
@@ -23,7 +23,17 @@ impl WasiView for Ctx {
     }
 }
 
-async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
+async fn run_test(path: &str) -> Result<()> {
+    let ctx = Ctx {
+        table: ResourceTable::new(),
+        wasi_ctx: WasiCtxBuilder::new()
+            .inherit_stderr()
+            .inherit_network()
+            .allow_ip_name_lookup(true)
+            .build(),
+        wasi_tls_ctx: WasiTlsCtxBuilder::new().build(),
+    };
+
     let engine = test_programs_artifacts::engine(|config| {
         config.async_support(true);
     });
@@ -35,7 +45,7 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
     let mut opts = LinkOptions::default();
     opts.tls(true);
     wasmtime_wasi_tls::add_to_linker(&mut linker, &mut opts, |h: &mut Ctx| {
-        WasiTlsCtx::new(&mut h.table)
+        WasiTls::new(&h.wasi_tls_ctx, &mut h.table)
     })?;
 
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
@@ -53,20 +63,9 @@ macro_rules! assert_test_exists {
     };
 }
 
-foreach_tls!(assert_test_exists);
+test_programs_artifacts::foreach_tls!(assert_test_exists);
 
 #[tokio::test(flavor = "multi_thread")]
 async fn tls_sample_application() -> Result<()> {
-    run_wasi(
-        TLS_SAMPLE_APPLICATION_COMPONENT,
-        Ctx {
-            table: ResourceTable::new(),
-            wasi_ctx: WasiCtxBuilder::new()
-                .inherit_stderr()
-                .inherit_network()
-                .allow_ip_name_lookup(true)
-                .build(),
-        },
-    )
-    .await
+    run_test(test_programs_artifacts::TLS_SAMPLE_APPLICATION_COMPONENT).await
 }

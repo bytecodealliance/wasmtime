@@ -39,8 +39,8 @@ block0(v0: i32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   ptest   %xmm0, %xmm0
-;   setnz   %al
+;   ptest %xmm0, %xmm0
+;   setne %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -69,8 +69,8 @@ block0(v0: i64x2):
 ;   uninit  %xmm3
 ;   pxor %xmm3, %xmm3
 ;   pcmpeqq %xmm3, %xmm0
-;   ptest   %xmm0, %xmm0
-;   setz    %al
+;   ptest %xmm0, %xmm0
+;   sete %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

@@ -13,11 +13,10 @@ use crate::runtime::vm::vmcontext::{
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    ExportFunction, ExportGlobal, ExportGlobalKind, ExportMemory, ExportTable, ExportTag, GcStore,
-    Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMStore, VMStoreRawPtr, VmPtr, VmSafe,
-    WasmFault,
+    GcStore, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMGlobalKind, VMStore,
+    VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
 };
-use crate::store::{InstanceId, StoreOpaque};
+use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::marker;
@@ -294,7 +293,7 @@ impl Instance {
                         .unwrap_or(0)
                         * 64
                         * 1024;
-                    Some(Wmemcheck::new(size as usize))
+                    Some(Wmemcheck::new(size.try_into().unwrap()))
                 } else {
                     None
                 }
@@ -339,6 +338,16 @@ impl Instance {
             .byte_sub(mem::size_of::<Instance>())
             .cast::<Instance>();
         f(Pin::new_unchecked(ptr.as_mut()))
+    }
+
+    /// Returns the `InstanceId` associated with the `vmctx` provided.
+    ///
+    /// # Safety
+    ///
+    /// The `vmctx` pointer must be a valid pointer to read the `InstanceId`
+    /// from.
+    unsafe fn vmctx_instance_id(vmctx: NonNull<VMContext>) -> InstanceId {
+        Instance::from_vmctx(vmctx, |i| i.id)
     }
 
     pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
@@ -423,24 +432,9 @@ impl Instance {
         }
     }
 
-    /// Get a locally defined or imported memory.
-    #[cfg(feature = "threads")]
-    pub(crate) fn get_runtime_memory(self: Pin<&mut Self>, index: MemoryIndex) -> &mut Memory {
-        if let Some(defined_index) = self.env_module().defined_memory_index(index) {
-            unsafe { &mut *self.get_defined_memory(defined_index) }
-        } else {
-            let import = self.imported_memory(index);
-            unsafe {
-                let ptr = Instance::from_vmctx(import.vmctx.as_non_null(), |i| {
-                    i.get_defined_memory(import.index)
-                });
-                &mut *ptr
-            }
-        }
-    }
-
     /// Return the indexed `VMMemoryDefinition`, loaded from vmctx memory
     /// already.
+    #[inline]
     pub fn memory(&self, index: DefinedMemoryIndex) -> VMMemoryDefinition {
         unsafe { VMMemoryDefinition::load(self.memory_ptr(index).as_ptr()) }
     }
@@ -456,6 +450,7 @@ impl Instance {
     ///
     /// Note that the returned pointer resides in wasm-code-readable-memory in
     /// the vmctx.
+    #[inline]
     pub fn memory_ptr(&self, index: DefinedMemoryIndex) -> NonNull<VMMemoryDefinition> {
         unsafe {
             self.vmctx_plus_offset::<VmPtr<_>>(self.offsets().vmctx_vmmemory_pointer(index))
@@ -490,32 +485,26 @@ impl Instance {
     /// Returns both exported and non-exported globals.
     ///
     /// Gives access to the full globals space.
-    pub fn all_globals(&self) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + '_ {
-        let module = self.env_module().clone();
+    pub fn all_globals(
+        &self,
+        store: StoreId,
+    ) -> impl ExactSizeIterator<Item = (GlobalIndex, crate::Global)> + '_ {
+        let module = self.env_module();
         module
             .globals
             .keys()
-            .map(move |idx| (idx, self.get_exported_global(idx)))
+            .map(move |idx| (idx, self.get_exported_global(store, idx)))
     }
 
     /// Get the globals defined in this instance (not imported).
     pub fn defined_globals(
         &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedGlobalIndex, ExportGlobal)> + '_ {
-        let module = self.env_module().clone();
-        module
-            .globals
-            .keys()
+        store: StoreId,
+    ) -> impl ExactSizeIterator<Item = (DefinedGlobalIndex, crate::Global)> + '_ {
+        let module = self.env_module();
+        self.all_globals(store)
             .skip(module.num_imported_globals)
-            .map(move |global_idx| {
-                let def_idx = module.defined_global_index(global_idx).unwrap();
-                let global = ExportGlobal {
-                    definition: self.global_ptr(def_idx),
-                    kind: ExportGlobalKind::Instance(self.vmctx(), def_idx),
-                    global: self.env_module().globals[global_idx],
-                };
-                (def_idx, global)
-            })
+            .map(move |(i, global)| (module.defined_global_index(i).unwrap(), global))
     }
 
     /// Return a pointer to the interrupts structure
@@ -586,9 +575,22 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds for this instance.
-    pub fn get_exported_func(self: Pin<&mut Self>, index: FuncIndex) -> ExportFunction {
+    ///
+    /// # Safety
+    ///
+    /// The `store` parameter must be the store that owns this instance and the
+    /// functions that this instance can reference.
+    pub unsafe fn get_exported_func(
+        self: Pin<&mut Self>,
+        store: StoreId,
+        index: FuncIndex,
+    ) -> crate::Func {
         let func_ref = self.get_func_ref(index).unwrap();
-        ExportFunction { func_ref }
+
+        // SAFETY: the validity of `func_ref` is guaranteed by the validity of
+        // `self`, and the contract that `store` must own `func_ref` is a
+        // contract of this function itself.
+        unsafe { crate::Func::from_vm_func_ref(store, func_ref) }
     }
 
     /// Lookup a table by index.
@@ -596,25 +598,19 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds for this instance.
-    pub fn get_exported_table(&self, index: TableIndex) -> ExportTable {
-        let ty = self.env_module().tables[index];
-        let (definition, vmctx, index) =
-            if let Some(def_index) = self.env_module().defined_table_index(index) {
-                (self.table_ptr(def_index), self.vmctx(), def_index)
-            } else {
-                let import = self.imported_table(index);
-                (
-                    import.from.as_non_null(),
-                    import.vmctx.as_non_null(),
-                    import.index,
-                )
-            };
-        ExportTable {
-            definition,
-            vmctx,
-            table: ty,
-            index,
-        }
+    pub fn get_exported_table(&self, store: StoreId, index: TableIndex) -> crate::Table {
+        let (id, def_index) = if let Some(def_index) = self.env_module().defined_table_index(index)
+        {
+            (self.id, def_index)
+        } else {
+            let import = self.imported_table(index);
+            // SAFETY: validity of this `Instance` guarantees validity of the
+            // `vmctx` pointer being read here to find the transitive
+            // `InstanceId` that the import is associated with.
+            let id = unsafe { Instance::vmctx_instance_id(import.vmctx.as_non_null()) };
+            (id, import.index)
+        };
+        crate::Table::from_raw(StoreInstanceId::new(store, id), def_index)
     }
 
     /// Lookup a memory by index.
@@ -622,58 +618,78 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `index` is out-of-bounds for this instance.
-    pub fn get_exported_memory(&self, index: MemoryIndex) -> ExportMemory {
-        let (definition, vmctx, def_index) =
-            if let Some(def_index) = self.env_module().defined_memory_index(index) {
-                (self.memory_ptr(def_index), self.vmctx(), def_index)
-            } else {
-                let import = self.imported_memory(index);
-                (
-                    import.from.as_non_null(),
-                    import.vmctx.as_non_null(),
-                    import.index,
-                )
-            };
-        ExportMemory {
-            definition,
-            vmctx,
-            memory: self.env_module().memories[index],
-            index: def_index,
-        }
-    }
-
-    fn get_exported_global(&self, index: GlobalIndex) -> ExportGlobal {
-        let global = self.env_module().globals[index];
-        if let Some(def_index) = self.env_module().defined_global_index(index) {
-            ExportGlobal {
-                definition: self.global_ptr(def_index),
-                kind: ExportGlobalKind::Instance(self.vmctx(), def_index),
-                global,
-            }
+    pub fn get_exported_memory(&self, store: StoreId, index: MemoryIndex) -> crate::Memory {
+        let (id, def_index) = if let Some(def_index) = self.env_module().defined_memory_index(index)
+        {
+            (self.id, def_index)
         } else {
-            ExportGlobal::from_vmimport(self.imported_global(index), global)
+            let import = self.imported_memory(index);
+            // SAFETY: validity of this `Instance` guarantees validity of the
+            // `vmctx` pointer being read here to find the transitive
+            // `InstanceId` that the import is associated with.
+            let id = unsafe { Instance::vmctx_instance_id(import.vmctx.as_non_null()) };
+            (id, import.index)
+        };
+        crate::Memory::from_raw(StoreInstanceId::new(store, id), def_index)
+    }
+
+    fn get_exported_global(&self, store: StoreId, index: GlobalIndex) -> crate::Global {
+        // If this global is defined within this instance, then that's easy to
+        // calculate the `Global`.
+        if let Some(def_index) = self.env_module().defined_global_index(index) {
+            let instance = StoreInstanceId::new(store, self.id);
+            return crate::Global::from_core(instance, def_index);
+        }
+
+        // For imported globals it's required to match on the `kind` to
+        // determine which `Global` constructor is going to be invoked.
+        let import = self.imported_global(index);
+        match import.kind {
+            VMGlobalKind::Host(index) => crate::Global::from_host(store, index),
+            VMGlobalKind::Instance(index) => {
+                // SAFETY: validity of this `&Instance` means validity of its
+                // imports meaning we can read the id of the vmctx within.
+                let id = unsafe {
+                    let vmctx = VMContext::from_opaque(import.vmctx.unwrap().as_non_null());
+                    Instance::vmctx_instance_id(vmctx)
+                };
+                crate::Global::from_core(StoreInstanceId::new(store, id), index)
+            }
+            #[cfg(feature = "component-model")]
+            VMGlobalKind::ComponentFlags(index) => {
+                // SAFETY: validity of this `&Instance` means validity of its
+                // imports meaning we can read the id of the vmctx within.
+                let id = unsafe {
+                    let vmctx = super::component::VMComponentContext::from_opaque(
+                        import.vmctx.unwrap().as_non_null(),
+                    );
+                    super::component::ComponentInstance::vmctx_instance_id(vmctx)
+                };
+                crate::Global::from_component_flags(
+                    crate::component::store::StoreComponentInstanceId::new(store, id),
+                    index,
+                )
+            }
         }
     }
 
-    fn get_exported_tag(&self, index: TagIndex) -> ExportTag {
-        let tag = self.env_module().tags[index];
-        let (vmctx, definition, index) =
-            if let Some(def_index) = self.env_module().defined_tag_index(index) {
-                (self.vmctx(), self.tag_ptr(def_index), def_index)
-            } else {
-                let import = self.imported_tag(index);
-                (
-                    import.vmctx.as_non_null(),
-                    import.from.as_non_null(),
-                    import.index,
-                )
-            };
-        ExportTag {
-            definition,
-            vmctx,
-            index,
-            tag,
-        }
+    /// Get an exported tag by index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out-of-range.
+    pub fn get_exported_tag(&self, store: StoreId, index: TagIndex) -> crate::Tag {
+        let (id, def_index) = if let Some(def_index) = self.env_module().defined_tag_index(index) {
+            (self.id, def_index)
+        } else {
+            let import = self.imported_tag(index);
+            // SAFETY: validity of this `Instance` guarantees validity of the
+            // `vmctx` pointer being read here to find the transitive
+            // `InstanceId` that the import is associated with.
+            let id = unsafe { Instance::vmctx_instance_id(import.vmctx.as_non_null()) };
+            (id, import.index)
+        };
+        crate::Tag::from_raw(StoreInstanceId::new(store, id), def_index)
     }
 
     /// Return an iterator over the exports of this instance.
@@ -698,36 +714,12 @@ impl Instance {
         index
     }
 
-    /// Get the given memory's page size, in bytes.
-    pub(crate) fn memory_page_size(&self, index: MemoryIndex) -> usize {
-        usize::try_from(self.env_module().memories[index].page_size()).unwrap()
-    }
-
     /// Grow memory by the specified amount of pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages. Returns `Some` with the old size in bytes if growth was
     /// successful.
     pub(crate) fn memory_grow(
-        self: Pin<&mut Self>,
-        store: &mut dyn VMStore,
-        index: MemoryIndex,
-        delta: u64,
-    ) -> Result<Option<usize>, Error> {
-        match self.env_module().defined_memory_index(index) {
-            Some(idx) => self.defined_memory_grow(store, idx, delta),
-            None => {
-                let import = self.imported_memory(index);
-                unsafe {
-                    Instance::from_vmctx(import.vmctx.as_non_null(), |i| {
-                        i.defined_memory_grow(store, import.index, delta)
-                    })
-                }
-            }
-        }
-    }
-
-    fn defined_memory_grow(
         mut self: Pin<&mut Self>,
         store: &mut dyn VMStore,
         idx: DefinedMemoryIndex,
@@ -759,19 +751,7 @@ impl Instance {
     ///
     /// Returns `None` if table can't be grown by the specified amount of
     /// elements, or if `init_value` is the wrong type of table element.
-    pub(crate) fn table_grow(
-        self: Pin<&mut Self>,
-        store: &mut dyn VMStore,
-        table_index: TableIndex,
-        delta: u64,
-        init_value: TableElement,
-    ) -> Result<Option<usize>, Error> {
-        self.with_defined_table_index_and_instance(table_index, |i, instance| {
-            instance.defined_table_grow(store, i, delta, init_value)
-        })
-    }
-
-    fn defined_table_grow(
+    pub(crate) fn defined_table_grow(
         mut self: Pin<&mut Self>,
         store: &mut dyn VMStore,
         table_index: DefinedTableIndex,
@@ -1024,7 +1004,7 @@ impl Instance {
                             VMGcRef::from_raw_u32(raw.get_externref())
                         }),
                     )?,
-                    WasmHeapTopType::Any => table.init_gc_refs(
+                    WasmHeapTopType::Any | WasmHeapTopType::Exn => table.init_gc_refs(
                         dst,
                         exprs.iter().map(|expr| unsafe {
                             let raw = const_evaluator
@@ -1064,10 +1044,13 @@ impl Instance {
     }
 
     /// Get a locally-defined memory.
-    pub fn get_defined_memory(self: Pin<&mut Self>, index: DefinedMemoryIndex) -> *mut Memory {
-        // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
-        // `*mut A`, which should be a safe operation to do.
-        unsafe { &raw mut (*self.memories_mut().get_raw_mut(index).unwrap()).1 }
+    pub fn get_defined_memory_mut(self: Pin<&mut Self>, index: DefinedMemoryIndex) -> &mut Memory {
+        &mut self.memories_mut()[index].1
+    }
+
+    /// Get a locally-defined memory.
+    pub fn get_defined_memory(&self, index: DefinedMemoryIndex) -> &Memory {
+        &self.memories[index].1
     }
 
     /// Do a `memory.copy`
@@ -1126,11 +1109,12 @@ impl Instance {
     /// Returns a `Trap` error if the memory range is out of bounds.
     pub(crate) fn memory_fill(
         self: Pin<&mut Self>,
-        memory_index: MemoryIndex,
+        memory_index: DefinedMemoryIndex,
         dst: u64,
         val: u8,
         len: u64,
     ) -> Result<(), Trap> {
+        let memory_index = self.env_module().memory_index(memory_index);
         let memory = self.get_memory(memory_index);
         let dst = self.validate_inbounds(memory.current_length(), dst, len)?;
         let len = usize::try_from(len).unwrap();
@@ -1234,7 +1218,9 @@ impl Instance {
         range: impl Iterator<Item = u64>,
     ) -> *mut Table {
         self.with_defined_table_index_and_instance(table_index, |idx, instance| {
-            instance.get_defined_table_with_lazy_init(idx, range)
+            // FIXME(#11179) shouldn't need to subvert the borrow checker
+            let ret: *mut Table = instance.get_defined_table_with_lazy_init(idx, range);
+            ret
         })
     }
 
@@ -1246,7 +1232,7 @@ impl Instance {
         mut self: Pin<&mut Self>,
         idx: DefinedTableIndex,
         range: impl Iterator<Item = u64>,
-    ) -> *mut Table {
+    ) -> &mut Table {
         let elt_ty = self.tables[idx].1.element_type();
 
         if elt_ty == TableElementType::Func {
@@ -1288,9 +1274,7 @@ impl Instance {
             }
         }
 
-        // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
-        // `*mut A`, which should be a safe operation to do.
-        unsafe { &raw mut (*self.tables_mut().get_raw_mut(idx).unwrap()).1 }
+        self.get_defined_table(idx)
     }
 
     /// Get a table by index regardless of whether it is locally-defined or an
@@ -1304,10 +1288,8 @@ impl Instance {
     }
 
     /// Get a locally-defined table.
-    pub(crate) fn get_defined_table(self: Pin<&mut Self>, index: DefinedTableIndex) -> *mut Table {
-        // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
-        // `*mut A`, which should be a safe operation to do.
-        unsafe { &raw mut (*self.tables_mut().get_raw_mut(index).unwrap()).1 }
+    pub(crate) fn get_defined_table(self: Pin<&mut Self>, index: DefinedTableIndex) -> &mut Table {
+        &mut self.tables_mut()[index].1
     }
 
     pub(crate) fn with_defined_table_index_and_instance<R>(
@@ -1491,21 +1473,23 @@ impl Instance {
     /// Returns both exported and non-exported memories.
     ///
     /// Gives access to the full memories space.
-    pub fn all_memories<'a>(
-        &'a self,
-    ) -> impl ExactSizeIterator<Item = (MemoryIndex, ExportMemory)> + 'a {
-        let indices = (0..self.env_module().memories.len())
-            .map(|i| MemoryIndex::new(i))
-            .collect::<Vec<_>>();
-        indices
-            .into_iter()
-            .map(|i| (i, self.get_exported_memory(i)))
+    pub fn all_memories(
+        &self,
+        store: StoreId,
+    ) -> impl ExactSizeIterator<Item = (MemoryIndex, crate::Memory)> + '_ {
+        self.env_module()
+            .memories
+            .iter()
+            .map(move |(i, _)| (i, self.get_exported_memory(store, i)))
     }
 
     /// Return the memories defined in this instance (not imported).
-    pub fn defined_memories<'a>(&'a self) -> impl ExactSizeIterator<Item = ExportMemory> + 'a {
+    pub fn defined_memories<'a>(
+        &'a self,
+        store: StoreId,
+    ) -> impl ExactSizeIterator<Item = crate::Memory> + 'a {
         let num_imported = self.env_module().num_imported_memories;
-        self.all_memories()
+        self.all_memories(store)
             .skip(num_imported)
             .map(|(_i, memory)| memory)
     }
@@ -1515,13 +1499,29 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `export` is not valid for this instance.
-    pub fn get_export_by_index_mut(self: Pin<&mut Self>, export: EntityIndex) -> Export {
+    ///
+    /// # Safety
+    ///
+    /// This function requires that `store` is the correct store which owns this
+    /// instance.
+    pub unsafe fn get_export_by_index_mut(
+        self: Pin<&mut Self>,
+        store: StoreId,
+        export: EntityIndex,
+    ) -> Export {
         match export {
-            EntityIndex::Function(i) => Export::Function(self.get_exported_func(i)),
-            EntityIndex::Global(i) => Export::Global(self.get_exported_global(i)),
-            EntityIndex::Table(i) => Export::Table(self.get_exported_table(i)),
-            EntityIndex::Memory(i) => Export::Memory(self.get_exported_memory(i)),
-            EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(i)),
+            // SAFETY: the contract of `store` owning the this instance is a
+            // safety requirement of this function itself.
+            EntityIndex::Function(i) => {
+                Export::Function(unsafe { self.get_exported_func(store, i) })
+            }
+            EntityIndex::Global(i) => Export::Global(self.get_exported_global(store, i)),
+            EntityIndex::Table(i) => Export::Table(self.get_exported_table(store, i)),
+            EntityIndex::Memory(i) => Export::Memory {
+                memory: self.get_exported_memory(store, i),
+                shared: self.env_module().memories[i].shared,
+            },
+            EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(store, i)),
         }
     }
 

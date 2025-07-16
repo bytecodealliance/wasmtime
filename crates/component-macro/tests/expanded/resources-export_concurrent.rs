@@ -367,14 +367,13 @@ pub mod exports {
                     }
                 }
                 impl GuestA<'_> {
-                    pub fn call_constructor<S: wasmtime::AsContextMut>(
+                    pub async fn call_constructor<_T, _D>(
                         &self,
-                        mut store: S,
-                    ) -> impl wasmtime::component::__internal::Future<
-                        Output = wasmtime::Result<wasmtime::component::ResourceAny>,
-                    > + Send + 'static + use<S>
+                        accessor: &wasmtime::component::Accessor<_T, _D>,
+                    ) -> wasmtime::Result<wasmtime::component::ResourceAny>
                     where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                        _T: Send,
+                        _D: wasmtime::component::HasData,
                     {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
@@ -382,19 +381,16 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
                         };
-                        wasmtime::component::__internal::FutureExt::map(
-                            callee.call_concurrent(store.as_context_mut(), ()),
-                            |v| v.map(|(v,)| v),
-                        )
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        Ok(ret0)
                     }
-                    pub fn call_static_a<S: wasmtime::AsContextMut>(
+                    pub async fn call_static_a<_T, _D>(
                         &self,
-                        mut store: S,
-                    ) -> impl wasmtime::component::__internal::Future<
-                        Output = wasmtime::Result<u32>,
-                    > + Send + 'static + use<S>
+                        accessor: &wasmtime::component::Accessor<_T, _D>,
+                    ) -> wasmtime::Result<u32>
                     where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                        _T: Send,
+                        _D: wasmtime::component::HasData,
                     {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
@@ -402,20 +398,17 @@ pub mod exports {
                                 (u32,),
                             >::new_unchecked(self.funcs.static_a_static_a)
                         };
-                        wasmtime::component::__internal::FutureExt::map(
-                            callee.call_concurrent(store.as_context_mut(), ()),
-                            |v| v.map(|(v,)| v),
-                        )
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        Ok(ret0)
                     }
-                    pub fn call_method_a<S: wasmtime::AsContextMut>(
+                    pub async fn call_method_a<_T, _D>(
                         &self,
-                        mut store: S,
+                        accessor: &wasmtime::component::Accessor<_T, _D>,
                         arg0: wasmtime::component::ResourceAny,
-                    ) -> impl wasmtime::component::__internal::Future<
-                        Output = wasmtime::Result<u32>,
-                    > + Send + 'static + use<S>
+                    ) -> wasmtime::Result<u32>
                     where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                        _T: Send,
+                        _D: wasmtime::component::HasData,
                     {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
@@ -423,10 +416,8 @@ pub mod exports {
                                 (u32,),
                             >::new_unchecked(self.funcs.method_a_method_a)
                         };
-                        wasmtime::component::__internal::FutureExt::map(
-                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
-                            |v| v.map(|(v,)| v),
-                        )
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        Ok(ret0)
                     }
                 }
             }
@@ -475,7 +466,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/export-using-import` does \
-                        not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };
@@ -533,15 +524,14 @@ pub mod exports {
                     }
                 }
                 impl GuestA<'_> {
-                    pub fn call_constructor<S: wasmtime::AsContextMut>(
+                    pub async fn call_constructor<_T, _D>(
                         &self,
-                        mut store: S,
+                        accessor: &wasmtime::component::Accessor<_T, _D>,
                         arg0: wasmtime::component::Resource<Y>,
-                    ) -> impl wasmtime::component::__internal::Future<
-                        Output = wasmtime::Result<wasmtime::component::ResourceAny>,
-                    > + Send + 'static + use<S>
+                    ) -> wasmtime::Result<wasmtime::component::ResourceAny>
                     where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                        _T: Send,
+                        _D: wasmtime::component::HasData,
                     {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
@@ -549,19 +539,16 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
                         };
-                        wasmtime::component::__internal::FutureExt::map(
-                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
-                            |v| v.map(|(v,)| v),
-                        )
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        Ok(ret0)
                     }
-                    pub fn call_static_a<S: wasmtime::AsContextMut>(
+                    pub async fn call_static_a<_T, _D>(
                         &self,
-                        mut store: S,
-                    ) -> impl wasmtime::component::__internal::Future<
-                        Output = wasmtime::Result<wasmtime::component::Resource<Y>>,
-                    > + Send + 'static + use<S>
+                        accessor: &wasmtime::component::Accessor<_T, _D>,
+                    ) -> wasmtime::Result<wasmtime::component::Resource<Y>>
                     where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                        _T: Send,
+                        _D: wasmtime::component::HasData,
                     {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
@@ -569,21 +556,18 @@ pub mod exports {
                                 (wasmtime::component::Resource<Y>,),
                             >::new_unchecked(self.funcs.static_a_static_a)
                         };
-                        wasmtime::component::__internal::FutureExt::map(
-                            callee.call_concurrent(store.as_context_mut(), ()),
-                            |v| v.map(|(v,)| v),
-                        )
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        Ok(ret0)
                     }
-                    pub fn call_method_a<S: wasmtime::AsContextMut>(
+                    pub async fn call_method_a<_T, _D>(
                         &self,
-                        mut store: S,
+                        accessor: &wasmtime::component::Accessor<_T, _D>,
                         arg0: wasmtime::component::ResourceAny,
                         arg1: wasmtime::component::Resource<Y>,
-                    ) -> impl wasmtime::component::__internal::Future<
-                        Output = wasmtime::Result<wasmtime::component::Resource<Y>>,
-                    > + Send + 'static + use<S>
+                    ) -> wasmtime::Result<wasmtime::component::Resource<Y>>
                     where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                        _T: Send,
+                        _D: wasmtime::component::HasData,
                     {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
@@ -594,10 +578,10 @@ pub mod exports {
                                 (wasmtime::component::Resource<Y>,),
                             >::new_unchecked(self.funcs.method_a_method_a)
                         };
-                        wasmtime::component::__internal::FutureExt::map(
-                            callee.call_concurrent(store.as_context_mut(), (arg0, arg1)),
-                            |v| v.map(|(v,)| v),
-                        )
+                        let (ret0,) = callee
+                            .call_concurrent(accessor, (arg0, arg1))
+                            .await?;
+                        Ok(ret0)
                     }
                 }
             }
@@ -641,7 +625,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/export-using-export1` does \
-                              not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };
@@ -676,14 +660,13 @@ pub mod exports {
                     }
                 }
                 impl GuestA<'_> {
-                    pub fn call_constructor<S: wasmtime::AsContextMut>(
+                    pub async fn call_constructor<_T, _D>(
                         &self,
-                        mut store: S,
-                    ) -> impl wasmtime::component::__internal::Future<
-                        Output = wasmtime::Result<wasmtime::component::ResourceAny>,
-                    > + Send + 'static + use<S>
+                        accessor: &wasmtime::component::Accessor<_T, _D>,
+                    ) -> wasmtime::Result<wasmtime::component::ResourceAny>
                     where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                        _T: Send,
+                        _D: wasmtime::component::HasData,
                     {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
@@ -691,10 +674,8 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
                         };
-                        wasmtime::component::__internal::FutureExt::map(
-                            callee.call_concurrent(store.as_context_mut(), ()),
-                            |v| v.map(|(v,)| v),
-                        )
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        Ok(ret0)
                     }
                 }
             }
@@ -739,7 +720,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/export-using-export2` does \
-                                not have export `{name}`"
+                  not have export `{name}`"
                                     )
                                 })
                         };
@@ -774,15 +755,14 @@ pub mod exports {
                     }
                 }
                 impl GuestB<'_> {
-                    pub fn call_constructor<S: wasmtime::AsContextMut>(
+                    pub async fn call_constructor<_T, _D>(
                         &self,
-                        mut store: S,
+                        accessor: &wasmtime::component::Accessor<_T, _D>,
                         arg0: wasmtime::component::ResourceAny,
-                    ) -> impl wasmtime::component::__internal::Future<
-                        Output = wasmtime::Result<wasmtime::component::ResourceAny>,
-                    > + Send + 'static + use<S>
+                    ) -> wasmtime::Result<wasmtime::component::ResourceAny>
                     where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                        _T: Send,
+                        _D: wasmtime::component::HasData,
                     {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
@@ -790,10 +770,8 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_b_constructor)
                         };
-                        wasmtime::component::__internal::FutureExt::map(
-                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
-                            |v| v.map(|(v,)| v),
-                        )
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        Ok(ret0)
                     }
                 }
             }

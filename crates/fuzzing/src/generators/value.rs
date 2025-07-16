@@ -17,6 +17,7 @@ pub enum DiffValue {
     FuncRef { null: bool },
     ExternRef { null: bool },
     AnyRef { null: bool },
+    ExnRef { null: bool },
 }
 
 impl DiffValue {
@@ -30,6 +31,7 @@ impl DiffValue {
             DiffValue::FuncRef { .. } => DiffValueType::FuncRef,
             DiffValue::ExternRef { .. } => DiffValueType::ExternRef,
             DiffValue::AnyRef { .. } => DiffValueType::AnyRef,
+            DiffValue::ExnRef { .. } => DiffValueType::ExnRef,
         }
     }
 
@@ -186,6 +188,7 @@ impl DiffValue {
             FuncRef => DiffValue::FuncRef { null: true },
             ExternRef => DiffValue::ExternRef { null: true },
             AnyRef => DiffValue::AnyRef { null: true },
+            ExnRef => DiffValue::ExnRef { null: true },
         };
         arbitrary::Result::Ok(val)
     }
@@ -232,6 +235,7 @@ impl Hash for DiffValue {
             DiffValue::ExternRef { null } => null.hash(state),
             DiffValue::FuncRef { null } => null.hash(state),
             DiffValue::AnyRef { null } => null.hash(state),
+            DiffValue::ExnRef { null } => null.hash(state),
         }
     }
 }
@@ -285,6 +289,7 @@ pub enum DiffValueType {
     FuncRef,
     ExternRef,
     AnyRef,
+    ExnRef,
 }
 
 impl TryFrom<wasmtime::ValType> for DiffValueType {
@@ -303,6 +308,7 @@ impl TryFrom<wasmtime::ValType> for DiffValueType {
                 (true, HeapType::Any) => Ok(Self::AnyRef),
                 (true, HeapType::I31) => Ok(Self::AnyRef),
                 (true, HeapType::None) => Ok(Self::AnyRef),
+                (true, HeapType::Exn) => Ok(Self::ExnRef),
                 _ => Err("non-null reference types are not supported yet"),
             },
         }

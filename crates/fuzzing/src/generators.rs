@@ -28,10 +28,7 @@ pub use codegen_settings::CodegenSettings;
 pub use config::CompilerStrategy;
 pub use config::{Config, WasmtimeConfig};
 pub use instance_allocation_strategy::InstanceAllocationStrategy;
-pub use memory::{
-    HeapImage, MemoryAccesses, MemoryConfig, NormalMemoryConfig, UnalignedMemory,
-    UnalignedMemoryCreator,
-};
+pub use memory::{HeapImage, MemoryAccesses, MemoryConfig};
 pub use module::ModuleConfig;
 pub use pooling_config::PoolingAllocationConfig;
 pub use single_inst_module::SingleInstModule;

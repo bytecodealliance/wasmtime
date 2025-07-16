@@ -7,13 +7,13 @@
 
 // Polyfill `std::simd::i8x16` etc. until they're stable.
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 pub(crate) type i8x16 = core::arch::x86_64::__m128i;
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 pub(crate) type f32x4 = core::arch::x86_64::__m128;
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 pub(crate) type f64x2 = core::arch::x86_64::__m128d;
 
 // On platforms other than x86_64, define i8x16 to a non-constructible type;
@@ -21,15 +21,15 @@ pub(crate) type f64x2 = core::arch::x86_64::__m128d;
 // functions that are awkward to make conditional on the target, but it
 // doesn't need to actually be constructible unless we're on x86_64.
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
 pub(crate) struct i8x16(crate::uninhabited::Uninhabited);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
 pub(crate) struct f32x4(crate::uninhabited::Uninhabited);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching wasm conventions")]
 #[derive(Copy, Clone)]
 pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
 
@@ -37,6 +37,7 @@ use crate::StoreContextMut;
 use crate::prelude::*;
 use crate::store::StoreInner;
 use crate::store::StoreOpaque;
+use crate::type_registry::RegisteredType;
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Deref;
@@ -116,8 +117,6 @@ pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
 pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
 pub use crate::runtime::vm::table::{Table, TableElement};
 pub use crate::runtime::vm::traphandlers::*;
-#[cfg(feature = "component-model")]
-pub use crate::runtime::vm::vmcontext::VMTableDefinition;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport,
@@ -182,7 +181,7 @@ cfg_if::cfg_if! {
 /// APIs using `Store<T>` are correctly inferring send/sync on the returned
 /// values (e.g. futures) and that internally in the runtime we aren't doing
 /// anything "weird" with threads for example.
-pub unsafe trait VMStore {
+pub unsafe trait VMStore: 'static {
     /// Get a shared borrow of this store's `StoreOpaque`.
     fn store_opaque(&self) -> &StoreOpaque;
 
@@ -336,23 +335,23 @@ pub enum ModuleRuntimeInfo {
 #[derive(Clone)]
 pub struct BareModuleInfo {
     module: Arc<wasmtime_environ::Module>,
-    one_signature: Option<VMSharedTypeIndex>,
     offsets: VMOffsets<HostPtr>,
+    _registered_type: Option<RegisteredType>,
 }
 
 impl ModuleRuntimeInfo {
     pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Self {
-        ModuleRuntimeInfo::bare_maybe_imported_func(module, None)
+        ModuleRuntimeInfo::bare_with_registered_type(module, None)
     }
 
-    pub(crate) fn bare_maybe_imported_func(
+    pub(crate) fn bare_with_registered_type(
         module: Arc<wasmtime_environ::Module>,
-        one_signature: Option<VMSharedTypeIndex>,
+        registered_type: Option<RegisteredType>,
     ) -> Self {
         ModuleRuntimeInfo::Bare(Box::new(BareModuleInfo {
             offsets: VMOffsets::new(HostPtr, &module),
             module,
-            one_signature,
+            _registered_type: registered_type,
         }))
     }
 
@@ -454,10 +453,7 @@ impl ModuleRuntimeInfo {
                 .as_module_map()
                 .values()
                 .as_slice(),
-            ModuleRuntimeInfo::Bare(b) => match &b.one_signature {
-                Some(s) => core::slice::from_ref(s),
-                None => &[],
-            },
+            ModuleRuntimeInfo::Bare(_) => &[],
         }
     }
 

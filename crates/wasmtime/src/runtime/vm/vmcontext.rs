@@ -13,6 +13,7 @@ use core::ffi::c_void;
 use core::fmt;
 use core::marker;
 use core::mem::{self, MaybeUninit};
+use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
@@ -178,6 +179,14 @@ mod test_vmtable {
             offset_of!(VMTableImport, from),
             usize::from(offsets.vmtable_import_from())
         );
+        assert_eq!(
+            offset_of!(VMTableImport, vmctx),
+            usize::from(offsets.vmtable_import_vmctx())
+        );
+        assert_eq!(
+            offset_of!(VMTableImport, index),
+            usize::from(offsets.vmtable_import_index())
+        );
     }
 
     #[test]
@@ -232,6 +241,14 @@ mod test_vmmemory_import {
         assert_eq!(
             offset_of!(VMMemoryImport, from),
             usize::from(offsets.vmmemory_import_from())
+        );
+        assert_eq!(
+            offset_of!(VMMemoryImport, vmctx),
+            usize::from(offsets.vmmemory_import_vmctx())
+        );
+        assert_eq!(
+            offset_of!(VMMemoryImport, index),
+            usize::from(offsets.vmmemory_import_index())
         );
     }
 }
@@ -371,12 +388,14 @@ impl VMMemoryDefinition {
     /// `current_length` potentially smaller than what some other thread
     /// observes. Since Wasm memory only grows, this under-estimation may be
     /// acceptable in certain cases.
+    #[inline]
     pub fn current_length(&self) -> usize {
         self.current_length.load(Ordering::Relaxed)
     }
 
     /// Return a copy of the [`VMMemoryDefinition`] using the relaxed value of
     /// `current_length`; see [`VMMemoryDefinition::current_length()`].
+    #[inline]
     pub unsafe fn load(ptr: *mut Self) -> Self {
         let other = &*ptr;
         VMMemoryDefinition {
@@ -548,6 +567,10 @@ impl VMGlobalDefinition {
                 }
                 WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
                 WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
+                WasmHeapTopType::Exn => {
+                    let r = VMGcRef::from_raw_u32(raw.get_exnref());
+                    global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
+                }
             },
         }
         Ok(global)
@@ -575,6 +598,12 @@ impl VMGlobalDefinition {
                     None => 0,
                 }),
                 WasmHeapTopType::Any => ValRaw::anyref({
+                    match self.as_gc_ref() {
+                        Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
+                        None => 0,
+                    }
+                }),
+                WasmHeapTopType::Exn => ValRaw::exnref({
                     match self.as_gc_ref() {
                         Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
                         None => 0,
@@ -968,12 +997,10 @@ macro_rules! define_builtin_array {
     ) => {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
-        ///
-        /// Ignore improper ctypes to permit `__m128i` on x86_64.
         #[repr(C)]
+        #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
         pub struct VMBuiltinFunctionsArray {
             $(
-                #[allow(improper_ctypes_definitions)]
                 $name: unsafe extern "C" fn(
                     $(define_builtin_array!(@ty $param)),*
                 ) $( -> define_builtin_array!(@ty $result))?,
@@ -981,7 +1008,6 @@ macro_rules! define_builtin_array {
         }
 
         impl VMBuiltinFunctionsArray {
-            #[allow(unused_doc_comments)]
             pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
                 $(
                     $name: crate::runtime::vm::libcalls::raw::$name,
@@ -1114,6 +1140,18 @@ pub struct VMStoreContext {
     /// Stack information used by stack switching instructions. See documentation
     /// on `VMStackChain` for details.
     pub stack_chain: UnsafeCell<VMStackChain>,
+
+    /// The range, in addresses, of the guard page that is currently in use.
+    ///
+    /// This field is used when signal handlers are run to determine whether a
+    /// faulting address lies within the guard page of an async stack for
+    /// example. If this happens then the signal handler aborts with a stack
+    /// overflow message similar to what would happen had the stack overflow
+    /// happened on the main thread. This field is, by default a null..null
+    /// range indicating that no async guard is in use (aka no fiber). In such a
+    /// situation while this field is read it'll never classify a fault as an
+    /// guard page fault.
+    pub async_guard_range: Range<*mut u8>,
 }
 
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
@@ -1140,6 +1178,7 @@ impl Default for VMStoreContext {
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
+            async_guard_range: ptr::null_mut()..ptr::null_mut(),
         }
     }
 }
@@ -1206,7 +1245,9 @@ mod test_vmstore_context {
 /// allocated at runtime.
 #[derive(Debug)]
 #[repr(C, align(16))] // align 16 since globals are aligned to that and contained inside
-pub struct VMContext;
+pub struct VMContext {
+    _magic: u32,
+}
 
 impl VMContext {
     /// Helper function to cast between context types using a debug assertion to
@@ -1243,7 +1284,6 @@ impl VMContext {
 /// instead use `Val` where possible. An important note about this union is that
 /// fields are all stored in little-endian format, regardless of the endianness
 /// of the host system.
-#[allow(missing_docs)]
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union ValRaw {
@@ -1327,6 +1367,17 @@ pub union ValRaw {
     ///
     /// This value is always stored in a little-endian format.
     anyref: u32,
+
+    /// A WebAssembly `exnref` value (or one of its subtypes).
+    ///
+    /// The payload here is a compressed pointer value which is
+    /// runtime-defined. This is one of the main points of unsafety about the
+    /// `ValRaw` type as the validity of the pointer here is not easily verified
+    /// and must be preserved by carefully calling the correct functions
+    /// throughout the runtime.
+    ///
+    /// This value is always stored in a little-endian format.
+    exnref: u32,
 }
 
 // The `ValRaw` type is matched as `wasmtime_val_raw_t` in the C API so these
@@ -1364,6 +1415,7 @@ impl fmt::Debug for ValRaw {
                 .field("funcref", &self.funcref)
                 .field("externref", &Hex(self.externref))
                 .field("anyref", &Hex(self.anyref))
+                .field("exnref", &Hex(self.exnref))
                 .finish()
         }
     }
@@ -1371,11 +1423,12 @@ impl fmt::Debug for ValRaw {
 
 impl ValRaw {
     /// Create a null reference that is compatible with any of
-    /// `{any,extern,func}ref`.
+    /// `{any,extern,func,exn}ref`.
     pub fn null() -> ValRaw {
         unsafe {
             let raw = mem::MaybeUninit::<Self>::zeroed().assume_init();
             debug_assert_eq!(raw.get_anyref(), 0);
+            debug_assert_eq!(raw.get_exnref(), 0);
             debug_assert_eq!(raw.get_externref(), 0);
             debug_assert_eq!(raw.get_funcref(), ptr::null_mut());
             raw
@@ -1460,6 +1513,13 @@ impl ValRaw {
         ValRaw { anyref: r.to_le() }
     }
 
+    /// Creates a WebAssembly `exnref` value
+    #[inline]
+    pub fn exnref(r: u32) -> ValRaw {
+        assert!(cfg!(feature = "gc") || r == 0);
+        ValRaw { exnref: r.to_le() }
+    }
+
     /// Gets the WebAssembly `i32` value
     #[inline]
     pub fn get_i32(&self) -> i32 {
@@ -1522,6 +1582,14 @@ impl ValRaw {
         let anyref = u32::from_le(unsafe { self.anyref });
         assert!(cfg!(feature = "gc") || anyref == 0);
         anyref
+    }
+
+    /// Gets the WebAssembly `exnref` value
+    #[inline]
+    pub fn get_exnref(&self) -> u32 {
+        let exnref = u32::from_le(unsafe { self.exnref });
+        assert!(cfg!(feature = "gc") || exnref == 0);
+        exnref
     }
 }
 

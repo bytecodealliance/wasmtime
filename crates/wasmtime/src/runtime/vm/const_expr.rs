@@ -10,7 +10,9 @@ use crate::{
 use smallvec::SmallVec;
 use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex};
 #[cfg(feature = "gc")]
-use wasmtime_environ::{VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType};
+use wasmtime_environ::{
+    Unsigned, VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType,
+};
 
 /// An interpreter for const expressions.
 ///
@@ -164,7 +166,7 @@ impl ConstExprEvaluator {
         context: &mut ConstEvalContext,
         expr: &ConstExpr,
     ) -> Result<ValRaw> {
-        log::trace!("evaluating const expr: {:?}", expr);
+        log::trace!("evaluating const expr: {expr:?}");
 
         self.stack.clear();
 
@@ -283,8 +285,7 @@ impl ConstExprEvaluator {
                         .unwrap_engine_type_index();
                     let ty = ArrayType::from_shared_type_index(store.engine(), ty);
 
-                    #[allow(clippy::cast_sign_loss)]
-                    let len = self.pop()?.get_i32() as u32;
+                    let len = self.pop()?.get_i32().unsigned();
 
                     let elem = Val::_from_raw(&mut store, self.pop()?, ty.element_type().unpack());
 
@@ -301,8 +302,7 @@ impl ConstExprEvaluator {
                         .unwrap_engine_type_index();
                     let ty = ArrayType::from_shared_type_index(store.engine(), ty);
 
-                    #[allow(clippy::cast_sign_loss)]
-                    let len = self.pop()?.get_i32() as u32;
+                    let len = self.pop()?.get_i32().unsigned();
 
                     let elem = Val::default_for_ty(ty.element_type().unpack())
                         .expect("type should have a default value");

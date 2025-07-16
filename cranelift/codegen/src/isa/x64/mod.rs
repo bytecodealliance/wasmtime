@@ -8,7 +8,7 @@ use crate::ir::{self, Function, Type, types};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::settings as x64_settings;
-use crate::isa::{Builder as IsaBuilder, FunctionAlignment};
+use crate::isa::{Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey};
 use crate::machinst::{
     CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode, compile,
@@ -23,7 +23,7 @@ use std::string::String;
 use target_lexicon::Triple;
 
 mod abi;
-pub mod encoding;
+pub(crate) mod encoding;
 mod inst;
 mod lower;
 mod pcc;
@@ -102,6 +102,10 @@ impl TargetIsa for X64Backend {
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.x64_flags.iter().collect()
+    }
+
+    fn isa_flags_hash_key(&self) -> IsaFlagsHashKey<'_> {
+        IsaFlagsHashKey(self.x64_flags.hash_key())
     }
 
     fn dynamic_vector_bytes(&self, _dyn_ty: Type) -> u32 {

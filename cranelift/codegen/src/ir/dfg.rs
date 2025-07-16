@@ -65,9 +65,23 @@ impl Blocks {
         self.0.len()
     }
 
+    /// Reserves capacity for at least `additional` more elements to be
+    /// inserted.
+    pub fn reserve(&mut self, additional: usize) {
+        self.0.reserve(additional);
+    }
+
     /// Returns `true` if the given block reference is valid.
     pub fn is_valid(&self, block: Block) -> bool {
         self.0.is_valid(block)
+    }
+
+    /// Iterate over all blocks, regardless whether a block is actually inserted
+    /// in the layout or not.
+    ///
+    /// Iterates in creation order, not layout order.
+    pub fn iter(&self) -> impl Iterator<Item = Block> {
+        self.0.keys()
     }
 }
 
@@ -107,13 +121,6 @@ pub struct DataFlowGraph {
     results: SecondaryMap<Inst, ValueList>,
 
     /// User-defined stack maps.
-    ///
-    /// Not to be confused with the stack maps that `regalloc2` produces. These
-    /// are defined by the user in `cranelift-frontend`. These will eventually
-    /// replace the stack maps support in `regalloc2`, but in the name of
-    /// incrementalism and avoiding gigantic PRs that completely overhaul
-    /// Cranelift and Wasmtime at the same time, we are allowing them to live in
-    /// parallel for the time being.
     user_stack_maps: alloc::collections::BTreeMap<Inst, UserStackMapEntryVec>,
 
     /// basic blocks in the function and their parameters.
@@ -335,6 +342,11 @@ impl DataFlowGraph {
     /// Allocate an extended value entry.
     fn make_value(&mut self, data: ValueData) -> Value {
         self.values.push(data.into())
+    }
+
+    /// The number of values defined in this DFG.
+    pub fn len_values(&self) -> usize {
+        self.values.len()
     }
 
     /// Get an iterator over all values.
@@ -598,6 +610,30 @@ impl DataFlowGraph {
         let opcode = self.insts[inst].opcode();
         assert!(opcode.is_safepoint());
         self.user_stack_maps.entry(inst).or_default().push(entry);
+    }
+
+    /// Append multiple stack map entries for the given call instruction.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given instruction is not a (non-tail) call instruction.
+    pub fn append_user_stack_map_entries(
+        &mut self,
+        inst: Inst,
+        entries: impl IntoIterator<Item = UserStackMapEntry>,
+    ) {
+        for entry in entries {
+            self.append_user_stack_map_entry(inst, entry);
+        }
+    }
+
+    /// Take the stack map entries for a given instruction, leaving the
+    /// instruction without stack maps.
+    pub(crate) fn take_user_stack_map_entries(
+        &mut self,
+        inst: Inst,
+    ) -> Option<UserStackMapEntryVec> {
+        self.user_stack_maps.remove(&inst)
     }
 }
 

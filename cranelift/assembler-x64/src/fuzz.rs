@@ -5,8 +5,8 @@
 //! unconditionally (use the `fuzz` feature instead).
 
 use crate::{
-    AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, CodeSink, Constant, Fixed, Gpr, Inst, Label,
-    NonRspGpr, Registers, TrapCode, Xmm,
+    AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, CodeSink, DeferredTarget, Fixed, Gpr, Inst,
+    KnownOffset, NonRspGpr, Registers, TrapCode, Xmm,
 };
 use arbitrary::{Arbitrary, Result, Unstructured};
 use capstone::{Capstone, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, arch::x86};
@@ -44,8 +44,7 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
 /// single-instruction disassembly we're doing here.
 fn assemble(inst: &Inst<FuzzRegs>) -> Vec<u8> {
     let mut sink = TestCodeSink::default();
-    let offsets: Vec<i32> = Vec::new();
-    inst.encode(&mut sink, &offsets);
+    inst.encode(&mut sink);
     sink.patch_labels_as_if_they_referred_to_end();
     sink.buf
 }
@@ -53,7 +52,7 @@ fn assemble(inst: &Inst<FuzzRegs>) -> Vec<u8> {
 #[derive(Default)]
 struct TestCodeSink {
     buf: Vec<u8>,
-    offsets_using_label: Vec<u32>,
+    offsets_using_label: Vec<usize>,
 }
 
 impl TestCodeSink {
@@ -74,7 +73,7 @@ impl TestCodeSink {
     fn patch_labels_as_if_they_referred_to_end(&mut self) {
         let len = i32::try_from(self.buf.len()).unwrap();
         for offset in self.offsets_using_label.iter() {
-            let range = self.buf[*offset as usize..].first_chunk_mut::<4>().unwrap();
+            let range = self.buf[*offset..].first_chunk_mut::<4>().unwrap();
             let offset = i32::try_from(*offset).unwrap() + 4;
             let rel_distance = len - offset;
             *range = (i32::from_le_bytes(*range) + rel_distance).to_le_bytes();
@@ -101,16 +100,13 @@ impl CodeSink for TestCodeSink {
 
     fn add_trap(&mut self, _: TrapCode) {}
 
-    fn current_offset(&self) -> u32 {
-        self.buf.len().try_into().unwrap()
-    }
-
-    fn use_label_at_offset(&mut self, offset: u32, _: Label) {
+    fn use_target(&mut self, _: DeferredTarget) {
+        let offset = self.buf.len();
         self.offsets_using_label.push(offset);
     }
 
-    fn get_label_for_constant(&mut self, c: Constant) -> Label {
-        Label(c.0)
+    fn known_offset(&self, target: KnownOffset) -> i32 {
+        panic!("unsupported known target {target:?}")
     }
 }
 
@@ -383,5 +379,14 @@ mod test {
 
         // This will run the `roundtrip` fuzzer for one second. To repeatably
         // test a single input, append `.seed(0x<failing seed>)`.
+    }
+
+    #[test]
+    fn callq() {
+        for i in -500..500 {
+            println!("immediate: {i}");
+            let inst = crate::inst::callq_d::new(i);
+            roundtrip(&inst.into());
+        }
     }
 }

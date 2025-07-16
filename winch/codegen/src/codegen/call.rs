@@ -37,7 +37,7 @@
 //! │  are used as function arguments.                 │
 //! │                                                  │
 //! ├──────────────────────────────────────────────────┤ ---> The Wasm value stack at this point in time would look like:
-//! │                                                  │      
+//! │                                                  │
 //! │   Stack space created by spilling locals and     |
 //! │   registers at the callsite.                     │
 //! │                                                  │
@@ -141,7 +141,10 @@ impl FnCall {
     ) -> Result<(CalleeKind, ContextArgs)> {
         let ptr = vmoffsets.ptr.size();
         match callee {
-            Callee::Builtin(b) => Ok(Self::lower_builtin(env, b)),
+            Callee::Builtin(b) => Ok(Self::lower_builtin(env, b, None)),
+            Callee::BuiltinWithDifferentVmctx(b, offset) => {
+                Ok(Self::lower_builtin(env, b, Some(*offset)))
+            }
             Callee::FuncRef(_) => {
                 Self::lower_funcref(env.callee_sig::<M::ABI>(callee)?, ptr, context, masm)
             }
@@ -158,11 +161,15 @@ impl FnCall {
     fn lower_builtin<P: PtrSize>(
         env: &mut FuncEnv<P>,
         builtin: &BuiltinFunction,
+        vmctx_offset: Option<u32>,
     ) -> (CalleeKind, ContextArgs) {
         match builtin.ty() {
             BuiltinType::Builtin(idx) => (
                 CalleeKind::direct(env.name_builtin(idx)),
-                ContextArgs::pinned_vmctx(),
+                match vmctx_offset {
+                    Some(offset) => ContextArgs::offset_from_pinned_vmctx(offset),
+                    None => ContextArgs::pinned_vmctx(),
+                },
             ),
         }
     }
@@ -269,6 +276,13 @@ impl FnCall {
                 (VMContextLoc::Pinned, ABIOperand::Stack { ty, offset, .. }) => {
                     let addr = masm.address_at_sp(SPOffset::from_u32(*offset))?;
                     masm.store(vmctx!(M).into(), addr, (*ty).try_into()?)?;
+                }
+                (VMContextLoc::OffsetFromPinned(offset), ABIOperand::Reg { ty, reg, .. }) => {
+                    let addr = masm.address_at_vmctx(*offset)?;
+                    masm.load(addr, writable!(*reg), (*ty).try_into()?)?;
+                }
+                (VMContextLoc::OffsetFromPinned(_), ABIOperand::Stack { .. }) => {
+                    anyhow::bail!("unimplemented load from vmctx into stack");
                 }
 
                 (VMContextLoc::Reg(src), ABIOperand::Reg { ty, reg, .. }) => {

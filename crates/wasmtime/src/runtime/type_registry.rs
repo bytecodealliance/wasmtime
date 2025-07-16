@@ -133,7 +133,7 @@ impl Engine {
 
         let engine = self.clone();
         let registry = engine.signatures();
-        let gc_runtime = engine.gc_runtime().ok().map(|rt| &**rt);
+        let gc_runtime = engine.gc_runtime().map(|rt| &**rt);
 
         // First, register these types in this engine's registry.
         let (rec_groups, types) = registry
@@ -336,7 +336,7 @@ impl RegisteredType {
         let (entry, index, ty, layout) = {
             log::trace!("RegisteredType::new({ty:?})");
 
-            let gc_runtime = engine.gc_runtime().ok().map(|rt| &**rt);
+            let gc_runtime = engine.gc_runtime().map(|rt| &**rt);
             let mut inner = engine.signatures().0.write();
 
             // It shouldn't be possible for users to construct non-canonical
@@ -929,9 +929,16 @@ impl TypeRegistryInner {
             ),
             wasmtime_environ::WasmCompositeInnerType::Struct(s) => Some(
                 gc_runtime
-                    .expect("must have a GC runtime to register array types")
+                    .expect("must have a GC runtime to register struct types")
                     .layouts()
                     .struct_layout(s)
+                    .into(),
+            ),
+            wasmtime_environ::WasmCompositeInnerType::Exn(e) => Some(
+                gc_runtime
+                    .expect("must have a GC runtime to register exception types")
+                    .layouts()
+                    .exn_layout(e)
                     .into(),
             ),
             wasmtime_environ::WasmCompositeInnerType::Cont(_) => None, // FIXME: #10248 stack switching support.

@@ -108,8 +108,10 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
                 .collect::<arbitrary::Result<_>>()?,
         ),
 
-        // Resources aren't fuzzed at this time.
-        Type::Own(_) | Type::Borrow(_) => unreachable!(),
+        // Resources, futures, streams, and error contexts aren't fuzzed at this time.
+        Type::Own(_) | Type::Borrow(_) | Type::Future(_) | Type::Stream(_) | Type::ErrorContext => {
+            unreachable!()
+        }
     })
 }
 
@@ -120,8 +122,26 @@ pub fn static_api_test<'a, P, R>(
     declarations: &Declarations,
 ) -> arbitrary::Result<()>
 where
-    P: ComponentNamedList + Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static,
-    R: ComponentNamedList + Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static,
+    P: ComponentNamedList
+        + Lift
+        + Lower
+        + Clone
+        + PartialEq
+        + Debug
+        + Arbitrary<'a>
+        + Send
+        + Sync
+        + 'static,
+    R: ComponentNamedList
+        + Lift
+        + Lower
+        + Clone
+        + PartialEq
+        + Debug
+        + Arbitrary<'a>
+        + Send
+        + Sync
+        + 'static,
 {
     crate::init_fuzzing();
 
@@ -138,17 +158,17 @@ where
         .root()
         .func_wrap(
             IMPORT_FUNCTION,
-            |cx: StoreContextMut<'_, Box<dyn Any>>, params: P| {
+            |cx: StoreContextMut<'_, Box<dyn Any + Send>>, params: P| {
                 log::trace!("received parameters {params:?}");
                 let data: &(P, R) = cx.data().downcast_ref().unwrap();
                 let (expected_params, result) = data;
                 assert_eq!(params, *expected_params);
-                log::trace!("returning result {:?}", result);
+                log::trace!("returning result {result:?}");
                 Ok(result.clone())
             },
         )
         .unwrap();
-    let mut store: Store<Box<dyn Any>> = Store::new(&engine, Box::new(()));
+    let mut store: Store<Box<dyn Any + Send>> = Store::new(&engine, Box::new(()));
     let instance = linker.instantiate(&mut store, &component).unwrap();
     let func = instance
         .get_typed_func::<P, R>(&mut store, EXPORT_FUNCTION)
@@ -160,7 +180,7 @@ where
         *store.data_mut() = Box::new((params.clone(), result.clone()));
         log::trace!("passing in parameters {params:?}");
         let actual = func.call(&mut store, params).unwrap();
-        log::trace!("got result {:?}", actual);
+        log::trace!("got result {actual:?}");
         assert_eq!(actual, result);
         func.post_return(&mut store).unwrap();
     }

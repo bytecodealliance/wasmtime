@@ -8,15 +8,19 @@ use wasmtime::component::{ComponentNamedList, ComponentType, Func, Lift, Lower, 
 use wasmtime::{AsContextMut, Config, Engine};
 
 pub trait TypedFuncExt<P, R> {
-    fn call_and_post_return(&self, store: impl AsContextMut, params: P) -> Result<R>;
+    fn call_and_post_return(&self, store: impl AsContextMut<Data: Send>, params: P) -> Result<R>;
 }
 
 impl<P, R> TypedFuncExt<P, R> for TypedFunc<P, R>
 where
     P: ComponentNamedList + Lower,
-    R: ComponentNamedList + Lift,
+    R: ComponentNamedList + Lift + Send + Sync + 'static,
 {
-    fn call_and_post_return(&self, mut store: impl AsContextMut, params: P) -> Result<R> {
+    fn call_and_post_return(
+        &self,
+        mut store: impl AsContextMut<Data: Send>,
+        params: P,
+    ) -> Result<R> {
         let result = self.call(&mut store, params)?;
         self.post_return(&mut store)?;
         Ok(result)
@@ -26,7 +30,7 @@ where
 pub trait FuncExt {
     fn call_and_post_return(
         &self,
-        store: impl AsContextMut,
+        store: impl AsContextMut<Data: Send>,
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()>;
@@ -35,7 +39,7 @@ pub trait FuncExt {
 impl FuncExt for Func {
     fn call_and_post_return(
         &self,
-        mut store: impl AsContextMut,
+        mut store: impl AsContextMut<Data: Send>,
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
@@ -93,27 +97,27 @@ macro_rules! forward_impls {
         }
 
         unsafe impl Lower for $a {
-            fn lower<U>(
+            fn linear_lower_to_flat<U>(
                 &self,
                 cx: &mut LowerContext<'_, U>,
                 ty: InterfaceType,
                 dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
-                <$b as Lower>::lower(&self.0, cx, ty, dst)
+                <$b as Lower>::linear_lower_to_flat(&self.0, cx, ty, dst)
             }
 
-            fn store<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType, offset: usize) -> Result<()> {
-                <$b as Lower>::store(&self.0, cx, ty, offset)
+            fn linear_lower_to_memory<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType, offset: usize) -> Result<()> {
+                <$b as Lower>::linear_lower_to_memory(&self.0, cx, ty, offset)
             }
         }
 
         unsafe impl Lift for $a {
-            fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
-                Ok(Self(<$b as Lift>::lift(cx, ty, src)?))
+            fn linear_lift_from_flat(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+                Ok(Self(<$b as Lift>::linear_lift_from_flat(cx, ty, src)?))
             }
 
-            fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
-                Ok(Self(<$b as Lift>::load(cx, ty, bytes)?))
+            fn linear_lift_from_memory(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+                Ok(Self(<$b as Lift>::linear_lift_from_memory(cx, ty, bytes)?))
             }
         }
 

@@ -8,8 +8,12 @@ use crate::runtime::vm::{
 use crate::vm::VMMemoryDefinition;
 use core::ptr::NonNull;
 use core::slice;
-use core::{alloc::Layout, any::Any, marker, mem, num::NonZeroUsize, ops::Range, ptr};
-use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMSharedTypeIndex};
+use core::{alloc::Layout, any::Any, marker, mem, ops::Range, ptr};
+use wasmtime_environ::{
+    GcArrayLayout, GcExceptionLayout, GcStructLayout, GcTypeLayouts, VMSharedTypeIndex,
+};
+
+use super::VMExnRef;
 
 /// Trait for integrating a garbage collector with the runtime.
 ///
@@ -188,13 +192,6 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// failures such as panics or incorrect results.
     fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef);
 
-    /// Predicate invoked before calling into or returning to Wasm to determine
-    /// whether we should GC first.
-    ///
-    /// `num_gc_refs` is the number of non-`i31ref` GC references that will be
-    /// passed into Wasm.
-    fn need_gc_before_entering_wasm(&self, num_gc_refs: NonZeroUsize) -> bool;
-
     ////////////////////////////////////////////////////////////////////////////
     // `externref` Methods
 
@@ -203,7 +200,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// Return values:
     ///
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
     /// * `Ok(Err(n))`: There is currently not enough available space for this
     ///   allocation of size `n`. The caller should either grow the heap or run
@@ -260,7 +257,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// Return values:
     ///
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
     /// * `Ok(Err(n))`: There is currently not enough available space for this
     ///   allocation of size `n`. The caller should either grow the heap or run
@@ -285,7 +282,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// Return values:
     ///
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
     /// * `Ok(Err(n))`: There is currently not enough available space for this
     ///   allocation of size `n`. The caller should either grow the heap or run
@@ -344,6 +341,46 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// do so is memory safe, but may result in general failures such as panics
     /// or incorrect results.
     fn array_len(&self, arrayref: &VMArrayRef) -> u32;
+
+    /// Allocate a GC-managed exception object of the given type and
+    /// layout, with the given tag.
+    ///
+    /// The exception object's fields are left uninitialized. It is
+    /// the caller's responsibility to initialize them before exposing
+    /// the object to Wasm or triggering a GC.
+    ///
+    /// The `ty` and `layout` must match, and the tag's function type
+    /// must have a matching signature to the exception layout's.
+    ///
+    /// Failure to do either of the above is memory safe, but may result in
+    /// general failures such as panics or incorrect results.
+    ///
+    /// Return values:
+    ///
+    /// * `Ok(Ok(_))`: The allocation was successful.
+    ///
+    /// * `Ok(Err(n))`: There is currently not enough available space for this
+    ///   allocation of size `n`. The caller should either grow the heap or run
+    ///   a collection to reclaim space, and then try allocating again.
+    ///
+    /// * `Err(_)`: The collector cannot satisfy this allocation request, and
+    ///   would not be able to even after the caller were to trigger a
+    ///   collection. This could be because, for example, the requested
+    ///   allocation is larger than this collector's implementation limit for
+    ///   object size.
+    fn alloc_uninit_exn(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        layout: &GcExceptionLayout,
+    ) -> Result<Result<VMExnRef, u64>>;
+
+    /// Deallocate an uninitialized, GC-managed exception object.
+    ///
+    /// This is useful for if initialization of the struct's fields fails, so
+    /// that the struct's allocation can be eagerly reclaimed, and so that the
+    /// collector doesn't attempt to treat any of the uninitialized fields as
+    /// valid GC references, or something like that.
+    fn dealloc_uninit_exn(&mut self, exnref: VMExnRef);
 
     ////////////////////////////////////////////////////////////////////////////
     // Garbage Collection Methods
@@ -411,6 +448,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     fn vmmemory(&self) -> VMMemoryDefinition;
 
     /// Get a slice of the raw bytes of the GC heap.
+    #[inline]
     fn heap_slice(&self) -> &[u8] {
         let vmmemory = self.vmmemory();
         let ptr = vmmemory.base.as_ptr().cast_const();
@@ -419,6 +457,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     }
 
     /// Get a mutable slice of the raw bytes of the GC heap.
+    #[inline]
     fn heap_slice_mut(&mut self) -> &mut [u8] {
         let vmmemory = self.vmmemory();
         let ptr = vmmemory.base.as_ptr();
@@ -435,6 +474,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// # Panics
     ///
     /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
+    #[inline]
     fn index<T>(&self, gc_ref: &TypedGcRef<T>) -> &T
     where
         Self: Sized,
@@ -455,6 +495,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// # Panics
     ///
     /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
+    #[inline]
     fn index_mut<T>(&mut self, gc_ref: &TypedGcRef<T>) -> &mut T
     where
         Self: Sized,

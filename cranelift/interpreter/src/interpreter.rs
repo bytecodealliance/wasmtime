@@ -91,7 +91,7 @@ impl<'a> Interpreter<'a> {
     /// Interpret a [Block] in a [Function]. This drives the interpretation over sequences of
     /// instructions, which may continue in other blocks, until the function returns.
     fn block(&mut self, block: Block) -> Result<ControlFlow<'a>, InterpreterError> {
-        trace!("Block: {}", block);
+        trace!("Block: {block}");
         let function = self.state.current_frame_mut().function();
         let layout = &function.layout;
         let mut maybe_inst = layout.first_inst(block);
@@ -110,7 +110,7 @@ impl<'a> Interpreter<'a> {
                 }
                 ControlFlow::Continue => maybe_inst = layout.next_inst(inst),
                 ControlFlow::ContinueAt(block, block_arguments) => {
-                    trace!("Block: {}", block);
+                    trace!("Block: {block}");
                     self.state
                         .current_frame_mut()
                         .set_all(function.dfg.block_params(block), block_arguments.to_vec());

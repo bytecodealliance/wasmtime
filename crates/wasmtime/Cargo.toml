@@ -62,6 +62,7 @@ smallvec = { workspace = true, optional = true }
 hashbrown = { workspace = true, features = ["default-hasher"] }
 bitflags = { workspace = true }
 futures = { workspace = true, features = ["alloc"], optional = true }
+bytes = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -254,10 +255,7 @@ runtime = [
   "dep:wasmtime-slab",
   "dep:wasmtime-versioned-export-macros",
   "dep:windows-sys",
-  "dep:rustix",
-  "rustix/mm",
   "pulley-interpreter/interp",
-  "dep:wasmtime-jit-icache-coherence",
   "dep:wasmtime-unwinder",
 ]
 
@@ -309,6 +307,7 @@ threads = [
 
 stack-switching = [
   "runtime",
+  "std",
   "wasmtime-environ/stack-switching",
   "wasmtime-cranelift?/stack-switching",
   "wasmtime-winch?/stack-switching",
@@ -333,6 +332,8 @@ std = [
   'pulley-interpreter/std',
   'wasmtime-math/std',
   'addr2line?/std',
+  "dep:rustix",
+  "wasmtime-jit-icache-coherence",
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom
@@ -391,5 +392,12 @@ component-model-async = [
   "component-model",
   "std",
   "wasmtime-component-macro?/component-model-async",
-  "dep:futures"
+  "dep:futures",
+  "futures/std",
+]
+
+# Enables support for `stream` interop with the `bytes` crate.
+component-model-async-bytes = [
+  "component-model-async",
+  "dep:bytes",
 ]

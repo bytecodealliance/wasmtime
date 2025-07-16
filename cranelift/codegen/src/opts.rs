@@ -1,5 +1,7 @@
 //! Optimization driver using ISLE rewrite rules on an egraph.
 
+mod div_const;
+
 use crate::egraph::{NewOrExistingInst, OptimizeCtx};
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
@@ -17,7 +19,6 @@ use cranelift_entity::packed_option::ReservedValue;
 use smallvec::{SmallVec, smallvec};
 use std::marker::PhantomData;
 
-#[allow(dead_code)]
 pub type Unit = ();
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
@@ -322,5 +323,47 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
 
     fn ieee128_constant(&mut self, n: Ieee128) -> Constant {
         self.ctx.func.dfg.constants.insert(n.into())
+    }
+
+    fn div_const_magic_u32(&mut self, d: u32) -> generated_code::DivConstMagicU32 {
+        let div_const::MU32 {
+            mul_by,
+            do_add,
+            shift_by,
+        } = div_const::magic_u32(d);
+        generated_code::DivConstMagicU32::U32 {
+            mul_by,
+            do_add,
+            shift_by: shift_by.try_into().unwrap(),
+        }
+    }
+
+    fn div_const_magic_u64(&mut self, d: u64) -> generated_code::DivConstMagicU64 {
+        let div_const::MU64 {
+            mul_by,
+            do_add,
+            shift_by,
+        } = div_const::magic_u64(d);
+        generated_code::DivConstMagicU64::U64 {
+            mul_by,
+            do_add,
+            shift_by: shift_by.try_into().unwrap(),
+        }
+    }
+
+    fn div_const_magic_s32(&mut self, d: i32) -> generated_code::DivConstMagicS32 {
+        let div_const::MS32 { mul_by, shift_by } = div_const::magic_s32(d);
+        generated_code::DivConstMagicS32::S32 {
+            mul_by,
+            shift_by: shift_by.try_into().unwrap(),
+        }
+    }
+
+    fn div_const_magic_s64(&mut self, d: i64) -> generated_code::DivConstMagicS64 {
+        let div_const::MS64 { mul_by, shift_by } = div_const::magic_s64(d);
+        generated_code::DivConstMagicS64::S64 {
+            mul_by,
+            shift_by: shift_by.try_into().unwrap(),
+        }
     }
 }

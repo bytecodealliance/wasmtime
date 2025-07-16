@@ -1718,14 +1718,10 @@ where
         // but the builtin function expects the init value as the last
         // argument.
         self.context.stack.inner_mut().swap(len - 1, len - 2);
-        self.context.stack.insert_many(at, &[table.try_into()?]);
 
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin.clone()),
-        )?;
+        let builtin = self.prepare_builtin_defined_table_arg(table_index, at, builtin)?;
+
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
 
         Ok(())
     }
@@ -1848,16 +1844,12 @@ where
 
     fn visit_memory_fill(&mut self, mem: u32) -> Self::Output {
         let at = self.context.stack.ensure_index_at(3)?;
-
-        self.context.stack.insert_many(at, &[mem.try_into()?]);
+        let mem = MemoryIndex::from_u32(mem);
 
         let builtin = self.env.builtins.memory_fill::<M::ABI, M::Ptr>()?;
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin),
-        )?;
+        let builtin = self.prepare_builtin_defined_memory_arg(mem, at, builtin)?;
+
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
         self.context.pop_and_free(self.masm)
     }
 
@@ -1867,20 +1859,16 @@ where
     }
 
     fn visit_memory_grow(&mut self, mem: u32) -> Self::Output {
-        let _ = self.context.stack.ensure_index_at(1)?;
+        let at = self.context.stack.ensure_index_at(1)?;
+        let mem = MemoryIndex::from_u32(mem);
         // The stack at this point contains: [ delta ]
         // The desired state is
         //   [ vmctx, delta, index ]
-        self.context.stack.extend([mem.try_into()?]);
+        let builtin = self.env.builtins.memory_grow::<M::ABI, M::Ptr>()?;
+        let builtin = self.prepare_builtin_defined_memory_arg(mem, at + 1, builtin)?;
 
-        let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
-        let builtin = self.env.builtins.memory32_grow::<M::ABI, M::Ptr>()?;
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin),
-        )?;
+        let heap = self.env.resolve_heap(mem);
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
 
         // The memory32_grow builtin returns a pointer type, therefore we must
         // ensure that the return type is representative of the address space of

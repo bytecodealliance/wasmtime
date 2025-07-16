@@ -236,6 +236,7 @@ impl StoreInstanceId {
     /// # Panics
     ///
     /// Panics if `self` does not belong to `store`.
+    #[inline]
     pub(crate) fn get<'a>(&self, store: &'a StoreOpaque) -> &'a vm::Instance {
         self.assert_belongs_to(store.id());
         store.instance(self.instance)
@@ -246,6 +247,7 @@ impl StoreInstanceId {
     /// # Panics
     ///
     /// Panics if `self` does not belong to `store`.
+    #[inline]
     pub(crate) fn get_mut<'a>(&self, store: &'a mut StoreOpaque) -> Pin<&'a mut vm::Instance> {
         self.assert_belongs_to(store.id());
         store.instance_mut(self.instance)
