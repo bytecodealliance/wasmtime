@@ -15,9 +15,9 @@ use crate::{FuncType, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
-use wasmtime_environ::component::{
-    ComponentTypes, StringEncoding, TypeResourceTableIndex, TypeTuple,
-};
+#[cfg(feature = "rr-type-validation")]
+use wasmtime_environ::component::TypeTuple;
+use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
 
 /// Same as [`ConstMemorySliceCell`] except allows for dynamically sized slices.
 ///
@@ -558,8 +558,8 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// * It is assumed that this is only invoked at the root lower/store calls
     pub fn replay_lowering(
         &mut self,
-        result_tys: &TypeTuple,
         mut result_storage: Option<&mut [ValRaw]>,
+        #[cfg(feature = "rr-type-validation")] result_tys: &TypeTuple,
     ) -> Result<()> {
         if self.store.0.replay_buffer_mut().is_none() {
             return Ok(());
@@ -567,12 +567,13 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         let mut complete = false;
         while !complete {
             let buf = self.store.0.replay_buffer_mut().unwrap();
+            let _replay_metadata = buf.metadata();
             let event = buf.next_event()?;
-            let replay_metadata = buf.metadata();
             let _ = match event {
                 RREvent::ComponentHostFuncReturn(e) => {
                     // End of lowering process
-                    if replay_metadata.validate {
+                    #[cfg(feature = "rr-type-validation")]
+                    if _replay_metadata.validate {
                         e.validate(result_tys)?
                     }
                     if let Some(storage) = result_storage.as_deref_mut() {

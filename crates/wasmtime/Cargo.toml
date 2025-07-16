@@ -393,3 +393,10 @@ component-model-async = [
   "wasmtime-component-macro?/component-model-async",
   "dep:futures"
 ]
+
+# Enables support for record/replay
+rr = ["rr-component", "rr-core"]
+rr-component = ["component-model", "std"]
+rr-core = ["std"]
+rr-type-validation = []
+rr-args-validation = []

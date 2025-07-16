@@ -3,7 +3,9 @@ use super::*;
 #[allow(unused_imports)]
 use crate::component::ComponentType;
 use std::vec::Vec;
-use wasmtime_environ::component::{InterfaceType, TypeTuple};
+use wasmtime_environ::component::InterfaceType;
+#[cfg(feature = "rr-type-validation")]
+use wasmtime_environ::component::TypeTuple;
 
 /// A call event from a Wasm component into the host
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,17 +18,23 @@ pub struct HostFuncEntryEvent {
     /// Note: This relies on the invariant that [InterfaceType] will always be
     /// deterministic. Currently, the type indices into various [ComponentTypes]
     /// maintain this, allowing for quick type-checking.
+    #[cfg(feature = "rr-type-validation")]
     types: Option<TypeTuple>,
 }
 impl HostFuncEntryEvent {
     // Record
-    pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<&TypeTuple>) -> Self {
+    pub fn new(
+        args: &[MaybeUninit<ValRaw>],
+        #[cfg(feature = "rr-type-validation")] types: Option<&TypeTuple>,
+    ) -> Self {
         Self {
             args: func_argvals_from_raw_slice(args),
+            #[cfg(feature = "rr-type-validation")]
             types: types.cloned(),
         }
     }
     // Replay
+    #[cfg(feature = "rr-type-validation")]
     pub fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
         replay_args_typecheck(self.types.as_ref(), expect_types)
     }
@@ -44,17 +52,23 @@ pub struct HostFuncReturnEvent {
     /// Note: This relies on the invariant that [InterfaceType] will always be
     /// deterministic. Currently, the type indices into various [ComponentTypes]
     /// maintain this, allowing for quick type-checking.
+    #[cfg(feature = "rr-type-validation")]
     types: Option<TypeTuple>,
 }
 impl HostFuncReturnEvent {
     // Record
-    pub fn new(args: &[ValRaw], types: Option<&TypeTuple>) -> Self {
+    pub fn new(
+        args: &[ValRaw],
+        #[cfg(feature = "rr-type-validation")] types: Option<&TypeTuple>,
+    ) -> Self {
         Self {
             args: func_argvals_from_raw_slice(args),
+            #[cfg(feature = "rr-type-validation")]
             types: types.cloned(),
         }
     }
     // Replay
+    #[cfg(feature = "rr-type-validation")]
     pub fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
         replay_args_typecheck(self.types.as_ref(), expect_types)
     }
@@ -107,6 +121,7 @@ macro_rules! generic_new_events {
     ) => (
         $(
             #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+            $(#[doc = $doc])*
             pub struct $struct {
                 $(
                     pub $field: $field_ty,
