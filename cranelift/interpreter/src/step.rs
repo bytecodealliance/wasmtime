@@ -771,12 +771,10 @@ where
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::UaddOverflowTrap => {
-            let sum = DataValueExt::add(arg(0), arg(1))?;
-            let carry = sum < arg(0) && sum < arg(1);
-            if carry {
-                ControlFlow::Trap(CraneliftTrap::User(trap_code()))
-            } else {
+            if let Some(sum) = DataValueExt::uadd_checked(arg(0), arg(1))? {
                 assign(sum)
+            } else {
+                ControlFlow::Trap(CraneliftTrap::User(trap_code()))
             }
         }
         Opcode::SsubOverflowBin => {
