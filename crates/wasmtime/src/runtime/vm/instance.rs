@@ -441,6 +441,7 @@ impl Instance {
 
     /// Return the indexed `VMMemoryDefinition`, loaded from vmctx memory
     /// already.
+    #[inline]
     pub fn memory(&self, index: DefinedMemoryIndex) -> VMMemoryDefinition {
         unsafe { VMMemoryDefinition::load(self.memory_ptr(index).as_ptr()) }
     }
@@ -456,6 +457,7 @@ impl Instance {
     ///
     /// Note that the returned pointer resides in wasm-code-readable-memory in
     /// the vmctx.
+    #[inline]
     pub fn memory_ptr(&self, index: DefinedMemoryIndex) -> NonNull<VMMemoryDefinition> {
         unsafe {
             self.vmctx_plus_offset::<VmPtr<_>>(self.offsets().vmctx_vmmemory_pointer(index))
