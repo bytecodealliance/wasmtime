@@ -250,7 +250,7 @@ where
     /// made using this method may run concurrently with other calls to the same
     /// instance.  In addition, the runtime will call the `post-return` function
     /// (if any) automatically when the guest task completes -- no need to
-    /// explicitly cll `Func::post_return` afterward.
+    /// explicitly call `Func::post_return` afterward.
     ///
     /// # Panics
     ///
