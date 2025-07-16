@@ -5,15 +5,13 @@ use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
 use crate::prelude::*;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
-use alloc::sync::Arc;
 use core::fmt;
 use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
-    StringEncoding, VariantInfo,
+    CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, StringEncoding, VariantInfo,
 };
 
 #[cfg(feature = "component-model-async")]
@@ -1842,10 +1840,6 @@ pub struct WasmList<T> {
     len: usize,
     options: Options,
     elem: InterfaceType,
-    // NB: it would probably be more efficient to store a non-atomic index-style
-    // reference to something inside a `StoreOpaque`, but that's not easily
-    // available at this time, so it's left as a future exercise.
-    types: Arc<ComponentTypes>,
     instance: Instance,
     _marker: marker::PhantomData<T>,
 }
@@ -1872,7 +1866,6 @@ impl<T: Lift> WasmList<T> {
             len,
             options: *cx.options,
             elem,
-            types: cx.types.clone(),
             instance: cx.instance_handle(),
             _marker: marker::PhantomData,
         })
@@ -1901,7 +1894,7 @@ impl<T: Lift> WasmList<T> {
     pub fn get(&self, mut store: impl AsContextMut, index: usize) -> Option<Result<T>> {
         let store = store.as_context_mut().0;
         self.options.store_id().assert_belongs_to(store.id());
-        let mut cx = LiftContext::new(store, &self.options, &self.types, self.instance);
+        let mut cx = LiftContext::new(store, &self.options, self.instance);
         self.get_from_store(&mut cx, index)
     }
 
@@ -1929,7 +1922,7 @@ impl<T: Lift> WasmList<T> {
     ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
         let store = store.into().0;
         self.options.store_id().assert_belongs_to(store.id());
-        let mut cx = LiftContext::new(store, &self.options, &self.types, self.instance);
+        let mut cx = LiftContext::new(store, &self.options, self.instance);
         (0..self.len).map(move |i| self.get_from_store(&mut cx, i).unwrap())
     }
 }

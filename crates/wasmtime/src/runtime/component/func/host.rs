@@ -283,8 +283,7 @@ where
 
             // Lift the parameters, either from flat storage or from linear
             // memory.
-            let lift =
-                &mut LiftContext::new(store.0.store_opaque_mut(), &options, &types, instance);
+            let lift = &mut LiftContext::new(store.0.store_opaque_mut(), &options, instance);
             lift.enter_call();
             let params = storage.lift_params(lift, param_tys)?;
 
@@ -351,7 +350,7 @@ where
         }
     } else {
         let mut storage = Storage::<'_, Params, Return>::new_sync(storage);
-        let mut lift = LiftContext::new(store.0.store_opaque_mut(), &options, &types, instance);
+        let mut lift = LiftContext::new(store.0.store_opaque_mut(), &options, instance);
         lift.enter_call();
         let params = storage.lift_params(&mut lift, param_tys)?;
 
@@ -752,7 +751,7 @@ where
     let result_tys = &types[func_ty.results];
 
     let mut params_and_results = Vec::new();
-    let mut lift = &mut LiftContext::new(store.0.store_opaque_mut(), &options, &types, instance);
+    let mut lift = &mut LiftContext::new(store.0.store_opaque_mut(), &options, instance);
     lift.enter_call();
     let max_flat = if async_ {
         MAX_FLAT_ASYNC_PARAMS

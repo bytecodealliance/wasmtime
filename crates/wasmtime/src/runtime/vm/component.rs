@@ -640,6 +640,20 @@ impl ComponentInstance {
         &self.component
     }
 
+    /// Same as [`Self::component`] but additionally returns the
+    /// `Pin<&mut Self>` with the same original lifetime.
+    pub fn component_and_self(self: Pin<&mut Self>) -> (&Component, Pin<&mut Self>) {
+        // SAFETY: this function is projecting both `&Component` and the same
+        // pointer both connected to the same lifetime. This is safe because
+        // it's a contract of `Pin<&mut Self>` that the `Component` field is
+        // never written, meaning it's effectively unsafe to have `&mut
+        // Component` projected from `Pin<&mut Self>`. Consequently it's safe to
+        // have a read-only view of the field while still retaining mutable
+        // access to all other fields.
+        let component = unsafe { &*(&raw const self.component) };
+        (component, self)
+    }
+
     /// Returns a reference to the resource type information.
     pub fn resource_types(&self) -> &Arc<PrimaryMap<ResourceIndex, ResourceType>> {
         &self.resource_types
