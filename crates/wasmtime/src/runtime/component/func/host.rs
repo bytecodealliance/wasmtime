@@ -288,16 +288,16 @@ where
     };
 
     let replay_enabled = cx.0.replay_enabled();
-    let ret = if replay_enabled {
-        None
-    } else {
-        Some({
+    let ret = if !replay_enabled {
+        ReturnMode::Standard({
             let mut lift = LiftContext::new(cx.0, &options, types, instance);
             lift.enter_call();
 
             let params = storage.lift_params(&mut lift, param_tys)?;
             closure(cx.as_context_mut(), params)?
         })
+    } else {
+        ReturnMode::Replay
     };
 
     flags.set_may_leave(false);
@@ -310,6 +310,11 @@ where
     }
 
     return Ok(());
+
+    enum ReturnMode<Return: Lower> {
+        Standard(Return),
+        Replay,
+    }
 
     enum Storage<'a, P: ComponentType, R: ComponentType> {
         Direct(&'a mut MaybeUninit<ReturnStack<P::Lower, R::Lower>>),
@@ -343,52 +348,56 @@ where
             cx: &mut LowerContext<'_, T>,
             ty: InterfaceType,
             rr_tys: &TypeTuple,
-            ret: Option<R>,
+            ret: ReturnMode<R>,
         ) -> Result<()> {
-            let direct_results_lower =
-                |cx: &mut LowerContext<'_, T>,
-                 dst: &mut MaybeUninit<<R as ComponentType>::Lower>| {
-                    let res = if let Some(retval) = &ret {
-                        // Normal execution path
+            let direct_results_lower = |cx: &mut LowerContext<'_, T>,
+                                        dst: &mut MaybeUninit<<R as ComponentType>::Lower>,
+                                        ret: ReturnMode<R>| {
+                let res = match ret {
+                    ReturnMode::Standard(retval) => {
                         record_lower_event_wrapper! { retval.lower(cx, ty, dst) => cx.store.0 }
-                    } else {
-                        // Replay execution path
+                    }
+                    ReturnMode::Replay => {
                         // This path also stores the final return values in resulting storage
                         cx.replay_lowering(rr_tys, Some(storage_as_slice_mut(dst)))
-                    };
-                    record_host_func_return_event! {
-                        storage_as_slice(dst), rr_tys => cx.store.0
-                    };
-                    res
+                    }
                 };
-            let indirect_results_lower = |cx: &mut LowerContext<'_, T>, dst: &ValRaw| {
-                let ptr = validate_inbounds::<R>(cx.as_slice(), dst)?;
-                let res = if let Some(retval) = &ret {
-                    // Normal execution path
-                    record_lower_store_event_wrapper! { retval.store(cx, ty, ptr) => cx.store.0 }
-                } else {
-                    // Replay execution path
-                    //
-                    // `dst` is a Wasm pointer to indirect results. This pointer itself will remain
-                    // deterministic, and thus replay will not need to change this. However,
-                    // replay will have to overwrite any nested stored lowerings (deep copy)
-                    cx.replay_lowering(rr_tys, None)
-                };
-                // Recording here is just for marking the return event
                 record_host_func_return_event! {
-                    &[], rr_tys => cx.store.0
+                    storage_as_slice(dst), rr_tys => cx.store.0
                 };
                 res
             };
+            let indirect_results_lower =
+                |cx: &mut LowerContext<'_, T>, dst: &ValRaw, ret: ReturnMode<R>| {
+                    let ptr = validate_inbounds::<R>(cx.as_slice(), dst)?;
+                    let res = match ret {
+                        ReturnMode::Standard(retval) => {
+                            record_lower_store_event_wrapper! { retval.store(cx, ty, ptr) => cx.store.0 }
+                        }
+                        ReturnMode::Replay => {
+                            // `dst` is a Wasm pointer to indirect results. This pointer itself will remain
+                            // deterministic, and thus replay will not need to change this. However,
+                            // replay will have to overwrite any nested stored lowerings (deep copy)
+                            cx.replay_lowering(rr_tys, None)
+                        }
+                    };
+                    // Recording here is just for marking the return event
+                    record_host_func_return_event! {
+                        &[], rr_tys => cx.store.0
+                    };
+                    res
+                };
             match self {
                 Storage::Direct(storage) => {
-                    direct_results_lower(cx, map_maybe_uninit!(storage.ret))
+                    direct_results_lower(cx, map_maybe_uninit!(storage.ret), ret)
                 }
                 Storage::ParamsIndirect(storage) => {
-                    direct_results_lower(cx, map_maybe_uninit!(storage.ret))
+                    direct_results_lower(cx, map_maybe_uninit!(storage.ret), ret)
                 }
-                Storage::ResultsIndirect(storage) => indirect_results_lower(cx, &storage.retptr),
-                Storage::Indirect(storage) => indirect_results_lower(cx, &storage.retptr),
+                Storage::ResultsIndirect(storage) => {
+                    indirect_results_lower(cx, &storage.retptr, ret)
+                }
+                Storage::Indirect(storage) => indirect_results_lower(cx, &storage.retptr, ret),
             }
         }
     }
@@ -452,6 +461,11 @@ where
     F: FnOnce(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()>,
     T: 'static,
 {
+    enum ReturnMode {
+        Standard { vals: Vec<Val>, index: usize },
+        Replay,
+    }
+
     if async_ {
         todo!()
     }
@@ -481,100 +495,102 @@ where
 
     rr_host_func_entry_event! { storage, &types[func_ty.params] => store.0 };
 
-    let results = if replay_enabled {
-        None
-    } else {
-        Some({
-            let mut cx = LiftContext::new(store.0, &options, types, instance);
-            cx.enter_call();
-            if let Some(param_count) = param_tys.abi.flat_count(MAX_FLAT_PARAMS) {
-                // NB: can use `MaybeUninit::slice_assume_init_ref` when that's stable
-                let mut iter =
-                    mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(&storage[..param_count])
-                        .iter();
-                args = param_tys
-                    .types
-                    .iter()
-                    .map(|ty| Val::lift(&mut cx, *ty, &mut iter))
-                    .collect::<Result<Box<[_]>>>()?;
-                ret_index = param_count;
-                assert!(iter.next().is_none());
-            } else {
-                let mut offset = validate_inbounds_dynamic(
-                    &param_tys.abi,
-                    cx.memory(),
-                    storage[0].assume_init_ref(),
-                )?;
-                args = param_tys
-                    .types
-                    .iter()
-                    .map(|ty| {
-                        let abi = types.canonical_abi(ty);
-                        let size = usize::try_from(abi.size32).unwrap();
-                        let memory = &cx.memory()[abi.next_field32_size(&mut offset)..][..size];
-                        Val::load(&mut cx, *ty, memory)
-                    })
-                    .collect::<Result<Box<[_]>>>()?;
-                ret_index = 1;
-            };
+    let results = if !replay_enabled {
+        let mut cx = LiftContext::new(store.0, &options, types, instance);
+        cx.enter_call();
+        if let Some(param_count) = param_tys.abi.flat_count(MAX_FLAT_PARAMS) {
+            // NB: can use `MaybeUninit::slice_assume_init_ref` when that's stable
+            let mut iter =
+                mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(&storage[..param_count]).iter();
+            args = param_tys
+                .types
+                .iter()
+                .map(|ty| Val::lift(&mut cx, *ty, &mut iter))
+                .collect::<Result<Box<[_]>>>()?;
+            ret_index = param_count;
+            assert!(iter.next().is_none());
+        } else {
+            let mut offset = validate_inbounds_dynamic(
+                &param_tys.abi,
+                cx.memory(),
+                storage[0].assume_init_ref(),
+            )?;
+            args = param_tys
+                .types
+                .iter()
+                .map(|ty| {
+                    let abi = types.canonical_abi(ty);
+                    let size = usize::try_from(abi.size32).unwrap();
+                    let memory = &cx.memory()[abi.next_field32_size(&mut offset)..][..size];
+                    Val::load(&mut cx, *ty, memory)
+                })
+                .collect::<Result<Box<[_]>>>()?;
+            ret_index = 1;
+        };
 
-            let mut result_vals = Vec::with_capacity(result_tys.types.len());
-            for _ in result_tys.types.iter() {
-                result_vals.push(Val::Bool(false));
-            }
-            closure(store.as_context_mut(), &args, &mut result_vals)?;
-            (result_vals, ret_index)
-        })
+        let mut result_vals = Vec::with_capacity(result_tys.types.len());
+        for _ in result_tys.types.iter() {
+            result_vals.push(Val::Bool(false));
+        }
+        closure(store.as_context_mut(), &args, &mut result_vals)?;
+        ReturnMode::Standard {
+            vals: result_vals,
+            index: ret_index,
+        }
+    } else {
+        ReturnMode::Replay
     };
+
     flags.set_may_leave(false);
 
     let mut cx = LowerContext::new(store, &options, types, instance);
     if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
-        if let Some((result_vals, _)) = results {
-            // Normal execution path
-            let mut dst = storage[..cnt].iter_mut();
-            for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-                record_lower_event_wrapper! {
-                    val.lower(&mut cx, *ty, &mut dst) => cx.store.0
-                }?;
+        match results {
+            ReturnMode::Standard { vals, index: _ } => {
+                let mut dst = storage[..cnt].iter_mut();
+                for (val, ty) in vals.iter().zip(result_tys.types.iter()) {
+                    record_lower_event_wrapper! {
+                        val.lower(&mut cx, *ty, &mut dst) => cx.store.0
+                    }?;
+                }
+                assert!(dst.next().is_none());
+                record_host_func_return_event! {
+                    mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(storage), result_tys => cx.store.0
+                };
             }
-            assert!(dst.next().is_none());
-        } else {
-            // Replay execution path
-            // This path also stores the final return values in resulting storage
-            cx.replay_lowering(
-                result_tys,
-                Some(mem::transmute::<&mut [MaybeUninit<ValRaw>], &mut [ValRaw]>(
-                    storage,
-                )),
-            )?;
-        }
-        record_host_func_return_event! {
-            mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(storage), result_tys => cx.store.0
+            ReturnMode::Replay => {
+                // This path also stores the final return values in resulting storage
+                cx.replay_lowering(
+                    result_tys,
+                    Some(mem::transmute::<&mut [MaybeUninit<ValRaw>], &mut [ValRaw]>(
+                        storage,
+                    )),
+                )?;
+            }
         };
     } else {
-        if let Some((result_vals, ret_index)) = results {
-            // Normal execution path
-            let ret_ptr = storage[ret_index].assume_init_ref();
-            let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice(), ret_ptr)?;
-            for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-                let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
-                record_lower_store_event_wrapper! {
-                    val.store(&mut cx, *ty, offset) => cx.store.0
-                }?;
+        match results {
+            ReturnMode::Standard { vals, index } => {
+                let ret_ptr = storage[index].assume_init_ref();
+                let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice(), ret_ptr)?;
+                for (val, ty) in vals.iter().zip(result_tys.types.iter()) {
+                    let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
+                    record_lower_store_event_wrapper! {
+                        val.store(&mut cx, *ty, offset) => cx.store.0
+                    }?;
+                }
+                // Recording here is just for marking the return event
+                record_host_func_return_event! {
+                    &[], result_tys => cx.store.0
+                };
             }
-        } else {
-            // Replay execution path
-            //
-            // The indirect `ret_ptr` itself will remain deterministic, and thus replay will not
-            // need to change the return storage. However, replay will have to overwrite any nested stored
-            // lowerings (deep copy)
-            cx.replay_lowering(result_tys, None)?;
+            ReturnMode::Replay => {
+                // The indirect `ret_ptr` itself will remain deterministic, and thus replay will not
+                // need to change the return storage. However, replay will have to overwrite any nested stored
+                // lowerings (deep copy)
+                cx.replay_lowering(result_tys, None)?;
+            }
         }
-        // Recording here is just for marking the return event
-        record_host_func_return_event! {
-            &[], result_tys => cx.store.0
-        };
     }
 
     flags.set_may_leave(true);
