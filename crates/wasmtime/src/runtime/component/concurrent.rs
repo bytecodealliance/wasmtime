@@ -1266,7 +1266,7 @@ impl Instance {
     /// # let instance = linker.instantiate_async(&mut store, &component).await?;
     /// # let foo = instance.get_typed_func::<(Resource<MyResource>,), (Resource<MyResource>,)>(&mut store, "foo")?;
     /// # let bar = instance.get_typed_func::<(u32,), ()>(&mut store, "bar")?;
-    /// instance.run_with(&mut store, async |accessor| -> wasmtime::Result<_> {
+    /// instance.run_concurrent(&mut store, async |accessor| -> wasmtime::Result<_> {
     ///    let resource = accessor.with(|mut access| access.get().table.push(MyResource(42)))?;
     ///    let (another_resource,) = foo.call_concurrent(accessor, (resource,)).await?;
     ///    let value = accessor.with(|mut access| access.get().table.delete(another_resource))?;
@@ -4334,7 +4334,7 @@ fn checked<F: Future + Send + 'static>(
                 `Future`s which depend on asynchronous component tasks, streams, or \
                 futures to complete may only be polled from the event loop of the \
                 instance from which they originated.  Please use \
-                `Instance::{run,run_with,spawn}` to poll or await them.\
+                `Instance::{run_concurrent,spawn}` to poll or await them.\
             ";
             tls::try_get(|store| {
                 let matched = match store {
