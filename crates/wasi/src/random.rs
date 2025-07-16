@@ -9,6 +9,12 @@ impl<T: WasiRandomView> WasiRandomView for &mut T {
     }
 }
 
+impl<T: WasiRandomView> WasiRandomView for Box<T> {
+    fn random(&mut self) -> &mut WasiRandomCtx {
+        (**self).random()
+    }
+}
+
 impl<T: WasiRandomView> WasiRandomView for WasiRandomImpl<T> {
     fn random(&mut self) -> &mut WasiRandomCtx {
         self.0.random()

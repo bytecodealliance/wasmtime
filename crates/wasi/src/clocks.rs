@@ -11,6 +11,12 @@ impl<T: WasiClocksView> WasiClocksView for &mut T {
     }
 }
 
+impl<T: WasiClocksView> WasiClocksView for Box<T> {
+    fn clocks(&mut self) -> &WasiClocksCtx {
+        (**self).clocks()
+    }
+}
+
 impl<T: WasiClocksView> WasiClocksView for WasiClocksImpl<T> {
     fn clocks(&mut self) -> &WasiClocksCtx {
         self.0.clocks()
