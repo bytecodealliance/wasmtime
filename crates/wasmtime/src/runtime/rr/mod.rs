@@ -24,7 +24,7 @@ macro_rules! rr_event {
         (
             $(
                 $(#[doc = $doc:literal])*
-                $variant:ident => $event:ty
+                $variant:ident($event:ty)
             ),*
         ) => (
         /// A single, unified, low-level recording/replay event
@@ -73,33 +73,33 @@ macro_rules! rr_event {
 // Set of supported record/replay events
 rr_event! {
     /// Call into host function from Core Wasm
-    CoreHostFuncEntry => core_wasm::HostFuncEntryEvent,
+    CoreHostFuncEntry(core_wasm::HostFuncEntryEvent),
     /// Return from host function to Core Wasm
-    CoreHostFuncReturn => core_wasm::HostFuncReturnEvent,
+    CoreHostFuncReturn(core_wasm::HostFuncReturnEvent),
 
     // REQUIRED events for replay
     //
     /// Return from host function to component
-    ComponentHostFuncReturn => component_wasm::HostFuncReturnEvent,
+    ComponentHostFuncReturn(component_wasm::HostFuncReturnEvent),
     /// Component ABI realloc call in linear wasm memory
-    ComponentReallocEntry => component_wasm::ReallocEntryEvent,
+    ComponentReallocEntry(component_wasm::ReallocEntryEvent),
     /// Return from a type lowering operation
-    ComponentLowerReturn => component_wasm::LowerReturnEvent,
+    ComponentLowerReturn(component_wasm::LowerReturnEvent),
     /// Return from a store during a type lowering operation
-    ComponentLowerStoreReturn => component_wasm::LowerStoreReturnEvent,
+    ComponentLowerStoreReturn(component_wasm::LowerStoreReturnEvent),
     /// An attempt to obtain a mutable slice into Wasm linear memory
-    ComponentMemorySliceWrite => component_wasm::MemorySliceWriteEvent,
+    ComponentMemorySliceWrite(component_wasm::MemorySliceWriteEvent),
 
     // OPTIONAL events for replay validation
     //
     /// Call into host function from component
-    ComponentHostFuncEntry => component_wasm::HostFuncEntryEvent,
+    ComponentHostFuncEntry(component_wasm::HostFuncEntryEvent),
     /// Call into [Lower::lower] for type lowering
-    ComponentLowerEntry => component_wasm::LowerEntryEvent,
+    ComponentLowerEntry(component_wasm::LowerEntryEvent),
     /// Call into [Lower::store] during type lowering
-    ComponentLowerStoreEntry => component_wasm::LowerStoreEntryEvent,
+    ComponentLowerStoreEntry(component_wasm::LowerStoreEntryEvent),
     /// Return from Component ABI realloc call
-    ComponentReallocReturn => component_wasm::ReallocReturnEvent
+    ComponentReallocReturn(component_wasm::ReallocReturnEvent)
 }
 
 /// Error type signalling failures during a replay run
