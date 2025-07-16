@@ -305,8 +305,8 @@ unsafe fn table_fill_func_ref(
     val: *mut u8,
     len: u64,
 ) -> Result<()> {
-    let table_index = TableIndex::from_u32(table_index);
-    let table = &mut *instance.get_table(table_index);
+    let table_index = DefinedTableIndex::from_u32(table_index);
+    let table = instance.get_defined_table(table_index);
     match table.element_type() {
         TableElementType::Func => {
             let val = NonNull::new(val.cast::<VMFuncRef>());
@@ -327,8 +327,8 @@ unsafe fn table_fill_gc_ref(
     val: u32,
     len: u64,
 ) -> Result<()> {
-    let table_index = TableIndex::from_u32(table_index);
-    let table = &mut *instance.get_table(table_index);
+    let table_index = DefinedTableIndex::from_u32(table_index);
+    let table = instance.get_defined_table(table_index);
     match table.element_type() {
         TableElementType::Func => unreachable!(),
         TableElementType::GcRef => {
@@ -353,8 +353,8 @@ unsafe fn table_fill_cont_obj(
     value_revision: u64,
     len: u64,
 ) -> Result<()> {
-    let table_index = TableIndex::from_u32(table_index);
-    let table = &mut *instance.get_table(table_index);
+    let table_index = DefinedTableIndex::from_u32(table_index);
+    let table = instance.get_defined_table(table_index);
     match table.element_type() {
         TableElementType::Cont => {
             let contobj = VMContObj::from_raw_parts(value_contref, value_revision);
