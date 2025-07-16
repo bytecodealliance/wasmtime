@@ -1,4 +1,4 @@
-use crate::dsl::{Customization::*, EvexLength, Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*};
 use crate::dsl::{align, evex, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
@@ -96,6 +96,6 @@ pub fn list() -> Vec<Inst> {
         inst("vpaddusw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xDD), _64b | compat | avx),
         inst("vphaddw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x01), _64b | compat | avx),
         inst("vphaddd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x02), _64b | compat | avx),
-        inst("vaddpd", fmt("C", [w(xmm1).k(1).z(), r(xmm2), r(xmm_m128)]), evex(EvexLength::L128).r().w1()._66()._0f().op(0x58), _64b | compat | avx512vl),
+        inst("vaddpd", fmt("C", [w(xmm1).k(1).z(), r(xmm2), r(xmm_m128)]), evex(L128).r().w1()._66()._0f().op(0x58), _64b | compat | avx512vl),
     ]
 }

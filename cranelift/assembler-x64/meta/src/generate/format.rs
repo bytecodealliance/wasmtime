@@ -244,7 +244,7 @@ impl dsl::Format {
 
         f.empty_line();
         f.comment("Emit VEX prefix.");
-        fmtln!(f, "let len = {:#03b};", vex.length.bits());
+        fmtln!(f, "let len = {:#03b};", vex.length.vex_bits());
         fmtln!(f, "let pp = {:#04b};", vex.pp.map_or(0b00, |pp| pp.bits()));
         fmtln!(f, "let mmmmm = {:#07b};", vex.mmmmm.unwrap().bits());
         fmtln!(f, "let w = {};", vex.w.as_bool());
@@ -364,8 +364,8 @@ impl dsl::Format {
 
         f.empty_line();
         f.comment("Emit EVEX prefix.");
-        let (l_bit, l_prime_bit) = evex.length.bits();
-        fmtln!(f, "let ll = ({:#02b}, {:#02b});", l_bit, l_prime_bit);
+        let ll = evex.length.evex_bits();
+        fmtln!(f, "let ll = {ll:#04b};");
         fmtln!(f, "let pp = {:#04b};", evex.pp.map_or(0b00, |pp| pp.bits()));
         fmtln!(f, "let mmmmm = {:#07b};", evex.mmmmm.unwrap().bits());
         fmtln!(f, "let w = {};", evex.w.as_bool());

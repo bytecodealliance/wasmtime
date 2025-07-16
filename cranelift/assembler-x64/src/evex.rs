@@ -30,7 +30,7 @@ impl EvexPrefix {
         reg: u8,
         vvvv: u8,
         (b, x): (Option<u8>, Option<u8>),
-        ll: (u8, u8),
+        ll: u8,
         pp: u8,
         mmmmm: u8,
         w: bool,
@@ -54,10 +54,7 @@ impl EvexPrefix {
         let byte2 = (w as u8) << 7 | vvvv_value << 3 | 0b100 | (pp & 0b11);
 
         // byte3
-        let (l, l_prime) = ll;
-        debug_assert!(l <= 0b1);
-        debug_assert!(l_prime <= 0b1);
-
+        debug_assert!(ll < 0b11, "bits 11b are reserved (#UD); must fit in 2 bits");
         let (z_bit, aaa_bits) = match masking {
             Some((k_reg, zeroing)) => {
                 debug_assert!(
@@ -69,8 +66,7 @@ impl EvexPrefix {
             None => (0, 0),
         };
 
-        let byte3 =
-            z_bit | l_prime << 6 | l << 5 | (broadcast as u8) << 4 | v_prime << 3 | aaa_bits;
+        let byte3 = z_bit | ll << 5 | (broadcast as u8) << 4 | v_prime << 3 | aaa_bits;
 
         Self {
             byte1,

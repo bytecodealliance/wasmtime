@@ -32,7 +32,7 @@ pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
 
 /// An abbreviated constructor for VEX-encoded instructions.
 #[must_use]
-pub fn vex(length: VexLength) -> Vex {
+pub fn vex(length: Length) -> Vex {
     Vex {
         length,
         pp: None,
@@ -47,7 +47,7 @@ pub fn vex(length: VexLength) -> Vex {
 
 /// An abbreviated constructor for EVEX-encoded instructions.
 #[must_use]
-pub fn evex(length: EvexLength) -> Evex {
+pub fn evex(length: Length) -> Evex {
     Evex {
         length,
         pp: None,
@@ -859,40 +859,60 @@ impl fmt::Display for VexEscape {
     }
 }
 
-/// Contains allowed VEX length definitions.
+/// Contains vector length definitions.
 ///
 /// VEX encodes these in the `L` bit field, a single bit with `128-bit = 0` and
-/// `256-bit = 1`. For convenience, we also include the `LIG` and `LZ`
-/// syntax, used by the reference manual, and always set these to `0`.
-pub enum VexLength {
-    /// Set `VEX.L` to `0` (128-bit).
+/// `256-bit = 1`. For convenience, we also include the `LIG` and `LZ` syntax,
+/// used by the reference manual, and always set these to `0`.
+///
+/// EVEX encodes this in the `L'L` bits, two bits that typically indicate the
+/// vector length for packed vector instructions but can also be used for
+/// rounding control for floating-point instructions with rounding semantics
+/// (see section 2.7.1 in the reference manual).
+pub enum Length {
+    /// 128-bit vector length.
     L128,
-    /// Set `VEX.L` to `1` (256-bit).
+    /// 256-bit vector length.
     L256,
-    /// Set `VEX.L` to `0`, but not necessarily for 128-bit operation. From the
-    /// reference manual: "The VEX.L must be encoded to be 0B, an #UD occurs if
-    /// VEX.L is not zero."
+    /// 512-bit vector length; invalid for VEX instructions.
+    L512,
+    /// Force the length bits to `0`, but not necessarily for 128-bit operation.
+    /// From the reference manual: "The VEX.L must be encoded to be 0B, an #UD
+    /// occurs if VEX.L is not zero."
     LZ,
-    /// The `VEX.L` bit is ignored (e.g., for floating point scalar
+    /// The length bits are ignored (e.g., for floating point scalar
     /// instructions). This assembler will emit `0`.
     LIG,
 }
 
-impl VexLength {
-    /// Encode the `L` bit.
-    pub fn bits(&self) -> u8 {
+impl Length {
+    /// Encode the `VEX.L` bit.
+    pub fn vex_bits(&self) -> u8 {
         match self {
             Self::L128 | Self::LIG | Self::LZ => 0b0,
             Self::L256 => 0b1,
+            Self::L512 => unreachable!("VEX does not support 512-bit vector length"),
+        }
+    }
+
+    /// Encode the `EVEX.L'L` bits.
+    ///
+    /// See section 2.7.10, Vector Length Orthogonality, in the reference manual
+    pub fn evex_bits(&self) -> u8 {
+        match self {
+            Self::L128 | Self::LIG | Self::LZ => 0b00,
+            Self::L256 => 0b01,
+            Self::L512 => 0b10,
         }
     }
 }
 
-impl fmt::Display for VexLength {
+impl fmt::Display for Length {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::L128 => write!(f, "128"),
             Self::L256 => write!(f, "256"),
+            Self::L512 => write!(f, "512"),
             Self::LIG => write!(f, "LIG"),
             Self::LZ => write!(f, "LZ"),
         }
@@ -948,7 +968,7 @@ impl fmt::Display for VexW {
 /// ```
 pub struct Vex {
     /// The length of the operand (e.g., 128-bit or 256-bit).
-    pub length: VexLength,
+    pub length: Length,
     /// Map the `PP` field encodings.
     pub pp: Option<VexPrefix>,
     /// Map the `MMMMM` field encodings.
@@ -1195,36 +1215,9 @@ impl fmt::Display for Vex {
     }
 }
 
-pub enum EvexLength {
-    L128,
-    L256,
-    L512,
-}
-
-impl EvexLength {
-    /// Encode the `L L'` bits.
-    pub fn bits(&self) -> (u8, u8) {
-        match self {
-            Self::L128 => (0b0, 0b0),
-            Self::L256 => (0b1, 0b0),
-            Self::L512 => (0b0, 0b1),
-        }
-    }
-}
-
-impl fmt::Display for EvexLength {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::L128 => write!(f, "128"),
-            Self::L256 => write!(f, "256"),
-            Self::L512 => write!(f, "512"),
-        }
-    }
-}
-
 pub struct Evex {
-    /// The length of the operand (e.g., 128-bit, 256-bit, or 512-bit).
-    pub length: EvexLength,
+    /// The vector length of the operand (e.g., 128-bit, 256-bit, or 512-bit).
+    pub length: Length,
     /// Map the `PP` field encodings.
     pub pp: Option<VexPrefix>,
     /// Map the `MMMMM` field encodings.
