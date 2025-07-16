@@ -866,12 +866,23 @@ impl<T> Drop for FutureReader<T> {
 /// Represents the writable end of a Component Model `stream`.
 pub struct StreamWriter<B> {
     instance: Instance,
+    closed: bool,
     tx: Option<mpsc::Sender<WriteEvent<B>>>,
 }
 
 impl<B> StreamWriter<B> {
     fn new(tx: Option<mpsc::Sender<WriteEvent<B>>>, instance: Instance) -> Self {
-        Self { instance, tx }
+        Self {
+            instance,
+            tx,
+            closed: false,
+        }
+    }
+
+    /// Returns whether this stream is "closed" meaning that the other end of
+    /// the stream has been dropped.
+    pub fn is_closed(&self) -> bool {
+        self.closed
     }
 
     /// Write the specified items to the `stream`.
@@ -880,22 +891,18 @@ impl<B> StreamWriter<B> {
     /// during its current or next read.  Use `write_all` to loop until the
     /// buffer is drained or the read end is dropped.
     ///
-    /// The returned `Future` will yield a `(Some(_), _)` if the write completed
-    /// (possibly consuming a subset of the items or nothing depending on the
-    /// number of items the reader accepted).  It will return `(None, _)` if the
-    /// write failed due to the closure of the read end.  In either case, the
-    /// returned buffer will be the same one passed as a parameter, possibly
-    /// mutated to consume any written values.
+    /// The returned `Future` will yield the input buffer back,
+    /// possibly consuming a subset of the items or nothing depending on the
+    /// number of items the reader accepted.
+    ///
+    /// The [`is_closed`](Self::is_closed) method can be used to determine
+    /// whether the stream was learned to be closed after this operation completes.
     ///
     /// # Panics
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future.
-    pub async fn write(
-        mut self,
-        accessor: impl AsAccessor,
-        buffer: B,
-    ) -> (Option<StreamWriter<B>>, B)
+    pub async fn write(&mut self, accessor: impl AsAccessor, buffer: B) -> B
     where
         B: Send + 'static,
     {
@@ -907,7 +914,13 @@ impl<B> StreamWriter<B> {
         send(self.tx.as_mut().unwrap(), WriteEvent::Write { buffer, tx });
         let v = rx.await;
         match v {
-            Ok(HostResult { buffer, dropped }) => ((!dropped).then_some(self), buffer),
+            Ok(HostResult { buffer, dropped }) => {
+                if self.closed {
+                    debug_assert!(dropped);
+                }
+                self.closed = dropped;
+                buffer
+            }
             Err(_) => todo!("guarantee buffer recovery if event loop errors or panics"),
         }
     }
@@ -915,37 +928,24 @@ impl<B> StreamWriter<B> {
     /// Write the specified values until either the buffer is drained or the
     /// read end is dropped.
     ///
-    /// The returned `Future` will yield a `(Some(_), _)` if the write completed
-    /// (i.e. all the items were accepted).  It will return `(None, _)` if the
-    /// write failed due to the closure of the read end.  In either case, the
-    /// returned buffer will be the same one passed as a parameter, possibly
-    /// mutated to consume any written values.
+    /// The buffer is returned back to the caller and may still contain items
+    /// within it if the other end of this stream was dropped. Use the
+    /// [`is_closed`](Self::is_closed) method to determine if the other end is
+    /// dropped.
     ///
     /// # Panics
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future.
-    pub async fn write_all<T>(
-        self,
-        accessor: impl AsAccessor,
-        mut buffer: B,
-    ) -> (Option<StreamWriter<B>>, B)
+    pub async fn write_all<T>(&mut self, accessor: impl AsAccessor, mut buffer: B) -> B
     where
         B: WriteBuffer<T>,
     {
         let accessor = accessor.as_accessor();
-        let mut maybe_me = Some(self);
-        loop {
-            if let Some(me) = maybe_me {
-                if buffer.remaining().len() > 0 {
-                    (maybe_me, buffer) = me.write(accessor, buffer).await;
-                } else {
-                    break (Some(me), buffer);
-                }
-            } else {
-                break (None, buffer);
-            }
+        while !self.is_closed() && buffer.remaining().len() > 0 {
+            buffer = self.write(accessor, buffer).await;
         }
+        buffer
     }
 
     /// Wait for the read end of this `stream` to be dropped.
@@ -1015,6 +1015,7 @@ impl<T> HostStream<T> {
                 self.rep,
                 TransmitKind::Stream,
             )),
+            closed: false,
         }
     }
 
@@ -1183,11 +1184,23 @@ pub struct StreamReader<B> {
     instance: Instance,
     rep: u32,
     tx: Option<mpsc::Sender<ReadEvent<B>>>,
+    closed: bool,
 }
 
 impl<B> StreamReader<B> {
     fn new(rep: u32, tx: Option<mpsc::Sender<ReadEvent<B>>>, instance: Instance) -> Self {
-        Self { instance, rep, tx }
+        Self {
+            instance,
+            rep,
+            tx,
+            closed: false,
+        }
+    }
+
+    /// Returns whether this stream is "closed" meaning that the other end of
+    /// the stream has been dropped.
+    pub fn is_closed(&self) -> bool {
+        self.closed
     }
 
     /// Read values from this `stream`.
@@ -1202,11 +1215,7 @@ impl<B> StreamReader<B> {
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future.
-    pub async fn read(
-        mut self,
-        accessor: impl AsAccessor,
-        buffer: B,
-    ) -> (Option<StreamReader<B>>, B)
+    pub async fn read(&mut self, accessor: impl AsAccessor, buffer: B) -> B
     where
         B: Send + 'static,
     {
@@ -1218,7 +1227,13 @@ impl<B> StreamReader<B> {
         send(self.tx.as_mut().unwrap(), ReadEvent::Read { buffer, tx });
         let v = rx.await;
         match v {
-            Ok(HostResult { buffer, dropped }) => ((!dropped).then_some(self), buffer),
+            Ok(HostResult { buffer, dropped }) => {
+                if self.closed {
+                    debug_assert!(dropped);
+                }
+                self.closed = dropped;
+                buffer
+            }
             Err(_) => {
                 todo!("guarantee buffer recovery if event loop errors or panics")
             }
