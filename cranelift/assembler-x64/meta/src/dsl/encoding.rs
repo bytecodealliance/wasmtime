@@ -37,7 +37,7 @@ pub fn vex(length: Length) -> Vex {
         length,
         pp: None,
         mmmmm: None,
-        w: VexW::WIG,
+        w: WBit::WIG,
         opcode: u8::MAX,
         modrm: None,
         imm: Imm::None,
@@ -52,7 +52,7 @@ pub fn evex(length: Length) -> Evex {
         length,
         pp: None,
         mmm: None,
-        w: VexW::WIG,
+        w: WBit::WIG,
         opcode: u8::MAX,
         modrm: None,
         imm: Imm::None,
@@ -919,8 +919,8 @@ impl fmt::Display for Length {
     }
 }
 
-/// Model the `W` bit in VEX-encoded instructions.
-pub enum VexW {
+/// Model the `W` bit.
+pub enum WBit {
     /// The `W` bit is ignored; equivalent to `.WIG` in the manual.
     WIG,
     /// The `W` bit is set to `0`; equivalent to `.W0` in the manual.
@@ -929,7 +929,7 @@ pub enum VexW {
     W1,
 }
 
-impl VexW {
+impl WBit {
     /// Return `true` if the `W` bit is ignored; this is useful to check in the
     /// DSL for the default case.
     fn is_ignored(&self) -> bool {
@@ -948,7 +948,7 @@ impl VexW {
     }
 }
 
-impl fmt::Display for VexW {
+impl fmt::Display for WBit {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::WIG => write!(f, "WIG"),
@@ -974,7 +974,7 @@ pub struct Vex {
     /// Any leading map bytes, but encoded in the `VEX.mmmmm` bit field.
     pub mmmmm: Option<VexEscape>,
     /// The `W` bit.
-    pub w: VexW,
+    pub w: WBit,
     /// VEX-encoded instructions have a single-byte opcode. Other prefix-related
     /// bytes (see [`Opcodes`]) are encoded in the VEX prefixes (see `pp`,
     /// `mmmmmm`). From the reference manual: "One (and only one) opcode byte
@@ -1053,7 +1053,7 @@ impl Vex {
     pub fn w0(self) -> Self {
         assert!(self.w.is_ignored());
         Self {
-            w: VexW::W0,
+            w: WBit::W0,
             ..self
         }
     }
@@ -1062,7 +1062,7 @@ impl Vex {
     pub fn w1(self) -> Self {
         assert!(self.w.is_ignored());
         Self {
-            w: VexW::W1,
+            w: WBit::W1,
             ..self
         }
     }
@@ -1071,7 +1071,7 @@ impl Vex {
     pub fn wig(self) -> Self {
         assert!(self.w.is_ignored());
         Self {
-            w: VexW::WIG,
+            w: WBit::WIG,
             ..self
         }
     }
@@ -1230,7 +1230,7 @@ pub struct Evex {
     /// 0F38, and 0F3A, respectively, in the instruction encoding descriptions."
     pub mmm: Option<VexEscape>,
     /// The `W` bit.
-    pub w: VexW,
+    pub w: WBit,
     /// EVEX-encoded instructions opcode byte"
     pub opcode: u8,
     /// See [`Rex.modrm`](Rex.modrm).
@@ -1304,7 +1304,7 @@ impl Evex {
     pub fn w0(self) -> Self {
         assert!(self.w.is_ignored());
         Self {
-            w: VexW::W0,
+            w: WBit::W0,
             ..self
         }
     }
@@ -1313,7 +1313,7 @@ impl Evex {
     pub fn w1(self) -> Self {
         assert!(self.w.is_ignored());
         Self {
-            w: VexW::W1,
+            w: WBit::W1,
             ..self
         }
     }
@@ -1322,7 +1322,7 @@ impl Evex {
     pub fn wig(self) -> Self {
         assert!(self.w.is_ignored());
         Self {
-            w: VexW::WIG,
+            w: WBit::WIG,
             ..self
         }
     }
