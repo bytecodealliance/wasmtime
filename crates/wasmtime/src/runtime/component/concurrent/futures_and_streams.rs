@@ -509,7 +509,7 @@ impl<T> FutureWriter<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the store that the `accessor` is derived from does not own
+    /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future.
     pub async fn write(mut self, accessor: impl AsAccessor, value: T) -> bool
     where
@@ -881,7 +881,7 @@ impl<B> StreamWriter<B> {
     ///
     /// # Panics
     ///
-    /// Panics if the store that the `accessor` is derived from does not own
+    /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future.
     pub async fn write(
         mut self,
@@ -915,7 +915,7 @@ impl<B> StreamWriter<B> {
     ///
     /// # Panics
     ///
-    /// Panics if the store that the `accessor` is derived from does not own
+    /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future.
     pub async fn write_all<T>(
         self,
@@ -944,7 +944,7 @@ impl<B> StreamWriter<B> {
     ///
     /// # Panics
     ///
-    /// Panics if the store that the `accessor` is derived from does not own
+    /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future.
     pub async fn watch_reader(&mut self, accessor: impl AsAccessor)
     where
@@ -1184,7 +1184,7 @@ impl<B> StreamReader<B> {
     ///
     /// # Panics
     ///
-    /// Panics if the store that the `accessor` is derived from does not own
+    /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future.
     pub async fn read(
         mut self,
@@ -1213,7 +1213,7 @@ impl<B> StreamReader<B> {
     ///
     /// # Panics
     ///
-    /// Panics if the store that the `accessor` is derived from does not own
+    /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future.
     pub async fn watch_writer(&mut self, accessor: impl AsAccessor)
     where
