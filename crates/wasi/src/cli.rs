@@ -1,3 +1,10 @@
+use std::rc::Rc;
+use std::sync::Arc;
+
+use wasmtime::component::ResourceTable;
+
+use crate::ResourceView;
+
 #[repr(transparent)]
 pub struct WasiCliImpl<T>(pub T);
 
@@ -10,6 +17,21 @@ impl<T: WasiCliView> WasiCliView for &mut T {
     }
 }
 
+impl<T: WasiCliView> WasiCliView for Box<T> {
+    type InputStream = T::InputStream;
+    type OutputStream = T::OutputStream;
+
+    fn cli(&mut self) -> &WasiCliCtx<T::InputStream, T::OutputStream> {
+        (**self).cli()
+    }
+}
+
+impl<T: ResourceView> ResourceView for WasiCliImpl<T> {
+    fn table(&mut self) -> &mut ResourceTable {
+        self.0.table()
+    }
+}
+
 impl<T: WasiCliView> WasiCliView for WasiCliImpl<T> {
     type InputStream = T::InputStream;
     type OutputStream = T::OutputStream;
@@ -19,18 +41,9 @@ impl<T: WasiCliView> WasiCliView for WasiCliImpl<T> {
     }
 }
 
-impl<I: Send, O: Send> WasiCliView for WasiCliCtx<I, O> {
-    type InputStream = I;
-    type OutputStream = O;
-
-    fn cli(&mut self) -> &WasiCliCtx<I, O> {
-        self
-    }
-}
-
-pub trait WasiCliView: Send {
-    type InputStream;
-    type OutputStream;
+pub trait WasiCliView: ResourceView + Send {
+    type InputStream: IsTerminal;
+    type OutputStream: IsTerminal;
 
     fn cli(&mut self) -> &WasiCliCtx<Self::InputStream, Self::OutputStream>;
 }
@@ -48,6 +61,36 @@ pub struct WasiCliCtx<I, O> {
 pub trait IsTerminal {
     /// Returns whether this stream is backed by a TTY.
     fn is_terminal(&self) -> bool;
+}
+
+impl<T: ?Sized + IsTerminal> IsTerminal for &T {
+    fn is_terminal(&self) -> bool {
+        (**self).is_terminal()
+    }
+}
+
+impl<T: ?Sized + IsTerminal> IsTerminal for &mut T {
+    fn is_terminal(&self) -> bool {
+        (**self).is_terminal()
+    }
+}
+
+impl<T: ?Sized + IsTerminal> IsTerminal for Box<T> {
+    fn is_terminal(&self) -> bool {
+        (**self).is_terminal()
+    }
+}
+
+impl<T: ?Sized + IsTerminal> IsTerminal for Rc<T> {
+    fn is_terminal(&self) -> bool {
+        (**self).is_terminal()
+    }
+}
+
+impl<T: ?Sized + IsTerminal> IsTerminal for Arc<T> {
+    fn is_terminal(&self) -> bool {
+        (**self).is_terminal()
+    }
 }
 
 impl IsTerminal for tokio::io::Empty {

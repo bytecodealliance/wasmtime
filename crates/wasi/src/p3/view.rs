@@ -1,3 +1,8 @@
+use wasmtime::component::ResourceTable;
+
+use crate::ResourceView;
+use crate::cli::{WasiCliCtx, WasiCliView};
+use crate::p3::cli::{InputStream, OutputStream};
 use crate::p3::ctx::WasiCtx;
 
 /// A trait which provides access to the [`WasiCtx`] inside the embedder's `T`
@@ -12,10 +17,17 @@ use crate::p3::ctx::WasiCtx;
 /// # Example
 ///
 /// ```
-/// use wasmtime_wasi::p3::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::ResourceView;
+/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiView};
+/// use wasmtime::component::ResourceTable;
 ///
 /// struct MyState {
 ///     ctx: WasiCtx,
+///     table: ResourceTable,
+/// }
+///
+/// impl ResourceView for MyState {
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 ///
 /// impl WasiView for MyState {
@@ -25,10 +37,20 @@ use crate::p3::ctx::WasiCtx;
 /// [`Store`]: wasmtime::Store
 /// [`Linker`]: wasmtime::component::Linker
 ///
-pub trait WasiView: Send {
+pub trait WasiView: ResourceView + Send {
     /// Yields mutable access to the [`WasiCtx`] configuration used for this
     /// context.
     fn ctx(&mut self) -> &mut WasiCtx;
+
+    #[doc(hidden)]
+    fn as_wasi_impl(&mut self) -> &mut WasiImpl<Self>
+    where
+        Self: Sized,
+    {
+        // TODO: Figure out how to avoid `unsafe`
+        // SAFETY: `WasiImpl` is `repr(transparent)`
+        unsafe { core::mem::transmute(self) }
+    }
 }
 
 impl<T: ?Sized + WasiView> WasiView for &mut T {
@@ -57,8 +79,23 @@ impl<T: ?Sized + WasiView> WasiView for Box<T> {
 #[repr(transparent)]
 pub struct WasiImpl<T>(pub T);
 
+impl<T: ResourceView> ResourceView for WasiImpl<T> {
+    fn table(&mut self) -> &mut ResourceTable {
+        T::table(&mut self.0)
+    }
+}
+
 impl<T: WasiView> WasiView for WasiImpl<T> {
     fn ctx(&mut self) -> &mut WasiCtx {
         T::ctx(&mut self.0)
+    }
+}
+
+impl<T: WasiView> WasiCliView for WasiImpl<T> {
+    type InputStream = Box<dyn InputStream + Send>;
+    type OutputStream = Box<dyn OutputStream + Send>;
+
+    fn cli(&mut self) -> &WasiCliCtx<Self::InputStream, Self::OutputStream> {
+        &T::ctx(&mut self.0).cli
     }
 }

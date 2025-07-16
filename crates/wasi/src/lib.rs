@@ -42,3 +42,20 @@ pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 #[doc(no_inline)]
 pub use wasmtime::component::{ResourceTable, ResourceTableError};
+
+// TODO: Consolidate with `IoView`
+pub trait ResourceView {
+    fn table(&mut self) -> &mut ResourceTable;
+}
+
+impl<T: ?Sized + ResourceView> ResourceView for &mut T {
+    fn table(&mut self) -> &mut ResourceTable {
+        (**self).table()
+    }
+}
+
+impl<T: ?Sized + ResourceView> ResourceView for Box<T> {
+    fn table(&mut self) -> &mut ResourceTable {
+        (**self).table()
+    }
+}

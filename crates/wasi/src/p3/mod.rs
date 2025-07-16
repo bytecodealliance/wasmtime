@@ -9,6 +9,7 @@
 //! Documentation of this module may be incorrect or out-of-sync with the implementation.
 
 pub mod bindings;
+pub mod cli;
 pub mod clocks;
 mod ctx;
 pub mod filesystem;
@@ -17,6 +18,7 @@ mod view;
 
 use wasmtime::component::Linker;
 
+use crate::cli::WasiCliImpl;
 use crate::clocks::WasiClocksImpl;
 use crate::p3::bindings::LinkOptions;
 use crate::random::WasiRandomImpl;
@@ -34,7 +36,8 @@ pub use self::view::{WasiImpl, WasiView};
 ///
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
-/// use wasmtime::component::Linker;
+/// use wasmtime::component::{ Linker, ResourceTable};
+/// use wasmtime_wasi::ResourceView;
 /// use wasmtime_wasi::p3::{WasiCtx, WasiView};
 ///
 /// fn main() -> Result<()> {
@@ -60,6 +63,11 @@ pub use self::view::{WasiImpl, WasiView};
 /// #[derive(Default)]
 /// struct MyState {
 ///     ctx: WasiCtx,
+///     table: ResourceTable,
+/// }
+///
+/// impl ResourceView for MyState {
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 ///
 /// impl WasiView for MyState {
@@ -82,9 +90,8 @@ pub fn add_to_linker_with_options<T>(
 where
     T: WasiView + 'static,
 {
-    // TODO: use options
-    _ = options;
     clocks::add_to_linker_impl(linker, |x| WasiClocksImpl(&mut x.ctx().clocks))?;
     random::add_to_linker_impl(linker, |x| WasiRandomImpl(&mut x.ctx().random))?;
+    cli::add_to_linker_impl(linker, &options.into(), |x| WasiCliImpl(x.as_wasi_impl()))?;
     Ok(())
 }

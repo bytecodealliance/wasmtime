@@ -51,7 +51,10 @@ use wasmtime::component::{HasData, Linker};
 ///     fn clocks(&mut self) -> &WasiClocksCtx { &self.clocks }
 /// }
 /// ```
-pub fn add_to_linker<T: WasiClocksView + 'static>(linker: &mut Linker<T>) -> wasmtime::Result<()> {
+pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
+where
+    T: WasiClocksView + 'static,
+{
     add_to_linker_impl(linker, |x| WasiClocksImpl(x))
 }
 

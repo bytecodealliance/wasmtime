@@ -51,7 +51,10 @@ use wasmtime::component::{HasData, Linker};
 ///     fn random(&mut self) -> &mut WasiRandomCtx { &mut self.random }
 /// }
 /// ```
-pub fn add_to_linker<T: WasiRandomView + 'static>(linker: &mut Linker<T>) -> wasmtime::Result<()> {
+pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
+where
+    T: WasiRandomView + 'static,
+{
     add_to_linker_impl(linker, |x| WasiRandomImpl(x))
 }
 
