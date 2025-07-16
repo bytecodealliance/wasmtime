@@ -126,6 +126,7 @@ impl FileInterpreter {
                     let state = InterpreterState::default().with_function_store(env.clone());
                     match Interpreter::new(state).call_by_name(func_name, args) {
                         Ok(ControlFlow::Return(results)) => Ok(results.to_vec()),
+                        Ok(ControlFlow::Trap(trap)) => Err(trap.to_string()),
                         Ok(_) => panic!("Unexpected returned control flow--this is likely a bug."),
                         Err(t) => Err(t.to_string()),
                     }
