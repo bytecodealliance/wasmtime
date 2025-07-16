@@ -4,6 +4,7 @@ use super::*;
 use wasmtime_environ::{WasmFuncType, WasmValType};
 
 /// Note: Switch [`CoreFuncArgTypes`] to use [`Vec<WasmValType>`] for better efficiency
+#[cfg(feature = "rr-type-validation")]
 type CoreFuncArgTypes = WasmFuncType;
 
 /// A call event from a Core Wasm module into the host
@@ -12,17 +13,23 @@ pub struct HostFuncEntryEvent {
     /// Raw values passed across the call/return boundary
     args: RRFuncArgVals,
     /// Optional param/return types (required to support replay validation)
+    #[cfg(feature = "rr-type-validation")]
     types: Option<CoreFuncArgTypes>,
 }
 impl HostFuncEntryEvent {
     // Record
-    pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<WasmFuncType>) -> Self {
+    pub fn new(
+        args: &[MaybeUninit<ValRaw>],
+        #[cfg(feature = "rr-type-validation")] types: Option<WasmFuncType>,
+    ) -> Self {
         Self {
             args: func_argvals_from_raw_slice(args),
+            #[cfg(feature = "rr-type-validation")]
             types: types,
         }
     }
     // Replay
+    #[cfg(feature = "rr-type-validation")]
     pub fn validate(&self, expect_types: &CoreFuncArgTypes) -> Result<(), ReplayError> {
         replay_args_typecheck(self.types.as_ref(), expect_types)
     }
@@ -36,13 +43,18 @@ pub struct HostFuncReturnEvent {
     /// Raw values passed across the call/return boundary
     args: RRFuncArgVals,
     /// Optional param/return types (required to support replay validation)
+    #[cfg(feature = "rr-type-validation")]
     types: Option<CoreFuncArgTypes>,
 }
 impl HostFuncReturnEvent {
     // Record
-    pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<WasmFuncType>) -> Self {
+    pub fn new(
+        args: &[MaybeUninit<ValRaw>],
+        #[cfg(feature = "rr-type-validation")] types: Option<WasmFuncType>,
+    ) -> Self {
         Self {
             args: func_argvals_from_raw_slice(args),
+            #[cfg(feature = "rr-type-validation")]
             types: types,
         }
     }
@@ -52,8 +64,9 @@ impl HostFuncReturnEvent {
     pub fn move_into_slice(
         self,
         args: &mut [MaybeUninit<ValRaw>],
-        expect_types: Option<&WasmFuncType>,
+        #[cfg(feature = "rr-type-validation")] expect_types: Option<&WasmFuncType>,
     ) -> Result<(), ReplayError> {
+        #[cfg(feature = "rr-type-validation")]
         if let Some(e) = expect_types {
             replay_args_typecheck(self.types.as_ref(), e)?;
         }

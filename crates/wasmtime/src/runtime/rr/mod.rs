@@ -386,7 +386,6 @@ impl Replayer for ReplayBuffer {
 mod tests {
     use super::*;
     use crate::ValRaw;
-    use core::mem::MaybeUninit;
     use std::path::Path;
     use tempfile::{NamedTempFile, TempPath};
 
@@ -402,14 +401,15 @@ mod tests {
             },
         };
 
-        let values = vec![ValRaw::i32(1), ValRaw::f32(2), ValRaw::i64(3)]
-            .into_iter()
-            .map(|x| MaybeUninit::new(x))
-            .collect::<Vec<_>>();
+        let values = vec![ValRaw::i32(1), ValRaw::f32(2), ValRaw::i64(3)];
 
         // Record values
         let mut recorder = RecordBuffer::new_recorder(record_cfg)?;
-        let event = core_wasm::HostFuncEntryEvent::new(values.as_slice(), None);
+        let event = component_wasm::HostFuncReturnEvent::new(
+            values.as_slice(),
+            #[cfg(feature = "rr-type-validation")]
+            None,
+        );
         recorder.record_event(|_| event.clone());
         recorder.flush_to_file()?;
 
@@ -424,7 +424,7 @@ mod tests {
             metadata: ReplayMetadata { validate: true },
         };
         let mut replayer = ReplayBuffer::new_replayer(replay_cfg)?;
-        replayer.next_event_and(|store_event: core_wasm::HostFuncEntryEvent, _| {
+        replayer.next_event_and(|store_event: component_wasm::HostFuncReturnEvent, _| {
             // Check replay matches record
             assert!(store_event == event);
             Ok(())

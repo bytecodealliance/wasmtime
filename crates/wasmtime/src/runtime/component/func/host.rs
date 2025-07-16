@@ -44,7 +44,7 @@ macro_rules! rr_host_func_entry_event {
                 |_event: HostFuncEntryEvent, _r: &ReplayMetadata| {
                     #[cfg(feature = "rr-type-validation")]
                     if _r.validate {
-                        _event.validate($param_types)
+                        _event.validate($param_types)?;
                     }
                     Ok(())
                 },

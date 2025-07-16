@@ -99,6 +99,7 @@ where
 /// Typechecking validation for replay, if `src_types` exist
 ///
 /// Returns [`ReplayError::FailedFuncValidation`] if typechecking fails
+#[cfg(feature = "rr-type-validation")]
 fn replay_args_typecheck<T>(src_types: Option<T>, expect_types: T) -> Result<(), ReplayError>
 where
     T: PartialEq,

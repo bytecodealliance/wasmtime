@@ -1,6 +1,5 @@
-use crate::config::ReplayMetadata;
 use crate::prelude::*;
-use crate::rr::events::core_wasm::{HostFuncEntryEvent, HostFuncReturnEvent};
+use crate::rr::events::core_wasm::HostFuncReturnEvent;
 use crate::runtime::Uninhabited;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
@@ -2322,6 +2321,11 @@ impl HostContext {
         // should be part of this closure, and the long-jmp-ing
         // happens after the closure in handling the result.
         let run = move |mut caller: Caller<'_, T>| {
+            enum ReturnMode<R: WasmRet> {
+                Standard(R::Fallible),
+                Replay,
+            }
+
             let mut args =
                 NonNull::slice_from_raw_parts(args.cast::<MaybeUninit<ValRaw>>(), args_len);
             let vmctx = VMArrayCallHostFuncContext::from_opaque(callee_vmctx).as_ref();
@@ -2355,38 +2359,44 @@ impl HostContext {
                 // (only when validation is enabled).
                 // Function type unwraps should never panic since they are
                 // lazily evaluated
-                store.record_event_if(
-                    |r| r.add_validation,
-                    |_| {
-                        let wasm_func_type = wasm_func_type.unwrap();
-                        let num_params = wasm_func_type.params().len();
-                        HostFuncEntryEvent::new(
-                            &args.as_ref()[..num_params],
-                            // Don't need to check validation here since it is
-                            // covered by the push predicate in this case
-                            Some(wasm_func_type.clone()),
-                        )
-                    },
-                );
-                store.next_replay_event_if(
-                    |_, r| r.add_validation,
-                    |event: HostFuncEntryEvent, r: &ReplayMetadata| {
-                        if r.validate {
-                            event.validate(wasm_func_type.unwrap())
-                        } else {
+                #[cfg(any(feature = "rr-type-validation", feature = "rr-args-validation"))]
+                {
+                    use crate::config::ReplayMetadata;
+                    use crate::rr::events::core_wasm::HostFuncEntryEvent;
+                    store.record_event_if(
+                        |r| r.add_validation,
+                        |_| {
+                            let wasm_func_type = wasm_func_type.unwrap();
+                            let num_params = wasm_func_type.params().len();
+                            HostFuncEntryEvent::new(
+                                &args.as_ref()[..num_params],
+                                // Don't need to check validation here since it is
+                                // covered by the push predicate in this case
+                                #[cfg(feature = "rr-type-validation")]
+                                Some(wasm_func_type.clone()),
+                            )
+                        },
+                    );
+                    store.next_replay_event_if(
+                        |_, r| r.add_validation,
+                        |_event: HostFuncEntryEvent, _r: &ReplayMetadata| {
+                            #[cfg(feature = "rr-type-validation")]
+                            if _r.validate {
+                                _event.validate(wasm_func_type.unwrap())?;
+                            }
                             Ok(())
-                        }
-                    },
-                )?;
+                        },
+                    )?;
+                }
 
                 P::load(&mut store, args.as_mut())
                 // Drop on store is necessary here; scope closure makes this implicit
             };
 
             let returns = if caller.store.0.replay_enabled() {
-                None
+                ReturnMode::<R>::Replay
             } else {
-                Some('ret: {
+                ReturnMode::Standard('ret: {
                     if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
                         break 'ret R::fallible_from_error(trap);
                     }
@@ -2409,24 +2419,28 @@ impl HostContext {
             };
 
             // Record/replay interceptions of raw return args
-            let ret = if store.replay_enabled() {
-                store
-                    .next_replay_event_and(|event: HostFuncReturnEvent, rmeta| {
+            let ret = match returns {
+                ReturnMode::Replay => store
+                    .next_replay_event_and(|event: HostFuncReturnEvent, _rmeta| {
                         event.move_into_slice(
                             args.as_mut(),
-                            rmeta.validate.then_some(wasm_func_type.unwrap()),
+                            #[cfg(feature = "rr-type-validation")]
+                            _rmeta.validate.then_some(wasm_func_type.unwrap()),
                         )
                     })
-                    .map_err(Into::into)
-            } else {
-                returns.unwrap().store(&mut store, args.as_mut())
+                    .map_err(Into::into),
+                ReturnMode::Standard(fallible) => {
+                    let fallible: <R as WasmRet>::Fallible = fallible;
+                    fallible.store(&mut store, args.as_mut())
+                }
             }?;
-            store.record_event(|rmeta| {
+            store.record_event(|_rmeta| {
                 let wasm_func_type = wasm_func_type.unwrap();
                 let num_results = wasm_func_type.params().len();
                 HostFuncReturnEvent::new(
                     unsafe { &args.as_ref()[..num_results] },
-                    rmeta.add_validation.then_some(wasm_func_type.clone()),
+                    #[cfg(feature = "rr-type-validation")]
+                    _rmeta.add_validation.then_some(wasm_func_type.clone()),
                 )
             });
 

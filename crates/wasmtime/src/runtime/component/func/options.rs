@@ -567,8 +567,8 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         let mut complete = false;
         while !complete {
             let buf = self.store.0.replay_buffer_mut().unwrap();
-            let _replay_metadata = buf.metadata();
             let event = buf.next_event()?;
+            let _replay_metadata = buf.metadata();
             let _ = match event {
                 RREvent::ComponentHostFuncReturn(e) => {
                     // End of lowering process

@@ -1413,6 +1413,7 @@ impl StoreOpaque {
     ///
     /// Convenience wrapper around [`Replayer::next_event_if`]
     #[inline]
+    #[allow(dead_code)]
     pub(crate) fn next_replay_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<(), ReplayError>
     where
         T: TryFrom<RREvent>,
