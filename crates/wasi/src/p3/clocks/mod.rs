@@ -10,6 +10,10 @@ use wasmtime::component::{HasData, Linker};
 /// [`Linker`], which corresponds to the `wasi:clocks/imports` world supported by
 /// this module.
 ///
+/// This is low-level API for advanced use cases,
+/// [`wasmtime_wasi::p3::add_to_linker`](crate::p3::add_to_linker) can be used instead
+/// to add *all* wasip3 interfaces (including the ones from this module) to the `linker`.
+///
 /// # Example
 ///
 /// ```

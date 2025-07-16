@@ -6,16 +6,14 @@ use wasmtime::component::{HasData, Linker};
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///
-/// This function will add the `async` variant of all interfaces into the
-/// [`Linker`] provided. By `async` this means that this function is only
-/// compatible with [`Config::async_support(true)`][async]. For embeddings with
-/// async support disabled see [`add_to_linker_sync`] instead.
-///
-/// This function will add all interfaces implemented by this crate to the
+/// This function will add all interfaces implemented by this module to the
 /// [`Linker`], which corresponds to the `wasi:random/imports` world supported by
 /// this crate.
 ///
-/// [async]: wasmtime::Config::async_support
+/// This is low-level API for advanced use cases,
+/// [`wasmtime_wasi::p3::add_to_linker`](crate::p3::add_to_linker) can be used instead
+/// to add *all* wasip3 interfaces (including the ones from this module) to the `linker`.
+///
 ///
 /// # Example
 ///
