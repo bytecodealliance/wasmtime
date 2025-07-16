@@ -526,14 +526,14 @@ mod tests {
         let _1 = m.push(1);
         let _2 = m.push(2);
 
-        assert_eq!([&mut 0, &mut 2], m.get_many_mut([_0, _2]).unwrap());
+        assert_eq!([&mut 0, &mut 2], m.get_disjoint_mut([_0, _2]).unwrap());
         assert_eq!(
-            m.get_many_mut([_0, _0]),
-            Err(GetManyMutError::MultipleOf(_0))
+            m.get_disjoint_mut([_0, _0]),
+            Err(slice::GetDisjointMutError::OverlappingIndices)
         );
         assert_eq!(
-            m.get_many_mut([E(4)]),
-            Err(GetManyMutError::DoesNotExist(E(4)))
+            m.get_disjoint_mut([E(4)]),
+            Err(slice::GetDisjointMutError::IndexOutOfBounds)
         );
     }
 }
