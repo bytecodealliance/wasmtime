@@ -229,6 +229,7 @@ impl Config {
             pooling.component_instance_size = pooling
                 .component_instance_size
                 .max(limits::CORE_INSTANCE_SIZE);
+            pooling.total_stacks = pooling.total_stacks.max(limits::TOTAL_STACKS);
         }
 
         // Return the test configuration that this fuzz configuration represents
