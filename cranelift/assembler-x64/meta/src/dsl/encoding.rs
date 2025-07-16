@@ -23,7 +23,7 @@ use core::fmt;
 pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
     Rex {
         opcodes: opcode.into(),
-        w: false,
+        w: WBit::W0,
         modrm: None,
         imm: Imm::None,
         opcode_mod: None,
@@ -32,12 +32,12 @@ pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
 
 /// An abbreviated constructor for VEX-encoded instructions.
 #[must_use]
-pub fn vex(length: VexLength) -> Vex {
+pub fn vex(length: Length) -> Vex {
     Vex {
         length,
         pp: None,
         mmmmm: None,
-        w: VexW::WIG,
+        w: WBit::WIG,
         opcode: u8::MAX,
         modrm: None,
         imm: Imm::None,
@@ -45,10 +45,25 @@ pub fn vex(length: VexLength) -> Vex {
     }
 }
 
+/// An abbreviated constructor for EVEX-encoded instructions.
+#[must_use]
+pub fn evex(length: Length) -> Evex {
+    Evex {
+        length,
+        pp: None,
+        mmm: None,
+        w: WBit::WIG,
+        opcode: u8::MAX,
+        modrm: None,
+        imm: Imm::None,
+    }
+}
+
 /// Enumerate the ways x64 encodes instructions.
 pub enum Encoding {
     Rex(Rex),
     Vex(Vex),
+    Evex(Evex),
 }
 
 impl Encoding {
@@ -58,6 +73,7 @@ impl Encoding {
         match self {
             Encoding::Rex(rex) => rex.validate(operands),
             Encoding::Vex(vex) => vex.validate(operands),
+            Encoding::Evex(evex) => evex.validate(operands),
         }
     }
 
@@ -66,6 +82,7 @@ impl Encoding {
         match self {
             Encoding::Rex(rex) => rex.opcodes.opcode(),
             Encoding::Vex(vex) => vex.opcode,
+            Encoding::Evex(evex) => evex.opcode,
         }
     }
 }
@@ -75,6 +92,7 @@ impl fmt::Display for Encoding {
         match self {
             Encoding::Rex(rex) => write!(f, "{rex}"),
             Encoding::Vex(vex) => write!(f, "{vex}"),
+            Encoding::Evex(evex) => write!(f, "{evex}"),
         }
     }
 }
@@ -151,7 +169,7 @@ pub struct Rex {
     /// prefix and other optional/mandatory instruction prefixes are discussed
     /// in chapter 2. Note that REX prefixes that promote legacy instructions to
     /// 64-bit behavior are not listed explicitly in the opcode column."
-    pub w: bool,
+    pub w: WBit,
     /// Indicates modifications to the ModR/M byte.
     pub modrm: Option<ModRmKind>,
     /// The number of bits used as an immediate operand to the instruction.
@@ -175,7 +193,10 @@ impl Rex {
     /// Set the `REX.W` bit.
     #[must_use]
     pub fn w(self) -> Self {
-        Self { w: true, ..self }
+        Self {
+            w: WBit::W1,
+            ..self
+        }
     }
 
     /// Set the ModR/M byte to contain a register operand and an r/m operand;
@@ -340,6 +361,8 @@ impl Rex {
                 "the opcode modifier width must match the operand widths"
             );
         }
+
+        assert!(!matches!(self.w, WBit::WIG));
     }
 }
 
@@ -363,7 +386,7 @@ impl fmt::Display for Rex {
         if let Some(group4) = &self.opcodes.prefixes.group4 {
             write!(f, "{group4} + ")?;
         }
-        if self.w {
+        if self.w.as_bool() {
             write!(f, "REX.W + ")?;
         }
         if self.opcodes.escape {
@@ -841,48 +864,68 @@ impl fmt::Display for VexEscape {
     }
 }
 
-/// Contains allowed VEX length definitions.
+/// Contains vector length definitions.
 ///
 /// VEX encodes these in the `L` bit field, a single bit with `128-bit = 0` and
-/// `256-bit = 1`. For convenience, we also include the `LIG` and `LZ`
-/// syntax, used by the reference manual, and always set these to `0`.
-pub enum VexLength {
-    /// Set `VEX.L` to `0` (128-bit).
+/// `256-bit = 1`. For convenience, we also include the `LIG` and `LZ` syntax,
+/// used by the reference manual, and always set these to `0`.
+///
+/// EVEX encodes this in the `L'L` bits, two bits that typically indicate the
+/// vector length for packed vector instructions but can also be used for
+/// rounding control for floating-point instructions with rounding semantics
+/// (see section 2.7.1 in the reference manual).
+pub enum Length {
+    /// 128-bit vector length.
     L128,
-    /// Set `VEX.L` to `1` (256-bit).
+    /// 256-bit vector length.
     L256,
-    /// Set `VEX.L` to `0`, but not necessarily for 128-bit operation. From the
-    /// reference manual: "The VEX.L must be encoded to be 0B, an #UD occurs if
-    /// VEX.L is not zero."
+    /// 512-bit vector length; invalid for VEX instructions.
+    L512,
+    /// Force the length bits to `0`, but not necessarily for 128-bit operation.
+    /// From the reference manual: "The VEX.L must be encoded to be 0B, an #UD
+    /// occurs if VEX.L is not zero."
     LZ,
-    /// The `VEX.L` bit is ignored (e.g., for floating point scalar
+    /// The length bits are ignored (e.g., for floating point scalar
     /// instructions). This assembler will emit `0`.
     LIG,
 }
 
-impl VexLength {
-    /// Encode the `L` bit.
-    pub fn bits(&self) -> u8 {
+impl Length {
+    /// Encode the `VEX.L` bit.
+    pub fn vex_bits(&self) -> u8 {
         match self {
             Self::L128 | Self::LIG | Self::LZ => 0b0,
             Self::L256 => 0b1,
+            Self::L512 => unreachable!("VEX does not support 512-bit vector length"),
+        }
+    }
+
+    /// Encode the `EVEX.L'L` bits.
+    ///
+    /// See section 2.7.10, Vector Length Orthogonality, in the reference manual
+    pub fn evex_bits(&self) -> u8 {
+        match self {
+            Self::L128 | Self::LIG | Self::LZ => 0b00,
+            Self::L256 => 0b01,
+            Self::L512 => 0b10,
         }
     }
 }
 
-impl fmt::Display for VexLength {
+impl fmt::Display for Length {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::L128 => write!(f, "128"),
             Self::L256 => write!(f, "256"),
+            Self::L512 => write!(f, "512"),
             Self::LIG => write!(f, "LIG"),
             Self::LZ => write!(f, "LZ"),
         }
     }
 }
 
-/// Model the `W` bit in VEX-encoded instructions.
-pub enum VexW {
+/// Model the `W` bit.
+pub enum WBit {
     /// The `W` bit is ignored; equivalent to `.WIG` in the manual.
     WIG,
     /// The `W` bit is set to `0`; equivalent to `.W0` in the manual.
@@ -891,7 +934,7 @@ pub enum VexW {
     W1,
 }
 
-impl VexW {
+impl WBit {
     /// Return `true` if the `W` bit is ignored; this is useful to check in the
     /// DSL for the default case.
     fn is_ignored(&self) -> bool {
@@ -910,7 +953,7 @@ impl VexW {
     }
 }
 
-impl fmt::Display for VexW {
+impl fmt::Display for WBit {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::WIG => write!(f, "WIG"),
@@ -923,20 +966,20 @@ impl fmt::Display for VexW {
 /// The VEX encoding, introduced for AVX instructions.
 ///
 /// ```
-/// # use cranelift_assembler_x64_meta::dsl::{vex, VexLength::L128};
+/// # use cranelift_assembler_x64_meta::dsl::{vex, Length::L128};
 /// // To encode a BLENDPD instruction in the manual: VEX.128.66.0F3A.WIG 0D /r ib
 /// let enc = vex(L128)._66()._0f3a().wig().op(0x0D).r().ib();
 /// assert_eq!(enc.to_string(), "VEX.128.66.0F3A.WIG 0x0D /r ib");
 /// ```
 pub struct Vex {
     /// The length of the operand (e.g., 128-bit or 256-bit).
-    pub length: VexLength,
-    /// Map the `PP` field encodings.
+    pub length: Length,
+    /// Any SIMD prefixes, but encoded in the `VEX.pp` bit field.
     pub pp: Option<VexPrefix>,
-    /// Map the `MMMMM` field encodings.
+    /// Any leading map bytes, but encoded in the `VEX.mmmmm` bit field.
     pub mmmmm: Option<VexEscape>,
     /// The `W` bit.
-    pub w: VexW,
+    pub w: WBit,
     /// VEX-encoded instructions have a single-byte opcode. Other prefix-related
     /// bytes (see [`Opcodes`]) are encoded in the VEX prefixes (see `pp`,
     /// `mmmmmm`). From the reference manual: "One (and only one) opcode byte
@@ -1015,7 +1058,7 @@ impl Vex {
     pub fn w0(self) -> Self {
         assert!(self.w.is_ignored());
         Self {
-            w: VexW::W0,
+            w: WBit::W0,
             ..self
         }
     }
@@ -1024,7 +1067,7 @@ impl Vex {
     pub fn w1(self) -> Self {
         assert!(self.w.is_ignored());
         Self {
-            w: VexW::W1,
+            w: WBit::W1,
             ..self
         }
     }
@@ -1033,7 +1076,7 @@ impl Vex {
     pub fn wig(self) -> Self {
         assert!(self.w.is_ignored());
         Self {
-            w: VexW::WIG,
+            w: WBit::WIG,
             ..self
         }
     }
@@ -1139,6 +1182,7 @@ impl Vex {
     fn validate(&self, _operands: &[Operand]) {
         assert!(self.opcode != u8::MAX);
         assert!(self.mmmmm.is_some());
+        assert!(!matches!(self.length, Length::L512));
     }
 
     /// Retrieve the digit extending the opcode, if available.
@@ -1164,6 +1208,174 @@ impl fmt::Display for Vex {
             write!(f, ".{pp}")?;
         }
         if let Some(mmmmm) = self.mmmmm {
+            write!(f, ".{mmmmm}")?;
+        }
+        write!(f, ".{} {:#04X}", self.w, self.opcode)?;
+        if let Some(modrm) = self.modrm {
+            write!(f, " {modrm}")?;
+        }
+        if self.imm != Imm::None {
+            write!(f, " {}", self.imm)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct Evex {
+    /// The vector length of the operand (e.g., 128-bit, 256-bit, or 512-bit).
+    pub length: Length,
+    /// Any SIMD prefixes, but encoded in the `EVEX.pp` bit field (see similar:
+    /// [`Vex::pp`]).
+    pub pp: Option<VexPrefix>,
+    /// The `mmm` bits.
+    ///
+    /// Bits `1:0` are identical to the lowest 2 bits of `VEX.mmmmm`; EVEX adds
+    /// one more bit here. From the reference manual: "provides access to up to
+    /// eight decoding maps. Currently, only the following decoding maps are
+    /// supported: 1, 2, 3, 5, and 6. Map ids 1, 2, and 3 are denoted by 0F,
+    /// 0F38, and 0F3A, respectively, in the instruction encoding descriptions."
+    pub mmm: Option<VexEscape>,
+    /// The `W` bit.
+    pub w: WBit,
+    /// EVEX-encoded instructions opcode byte"
+    pub opcode: u8,
+    /// See [`Rex.modrm`](Rex.modrm).
+    pub modrm: Option<ModRmKind>,
+    /// See [`Rex.imm`](Rex.imm).
+    pub imm: Imm,
+}
+
+impl Evex {
+    /// Set the `pp` field to use [`VexPrefix::_66`]; equivalent to `.66` in the
+    /// manual.
+    pub fn _66(self) -> Self {
+        assert!(self.pp.is_none());
+        Self {
+            pp: Some(VexPrefix::_66),
+            ..self
+        }
+    }
+
+    /// Set the `pp` field to use [`VexPrefix::_F2`]; equivalent to `.F2` in the
+    /// manual.
+    pub fn _f2(self) -> Self {
+        assert!(self.pp.is_none());
+        Self {
+            pp: Some(VexPrefix::_F2),
+            ..self
+        }
+    }
+
+    /// Set the `pp` field to use [`VexPrefix::_F3`]; equivalent to `.F3` in the
+    /// manual.
+    pub fn _f3(self) -> Self {
+        assert!(self.pp.is_none());
+        Self {
+            pp: Some(VexPrefix::_F3),
+            ..self
+        }
+    }
+
+    /// Set the `mmmmmm` field to use [`VexEscape::_0F`]; equivalent to `.0F` in
+    /// the manual.
+    pub fn _0f(self) -> Self {
+        assert!(self.mmm.is_none());
+        Self {
+            mmm: Some(VexEscape::_0F),
+            ..self
+        }
+    }
+
+    /// Set the `mmmmmm` field to use [`VexEscape::_0F3A`]; equivalent to
+    /// `.0F3A` in the manual.
+    pub fn _0f3a(self) -> Self {
+        assert!(self.mmm.is_none());
+        Self {
+            mmm: Some(VexEscape::_0F3A),
+            ..self
+        }
+    }
+
+    /// Set the `mmmmmm` field to use [`VexEscape::_0F38`]; equivalent to
+    /// `.0F38` in the manual.
+    pub fn _0f38(self) -> Self {
+        assert!(self.mmm.is_none());
+        Self {
+            mmm: Some(VexEscape::_0F38),
+            ..self
+        }
+    }
+
+    /// Set the `W` bit to `0`; equivalent to `.W0` in the manual.
+    pub fn w0(self) -> Self {
+        assert!(self.w.is_ignored());
+        Self {
+            w: WBit::W0,
+            ..self
+        }
+    }
+
+    /// Set the `W` bit to `1`; equivalent to `.W1` in the manual.
+    pub fn w1(self) -> Self {
+        assert!(self.w.is_ignored());
+        Self {
+            w: WBit::W1,
+            ..self
+        }
+    }
+
+    /// Ignore the `W` bit; equivalent to `.WIG` in the manual.
+    pub fn wig(self) -> Self {
+        assert!(self.w.is_ignored());
+        Self {
+            w: WBit::WIG,
+            ..self
+        }
+    }
+
+    /// Set the single opcode for this VEX-encoded instruction.
+    pub fn op(self, opcode: u8) -> Self {
+        assert_eq!(self.opcode, u8::MAX);
+        Self { opcode, ..self }
+    }
+
+    /// Set the ModR/M byte to contain a register operand; see [`Rex::r`].
+    pub fn r(self) -> Self {
+        assert!(self.modrm.is_none());
+        Self {
+            modrm: Some(ModRmKind::Reg),
+            ..self
+        }
+    }
+
+    fn validate(&self, _operands: &[Operand]) {
+        assert!(self.opcode != u8::MAX);
+        assert!(self.mmm.is_some());
+    }
+
+    /// Retrieve the digit extending the opcode, if available.
+    #[must_use]
+    pub fn unwrap_digit(&self) -> Option<u8> {
+        match self.modrm {
+            Some(ModRmKind::Digit(digit)) => Some(digit),
+            _ => None,
+        }
+    }
+}
+
+impl From<Evex> for Encoding {
+    fn from(evex: Evex) -> Encoding {
+        Encoding::Evex(evex)
+    }
+}
+
+impl fmt::Display for Evex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "EVEX.{}", self.length)?;
+        if let Some(pp) = self.pp {
+            write!(f, ".{pp}")?;
+        }
+        if let Some(mmmmm) = self.mmm {
             write!(f, ".{mmmmm}")?;
         }
         write!(f, ".{} {:#04X}", self.w, self.opcode)?;

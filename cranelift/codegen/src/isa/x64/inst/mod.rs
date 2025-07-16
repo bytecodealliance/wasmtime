@@ -134,6 +134,8 @@ impl Inst {
                         popcnt => features.push(InstructionSet::Popcnt),
                         avx => features.push(InstructionSet::AVX),
                         avx2 => features.push(InstructionSet::AVX2),
+                        avx512f => features.push(InstructionSet::AVX512F),
+                        avx512vl => features.push(InstructionSet::AVX512VL),
                         cmpxchg16b => features.push(InstructionSet::CMPXCHG16b),
                         fma => features.push(InstructionSet::FMA),
                     }

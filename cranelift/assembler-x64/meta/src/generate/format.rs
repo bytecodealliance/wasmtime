@@ -90,6 +90,13 @@ impl dsl::Format {
         self.generate_immediate(f, style);
     }
 
+    pub fn generate_evex_encoding(&self, f: &mut Formatter, evex: &dsl::Evex) {
+        let style = self.generate_evex_prefix(f, evex);
+        evex.generate_opcode(f);
+        self.generate_modrm_byte(f, style);
+        self.generate_immediate(f, style);
+    }
+
     /// `buf.put1(...);`
     fn generate_prefixes(&self, f: &mut Formatter, rex: &dsl::Rex) {
         if !rex.opcodes.prefixes.is_empty() {
@@ -127,7 +134,7 @@ impl dsl::Format {
             |l: &dsl::Location| l.bits() == 8 && matches!(l.kind(), Reg(_) | RegMem(_));
         let uses_8bit = self.locations().any(find_8bit_registers);
         fmtln!(f, "let uses_8bit = {uses_8bit};");
-        fmtln!(f, "let w_bit = {};", rex.w);
+        fmtln!(f, "let w_bit = {};", rex.w.as_bool());
         let bits = "w_bit, uses_8bit";
 
         let style = match self.operands_by_kind().as_slice() {
@@ -211,7 +218,7 @@ impl dsl::Format {
 
         f.empty_line();
         f.comment("Emit VEX prefix.");
-        fmtln!(f, "let len = {:#03b};", vex.length.bits());
+        fmtln!(f, "let len = {:#03b};", vex.length.vex_bits());
         fmtln!(f, "let pp = {:#04b};", vex.pp.map_or(0b00, |pp| pp.bits()));
         fmtln!(f, "let mmmmm = {:#07b};", vex.mmmmm.unwrap().bits());
         fmtln!(f, "let w = {};", vex.w.as_bool());
@@ -326,6 +333,36 @@ impl dsl::Format {
         style
     }
 
+    fn generate_evex_prefix(&self, f: &mut Formatter, evex: &dsl::Evex) -> ModRmStyle {
+        use dsl::OperandKind::{Reg, RegMem};
+
+        f.empty_line();
+        f.comment("Emit EVEX prefix.");
+        let ll = evex.length.evex_bits();
+        fmtln!(f, "let ll = {ll:#04b};");
+        fmtln!(f, "let pp = {:#04b};", evex.pp.map_or(0b00, |pp| pp.bits()));
+        fmtln!(f, "let mmm = {:#07b};", evex.mmm.unwrap().bits());
+        fmtln!(f, "let w = {};", evex.w.as_bool());
+        fmtln!(f, "let bcast = false;");
+        let bits = format!("ll, pp, mmm, w, bcast");
+
+        let style = match self.operands_by_kind().as_slice() {
+            [Reg(reg), Reg(vvvv), RegMem(rm)] => {
+                fmtln!(f, "let reg = self.{reg}.enc();");
+                fmtln!(f, "let vvvv = self.{vvvv}.enc();");
+                fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
+                fmtln!(f, "let evex = EvexPrefix::new(reg, vvvv, rm, {bits});");
+                ModRmStyle::RegMem {
+                    reg: ModRmReg::Reg(*reg),
+                    rm: *rm,
+                }
+            }
+            unknown => unimplemented!("unknown pattern: {unknown:?}"),
+        };
+        fmtln!(f, "evex.encode(buf);");
+        style
+    }
+
     fn generate_modrm_byte(&self, f: &mut Formatter, modrm_style: ModRmStyle) {
         let operands = self.operands_by_kind();
         let bytes_at_end = match operands.as_slice() {
@@ -409,6 +446,15 @@ impl dsl::Rex {
 }
 
 impl dsl::Vex {
+    // `buf.put1(...);`
+    fn generate_opcode(&self, f: &mut Formatter) {
+        f.empty_line();
+        f.comment("Emit opcode.");
+        fmtln!(f, "buf.put1(0x{:x});", self.opcode);
+    }
+}
+
+impl dsl::Evex {
     // `buf.put1(...);`
     fn generate_opcode(&self, f: &mut Formatter) {
         f.empty_line();

@@ -214,7 +214,7 @@ impl core::fmt::Display for Format {
 /// assert_eq!(sxq(imm32).to_string(), "imm32[sxq]");
 /// assert_eq!(align(xmm_m128).to_string(), "xmm_m128[align]");
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Operand {
     /// The location of the data: memory, register, immediate.
     pub location: Location,
@@ -293,7 +293,7 @@ impl core::fmt::Display for RegClass {
 }
 
 /// An operand location, as expressed in Intel's _Instruction Set Reference_.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(non_camel_case_types, reason = "makes DSL definitions easier to read")]
 pub enum Location {
     // Fixed registers.

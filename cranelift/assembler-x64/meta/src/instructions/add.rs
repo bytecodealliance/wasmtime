@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Location::*, VexLength::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
+use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*};
+use crate::dsl::{align, evex, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -82,19 +82,20 @@ pub fn list() -> Vec<Inst> {
         inst("paddusw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDD]).r(), _64b | compat | sse2).alt(avx, "vpaddusw_b"),
         inst("phaddw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x01]).r(), _64b | compat | ssse3).alt(avx, "vphaddw_b"),
         inst("phaddd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x02]).r(), _64b | compat | ssse3).alt(avx, "vphaddd_b"),
-        inst("vaddss", fmt("B", [w(xmm1), r(xmm2), r(xmm_m32)]), vex(L128)._f3()._0f().op(0x58), _64b | compat | avx),
-        inst("vaddsd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m64)]), vex(L128)._f2()._0f().op(0x58), _64b | compat | avx),
-        inst("vaddps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._0f().op(0x58), _64b | compat | avx),
-        inst("vaddpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0x58), _64b | compat | avx),
-        inst("vpaddb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xFC), _64b | compat | avx),
-        inst("vpaddw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xFD), _64b | compat | avx),
-        inst("vpaddd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xFE), _64b | compat | avx),
-        inst("vpaddq", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xD4), _64b | compat | avx),
-        inst("vpaddsb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xEC), _64b | compat | avx),
-        inst("vpaddsw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xED), _64b | compat | avx),
-        inst("vpaddusb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xDC), _64b | compat | avx),
-        inst("vpaddusw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xDD), _64b | compat | avx),
-        inst("vphaddw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x01), _64b | compat | avx),
-        inst("vphaddd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x02), _64b | compat | avx),
+        inst("vaddss", fmt("B", [w(xmm1), r(xmm2), r(xmm_m32)]), vex(L128)._f3()._0f().op(0x58).r(), _64b | compat | avx),
+        inst("vaddsd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m64)]), vex(L128)._f2()._0f().op(0x58).r(), _64b | compat | avx),
+        inst("vaddps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._0f().op(0x58).r(), _64b | compat | avx),
+        inst("vaddpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0x58).r(), _64b | compat | avx),
+        inst("vpaddb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xFC).r(), _64b | compat | avx),
+        inst("vpaddw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xFD).r(), _64b | compat | avx),
+        inst("vpaddd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xFE).r(), _64b | compat | avx),
+        inst("vpaddq", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xD4).r(), _64b | compat | avx),
+        inst("vpaddsb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xEC).r(), _64b | compat | avx),
+        inst("vpaddsw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xED).r(), _64b | compat | avx),
+        inst("vpaddusb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xDC).r(), _64b | compat | avx),
+        inst("vpaddusw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xDD).r(), _64b | compat | avx),
+        inst("vphaddw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x01).r(), _64b | compat | avx),
+        inst("vphaddd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x02).r(), _64b | compat | avx),
+        inst("vaddpd", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128)._66()._0f().w1().op(0x58).r(), _64b | compat | avx512vl),
     ]
 }
