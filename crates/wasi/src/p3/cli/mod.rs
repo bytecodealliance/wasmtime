@@ -2,14 +2,13 @@ mod host;
 
 use crate::cli::{IsTerminal, WasiCliCtx, WasiCliImpl, WasiCliView};
 use crate::p3::bindings::cli;
-use std::rc::Rc;
 use std::sync::Arc;
 use tokio::io::{
     AsyncRead, AsyncWrite, Empty, Stderr, Stdin, Stdout, empty, stderr, stdin, stdout,
 };
 use wasmtime::component::{HasData, Linker};
 
-impl Default for WasiCliCtx<Box<dyn InputStream + Send>, Box<dyn OutputStream + Send>> {
+impl Default for WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>> {
     fn default() -> Self {
         Self {
             environment: Vec::default(),
@@ -63,7 +62,7 @@ impl Default for WasiCliCtx<Box<dyn InputStream + Send>, Box<dyn OutputStream + 
 ///
 /// #[derive(Default)]
 /// struct MyState {
-///     cli: WasiCliCtx<Box<dyn InputStream + Send>, Box<dyn OutputStream + Send>>,
+///     cli: WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>>,
 ///     table: ResourceTable,
 /// }
 ///
@@ -72,8 +71,8 @@ impl Default for WasiCliCtx<Box<dyn InputStream + Send>, Box<dyn OutputStream + 
 /// }
 ///
 /// impl WasiCliView for MyState {
-///     type InputStream = Box<dyn InputStream + Send>;
-///     type OutputStream = Box<dyn OutputStream + Send>;
+///     type InputStream = Box<dyn InputStream>;
+///     type OutputStream = Box<dyn OutputStream>;
 ///
 ///     fn cli(&mut self) -> &WasiCliCtx<Self::InputStream, Self::OutputStream> { &self.cli }
 /// }
@@ -134,11 +133,11 @@ impl<T: 'static> HasData for WasiCli<T> {
 pub struct TerminalInput;
 pub struct TerminalOutput;
 
-pub trait InputStream: IsTerminal {
+pub trait InputStream: IsTerminal + Send {
     fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin>;
 }
 
-impl<T: ?Sized + InputStream> InputStream for &T {
+impl<T: ?Sized + InputStream + Sync> InputStream for &T {
     fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
         (**self).reader()
     }
@@ -156,13 +155,7 @@ impl<T: ?Sized + InputStream> InputStream for Box<T> {
     }
 }
 
-impl<T: ?Sized + InputStream> InputStream for Rc<T> {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
-        (**self).reader()
-    }
-}
-
-impl<T: ?Sized + InputStream> InputStream for Arc<T> {
+impl<T: ?Sized + InputStream + Sync> InputStream for Arc<T> {
     fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
         (**self).reader()
     }
@@ -192,11 +185,11 @@ impl InputStream for std::io::Stdin {
     }
 }
 
-pub trait OutputStream: IsTerminal {
+pub trait OutputStream: IsTerminal + Send {
     fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin>;
 }
 
-impl<T: ?Sized + OutputStream> OutputStream for &T {
+impl<T: ?Sized + OutputStream + Sync> OutputStream for &T {
     fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
         (**self).writer()
     }
@@ -214,13 +207,7 @@ impl<T: ?Sized + OutputStream> OutputStream for Box<T> {
     }
 }
 
-impl<T: ?Sized + OutputStream> OutputStream for Rc<T> {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
-        (**self).writer()
-    }
-}
-
-impl<T: ?Sized + OutputStream> OutputStream for Arc<T> {
+impl<T: ?Sized + OutputStream + Sync> OutputStream for Arc<T> {
     fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
         (**self).writer()
     }

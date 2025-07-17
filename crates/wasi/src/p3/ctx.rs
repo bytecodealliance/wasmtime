@@ -36,13 +36,13 @@ use tokio::io::{empty, stderr, stdin, stdout};
 ///
 /// [`Store`]: wasmtime::Store
 pub struct WasiCtxBuilder {
-    common: crate::WasiCtxBuilder<Box<dyn InputStream + Send>, Box<dyn OutputStream + Send>>,
+    common: crate::WasiCtxBuilder<Box<dyn InputStream>, Box<dyn OutputStream>>,
     // TODO: implement filesystem
     preopens: Vec<(Dir, String)>,
     built: bool,
 }
 
-impl Default for crate::WasiCtxBuilder<Box<dyn InputStream + Send>, Box<dyn OutputStream + Send>> {
+impl Default for crate::WasiCtxBuilder<Box<dyn InputStream>, Box<dyn OutputStream>> {
     fn default() -> Self {
         crate::WasiCtxBuilder::new(Box::new(empty()), Box::new(empty()), Box::new(empty()))
     }
@@ -80,19 +80,19 @@ impl WasiCtxBuilder {
     ///
     /// Note that inheriting the process's stdin can also be done through
     /// [`inherit_stdin`](WasiCtxBuilder::inherit_stdin).
-    pub fn stdin(&mut self, stdin: impl InputStream + Send + 'static) -> &mut Self {
+    pub fn stdin(&mut self, stdin: impl InputStream + 'static) -> &mut Self {
         self.common.stdin(Box::new(stdin));
         self
     }
 
     /// Same as [`stdin`](WasiCtxBuilder::stdin), but for stdout.
-    pub fn stdout(&mut self, stdout: impl OutputStream + Send + 'static) -> &mut Self {
+    pub fn stdout(&mut self, stdout: impl OutputStream + 'static) -> &mut Self {
         self.common.stdout(Box::new(stdout));
         self
     }
 
     /// Same as [`stdin`](WasiCtxBuilder::stdin), but for stderr.
-    pub fn stderr(&mut self, stderr: impl OutputStream + Send + 'static) -> &mut Self {
+    pub fn stderr(&mut self, stderr: impl OutputStream + 'static) -> &mut Self {
         self.common.stderr(Box::new(stderr));
         self
     }
@@ -498,7 +498,7 @@ impl WasiCtxBuilder {
 pub struct WasiCtx {
     pub random: WasiRandomCtx,
     pub clocks: WasiClocksCtx,
-    pub cli: WasiCliCtx<Box<dyn InputStream + Send>, Box<dyn OutputStream + Send>>,
+    pub cli: WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>>,
 }
 
 impl WasiCtx {

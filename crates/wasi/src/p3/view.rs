@@ -92,8 +92,8 @@ impl<T: WasiView> WasiView for WasiImpl<T> {
 }
 
 impl<T: WasiView> WasiCliView for WasiImpl<T> {
-    type InputStream = Box<dyn InputStream + Send>;
-    type OutputStream = Box<dyn OutputStream + Send>;
+    type InputStream = Box<dyn InputStream>;
+    type OutputStream = Box<dyn OutputStream>;
 
     fn cli(&mut self) -> &WasiCliCtx<Self::InputStream, Self::OutputStream> {
         &T::ctx(&mut self.0).cli
