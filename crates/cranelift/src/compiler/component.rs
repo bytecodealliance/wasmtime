@@ -1314,7 +1314,7 @@ impl<'a> TrampolineCompiler<'a> {
             };
 
             // memory: *mut VMMemoryDefinition
-            callee_args.push(self.load_memory(vmctx, mem_opts.memory.unwrap()));
+            callee_args.push(self.load_optional_memory(vmctx, mem_opts.memory));
             // realloc: *mut VMFuncRef
             callee_args.push(self.load_realloc(vmctx, mem_opts.realloc));
             // string_encoding: StringEncoding

@@ -2275,8 +2275,9 @@ impl Instance {
 
     /// Write to the specified stream or future from the guest.
     ///
-    /// SAFETY: `memory` and `realloc` must be valid pointers to their
-    /// respective guest entities.
+    /// SAFETY: `memory` and `realloc` must be either be valid pointers to their
+    /// respective guest entities or null if not applicable (e.g. for a future
+    /// or stream with no payload type).
     pub(super) unsafe fn guest_write<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
@@ -2297,7 +2298,7 @@ impl Instance {
         let address = usize::try_from(address).unwrap();
         let count = usize::try_from(count).unwrap();
         // SAFETY: Per this function's contract, `memory` and `realloc` are
-        // valid.
+        // either valid or null.
         let options = unsafe {
             Options::new(
                 store.0.store_opaque().id(),
@@ -2510,8 +2511,9 @@ impl Instance {
 
     /// Read from the specified stream or future from the guest.
     ///
-    /// SAFETY: `memory` and `realloc` must be valid pointers to their
-    /// respective guest entities.
+    /// SAFETY: `memory` and `realloc` must be either be valid pointers to their
+    /// respective guest entities or null if not applicable (e.g. for a future
+    /// or stream with no payload type).
     pub(super) unsafe fn guest_read<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
@@ -2531,7 +2533,7 @@ impl Instance {
 
         let address = usize::try_from(address).unwrap();
         // SAFETY: Per this function's contract, `memory` and `realloc` must be
-        // valid.
+        // valid or null.
         let options = unsafe {
             Options::new(
                 store.0.store_opaque().id(),
