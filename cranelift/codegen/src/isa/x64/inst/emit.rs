@@ -844,7 +844,6 @@ pub(crate) fn emit(
 
             let (prefix, map, w, opcode) = match op {
                 Avx512Opcode::Vcvtudq2ps => (LegacyPrefixes::_F2, OpcodeMap::_0F, false, 0x7a),
-                Avx512Opcode::Vpabsq => (LegacyPrefixes::_66, OpcodeMap::_0F38, true, 0x1f),
                 Avx512Opcode::Vpopcntb => (LegacyPrefixes::_66, OpcodeMap::_0F38, false, 0x54),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };

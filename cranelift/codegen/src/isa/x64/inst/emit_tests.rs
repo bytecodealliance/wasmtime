@@ -258,13 +258,6 @@ fn test_x64_emit() {
     // ========================================================
     // XMM_MOV: Packed Move
 
-    // XmmUnary: moves and unary float ops
-    insns.push((
-        Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpabsq, RegMem::reg(xmm2), w_xmm8),
-        "6272FD081FC2",
-        "vpabsq  %xmm2, %xmm8",
-    ));
-
     insns.push((
         Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vcvtudq2ps, RegMem::reg(xmm2), w_xmm8),
         "62717F087AC2",

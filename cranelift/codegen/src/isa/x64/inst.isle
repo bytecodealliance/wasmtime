@@ -657,7 +657,6 @@
 
 (type Avx512Opcode
       (enum Vcvtudq2ps
-            Vpabsq
             Vpermi2b
             Vpmullq
             Vpopcntb))
@@ -2679,8 +2678,7 @@
 
 ;; Helper for creating `vpabsq` instructions.
 (decl x64_vpabsq (XmmMem) Xmm)
-(rule (x64_vpabsq src)
-      (xmm_unary_rm_r_evex (Avx512Opcode.Vpabsq) src))
+(rule (x64_vpabsq src) (x64_vpabsq_c src))
 
 ;; Helper for creating `vpopcntb` instructions.
 (decl x64_vpopcntb (XmmMem) Xmm)
