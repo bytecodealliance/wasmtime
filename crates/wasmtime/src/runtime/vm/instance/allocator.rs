@@ -122,7 +122,7 @@ impl StorePtr {
     ///
     /// Safety: must not be used outside the original lifetime of the borrow.
     pub(crate) unsafe fn get(&mut self) -> Option<&mut dyn VMStore> {
-        let ptr = self.0?.as_mut();
+        let ptr = unsafe { self.0?.as_mut() };
         Some(ptr)
     }
 }
@@ -432,14 +432,21 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         let mut tables = PrimaryMap::with_capacity(num_defined_tables);
 
         match (|| {
-            self.allocate_memories(&mut request, &mut memories)?;
-            self.allocate_tables(&mut request, &mut tables)?;
+            // SAFETY: validation of tables/memories is a contract of this
+            // function.
+            unsafe {
+                self.allocate_memories(&mut request, &mut memories)?;
+                self.allocate_tables(&mut request, &mut tables)?;
+            }
             Ok(())
         })() {
             Ok(_) => Ok(Instance::new(request, memories, tables, &module.memories)),
             Err(e) => {
-                self.deallocate_memories(&mut memories);
-                self.deallocate_tables(&mut tables);
+                // SAFETY: these were previously allocated by this allocator
+                unsafe {
+                    self.deallocate_memories(&mut memories);
+                    self.deallocate_tables(&mut tables);
+                }
                 self.decrement_core_instance_count();
                 Err(e)
             }
@@ -455,8 +462,13 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
     ///
     /// The instance must have previously been allocated by `Self::allocate`.
     unsafe fn deallocate_module(&self, handle: &mut InstanceHandle) {
-        self.deallocate_memories(handle.get_mut().memories_mut());
-        self.deallocate_tables(handle.get_mut().tables_mut());
+        // SAFETY: the contract of `deallocate_*` is itself a contract of this
+        // function, that the memories/tables were previously allocated from
+        // here.
+        unsafe {
+            self.deallocate_memories(handle.get_mut().memories_mut());
+            self.deallocate_tables(handle.get_mut().tables_mut());
+        }
 
         self.decrement_core_instance_count();
     }
@@ -484,12 +496,11 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
                 .defined_memory_index(memory_index)
                 .expect("should be a defined memory since we skipped imported ones");
 
-            memories.push(self.allocate_memory(
-                request,
-                ty,
-                request.tunables,
-                Some(memory_index),
-            )?);
+            // SAFETY: validation of the memory from this allocator is itself a
+            // contract of this function.
+            let memory =
+                unsafe { self.allocate_memory(request, ty, request.tunables, Some(memory_index))? };
+            memories.push(memory);
         }
 
         Ok(())
@@ -510,7 +521,13 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
             // about leaking subsequent memories if the first memory failed to
             // deallocate. If deallocating memory ever becomes fallible, we will
             // need to be careful here!
-            self.deallocate_memory(Some(memory_index), allocation_index, memory);
+            //
+            // SAFETY: the unsafe contract here is the same as the unsafe
+            // contract of this function, that the memories were previously
+            // allocated by this allocator.
+            unsafe {
+                self.deallocate_memory(Some(memory_index), allocation_index, memory);
+            }
         }
     }
 
@@ -537,7 +554,11 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
                 .defined_table_index(index)
                 .expect("should be a defined table since we skipped imported ones");
 
-            tables.push(self.allocate_table(request, table, request.tunables, def_index)?);
+            // SAFETY: the contract here is that the table has been validated by
+            // this allocator which is a contract of this function itself.
+            let table =
+                unsafe { self.allocate_table(request, table, request.tunables, def_index)? };
+            tables.push(table);
         }
 
         Ok(())
@@ -554,7 +575,11 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         tables: &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) {
         for (table_index, (allocation_index, table)) in mem::take(tables) {
-            self.deallocate_table(table_index, allocation_index, table);
+            // SAFETY: the tables here were allocated from this allocator per
+            // the contract on this function itself.
+            unsafe {
+                self.deallocate_table(table_index, allocation_index, table);
+            }
         }
     }
 }
