@@ -298,7 +298,7 @@ fn test_x64_emit() {
             temp: w_r11.map(Gpr::unwrap_new),
             dst_old: w_rax.map(Gpr::unwrap_new),
         },
-        "490FB6014989C34D0BDAF0450FB0190F85EFFFFFFF",
+        "490FB6014989C34D0BDAF0450FB01975F3",
         "atomically { 8_bits_at_[%r9] Or= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }",
     ));
     insns.push((
@@ -310,7 +310,7 @@ fn test_x64_emit() {
             temp: w_r11.map(Gpr::unwrap_new),
             dst_old: w_rax.map(Gpr::unwrap_new)
         },
-        "490FB7014989C34D23DAF066450FB1190F85EEFFFFFF",
+        "490FB7014989C34D23DAF066450FB11975F2",
         "atomically { 16_bits_at_[%r9] And= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
@@ -322,7 +322,7 @@ fn test_x64_emit() {
             temp: w_r11.map(Gpr::unwrap_new),
             dst_old: w_rax.map(Gpr::unwrap_new)
         },
-        "418B014989C34D23DA49F7D3F0450FB1190F85ECFFFFFF",
+        "418B014989C34D23DA49F7D3F0450FB11975F0",
         "atomically { 32_bits_at_[%r9] Nand= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
@@ -334,7 +334,7 @@ fn test_x64_emit() {
             temp: w_r11.map(Gpr::unwrap_new),
             dst_old: w_rax.map(Gpr::unwrap_new)
         },
-        "418B014989C34539DA4D0F46DAF0450FB1190F85EBFFFFFF",
+        "418B014989C34539DA4D0F46DAF0450FB11975EF",
         "atomically { 32_bits_at_[%r9] Umin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
@@ -346,7 +346,7 @@ fn test_x64_emit() {
             temp: w_r11.map(Gpr::unwrap_new),
             dst_old: w_rax.map(Gpr::unwrap_new)
         },
-        "498B014989C34D39DA4D0F4DDAF04D0FB1190F85EBFFFFFF",
+        "498B014989C34D39DA4D0F4DDAF04D0FB11975EF",
         "atomically { 64_bits_at_[%r9] Smax= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
 
@@ -362,7 +362,7 @@ fn test_x64_emit() {
             dst_old_low: w_rax.map(Gpr::unwrap_new),
             dst_old_high: w_rdx.map(Gpr::unwrap_new),
         },
-        "498B01498B51084889C34889D1490BDA490BCBF0490FC7090F85E9FFFFFF",
+        "498B01498B51084889C34889D1490BDA490BCBF0490FC70975ED",
         "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Or %r11:%r10; 0(%r9) = %rcx:%rbx }",
     ));
     insns.push((
@@ -376,7 +376,7 @@ fn test_x64_emit() {
             dst_old_low: w_rax.map(Gpr::unwrap_new),
             dst_old_high: w_rdx.map(Gpr::unwrap_new),
         },
-        "498B01498B51084889C34889D14923DA4923CBF0490FC7090F85E9FFFFFF",
+        "498B01498B51084889C34889D14923DA4923CBF0490FC70975ED",
         "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax And %r11:%r10; 0(%r9) = %rcx:%rbx }"
     ));
     insns.push((
@@ -390,7 +390,7 @@ fn test_x64_emit() {
             dst_old_low: w_rax.map(Gpr::unwrap_new),
             dst_old_high: w_rdx.map(Gpr::unwrap_new),
         },
-        "498B01498B51084889C34889D14C39D3491BCB4889D1490F43DA490F43CBF0490FC7090F85DEFFFFFF",
+        "498B01498B51084889C34889D14C39D3491BCB4889D1490F43DA490F43CBF0490FC70975E2",
         "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Umin %r11:%r10; 0(%r9) = %rcx:%rbx }"
     ));
     insns.push((
@@ -404,7 +404,7 @@ fn test_x64_emit() {
             dst_old_low: w_rax.map(Gpr::unwrap_new),
             dst_old_high: w_rdx.map(Gpr::unwrap_new),
         },
-        "498B01498B51084889C34889D14903DA4913CBF0490FC7090F85E9FFFFFF",
+        "498B01498B51084889C34889D14903DA4913CBF0490FC70975ED",
         "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Add %r11:%r10; 0(%r9) = %rcx:%rbx }"
     ));
     insns.push((
@@ -415,7 +415,7 @@ fn test_x64_emit() {
             dst_old_low: w_rax.map(Gpr::unwrap_new),
             dst_old_high: w_rdx.map(Gpr::unwrap_new),
         },
-        "498B01498B5108F0490FC7090F85F5FFFFFF",
+        "498B01498B5108F0490FC70975F9",
         "atomically { %rdx:%rax = 0(%r9); 0(%r9) = %rcx:%rbx }",
     ));
 
