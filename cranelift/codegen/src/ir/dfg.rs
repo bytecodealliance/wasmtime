@@ -333,6 +333,16 @@ impl<'a> Iterator for Values<'a> {
             .find(|kv| valid_valuedata(*kv.1))
             .map(|kv| kv.0)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl ExactSizeIterator for Values<'_> {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
 }
 
 /// Handling values.
