@@ -38,11 +38,7 @@ use cranelift_codegen::{
     ir::{MemFlags, RelSourceLoc, SourceLoc},
     isa::{
         unwind::UnwindInst,
-        x64::{
-            AtomicRmwSeqOp,
-            args::{Avx512Opcode, CC},
-            settings as x64_settings,
-        },
+        x64::{AtomicRmwSeqOp, args::CC, settings as x64_settings},
     },
     settings,
 };
@@ -2188,8 +2184,7 @@ impl Masm for MacroAssembler {
         let lhs = context.pop_to_reg(self, None)?;
 
         let mul_i64x2_avx512 = |this: &mut Self| {
-            this.asm
-                .xmm_rm_rvex3(Avx512Opcode::Vpmullq, lhs.reg, rhs.reg, writable!(lhs.reg));
+            this.asm.vpmullq(lhs.reg, rhs.reg, writable!(lhs.reg));
         };
 
         let mul_i64x2_fallback = |this: &mut Self,

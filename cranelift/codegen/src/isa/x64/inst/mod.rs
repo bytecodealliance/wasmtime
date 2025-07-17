@@ -111,9 +111,7 @@ impl Inst {
                 smallvec![InstructionSet::CMPXCHG16b]
             }
 
-            Inst::XmmUnaryRmREvex { op, .. }
-            | Inst::XmmRmREvex { op, .. }
-            | Inst::XmmRmREvex3 { op, .. } => op.available_from(),
+            Inst::XmmUnaryRmREvex { op, .. } | Inst::XmmRmREvex3 { op, .. } => op.available_from(),
 
             Inst::External { inst } => {
                 use cranelift_assembler_x64::Feature::*;
@@ -135,6 +133,7 @@ impl Inst {
                         avx2 => features.push(InstructionSet::AVX2),
                         avx512f => features.push(InstructionSet::AVX512F),
                         avx512vl => features.push(InstructionSet::AVX512VL),
+                        avx512dq => features.push(InstructionSet::AVX512DQ),
                         avx512bitalg => features.push(InstructionSet::AVX512BITALG),
                         cmpxchg16b => features.push(InstructionSet::CMPXCHG16b),
                         fma => features.push(InstructionSet::FMA),
@@ -455,20 +454,6 @@ impl PrettyPrint for Inst {
                 let src = src.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} {src}, {dst}")
-            }
-
-            Inst::XmmRmREvex {
-                op,
-                src1,
-                src2,
-                dst,
-                ..
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let src2 = src2.pretty_print(8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src2}, {src1}, {dst}")
             }
 
             Inst::XmmRmREvex3 {
@@ -952,18 +937,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::XmmUnaryRmREvex { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
-        }
-        Inst::XmmRmREvex {
-            op,
-            src1,
-            src2,
-            dst,
-            ..
-        } => {
-            assert_ne!(*op, Avx512Opcode::Vpermi2b);
-            collector.reg_use(src1);
-            src2.get_operands(collector);
-            collector.reg_def(dst);
         }
         Inst::XmmRmREvex3 {
             op,

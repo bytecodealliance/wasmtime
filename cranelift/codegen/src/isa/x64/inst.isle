@@ -61,13 +61,6 @@
        ;; Floating-point operations.
 
        ;; XMM (scalar or vector) binary op that relies on the EVEX
-       ;; prefix. Takes two inputs.
-       (XmmRmREvex (op Avx512Opcode)
-                   (src1 Xmm)
-                   (src2 XmmMem)
-                   (dst WritableXmm))
-
-       ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes three inputs.
        (XmmRmREvex3 (op Avx512Opcode)
                     (src1 Xmm)
@@ -657,8 +650,7 @@
 
 (type Avx512Opcode
       (enum Vcvtudq2ps
-            Vpermi2b
-            Vpmullq))
+            Vpermi2b))
 
 (type FcmpImm extern
       (enum Equal
@@ -1129,16 +1121,6 @@
 (rule (xmm_unary_rm_r_evex op src)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUnaryRmREvex op src dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmREvex` instructions.
-(decl xmm_rm_r_evex (Avx512Opcode Xmm XmmMem) Xmm)
-(rule (xmm_rm_r_evex op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmREvex op
-                                            src1
-                                            src2
-                                            dst))))
         dst))
 
 ;; Helper for creating `xmm_min_max_seq` pseudo-instructions.
@@ -2687,10 +2669,7 @@
 ;;
 ;; Requires AVX-512 vl and dq.
 (decl x64_vpmullq (Xmm XmmMem) Xmm)
-(rule (x64_vpmullq src1 src2)
-      (xmm_rm_r_evex (Avx512Opcode.Vpmullq)
-                     src1
-                     src2))
+(rule (x64_vpmullq src1 src2) (x64_vpmullq_c src1 src2))
 
 ;; Helper for creating `vpermi2b` instructions.
 ;;

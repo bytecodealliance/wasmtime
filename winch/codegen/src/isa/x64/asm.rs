@@ -18,9 +18,8 @@ use cranelift_codegen::{
         x64::{
             AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
             args::{
-                self, Amode, Avx512Opcode, CC, ExtMode, FromWritableReg, Gpr, GprMem, GprMemImm,
-                RegMem, RegMemImm, SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem,
-                XmmMemImm,
+                self, Amode, CC, ExtMode, FromWritableReg, Gpr, GprMem, GprMemImm, RegMem,
+                RegMemImm, SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemImm,
             },
             external::{PairedGpr, PairedXmm},
             settings as x64_settings,
@@ -2311,21 +2310,10 @@ impl Assembler {
         self.emit(Inst::External { inst });
     }
 
-    pub(crate) fn xmm_rm_rvex3(
-        &mut self,
-        op: Avx512Opcode,
-        src1: Reg,
-        src2: Reg,
-        dst: WritableReg,
-    ) {
-        self.emit(Inst::XmmRmREvex3 {
-            op,
-            // `src1` reuses `dst`, and is ignored in emission
-            src1: dst.to_reg().into(),
-            src2: src1.into(),
-            src3: src2.into(),
-            dst: dst.map(Into::into),
-        });
+    pub(crate) fn vpmullq(&mut self, src1: Reg, src2: Reg, dst: WritableReg) {
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vpmullq_c::new(dst, src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Creates a mask made up of the most significant bit of each byte of

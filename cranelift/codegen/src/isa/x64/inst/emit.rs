@@ -858,13 +858,7 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
-        Inst::XmmRmREvex {
-            op,
-            src1,
-            src2,
-            dst,
-        }
-        | Inst::XmmRmREvex3 {
+        Inst::XmmRmREvex3 {
             op,
             src1: _, // `dst` reuses `src1`.
             src2: src1,
@@ -891,7 +885,6 @@ pub(crate) fn emit(
 
             let (w, opcode, map) = match op {
                 Avx512Opcode::Vpermi2b => (false, 0x75, OpcodeMap::_0F38),
-                Avx512Opcode::Vpmullq => (true, 0x40, OpcodeMap::_0F38),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             EvexInstruction::new()

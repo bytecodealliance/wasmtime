@@ -30,19 +30,6 @@ impl Inst {
         }
     }
 
-    fn xmm_rm_r_evex(op: Avx512Opcode, src1: Reg, src2: RegMem, dst: Writable<Reg>) -> Self {
-        debug_assert_ne!(op, Avx512Opcode::Vpermi2b);
-        src2.assert_regclass_is(RegClass::Float);
-        debug_assert!(src1.class() == RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmRmREvex {
-            op,
-            src1: Xmm::unwrap_new(src1),
-            src2: XmmMem::unwrap_new(src2),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     fn xmm_rm_r_evex3(
         op: Avx512Opcode,
         src1: Reg,
@@ -224,12 +211,6 @@ fn test_x64_emit() {
 
     // ========================================================
     // XMM_RM_R: Integer Packed
-
-    insns.push((
-        Inst::xmm_rm_r_evex(Avx512Opcode::Vpmullq, xmm10, RegMem::reg(xmm14), w_xmm1),
-        "62D2AD0840CE",
-        "vpmullq %xmm14, %xmm10, %xmm1",
-    ));
 
     insns.push((
         Inst::xmm_rm_r_evex3(
