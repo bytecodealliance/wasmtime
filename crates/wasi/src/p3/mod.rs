@@ -18,10 +18,8 @@ mod view;
 
 use wasmtime::component::Linker;
 
-use crate::clocks::WasiClocksImpl;
 use crate::p3::bindings::LinkOptions;
 use crate::p3::cli::WasiCliCtxView;
-use crate::random::WasiRandomImpl;
 
 pub use self::ctx::{WasiCtx, WasiCtxBuilder};
 pub use self::view::{WasiCtxView, WasiView};
@@ -90,8 +88,8 @@ pub fn add_to_linker_with_options<T>(
 where
     T: WasiView + 'static,
 {
-    clocks::add_to_linker_impl(linker, |x| WasiClocksImpl(&mut x.ctx().ctx.clocks))?;
-    random::add_to_linker_impl(linker, |x| WasiRandomImpl(&mut x.ctx().ctx.random))?;
+    clocks::add_to_linker_impl(linker, |x| &mut x.ctx().ctx.clocks)?;
+    random::add_to_linker_impl(linker, |x| &mut x.ctx().ctx.random)?;
     cli::add_to_linker_impl(linker, &options.into(), |x| {
         let WasiCtxView { ctx, table } = x.ctx();
         WasiCliCtxView {

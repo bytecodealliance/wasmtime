@@ -1,8 +1,5 @@
 use cap_rand::{Rng as _, RngCore, SeedableRng as _};
 
-#[repr(transparent)]
-pub struct WasiRandomImpl<T>(pub T);
-
 impl<T: WasiRandomView> WasiRandomView for &mut T {
     fn random(&mut self) -> &mut WasiRandomCtx {
         T::random(self)
@@ -12,12 +9,6 @@ impl<T: WasiRandomView> WasiRandomView for &mut T {
 impl<T: WasiRandomView> WasiRandomView for Box<T> {
     fn random(&mut self) -> &mut WasiRandomCtx {
         T::random(self)
-    }
-}
-
-impl<T: WasiRandomView> WasiRandomView for WasiRandomImpl<T> {
-    fn random(&mut self) -> &mut WasiRandomCtx {
-        self.0.random()
     }
 }
 

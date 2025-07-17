@@ -2,46 +2,37 @@ use cap_rand::Rng;
 use cap_rand::distributions::Standard;
 
 use crate::p3::bindings::random::{insecure, insecure_seed, random};
-use crate::p3::random::{WasiRandomImpl, WasiRandomView};
+use crate::random::WasiRandomCtx;
 
-impl<T> random::Host for WasiRandomImpl<T>
-where
-    T: WasiRandomView,
-{
+impl random::Host for WasiRandomCtx {
     fn get_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>> {
-        Ok((&mut self.random().random)
+        Ok((&mut self.random)
             .sample_iter(Standard)
             .take(len as usize)
             .collect())
     }
 
     fn get_random_u64(&mut self) -> wasmtime::Result<u64> {
-        Ok(self.random().random.sample(Standard))
+        Ok(self.random.sample(Standard))
     }
 }
 
-impl<T> insecure::Host for WasiRandomImpl<T>
-where
-    T: WasiRandomView,
-{
+impl insecure::Host for WasiRandomCtx {
     fn get_insecure_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>> {
-        Ok((&mut self.random().insecure_random)
+        Ok((&mut self.insecure_random)
             .sample_iter(Standard)
             .take(len as usize)
             .collect())
     }
 
     fn get_insecure_random_u64(&mut self) -> wasmtime::Result<u64> {
-        Ok(self.random().insecure_random.sample(Standard))
+        Ok(self.insecure_random.sample(Standard))
     }
 }
 
-impl<T> insecure_seed::Host for WasiRandomImpl<T>
-where
-    T: WasiRandomView,
-{
+impl insecure_seed::Host for WasiRandomCtx {
     fn insecure_seed(&mut self) -> wasmtime::Result<(u64, u64)> {
-        let seed: u128 = self.random().insecure_random_seed;
+        let seed: u128 = self.insecure_random_seed;
         Ok((seed as u64, (seed >> 64) as u64))
     }
 }
