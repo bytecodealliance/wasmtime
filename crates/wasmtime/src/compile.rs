@@ -43,7 +43,9 @@ use wasmtime_environ::{
     StaticModuleIndex,
 };
 
+mod call_graph;
 mod scc;
+mod stratify;
 
 mod code_builder;
 pub use self::code_builder::{CodeBuilder, CodeHint, HashedEngineCompileEnv};
