@@ -10,7 +10,7 @@ use bytes::BytesMut;
 use std::io::Cursor;
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
 use wasmtime::component::{
-    Accessor, AccessorTask, HostStream, Resource, StreamReader, StreamWriter,
+    Accessor, AccessorTask, HasData, HostStream, Resource, StreamReader, StreamWriter,
 };
 
 struct InputTask<T> {
@@ -18,12 +18,12 @@ struct InputTask<T> {
     tx: StreamWriter<Cursor<BytesMut>>,
 }
 
-impl<T, U, V> AccessorTask<T, WasiCli<U>, wasmtime::Result<()>> for InputTask<V>
+impl<T, U, V> AccessorTask<T, U, wasmtime::Result<()>> for InputTask<V>
 where
-    U: 'static,
+    U: HasData,
     V: AsyncRead + Send + Sync + Unpin + 'static,
 {
-    async fn run(mut self, store: &Accessor<T, WasiCli<U>>) -> wasmtime::Result<()> {
+    async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
         let mut buf = BytesMut::with_capacity(8192);
         let mut tx = self.tx;
         loop {
@@ -52,12 +52,12 @@ struct OutputTask<T> {
     tx: T,
 }
 
-impl<T, U, V> AccessorTask<T, WasiCli<U>, wasmtime::Result<()>> for OutputTask<V>
+impl<T, U, V> AccessorTask<T, U, wasmtime::Result<()>> for OutputTask<V>
 where
-    U: 'static,
+    U: HasData,
     V: AsyncWrite + Send + Sync + Unpin + 'static,
 {
-    async fn run(mut self, store: &Accessor<T, WasiCli<U>>) -> wasmtime::Result<()> {
+    async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
         let mut buf = BytesMut::with_capacity(8192);
         let mut rx = self.rx;
         while let (Some(rx_next), buf_next) = rx.read(store, buf).await {
