@@ -1247,19 +1247,17 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
         ];
         let func = instance.get_func(&mut store, "many-param").unwrap();
 
-        let mut results = if concurrent {
+        let mut results = vec![Val::Bool(false)];
+        if concurrent {
             instance
                 .run_concurrent(&mut store, async |store| {
-                    func.call_concurrent(store, input).await
+                    func.call_concurrent(store, &input, &mut results).await
                 })
-                .await??
-                .into_iter()
+                .await??;
         } else {
-            let mut results = vec![Val::Bool(false)];
             func.call_async(&mut store, &input, &mut results).await?;
-            results.into_iter()
         };
-
+        let mut results = results.into_iter();
         let Some(Val::Tuple(results)) = results.next() else {
             panic!()
         };
@@ -1682,18 +1680,17 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
     let actual = if dynamic {
         let func = instance.get_func(&mut store, "many-results").unwrap();
 
-        let mut results = if concurrent {
+        let mut results = vec![Val::Bool(false)];
+        if concurrent {
             instance
                 .run_concurrent(&mut store, async |store| {
-                    func.call_concurrent(store, Vec::new()).await
+                    func.call_concurrent(store, &[], &mut results).await
                 })
-                .await??
-                .into_iter()
+                .await??;
         } else {
-            let mut results = vec![Val::Bool(false)];
             func.call_async(&mut store, &[], &mut results).await?;
-            results.into_iter()
         };
+        let mut results = results.into_iter();
 
         let Some(Val::Tuple(results)) = results.next() else {
             panic!()
