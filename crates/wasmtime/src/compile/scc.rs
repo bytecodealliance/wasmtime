@@ -13,7 +13,7 @@
 
 #![cfg_attr(not(test), expect(dead_code, reason = "used in upcoming PRs"))]
 
-use crate::prelude::*;
+use super::*;
 use std::{
     collections::BTreeSet,
     fmt::{self, Debug},
@@ -152,21 +152,22 @@ where
                     // from the SCC stack and push them into our result data
                     // structures.
                     if indices[node] == lowlinks[node] {
-                        let start = component_nodes.len();
-                        let start = u32::try_from(start).unwrap();
-                        loop {
-                            let v = stack.pop().unwrap();
-                            let was_on_stack = on_stack.remove(v);
-                            debug_assert!(was_on_stack);
-                            component_nodes.push(v);
-                            if v == node {
-                                break;
-                            }
-                        }
-                        let end = component_nodes.len();
-                        let end = u32::try_from(end).unwrap();
-                        debug_assert!(end > start);
-                        components.push(start..end);
+                        let mut done = false;
+                        components.push(extend_with_range(
+                            &mut component_nodes,
+                            std::iter::from_fn(|| {
+                                if done {
+                                    return None;
+                                }
+                                let v = stack.pop().unwrap();
+                                let was_on_stack = on_stack.remove(v);
+                                debug_assert!(was_on_stack);
+                                if v == node {
+                                    done = true;
+                                }
+                                Some(v)
+                            }),
+                        ));
                     }
                 }
             }
@@ -344,15 +345,13 @@ where
             SecondaryMap::<Scc, Range<u32>>::with_capacity(self.components.len());
         let mut reverse_edge_elems = Vec::with_capacity(reverse_edge_set.len());
         for (to_node, from_node) in reverse_edge_set {
-            let start = u32::try_from(reverse_edge_elems.len()).unwrap();
-            reverse_edge_elems.push(from_node);
-            let end = u32::try_from(reverse_edge_elems.len()).unwrap();
+            let range = extend_with_range(&mut reverse_edge_elems, Some(from_node));
 
             if reverse_edges[to_node] == Range::default() {
-                reverse_edges[to_node] = start..end;
+                reverse_edges[to_node] = range;
             } else {
-                debug_assert_eq!(reverse_edges[to_node].end, start);
-                reverse_edges[to_node].end = end;
+                debug_assert_eq!(reverse_edges[to_node].end, range.start);
+                reverse_edges[to_node].end = range.end;
             }
         }
 

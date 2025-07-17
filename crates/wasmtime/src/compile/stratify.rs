@@ -150,17 +150,12 @@ impl<Node> Strata<Node> {
                 }
             }
 
-            let start = layer_elems.len();
-            let start = u32::try_from(start).unwrap();
-            layer_elems.extend(
+            layers.push(extend_with_range(
+                &mut layer_elems,
                 current_layer
                     .drain(..)
                     .flat_map(|scc| components.nodes(scc).iter().copied()),
-            );
-            let end = layer_elems.len();
-            let end = u32::try_from(end).unwrap();
-
-            layers.push(start..end);
+            ));
 
             std::mem::swap(&mut next_layer, &mut current_layer);
         }

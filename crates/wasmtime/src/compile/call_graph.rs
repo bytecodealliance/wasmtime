@@ -1,4 +1,14 @@
-//! Construction of the call-graph.
+//! Construction of the call-graph, for the purposes of inlining.
+//!
+//! These call graphs are not necessarily complete or accurate, and Wasmtime's
+//! soundness does not rely on those properties. First off, we do not attempt to
+//! understand indirect calls, which at their worst must force any call analysis
+//! give up and say "the callee could be absolutely any function". More
+//! interestingly, these call graphs are only used for scheduling bottom-up
+//! inlining, so the worst that inaccurate information can do is cause us to
+//! miss inlining opportunities or lose potential parallelism in our
+//! schedule. For best results, however, every direct call that is potentially
+//! inlinable should be reported when constructing these call graphs.
 
 #![cfg_attr(not(test), expect(dead_code, reason = "used in upcoming PRs"))]
 
@@ -72,17 +82,11 @@ where
 
         let mut calls = vec![];
         for caller in funcs {
-            calls.clear();
+            debug_assert!(calls.is_empty());
             get_calls(caller, &mut calls)?;
 
-            let start = edge_elems.len();
-            let start = u32::try_from(start).unwrap();
-            edge_elems.extend_from_slice(&calls);
-            let end = edge_elems.len();
-            let end = u32::try_from(end).unwrap();
-
             debug_assert_eq!(edges[caller], Range::default());
-            edges[caller] = start..end;
+            edges[caller] = extend_with_range(&mut edge_elems, calls.drain(..));
         }
 
         Ok(CallGraph { edges, edge_elems })

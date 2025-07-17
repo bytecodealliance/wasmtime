@@ -31,6 +31,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, btree_map},
     mem,
+    ops::Range,
 };
 
 use wasmtime_environ::CompiledFunctionBody;
@@ -1018,4 +1019,18 @@ impl Artifacts {
         assert!(self.trampolines.is_empty());
         self.modules.into_iter().next().unwrap().1
     }
+}
+
+/// Extend `dest` with `items` and return the range of indices in `dest` where
+/// they ended up.
+fn extend_with_range<T>(dest: &mut Vec<T>, items: impl IntoIterator<Item = T>) -> Range<u32> {
+    let start = dest.len();
+    let start = u32::try_from(start).unwrap();
+
+    dest.extend(items);
+
+    let end = dest.len();
+    let end = u32::try_from(end).unwrap();
+
+    start..end
 }
