@@ -232,12 +232,6 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r_evex(Avx512Opcode::Vpsraq, xmm10, RegMem::reg(xmm14), w_xmm1),
-        "62D1AD08E2CE",
-        "vpsraq  %xmm14, %xmm10, %xmm1",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r_evex3(
             Avx512Opcode::Vpermi2b,
             xmm1,

@@ -67,12 +67,6 @@
                    (src2 XmmMem)
                    (dst WritableXmm))
 
-       ;; Same as `XmmRmREvex` but for unary operations.
-       (XmmUnaryRmRImmEvex (op Avx512Opcode)
-                           (src XmmMem)
-                           (dst WritableXmm)
-                           (imm u8))
-
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes three inputs.
        (XmmRmREvex3 (op Avx512Opcode)
@@ -666,9 +660,7 @@
             Vpabsq
             Vpermi2b
             Vpmullq
-            Vpopcntb
-            Vpsraq
-            VpsraqImm))
+            Vpopcntb))
 
 (type FcmpImm extern
       (enum Equal
@@ -1149,13 +1141,6 @@
                                             src1
                                             src2
                                             dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmUnaryRmRImmEvex` instructions.
-(decl xmm_unary_rm_r_imm_evex (Avx512Opcode XmmMem u8) Xmm)
-(rule (xmm_unary_rm_r_imm_evex op src imm)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmRImmEvex op src dst imm))))
         dst))
 
 ;; Helper for creating `xmm_min_max_seq` pseudo-instructions.
@@ -2759,13 +2744,11 @@
 
 ;; Helper for creating `vpsraq` instructions.
 (decl x64_vpsraq (Xmm XmmMem) Xmm)
-(rule (x64_vpsraq src1 src2)
-      (xmm_rm_r_evex (Avx512Opcode.Vpsraq) src1 src2))
+(rule (x64_vpsraq src1 src2) (x64_vpsraq_g src1 src2))
 
 ;; Helper for creating `vpsraq` instructions.
 (decl x64_vpsraq_imm (XmmMem u8) Xmm)
-(rule (x64_vpsraq_imm src imm)
-      (xmm_unary_rm_r_imm_evex (Avx512Opcode.VpsraqImm) src imm))
+(rule (x64_vpsraq_imm src imm) (x64_vpsraq_f src imm))
 
 ;; Helper for creating `pextr*` instructions.
 (decl x64_pextrb (Xmm u8) Gpr)

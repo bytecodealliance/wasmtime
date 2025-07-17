@@ -113,8 +113,7 @@ impl Inst {
 
             Inst::XmmUnaryRmREvex { op, .. }
             | Inst::XmmRmREvex { op, .. }
-            | Inst::XmmRmREvex3 { op, .. }
-            | Inst::XmmUnaryRmRImmEvex { op, .. } => op.available_from(),
+            | Inst::XmmRmREvex3 { op, .. } => op.available_from(),
 
             Inst::External { inst } => {
                 use cranelift_assembler_x64::Feature::*;
@@ -455,15 +454,6 @@ impl PrettyPrint for Inst {
                 let src = src.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} {src}, {dst}")
-            }
-
-            Inst::XmmUnaryRmRImmEvex {
-                op, src, dst, imm, ..
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src = src.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} ${imm}, {src}, {dst}")
             }
 
             Inst::XmmRmREvex {
@@ -958,7 +948,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_fixed_use(dividend, regs::rax());
             collector.reg_fixed_def(dst, regs::rax());
         }
-        Inst::XmmUnaryRmREvex { src, dst, .. } | Inst::XmmUnaryRmRImmEvex { src, dst, .. } => {
+        Inst::XmmUnaryRmREvex { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
         }

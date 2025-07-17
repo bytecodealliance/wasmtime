@@ -80,9 +80,6 @@ pub(crate) fn check(
         // verified. The effect of this will be spurious PCC failures when these instructions are
         // involved.
         Inst::XmmRmREvex { dst, ref src2, .. }
-        | Inst::XmmUnaryRmRImmEvex {
-            dst, src: ref src2, ..
-        }
         | Inst::XmmUnaryRmREvex {
             dst, src: ref src2, ..
         }
