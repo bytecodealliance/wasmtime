@@ -6,6 +6,7 @@ use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::isa::x64::inst::Inst;
 use crate::isa::x64::inst::regs::pretty_print_reg;
+use crate::isa::x64::settings as x64_settings;
 use crate::machinst::*;
 use std::fmt;
 use std::string::String;
