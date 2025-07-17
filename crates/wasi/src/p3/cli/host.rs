@@ -168,7 +168,10 @@ where
                 .stream::<_, _, BytesMut>(&mut view)
                 .context("failed to create stream")?;
             let stdin = view.get().cli().stdin.reader();
-            view.spawn(InputTask { rx: stdin, tx });
+            view.spawn(InputTask {
+                rx: Box::into_pin(stdin),
+                tx,
+            });
             Ok(rx.into())
         })
     }
@@ -188,7 +191,10 @@ where
         store.with(|mut view| {
             let stdout = data.into_reader(&mut view);
             let tx = view.get().cli().stdout.writer();
-            view.spawn(OutputTask { rx: stdout, tx });
+            view.spawn(OutputTask {
+                rx: stdout,
+                tx: Box::into_pin(tx),
+            });
             Ok(())
         })
     }
@@ -208,7 +214,10 @@ where
         store.with(|mut view| {
             let stderr = data.into_reader(&mut view);
             let tx = view.get().cli().stderr.writer();
-            view.spawn(OutputTask { rx: stderr, tx });
+            view.spawn(OutputTask {
+                rx: stderr,
+                tx: Box::into_pin(tx),
+            });
             Ok(())
         })
     }

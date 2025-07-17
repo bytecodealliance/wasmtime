@@ -134,117 +134,117 @@ pub struct TerminalInput;
 pub struct TerminalOutput;
 
 pub trait InputStream: IsTerminal + Send {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin>;
+    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync>;
 }
 
 impl<T: ?Sized + InputStream + Sync> InputStream for &T {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
+    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
         (**self).reader()
     }
 }
 
 impl<T: ?Sized + InputStream> InputStream for &mut T {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
+    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
         (**self).reader()
     }
 }
 
 impl<T: ?Sized + InputStream> InputStream for Box<T> {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
+    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
         (**self).reader()
     }
 }
 
 impl<T: ?Sized + InputStream + Sync> InputStream for Arc<T> {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
+    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
         (**self).reader()
     }
 }
 
 impl InputStream for Empty {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
+    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
         Box::new(empty())
     }
 }
 
 impl InputStream for std::io::Empty {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
+    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
         Box::new(empty())
     }
 }
 
 impl InputStream for Stdin {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
+    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
         Box::new(stdin())
     }
 }
 
 impl InputStream for std::io::Stdin {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync + Unpin> {
+    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
         Box::new(stdin())
     }
 }
 
 pub trait OutputStream: IsTerminal + Send {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin>;
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync>;
 }
 
 impl<T: ?Sized + OutputStream + Sync> OutputStream for &T {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         (**self).writer()
     }
 }
 
 impl<T: ?Sized + OutputStream> OutputStream for &mut T {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         (**self).writer()
     }
 }
 
 impl<T: ?Sized + OutputStream> OutputStream for Box<T> {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         (**self).writer()
     }
 }
 
 impl<T: ?Sized + OutputStream + Sync> OutputStream for Arc<T> {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         (**self).writer()
     }
 }
 
 impl OutputStream for Empty {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         Box::new(empty())
     }
 }
 
 impl OutputStream for std::io::Empty {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         Box::new(empty())
     }
 }
 
 impl OutputStream for Stdout {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         Box::new(stdout())
     }
 }
 
 impl OutputStream for std::io::Stdout {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         Box::new(stdout())
     }
 }
 
 impl OutputStream for Stderr {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         Box::new(stderr())
     }
 }
 
 impl OutputStream for std::io::Stderr {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync + Unpin> {
+    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         Box::new(stderr())
     }
 }
