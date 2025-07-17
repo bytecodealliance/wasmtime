@@ -12,7 +12,7 @@ use crate::{CodegenError, CodegenResult, settings};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
 use core::slice;
-use cranelift_assembler_x64::{self as asm, Features};
+use cranelift_assembler_x64 as asm;
 use cranelift_entity::{Signed, Unsigned};
 use smallvec::{SmallVec, smallvec};
 use std::fmt::{self, Write};
@@ -68,6 +68,8 @@ impl Inst {
     /// instructions, this assumes a baseline feature set (i.e., 64-bit AND SSE2
     /// and below).
     fn is_available(&self, emit_info: &EmitInfo) -> bool {
+        use asm::AvailableFeatures;
+
         match self {
             // These instructions are part of SSE2, which is a basic requirement
             // in Cranelift, and don't have to be checked.
@@ -1448,7 +1450,7 @@ impl EmitInfo {
     }
 }
 
-impl Features for &EmitInfo {
+impl asm::AvailableFeatures for &EmitInfo {
     fn _64b(&self) -> bool {
         // Currently, this x64 backend always assumes 64-bit mode.
         true

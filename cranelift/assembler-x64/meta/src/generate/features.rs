@@ -10,7 +10,7 @@ impl dsl::Feature {
     /// query if instructions are available on a target CPU.
     pub(crate) fn generate_trait(f: &mut Formatter) {
         fmtln!(f, "#[doc(hidden)]");
-        f.add_block("pub trait Features", |f| {
+        f.add_block("pub trait AvailableFeatures", |f| {
             for feature in dsl::ALL_FEATURES {
                 fmtln!(f, "fn {feature}(&self) -> bool;");
             }

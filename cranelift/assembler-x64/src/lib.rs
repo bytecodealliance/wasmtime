@@ -73,7 +73,7 @@ pub use inst::Inst;
 /// [`Inst::is_available`] and [`for_each_feature`].
 #[doc(inline)]
 // Like `Inst` above, a convenient re-export.
-pub use inst::Features;
+pub use inst::AvailableFeatures;
 
 pub use api::{
     AsReg, CodeSink, Constant, KnownOffset, Label, RegisterVisitor, Registers, TrapCode,

@@ -22,7 +22,7 @@ include!(concat!(env!("OUT_DIR"), "/assembler.rs"));
 /// crate. It makes it easier to generate code based on the available features.
 ///
 /// ```
-/// # use cranelift_assembler_x64::{Features, Fixed, for_each_feature, Imm8, inst, Registers};
+/// # use cranelift_assembler_x64::{AvailableFeatures, Fixed, for_each_feature, Imm8, inst, Registers};
 /// // Tell the assembler the type of registers we're using; we can always
 /// // encode a HW register as a `u8` (e.g., `eax = 0`).
 /// pub struct Regs;
@@ -38,14 +38,14 @@ include!(concat!(env!("OUT_DIR"), "/assembler.rs"));
 /// // Define a target that says all CPU features are available.
 /// macro_rules! return_true { ($($f:ident)+) => { $(fn $f(&self) -> bool { true })+ }; }
 /// struct AllFeatures;
-/// impl Features for AllFeatures {
+/// impl AvailableFeatures for AllFeatures {
 ///     for_each_feature!(return_true);
 /// }
 ///
 /// // Define a target that says no CPU features are available.
 /// macro_rules! return_false { ($($f:ident)+) => { $(fn $f(&self) -> bool { false })+ }; }
 /// struct NoFeatures;
-/// impl Features for NoFeatures {
+/// impl AvailableFeatures for NoFeatures {
 ///     for_each_feature!(return_false);
 /// }
 ///

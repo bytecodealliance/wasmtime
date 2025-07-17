@@ -226,7 +226,7 @@ impl dsl::Inst {
     fn generate_features_function(&self, f: &mut Formatter) {
         fmtln!(f, "#[must_use]");
         f.add_block(
-            "pub fn is_available(&self, features: &impl Features) -> bool",
+            "pub fn is_available(&self, features: &impl AvailableFeatures) -> bool",
             |f| {
                 let expr = self.features.generate_boolean_expr("features");
                 fmtln!(f, "{expr}");
