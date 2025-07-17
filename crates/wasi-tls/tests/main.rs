@@ -27,6 +27,7 @@ async fn run_test(path: &str) -> Result<()> {
     let ctx = Ctx {
         table: ResourceTable::new(),
         wasi_ctx: WasiCtxBuilder::new()
+            .inherit_stdout()
             .inherit_stderr()
             .inherit_network()
             .allow_ip_name_lookup(true)
