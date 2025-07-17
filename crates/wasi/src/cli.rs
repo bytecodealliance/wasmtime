@@ -1,53 +1,6 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use wasmtime::component::ResourceTable;
-
-use crate::ResourceView;
-
-#[repr(transparent)]
-pub struct WasiCliImpl<T>(pub T);
-
-impl<T: WasiCliView> WasiCliView for &mut T {
-    type InputStream = T::InputStream;
-    type OutputStream = T::OutputStream;
-
-    fn cli(&mut self) -> &WasiCliCtx<T::InputStream, T::OutputStream> {
-        (**self).cli()
-    }
-}
-
-impl<T: WasiCliView> WasiCliView for Box<T> {
-    type InputStream = T::InputStream;
-    type OutputStream = T::OutputStream;
-
-    fn cli(&mut self) -> &WasiCliCtx<T::InputStream, T::OutputStream> {
-        (**self).cli()
-    }
-}
-
-impl<T: ResourceView> ResourceView for WasiCliImpl<T> {
-    fn table(&mut self) -> &mut ResourceTable {
-        self.0.table()
-    }
-}
-
-impl<T: WasiCliView> WasiCliView for WasiCliImpl<T> {
-    type InputStream = T::InputStream;
-    type OutputStream = T::OutputStream;
-
-    fn cli(&mut self) -> &WasiCliCtx<T::InputStream, T::OutputStream> {
-        self.0.cli()
-    }
-}
-
-pub trait WasiCliView: ResourceView + Send {
-    type InputStream: IsTerminal;
-    type OutputStream: IsTerminal;
-
-    fn cli(&mut self) -> &WasiCliCtx<Self::InputStream, Self::OutputStream>;
-}
-
 #[derive(Default)]
 pub struct WasiCliCtx<I, O> {
     pub environment: Vec<(String, String)>,

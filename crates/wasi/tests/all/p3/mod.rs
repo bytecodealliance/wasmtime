@@ -4,8 +4,8 @@ use anyhow::{Context as _, anyhow};
 use wasmtime::Store;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p3::bindings::Command;
-use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi::{DirPerms, FilePerms, ResourceView};
+use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi::{DirPerms, FilePerms};
 
 use test_programs_artifacts::*;
 
@@ -23,14 +23,11 @@ struct Ctx {
 }
 
 impl WasiView for Ctx {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.p3
-    }
-}
-
-impl ResourceView for Ctx {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.p3,
+            table: &mut self.table,
+        }
     }
 }
 

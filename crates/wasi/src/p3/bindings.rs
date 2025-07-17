@@ -12,8 +12,7 @@
 //! done using the `with` option to [`bindgen!`]:
 //!
 //! ```rust
-//! use wasmtime_wasi::ResourceView;
-//! use wasmtime_wasi::p3::{WasiCtx, WasiView};
+//! use wasmtime_wasi::p3::{WasiCtx, WasiCtxView, WasiView};
 //! use wasmtime::{Result, Engine, Config};
 //! use wasmtime::component::{Linker, HasSelf, ResourceTable};
 //!
@@ -96,12 +95,13 @@
 //!     }
 //! }
 //!
-//! impl ResourceView for MyState {
-//!     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-//! }
-//!
 //! impl WasiView for MyState {
-//!     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+//!     fn ctx(&mut self) -> WasiCtxView<'_> {
+//!         WasiCtxView{
+//!             ctx: &mut self.ctx,
+//!             table: &mut self.table,
+//!         }
+//!     }
 //! }
 //!
 //! fn main() -> Result<()> {
@@ -194,8 +194,7 @@ pub use self::generated::wasi::*;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Component, Linker, ResourceTable};
-/// use wasmtime_wasi::ResourceView;
-/// use wasmtime_wasi::p3::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxView, WasiCtxBuilder, WasiView};
 /// use wasmtime_wasi::p3::bindings::Command;
 ///
 /// // This example is an example shim of executing a component based on the
@@ -246,12 +245,13 @@ pub use self::generated::wasi::*;
 ///     table: ResourceTable,
 /// }
 ///
-/// impl ResourceView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
-///
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView{
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///         }
+///     }
 /// }
 /// ```
 ///
@@ -268,8 +268,7 @@ pub use self::generated::Command;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Linker, Component, ResourceTable};
-/// use wasmtime_wasi::ResourceView;
-/// use wasmtime_wasi::p3::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 /// use wasmtime_wasi::p3::bindings::CommandPre;
 ///
 /// // This example is an example shim of executing a component based on the
@@ -321,12 +320,13 @@ pub use self::generated::Command;
 ///     table: ResourceTable,
 /// }
 ///
-/// impl ResourceView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
-///
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView{
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///         }
+///     }
 /// }
 /// ```
 ///

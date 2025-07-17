@@ -464,20 +464,20 @@ impl WasiCtxBuilder {
 ///
 /// ```
 /// use wasmtime::component::ResourceTable;
-/// use wasmtime_wasi::ResourceView;
-/// use wasmtime_wasi::p3::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 ///
 /// struct MyState {
 ///     ctx: WasiCtx,
 ///     table: ResourceTable,
 /// }
 ///
-/// impl ResourceView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
-///
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView{
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///         }
+///     }
 /// }
 ///
 /// impl MyState {

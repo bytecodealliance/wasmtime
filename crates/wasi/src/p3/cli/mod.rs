@@ -1,12 +1,33 @@
 mod host;
 
-use crate::cli::{IsTerminal, WasiCliCtx, WasiCliImpl, WasiCliView};
+use crate::cli::{IsTerminal, WasiCliCtx};
 use crate::p3::bindings::cli;
 use std::sync::Arc;
 use tokio::io::{
     AsyncRead, AsyncWrite, Empty, Stderr, Stdin, Stdout, empty, stderr, stdin, stdout,
 };
-use wasmtime::component::{HasData, Linker};
+use wasmtime::component::{HasData, Linker, ResourceTable};
+
+pub struct WasiCliCtxView<'a> {
+    pub ctx: &'a mut WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>>,
+    pub table: &'a mut ResourceTable,
+}
+
+impl<T: WasiCliView> WasiCliView for &mut T {
+    fn cli(&mut self) -> WasiCliCtxView<'_> {
+        T::cli(self)
+    }
+}
+
+impl<T: WasiCliView> WasiCliView for Box<T> {
+    fn cli(&mut self) -> WasiCliCtxView<'_> {
+        T::cli(self)
+    }
+}
+
+pub trait WasiCliView: Send {
+    fn cli(&mut self) -> WasiCliCtxView<'_>;
+}
 
 impl Default for WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>> {
     fn default() -> Self {
@@ -36,9 +57,8 @@ impl Default for WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>> {
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime_wasi::ResourceView;
-/// use wasmtime_wasi::cli::{WasiCliView, WasiCliCtx};
-/// use wasmtime_wasi::p3::cli::{InputStream, OutputStream};
+/// use wasmtime_wasi::cli::WasiCliCtx;
+/// use wasmtime_wasi::p3::cli::{InputStream, OutputStream, WasiCliView, WasiCliCtxView};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -66,25 +86,21 @@ impl Default for WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>> {
 ///     table: ResourceTable,
 /// }
 ///
-/// impl ResourceView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
-///
 /// impl WasiCliView for MyState {
-///     type InputStream = Box<dyn InputStream>;
-///     type OutputStream = Box<dyn OutputStream>;
-///
-///     fn cli(&mut self) -> &WasiCliCtx<Self::InputStream, Self::OutputStream> { &self.cli }
+///     fn cli(&mut self) -> WasiCliCtxView<'_> {
+///         WasiCliCtxView {
+///             ctx: &mut self.cli,
+///             table: &mut self.table,
+///         }
+///     }
 /// }
 /// ```
 pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiCliView + 'static,
-    T::InputStream: InputStream,
-    T::OutputStream: OutputStream,
 {
     let exit_options = cli::exit::LinkOptions::default();
-    add_to_linker_impl(linker, &exit_options, |x| WasiCliImpl(x))
+    add_to_linker_impl(linker, &exit_options, |x| x.cli())
 }
 
 /// Similar to [`add_to_linker`], but with the ability to enable unstable features.
@@ -94,40 +110,32 @@ pub fn add_to_linker_with_options<T>(
 ) -> anyhow::Result<()>
 where
     T: WasiCliView + 'static,
-    T::InputStream: InputStream,
-    T::OutputStream: OutputStream,
 {
-    add_to_linker_impl(linker, exit_options, |x| WasiCliImpl(x))
+    add_to_linker_impl(linker, exit_options, |x| x.cli())
 }
 
-pub(crate) fn add_to_linker_impl<T, U>(
+pub(crate) fn add_to_linker_impl<T: Send>(
     linker: &mut Linker<T>,
     exit_options: &cli::exit::LinkOptions,
-    host_getter: fn(&mut T) -> WasiCliImpl<&mut U>,
-) -> wasmtime::Result<()>
-where
-    T: Send,
-    U: WasiCliView + 'static,
-    U::InputStream: InputStream,
-    U::OutputStream: OutputStream,
-{
-    cli::exit::add_to_linker::<_, WasiCli<U>>(linker, exit_options, host_getter)?;
-    cli::environment::add_to_linker::<_, WasiCli<U>>(linker, host_getter)?;
-    cli::stdin::add_to_linker::<_, WasiCli<U>>(linker, host_getter)?;
-    cli::stdout::add_to_linker::<_, WasiCli<U>>(linker, host_getter)?;
-    cli::stderr::add_to_linker::<_, WasiCli<U>>(linker, host_getter)?;
-    cli::terminal_input::add_to_linker::<_, WasiCli<U>>(linker, host_getter)?;
-    cli::terminal_output::add_to_linker::<_, WasiCli<U>>(linker, host_getter)?;
-    cli::terminal_stdin::add_to_linker::<_, WasiCli<U>>(linker, host_getter)?;
-    cli::terminal_stdout::add_to_linker::<_, WasiCli<U>>(linker, host_getter)?;
-    cli::terminal_stderr::add_to_linker::<_, WasiCli<U>>(linker, host_getter)?;
+    host_getter: fn(&mut T) -> WasiCliCtxView<'_>,
+) -> wasmtime::Result<()> {
+    cli::exit::add_to_linker::<_, WasiCli>(linker, exit_options, host_getter)?;
+    cli::environment::add_to_linker::<_, WasiCli>(linker, host_getter)?;
+    cli::stdin::add_to_linker::<_, WasiCli>(linker, host_getter)?;
+    cli::stdout::add_to_linker::<_, WasiCli>(linker, host_getter)?;
+    cli::stderr::add_to_linker::<_, WasiCli>(linker, host_getter)?;
+    cli::terminal_input::add_to_linker::<_, WasiCli>(linker, host_getter)?;
+    cli::terminal_output::add_to_linker::<_, WasiCli>(linker, host_getter)?;
+    cli::terminal_stdin::add_to_linker::<_, WasiCli>(linker, host_getter)?;
+    cli::terminal_stdout::add_to_linker::<_, WasiCli>(linker, host_getter)?;
+    cli::terminal_stderr::add_to_linker::<_, WasiCli>(linker, host_getter)?;
     Ok(())
 }
 
-struct WasiCli<T>(T);
+struct WasiCli;
 
-impl<T: 'static> HasData for WasiCli<T> {
-    type Data<'a> = WasiCliImpl<&'a mut T>;
+impl HasData for WasiCli {
+    type Data<'a> = WasiCliCtxView<'a>;
 }
 
 pub struct TerminalInput;
