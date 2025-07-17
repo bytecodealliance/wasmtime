@@ -959,7 +959,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     if concurrent {
         instance
             .run_concurrent(&mut store, async |store| {
-                run.call_concurrent(store, Vec::new()).await
+                run.call_concurrent(store, &[], &mut []).await
             })
             .await??;
     } else {

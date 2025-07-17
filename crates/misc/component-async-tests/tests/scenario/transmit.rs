@@ -8,7 +8,7 @@ use cancel::exports::local::local::cancel::Mode;
 use component_async_tests::transmit::bindings::exports::local::local::transmit::Control;
 use component_async_tests::{Ctx, sleep, transmit};
 use futures::{
-    future::{self, FutureExt},
+    future::FutureExt,
     stream::{FuturesUnordered, TryStreamExt},
 };
 use wasmtime::component::{
@@ -258,11 +258,11 @@ impl TransmitTest for DynamicTransmitTest {
         Ok((instance, instance))
     }
 
-    fn call<'a>(
+    async fn call<'a>(
         accessor: &'a Accessor<Ctx, HasSelf<Ctx>>,
         instance: &'a Self::Instance,
         params: Self::Params,
-    ) -> impl Future<Output = Result<Self::Result>> + Send + 'a {
+    ) -> Result<Self::Result> {
         let exchange_function = accessor.with(|mut store| {
             let transmit_instance = instance
                 .get_export_index(store.as_context_mut(), None, "local:local/transmit")
@@ -277,15 +277,13 @@ impl TransmitTest for DynamicTransmitTest {
             instance
                 .get_func(store.as_context_mut(), exchange_function)
                 .ok_or_else(|| anyhow!("can't find `exchange` in instance"))
-        });
+        })?;
 
-        match exchange_function {
-            Ok(exchange_function) => exchange_function
-                .call_concurrent(accessor, params)
-                .map(|v| v.map(|v| v.into_iter().next().unwrap()))
-                .boxed(),
-            Err(e) => future::ready(Err(e)).boxed(),
-        }
+        let mut results = vec![Val::Bool(false)];
+        exchange_function
+            .call_concurrent(accessor, &params, &mut results)
+            .await?;
+        Ok(results.pop().unwrap())
     }
 
     fn into_params(

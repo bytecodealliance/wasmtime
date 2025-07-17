@@ -119,9 +119,13 @@ async fn test_round_trip_direct(
             .run_concurrent(&mut store, async |store| -> wasmtime::Result<_> {
                 let mut futures = FuturesUnordered::new();
                 for _ in 0..3 {
-                    futures.push(
-                        foo_function.call_concurrent(store, vec![Val::String(input.to_owned())]),
-                    );
+                    futures.push(async move {
+                        let mut results = vec![Val::Bool(false)];
+                        foo_function
+                            .call_concurrent(store, &[Val::String(input.to_owned())], &mut results)
+                            .await?;
+                        anyhow::Ok(results)
+                    });
                 }
 
                 while let Some(value) = futures.try_next().await? {
