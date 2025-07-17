@@ -111,8 +111,6 @@ impl Inst {
                 smallvec![InstructionSet::CMPXCHG16b]
             }
 
-            Inst::XmmRmREvex3 { op, .. } => op.available_from(),
-
             Inst::External { inst } => {
                 use cranelift_assembler_x64::Feature::*;
                 let mut features = smallvec![];
@@ -135,6 +133,7 @@ impl Inst {
                         avx512vl => features.push(InstructionSet::AVX512VL),
                         avx512dq => features.push(InstructionSet::AVX512DQ),
                         avx512bitalg => features.push(InstructionSet::AVX512BITALG),
+                        avx512vbmi => features.push(InstructionSet::AVX512VBMI),
                         cmpxchg16b => features.push(InstructionSet::CMPXCHG16b),
                         fma => features.push(InstructionSet::FMA),
                     }
@@ -447,22 +446,6 @@ impl PrettyPrint for Inst {
                 let dividend = pretty_print_reg(dividend.to_reg(), 1);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1);
                 format!("checked_srem_seq {dividend}, {divisor}, {dst}")
-            }
-
-            Inst::XmmRmREvex3 {
-                op,
-                src1,
-                src2,
-                src3,
-                dst,
-                ..
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let src2 = pretty_print_reg(src2.to_reg(), 8);
-                let src3 = src3.pretty_print(8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src3}, {src2}, {src1}, {dst}")
             }
 
             Inst::XmmMinMaxSeq {
@@ -926,20 +909,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(divisor);
             collector.reg_fixed_use(dividend, regs::rax());
             collector.reg_fixed_def(dst, regs::rax());
-        }
-        Inst::XmmRmREvex3 {
-            op,
-            src1,
-            src2,
-            src3,
-            dst,
-            ..
-        } => {
-            assert_eq!(*op, Avx512Opcode::Vpermi2b);
-            collector.reg_use(src1);
-            collector.reg_use(src2);
-            src3.get_operands(collector);
-            collector.reg_reuse_def(dst, 0); // Reuse `src1`.
         }
         Inst::XmmUninitializedValue { dst } => collector.reg_def(dst),
         Inst::GprUninitializedValue { dst } => collector.reg_def(dst),

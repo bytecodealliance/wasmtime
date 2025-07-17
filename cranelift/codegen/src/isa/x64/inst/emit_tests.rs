@@ -19,29 +19,6 @@ use crate::isa::x64::lower::isle::generated_code::{Atomic128RmwSeqOp, AtomicRmwS
 use alloc::vec::Vec;
 use cranelift_entity::EntityRef as _;
 
-impl Inst {
-    fn xmm_rm_r_evex3(
-        op: Avx512Opcode,
-        src1: Reg,
-        src2: Reg,
-        src3: RegMem,
-        dst: Writable<Reg>,
-    ) -> Self {
-        debug_assert_eq!(op, Avx512Opcode::Vpermi2b);
-        src3.assert_regclass_is(RegClass::Float);
-        debug_assert!(src1.class() == RegClass::Float);
-        debug_assert!(src2.class() == RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmRmREvex3 {
-            op,
-            src1: Xmm::unwrap_new(src1),
-            src2: Xmm::unwrap_new(src2),
-            src3: XmmMem::unwrap_new(src3),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-}
-
 #[test]
 fn test_x64_emit() {
     let rax = regs::rax();
@@ -198,33 +175,6 @@ fn test_x64_emit() {
 
     // ========================================================
     // JmpCondCompound isn't a real instruction
-
-    // ========================================================
-    // XMM_RM_R: Integer Packed
-
-    insns.push((
-        Inst::xmm_rm_r_evex3(
-            Avx512Opcode::Vpermi2b,
-            xmm1,
-            xmm10,
-            RegMem::reg(xmm14),
-            w_xmm1,
-        ),
-        "62D22D0875CE",
-        "vpermi2b %xmm14, %xmm10, %xmm1, %xmm1",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r_evex3(
-            Avx512Opcode::Vpermi2b,
-            xmm2,
-            xmm0,
-            RegMem::reg(xmm1),
-            w_xmm2,
-        ),
-        "62F27D0875D1",
-        "vpermi2b %xmm1, %xmm0, %xmm2, %xmm2",
-    ));
 
     // ========================================================
     // Pertaining to atomics.

@@ -60,14 +60,6 @@
        ;; =========================================
        ;; Floating-point operations.
 
-       ;; XMM (scalar or vector) binary op that relies on the EVEX
-       ;; prefix. Takes three inputs.
-       (XmmRmREvex3 (op Avx512Opcode)
-                    (src1 Xmm)
-                    (src2 Xmm)
-                    (src3 XmmMem)
-                    (dst WritableXmm))
-
        ;; Converts an unsigned int64 to a float32/float64.
        (CvtUint64ToFloatSeq (dst_size OperandSize) ;; 4 or 8
                             (src Gpr)
@@ -642,9 +634,6 @@
 ;; Fails if the argument is not either CC.NZ or CC.Z.
 (decl cc_nz_or_z (CC) CC)
 (extern extractor cc_nz_or_z cc_nz_or_z)
-
-(type Avx512Opcode
-      (enum Vpermi2b))
 
 (type FcmpImm extern
       (enum Equal
@@ -2661,14 +2650,7 @@
 ;;
 ;; Requires AVX-512 vl and vbmi extensions.
 (decl x64_vpermi2b (Xmm Xmm XmmMem) Xmm)
-(rule (x64_vpermi2b src1 src2 src3)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmREvex3 (Avx512Opcode.Vpermi2b)
-                                             src1
-                                             src2
-                                             src3
-                                             dst))))
-        dst))
+(rule (x64_vpermi2b src1 src2 src3) (x64_vpermi2b_a src1 src2 src3))
 
 ;; Helpers for creating vector `shift` instructions.
 (decl x64_psllw (Xmm XmmMemImm) Xmm)
