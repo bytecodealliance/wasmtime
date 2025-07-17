@@ -11,16 +11,23 @@
 //!
 //! [Tarjan's algorithm]: https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
 
-#![expect(dead_code, reason = "used in upcoming PRs")]
+#![cfg_attr(not(test), expect(dead_code, reason = "used in upcoming PRs"))]
 
-use crate::prelude::*;
-use std::ops::Range;
-use wasmtime_environ::{EntityRef, EntitySet, PrimaryMap, SecondaryMap};
+use super::*;
+use std::{
+    collections::BTreeSet,
+    fmt::{self, Debug},
+    hash::Hash,
+    ops::Range,
+};
+use wasmtime_environ::{
+    EntityRef, EntitySet, PrimaryMap, SecondaryMap, packed_option::PackedOption,
+};
 
 /// A strongly-connected component.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Component(u32);
-wasmtime_environ::entity_impl!(Component);
+pub struct Scc(u32);
+wasmtime_environ::entity_impl!(Scc);
 
 /// The set of strongly-connected components for a graph of `Node`s.
 pub struct StronglyConnectedComponents<Node>
@@ -29,10 +36,32 @@ where
 {
     /// A map from a component to the range of `self.component_nodes` that make
     /// up that component's nodes.
-    components: PrimaryMap<Component, Range<u32>>,
+    components: PrimaryMap<Scc, Range<u32>>,
 
     /// The data storage for the values of `self.components`.
     component_nodes: Vec<Node>,
+}
+
+impl<Node> Debug for StronglyConnectedComponents<Node>
+where
+    Node: EntityRef + Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct Map<'a, Node: EntityRef + Debug>(&'a StronglyConnectedComponents<Node>);
+
+        impl<'a, Node> Debug for Map<'a, Node>
+        where
+            Node: EntityRef + Debug,
+        {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_map().entries(self.0.iter()).finish()
+            }
+        }
+
+        f.debug_struct("StronglyConnectedComponents")
+            .field("components", &Map(self))
+            .finish()
+    }
 }
 
 impl<Node> StronglyConnectedComponents<Node>
@@ -50,7 +79,7 @@ where
 
         // The resulting components and their nodes.
         let mut component_nodes = vec![];
-        let mut components = PrimaryMap::<Component, Range<u32>>::new();
+        let mut components = PrimaryMap::<Scc, Range<u32>>::new();
 
         // The DFS index counter.
         let mut index = NonMaxU32::default();
@@ -123,21 +152,22 @@ where
                     // from the SCC stack and push them into our result data
                     // structures.
                     if indices[node] == lowlinks[node] {
-                        let start = component_nodes.len();
-                        let start = u32::try_from(start).unwrap();
-                        loop {
-                            let v = stack.pop().unwrap();
-                            let was_on_stack = on_stack.remove(v);
-                            debug_assert!(was_on_stack);
-                            component_nodes.push(v);
-                            if v == node {
-                                break;
-                            }
-                        }
-                        let end = component_nodes.len();
-                        let end = u32::try_from(end).unwrap();
-                        debug_assert!(end > start);
-                        components.push(start..end);
+                        let mut done = false;
+                        components.push(extend_with_range(
+                            &mut component_nodes,
+                            std::iter::from_fn(|| {
+                                if done {
+                                    return None;
+                                }
+                                let v = stack.pop().unwrap();
+                                let was_on_stack = on_stack.remove(v);
+                                debug_assert!(was_on_stack);
+                                if v == node {
+                                    done = true;
+                                }
+                                Some(v)
+                            }),
+                        ));
                     }
                 }
             }
@@ -165,7 +195,7 @@ where
     ///
     /// Iteration happens in reverse-topological order (successors are visited
     /// before predecessors in the resulting SCC DAG).
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (Component, &[Node])> + '_ {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (Scc, &[Node])> + '_ {
         self.components
             .iter()
             .map(|(component, range)| (component, self.node_range(range.clone())))
@@ -175,7 +205,7 @@ where
     ///
     /// Iteration happens in reverse-topological order (successors are visited
     /// before predecessors in the resulting SCC DAG).
-    pub fn keys(&self) -> impl ExactSizeIterator<Item = Component> {
+    pub fn keys(&self) -> impl ExactSizeIterator<Item = Scc> {
         self.components.keys()
     }
 
@@ -190,9 +220,192 @@ where
     }
 
     /// Get the `Node`s that make up the given strongly-connected component.
-    pub fn nodes(&self, component: Component) -> &[Node] {
+    pub fn nodes(&self, component: Scc) -> &[Node] {
         let range = self.components[component].clone();
         self.node_range(range)
+    }
+
+    /// Get this set of strongly-connected components' "evaporation".
+    ///
+    /// Given an input graph `G`, we can construct a new graph where the new
+    /// graph's nodes are the strongly-connected components of `G` and there is
+    /// an edge `scc(a) --> scc(b)` for every edge `a --> b` in the input graph
+    /// `G` where `scc(a) != scc(b)` and `scc` is the function from a node to
+    /// its strongly-connected component. This new graph is known as the
+    /// "condensation" of `G`.
+    ///
+    /// In the following diagram, the solid lines are the input graph and the
+    /// dotted lines show its condensation:
+    ///
+    /// ```ignore
+    /// ...............
+    /// :             :
+    /// :    ,-----.  :
+    /// :    |     |  :
+    /// :    V     |  :
+    /// :  +---+   |  :
+    /// :  | a |---'  :
+    /// :  +---+      :
+    /// :    |        :
+    /// :....|........:
+    ///      |  :
+    ///      |  :
+    ///      |  :
+    ///      |  V
+    /// .....|..............       ....................
+    /// :    |             :       :                  :
+    /// :    V             :......>:                  :
+    /// :  +---+    +---+  :       :  +---+    +---+  :
+    /// :  | b |<-->| c |------------>| d |<-->| e |  :
+    /// :  +---+    +---+  :       :  +---+    +---+  :
+    /// :    |             :       :             |    :
+    /// :....|.............:       :.............|....:
+    ///      |  :                          :     |
+    ///      |  :                          :     |
+    ///      |  :                          :     |
+    ///      |  V                          :     |
+    /// .....|........................     :     |
+    /// :    |                       :     :     |
+    /// :    | ,----------------.    :     :     |
+    /// :    | |                |    :<....:     |
+    /// :    V |                V    :           |
+    /// :   +---+    +---+    +---+  :           |
+    /// :   | f |<---| g |<---| h |<-------------'
+    /// :   +---+    +---+    +---+  :
+    /// :                            :
+    /// :............................:
+    /// ```
+    ///
+    /// Note that a graph's condensation is always acyclic, because the
+    /// strongly-conneted components encapsulate and hide any cycles from the
+    /// input graph.
+    ///
+    /// I am not aware of an existing name for the reverse (or transpose)
+    /// condensation, where each of the condensation's edges `a --> b` are
+    /// flipped into `b --> a`, so, at cfallin's brilliant suggestion, I have
+    /// decided to call it an "evaporation".
+    ///
+    /// In the context of a call graph, the condensation allows us to derive a
+    /// partial dependency ordering for bottom-up inlining:
+    ///
+    /// * An edge `scc({a,b,...}) --> scc({c,d,...})` means that the functions
+    ///   `{c,d,...}` should be processed for inlining before functions
+    ///   `{a,b,...}`, since some functions in `{a,b,...}` call some functions
+    ///   in `{c,d,...}` and we might want to inline these calls but only after
+    ///   `{c,d,...}` have already had their calls inlined.
+    ///
+    /// * Functions within an SCC are unordered (and we probably don't want to
+    ///   inline between them at all, or only want to do so in a very limited
+    ///   manner, since their members are mutually recursive).
+    ///
+    /// A call graph's evaporation, by flipping edges from pointing to an SCC's
+    /// dependencies to pointing to its dependers, allows us to answer the
+    /// question "given that I've finished processing calls in `scc({e,f,...})`
+    /// for inlining, which other SCCs are now potentially ready for
+    /// processing?".
+    pub fn evaporation<F, S>(&self, successors: F) -> Evaporation
+    where
+        F: Fn(Node) -> S,
+        S: Iterator<Item = Node>,
+    {
+        log::trace!("Creating the evaporation of {self:#?}");
+
+        let node_to_component: SecondaryMap<Node, PackedOption<Scc>> = self
+            .iter()
+            .flat_map(|(c, nodes)| {
+                nodes
+                    .iter()
+                    .copied()
+                    .map(move |node| (node, PackedOption::from(Some(c))))
+            })
+            .collect();
+
+        // Create a set of all reverse dependencies. This set contains an entry
+        // `(to, from)` for all `from --> to` edges in the SCC's condensation.
+        //
+        // Note that we use a `BTreeSet` so that the results are ordered, all
+        // edges `a --> *` are contiguous for each component `a`, and we can
+        // therefore pack them densely in the resulting `Evaporation`.
+        let mut reverse_edge_set = BTreeSet::<(Scc, Scc)>::new();
+        for (from_component, nodes) in self.iter() {
+            for node in nodes {
+                for succ in successors(*node) {
+                    let to_component = node_to_component[succ].unwrap();
+                    if to_component == from_component {
+                        continue;
+                    }
+                    reverse_edge_set.insert((to_component, from_component));
+                }
+            }
+        }
+
+        // Convert the `reverse_edge_set` into our densely-packed
+        // representation.
+        let mut reverse_edges =
+            SecondaryMap::<Scc, Range<u32>>::with_capacity(self.components.len());
+        let mut reverse_edge_elems = Vec::with_capacity(reverse_edge_set.len());
+        for (to_node, from_node) in reverse_edge_set {
+            let range = extend_with_range(&mut reverse_edge_elems, Some(from_node));
+
+            if reverse_edges[to_node] == Range::default() {
+                reverse_edges[to_node] = range;
+            } else {
+                debug_assert_eq!(reverse_edges[to_node].end, range.start);
+                reverse_edges[to_node].end = range.end;
+            }
+        }
+
+        let result = Evaporation {
+            reverse_edges,
+            reverse_edge_elems,
+        };
+        log::trace!("  -> {result:#?}");
+        result
+    }
+}
+
+/// The "evaporation" of a graph and its strongly-connected components.
+///
+/// Created by `StronglyConnectedComponents::evaporation`; see that method's
+/// documentation for more details.
+pub struct Evaporation {
+    reverse_edges: SecondaryMap<Scc, Range<u32>>,
+    reverse_edge_elems: Vec<Scc>,
+}
+
+impl Debug for Evaporation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct Map<'a>(&'a Evaporation);
+
+        impl<'a> Debug for Map<'a> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.debug_map()
+                    .entries(
+                        self.0
+                            .reverse_edges
+                            .keys()
+                            .map(|k| (k, self.0.reverse_edges(k))),
+                    )
+                    .finish()
+            }
+        }
+
+        f.debug_struct("Evaporation")
+            .field("reverse_edges", &Map(self))
+            .finish()
+    }
+}
+
+impl Evaporation {
+    /// Get the reverse dependencies of the given strongly-connected component.
+    ///
+    /// The result is all of the SCCs whose members have edges in the original
+    /// graph to one or more of this SCC's members.
+    pub fn reverse_edges(&self, component: Scc) -> &[Scc] {
+        let Range { start, end } = self.reverse_edges[component].clone();
+        let start = usize::try_from(start).unwrap();
+        let end = usize::try_from(end).unwrap();
+        &self.reverse_edge_elems[start..end]
     }
 }
 

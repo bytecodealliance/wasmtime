@@ -149,6 +149,23 @@ where
     }
 }
 
+impl<K, V> FromIterator<(K, V)> for SecondaryMap<K, V>
+where
+    K: EntityRef,
+    V: Clone + Default,
+{
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
+        let iter = iter.into_iter();
+        let (min, max) = iter.size_hint();
+        let cap = max.unwrap_or_else(|| 2 * min);
+        let mut map = Self::with_capacity(cap);
+        for (k, v) in iter {
+            map[k] = v;
+        }
+        map
+    }
+}
+
 /// Immutable indexing into an `SecondaryMap`.
 ///
 /// All keys are permitted. Untouched entries have the default value.
