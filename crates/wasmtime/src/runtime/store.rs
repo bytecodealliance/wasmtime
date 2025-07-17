@@ -1305,6 +1305,32 @@ impl StoreOpaque {
         self.instances[id].handle.get_mut()
     }
 
+    /// Access multiple instances specified via `ids`.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if any indices in `ids` overlap.
+    ///
+    /// # Safety
+    ///
+    /// This method is not safe if the returned instances are used to traverse
+    /// "laterally" between other instances. For example accessing imported
+    /// items in an instance may traverse laterally to a sibling instance thus
+    /// aliasing a returned value here. The caller must ensure that only defined
+    /// items within the instances themselves are accessed.
+    #[inline]
+    pub unsafe fn optional_gc_store_and_instances_mut<const N: usize>(
+        &mut self,
+        ids: [InstanceId; N],
+    ) -> (Option<&mut GcStore>, [Pin<&mut vm::Instance>; N]) {
+        let instances = self
+            .instances
+            .get_disjoint_mut(ids)
+            .unwrap()
+            .map(|h| h.handle.get_mut());
+        (self.gc_store.as_mut(), instances)
+    }
+
     /// Pair of `Self::optional_gc_store_mut` and `Self::instance_mut`
     pub fn optional_gc_store_and_instance_mut(
         &mut self,
