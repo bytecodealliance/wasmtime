@@ -222,17 +222,16 @@ impl dsl::Inst {
         });
     }
 
-    /// `fn features(&self) -> Vec<Flag> { ... }`
+    /// `fn is_available(&self, ...) -> bool { ... }`
     fn generate_features_function(&self, f: &mut Formatter) {
         fmtln!(f, "#[must_use]");
-        f.add_block("pub fn features(&self) -> Vec<Feature>", |f| {
-            let flags = self
-                .features
-                .iter()
-                .map(|f| format!("Feature::{f}"))
-                .collect::<Vec<_>>();
-            fmtln!(f, "vec![{}]", flags.join(", "));
-        });
+        f.add_block(
+            "pub fn is_available(&self, features: &impl Features) -> bool",
+            |f| {
+                let expr = self.features.generate_boolean_expr("features");
+                fmtln!(f, "{expr}");
+            },
+        );
     }
 
     /// `impl Display for <inst> { ... }`

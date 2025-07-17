@@ -6,7 +6,7 @@
 //! trait, allowing users of this assembler to plug in their own register types.
 //!
 //! ```
-//! # use cranelift_assembler_x64::{Feature, Fixed, Imm8, inst, Inst, Registers};
+//! # use cranelift_assembler_x64::{Fixed, Imm8, inst, Inst, Registers};
 //! // Tell the assembler the type of registers we're using; we can always
 //! // encode a HW register as a `u8` (e.g., `eax = 0`).
 //! pub struct Regs;
@@ -26,13 +26,10 @@
 //! let and = inst::andb_i::new(Fixed(rax), Imm8::new(0b10101010));
 //! let seq: Vec<Inst<Regs>> = vec![and.into()];
 //!
-//! // Now we can encode this sequence into a code buffer, checking that each
-//! // instruction is valid in 64-bit mode.
+//! // Now we can encode this sequence into a code buffer.
 //! let mut buffer = vec![];
 //! for inst in seq {
-//!     if inst.features().contains(&Feature::_64b) {
-//!         inst.encode(&mut buffer);
-//!     }
+//!     inst.encode(&mut buffer);
 //! }
 //! assert_eq!(buffer, vec![0x24, 0b10101010]);
 //! ```
@@ -69,14 +66,14 @@ pub mod fuzz;
 // the library top-level.
 pub use inst::Inst;
 
-/// A CPU feature.
+/// A trait for querying CPU features.
 ///
 /// This is generated from the `dsl::Feature` enumeration defined in the `meta`
-/// crate (i.e., an exact replica). It describes the CPUID features required by
-/// an instruction; see [`Inst::features`].
+/// crate. It allows querying the CPUID features required by an instruction; see
+/// [`Inst::is_available`] and [`for_each_feature`].
 #[doc(inline)]
 // Like `Inst` above, a convenient re-export.
-pub use inst::Feature;
+pub use inst::Features;
 
 pub use api::{
     AsReg, CodeSink, Constant, KnownOffset, Label, RegisterVisitor, Registers, TrapCode,
