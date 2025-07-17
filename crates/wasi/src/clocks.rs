@@ -7,13 +7,13 @@ pub struct WasiClocksImpl<T>(pub T);
 
 impl<T: WasiClocksView> WasiClocksView for &mut T {
     fn clocks(&mut self) -> &WasiClocksCtx {
-        (**self).clocks()
+        T::clocks(self)
     }
 }
 
 impl<T: WasiClocksView> WasiClocksView for Box<T> {
     fn clocks(&mut self) -> &WasiClocksCtx {
-        (**self).clocks()
+        T::clocks(self)
     }
 }
 

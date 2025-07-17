@@ -18,31 +18,31 @@ pub trait IsTerminal {
 
 impl<T: ?Sized + IsTerminal> IsTerminal for &T {
     fn is_terminal(&self) -> bool {
-        (**self).is_terminal()
+        T::is_terminal(self)
     }
 }
 
 impl<T: ?Sized + IsTerminal> IsTerminal for &mut T {
     fn is_terminal(&self) -> bool {
-        (**self).is_terminal()
+        T::is_terminal(self)
     }
 }
 
 impl<T: ?Sized + IsTerminal> IsTerminal for Box<T> {
     fn is_terminal(&self) -> bool {
-        (**self).is_terminal()
+        T::is_terminal(self)
     }
 }
 
 impl<T: ?Sized + IsTerminal> IsTerminal for Rc<T> {
     fn is_terminal(&self) -> bool {
-        (**self).is_terminal()
+        T::is_terminal(self)
     }
 }
 
 impl<T: ?Sized + IsTerminal> IsTerminal for Arc<T> {
     fn is_terminal(&self) -> bool {
-        (**self).is_terminal()
+        T::is_terminal(self)
     }
 }
 

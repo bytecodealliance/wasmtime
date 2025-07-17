@@ -147,25 +147,25 @@ pub trait InputStream: IsTerminal + Send {
 
 impl<T: ?Sized + InputStream + Sync> InputStream for &T {
     fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        (**self).reader()
+        T::reader(self)
     }
 }
 
 impl<T: ?Sized + InputStream> InputStream for &mut T {
     fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        (**self).reader()
+        T::reader(self)
     }
 }
 
 impl<T: ?Sized + InputStream> InputStream for Box<T> {
     fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        (**self).reader()
+        T::reader(self)
     }
 }
 
 impl<T: ?Sized + InputStream + Sync> InputStream for Arc<T> {
     fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        (**self).reader()
+        T::reader(self)
     }
 }
 
@@ -199,25 +199,25 @@ pub trait OutputStream: IsTerminal + Send {
 
 impl<T: ?Sized + OutputStream + Sync> OutputStream for &T {
     fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        (**self).writer()
+        T::writer(self)
     }
 }
 
 impl<T: ?Sized + OutputStream> OutputStream for &mut T {
     fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        (**self).writer()
+        T::writer(self)
     }
 }
 
 impl<T: ?Sized + OutputStream> OutputStream for Box<T> {
     fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        (**self).writer()
+        T::writer(self)
     }
 }
 
 impl<T: ?Sized + OutputStream + Sync> OutputStream for Arc<T> {
     fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        (**self).writer()
+        T::writer(self)
     }
 }
 

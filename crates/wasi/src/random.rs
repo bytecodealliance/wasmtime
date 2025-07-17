@@ -5,13 +5,13 @@ pub struct WasiRandomImpl<T>(pub T);
 
 impl<T: WasiRandomView> WasiRandomView for &mut T {
     fn random(&mut self) -> &mut WasiRandomCtx {
-        (**self).random()
+        T::random(self)
     }
 }
 
 impl<T: WasiRandomView> WasiRandomView for Box<T> {
     fn random(&mut self) -> &mut WasiRandomCtx {
-        (**self).random()
+        T::random(self)
     }
 }
 
