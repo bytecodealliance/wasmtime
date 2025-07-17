@@ -55,7 +55,7 @@ pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiClocksView + 'static,
 {
-    add_to_linker_impl(linker, |x| x.clocks())
+    add_to_linker_impl(linker, T::clocks)
 }
 
 pub(crate) fn add_to_linker_impl<T: Send>(

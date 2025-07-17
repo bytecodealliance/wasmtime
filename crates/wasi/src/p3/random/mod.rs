@@ -55,7 +55,7 @@ pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiRandomView + 'static,
 {
-    add_to_linker_impl(linker, |x| x.random())
+    add_to_linker_impl(linker, T::random)
 }
 
 pub(crate) fn add_to_linker_impl<T: Send>(

@@ -100,7 +100,7 @@ where
     T: WasiCliView + 'static,
 {
     let exit_options = cli::exit::LinkOptions::default();
-    add_to_linker_impl(linker, &exit_options, |x| x.cli())
+    add_to_linker_impl(linker, &exit_options, T::cli)
 }
 
 /// Similar to [`add_to_linker`], but with the ability to enable unstable features.
@@ -111,7 +111,7 @@ pub fn add_to_linker_with_options<T>(
 where
     T: WasiCliView + 'static,
 {
-    add_to_linker_impl(linker, exit_options, |x| x.cli())
+    add_to_linker_impl(linker, exit_options, T::cli)
 }
 
 pub(crate) fn add_to_linker_impl<T: Send>(
