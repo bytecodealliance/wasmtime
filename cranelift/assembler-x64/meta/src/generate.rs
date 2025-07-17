@@ -122,7 +122,7 @@ fn generate_inst_visit_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
 fn generate_inst_is_available_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
     f.add_block("impl<R: Registers> Inst<R>", |f| {
         f.add_block(
-            "pub fn is_available(&self, f: &impl Features) -> bool",
+            "pub fn is_available(&self, f: &impl AvailableFeatures) -> bool",
             |f| {
                 f.add_block("match self", |f| {
                     for inst in insts {
