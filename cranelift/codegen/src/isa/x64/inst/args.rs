@@ -6,7 +6,6 @@ use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::isa::x64::inst::Inst;
 use crate::isa::x64::inst::regs::pretty_print_reg;
-use crate::isa::x64::settings as x64_settings;
 use crate::machinst::*;
 use std::fmt;
 use std::string::String;
@@ -740,29 +739,6 @@ impl PrettyPrint for RegMem {
             RegMem::Mem { addr, .. } => addr.pretty_print(size),
         }
     }
-}
-
-#[derive(Debug)]
-pub(crate) enum InstructionSet {
-    SSE,
-    SSE2,
-    CMPXCHG16b,
-    SSE3,
-    SSSE3,
-    SSE41,
-    SSE42,
-    Popcnt,
-    Lzcnt,
-    BMI1,
-    BMI2,
-    FMA,
-    AVX,
-    AVX2,
-    AVX512BITALG,
-    AVX512DQ,
-    AVX512F,
-    AVX512VBMI,
-    AVX512VL,
 }
 
 /// This defines the ways a value can be extended: either signed- or zero-extension, or none for
