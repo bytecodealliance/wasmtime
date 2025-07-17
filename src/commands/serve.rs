@@ -840,10 +840,10 @@ impl wasmtime_wasi::p2::StdoutStream for LogStream {
     fn stream(&self) -> Box<dyn wasmtime_wasi::p2::OutputStream> {
         Box::new(self.clone())
     }
+}
 
-    fn isatty(&self) -> bool {
-        use std::io::IsTerminal;
-
+impl wasmtime_wasi::cli::IsTerminal for LogStream {
+    fn is_terminal(&self) -> bool {
         match &self.output {
             Output::Stdout => std::io::stdout().is_terminal(),
             Output::Stderr => std::io::stderr().is_terminal(),
