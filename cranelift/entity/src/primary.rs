@@ -306,6 +306,15 @@ where
     }
 }
 
+impl<K, V> From<PrimaryMap<K, V>> for Vec<V>
+where
+    K: EntityRef,
+{
+    fn from(map: PrimaryMap<K, V>) -> Self {
+        map.elems
+    }
+}
+
 impl<K: EntityRef + fmt::Debug, V: fmt::Debug> fmt::Debug for PrimaryMap<K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut struct_ = f.debug_struct("PrimaryMap");

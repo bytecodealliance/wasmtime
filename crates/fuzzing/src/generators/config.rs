@@ -276,6 +276,19 @@ impl Config {
             16 << 20,
             self.wasmtime.memory_guaranteed_dense_image_size,
         ));
+        cfg.opts.compiler_inlining = Some(self.wasmtime.compiler_inlining);
+        cfg.opts.compiler_inlining_intra_module =
+            Some(self.wasmtime.compiler_inlining_intra_module.to_wasmtime());
+        cfg.opts.compiler_inlining_small_callee_size = Some(std::cmp::min(
+            // Clamp to avoid extreme code size blow up.
+            1000,
+            self.wasmtime.compiler_inlining_small_callee_size,
+        ));
+        cfg.opts.compiler_inlining_sum_size_threshold = Some(std::cmp::min(
+            // Clamp to avoid extreme code size blow up.
+            10_000,
+            self.wasmtime.compiler_inlining_sum_size_threshold,
+        ));
         cfg.wasm.async_stack_zeroing = Some(self.wasmtime.async_stack_zeroing);
         cfg.wasm.bulk_memory = Some(true);
         cfg.wasm.component_model_async = Some(self.module_config.component_model_async);
@@ -554,6 +567,10 @@ pub struct WasmtimeConfig {
     force_jump_veneers: bool,
     memory_init_cow: bool,
     memory_guaranteed_dense_image_size: u64,
+    compiler_inlining: bool,
+    compiler_inlining_intra_module: IntraModuleInlining,
+    compiler_inlining_small_callee_size: u32,
+    compiler_inlining_sum_size_threshold: u32,
     use_precompiled_cwasm: bool,
     async_stack_zeroing: bool,
     /// Configuration for the instance allocation strategy to use.
@@ -820,6 +837,23 @@ impl RegallocAlgorithm {
             // `arbitrary` mappings, we keep the `RegallocAlgorithm`
             // enum as it is and remap here to `Backtracking`.
             RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::Backtracking,
+        }
+    }
+}
+
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+enum IntraModuleInlining {
+    Yes,
+    No,
+    WhenUsingGc,
+}
+
+impl IntraModuleInlining {
+    fn to_wasmtime(&self) -> wasmtime::IntraModuleInlining {
+        match self {
+            IntraModuleInlining::Yes => wasmtime::IntraModuleInlining::Yes,
+            IntraModuleInlining::No => wasmtime::IntraModuleInlining::No,
+            IntraModuleInlining::WhenUsingGc => wasmtime::IntraModuleInlining::WhenUsingGc,
         }
     }
 }

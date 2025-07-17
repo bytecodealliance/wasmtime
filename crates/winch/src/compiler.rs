@@ -89,6 +89,10 @@ impl Compiler {
 }
 
 impl wasmtime_environ::Compiler for Compiler {
+    fn inlining_compiler(&self) -> Option<&dyn wasmtime_environ::InliningCompiler> {
+        None
+    }
+
     fn compile_function(
         &self,
         translation: &ModuleTranslation<'_>,
@@ -163,7 +167,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn append_code(
         &self,
         obj: &mut Object<'static>,
-        funcs: &[(String, Box<dyn Any + Send>)],
+        funcs: &[(String, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, wasmtime_environ::RelocationTarget) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         self.trampolines.append_code(obj, funcs, resolve_reloc)
@@ -197,7 +201,7 @@ impl wasmtime_environ::Compiler for Compiler {
         _get_func: &'a dyn Fn(
             StaticModuleIndex,
             DefinedFuncIndex,
-        ) -> (SymbolId, &'a (dyn Any + Send)),
+        ) -> (SymbolId, &'a (dyn Any + Send + Sync)),
         _dwarf_package_bytes: Option<&'a [u8]>,
         _tunables: &'a Tunables,
     ) -> Result<()> {
