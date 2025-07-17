@@ -25,17 +25,15 @@ where
 {
     async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
         let mut buf = BytesMut::with_capacity(8192);
-        let mut tx = self.tx;
-        loop {
+        while !self.tx.is_closed() {
             match self.rx.read_buf(&mut buf).await {
                 Ok(0) => return Ok(()),
                 Ok(_) => {
-                    let (Some(tx_next), buf_next) = tx.write_all(store, Cursor::new(buf)).await
-                    else {
-                        break Ok(());
-                    };
-                    tx = tx_next;
-                    buf = buf_next.into_inner();
+                    buf = self
+                        .tx
+                        .write_all(store, Cursor::new(buf))
+                        .await
+                        .into_inner();
                     buf.clear();
                 }
                 Err(_err) => {
@@ -44,6 +42,7 @@ where
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -59,10 +58,8 @@ where
 {
     async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
         let mut buf = BytesMut::with_capacity(8192);
-        let mut rx = self.rx;
-        while let (Some(rx_next), buf_next) = rx.read(store, buf).await {
-            buf = buf_next;
-            rx = rx_next;
+        while !self.rx.is_closed() {
+            buf = self.rx.read(store, buf).await;
             match self.tx.write_all(&buf).await {
                 Ok(()) => {
                     buf.clear();
