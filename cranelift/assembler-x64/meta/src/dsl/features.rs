@@ -87,6 +87,7 @@ pub enum Feature {
     avx2,
     avx512f,
     avx512vl,
+    avx512bitalg,
     cmpxchg16b,
     fma,
 }
@@ -115,6 +116,7 @@ pub const ALL_FEATURES: &[Feature] = &[
     Feature::avx2,
     Feature::avx512f,
     Feature::avx512vl,
+    Feature::avx512bitalg,
     Feature::cmpxchg16b,
     Feature::fma,
 ];

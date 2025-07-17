@@ -264,12 +264,6 @@ fn test_x64_emit() {
         "vcvtudq2ps %xmm2, %xmm8",
     ));
 
-    insns.push((
-        Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpopcntb, RegMem::reg(xmm2), w_xmm8),
-        "62727D0854C2",
-        "vpopcntb %xmm2, %xmm8",
-    ));
-
     // ========================================================
     // Pertaining to atomics.
     // Use `r9` with a 0 offset.

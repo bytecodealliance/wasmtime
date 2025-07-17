@@ -1,5 +1,5 @@
-use crate::dsl::{Eflags::*, Feature::*, Inst, Length::*, Location::*};
-use crate::dsl::{fmt, implicit, inst, r, rex, rw, vex, w};
+use crate::dsl::{Eflags::*, Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{evex, fmt, implicit, inst, r, rex, rw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -61,5 +61,11 @@ pub fn list() -> Vec<Inst> {
         // BMI2 instructions
         inst("bzhil", fmt("RMV", [w(r32a), r(rm32), r(r32b)]), vex(LZ)._0f38().w0().op(0xF5), _64b | compat | bmi2),
         inst("bzhiq", fmt("RMV", [w(r64a), r(rm64), r(r64b)]), vex(LZ)._0f38().w1().op(0xF5), _64b | bmi2),
+
+        inst("vpopcntb", fmt("A", [w(xmm1), r(xmm_m128)]), evex(L128, FullMem)._66()._0f38().w0().op(0x54).r(), _64b | compat | avx512vl | avx512bitalg),
+        inst("vpopcntw", fmt("A", [w(xmm1), r(xmm_m128)]), evex(L128, FullMem)._66()._0f38().w1().op(0x54).r(), _64b | compat | avx512vl | avx512bitalg),
+        // FIXME: uncomment when avx512vpopcntdq is bound in cranelift
+        // inst("vpopcntd", fmt("A", [w(xmm1), r(xmm_m128)]), evex(L128, Full)._66()._0f38().w0().op(0x55).r(), _64b | compat | avx512vl | avx512vpopcntdq),
+        // inst("vpopcntq", fmt("A", [w(xmm1), r(xmm_m128)]), evex(L128, Full)._66()._0f38().w1().op(0x55).r(), _64b | compat | avx512vl | avx512vpopcntdq),
     ]
 }

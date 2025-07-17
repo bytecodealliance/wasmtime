@@ -658,8 +658,7 @@
 (type Avx512Opcode
       (enum Vcvtudq2ps
             Vpermi2b
-            Vpmullq
-            Vpopcntb))
+            Vpmullq))
 
 (type FcmpImm extern
       (enum Equal
@@ -2682,8 +2681,7 @@
 
 ;; Helper for creating `vpopcntb` instructions.
 (decl x64_vpopcntb (XmmMem) Xmm)
-(rule (x64_vpopcntb src)
-      (xmm_unary_rm_r_evex (Avx512Opcode.Vpopcntb) src))
+(rule (x64_vpopcntb src) (x64_vpopcntb_a src))
 
 ;; Helper for creating `vpmullq` instructions.
 ;;

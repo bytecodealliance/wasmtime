@@ -786,9 +786,6 @@ impl Avx512Opcode {
                 smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512VBMI]
             }
             Avx512Opcode::Vpmullq => smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512DQ],
-            Avx512Opcode::Vpopcntb => {
-                smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512BITALG]
-            }
         }
     }
 
@@ -804,7 +801,7 @@ impl Avx512Opcode {
 
         match self {
             Vcvtudq2ps | Vpmullq => Full,
-            Vpermi2b | Vpopcntb => FullMem,
+            Vpermi2b => FullMem,
         }
     }
 }
