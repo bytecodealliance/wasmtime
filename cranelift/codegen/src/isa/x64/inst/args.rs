@@ -742,29 +742,6 @@ impl PrettyPrint for RegMem {
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum InstructionSet {
-    SSE,
-    SSE2,
-    CMPXCHG16b,
-    SSE3,
-    SSSE3,
-    SSE41,
-    SSE42,
-    Popcnt,
-    Lzcnt,
-    BMI1,
-    BMI2,
-    FMA,
-    AVX,
-    AVX2,
-    AVX512BITALG,
-    AVX512DQ,
-    AVX512F,
-    AVX512VBMI,
-    AVX512VL,
-}
-
 #[derive(Copy, Clone, PartialEq)]
 #[expect(missing_docs, reason = "self-describing")]
 pub enum Avx512TupleType {
