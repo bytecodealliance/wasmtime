@@ -65,6 +65,20 @@ impl EvexPrefix {
         }
     }
 
+    /// Construct the [`EvexPrefix`] for an instruction.
+    pub fn three_op(
+        reg: u8,
+        vvvv: u8,
+        (b, x): (Option<u8>, Option<u8>),
+        ll: u8,
+        pp: u8,
+        mmm: u8,
+        w: bool,
+        broadcast: bool,
+    ) -> Self {
+        EvexPrefix::new(reg, vvvv, (b, x), ll, pp, mmm, w, broadcast)
+    }
+
     pub(crate) fn encode(&self, sink: &mut impl CodeSink) {
         sink.put1(0x62);
         sink.put1(self.byte1);

@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, vex, w};
+use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{align, evex, fmt, inst, r, rex, rw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -98,6 +98,14 @@ pub fn list() -> Vec<Inst> {
         inst("vpslld", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x72).digit(6).ib(), _64b | compat | avx),
         inst("vpsllq", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xF3).r(), _64b | compat | avx),
         inst("vpsllq", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x73).digit(6).ib(), _64b | compat | avx),
+        // FIXME: uncomment once the avx512bw feature is bound
+        // inst("vpsllw", fmt("G", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Mem128)._66()._0f().wig().op(0xF1).r(), _64b | compat | avx512vl | avx512bw),
+        // inst("vpsllw", fmt("E", [w(xmm1), r(xmm_m128), r(imm8)]), evex(L128, FullMem)._66()._0f().wig().op(0x71).digit(6).ib(), _64b | compat | avx512vl | avx512bw),
+        inst("vpslld", fmt("G", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Mem128)._66()._0f().w0().op(0xF2).r(), _64b | compat | avx512vl | avx512f),
+        inst("vpslld", fmt("F", [w(xmm1), r(xmm_m128), r(imm8)]), evex(L128, Full)._66()._0f().w0().op(0x72).digit(6).ib(), _64b | compat | avx512vl | avx512f),
+        inst("vpsllq", fmt("G", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Mem128)._66()._0f().w1().op(0xF3).r(), _64b | compat | avx512vl | avx512f),
+        inst("vpsllq", fmt("F", [w(xmm1), r(xmm_m128), r(imm8)]), evex(L128, Full)._66()._0f().w1().op(0x73).digit(6).ib(), _64b | compat | avx512vl | avx512f),
+
         // Vector instructions (shift right).
         inst("psraw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE1]).r(), _64b | compat | sse2).alt(avx, "vpsraw_c"),
         inst("psraw", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x71]).digit(4).ib(), _64b | compat | sse2).alt(avx, "vpsraw_d"),
@@ -119,5 +127,19 @@ pub fn list() -> Vec<Inst> {
         inst("vpsrld", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x72).digit(2).ib(), _64b | compat | avx),
         inst("vpsrlq", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xD3).r(), _64b | compat | avx),
         inst("vpsrlq", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x73).digit(2).ib(), _64b | compat | avx),
+        // FIXME: uncomment once the avx512bw feature is bound
+        // inst("vpsraw", fmt("G", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Mem128)._66()._0f().wig().op(0xE1).r(), _64b | compat | avx512vl | avx512bw),
+        // inst("vpsraw", fmt("E", [w(xmm1), r(xmm_m128), r(imm8)]), evex(L128, FullMem)._66()._0f().wig().op(0x71).digit(4).ib(), _64b | compat | avx512vl | avx512bw),
+        inst("vpsrad", fmt("G", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Mem128)._66()._0f().w0().op(0xE2).r(), _64b | compat | avx512vl | avx512f),
+        inst("vpsrad", fmt("F", [w(xmm1), r(xmm_m128), r(imm8)]), evex(L128, Full)._66()._0f().w0().op(0x72).digit(4).ib(), _64b | compat | avx512vl | avx512f),
+        inst("vpsraq", fmt("G", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Mem128)._66()._0f().w1().op(0xE2).r(), _64b | compat | avx512vl | avx512f),
+        inst("vpsraq", fmt("F", [w(xmm1), r(xmm_m128), r(imm8)]), evex(L128, Full)._66()._0f().w1().op(0x72).digit(4).ib(), _64b | compat | avx512vl | avx512f),
+        // FIXME: uncomment once the avx512bw feature is bound
+        // inst("vpsrlw", fmt("G", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Mem128)._66()._0f().wig().op(0xD1).r(), _64b | compat | avx512vl | avx512bw),
+        // inst("vpsrlw", fmt("E", [w(xmm1), r(xmm_m128), r(imm8)]), evex(L128, FullMem)._66()._0f().wig().op(0x71).digit(2).ib(), _64b | compat | avx512vl | avx512bw),
+        inst("vpsrld", fmt("G", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Mem128)._66()._0f().w0().op(0xD2).r(), _64b | compat | avx512vl | avx512f),
+        inst("vpsrld", fmt("F", [w(xmm1), r(xmm_m128), r(imm8)]), evex(L128, Full)._66()._0f().w0().op(0x72).digit(2).ib(), _64b | compat | avx512vl | avx512f),
+        inst("vpsrlq", fmt("G", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Mem128)._66()._0f().w1().op(0xD3).r(), _64b | compat | avx512vl | avx512f),
+        inst("vpsrlq", fmt("F", [w(xmm1), r(xmm_m128), r(imm8)]), evex(L128, Full)._66()._0f().w1().op(0x73).digit(2).ib(), _64b | compat | avx512vl | avx512f),
     ]
 }

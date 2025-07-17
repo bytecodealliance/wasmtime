@@ -823,35 +823,6 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
-        Inst::XmmUnaryRmRImmEvex { op, src, dst, imm } => {
-            let dst = dst.to_reg().to_reg();
-            let src = match src.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let (opcode, opcode_ext, w) = match op {
-                Avx512Opcode::VpsraqImm => (0x72, 4, true),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            EvexInstruction::new()
-                .length(EvexVectorLength::V128)
-                .prefix(LegacyPrefixes::_66)
-                .map(OpcodeMap::_0F)
-                .w(w)
-                .opcode(opcode)
-                .reg(opcode_ext)
-                .vvvvv(dst.to_real_reg().unwrap().hw_enc())
-                .tuple_type(op.tuple_type())
-                .rm(src)
-                .imm(*imm)
-                .encode(sink);
-        }
-
         Inst::XmmRmREvex {
             op,
             src1,
@@ -886,7 +857,6 @@ pub(crate) fn emit(
             let (w, opcode, map) = match op {
                 Avx512Opcode::Vpermi2b => (false, 0x75, OpcodeMap::_0F38),
                 Avx512Opcode::Vpmullq => (true, 0x40, OpcodeMap::_0F38),
-                Avx512Opcode::Vpsraq => (true, 0xE2, OpcodeMap::_0F),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             EvexInstruction::new()

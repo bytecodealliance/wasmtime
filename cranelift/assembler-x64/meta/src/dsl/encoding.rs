@@ -47,7 +47,7 @@ pub fn vex(length: Length) -> Vex {
 
 /// An abbreviated constructor for EVEX-encoded instructions.
 #[must_use]
-pub fn evex(length: Length) -> Evex {
+pub fn evex(length: Length, tuple_type: TupleType) -> Evex {
     Evex {
         length,
         pp: None,
@@ -56,6 +56,7 @@ pub fn evex(length: Length) -> Evex {
         opcode: u8::MAX,
         modrm: None,
         imm: Imm::None,
+        tuple_type,
     }
 }
 
@@ -1243,6 +1244,9 @@ pub struct Evex {
     pub modrm: Option<ModRmKind>,
     /// See [`Rex.imm`](Rex.imm).
     pub imm: Imm,
+    /// The "Tuple Type" corresponding to scaling of the 8-bit displacement
+    /// parameter for memory operands. See [`TupleType`] for more information.
+    pub tuple_type: TupleType,
 }
 
 impl Evex {
@@ -1361,6 +1365,36 @@ impl Evex {
             _ => None,
         }
     }
+
+    /// Set the digit extending the opcode; equivalent to `/<digit>` in the
+    /// reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `extension` is too large.
+    #[must_use]
+    pub fn digit(self, extension: u8) -> Self {
+        assert!(extension <= 0b111, "must fit in 3 bits");
+        Self {
+            modrm: Some(ModRmKind::Digit(extension)),
+            ..self
+        }
+    }
+
+    /// Append a byte-sized immediate operand (8-bit); equivalent to `ib` in the
+    /// reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an immediate operand is already set.
+    #[must_use]
+    pub fn ib(self) -> Self {
+        assert_eq!(self.imm, Imm::None);
+        Self {
+            imm: Imm::ib,
+            ..self
+        }
+    }
 }
 
 impl From<Evex> for Encoding {
@@ -1387,4 +1421,26 @@ impl fmt::Display for Evex {
         }
         Ok(())
     }
+}
+
+/// Tuple Type definitions used in EVEX encodings.
+///
+/// This enumeration corresponds to table 2-34 and 2-35 in the Intel manual.
+/// This is a property of all instruction formats listed in the encoding table
+/// for each instruction.
+#[expect(missing_docs, reason = "matching manual names")]
+pub enum TupleType {
+    Full,
+    Half,
+    FullMem,
+    Tuple1Scalar,
+    Tuple1Fixed,
+    Tuple2,
+    Tuple4,
+    Tuple8,
+    HalfMem,
+    QuarterMem,
+    EigthMem,
+    Mem128,
+    Movddup,
 }
