@@ -217,7 +217,7 @@ pub mod foo {
                     "f32-param",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (f32,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::f32_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -228,7 +228,7 @@ pub mod foo {
                     "f64-param",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (f64,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::f64_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -239,7 +239,7 @@ pub mod foo {
                     "f32-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::f32_result(accessor).await;
                             Ok((r,))
                         })
@@ -249,7 +249,7 @@ pub mod foo {
                     "f64-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::f64_result(accessor).await;
                             Ok((r,))
                         })

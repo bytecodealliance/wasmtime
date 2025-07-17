@@ -1420,6 +1420,11 @@ impl Wasmtime {
             let key = resolve.name_world_key(key);
             return resolve.interfaces[id].functions.iter().any(|(name, _)| {
                 self.opts.import_call_style(Some(&key), name) == CallStyle::Concurrent
+            }) || get_resources(resolve, id).any(|(_, name)| {
+                matches!(
+                    self.opts.drop_call_style(Some(&key), name),
+                    CallStyle::Concurrent
+                )
             });
         }
         unreachable!()
@@ -1592,30 +1597,48 @@ impl Wasmtime {
     ) {
         let gate = FeatureGate::open(src, stability);
         let camel = name.to_upper_camel_case();
-        if let CallStyle::Async | CallStyle::Concurrent = opts.drop_call_style(qualifier, name) {
-            uwriteln!(
-                src,
-                "{inst}.resource_async(
-                    \"{name}\",
-                    {wt}::component::ResourceType::host::<{camel}>(),
-                    move |mut store, rep| {{
-                        {wt}::component::__internal::Box::new(async move {{
-                            Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep)).await
-                        }})
-                    }},
-                )?;"
-            )
-        } else {
-            uwriteln!(
-                src,
-                "{inst}.resource(
-                    \"{name}\",
-                    {wt}::component::ResourceType::host::<{camel}>(),
-                    move |mut store, rep| -> {wt}::Result<()> {{
-                        Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep))
-                    }},
-                )?;"
-            )
+        match opts.drop_call_style(qualifier, name) {
+            CallStyle::Concurrent => {
+                uwriteln!(
+                    src,
+                    "{inst}.resource_concurrent(
+                        \"{name}\",
+                        {wt}::component::ResourceType::host::<{camel}>(),
+                        move |caller: &{wt}::component::Accessor::<T>, rep| {{
+                            {wt}::component::__internal::Box::pin(async move {{
+                                let accessor = &caller.with_data(host_getter);
+                                Host{camel}Concurrent::drop(accessor, {wt}::component::Resource::new_own(rep)).await
+                            }})
+                        }},
+                    )?;"
+                )
+            }
+            CallStyle::Async => {
+                uwriteln!(
+                    src,
+                    "{inst}.resource_async(
+                        \"{name}\",
+                        {wt}::component::ResourceType::host::<{camel}>(),
+                        move |mut store, rep| {{
+                            {wt}::component::__internal::Box::new(async move {{
+                                Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep)).await
+                            }})
+                        }},
+                    )?;"
+                )
+            }
+            CallStyle::Sync => {
+                uwriteln!(
+                    src,
+                    "{inst}.resource(
+                        \"{name}\",
+                        {wt}::component::ResourceType::host::<{camel}>(),
+                        move |mut store, rep| -> {wt}::Result<()> {{
+                            Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep))
+                        }},
+                    )?;"
+                )
+            }
         }
         gate.close(src);
     }
@@ -2511,7 +2534,7 @@ impl<'a> InterfaceGenerator<'a> {
                 uwriteln!(
                     self.src,
                     "{wt}::component::__internal::Box::pin(async move {{
-                        let accessor = &mut unsafe {{ caller.with_data(host_getter) }};
+                        let accessor = &caller.with_data(host_getter);
                     "
                 );
             }
@@ -2941,7 +2964,20 @@ impl<'a> InterfaceGenerator<'a> {
             CallStyle::Async | CallStyle::Concurrent
         );
         let partition = self.partition_concurrent_funcs(functions.iter().copied());
-        ret.any_concurrent = !partition.concurrent.is_empty();
+        ret.any_concurrent = !partition.concurrent.is_empty()
+            || extra_functions.iter().any(|f| {
+                matches!(
+                    f,
+                    ExtraTraitMethod::ResourceDrop { name }
+                    if matches!(
+                        self
+                            .generator
+                            .opts
+                            .drop_call_style(self.qualifier().as_deref(), name),
+                        CallStyle::Concurrent
+                    )
+                )
+            });
 
         let mut concurrent_supertraits = vec![format!("{wt}::component::HasData")];
         let mut sync_supertraits = vec![];
@@ -2953,7 +2989,13 @@ impl<'a> InterfaceGenerator<'a> {
             let camel = name.to_upper_camel_case();
             sync_supertraits.push(format!("Host{camel}"));
             let funcs = self.partition_concurrent_funcs(get_resource_functions(self.resolve, *id));
-            if !funcs.concurrent.is_empty() {
+            let concurrent_drop = matches!(
+                self.generator
+                    .opts
+                    .drop_call_style(self.qualifier().as_deref(), name),
+                CallStyle::Concurrent
+            );
+            if concurrent_drop || !funcs.concurrent.is_empty() {
                 ret.any_concurrent = true;
                 concurrent_supertraits.push(format!("Host{camel}Concurrent"));
             }
@@ -2974,6 +3016,26 @@ impl<'a> InterfaceGenerator<'a> {
                 self.generate_function_trait_sig(func, false);
                 self.push_str(";\n");
             }
+
+            for extra in extra_functions {
+                match extra {
+                    ExtraTraitMethod::ResourceDrop { name } => {
+                        let camel = name.to_upper_camel_case();
+                        if let CallStyle::Concurrent = self
+                            .generator
+                            .opts
+                            .drop_call_style(self.qualifier().as_deref(), name)
+                        {
+                            uwrite!(
+                                self.src,
+                                "fn drop<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>) -> impl ::core::future::Future<Output = {wt}::Result<()>> + Send where Self: Sized;"
+                            );
+                        }
+                    }
+                    ExtraTraitMethod::ErrorConvert { .. } => {}
+                }
+            }
+
             uwriteln!(self.src, "}}");
         }
 
@@ -2998,17 +3060,19 @@ impl<'a> InterfaceGenerator<'a> {
             match extra {
                 ExtraTraitMethod::ResourceDrop { name } => {
                     let camel = name.to_upper_camel_case();
-                    if let CallStyle::Async | CallStyle::Concurrent = self
+                    let style = self
                         .generator
                         .opts
-                        .drop_call_style(self.qualifier().as_deref(), name)
-                    {
-                        uwrite!(self.src, "async ");
+                        .drop_call_style(self.qualifier().as_deref(), name);
+                    if !matches!(style, CallStyle::Concurrent) {
+                        if let CallStyle::Async = style {
+                            uwrite!(self.src, "async ");
+                        }
+                        uwrite!(
+                            self.src,
+                            "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()>;"
+                        );
                     }
-                    uwrite!(
-                        self.src,
-                        "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()>;"
-                    );
                 }
                 ExtraTraitMethod::ErrorConvert { name, id } => {
                     let root = self.path_to_root();
@@ -3058,23 +3122,25 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) -> {wt}::Result<{camel}>
             match extra {
                 ExtraTraitMethod::ResourceDrop { name } => {
                     let camel = name.to_upper_camel_case();
-                    let mut await_ = "";
-                    if let CallStyle::Async | CallStyle::Concurrent = self
+                    let style = self
                         .generator
                         .opts
-                        .drop_call_style(self.qualifier().as_deref(), name)
-                    {
-                        self.src.push_str("async ");
-                        await_ = ".await";
-                    }
-                    uwriteln!(
-                        self.src,
-                        "
+                        .drop_call_style(self.qualifier().as_deref(), name);
+                    let mut await_ = "";
+                    if !matches!(style, CallStyle::Concurrent) {
+                        if let CallStyle::Async = style {
+                            self.src.push_str("async ");
+                            await_ = ".await";
+                        }
+                        uwriteln!(
+                            self.src,
+                            "
 fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()> {{
     {trait_name}::drop(*self, rep){await_}
 }}
                         ",
-                    );
+                        );
+                    }
                 }
                 ExtraTraitMethod::ErrorConvert { name, id } => {
                     let root = self.path_to_root();

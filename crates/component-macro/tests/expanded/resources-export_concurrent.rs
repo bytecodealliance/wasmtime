@@ -185,7 +185,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::transitive_import::HostConcurrent + Send,
             for<'a> D::Data<'a>: foo::foo::transitive_import::Host + Send,
             T: 'static + Send,
         {
@@ -220,20 +220,19 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Y {}
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait HostY: Send {
-                async fn drop(
-                    &mut self,
+            pub trait HostYConcurrent: wasmtime::component::HasData + Send {
+                fn drop<T: 'static>(
+                    accessor: &wasmtime::component::Accessor<T, Self>,
                     rep: wasmtime::component::Resource<Y>,
-                ) -> wasmtime::Result<()>;
+                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
+                where
+                    Self: Sized;
             }
-            impl<_T: HostY + ?Sized + Send> HostY for &mut _T {
-                async fn drop(
-                    &mut self,
-                    rep: wasmtime::component::Resource<Y>,
-                ) -> wasmtime::Result<()> {
-                    HostY::drop(*self, rep).await
-                }
-            }
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait HostY: Send {}
+            impl<_T: HostY + ?Sized + Send> HostY for &mut _T {}
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait HostConcurrent: wasmtime::component::HasData + Send + HostYConcurrent {}
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send + HostY {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
@@ -242,18 +241,19 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostConcurrent,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/transitive-import")?;
-                inst.resource_async(
+                inst.resource_concurrent(
                     "y",
                     wasmtime::component::ResourceType::host::<Y>(),
-                    move |mut store, rep| {
-                        wasmtime::component::__internal::Box::new(async move {
-                            HostY::drop(
-                                    &mut host_getter(store.data_mut()),
+                    move |caller: &wasmtime::component::Accessor<T>, rep| {
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &caller.with_data(host_getter);
+                            HostYConcurrent::drop(
+                                    accessor,
                                     wasmtime::component::Resource::new_own(rep),
                                 )
                                 .await

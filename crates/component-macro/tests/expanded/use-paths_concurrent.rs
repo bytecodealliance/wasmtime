@@ -211,7 +211,7 @@ pub mod foo {
                     "a",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::a(accessor).await;
                             Ok((r,))
                         })
@@ -254,7 +254,7 @@ pub mod foo {
                     "a",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::a(accessor).await;
                             Ok((r,))
                         })
@@ -297,7 +297,7 @@ pub mod foo {
                     "a",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::a(accessor).await;
                             Ok((r,))
                         })
@@ -342,7 +342,7 @@ pub mod d {
             "b",
             move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                 wasmtime::component::__internal::Box::pin(async move {
-                    let accessor = &mut unsafe { caller.with_data(host_getter) };
+                    let accessor = &caller.with_data(host_getter);
                     let r = <D as HostConcurrent>::b(accessor).await;
                     Ok((r,))
                 })

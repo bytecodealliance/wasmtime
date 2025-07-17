@@ -248,7 +248,7 @@ pub mod foo {
                     "option-test",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::option_test(accessor).await;
                             Ok((r,))
                         })

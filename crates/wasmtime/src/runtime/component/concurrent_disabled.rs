@@ -80,12 +80,12 @@ impl ErrorContext {
     }
 }
 
-pub struct HostStream<P> {
+pub struct StreamReader<P> {
     uninhabited: Uninhabited,
     _phantom: PhantomData<P>,
 }
 
-impl<P> HostStream<P> {
+impl<P> StreamReader<P> {
     pub(crate) fn into_val(self) -> Val {
         match self.uninhabited {}
     }
@@ -107,12 +107,12 @@ impl<P> HostStream<P> {
     }
 }
 
-pub struct HostFuture<P> {
+pub struct FutureReader<P> {
     uninhabited: Uninhabited,
     _phantom: PhantomData<P>,
 }
 
-impl<P> HostFuture<P> {
+impl<P> FutureReader<P> {
     pub(crate) fn into_val(self) -> Val {
         match self.uninhabited {}
     }

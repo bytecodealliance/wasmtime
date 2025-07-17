@@ -294,7 +294,7 @@ pub mod foo {
                     "kebab-case",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::kebab_case(accessor).await;
                             Ok(r)
                         })
@@ -307,7 +307,7 @@ pub mod foo {
                         (arg0,): (LudicrousSpeed,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::foo(accessor, arg0).await;
                             Ok(r)
                         })
@@ -317,7 +317,7 @@ pub mod foo {
                     "function-with-dashes",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::function_with_dashes(accessor)
                                 .await;
                             Ok(r)
@@ -328,7 +328,7 @@ pub mod foo {
                     "function-with-no-weird-characters",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::function_with_no_weird_characters(
                                     accessor,
                                 )
@@ -341,7 +341,7 @@ pub mod foo {
                     "apple",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::apple(accessor).await;
                             Ok(r)
                         })
@@ -351,7 +351,7 @@ pub mod foo {
                     "apple-pear",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::apple_pear(accessor).await;
                             Ok(r)
                         })
@@ -361,7 +361,7 @@ pub mod foo {
                     "apple-pear-grape",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::apple_pear_grape(accessor)
                                 .await;
                             Ok(r)
@@ -372,7 +372,7 @@ pub mod foo {
                     "a0",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::a0(accessor).await;
                             Ok(r)
                         })
@@ -382,7 +382,7 @@ pub mod foo {
                     "is-XML",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::is_xml(accessor).await;
                             Ok(r)
                         })
@@ -392,7 +392,7 @@ pub mod foo {
                     "explicit",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::explicit(accessor).await;
                             Ok(r)
                         })
@@ -402,7 +402,7 @@ pub mod foo {
                     "explicit-kebab",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::explicit_kebab(accessor)
                                 .await;
                             Ok(r)
@@ -413,7 +413,7 @@ pub mod foo {
                     "bool",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::bool(accessor).await;
                             Ok(r)
                         })

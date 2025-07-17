@@ -15,7 +15,7 @@ use wasmtime::component::{
 
 struct InputTask<T> {
     rx: T,
-    tx: StreamWriter<Cursor<BytesMut>>,
+    tx: StreamWriter<u8>,
 }
 
 impl<T, U, V> AccessorTask<T, U, wasmtime::Result<()>> for InputTask<V>
@@ -47,7 +47,7 @@ where
 }
 
 struct OutputTask<T> {
-    rx: StreamReader<BytesMut>,
+    rx: StreamReader<u8>,
     tx: T,
 }
 
@@ -139,18 +139,18 @@ impl terminal_stderr::Host for WasiCliCtxView<'_> {
 }
 
 impl stdin::HostConcurrent for WasiCli {
-    async fn get_stdin<U>(store: &Accessor<U, Self>) -> wasmtime::Result<HostStream<u8>> {
+    async fn get_stdin<U>(store: &Accessor<U, Self>) -> wasmtime::Result<StreamReader<u8>> {
         store.with(|mut view| {
             let instance = view.instance();
             let (tx, rx) = instance
-                .stream::<_, _, BytesMut>(&mut view)
+                .stream(&mut view)
                 .context("failed to create stream")?;
             let stdin = view.get().ctx.stdin.reader();
             view.spawn(InputTask {
                 rx: Box::into_pin(stdin),
                 tx,
             });
-            Ok(rx.into())
+            Ok(rx)
         })
     }
 }
@@ -160,13 +160,12 @@ impl stdin::Host for WasiCliCtxView<'_> {}
 impl stdout::HostConcurrent for WasiCli {
     async fn set_stdout<U>(
         store: &Accessor<U, Self>,
-        data: HostStream<u8>,
+        data: StreamReader<u8>,
     ) -> wasmtime::Result<()> {
         store.with(|mut view| {
-            let stdout = data.into_reader(&mut view);
             let tx = view.get().ctx.stdout.writer();
             view.spawn(OutputTask {
-                rx: stdout,
+                rx: data,
                 tx: Box::into_pin(tx),
             });
             Ok(())
@@ -179,13 +178,12 @@ impl stdout::Host for WasiCliCtxView<'_> {}
 impl stderr::HostConcurrent for WasiCli {
     async fn set_stderr<U>(
         store: &Accessor<U, Self>,
-        data: HostStream<u8>,
+        data: StreamReader<u8>,
     ) -> wasmtime::Result<()> {
         store.with(|mut view| {
-            let stderr = data.into_reader(&mut view);
             let tx = view.get().ctx.stderr.writer();
             view.spawn(OutputTask {
-                rx: stderr,
+                rx: data,
                 tx: Box::into_pin(tx),
             });
             Ok(())

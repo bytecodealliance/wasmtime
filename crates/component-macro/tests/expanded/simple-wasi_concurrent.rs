@@ -260,7 +260,7 @@ pub mod foo {
                     "create-directory-at",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::create_directory_at(accessor)
                                 .await;
                             Ok((r,))
@@ -271,7 +271,7 @@ pub mod foo {
                     "stat",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::stat(accessor).await;
                             Ok((r,))
                         })

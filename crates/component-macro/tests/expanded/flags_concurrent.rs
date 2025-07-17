@@ -349,7 +349,7 @@ pub mod foo {
                     "roundtrip-flag1",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag1,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::roundtrip_flag1(
                                     accessor,
                                     arg0,
@@ -363,7 +363,7 @@ pub mod foo {
                     "roundtrip-flag2",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag2,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::roundtrip_flag2(
                                     accessor,
                                     arg0,
@@ -377,7 +377,7 @@ pub mod foo {
                     "roundtrip-flag4",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag4,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::roundtrip_flag4(
                                     accessor,
                                     arg0,
@@ -391,7 +391,7 @@ pub mod foo {
                     "roundtrip-flag8",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag8,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::roundtrip_flag8(
                                     accessor,
                                     arg0,
@@ -405,7 +405,7 @@ pub mod foo {
                     "roundtrip-flag16",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag16,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::roundtrip_flag16(
                                     accessor,
                                     arg0,
@@ -419,7 +419,7 @@ pub mod foo {
                     "roundtrip-flag32",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag32,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::roundtrip_flag32(
                                     accessor,
                                     arg0,
@@ -433,7 +433,7 @@ pub mod foo {
                     "roundtrip-flag64",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag64,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::roundtrip_flag64(
                                     accessor,
                                     arg0,

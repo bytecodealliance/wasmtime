@@ -585,7 +585,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<u8>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_u8_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -599,7 +599,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<u16>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_u16_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -613,7 +613,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<u32>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_u32_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -627,7 +627,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<u64>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_u64_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -641,7 +641,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<i8>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_s8_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -655,7 +655,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<i16>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_s16_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -669,7 +669,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<i32>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_s32_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -683,7 +683,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<i64>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_s64_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -697,7 +697,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<f32>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_f32_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -711,7 +711,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<f64>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_f64_param(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -722,7 +722,7 @@ pub mod foo {
                     "list-u8-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_u8_ret(accessor).await;
                             Ok((r,))
                         })
@@ -732,7 +732,7 @@ pub mod foo {
                     "list-u16-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_u16_ret(accessor).await;
                             Ok((r,))
                         })
@@ -742,7 +742,7 @@ pub mod foo {
                     "list-u32-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_u32_ret(accessor).await;
                             Ok((r,))
                         })
@@ -752,7 +752,7 @@ pub mod foo {
                     "list-u64-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_u64_ret(accessor).await;
                             Ok((r,))
                         })
@@ -762,7 +762,7 @@ pub mod foo {
                     "list-s8-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_s8_ret(accessor).await;
                             Ok((r,))
                         })
@@ -772,7 +772,7 @@ pub mod foo {
                     "list-s16-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_s16_ret(accessor).await;
                             Ok((r,))
                         })
@@ -782,7 +782,7 @@ pub mod foo {
                     "list-s32-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_s32_ret(accessor).await;
                             Ok((r,))
                         })
@@ -792,7 +792,7 @@ pub mod foo {
                     "list-s64-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_s64_ret(accessor).await;
                             Ok((r,))
                         })
@@ -802,7 +802,7 @@ pub mod foo {
                     "list-f32-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_f32_ret(accessor).await;
                             Ok((r,))
                         })
@@ -812,7 +812,7 @@ pub mod foo {
                     "list-f64-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::list_f64_ret(accessor).await;
                             Ok((r,))
                         })
@@ -825,7 +825,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<(u8, i8)>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::tuple_list(accessor, arg0)
                                 .await;
                             Ok((r,))
@@ -845,7 +845,7 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::string_list_arg(
                                     accessor,
                                     arg0,
@@ -859,7 +859,7 @@ pub mod foo {
                     "string-list-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::string_list_ret(accessor)
                                 .await;
                             Ok((r,))
@@ -879,7 +879,7 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::tuple_string_list(
                                     accessor,
                                     arg0,
@@ -902,7 +902,7 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::string_list(accessor, arg0)
                                 .await;
                             Ok((r,))
@@ -916,7 +916,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<SomeRecord>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::record_list(accessor, arg0)
                                 .await;
                             Ok((r,))
@@ -930,7 +930,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<OtherRecord>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::record_list_reverse(
                                     accessor,
                                     arg0,
@@ -947,7 +947,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<SomeVariant>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::variant_list(accessor, arg0)
                                 .await;
                             Ok((r,))
@@ -961,7 +961,7 @@ pub mod foo {
                         (arg0,): (LoadStoreAllSizes,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::load_store_everything(
                                     accessor,
                                     arg0,
