@@ -6,8 +6,8 @@ use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::isa::x64::inst::Inst;
 use crate::isa::x64::inst::regs::pretty_print_reg;
+use crate::isa::x64::settings as x64_settings;
 use crate::machinst::*;
-use smallvec::{SmallVec, smallvec};
 use std::fmt;
 use std::string::String;
 
@@ -777,21 +777,15 @@ pub use crate::isa::x64::lower::isle::generated_code::Avx512Opcode;
 
 impl Avx512Opcode {
     /// Which `InstructionSet`s support the opcode?
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
+    pub(crate) fn is_available(&self, flags: &x64_settings::Flags) -> bool {
         match self {
             Avx512Opcode::Vcvtudq2ps
             | Avx512Opcode::Vpabsq
             | Avx512Opcode::Vpsraq
-            | Avx512Opcode::VpsraqImm => {
-                smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL]
-            }
-            Avx512Opcode::Vpermi2b => {
-                smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512VBMI]
-            }
-            Avx512Opcode::Vpmullq => smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512DQ],
-            Avx512Opcode::Vpopcntb => {
-                smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512BITALG]
-            }
+            | Avx512Opcode::VpsraqImm => flags.use_avx512vl() && flags.use_avx512f(),
+            Avx512Opcode::Vpermi2b => flags.use_avx512vl() && flags.use_avx512vbmi(),
+            Avx512Opcode::Vpmullq => flags.use_avx512vl() && flags.use_avx512dq(),
+            Avx512Opcode::Vpopcntb => flags.use_avx512vl() && flags.use_avx512bitalg(),
         }
     }
 
