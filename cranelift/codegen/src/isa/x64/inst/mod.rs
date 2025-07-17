@@ -1562,6 +1562,14 @@ pub enum LabelUse {
     /// next instruction (so the size of the payload -- 4 bytes -- is subtracted from the payload).
     JmpRel32,
 
+    /// An 8-bit offset from location of relocation itself, added to the
+    /// existing value at that location.
+    ///
+    /// Used for control flow instructions which consider an offset from the
+    /// start of the next instruction (so the size of the payload -- 1 byte --
+    /// is subtracted from the payload).
+    JmpRel8,
+
     /// A 32-bit offset from location of relocation itself, added to the existing value at that
     /// location.
     PCRel32,
@@ -1573,18 +1581,21 @@ impl MachInstLabelUse for LabelUse {
     fn max_pos_range(self) -> CodeOffset {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => 0x7fff_ffff,
+            LabelUse::JmpRel8 => 0x7f,
         }
     }
 
     fn max_neg_range(self) -> CodeOffset {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => 0x8000_0000,
+            LabelUse::JmpRel8 => 0x80,
         }
     }
 
     fn patch_size(self) -> CodeOffset {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => 4,
+            LabelUse::JmpRel8 => 1,
         }
     }
 
@@ -1599,6 +1610,9 @@ impl MachInstLabelUse for LabelUse {
                 let value = pc_rel.wrapping_add(addend).wrapping_sub(4);
                 buffer.copy_from_slice(&value.to_le_bytes()[..]);
             }
+            LabelUse::JmpRel8 => {
+                buffer[0] = buffer[0].wrapping_add(pc_rel as u8).wrapping_sub(1);
+            }
             LabelUse::PCRel32 => {
                 let addend = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
                 let value = pc_rel.wrapping_add(addend);
@@ -1610,12 +1624,21 @@ impl MachInstLabelUse for LabelUse {
     fn supports_veneer(self) -> bool {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => false,
+
+            // Technically this is possible to have a veneer because it can jump
+            // to a 32-bit jump which keeps going. That being said at this time
+            // this variant is only used in `emit.rs` for jumps that are already
+            // known to be short so it's a bug if we jump to a jump that's too
+            // far away. In the future if general-purpose basic-block
+            // terminators are switched to using short jumps to get promoted to
+            // a long jump then this may wish to change.
+            LabelUse::JmpRel8 => false,
         }
     }
 
     fn veneer_size(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::JmpRel8 => 0,
         }
     }
 
@@ -1625,7 +1648,7 @@ impl MachInstLabelUse for LabelUse {
 
     fn generate_veneer(self, _: &mut [u8], _: CodeOffset) -> (CodeOffset, LabelUse) {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 => {
+            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::JmpRel8 => {
                 panic!("Veneer not supported for JumpRel32 label-use.");
             }
         }
