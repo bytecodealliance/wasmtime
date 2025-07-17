@@ -14,7 +14,10 @@ use {
     },
     wasmtime::{
         Engine, Store,
-        component::{Linker, ResourceTable, StreamReader, StreamWriter, VecBuffer},
+        component::{
+            GuardedFutureReader, GuardedStreamReader, GuardedStreamWriter, Linker, ResourceTable,
+            VecBuffer,
+        },
     },
     wasmtime_wasi::p2::WasiCtxBuilder,
 };
@@ -46,108 +49,114 @@ pub async fn async_watch_streams() -> Result<()> {
     let instance = linker.instantiate_async(&mut store, &component).await?;
 
     // Test watching and then dropping the read end of a stream.
-    let (mut tx, rx) = instance.stream::<u8, Option<_>, Option<_>>(&mut store)?;
+    let (mut tx, rx) = instance.stream::<u8>(&mut store)?;
     instance
         .run_concurrent(&mut store, async |store| {
-            futures::join!(tx.watch_reader(store), async {
-                drop(rx);
-            });
+            futures::join!(tx.watch_reader(store), async { rx.close_with(store) }).1
         })
-        .await?;
+        .await??;
 
     // Test dropping and then watching the read end of a stream.
-    let (mut tx, rx) = instance.stream::<u8, Option<_>, Option<_>>(&mut store)?;
-    drop(rx);
+    let (mut tx, rx) = instance.stream::<u8>(&mut store)?;
     instance
-        .run_concurrent(&mut store, async |store| tx.watch_reader(store).await)
-        .await?;
+        .run_concurrent(&mut store, async |store| {
+            rx.close_with(store)?;
+            tx.watch_reader(store).await;
+            anyhow::Ok(())
+        })
+        .await??;
 
     // Test watching and then dropping the write end of a stream.
-    let (tx, mut rx) = instance.stream::<u8, Option<_>, Option<_>>(&mut store)?;
+    let (tx, mut rx) = instance.stream::<u8>(&mut store)?;
     instance
         .run_concurrent(&mut store, async |store| {
-            futures::join!(rx.watch_writer(store), async {
-                drop(tx);
-            });
+            futures::join!(rx.watch_writer(store), async { tx.close_with(store) }).1
         })
-        .await?;
+        .await??;
 
     // Test dropping and then watching the write end of a stream.
-    let (tx, mut rx) = instance.stream::<u8, Option<_>, Option<_>>(&mut store)?;
-    drop(tx);
+    let (tx, mut rx) = instance.stream::<u8>(&mut store)?;
     instance
-        .run_concurrent(&mut store, async |store| rx.watch_writer(store).await)
-        .await?;
+        .run_concurrent(&mut store, async |store| {
+            tx.close_with(store)?;
+            rx.watch_writer(store).await;
+            anyhow::Ok(())
+        })
+        .await??;
 
     // Test watching and then dropping the read end of a future.
-    let (mut tx, rx) = instance.future::<u8>(|| 42, &mut store)?;
+    let (mut tx, rx) = instance.future::<u8>(&mut store, || 42)?;
     instance
         .run_concurrent(&mut store, async |store| {
-            futures::join!(tx.watch_reader(store), async {
-                drop(rx);
-            });
+            futures::join!(tx.watch_reader(store), async { rx.close_with(store) }).1
         })
-        .await?;
+        .await??;
 
     // Test dropping and then watching the read end of a future.
-    let (mut tx, rx) = instance.future::<u8>(|| 42, &mut store)?;
-    drop(rx);
-    instance
-        .run_concurrent(&mut store, async |store| tx.watch_reader(store).await)
-        .await?;
-
-    // Test watching and then dropping the write end of a future.
-    let (tx, mut rx) = instance.future::<u8>(|| 42, &mut store)?;
+    let (mut tx, rx) = instance.future::<u8>(&mut store, || 42)?;
     instance
         .run_concurrent(&mut store, async |store| {
-            futures::join!(rx.watch_writer(store), async {
-                drop(tx);
-            });
+            rx.close_with(store)?;
+            tx.watch_reader(store).await;
+            anyhow::Ok(())
         })
-        .await?;
+        .await??;
+
+    // Test watching and then dropping the write end of a future.
+    let (tx, mut rx) = instance.future::<u8>(&mut store, || 42)?;
+    instance
+        .run_concurrent(&mut store, async |store| {
+            futures::join!(rx.watch_writer(store), async { tx.close_with(store) }).1
+        })
+        .await??;
 
     // Test dropping and then watching the write end of a future.
-    let (tx, mut rx) = instance.future::<u8>(|| 42, &mut store)?;
-    drop(tx);
+    let (tx, mut rx) = instance.future::<u8>(&mut store, || 42)?;
     instance
-        .run_concurrent(&mut store, async |store| rx.watch_writer(store).await)
-        .await?;
+        .run_concurrent(&mut store, async |store| {
+            tx.close_with(store)?;
+            rx.watch_writer(store).await;
+            anyhow::Ok(())
+        })
+        .await??;
 
-    enum Event {
-        Write(Option<StreamWriter<Option<u8>>>),
-        Read(Option<StreamReader<Option<u8>>>, Option<u8>),
+    enum Event<'a> {
+        Write(Option<GuardedStreamWriter<'a, u8, Ctx>>),
+        Read(Option<GuardedStreamReader<'a, u8, Ctx>>, Option<u8>),
     }
 
     // Test watching, then writing to, then dropping, then writing again to the
     // read end of a stream.
+    let (tx, rx) = instance.stream(&mut store)?;
     instance
-        .run_concurrent(&mut store, async |store| -> wasmtime::Result<_> {
+        .run_concurrent(&mut store, async move |store| -> wasmtime::Result<_> {
+            let mut tx = GuardedStreamWriter::new(store, tx);
+            let mut rx = GuardedStreamReader::new(store, rx);
             let mut futures = FuturesUnordered::new();
-            let (mut tx, mut rx) = store.with(|s| instance.stream(s))?;
             assert!(
-                pin!(tx.watch_reader(store))
+                pin!(tx.watch_reader())
                     .poll(&mut Context::from_waker(&Waker::noop()))
                     .is_pending()
             );
             futures.push(
                 async move {
-                    tx.write_all(store, Some(42)).await;
+                    tx.write_all(Some(42)).await;
                     let w = if tx.is_closed() { None } else { Some(tx) };
-                    Event::Write(w)
+                    anyhow::Ok(Event::Write(w))
                 }
                 .boxed(),
             );
             futures.push(
                 async move {
-                    let b = rx.read(store, None).await;
+                    let b = rx.read(None).await;
                     let r = if rx.is_closed() { None } else { Some(rx) };
-                    Event::Read(r, b)
+                    Ok(Event::Read(r, b))
                 }
                 .boxed(),
             );
             let mut rx = None;
             let mut tx = None;
-            while let Some(event) = futures.next().await {
+            while let Some(event) = futures.try_next().await? {
                 match event {
                     Event::Write(None) => unreachable!(),
                     Event::Write(Some(new_tx)) => tx = Some(new_tx),
@@ -161,8 +170,8 @@ pub async fn async_watch_streams() -> Result<()> {
             drop(rx);
 
             let mut tx = tx.take().unwrap();
-            tx.watch_reader(store).await;
-            tx.write_all(store, Some(42)).await;
+            tx.watch_reader().await;
+            tx.write_all(Some(42)).await;
             assert!(tx.is_closed());
             Ok(())
         })
@@ -206,10 +215,10 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
 
     let instance = linker.instantiate_async(&mut store, &component).await?;
 
-    enum StreamEvent {
-        FirstWrite(Option<StreamWriter<VecBuffer<u8>>>),
-        FirstRead(Option<StreamReader<Vec<u8>>>, Vec<u8>),
-        SecondWrite(Option<StreamWriter<VecBuffer<u8>>>),
+    enum StreamEvent<'a> {
+        FirstWrite(Option<GuardedStreamWriter<'a, u8, Ctx>>),
+        FirstRead(Option<GuardedStreamReader<'a, u8, Ctx>>, Vec<u8>),
+        SecondWrite(Option<GuardedStreamWriter<'a, u8, Ctx>>),
         GuestCompleted,
     }
 
@@ -225,83 +234,95 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
     let value = 42_u8;
 
     // First, test stream host->host
-    instance
-        .run_concurrent(&mut store, async |store| -> wasmtime::Result<_> {
-            let (mut tx, mut rx) = store.with(|mut s| instance.stream(&mut s))?;
+    {
+        let (tx, rx) = instance.stream(&mut store)?;
+        let values = values.clone();
 
-            let mut futures = FuturesUnordered::new();
-            futures.push({
-                let values = values.clone();
-                async move {
-                    tx.write_all(store, values.into()).await;
-                    StreamEvent::FirstWrite(if tx.is_closed() { None } else { Some(tx) })
-                }
-                .boxed()
-            });
-            futures.push(
-                async move {
-                    let b = rx.read(store, Vec::with_capacity(3)).await;
-                    let r = if rx.is_closed() { None } else { Some(rx) };
-                    StreamEvent::FirstRead(r, b)
-                }
-                .boxed(),
-            );
+        instance
+            .run_concurrent(&mut store, async move |store| -> wasmtime::Result<_> {
+                let mut tx = GuardedStreamWriter::new(store, tx);
+                let mut rx = GuardedStreamReader::new(store, rx);
 
-            let mut count = 0;
-            while let Some(event) = futures.next().await {
-                count += 1;
-                match event {
-                    StreamEvent::FirstWrite(Some(mut tx)) => {
-                        if watch {
-                            futures.push(
-                                async move {
-                                    tx.watch_reader(store).await;
-                                    StreamEvent::SecondWrite(None)
-                                }
-                                .boxed(),
-                            );
+                let mut futures = FuturesUnordered::new();
+                futures.push({
+                    let values = values.clone();
+                    async move {
+                        tx.write_all(VecBuffer::from(values)).await;
+                        anyhow::Ok(StreamEvent::FirstWrite(if tx.is_closed() {
+                            None
                         } else {
-                            futures.push({
-                                let values = values.clone();
-                                async move {
-                                    tx.write_all(store, values.into()).await;
-                                    StreamEvent::SecondWrite(if tx.is_closed() {
-                                        None
-                                    } else {
-                                        Some(tx)
-                                    })
-                                }
-                                .boxed()
-                            });
-                        }
+                            Some(tx)
+                        }))
                     }
-                    StreamEvent::FirstWrite(None) => {
-                        panic!("first write should have been accepted")
+                    .boxed()
+                });
+                futures.push(
+                    async move {
+                        let b = rx.read(Vec::with_capacity(3)).await;
+                        let r = if rx.is_closed() { None } else { Some(rx) };
+                        Ok(StreamEvent::FirstRead(r, b))
                     }
-                    StreamEvent::FirstRead(Some(_), results) => {
-                        assert_eq!(values, results);
-                    }
-                    StreamEvent::FirstRead(None, _) => unreachable!(),
-                    StreamEvent::SecondWrite(None) => {}
-                    StreamEvent::SecondWrite(Some(_)) => {
-                        panic!("second write should _not_ have been accepted")
-                    }
-                    StreamEvent::GuestCompleted => unreachable!(),
-                }
-            }
+                    .boxed(),
+                );
 
-            assert_eq!(count, 3);
-            Ok(())
-        })
-        .await??;
+                let mut count = 0;
+                while let Some(event) = futures.try_next().await? {
+                    count += 1;
+                    match event {
+                        StreamEvent::FirstWrite(Some(mut tx)) => {
+                            if watch {
+                                futures.push(
+                                    async move {
+                                        tx.watch_reader().await;
+                                        Ok(StreamEvent::SecondWrite(None))
+                                    }
+                                    .boxed(),
+                                );
+                            } else {
+                                futures.push({
+                                    let values = values.clone();
+                                    async move {
+                                        tx.write_all(VecBuffer::from(values)).await;
+                                        Ok(StreamEvent::SecondWrite(if tx.is_closed() {
+                                            None
+                                        } else {
+                                            Some(tx)
+                                        }))
+                                    }
+                                    .boxed()
+                                });
+                            }
+                        }
+                        StreamEvent::FirstWrite(None) => {
+                            panic!("first write should have been accepted")
+                        }
+                        StreamEvent::FirstRead(Some(_), results) => {
+                            assert_eq!(values, results);
+                        }
+                        StreamEvent::FirstRead(None, _) => unreachable!(),
+                        StreamEvent::SecondWrite(None) => {}
+                        StreamEvent::SecondWrite(Some(_)) => {
+                            panic!("second write should _not_ have been accepted")
+                        }
+                        StreamEvent::GuestCompleted => unreachable!(),
+                    }
+                }
+
+                assert_eq!(count, 3);
+                Ok(())
+            })
+            .await??;
+    }
 
     // Next, test futures host->host
     {
-        let (tx, rx) = instance.future(|| unreachable!(), &mut store)?;
-        let (mut tx_ignored, rx_ignored) = instance.future(|| 42u8, &mut store)?;
+        let (tx, rx) = instance.future(&mut store, || unreachable!())?;
+        let (mut tx_ignored, rx_ignored) = instance.future(&mut store, || unreachable!())?;
 
         instance
-            .run_concurrent(&mut store, async |store| {
+            .run_concurrent(&mut store, async move |store| {
+                let rx_ignored = GuardedFutureReader::new(store, rx_ignored);
+
                 let mut futures = FuturesUnordered::new();
                 futures.push(tx.write(store, value).map(FutureEvent::Write).boxed());
                 futures.push(rx.read(store).map(FutureEvent::Read).boxed());
@@ -348,24 +369,28 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
 
     // Next, test stream host->guest
     {
-        let (mut tx, rx) = instance.stream::<_, _, Vec<_>>(&mut store)?;
+        let (tx, rx) = instance.stream(&mut store)?;
 
         let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
 
+        let values = values.clone();
+
         instance
             .run_concurrent(&mut store, async move |accessor| {
+                let mut tx = GuardedStreamWriter::new(accessor, tx);
+
                 let mut futures = FuturesUnordered::new();
                 futures.push(
                     closed_streams
                         .local_local_closed()
-                        .call_read_stream(accessor, rx.into(), values.clone())
+                        .call_read_stream(accessor, rx, values.clone())
                         .map(|v| v.map(|()| StreamEvent::GuestCompleted))
                         .boxed(),
                 );
                 futures.push({
                     let values = values.clone();
                     async move {
-                        tx.write_all(accessor, values.into()).await;
+                        tx.write_all(VecBuffer::from(values)).await;
                         let w = if tx.is_closed() { None } else { Some(tx) };
                         Ok(StreamEvent::FirstWrite(w))
                     }
@@ -380,7 +405,7 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
                             if watch {
                                 futures.push(
                                     async move {
-                                        tx.watch_reader(accessor).await;
+                                        tx.watch_reader().await;
                                         Ok(StreamEvent::SecondWrite(None))
                                     }
                                     .boxed(),
@@ -389,7 +414,7 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
                                 futures.push({
                                     let values = values.clone();
                                     async move {
-                                        tx.write_all(accessor, values.into()).await;
+                                        tx.write_all(VecBuffer::from(values)).await;
                                         let w = if tx.is_closed() { None } else { Some(tx) };
                                         Ok(StreamEvent::SecondWrite(w))
                                     }
@@ -418,8 +443,8 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
 
     // Next, test futures host->guest
     {
-        let (tx, rx) = instance.future(|| unreachable!(), &mut store)?;
-        let (mut tx_ignored, rx_ignored) = instance.future(|| 0, &mut store)?;
+        let (tx, rx) = instance.future(&mut store, || unreachable!())?;
+        let (mut tx_ignored, rx_ignored) = instance.future(&mut store, || unreachable!())?;
 
         let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
 
@@ -429,7 +454,7 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
                 futures.push(
                     closed_streams
                         .local_local_closed()
-                        .call_read_future(accessor, rx.into(), value, rx_ignored.into())
+                        .call_read_future(accessor, rx, value, rx_ignored)
                         .map(|v| v.map(|()| FutureEvent::GuestCompleted))
                         .boxed(),
                 );

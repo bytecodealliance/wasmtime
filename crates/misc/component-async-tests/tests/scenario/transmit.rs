@@ -12,8 +12,8 @@ use futures::{
     stream::{FuturesUnordered, TryStreamExt},
 };
 use wasmtime::component::{
-    Accessor, Component, HasSelf, HostFuture, HostStream, Instance, Linker, ResourceTable,
-    StreamReader, StreamWriter, Val,
+    Accessor, Component, FutureReader, GuardedFutureReader, GuardedStreamReader,
+    GuardedStreamWriter, HasSelf, Instance, Linker, ResourceTable, StreamReader, Val,
 };
 use wasmtime::{AsContextMut, Engine, Store};
 use wasmtime_wasi::p2::WasiCtxBuilder;
@@ -175,17 +175,21 @@ pub trait TransmitTest {
     ) -> impl Future<Output = Result<Self::Result>> + Send + 'a;
 
     fn into_params(
-        control: HostStream<Control>,
-        caller_stream: HostStream<String>,
-        caller_future1: HostFuture<String>,
-        caller_future2: HostFuture<String>,
+        control: StreamReader<Control>,
+        caller_stream: StreamReader<String>,
+        caller_future1: FutureReader<String>,
+        caller_future2: FutureReader<String>,
     ) -> Self::Params;
 
     fn from_result(
         store: impl AsContextMut<Data = Ctx>,
         instance: Instance,
         result: Self::Result,
-    ) -> Result<(HostStream<String>, HostFuture<String>, HostFuture<String>)>;
+    ) -> Result<(
+        StreamReader<String>,
+        FutureReader<String>,
+        FutureReader<String>,
+    )>;
 }
 
 struct StaticTransmitTest;
@@ -193,12 +197,16 @@ struct StaticTransmitTest;
 impl TransmitTest for StaticTransmitTest {
     type Instance = transmit::bindings::TransmitCallee;
     type Params = (
-        HostStream<Control>,
-        HostStream<String>,
-        HostFuture<String>,
-        HostFuture<String>,
+        StreamReader<Control>,
+        StreamReader<String>,
+        FutureReader<String>,
+        FutureReader<String>,
     );
-    type Result = (HostStream<String>, HostFuture<String>, HostFuture<String>);
+    type Result = (
+        StreamReader<String>,
+        FutureReader<String>,
+        FutureReader<String>,
+    );
 
     async fn instantiate(
         mut store: impl AsContextMut<Data = Ctx>,
@@ -221,10 +229,10 @@ impl TransmitTest for StaticTransmitTest {
     }
 
     fn into_params(
-        control: HostStream<Control>,
-        caller_stream: HostStream<String>,
-        caller_future1: HostFuture<String>,
-        caller_future2: HostFuture<String>,
+        control: StreamReader<Control>,
+        caller_stream: StreamReader<String>,
+        caller_future1: FutureReader<String>,
+        caller_future2: FutureReader<String>,
     ) -> Self::Params {
         (control, caller_stream, caller_future1, caller_future2)
     }
@@ -233,7 +241,11 @@ impl TransmitTest for StaticTransmitTest {
         _: impl AsContextMut<Data = Ctx>,
         _: Instance,
         result: Self::Result,
-    ) -> Result<(HostStream<String>, HostFuture<String>, HostFuture<String>)> {
+    ) -> Result<(
+        StreamReader<String>,
+        FutureReader<String>,
+        FutureReader<String>,
+    )> {
         Ok(result)
     }
 }
@@ -283,10 +295,10 @@ impl TransmitTest for DynamicTransmitTest {
     }
 
     fn into_params(
-        control: HostStream<Control>,
-        caller_stream: HostStream<String>,
-        caller_future1: HostFuture<String>,
-        caller_future2: HostFuture<String>,
+        control: StreamReader<Control>,
+        caller_stream: StreamReader<String>,
+        caller_future1: FutureReader<String>,
+        caller_future2: FutureReader<String>,
     ) -> Self::Params {
         vec![
             control.into_val(),
@@ -300,13 +312,17 @@ impl TransmitTest for DynamicTransmitTest {
         mut store: impl AsContextMut<Data = Ctx>,
         instance: Instance,
         result: Self::Result,
-    ) -> Result<(HostStream<String>, HostFuture<String>, HostFuture<String>)> {
+    ) -> Result<(
+        StreamReader<String>,
+        FutureReader<String>,
+        FutureReader<String>,
+    )> {
         let Val::Tuple(fields) = result else {
             unreachable!()
         };
-        let stream = HostStream::from_val(store.as_context_mut(), instance, &fields[0])?;
-        let future1 = HostFuture::from_val(store.as_context_mut(), instance, &fields[1])?;
-        let future2 = HostFuture::from_val(store.as_context_mut(), instance, &fields[2])?;
+        let stream = StreamReader::from_val(store.as_context_mut(), instance, &fields[0])?;
+        let future1 = FutureReader::from_val(store.as_context_mut(), instance, &fields[1])?;
+        let future2 = FutureReader::from_val(store.as_context_mut(), instance, &fields[2])?;
         Ok((stream, future1, future2))
     }
 }
@@ -341,29 +357,32 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
 
     let (test, instance) = Test::instantiate(&mut store, &component, &linker).await?;
 
-    enum Event<Test: TransmitTest> {
+    enum Event<'a, Test: TransmitTest> {
         Result(Test::Result),
-        ControlWriteA(Option<StreamWriter<Option<Control>>>),
-        ControlWriteB(Option<StreamWriter<Option<Control>>>),
-        ControlWriteC(Option<StreamWriter<Option<Control>>>),
+        ControlWriteA(Option<GuardedStreamWriter<'a, Control, Ctx>>),
+        ControlWriteB(Option<GuardedStreamWriter<'a, Control, Ctx>>),
+        ControlWriteC(Option<GuardedStreamWriter<'a, Control, Ctx>>),
         ControlWriteD,
         WriteA,
         WriteB(bool),
-        ReadC(Option<StreamReader<Option<String>>>, Option<String>),
+        ReadC(Option<GuardedStreamReader<'a, String, Ctx>>, Option<String>),
         ReadD(Option<String>),
-        ReadNone(Option<StreamReader<Option<String>>>),
+        ReadNone(Option<GuardedStreamReader<'a, String, Ctx>>),
     }
 
-    let (mut control_tx, control_rx) = instance.stream::<_, _, Option<_>>(&mut store)?;
-    let (mut caller_stream_tx, caller_stream_rx) =
-        instance.stream::<_, _, Option<_>>(&mut store)?;
-    let (caller_future1_tx, caller_future1_rx) = instance.future(|| unreachable!(), &mut store)?;
-    let (_caller_future2_tx, caller_future2_rx) = instance.future(|| unreachable!(), &mut store)?;
+    let (control_tx, control_rx) = instance.stream(&mut store)?;
+    let (caller_stream_tx, caller_stream_rx) = instance.stream(&mut store)?;
+    let (caller_future1_tx, caller_future1_rx) = instance.future(&mut store, || unreachable!())?;
+    let (_caller_future2_tx, caller_future2_rx) = instance.future(&mut store, || unreachable!())?;
 
     instance
         .run_concurrent(&mut store, async move |accessor| {
+            let mut control_tx = GuardedStreamWriter::new(accessor, control_tx);
+            let control_rx = GuardedStreamReader::new(accessor, control_rx);
+            let mut caller_stream_tx = GuardedStreamWriter::new(accessor, caller_stream_tx);
+
             let mut futures = FuturesUnordered::<
-                Pin<Box<dyn Future<Output = Result<Event<Test>>> + Send>>,
+                Pin<Box<dyn Future<Output = Result<Event<'_, Test>>> + Send>>,
             >::new();
             let mut caller_future1_tx = Some(caller_future1_tx);
             let mut callee_stream_rx = None;
@@ -373,7 +392,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
             futures.push(
                 async move {
                     control_tx
-                        .write_all(accessor, Some(Control::ReadStream("a".into())))
+                        .write_all(Some(Control::ReadStream("a".into())))
                         .await;
                     let w = if control_tx.is_closed() {
                         None
@@ -387,9 +406,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
 
             futures.push(
                 async move {
-                    caller_stream_tx
-                        .write_all(accessor, Some(String::from("a")))
-                        .await;
+                    caller_stream_tx.write_all(Some(String::from("a"))).await;
                     Ok(Event::WriteA)
                 }
                 .boxed(),
@@ -401,9 +418,9 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                     &test,
                     Test::into_params(
                         control_rx.into(),
-                        caller_stream_rx.into(),
-                        caller_future1_rx.into(),
-                        caller_future2_rx.into(),
+                        caller_stream_rx,
+                        caller_future1_rx,
+                        caller_future2_rx,
                     ),
                 )
                 .map(|v| v.map(Event::Result))
@@ -413,19 +430,16 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
             while let Some(event) = futures.try_next().await? {
                 match event {
                     Event::Result(result) => {
-                        accessor.with(|mut store| {
-                            let results = Test::from_result(&mut store, instance, result)?;
-                            callee_stream_rx = Some(results.0.into_reader(&mut store));
-                            callee_future1_rx = Some(results.1.into_reader(&mut store));
-                            anyhow::Ok(())
-                        })?;
+                        let (stream_rx, future_rx, _) = accessor
+                            .with(|mut store| Test::from_result(&mut store, instance, result))?;
+                        callee_stream_rx = Some(GuardedStreamReader::new(accessor, stream_rx));
+                        callee_future1_rx = Some(GuardedFutureReader::new(accessor, future_rx));
                     }
                     Event::ControlWriteA(tx) => {
                         futures.push(
                             async move {
                                 let mut tx = tx.unwrap();
-                                tx.write_all(accessor, Some(Control::ReadFuture("b".into())))
-                                    .await;
+                                tx.write_all(Some(Control::ReadFuture("b".into()))).await;
                                 let w = if tx.is_closed() { None } else { Some(tx) };
                                 Ok(Event::ControlWriteB(w))
                             }
@@ -447,8 +461,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                         futures.push(
                             async move {
                                 let mut tx = tx.unwrap();
-                                tx.write_all(accessor, Some(Control::WriteStream("c".into())))
-                                    .await;
+                                tx.write_all(Some(Control::WriteStream("c".into()))).await;
                                 let w = if tx.is_closed() { None } else { Some(tx) };
                                 Ok(Event::ControlWriteC(w))
                             }
@@ -460,7 +473,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                         let mut rx = callee_stream_rx.take().unwrap();
                         futures.push(
                             async move {
-                                let b = rx.read(accessor, None).await;
+                                let b = rx.read(None).await;
                                 let r = if rx.is_closed() { None } else { Some(rx) };
                                 Ok(Event::ReadC(r, b))
                             }
@@ -471,8 +484,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                         futures.push(
                             async move {
                                 let mut tx = tx.unwrap();
-                                tx.write_all(accessor, Some(Control::WriteFuture("d".into())))
-                                    .await;
+                                tx.write_all(Some(Control::WriteFuture("d".into()))).await;
                                 Ok(Event::ControlWriteD)
                             }
                             .boxed(),
@@ -485,7 +497,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                             callee_future1_rx
                                 .take()
                                 .unwrap()
-                                .read(accessor)
+                                .read()
                                 .map(Event::ReadD)
                                 .map(Ok)
                                 .boxed(),
@@ -499,7 +511,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                         let mut rx = callee_stream_rx.take().unwrap();
                         futures.push(
                             async move {
-                                rx.read(accessor, None).await;
+                                rx.read(None).await;
                                 let r = if rx.is_closed() { None } else { Some(rx) };
                                 Ok(Event::ReadNone(r))
                             }

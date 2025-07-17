@@ -1,5 +1,7 @@
 use anyhow::Result;
-use wasmtime::component::{Accessor, AccessorTask, HostStream, Resource, StreamWriter};
+use wasmtime::component::{
+    Accessor, AccessorTask, GuardedStreamWriter, Resource, StreamReader, StreamWriter,
+};
 use wasmtime_wasi::p2::IoView;
 
 use super::Ctx;
@@ -36,20 +38,20 @@ impl bindings::local::local::resource_stream::HostWithStore for Ctx {
     async fn foo<T: 'static>(
         accessor: &Accessor<T, Self>,
         count: u32,
-    ) -> wasmtime::Result<HostStream<Resource<ResourceStreamX>>> {
+    ) -> wasmtime::Result<StreamReader<Resource<ResourceStreamX>>> {
         struct Task {
-            tx: StreamWriter<Option<Resource<ResourceStreamX>>>,
+            tx: StreamWriter<Resource<ResourceStreamX>>,
 
             count: u32,
         }
 
         impl<T> AccessorTask<T, Ctx, Result<()>> for Task {
             async fn run(self, accessor: &Accessor<T, Ctx>) -> Result<()> {
-                let mut tx = self.tx;
+                let mut tx = GuardedStreamWriter::new(accessor, self.tx);
                 for _ in 0..self.count {
                     let item =
                         accessor.with(|mut view| view.get().table().push(ResourceStreamX))?;
-                    tx.write_all(accessor, Some(item)).await;
+                    tx.write_all(Some(item)).await;
                 }
                 Ok(())
             }
@@ -57,10 +59,10 @@ impl bindings::local::local::resource_stream::HostWithStore for Ctx {
 
         let (tx, rx) = accessor.with(|mut view| {
             let instance = view.instance();
-            instance.stream::<_, _, Option<_>>(&mut view)
+            instance.stream(&mut view)
         })?;
         accessor.spawn(Task { tx, count });
-        Ok(rx.into())
+        Ok(rx)
     }
 }
 

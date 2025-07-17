@@ -797,6 +797,59 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Ok(())
     }
 
+    /// Identical to [`Self::resource`], except that it takes a concurrent destructor.
+    #[cfg(feature = "component-model-async")]
+    pub fn resource_concurrent<F>(&mut self, name: &str, ty: ResourceType, dtor: F) -> Result<()>
+    where
+        T: Send + 'static,
+        F: Fn(&Accessor<T>, u32) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        assert!(
+            self.engine.config().async_support,
+            "cannot use `resource_concurrent` without enabling async support in the config"
+        );
+        // TODO: This isn't really concurrent -- it requires exclusive access to
+        // the store for the duration of the call, preventing guest code from
+        // running until it completes.  We should make it concurrent and clean
+        // up the implementation to avoid using e.g. `Accessor::new` and
+        // `tls::set` directly.
+        let dtor = Arc::new(dtor);
+        let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
+            &self.engine,
+            move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
+                let dtor = dtor.clone();
+                cx.as_context_mut().block_on(move |mut store| {
+                    Box::pin(async move {
+                        // NOTE: We currently pass `None` as the `instance`
+                        // parameter to `Accessor::new` because we don't have ready
+                        // access to it, meaning `dtor` will panic if it tries to
+                        // use `Accessor::instance`.  We could plumb that through
+                        // from the `wasmtime-cranelift`-generated code, but we plan
+                        // to remove `Accessor::instance` once all instances in a
+                        // store share the same concurrent state, at which point we
+                        // won't need it anyway.
+                        let accessor = &Accessor::new(
+                            crate::store::StoreToken::new(store.as_context_mut()),
+                            None,
+                        );
+                        let mut future = std::pin::pin!(dtor(accessor, param));
+                        std::future::poll_fn(|cx| {
+                            crate::component::concurrent::tls::set(store.0.traitobj_mut(), || {
+                                future.as_mut().poll(cx)
+                            })
+                        })
+                        .await
+                    })
+                })?
+            },
+        ));
+        self.insert(name, Definition::Resource(ty, dtor))?;
+        Ok(())
+    }
+
     /// Defines a nested instance within this instance.
     ///
     /// This can be used to describe arbitrarily nested levels of instances

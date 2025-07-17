@@ -1004,9 +1004,11 @@ fn future_drop_writable(
     ty: u32,
     writer: u32,
 ) -> Result<()> {
-    instance
-        .concurrent_state_mut(store)
-        .future_drop_writable(TypeFutureTableIndex::from_u32(ty), writer)
+    store.component_async_store().future_drop_writable(
+        instance,
+        TypeFutureTableIndex::from_u32(ty),
+        writer,
+    )
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1103,9 +1105,11 @@ fn stream_drop_writable(
     ty: u32,
     writer: u32,
 ) -> Result<()> {
-    instance
-        .concurrent_state_mut(store)
-        .stream_drop_writable(TypeStreamTableIndex::from_u32(ty), writer)
+    store.component_async_store().stream_drop_writable(
+        instance,
+        TypeStreamTableIndex::from_u32(ty),
+        writer,
+    )
 }
 
 #[cfg(feature = "component-model-async")]
