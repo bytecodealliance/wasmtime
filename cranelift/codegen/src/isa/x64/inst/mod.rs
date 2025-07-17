@@ -111,7 +111,7 @@ impl Inst {
                 smallvec![InstructionSet::CMPXCHG16b]
             }
 
-            Inst::XmmUnaryRmREvex { op, .. } | Inst::XmmRmREvex3 { op, .. } => op.available_from(),
+            Inst::XmmRmREvex3 { op, .. } => op.available_from(),
 
             Inst::External { inst } => {
                 use cranelift_assembler_x64::Feature::*;
@@ -447,13 +447,6 @@ impl PrettyPrint for Inst {
                 let dividend = pretty_print_reg(dividend.to_reg(), 1);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1);
                 format!("checked_srem_seq {dividend}, {divisor}, {dst}")
-            }
-
-            Inst::XmmUnaryRmREvex { op, src, dst, .. } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src = src.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
             }
 
             Inst::XmmRmREvex3 {
@@ -933,10 +926,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(divisor);
             collector.reg_fixed_use(dividend, regs::rax());
             collector.reg_fixed_def(dst, regs::rax());
-        }
-        Inst::XmmUnaryRmREvex { src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
         }
         Inst::XmmRmREvex3 {
             op,

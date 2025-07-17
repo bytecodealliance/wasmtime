@@ -20,16 +20,6 @@ use alloc::vec::Vec;
 use cranelift_entity::EntityRef as _;
 
 impl Inst {
-    fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmUnaryRmREvex {
-            op,
-            src: XmmMem::unwrap_new(src),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     fn xmm_rm_r_evex3(
         op: Avx512Opcode,
         src1: Reg,
@@ -107,7 +97,7 @@ fn test_x64_emit() {
     let _w_xmm4 = Writable::<Reg>::from_reg(xmm4);
     let _w_xmm6 = Writable::<Reg>::from_reg(xmm6);
     let _w_xmm7 = Writable::<Reg>::from_reg(xmm7);
-    let w_xmm8 = Writable::<Reg>::from_reg(xmm8);
+    let _w_xmm8 = Writable::<Reg>::from_reg(xmm8);
     let _w_xmm9 = Writable::<Reg>::from_reg(xmm9);
     let _w_xmm10 = Writable::<Reg>::from_reg(xmm10);
     let _w_xmm11 = Writable::<Reg>::from_reg(xmm11);
@@ -234,15 +224,6 @@ fn test_x64_emit() {
         ),
         "62F27D0875D1",
         "vpermi2b %xmm1, %xmm0, %xmm2, %xmm2",
-    ));
-
-    // ========================================================
-    // XMM_MOV: Packed Move
-
-    insns.push((
-        Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vcvtudq2ps, RegMem::reg(xmm2), w_xmm8),
-        "62717F087AC2",
-        "vcvtudq2ps %xmm2, %xmm8",
     ));
 
     // ========================================================

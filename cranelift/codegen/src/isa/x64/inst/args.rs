@@ -779,9 +779,6 @@ impl Avx512Opcode {
     /// Which `InstructionSet`s support the opcode?
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
-            Avx512Opcode::Vcvtudq2ps => {
-                smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL]
-            }
             Avx512Opcode::Vpermi2b => {
                 smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512VBMI]
             }
@@ -799,7 +796,6 @@ impl Avx512Opcode {
         use Avx512TupleType::*;
 
         match self {
-            Vcvtudq2ps => Full,
             Vpermi2b => FullMem,
         }
     }

@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, vex, w};
+use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{align, evex, fmt, inst, r, rex, rw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -64,5 +64,7 @@ pub fn list() -> Vec<Inst> {
         // * cvtps2pi
         // * cvttpd2pi
         // * cvttps2pi
+
+        inst("vcvtudq2ps", fmt("A", [w(xmm1), r(xmm_m128)]), evex(L128, Full)._f2()._0f().w0().op(0x7A).r(), _64b | avx512vl | avx512f),
     ]
 }

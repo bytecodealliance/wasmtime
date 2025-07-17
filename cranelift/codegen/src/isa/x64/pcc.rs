@@ -79,10 +79,7 @@ pub(crate) fn check(
         // NOTE: it's assumed that all of these cases perform 128-bit loads, but this hasn't been
         // verified. The effect of this will be spurious PCC failures when these instructions are
         // involved.
-        Inst::XmmUnaryRmREvex {
-            dst, src: ref src2, ..
-        }
-        | Inst::XmmRmREvex3 {
+        Inst::XmmRmREvex3 {
             dst,
             src3: ref src2,
             ..

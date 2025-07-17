@@ -68,11 +68,6 @@
                     (src3 XmmMem)
                     (dst WritableXmm))
 
-       ;; XMM (scalar or vector) unary op that relies on the EVEX prefix.
-       (XmmUnaryRmREvex (op Avx512Opcode)
-                        (src XmmMem)
-                        (dst WritableXmm))
-
        ;; Converts an unsigned int64 to a float32/float64.
        (CvtUint64ToFloatSeq (dst_size OperandSize) ;; 4 or 8
                             (src Gpr)
@@ -649,8 +644,7 @@
 (extern extractor cc_nz_or_z cc_nz_or_z)
 
 (type Avx512Opcode
-      (enum Vcvtudq2ps
-            Vpermi2b))
+      (enum Vpermi2b))
 
 (type FcmpImm extern
       (enum Equal
@@ -1114,13 +1108,6 @@
 (rule (load_ext_name extname offset distance)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))
-        dst))
-
-;; Helper for creating `MInst.XmmUnaryRmREvex` instructions.
-(decl xmm_unary_rm_r_evex (Avx512Opcode XmmMem) Xmm)
-(rule (xmm_unary_rm_r_evex op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmREvex op src dst))))
         dst))
 
 ;; Helper for creating `xmm_min_max_seq` pseudo-instructions.
@@ -2654,8 +2641,7 @@
 
 ;; Helper for creating `vcvtudq2ps` instructions.
 (decl x64_vcvtudq2ps (XmmMem) Xmm)
-(rule (x64_vcvtudq2ps src)
-      (xmm_unary_rm_r_evex (Avx512Opcode.Vcvtudq2ps) src))
+(rule (x64_vcvtudq2ps src) (x64_vcvtudq2ps_a src))
 
 ;; Helper for creating `vpabsq` instructions.
 (decl x64_vpabsq (XmmMem) Xmm)
