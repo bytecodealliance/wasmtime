@@ -330,8 +330,8 @@ impl Descriptors {
             .ok_or(wasi::ERRNO_BADF)
     }
 
-    // Internal: close a fd, returning the descriptor.
-    fn close_(&mut self, fd: Fd) -> Result<Descriptor, Errno> {
+    // Close an fd.
+    pub fn close(&mut self, fd: Fd) -> Result<(), Errno> {
         // Throw an error if closing an fd which is already closed
         match self.get(fd)? {
             Descriptor::Closed(_) => Err(wasi::ERRNO_BADF)?,
@@ -341,12 +341,7 @@ impl Descriptors {
         let last_closed = self.closed;
         let prev = std::mem::replace(self.get_mut(fd)?, Descriptor::Closed(last_closed));
         self.closed = Some(fd);
-        Ok(prev)
-    }
-
-    // Close an fd.
-    pub fn close(&mut self, fd: Fd) -> Result<(), Errno> {
-        drop(self.close_(fd)?);
+        drop(prev);
         Ok(())
     }
 
@@ -366,11 +361,20 @@ impl Descriptors {
         while self.table_len.get() as u32 <= to_fd {
             self.push_closed()?;
         }
-        // Then, close from_fd and put its contents into to_fd:
-        let desc = self.close_(from_fd)?;
-        // TODO FIXME if this overwrites a preopen, do we need to clear it from the preopen table?
-        *self.get_mut(to_fd)? = desc;
-
+        // Throw an error if renumbering a closed fd
+        match self.get(from_fd)? {
+            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF)?,
+            _ => {}
+        }
+        // Close from_fd and put its contents into to_fd
+        if from_fd != to_fd {
+            // Mutate the descriptor to be closed, and push the closed fd onto the head of the linked list:
+            let last_closed = self.closed;
+            let desc = std::mem::replace(self.get_mut(from_fd)?, Descriptor::Closed(last_closed));
+            self.closed = Some(from_fd);
+            // TODO FIXME if this overwrites a preopen, do we need to clear it from the preopen table?
+            *self.get_mut(to_fd)? = desc;
+        }
         Ok(())
     }
 
