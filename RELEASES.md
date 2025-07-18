@@ -5,7 +5,7 @@ Released 2025-07-18.
 ### Fixed
 
 * Fix a panic in the host caused by preview1 guests using `fd_renumber`.
-  [GHSA-fm79-3f68-h2fc](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-fm79-3f68-h2fc).
+  [CVE-2025-53901](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-fm79-3f68-h2fc).
 
 * Fix a panic in the preview1 adapter caused by guests using `fd_renumber`.
 
