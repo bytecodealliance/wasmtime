@@ -3,7 +3,7 @@ use crate::p2::bindings::sockets::udp;
 use crate::p2::host::network::util;
 use crate::p2::udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState};
 use crate::p2::{IoView, Pollable, SocketError, SocketResult, WasiImpl, WasiView};
-use crate::sockets::{SocketAddrUse, SocketAddressFamily};
+use crate::sockets::{MAX_UDP_DATAGRAM_SIZE, SocketAddrUse, SocketAddressFamily};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;
@@ -12,11 +12,6 @@ use std::net::SocketAddr;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::poll::DynPollable;
-
-/// Theoretical maximum byte size of a UDP datagram, the real limit is lower,
-/// but we do not account for e.g. the transport layer here for simplicity.
-/// In practice, datagrams are typically less than 1500 bytes.
-const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
 impl<T> udp::Host for WasiImpl<T> where T: WasiView {}
 
