@@ -30,48 +30,40 @@ impl fmt::Display for EventActionError {
 
 impl std::error::Error for EventActionError {}
 
-/// Transmutable byte array used to serialize [`ValRaw`] union
+type ValRawBytes = [u8; mem::size_of::<ValRaw>()];
+
+/// Types that can be converted zero-copy to [`ValRawBytes`] for
+/// serialization/deserialization in record/replay (since
+/// unions are non serializable by `serde`)
 ///
-/// Maintaining the exact layout is crucial for zero-copy transmutations
-/// between [`ValRawBytes`] and [`ValRaw`] as currently assumed. However,
-/// in the future, this type could be represented with LEB128s
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
-#[repr(C)]
-pub(super) struct ValRawBytes([u8; mem::size_of::<ValRaw>()]);
+/// Essentially [`From`] and [`Into`] but local to the crate
+/// to bypass orphan rule for externally defined types
+trait ValRawBytesConvertable {
+    fn to_valraw_bytes(self) -> ValRawBytes;
+    fn from_valraw_bytes(value: ValRawBytes) -> Self;
+}
 
-impl From<ValRaw> for ValRawBytes {
-    fn from(value: ValRaw) -> Self {
-        Self(value.as_bytes())
+impl ValRawBytesConvertable for ValRaw {
+    #[inline]
+    fn to_valraw_bytes(self) -> ValRawBytes {
+        self.as_bytes()
+    }
+    #[inline]
+    fn from_valraw_bytes(value: ValRawBytes) -> Self {
+        ValRaw::from_bytes(value)
     }
 }
 
-impl From<ValRawBytes> for ValRaw {
-    fn from(value: ValRawBytes) -> Self {
-        ValRaw::from_bytes(value.0)
+impl ValRawBytesConvertable for MaybeUninit<ValRaw> {
+    #[inline]
+    fn to_valraw_bytes(self) -> ValRawBytes {
+        // Uninitialized data is assumed and serialized, so hence
+        // may contain some undefined values
+        unsafe { self.assume_init() }.to_valraw_bytes()
     }
-}
-
-impl From<MaybeUninit<ValRaw>> for ValRawBytes {
-    /// Uninitialized data is assumed, and serialized
-    fn from(value: MaybeUninit<ValRaw>) -> Self {
-        Self::from(unsafe { value.assume_init() })
-    }
-}
-
-impl From<ValRawBytes> for MaybeUninit<ValRaw> {
-    fn from(value: ValRawBytes) -> Self {
-        MaybeUninit::new(value.into())
-    }
-}
-
-impl fmt::Debug for ValRawBytes {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let hex_digits_per_byte = 2;
-        let _ = write!(f, "0x..");
-        for b in self.0.iter().rev() {
-            let _ = write!(f, "{:0width$x}", b, width = hex_digits_per_byte);
-        }
-        Ok(())
+    #[inline]
+    fn from_valraw_bytes(value: ValRawBytes) -> Self {
+        MaybeUninit::new(ValRaw::from_valraw_bytes(value))
     }
 }
 
@@ -80,19 +72,18 @@ type RRFuncArgVals = Vec<ValRawBytes>;
 /// Construct [`RRFuncArgVals`] from raw value buffer
 fn func_argvals_from_raw_slice<T>(args: &[T]) -> RRFuncArgVals
 where
-    ValRawBytes: From<T>,
-    T: Copy,
+    T: ValRawBytesConvertable + Copy,
 {
-    args.iter().map(|x| ValRawBytes::from(*x)).collect()
+    args.iter().map(|x| x.to_valraw_bytes()).collect()
 }
 
 /// Encode [`RRFuncArgVals`] back into raw value buffer
 fn func_argvals_into_raw_slice<T>(rr_args: RRFuncArgVals, raw_args: &mut [T])
 where
-    ValRawBytes: Into<T>,
+    T: ValRawBytesConvertable,
 {
     for (src, dst) in rr_args.into_iter().zip(raw_args.iter_mut()) {
-        *dst = src.into();
+        *dst = T::from_valraw_bytes(src);
     }
 }
 

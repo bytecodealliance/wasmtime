@@ -291,14 +291,13 @@ impl RecordBuffer {
 
 impl Recorder for RecordBuffer {
     fn new_recorder(cfg: RecordConfig) -> Result<Self> {
-        let mut buf = RecordBuffer {
+        let buf = RecordBuffer {
             data: RRDataCommon {
                 buf: VecDeque::new(),
                 rw: File::create(cfg.path)?,
             },
             metadata: cfg.metadata,
         };
-
         Ok(buf)
     }
 
