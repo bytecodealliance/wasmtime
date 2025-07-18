@@ -167,6 +167,7 @@ Unreleased.
   [CVE-2025-53901](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-fm79-3f68-h2fc).
 
 * Fix a panic in the preview1 adapter caused by guests using `fd_renumber`.
+  [#11277](https://github.com/bytecodealliance/wasmtime/pull/11277)
 
 --------------------------------------------------------------------------------
 
