@@ -1,6 +1,6 @@
 mod host;
 
-use crate::clocks::{WasiClocksImpl, WasiClocksView};
+use crate::clocks::{WasiClocksCtx, WasiClocksView};
 use crate::p3::bindings::clocks;
 use wasmtime::component::{HasData, Linker};
 
@@ -48,28 +48,27 @@ use wasmtime::component::{HasData, Linker};
 /// }
 ///
 /// impl WasiClocksView for MyState {
-///     fn clocks(&mut self) -> &WasiClocksCtx { &self.clocks }
+///     fn clocks(&mut self) -> &mut WasiClocksCtx { &mut self.clocks }
 /// }
 /// ```
-pub fn add_to_linker<T: WasiClocksView + 'static>(linker: &mut Linker<T>) -> wasmtime::Result<()> {
-    add_to_linker_impl(linker, |x| WasiClocksImpl(x))
+pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
+where
+    T: WasiClocksView + 'static,
+{
+    add_to_linker_impl(linker, T::clocks)
 }
 
-pub(crate) fn add_to_linker_impl<T, U>(
+pub(crate) fn add_to_linker_impl<T: Send>(
     linker: &mut Linker<T>,
-    host_getter: fn(&mut T) -> WasiClocksImpl<&mut U>,
-) -> wasmtime::Result<()>
-where
-    T: Send,
-    U: WasiClocksView + 'static,
-{
-    clocks::monotonic_clock::add_to_linker::<_, WasiClocks<U>>(linker, host_getter)?;
-    clocks::wall_clock::add_to_linker::<_, WasiClocks<U>>(linker, host_getter)?;
+    host_getter: fn(&mut T) -> &mut WasiClocksCtx,
+) -> wasmtime::Result<()> {
+    clocks::monotonic_clock::add_to_linker::<_, WasiClocks>(linker, host_getter)?;
+    clocks::wall_clock::add_to_linker::<_, WasiClocks>(linker, host_getter)?;
     Ok(())
 }
 
-struct WasiClocks<T>(T);
+struct WasiClocks;
 
-impl<T: 'static> HasData for WasiClocks<T> {
-    type Data<'a> = WasiClocksImpl<&'a mut T>;
+impl HasData for WasiClocks {
+    type Data<'a> = &'a mut WasiClocksCtx;
 }

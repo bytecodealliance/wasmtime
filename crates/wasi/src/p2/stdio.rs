@@ -1,3 +1,4 @@
+use crate::cli::IsTerminal;
 use crate::p2::bindings::cli::{
     stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
     terminal_stdout,
@@ -7,7 +8,6 @@ use crate::p2::{
     InputStream, IoView, OutputStream, Pollable, StreamError, StreamResult, WasiImpl, WasiView,
 };
 use bytes::Bytes;
-use std::io::IsTerminal;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use wasmtime::component::Resource;
@@ -20,7 +20,7 @@ use wasmtime_wasi_io::streams;
 ///
 /// Built-in implementations are provided for [`Stdin`],
 /// [`pipe::MemoryInputPipe`], and [`pipe::ClosedInputStream`].
-pub trait StdinStream: Send {
+pub trait StdinStream: IsTerminal + Send {
     /// Creates a fresh stream which is reading stdin.
     ///
     /// Note that the returned stream must share state with all other streams
@@ -33,17 +33,16 @@ pub trait StdinStream: Send {
     /// mean that all the others are no longer ready for reading. This is
     /// basically a consequence of the way the WIT APIs are designed today.
     fn stream(&self) -> Box<dyn InputStream>;
-
-    /// Returns whether this stream is backed by a TTY.
-    fn isatty(&self) -> bool;
 }
 
 impl StdinStream for pipe::MemoryInputPipe {
     fn stream(&self) -> Box<dyn InputStream> {
         Box::new(self.clone())
     }
+}
 
-    fn isatty(&self) -> bool {
+impl IsTerminal for pipe::MemoryInputPipe {
+    fn is_terminal(&self) -> bool {
         false
     }
 }
@@ -52,8 +51,10 @@ impl StdinStream for pipe::ClosedInputStream {
     fn stream(&self) -> Box<dyn InputStream> {
         Box::new(*self)
     }
+}
 
-    fn isatty(&self) -> bool {
+impl IsTerminal for pipe::ClosedInputStream {
+    fn is_terminal(&self) -> bool {
         false
     }
 }
@@ -79,8 +80,10 @@ impl StdinStream for InputFile {
             file: Arc::clone(&self.file),
         })
     }
+}
 
-    fn isatty(&self) -> bool {
+impl IsTerminal for InputFile {
+    fn is_terminal(&self) -> bool {
         false
     }
 }
@@ -151,7 +154,10 @@ impl StdinStream for AsyncStdinStream {
     fn stream(&self) -> Box<dyn InputStream> {
         Box::new(Self(self.0.clone()))
     }
-    fn isatty(&self) -> bool {
+}
+
+impl IsTerminal for AsyncStdinStream {
+    fn is_terminal(&self) -> bool {
         false
     }
 }
@@ -192,7 +198,7 @@ mod worker_thread_stdin;
 pub use self::worker_thread_stdin::{Stdin, stdin};
 
 /// Similar to [`StdinStream`], except for output.
-pub trait StdoutStream: Send {
+pub trait StdoutStream: IsTerminal + Send {
     /// Returns a fresh new stream which can write to this output stream.
     ///
     /// Note that all output streams should output to the same logical source.
@@ -206,17 +212,16 @@ pub trait StdoutStream: Send {
     ///
     /// Implementations must be able to handle this
     fn stream(&self) -> Box<dyn OutputStream>;
-
-    /// Returns whether this stream is backed by a TTY.
-    fn isatty(&self) -> bool;
 }
 
 impl StdoutStream for pipe::MemoryOutputPipe {
     fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(self.clone())
     }
+}
 
-    fn isatty(&self) -> bool {
+impl IsTerminal for pipe::MemoryOutputPipe {
+    fn is_terminal(&self) -> bool {
         false
     }
 }
@@ -225,8 +230,10 @@ impl StdoutStream for pipe::SinkOutputStream {
     fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(*self)
     }
+}
 
-    fn isatty(&self) -> bool {
+impl IsTerminal for pipe::SinkOutputStream {
+    fn is_terminal(&self) -> bool {
         false
     }
 }
@@ -235,8 +242,10 @@ impl StdoutStream for pipe::ClosedOutputStream {
     fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(*self)
     }
+}
 
-    fn isatty(&self) -> bool {
+impl IsTerminal for pipe::ClosedOutputStream {
+    fn is_terminal(&self) -> bool {
         false
     }
 }
@@ -262,8 +271,10 @@ impl StdoutStream for OutputFile {
             file: Arc::clone(&self.file),
         })
     }
+}
 
-    fn isatty(&self) -> bool {
+impl IsTerminal for OutputFile {
+    fn is_terminal(&self) -> bool {
         false
     }
 }
@@ -315,8 +326,10 @@ impl StdoutStream for Stdout {
     fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(StdioOutputStream::Stdout)
     }
+}
 
-    fn isatty(&self) -> bool {
+impl IsTerminal for Stdout {
+    fn is_terminal(&self) -> bool {
         std::io::stdout().is_terminal()
     }
 }
@@ -339,8 +352,10 @@ impl StdoutStream for Stderr {
     fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(StdioOutputStream::Stderr)
     }
+}
 
-    fn isatty(&self) -> bool {
+impl IsTerminal for Stderr {
+    fn is_terminal(&self) -> bool {
         std::io::stderr().is_terminal()
     }
 }
@@ -398,7 +413,10 @@ impl StdoutStream for AsyncStdoutStream {
     fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(Self(self.0.clone()))
     }
-    fn isatty(&self) -> bool {
+}
+
+impl IsTerminal for AsyncStdoutStream {
+    fn is_terminal(&self) -> bool {
         false
     }
 }
@@ -520,7 +538,7 @@ where
     T: WasiView,
 {
     fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<Resource<TerminalInput>>> {
-        if self.ctx().stdin.isatty() {
+        if self.ctx().stdin.is_terminal() {
             let fd = self.table().push(TerminalInput)?;
             Ok(Some(fd))
         } else {
@@ -533,7 +551,7 @@ where
     T: WasiView,
 {
     fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
-        if self.ctx().stdout.isatty() {
+        if self.ctx().stdout.is_terminal() {
             let fd = self.table().push(TerminalOutput)?;
             Ok(Some(fd))
         } else {
@@ -546,7 +564,7 @@ where
     T: WasiView,
 {
     fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
-        if self.ctx().stderr.isatty() {
+        if self.ctx().stderr.is_terminal() {
             let fd = self.table().push(TerminalOutput)?;
             Ok(Some(fd))
         } else {

@@ -9,6 +9,7 @@
 //! Documentation of this module may be incorrect or out-of-sync with the implementation.
 
 pub mod bindings;
+pub mod cli;
 pub mod clocks;
 mod ctx;
 pub mod filesystem;
@@ -17,12 +18,11 @@ mod view;
 
 use wasmtime::component::Linker;
 
-use crate::clocks::WasiClocksImpl;
 use crate::p3::bindings::LinkOptions;
-use crate::random::WasiRandomImpl;
+use crate::p3::cli::WasiCliCtxView;
 
 pub use self::ctx::{WasiCtx, WasiCtxBuilder};
-pub use self::view::{WasiImpl, WasiView};
+pub use self::view::{WasiCtxView, WasiView};
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///
@@ -34,8 +34,8 @@ pub use self::view::{WasiImpl, WasiView};
 ///
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
-/// use wasmtime::component::Linker;
-/// use wasmtime_wasi::p3::{WasiCtx, WasiView};
+/// use wasmtime::component::{Linker, ResourceTable};
+/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxView, WasiView};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -60,10 +60,16 @@ pub use self::view::{WasiImpl, WasiView};
 /// #[derive(Default)]
 /// struct MyState {
 ///     ctx: WasiCtx,
+///     table: ResourceTable,
 /// }
 ///
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView{
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///         }
+///     }
 /// }
 /// ```
 pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
@@ -82,9 +88,14 @@ pub fn add_to_linker_with_options<T>(
 where
     T: WasiView + 'static,
 {
-    // TODO: use options
-    _ = options;
-    clocks::add_to_linker_impl(linker, |x| WasiClocksImpl(&mut x.ctx().clocks))?;
-    random::add_to_linker_impl(linker, |x| WasiRandomImpl(&mut x.ctx().random))?;
+    clocks::add_to_linker_impl(linker, |x| &mut x.ctx().ctx.clocks)?;
+    random::add_to_linker_impl(linker, |x| &mut x.ctx().ctx.random)?;
+    cli::add_to_linker_impl(linker, &options.into(), |x| {
+        let WasiCtxView { ctx, table } = x.ctx();
+        WasiCliCtxView {
+            ctx: &mut ctx.cli,
+            table,
+        }
+    })?;
     Ok(())
 }

@@ -4,7 +4,7 @@ use anyhow::{Context as _, anyhow};
 use wasmtime::Store;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p3::bindings::Command;
-use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi::{DirPerms, FilePerms};
 
 use test_programs_artifacts::*;
@@ -23,8 +23,11 @@ struct Ctx {
 }
 
 impl WasiView for Ctx {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.p3
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.p3,
+            table: &mut self.table,
+        }
     }
 }
 
@@ -56,23 +59,28 @@ async fn run(path: &str) -> anyhow::Result<()> {
         .context("failed to link `wasi:cli@0.2.x`")?;
     wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
 
-    let mut builder = WasiCtxBuilder::new();
+    let table = ResourceTable::default();
+
+    let p2 = wasmtime_wasi::p2::WasiCtx::builder()
+        .inherit_stdout()
+        .inherit_stderr()
+        .build();
+
+    let mut p3 = WasiCtxBuilder::new();
     let name = path.file_stem().unwrap().to_str().unwrap();
     let tempdir = tempfile::Builder::new()
         .prefix(&format!("wasi_components_{name}_",))
         .tempdir()?;
-    builder
-        .args(&[name, "."])
+    p3.args(&[name, "."])
         .inherit_network()
         .allow_ip_name_lookup(true);
     println!("preopen: {tempdir:?}");
-    builder.preopened_dir(tempdir.path(), ".", DirPerms::all(), FilePerms::all())?;
+    p3.preopened_dir(tempdir.path(), ".", DirPerms::all(), FilePerms::all())?;
     for (var, val) in test_programs_artifacts::wasi_tests_environment() {
-        builder.env(var, val);
+        p3.env(var, val);
     }
-    let table = ResourceTable::default();
-    let p2 = wasmtime_wasi::p2::WasiCtx::builder().build();
-    let p3 = builder.build();
+    let p3 = p3.build();
+
     let mut store = Store::new(&engine, Ctx { table, p2, p3 });
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let command =
@@ -97,4 +105,9 @@ async fn p3_clocks_sleep() -> anyhow::Result<()> {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_random_imports() -> anyhow::Result<()> {
     run(P3_RANDOM_IMPORTS_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_cli() -> anyhow::Result<()> {
+    run(P3_CLI_COMPONENT).await
 }

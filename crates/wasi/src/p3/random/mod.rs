@@ -1,7 +1,7 @@
 mod host;
 
 use crate::p3::bindings::random;
-use crate::random::{WasiRandomImpl, WasiRandomView};
+use crate::random::{WasiRandomCtx, WasiRandomView};
 use wasmtime::component::{HasData, Linker};
 
 /// Add all WASI interfaces from this module into the `linker` provided.
@@ -19,7 +19,7 @@ use wasmtime::component::{HasData, Linker};
 ///
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
-/// use wasmtime::component::{ResourceTable, Linker};
+/// use wasmtime::component::Linker;
 /// use wasmtime_wasi::random::{WasiRandomView, WasiRandomCtx};
 ///
 /// fn main() -> Result<()> {
@@ -51,26 +51,25 @@ use wasmtime::component::{HasData, Linker};
 ///     fn random(&mut self) -> &mut WasiRandomCtx { &mut self.random }
 /// }
 /// ```
-pub fn add_to_linker<T: WasiRandomView + 'static>(linker: &mut Linker<T>) -> wasmtime::Result<()> {
-    add_to_linker_impl(linker, |x| WasiRandomImpl(x))
+pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
+where
+    T: WasiRandomView + 'static,
+{
+    add_to_linker_impl(linker, T::random)
 }
 
-pub(crate) fn add_to_linker_impl<T, U>(
+pub(crate) fn add_to_linker_impl<T: Send>(
     linker: &mut Linker<T>,
-    host_getter: fn(&mut T) -> WasiRandomImpl<&mut U>,
-) -> wasmtime::Result<()>
-where
-    T: Send,
-    U: WasiRandomView + 'static,
-{
-    random::random::add_to_linker::<_, WasiRandom<U>>(linker, host_getter)?;
-    random::insecure::add_to_linker::<_, WasiRandom<U>>(linker, host_getter)?;
-    random::insecure_seed::add_to_linker::<_, WasiRandom<U>>(linker, host_getter)?;
+    host_getter: fn(&mut T) -> &mut WasiRandomCtx,
+) -> wasmtime::Result<()> {
+    random::random::add_to_linker::<_, WasiRandom>(linker, host_getter)?;
+    random::insecure::add_to_linker::<_, WasiRandom>(linker, host_getter)?;
+    random::insecure_seed::add_to_linker::<_, WasiRandom>(linker, host_getter)?;
     Ok(())
 }
 
-struct WasiRandom<T>(T);
+struct WasiRandom;
 
-impl<T: 'static> HasData for WasiRandom<T> {
-    type Data<'a> = WasiRandomImpl<&'a mut T>;
+impl HasData for WasiRandom {
+    type Data<'a> = &'a mut WasiRandomCtx;
 }
