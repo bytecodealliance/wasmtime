@@ -72,6 +72,46 @@ unsafe fn test_renumber(dir_fd: wasi::Fd) {
     );
 
     wasi::fd_close(fd_to).expect("closing a file");
+
+    wasi::fd_renumber(0, 0).expect("renumbering 0 to 0");
+    let fd_file3 = wasi::path_open(
+        dir_fd,
+        0,
+        "file3",
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("opening a file");
+    assert!(
+        fd_file3 > libc::STDERR_FILENO as wasi::Fd,
+        "file descriptor range check",
+    );
+
+    wasi::fd_renumber(fd_file3, 127).expect("renumbering FD to 127");
+    match wasi::fd_renumber(127, u32::MAX) {
+        Err(wasi::ERRNO_NOMEM) => {
+            // The preview1 adapter cannot handle more than 128 descriptors
+            eprintln!("fd_renumber({fd_file3}, {}) returned NOMEM", u32::MAX)
+        }
+        res => res.expect("renumbering FD to `u32::MAX`"),
+    }
+
+    let fd_file4 = wasi::path_open(
+        dir_fd,
+        0,
+        "file4",
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("opening a file");
+    assert!(
+        fd_file4 > libc::STDERR_FILENO as wasi::Fd,
+        "file descriptor range check",
+    );
 }
 
 fn main() {
