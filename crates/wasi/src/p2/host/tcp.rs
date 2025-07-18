@@ -1,9 +1,9 @@
-use crate::net::{SocketAddrUse, SocketAddressFamily};
 use crate::p2::bindings::{
     sockets::network::{IpAddressFamily, IpSocketAddress, Network},
     sockets::tcp::{self, ShutdownType},
 };
 use crate::p2::{SocketResult, WasiImpl, WasiView};
+use crate::sockets::{SocketAddrUse, SocketAddressFamily};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
