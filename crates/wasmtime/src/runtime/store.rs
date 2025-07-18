@@ -2137,7 +2137,9 @@ at https://bytecodealliance.org/security.
     pub(crate) fn check_empty_replay_buffer(&mut self) {
         if let Some(buf) = self.replay_buffer_mut() {
             if buf.next().is_some() {
-                println!("Warning: Replay buffer is not emptied!");
+                log::warn!(
+                    "Replay buffer is expected to be empty (possibly incorrect execution encountered)"
+                );
             }
         }
     }

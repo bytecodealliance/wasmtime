@@ -200,7 +200,7 @@ pub trait Replayer: Iterator<Item = RREvent> {
     fn next_event(&mut self) -> Result<RREvent, ReplayError> {
         let event = self.next().ok_or(ReplayError::EmptyBuffer);
         if let Ok(e) = &event {
-            println!("Replay | {}", e);
+            log::debug!("Replay Event => {}", e);
         }
         event
     }
@@ -291,13 +291,15 @@ impl RecordBuffer {
 
 impl Recorder for RecordBuffer {
     fn new_recorder(cfg: RecordConfig) -> Result<Self> {
-        Ok(RecordBuffer {
+        let mut buf = RecordBuffer {
             data: RRDataCommon {
                 buf: VecDeque::new(),
                 rw: File::create(cfg.path)?,
             },
             metadata: cfg.metadata,
-        })
+        };
+
+        Ok(buf)
     }
 
     #[inline]
@@ -307,7 +309,7 @@ impl Recorder for RecordBuffer {
         F: FnOnce(&RecordMetadata) -> T,
     {
         let event = f(self.metadata()).into();
-        println!("Record | {}", &event);
+        log::debug!("Recording event => {}", &event);
         self.push_event(event);
     }
 
@@ -322,8 +324,8 @@ impl Recorder for RecordBuffer {
         }
         data.rw.flush()?;
         data.buf.clear();
-        println!(
-            "Record flush | File size: {:?} bytes",
+        log::debug!(
+            "Flushing record buffer | File size: {:?} bytes",
             data.rw.metadata()?.len()
         );
         Ok(())
