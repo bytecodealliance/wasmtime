@@ -1,7 +1,7 @@
 use crate::cli::WasiCliCtx;
 use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
 use crate::random::WasiRandomCtx;
-use crate::sockets::{SocketAddrCheck, SocketAddrUse};
+use crate::sockets::{SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
 use cap_rand::RngCore;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -19,11 +19,10 @@ use std::sync::Arc;
 /// [`Store`]: wasmtime::Store
 #[derive(Default)]
 pub(crate) struct WasiCtxBuilder<I, O> {
-    pub(crate) random: WasiRandomCtx,
-    pub(crate) clocks: WasiClocksCtx,
     pub(crate) cli: WasiCliCtx<I, O>,
-    pub(crate) socket_addr_check: SocketAddrCheck,
-    pub(crate) allowed_network_uses: AllowedNetworkUses,
+    pub(crate) clocks: WasiClocksCtx,
+    pub(crate) random: WasiRandomCtx,
+    pub(crate) sockets: WasiSocketsCtx,
     pub(crate) allow_blocking_current_thread: bool,
 }
 
@@ -46,8 +45,6 @@ impl<I, O> WasiCtxBuilder<I, O> {
     /// These defaults can all be updated via the various builder configuration
     /// methods below.
     pub(crate) fn new(stdin: I, stdout: O, stderr: O) -> Self {
-        let random = WasiRandomCtx::default();
-        let clocks = WasiClocksCtx::default();
         let cli = WasiCliCtx {
             environment: Vec::default(),
             arguments: Vec::default(),
@@ -56,12 +53,14 @@ impl<I, O> WasiCtxBuilder<I, O> {
             stdout,
             stderr,
         };
+        let clocks = WasiClocksCtx::default();
+        let random = WasiRandomCtx::default();
+        let sockets = WasiSocketsCtx::default();
         Self {
-            random,
-            clocks,
             cli,
-            socket_addr_check: SocketAddrCheck::default(),
-            allowed_network_uses: AllowedNetworkUses::default(),
+            clocks,
+            random,
+            sockets,
             allow_blocking_current_thread: false,
         }
     }
@@ -241,7 +240,7 @@ impl<I, O> WasiCtxBuilder<I, O> {
             + Sync
             + 'static,
     {
-        self.socket_addr_check = SocketAddrCheck(Arc::new(check));
+        self.sockets.socket_addr_check = SocketAddrCheck(Arc::new(check));
         self
     }
 
@@ -249,7 +248,7 @@ impl<I, O> WasiCtxBuilder<I, O> {
     ///
     /// By default this is disabled.
     pub fn allow_ip_name_lookup(&mut self, enable: bool) -> &mut Self {
-        self.allowed_network_uses.ip_name_lookup = enable;
+        self.sockets.allowed_network_uses.ip_name_lookup = enable;
         self
     }
 
@@ -258,7 +257,7 @@ impl<I, O> WasiCtxBuilder<I, O> {
     /// This is enabled by default, but can be disabled if UDP should be blanket
     /// disabled.
     pub fn allow_udp(&mut self, enable: bool) -> &mut Self {
-        self.allowed_network_uses.udp = enable;
+        self.sockets.allowed_network_uses.udp = enable;
         self
     }
 
@@ -267,47 +266,7 @@ impl<I, O> WasiCtxBuilder<I, O> {
     /// This is enabled by default, but can be disabled if TCP should be blanket
     /// disabled.
     pub fn allow_tcp(&mut self, enable: bool) -> &mut Self {
-        self.allowed_network_uses.tcp = enable;
+        self.sockets.allowed_network_uses.tcp = enable;
         self
-    }
-}
-
-pub struct AllowedNetworkUses {
-    pub ip_name_lookup: bool,
-    pub udp: bool,
-    pub tcp: bool,
-}
-
-impl Default for AllowedNetworkUses {
-    fn default() -> Self {
-        Self {
-            ip_name_lookup: false,
-            udp: true,
-            tcp: true,
-        }
-    }
-}
-
-impl AllowedNetworkUses {
-    pub(crate) fn check_allowed_udp(&self) -> std::io::Result<()> {
-        if !self.udp {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "UDP is not allowed",
-            ));
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn check_allowed_tcp(&self) -> std::io::Result<()> {
-        if !self.tcp {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "TCP is not allowed",
-            ));
-        }
-
-        Ok(())
     }
 }

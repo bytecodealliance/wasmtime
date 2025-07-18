@@ -6,18 +6,50 @@ use std::sync::Arc;
 /// Value taken from rust std library.
 pub const DEFAULT_TCP_BACKLOG: u32 = 128;
 
-pub struct Network {
+#[derive(Clone, Default)]
+pub struct WasiSocketsCtx {
     pub socket_addr_check: SocketAddrCheck,
-    pub allow_ip_name_lookup: bool,
+    pub allowed_network_uses: AllowedNetworkUses,
 }
 
-impl Network {
-    pub async fn check_socket_addr(
-        &self,
-        addr: SocketAddr,
-        reason: SocketAddrUse,
-    ) -> std::io::Result<()> {
-        self.socket_addr_check.check(addr, reason).await
+#[derive(Clone)]
+pub struct AllowedNetworkUses {
+    pub ip_name_lookup: bool,
+    pub udp: bool,
+    pub tcp: bool,
+}
+
+impl Default for AllowedNetworkUses {
+    fn default() -> Self {
+        Self {
+            ip_name_lookup: false,
+            udp: true,
+            tcp: true,
+        }
+    }
+}
+
+impl AllowedNetworkUses {
+    pub(crate) fn check_allowed_udp(&self) -> std::io::Result<()> {
+        if !self.udp {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "UDP is not allowed",
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn check_allowed_tcp(&self) -> std::io::Result<()> {
+        if !self.tcp {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "TCP is not allowed",
+            ));
+        }
+
+        Ok(())
     }
 }
 
