@@ -100,6 +100,17 @@ impl core::hash::Hash for ModuleVersionStrategy {
     }
 }
 
+impl ModuleVersionStrategy {
+    /// Get the string-encoding version of the module
+    pub fn as_str(&self) -> &str {
+        match &self {
+            Self::WasmtimeVersion => env!("CARGO_PKG_VERSION"),
+            Self::Custom(c) => c,
+            Self::None => "",
+        }
+    }
+}
+
 /// Global configuration options used to create an [`Engine`](crate::Engine)
 /// and customize its behavior.
 ///

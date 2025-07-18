@@ -2,7 +2,9 @@
 //!
 //! This feature is currently experimental and hence not optimized.
 
-use crate::config::{RecordConfig, RecordMetadata, ReplayConfig, ReplayMetadata};
+use crate::config::{
+    ModuleVersionStrategy, RecordConfig, RecordMetadata, ReplayConfig, ReplayMetadata,
+};
 use crate::prelude::*;
 #[allow(unused_imports)]
 use crate::runtime::Store;
@@ -282,23 +284,21 @@ impl RecordBuffer {
     fn push_event(&mut self, event: RREvent) -> () {
         self.data.buf.push_back(event)
     }
-
-    /// Generate indepedent references to data and metadata
-    fn split(&mut self) -> (&mut RRDataCommon, &RecordMetadata) {
-        (&mut self.data, &self.metadata)
-    }
 }
 
 impl Recorder for RecordBuffer {
     fn new_recorder(cfg: RecordConfig) -> Result<Self> {
-        let buf = RecordBuffer {
+        let mut file = File::create(cfg.path)?;
+        // Replay requires the Module version and RecordMetadata configuration
+        postcard::to_io(ModuleVersionStrategy::WasmtimeVersion.as_str(), &mut file)?;
+        postcard::to_io(&cfg.metadata, &mut file)?;
+        Ok(RecordBuffer {
             data: RRDataCommon {
                 buf: VecDeque::new(),
-                rw: File::create(cfg.path)?,
+                rw: file,
             },
             metadata: cfg.metadata,
-        };
-        Ok(buf)
+        })
     }
 
     #[inline]
@@ -313,9 +313,7 @@ impl Recorder for RecordBuffer {
     }
 
     fn flush_to_file(&mut self) -> Result<()> {
-        let (data, metadata) = self.split();
-        // Replay requires the RecordMetadata configuration
-        postcard::to_io(metadata, &mut data.rw)?;
+        let data = &mut self.data;
         // Seralizing each event independently prevents checking for vector sizes
         // during deserialization
         for v in &data.buf {
@@ -356,6 +354,14 @@ impl Replayer for ReplayBuffer {
     fn new_replayer(cfg: ReplayConfig) -> Result<Self> {
         let mut file = File::open(cfg.path)?;
         let mut events = VecDeque::<RREvent>::new();
+        // Ensure module versions match
+        let mut scratch = [0u8; 12];
+        let (version, _) = postcard::from_io::<&str, _>((&mut file, &mut scratch))?;
+        assert_eq!(
+            version,
+            ModuleVersionStrategy::WasmtimeVersion.as_str(),
+            "Wasmtime version mismatch between engine used for record and replay"
+        );
         // Read till EOF
         let (trace_metadata, _) = postcard::from_io((&mut file, &mut [0; 0]))?;
         while file.stream_position()? != file.metadata()?.len() {

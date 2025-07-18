@@ -127,11 +127,7 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Me
     );
     let mut data = Vec::new();
     data.push(VERSION);
-    let version = match &engine.config().module_version {
-        ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION"),
-        ModuleVersionStrategy::Custom(c) => c,
-        ModuleVersionStrategy::None => "",
-    };
+    let version = engine.config().module_version.as_str();
     // This precondition is checked in Config::module_version:
     assert!(
         version.len() < 256,
