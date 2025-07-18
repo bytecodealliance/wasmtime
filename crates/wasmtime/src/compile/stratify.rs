@@ -50,8 +50,6 @@
 //! dependencies each component has, and a component is ready for inclusion in a
 //! layer once its unprocessed-dependencies count reaches zero.
 
-#![cfg_attr(not(test), expect(dead_code, reason = "used in upcoming PRs"))]
-
 use super::{
     call_graph::CallGraph,
     scc::{Scc, StronglyConnectedComponents},
@@ -77,7 +75,7 @@ impl<Node: Debug> Debug for Strata<Node> {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 let mut f = f.debug_list();
                 for layer in self.0.layers() {
-                    f.entries(layer);
+                    f.entry(&layer);
                 }
                 f.finish()
             }

@@ -23,6 +23,7 @@ macro_rules! wasmtime_option_group {
         pub struct $opts:ident {
             $(
                 $(#[doc = $doc:tt])*
+                $(#[doc($doc_attr:meta)])?
                 $(#[serde($serde_attr:meta)])*
                 pub $opt:ident: $container:ident<$payload:ty>,
             )+
@@ -31,6 +32,7 @@ macro_rules! wasmtime_option_group {
                 #[prefixed = $prefix:tt]
                 $(#[serde($serde_attr2:meta)])*
                 $(#[doc = $prefixed_doc:tt])*
+                $(#[doc($prefixed_doc_attr:meta)])?
                 pub $prefixed:ident: Vec<(String, Option<String>)>,
             )?
         }
@@ -43,6 +45,7 @@ macro_rules! wasmtime_option_group {
         pub struct $opts {
             $(
                 $(#[serde($serde_attr)])*
+                $(#[doc($doc_attr)])?
                 pub $opt: $container<$payload>,
             )+
             $(
@@ -551,6 +554,30 @@ impl WasmtimeOptionValue for wasmtime::MpkEnabled {
             wasmtime::MpkEnabled::Enable => f.write_str("y"),
             wasmtime::MpkEnabled::Disable => f.write_str("n"),
             wasmtime::MpkEnabled::Auto => f.write_str("auto"),
+        }
+    }
+}
+
+impl WasmtimeOptionValue for wasmtime::IntraModuleInlining {
+    const VAL_HELP: &'static str = "[=y|n|gc]";
+
+    fn parse(val: Option<&str>) -> Result<Self> {
+        match val {
+            None | Some("n") | Some("no") | Some("false") => Ok(wasmtime::IntraModuleInlining::Yes),
+            Some("y") | Some("yes") | Some("true") => Ok(wasmtime::IntraModuleInlining::No),
+            Some("gc") => Ok(wasmtime::IntraModuleInlining::WhenUsingGc),
+            Some(s) => bail!(
+                "unknown compiler intra-module inlining flag `{s}`, \
+                 only yes,no,gc,<nothing> accepted"
+            ),
+        }
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            wasmtime::IntraModuleInlining::Yes => f.write_str("y"),
+            wasmtime::IntraModuleInlining::No => f.write_str("n"),
+            wasmtime::IntraModuleInlining::WhenUsingGc => f.write_str("gc"),
         }
     }
 }

@@ -73,7 +73,7 @@ pub trait Inline {
     /// Failure to uphold these invariants may result in panics during
     /// compilation or incorrect runtime behavior in the generated code.
     fn inline(
-        &self,
+        &mut self,
         caller: &ir::Function,
         call_inst: ir::Inst,
         call_opcode: ir::Opcode,
@@ -82,12 +82,12 @@ pub trait Inline {
     ) -> InlineCommand<'_>;
 }
 
-impl<'a, T> Inline for &'a T
+impl<'a, T> Inline for &'a mut T
 where
     T: Inline,
 {
     fn inline(
-        &self,
+        &mut self,
         caller: &ir::Function,
         inst: ir::Inst,
         opcode: ir::Opcode,
@@ -102,7 +102,12 @@ where
 /// instruction, and inline the callee when directed to do so.
 ///
 /// Returns whether any call was inlined.
-pub(crate) fn do_inlining(func: &mut ir::Function, inliner: impl Inline) -> CodegenResult<bool> {
+pub(crate) fn do_inlining(
+    func: &mut ir::Function,
+    mut inliner: impl Inline,
+) -> CodegenResult<bool> {
+    trace!("function {} before inlining: {}", func.name, func);
+
     let mut inlined_any = false;
     let mut allocs = InliningAllocs::default();
 
@@ -173,6 +178,12 @@ pub(crate) fn do_inlining(func: &mut ir::Function, inliner: impl Inline) -> Code
                 _ => continue,
             }
         }
+    }
+
+    if inlined_any {
+        trace!("function {} after inlining: {}", func.name, func);
+    } else {
+        trace!("function {} did not have any callees inlined", func.name);
     }
 
     Ok(inlined_any)
@@ -411,6 +422,18 @@ fn inline_one(
             );
 
             next_callee_inst = callee.layout.next_inst(callee_inst);
+        }
+    }
+
+    // We copied *all* callee blocks into the caller's layout, but only copied
+    // the callee instructions in *reachable* callee blocks into the caller's
+    // associated blocks. Therefore, any *unreachable* blocks are empty in the
+    // caller, which is invalid CLIF because all blocks must end in a
+    // terminator, so do a quick pass over the inlined blocks and remove any
+    // empty blocks from the caller's layout.
+    for block in entity_map.iter_inlined_blocks(func) {
+        if func.layout.first_inst(block).is_none() {
+            func.layout.remove_block(block);
         }
     }
 
@@ -1115,6 +1138,17 @@ impl EntityMap {
             .block_offset
             .expect("must create inlined `ir::Block`s before calling `EntityMap::inlined_block`");
         ir::Block::from_u32(offset + callee_block.as_u32())
+    }
+
+    fn iter_inlined_blocks(&self, func: &ir::Function) -> impl Iterator<Item = ir::Block> + use<> {
+        let start = self.block_offset.expect(
+            "must create inlined `ir::Block`s before calling `EntityMap::iter_inlined_blocks`",
+        );
+
+        let end = func.dfg.blocks.len();
+        let end = u32::try_from(end).unwrap();
+
+        (start..end).map(|i| ir::Block::from_u32(i))
     }
 
     fn inlined_global_value(&self, callee_global_value: ir::GlobalValue) -> ir::GlobalValue {
