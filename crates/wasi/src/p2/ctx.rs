@@ -1,11 +1,10 @@
 use crate::cli::WasiCliCtx;
 use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
-use crate::ctx::AllowedNetworkUses;
 use crate::p2::filesystem::Dir;
 use crate::p2::pipe;
 use crate::p2::stdio::{self, StdinStream, StdoutStream};
 use crate::random::WasiRandomCtx;
-use crate::sockets::{SocketAddrCheck, SocketAddrUse};
+use crate::sockets::{AllowedNetworkUses, SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
 use crate::{DirPerms, FilePerms, OpenMode};
 use anyhow::Result;
 use cap_rand::RngCore;
@@ -435,17 +434,6 @@ impl WasiCtxBuilder {
         let Self {
             common:
                 crate::WasiCtxBuilder {
-                    random:
-                        WasiRandomCtx {
-                            random,
-                            insecure_random,
-                            insecure_random_seed,
-                        },
-                    clocks:
-                        WasiClocksCtx {
-                            wall_clock,
-                            monotonic_clock,
-                        },
                     cli:
                         WasiCliCtx {
                             environment: env,
@@ -455,8 +443,22 @@ impl WasiCtxBuilder {
                             stdout,
                             stderr,
                         },
-                    socket_addr_check,
-                    allowed_network_uses,
+                    clocks:
+                        WasiClocksCtx {
+                            wall_clock,
+                            monotonic_clock,
+                        },
+                    random:
+                        WasiRandomCtx {
+                            random,
+                            insecure_random,
+                            insecure_random_seed,
+                        },
+                    sockets:
+                        WasiSocketsCtx {
+                            socket_addr_check,
+                            allowed_network_uses,
+                        },
                     allow_blocking_current_thread,
                 },
             preopens,
