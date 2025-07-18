@@ -76,7 +76,7 @@ use crate::{
     FsError, IsATTY, ResourceTable, StreamError, StreamResult, WasiCtx, WasiImpl, WasiView,
 };
 use anyhow::{bail, Context};
-use std::collections::{BTreeMap, BTreeSet, HashSet, btree_map};
+use std::collections::{btree_map, BTreeMap, BTreeSet, HashSet};
 use std::mem::{self, size_of, size_of_val};
 use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
