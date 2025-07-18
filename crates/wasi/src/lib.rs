@@ -26,7 +26,7 @@ pub mod preview0;
 pub mod preview1;
 pub mod random;
 pub mod runtime;
-mod sockets;
+pub mod sockets;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub(crate) use self::ctx::WasiCtxBuilder;

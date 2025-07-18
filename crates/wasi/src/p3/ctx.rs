@@ -3,7 +3,7 @@ use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
 use crate::p3::cli::{InputStream, OutputStream};
 use crate::p3::filesystem::Dir;
 use crate::random::WasiRandomCtx;
-use crate::sockets::SocketAddrUse;
+use crate::sockets::{SocketAddrUse, WasiSocketsCtx};
 use crate::{DirPerms, FilePerms, OpenMode};
 use anyhow::Result;
 use cap_rand::RngCore;
@@ -432,6 +432,7 @@ impl WasiCtxBuilder {
                     random,
                     clocks,
                     cli,
+                    sockets,
                     ..
                 },
             built: _,
@@ -440,9 +441,10 @@ impl WasiCtxBuilder {
         self.built = true;
 
         WasiCtx {
-            random,
-            clocks,
             cli,
+            clocks,
+            random,
+            sockets,
         }
     }
 }
@@ -496,9 +498,10 @@ impl WasiCtxBuilder {
 /// ```
 #[derive(Default)]
 pub struct WasiCtx {
-    pub random: WasiRandomCtx,
-    pub clocks: WasiClocksCtx,
     pub cli: WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>>,
+    pub clocks: WasiClocksCtx,
+    pub random: WasiRandomCtx,
+    pub sockets: WasiSocketsCtx,
 }
 
 impl WasiCtx {

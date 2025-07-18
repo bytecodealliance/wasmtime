@@ -1,10 +1,19 @@
+use core::ops::Deref;
+
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use wasmtime::component::ResourceTable;
+
 /// Value taken from rust std library.
 pub const DEFAULT_TCP_BACKLOG: u32 = 128;
+
+/// Theoretical maximum byte size of a UDP datagram, the real limit is lower,
+/// but we do not account for e.g. the transport layer here for simplicity.
+/// In practice, datagrams are typically less than 1500 bytes.
+pub const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
 #[derive(Clone, Default)]
 pub struct WasiSocketsCtx {
@@ -12,7 +21,28 @@ pub struct WasiSocketsCtx {
     pub allowed_network_uses: AllowedNetworkUses,
 }
 
-#[derive(Clone)]
+pub struct WasiSocketsCtxView<'a> {
+    pub ctx: &'a mut WasiSocketsCtx,
+    pub table: &'a mut ResourceTable,
+}
+
+pub trait WasiSocketsView: Send {
+    fn sockets(&mut self) -> WasiSocketsCtxView<'_>;
+}
+
+impl<T: WasiSocketsView> WasiSocketsView for &mut T {
+    fn sockets(&mut self) -> WasiSocketsCtxView<'_> {
+        T::sockets(self)
+    }
+}
+
+impl<T: WasiSocketsView> WasiSocketsView for Box<T> {
+    fn sockets(&mut self) -> WasiSocketsCtxView<'_> {
+        T::sockets(self)
+    }
+}
+
+#[derive(Copy, Clone)]
 pub struct AllowedNetworkUses {
     pub ip_name_lookup: bool,
     pub udp: bool,
@@ -64,6 +94,19 @@ pub struct SocketAddrCheck(
 );
 
 impl SocketAddrCheck {
+    /// A check that will be called for each socket address that is used.
+    ///
+    /// Returning `true` will permit socket connections to the `SocketAddr`,
+    /// while returning `false` will reject the connection.
+    pub fn new(
+        f: impl Fn(SocketAddr, SocketAddrUse) -> Pin<Box<dyn Future<Output = bool> + Send + Sync>>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        Self(Arc::new(f))
+    }
+
     pub async fn check(&self, addr: SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
         if (self.0)(addr, reason).await {
             Ok(())
@@ -73,6 +116,16 @@ impl SocketAddrCheck {
                 "An address was not permitted by the socket address check.",
             ))
         }
+    }
+}
+
+impl Deref for SocketAddrCheck {
+    type Target = dyn Fn(SocketAddr, SocketAddrUse) -> Pin<Box<dyn Future<Output = bool> + Send + Sync>>
+        + Send
+        + Sync;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
     }
 }
 
@@ -97,7 +150,7 @@ pub enum SocketAddrUse {
     UdpOutgoingDatagram,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum SocketAddressFamily {
     Ipv4,
     Ipv6,
