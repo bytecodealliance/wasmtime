@@ -1,11 +1,11 @@
 use crate::cli::WasiCliCtx;
 use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
 use crate::ctx::AllowedNetworkUses;
-use crate::net::{SocketAddrCheck, SocketAddrUse};
 use crate::p2::filesystem::Dir;
 use crate::p2::pipe;
 use crate::p2::stdio::{self, StdinStream, StdoutStream};
 use crate::random::WasiRandomCtx;
+use crate::sockets::{SocketAddrCheck, SocketAddrUse};
 use crate::{DirPerms, FilePerms, OpenMode};
 use anyhow::Result;
 use cap_rand::RngCore;

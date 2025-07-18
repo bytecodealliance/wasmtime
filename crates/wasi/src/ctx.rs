@@ -1,7 +1,7 @@
 use crate::cli::WasiCliCtx;
 use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
-use crate::net::{SocketAddrCheck, SocketAddrUse};
 use crate::random::WasiRandomCtx;
+use crate::sockets::{SocketAddrCheck, SocketAddrUse};
 use cap_rand::RngCore;
 use std::future::Future;
 use std::net::SocketAddr;

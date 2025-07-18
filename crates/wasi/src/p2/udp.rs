@@ -1,6 +1,6 @@
-use crate::net::{SocketAddrCheck, SocketAddressFamily};
 use crate::p2::host::network::util;
 use crate::runtime::with_ambient_tokio_runtime;
+use crate::sockets::{SocketAddrCheck, SocketAddressFamily};
 use async_trait::async_trait;
 use cap_net_ext::{AddressFamily, Blocking};
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
