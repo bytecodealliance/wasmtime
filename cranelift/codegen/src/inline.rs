@@ -414,6 +414,18 @@ fn inline_one(
         }
     }
 
+    // We copied *all* callee blocks into the caller's layout, but only copied
+    // the callee instructions in *reachable* callee blocks into the caller's
+    // associated blocks. Therefore, any *unreachable* blocks are empty in the
+    // caller, which is invalid CLIF because all blocks must end in a
+    // terminator, so do a quick pass over the inlined blocks and remove any
+    // empty blocks from the caller's layout.
+    for block in entity_map.iter_inlined_blocks(func) {
+        if func.layout.first_inst(block).is_none() {
+            func.layout.remove_block(block);
+        }
+    }
+
     // Final step: fixup the exception tables of any inlined calls when we are
     // inlining a `try_call` site.
     //
@@ -1115,6 +1127,17 @@ impl EntityMap {
             .block_offset
             .expect("must create inlined `ir::Block`s before calling `EntityMap::inlined_block`");
         ir::Block::from_u32(offset + callee_block.as_u32())
+    }
+
+    fn iter_inlined_blocks(&self, func: &ir::Function) -> impl Iterator<Item = ir::Block> + use<> {
+        let start = self.block_offset.expect(
+            "must create inlined `ir::Block`s before calling `EntityMap::iter_inlined_blocks`",
+        );
+
+        let end = func.dfg.blocks.len();
+        let end = u32::try_from(end).unwrap();
+
+        (start..end).map(|i| ir::Block::from_u32(i))
     }
 
     fn inlined_global_value(&self, callee_global_value: ir::GlobalValue) -> ir::GlobalValue {
