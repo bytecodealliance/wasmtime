@@ -48,6 +48,10 @@ struct IncrementalCacheContext {
 
 /// ABI signature of functions that are generated here.
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(
+    not(feature = "component-model"),
+    expect(dead_code, reason = "only used with component model compiler")
+)]
 enum Abi {
     /// The "wasm" ABI, or suitable to be a `wasm_call` field of a `VMFuncRef`.
     Wasm,
