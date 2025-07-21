@@ -7,7 +7,7 @@ use crate::component::concurrent::{ConcurrentState, tls};
 use crate::component::func::{self, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
-use crate::component::{Instance, Lower, Val, WasmList, WasmStr};
+use crate::component::{AsAccessor, Instance, Lower, Val, WasmList, WasmStr};
 use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::{VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
@@ -507,13 +507,18 @@ impl<T> FutureWriter<T> {
     /// value; otherwise it will return `false`, meaning the read end was dropped
     /// before the value could be delivered.
     ///
-    /// Note that the returned `Future` must be polled from the event loop of
-    /// the component instance from which this `FutureWriter` originated.  See
-    /// [`Instance::run`] for details.
-    pub fn write(mut self, value: T) -> impl Future<Output = bool> + Send + 'static
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this future.
+    pub async fn write(mut self, accessor: impl AsAccessor, value: T) -> bool
     where
         T: Send + 'static,
     {
+        // FIXME: this is intended to be used in the future to directly
+        // manipulate state for this future within the store without having to
+        // go through an mpsc.
+        let _accessor = accessor.as_accessor();
         let (tx, rx) = oneshot::channel();
         send(
             &mut self.tx.as_mut().unwrap(),
@@ -523,38 +528,35 @@ impl<T> FutureWriter<T> {
             },
         );
         self.default = None;
-        let instance = self.instance;
-        super::checked(
-            instance,
-            rx.map(move |v| {
-                drop(self);
-                match v {
-                    Ok(HostResult { dropped, .. }) => !dropped,
-                    Err(_) => todo!("guarantee buffer recovery if event loop errors or panics"),
-                }
-            }),
-        )
+        let v = rx.await;
+        drop(self);
+        match v {
+            Ok(HostResult { dropped, .. }) => !dropped,
+            Err(_) => todo!("guarantee buffer recovery if event loop errors or panics"),
+        }
     }
 
-    /// Convert this object into a `Future` which will resolve when the read end
-    /// of this `future` is dropped, plus a `Watch` which can be used to retrieve
-    /// the `FutureWriter` again.
+    /// Wait for the read end of this `future` is dropped.
     ///
-    /// Note that calling `Watch::into_inner` on the returned `Watch` will have
-    /// the side effect of causing the `Future` to resolve immediately if it
-    /// hasn't already.
+    /// The [`Accessor`] provided can be acquired from [`Instance::run_concurrent`] or
+    /// from within a host function for example.
     ///
-    /// Also note that the returned `Future` must be polled from the event loop
-    /// of the component instance from which this `FutureWriter` originated.
-    /// See [`Instance::run`] for details.
-    pub fn watch_reader(mut self) -> (impl Future<Output = ()> + Send + 'static, Watch<Self>)
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this future.
+    pub async fn watch_reader(&mut self, accessor: impl AsAccessor)
     where
         T: Send + 'static,
     {
+        // FIXME: this is intended to be used in the future to directly
+        // manipulate state for this future within the store without having to
+        // go through an mpsc.
+        let _accessor = accessor.as_accessor();
         let (tx, rx) = oneshot::channel();
         send(&mut self.tx.as_mut().unwrap(), WriteEvent::Watch { tx });
-        let instance = self.instance;
-        watch(instance, rx, self)
+        let (future, _watch) = watch(self.instance, rx, ());
+        future.await;
     }
 }
 
@@ -666,6 +668,14 @@ impl<T> HostFuture<T> {
             }
             _ => func::bad_type_info(),
         }
+    }
+}
+
+impl<T> fmt::Debug for HostFuture<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HostFuture")
+            .field("rep", &self.rep)
+            .finish()
     }
 }
 
@@ -787,56 +797,61 @@ impl<T> FutureReader<T> {
     /// The returned `Future` will yield `None` if the guest has trapped
     /// before it could produce a result.
     ///
-    /// Note that the returned `Future` must be polled from the event loop of
-    /// the component instance from which this `FutureReader` originated.  See
-    /// [`Instance::run`] for details.
-    pub fn read(mut self) -> impl Future<Output = Option<T>> + Send + 'static
+    /// The [`Accessor`] provided can be acquired from [`Instance::run_concurrent`] or
+    /// from within a host function for example.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this future.
+    pub async fn read(mut self, accessor: impl AsAccessor) -> Option<T>
     where
         T: Send + 'static,
     {
+        // FIXME: this is intended to be used in the future to directly
+        // manipulate state for this future within the store without having to
+        // go through an mpsc.
+        let _accessor = accessor.as_accessor();
         let (tx, rx) = oneshot::channel();
         send(
             &mut self.tx.as_mut().unwrap(),
             ReadEvent::Read { buffer: None, tx },
         );
-        let instance = self.instance;
-        super::checked(
-            instance,
-            rx.map(move |v| {
-                drop(self);
+        let v = rx.await;
+        drop(self);
 
-                if let Ok(HostResult {
-                    mut buffer,
-                    dropped: false,
-                }) = v
-                {
-                    buffer.take()
-                } else {
-                    None
-                }
-            }),
-        )
+        if let Ok(HostResult {
+            mut buffer,
+            dropped: false,
+        }) = v
+        {
+            buffer.take()
+        } else {
+            None
+        }
     }
 
-    /// Convert this object into a `Future` which will resolve when the write
-    /// end of this `future` is dropped, plus a `Watch` which can be used to
-    /// retrieve the `FutureReader` again.
+    /// Wait for the write end of this `future` to be dropped.
     ///
-    /// Note that calling `Watch::into_inner` on the returned `Watch` will have
-    /// the side effect of causing the `Future` to resolve immediately if it
-    /// hasn't already.
+    /// The [`Accessor`] provided can be acquired from
+    /// [`Instance::run_concurrent`] or from within a host function for example.
     ///
-    /// Also note that the returned `Future` must be polled from the event loop
-    /// of the component instance from which this `FutureReader` originated.
-    /// See [`Instance::run`] for details.
-    pub fn watch_writer(mut self) -> (impl Future<Output = ()> + Send + 'static, Watch<Self>)
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this future.
+    pub async fn watch_writer(&mut self, accessor: impl AsAccessor)
     where
         T: Send + 'static,
     {
+        // FIXME: this is intended to be used in the future to directly
+        // manipulate state for this future within the store without having to
+        // go through an mpsc.
+        let _accessor = accessor.as_accessor();
         let (tx, rx) = oneshot::channel();
         send(&mut self.tx.as_mut().unwrap(), ReadEvent::Watch { tx });
-        let instance = self.instance;
-        watch(instance, rx, self)
+        let (future, _watch) = watch(self.instance, rx, ());
+        future.await
     }
 }
 
@@ -851,12 +866,23 @@ impl<T> Drop for FutureReader<T> {
 /// Represents the writable end of a Component Model `stream`.
 pub struct StreamWriter<B> {
     instance: Instance,
+    closed: bool,
     tx: Option<mpsc::Sender<WriteEvent<B>>>,
 }
 
 impl<B> StreamWriter<B> {
     fn new(tx: Option<mpsc::Sender<WriteEvent<B>>>, instance: Instance) -> Self {
-        Self { instance, tx }
+        Self {
+            instance,
+            tx,
+            closed: false,
+        }
+    }
+
+    /// Returns whether this stream is "closed" meaning that the other end of
+    /// the stream has been dropped.
+    pub fn is_closed(&self) -> bool {
+        self.closed
     }
 
     /// Write the specified items to the `stream`.
@@ -865,92 +891,81 @@ impl<B> StreamWriter<B> {
     /// during its current or next read.  Use `write_all` to loop until the
     /// buffer is drained or the read end is dropped.
     ///
-    /// The returned `Future` will yield a `(Some(_), _)` if the write completed
-    /// (possibly consuming a subset of the items or nothing depending on the
-    /// number of items the reader accepted).  It will return `(None, _)` if the
-    /// write failed due to the closure of the read end.  In either case, the
-    /// returned buffer will be the same one passed as a parameter, possibly
-    /// mutated to consume any written values.
+    /// The returned `Future` will yield the input buffer back,
+    /// possibly consuming a subset of the items or nothing depending on the
+    /// number of items the reader accepted.
     ///
-    /// Note that the returned `Future` must be polled from the event loop of
-    /// the component instance from which this `StreamWriter` originated.  See
-    /// [`Instance::run`] for details.
-    pub fn write(
-        mut self,
-        buffer: B,
-    ) -> impl Future<Output = (Option<StreamWriter<B>>, B)> + Send + 'static
+    /// The [`is_closed`](Self::is_closed) method can be used to determine
+    /// whether the stream was learned to be closed after this operation completes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this future.
+    pub async fn write(&mut self, accessor: impl AsAccessor, buffer: B) -> B
     where
         B: Send + 'static,
     {
+        // FIXME: this is intended to be used in the future to directly
+        // manipulate state for this future within the store without having to
+        // go through an mpsc.
+        let _accessor = accessor.as_accessor();
         let (tx, rx) = oneshot::channel();
         send(self.tx.as_mut().unwrap(), WriteEvent::Write { buffer, tx });
-        let instance = self.instance;
-        super::checked(
-            instance,
-            rx.map(move |v| match v {
-                Ok(HostResult { buffer, dropped }) => ((!dropped).then_some(self), buffer),
-                Err(_) => todo!("guarantee buffer recovery if event loop errors or panics"),
-            }),
-        )
+        let v = rx.await;
+        match v {
+            Ok(HostResult { buffer, dropped }) => {
+                if self.closed {
+                    debug_assert!(dropped);
+                }
+                self.closed = dropped;
+                buffer
+            }
+            Err(_) => todo!("guarantee buffer recovery if event loop errors or panics"),
+        }
     }
 
     /// Write the specified values until either the buffer is drained or the
     /// read end is dropped.
     ///
-    /// The returned `Future` will yield a `(Some(_), _)` if the write completed
-    /// (i.e. all the items were accepted).  It will return `(None, _)` if the
-    /// write failed due to the closure of the read end.  In either case, the
-    /// returned buffer will be the same one passed as a parameter, possibly
-    /// mutated to consume any written values.
+    /// The buffer is returned back to the caller and may still contain items
+    /// within it if the other end of this stream was dropped. Use the
+    /// [`is_closed`](Self::is_closed) method to determine if the other end is
+    /// dropped.
     ///
-    /// Note that the returned `Future` must be polled from the event loop of
-    /// the component instance from which this `StreamWriter` originated.  See
-    /// [`Instance::run`] for details.
-    pub fn write_all<T>(
-        self,
-        buffer: B,
-    ) -> impl Future<Output = (Option<StreamWriter<B>>, B)> + Send + 'static
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this future.
+    pub async fn write_all<T>(&mut self, accessor: impl AsAccessor, mut buffer: B) -> B
     where
         B: WriteBuffer<T>,
     {
-        let instance = self.instance;
-        super::checked(
-            instance,
-            self.write(buffer).then(|(me, buffer)| async move {
-                if let Some(me) = me {
-                    if buffer.remaining().len() > 0 {
-                        // Note the use of `Box::pin` which is required due to
-                        // the recursive nature of this function.
-                        Box::pin(me.write_all(buffer)).await
-                    } else {
-                        (Some(me), buffer)
-                    }
-                } else {
-                    (None, buffer)
-                }
-            }),
-        )
+        let accessor = accessor.as_accessor();
+        while !self.is_closed() && buffer.remaining().len() > 0 {
+            buffer = self.write(accessor, buffer).await;
+        }
+        buffer
     }
 
-    /// Convert this object into a `Future` which will resolve when the read end
-    /// of this `stream` is dropped, plus a `Watch` which can be used to retrieve
-    /// the `StreamWriter` again.
+    /// Wait for the read end of this `stream` to be dropped.
     ///
-    /// Note that calling `Watch::into_inner` on the returned `Watch` will have
-    /// the side effect of causing the `Future` to resolve immediately if it
-    /// hasn't already.
+    /// # Panics
     ///
-    /// Also note that the returned `Future` must be polled from the event loop
-    /// of the component instance from which this `StreamWriter` originated.
-    /// See [`Instance::run`] for details.
-    pub fn watch_reader(mut self) -> (impl Future<Output = ()> + Send + 'static, Watch<Self>)
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this future.
+    pub async fn watch_reader(&mut self, accessor: impl AsAccessor)
     where
         B: Send + 'static,
     {
+        // FIXME: this is intended to be used in the future to directly
+        // manipulate state for this future within the store without having to
+        // go through an mpsc.
+        let _accessor = accessor.as_accessor();
         let (tx, rx) = oneshot::channel();
         send(&mut self.tx.as_mut().unwrap(), WriteEvent::Watch { tx });
-        let instance = self.instance;
-        watch(instance, rx, self)
+        let (future, _watch) = watch(self.instance, rx, ());
+        future.await;
     }
 }
 
@@ -1000,6 +1015,7 @@ impl<T> HostStream<T> {
                 self.rep,
                 TransmitKind::Stream,
             )),
+            closed: false,
         }
     }
 
@@ -1051,6 +1067,14 @@ impl<T> HostStream<T> {
             }
             _ => func::bad_type_info(),
         }
+    }
+}
+
+impl<T> fmt::Debug for HostStream<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HostStream")
+            .field("rep", &self.rep)
+            .finish()
     }
 }
 
@@ -1160,64 +1184,80 @@ pub struct StreamReader<B> {
     instance: Instance,
     rep: u32,
     tx: Option<mpsc::Sender<ReadEvent<B>>>,
+    closed: bool,
 }
 
 impl<B> StreamReader<B> {
     fn new(rep: u32, tx: Option<mpsc::Sender<ReadEvent<B>>>, instance: Instance) -> Self {
-        Self { instance, rep, tx }
+        Self {
+            instance,
+            rep,
+            tx,
+            closed: false,
+        }
+    }
+
+    /// Returns whether this stream is "closed" meaning that the other end of
+    /// the stream has been dropped.
+    pub fn is_closed(&self) -> bool {
+        self.closed
     }
 
     /// Read values from this `stream`.
     ///
     /// The returned `Future` will yield a `(Some(_), _)` if the read completed
     /// (possibly with zero items if the write was empty).  It will return
-    /// `(None, _)` if the read failed due to the closure of the write end.  In
+    /// `(None, _)` if the read failed due to the closure of the write end. In
     /// either case, the returned buffer will be the same one passed as a
     /// parameter, with zero or more items added.
     ///
-    /// Note that the returned `Future` must be polled from the event loop of
-    /// the component instance from which this `StreamReader` originated.  See
-    /// [`Instance::run`] for details.
-    pub fn read(
-        mut self,
-        buffer: B,
-    ) -> impl Future<Output = (Option<StreamReader<B>>, B)> + Send + 'static
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this future.
+    pub async fn read(&mut self, accessor: impl AsAccessor, buffer: B) -> B
     where
         B: Send + 'static,
     {
+        // FIXME: this is intended to be used in the future to directly
+        // manipulate state for this future within the store without having to
+        // go through an mpsc.
+        let _accessor = accessor.as_accessor();
         let (tx, rx) = oneshot::channel();
         send(self.tx.as_mut().unwrap(), ReadEvent::Read { buffer, tx });
-        let instance = self.instance;
-        super::checked(
-            instance,
-            rx.map(move |v| match v {
-                Ok(HostResult { buffer, dropped }) => ((!dropped).then_some(self), buffer),
-                Err(_) => {
-                    todo!("guarantee buffer recovery if event loop errors or panics")
+        let v = rx.await;
+        match v {
+            Ok(HostResult { buffer, dropped }) => {
+                if self.closed {
+                    debug_assert!(dropped);
                 }
-            }),
-        )
+                self.closed = dropped;
+                buffer
+            }
+            Err(_) => {
+                todo!("guarantee buffer recovery if event loop errors or panics")
+            }
+        }
     }
 
-    /// Convert this object into a `Future` which will resolve when the write
-    /// end of this `stream` is dropped, plus a `Watch` which can be used to
-    /// retrieve the `StreamReader` again.
+    /// Wait until the write end of this `stream` is dropped.
     ///
-    /// Note that calling `Watch::into_inner` on the returned `Watch` will have
-    /// the side effect of causing the `Future` to resolve immediately if it
-    /// hasn't already.
+    /// # Panics
     ///
-    /// Also note that the returned `Future` must be polled from the event loop
-    /// of the component instance from which this `StreamReader` originated.
-    /// See [`Instance::run`] for details.
-    pub fn watch_writer(mut self) -> (impl Future<Output = ()> + Send + 'static, Watch<Self>)
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this future.
+    pub async fn watch_writer(&mut self, accessor: impl AsAccessor)
     where
         B: Send + 'static,
     {
+        // FIXME: this is intended to be used in the future to directly
+        // manipulate state for this future within the store without having to
+        // go through an mpsc.
+        let _accessor = accessor.as_accessor();
         let (tx, rx) = oneshot::channel();
         send(&mut self.tx.as_mut().unwrap(), ReadEvent::Watch { tx });
-        let instance = self.instance;
-        watch(instance, rx, self)
+        let (future, _) = watch(self.instance, rx, ());
+        future.await
     }
 }
 
@@ -1936,12 +1976,10 @@ impl Instance {
                 }
 
                 let write_handle = transmit.write_handle;
-                let types = self.id().get(store.0).component().types().clone();
-                let lift =
-                    &mut LiftContext::new(store.0.store_opaque_mut(), &options, &types, self);
+                let lift = &mut LiftContext::new(store.0.store_opaque_mut(), &options, self);
                 let code = accept_writer::<T, B, U>(buffer, tx, kind)(Writer::Guest {
+                    ty: payload(ty, lift.types),
                     lift,
-                    ty: payload(ty, &types),
                     address,
                     count,
                 })?;
@@ -2125,12 +2163,8 @@ impl Instance {
                             bail!("write pointer not aligned");
                         }
 
-                        let lift = &mut LiftContext::new(
-                            store.0.store_opaque_mut(),
-                            write_options,
-                            &types,
-                            self,
-                        );
+                        let lift =
+                            &mut LiftContext::new(store.0.store_opaque_mut(), write_options, self);
                         let bytes = lift
                             .memory()
                             .get(write_address..)
@@ -2193,7 +2227,7 @@ impl Instance {
                     }
                 } else {
                     let store_opaque = store.0.store_opaque_mut();
-                    let lift = &mut LiftContext::new(store_opaque, write_options, &types, self);
+                    let lift = &mut LiftContext::new(store_opaque, write_options, self);
                     let ty = types[types[write_ty].ty].payload.unwrap();
                     let abi = lift.types.canonical_abi(&ty);
                     let size = usize::try_from(abi.size32).unwrap();
@@ -2241,8 +2275,9 @@ impl Instance {
 
     /// Write to the specified stream or future from the guest.
     ///
-    /// SAFETY: `memory` and `realloc` must be valid pointers to their
-    /// respective guest entities.
+    /// SAFETY: `memory` and `realloc` must be either be valid pointers to their
+    /// respective guest entities or null if not applicable (e.g. for a future
+    /// or stream with no payload type).
     pub(super) unsafe fn guest_write<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
@@ -2263,7 +2298,7 @@ impl Instance {
         let address = usize::try_from(address).unwrap();
         let count = usize::try_from(count).unwrap();
         // SAFETY: Per this function's contract, `memory` and `realloc` are
-        // valid.
+        // either valid or null.
         let options = unsafe {
             Options::new(
                 store.0.store_opaque().id(),
@@ -2438,12 +2473,10 @@ impl Instance {
                     transmit.done = true;
                 }
 
-                let types = self.id().get(store.0).component().types().clone();
-                let lift =
-                    &mut LiftContext::new(store.0.store_opaque_mut(), &options, &types, self);
+                let lift = &mut LiftContext::new(store.0.store_opaque_mut(), &options, self);
                 accept(Writer::Guest {
+                    ty: payload(ty, lift.types),
                     lift,
-                    ty: payload(ty, &types),
                     address,
                     count,
                 })?
@@ -2478,8 +2511,9 @@ impl Instance {
 
     /// Read from the specified stream or future from the guest.
     ///
-    /// SAFETY: `memory` and `realloc` must be valid pointers to their
-    /// respective guest entities.
+    /// SAFETY: `memory` and `realloc` must be either be valid pointers to their
+    /// respective guest entities or null if not applicable (e.g. for a future
+    /// or stream with no payload type).
     pub(super) unsafe fn guest_read<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
@@ -2499,7 +2533,7 @@ impl Instance {
 
         let address = usize::try_from(address).unwrap();
         // SAFETY: Per this function's contract, `memory` and `realloc` must be
-        // valid.
+        // valid or null.
         let options = unsafe {
             Options::new(
                 store.0.store_opaque().id(),
@@ -2762,8 +2796,7 @@ impl Instance {
                 None,
             )
         };
-        let types = self.id().get(store).component().types().clone();
-        let lift_ctx = &mut LiftContext::new(store, &options, &types, self);
+        let lift_ctx = &mut LiftContext::new(store, &options, self);
         //  Read string from guest memory
         let address = usize::try_from(debug_msg_address)?;
         let len = usize::try_from(debug_msg_len)?;

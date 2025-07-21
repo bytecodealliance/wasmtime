@@ -122,7 +122,7 @@ impl StorePtr {
     ///
     /// Safety: must not be used outside the original lifetime of the borrow.
     pub(crate) unsafe fn get(&mut self) -> Option<&mut dyn VMStore> {
-        let ptr = self.0?.as_mut();
+        let ptr = unsafe { self.0?.as_mut() };
         Some(ptr)
     }
 }
@@ -432,14 +432,21 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         let mut tables = PrimaryMap::with_capacity(num_defined_tables);
 
         match (|| {
-            self.allocate_memories(&mut request, &mut memories)?;
-            self.allocate_tables(&mut request, &mut tables)?;
+            // SAFETY: validation of tables/memories is a contract of this
+            // function.
+            unsafe {
+                self.allocate_memories(&mut request, &mut memories)?;
+                self.allocate_tables(&mut request, &mut tables)?;
+            }
             Ok(())
         })() {
             Ok(_) => Ok(Instance::new(request, memories, tables, &module.memories)),
             Err(e) => {
-                self.deallocate_memories(&mut memories);
-                self.deallocate_tables(&mut tables);
+                // SAFETY: these were previously allocated by this allocator
+                unsafe {
+                    self.deallocate_memories(&mut memories);
+                    self.deallocate_tables(&mut tables);
+                }
                 self.decrement_core_instance_count();
                 Err(e)
             }
@@ -455,8 +462,13 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
     ///
     /// The instance must have previously been allocated by `Self::allocate`.
     unsafe fn deallocate_module(&self, handle: &mut InstanceHandle) {
-        self.deallocate_memories(handle.get_mut().memories_mut());
-        self.deallocate_tables(handle.get_mut().tables_mut());
+        // SAFETY: the contract of `deallocate_*` is itself a contract of this
+        // function, that the memories/tables were previously allocated from
+        // here.
+        unsafe {
+            self.deallocate_memories(handle.get_mut().memories_mut());
+            self.deallocate_tables(handle.get_mut().tables_mut());
+        }
 
         self.decrement_core_instance_count();
     }
@@ -484,12 +496,11 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
                 .defined_memory_index(memory_index)
                 .expect("should be a defined memory since we skipped imported ones");
 
-            memories.push(self.allocate_memory(
-                request,
-                ty,
-                request.tunables,
-                Some(memory_index),
-            )?);
+            // SAFETY: validation of the memory from this allocator is itself a
+            // contract of this function.
+            let memory =
+                unsafe { self.allocate_memory(request, ty, request.tunables, Some(memory_index))? };
+            memories.push(memory);
         }
 
         Ok(())
@@ -510,7 +521,13 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
             // about leaking subsequent memories if the first memory failed to
             // deallocate. If deallocating memory ever becomes fallible, we will
             // need to be careful here!
-            self.deallocate_memory(Some(memory_index), allocation_index, memory);
+            //
+            // SAFETY: the unsafe contract here is the same as the unsafe
+            // contract of this function, that the memories were previously
+            // allocated by this allocator.
+            unsafe {
+                self.deallocate_memory(Some(memory_index), allocation_index, memory);
+            }
         }
     }
 
@@ -537,7 +554,11 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
                 .defined_table_index(index)
                 .expect("should be a defined table since we skipped imported ones");
 
-            tables.push(self.allocate_table(request, table, request.tunables, def_index)?);
+            // SAFETY: the contract here is that the table has been validated by
+            // this allocator which is a contract of this function itself.
+            let table =
+                unsafe { self.allocate_table(request, table, request.tunables, def_index)? };
+            tables.push(table);
         }
 
         Ok(())
@@ -554,7 +575,11 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         tables: &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) {
         for (table_index, (allocation_index, table)) in mem::take(tables) {
-            self.deallocate_table(table_index, allocation_index, table);
+            // SAFETY: the tables here were allocated from this allocator per
+            // the contract on this function itself.
+            unsafe {
+                self.deallocate_table(table_index, allocation_index, table);
+            }
         }
     }
 }
@@ -572,7 +597,6 @@ fn check_table_init_bounds(
     let mut const_evaluator = ConstExprEvaluator::default();
 
     for segment in module.table_initialization.segments.iter() {
-        let table = unsafe { &*store.instance_mut(instance).get_table(segment.table_index) };
         let mut context = ConstEvalContext::new(instance);
         let start = unsafe {
             const_evaluator
@@ -582,6 +606,7 @@ fn check_table_init_bounds(
         let start = usize::try_from(start.get_u32()).unwrap();
         let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
 
+        let table = store.instance_mut(instance).get_table(segment.table_index);
         match end {
             Some(end) if end <= table.size() => {
                 // Initializer is in bounds
@@ -615,8 +640,10 @@ fn initialize_tables(
                 let idx = module.table_index(table);
                 match module.tables[idx].ref_type.heap_type.top() {
                     WasmHeapTopType::Extern => {
+                        store.gc_store_mut()?;
                         let (gc_store, instance) =
-                            store.gc_store_and_instance_mut(context.instance)?;
+                            store.optional_gc_store_and_instance_mut(context.instance);
+                        let gc_store = gc_store.unwrap();
                         let table = instance.get_defined_table(table);
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
                         let items = (0..table.size())
@@ -625,10 +652,24 @@ fn initialize_tables(
                     }
 
                     WasmHeapTopType::Any => {
+                        store.gc_store_mut()?;
                         let (gc_store, instance) =
-                            store.gc_store_and_instance_mut(context.instance)?;
+                            store.optional_gc_store_and_instance_mut(context.instance);
+                        let gc_store = gc_store.unwrap();
                         let table = instance.get_defined_table(table);
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
+                        let items = (0..table.size())
+                            .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
+                        table.init_gc_refs(0, items)?;
+                    }
+
+                    WasmHeapTopType::Exn => {
+                        store.gc_store_mut()?;
+                        let (gc_store, instance) =
+                            store.optional_gc_store_and_instance_mut(context.instance);
+                        let gc_store = gc_store.unwrap();
+                        let table = instance.get_defined_table(table);
+                        let gc_ref = VMGcRef::from_raw_u32(raw.get_exnref());
                         let items = (0..table.size())
                             .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
                         table.init_gc_refs(0, items)?;

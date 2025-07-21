@@ -55,12 +55,16 @@ fn test_tls_invalid_certificate(_domain: &str, ip: IpAddress) -> Result<()> {
         .context("tcp connect failed")?;
 
     match ClientHandshake::new(BAD_DOMAIN, tcp_input, tcp_output).blocking_finish() {
-        // We're expecting an error regarding the "certificate" is some form or
-        // another. When we add more TLS backends this naive
-        // check will likely need to be revisited/expanded:
-        Err(e) if e.to_debug_string().contains("certificate") => Ok(()),
-
-        Err(e) => Err(e.into()),
+        Err(e) => {
+            let debug_string = e.to_debug_string();
+            // We're expecting an error regarding certificates in some form or
+            // another. When we add more TLS backends this naive check will
+            // likely need to be revisited/expanded:
+            if debug_string.contains("certificate") || debug_string.contains("HandshakeFailure") {
+                return Ok(());
+            }
+            Err(e.into())
+        }
         Ok(_) => panic!("expecting server name mismatch"),
     }
 }
@@ -68,7 +72,13 @@ fn test_tls_invalid_certificate(_domain: &str, ip: IpAddress) -> Result<()> {
 fn try_live_endpoints(test: impl Fn(&str, IpAddress) -> Result<()>) {
     // since this is testing remote endpoints to ensure system cert store works
     // the test uses a couple different endpoints to reduce the number of flakes
-    const DOMAINS: &'static [&'static str] = &["example.com", "api.github.com"];
+    const DOMAINS: &'static [&'static str] = &[
+        "example.com",
+        "api.github.com",
+        "docs.wasmtime.dev",
+        "bytecodealliance.org",
+        "www.rust-lang.org",
+    ];
 
     let net = Network::default();
 
@@ -94,6 +104,8 @@ fn try_live_endpoints(test: impl Fn(&str, IpAddress) -> Result<()>) {
 }
 
 fn main() {
+    println!("sample app");
     try_live_endpoints(test_tls_sample_application);
+    println!("invalid cert");
     try_live_endpoints(test_tls_invalid_certificate);
 }

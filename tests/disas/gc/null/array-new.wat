@@ -32,8 +32,8 @@
 ;;                                     v62 = iconst.i32 3
 ;;                                     v63 = ishl v3, v62  ; v62 = 3
 ;; @0022                               v10 = uadd_overflow_trap v5, v63, user18  ; v5 = 16
-;; @0022                               v12 = iconst.i32 -134217728
-;; @0022                               v13 = band v10, v12  ; v12 = -134217728
+;; @0022                               v12 = iconst.i32 -67108864
+;; @0022                               v13 = band v10, v12  ; v12 = -67108864
 ;; @0022                               trapnz v13, user18
 ;; @0022                               v15 = load.i64 notrap aligned readonly v0+32
 ;; @0022                               v16 = load.i32 notrap aligned v15

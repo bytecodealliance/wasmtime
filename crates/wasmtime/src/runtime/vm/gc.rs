@@ -25,7 +25,9 @@ use crate::runtime::vm::{GcHeapAllocationIndex, VMMemoryDefinition};
 use core::any::Any;
 use core::mem::MaybeUninit;
 use core::{alloc::Layout, num::NonZeroU32};
-use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{
+    GcArrayLayout, GcExceptionLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex,
+};
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.
 ///
@@ -267,5 +269,25 @@ impl GcStore {
     /// Get the length of the given array.
     pub fn array_len(&self, arrayref: &VMArrayRef) -> u32 {
         self.gc_heap.array_len(arrayref)
+    }
+
+    /// Allocate an uninitialized exception object with the given type
+    /// index.
+    ///
+    /// This does NOT check that the index is currently allocated in the types
+    /// registry or that the layout matches the index's type. Failure to uphold
+    /// those invariants is memory safe, but will lead to general incorrectness
+    /// such as panics and wrong results.
+    pub fn alloc_uninit_exn(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        layout: &GcExceptionLayout,
+    ) -> Result<Result<VMExnRef, u64>> {
+        self.gc_heap.alloc_uninit_exn(ty, layout)
+    }
+
+    /// Deallocate an uninitialized exception object.
+    pub fn dealloc_uninit_exn(&mut self, exnref: VMExnRef) {
+        self.gc_heap.dealloc_uninit_exn(exnref);
     }
 }

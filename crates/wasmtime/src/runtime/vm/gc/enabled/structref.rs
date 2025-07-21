@@ -1,6 +1,6 @@
 use super::{truncate_i32_to_i8, truncate_i32_to_i16};
 use crate::{
-    AnyRef, ExternRef, Func, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
+    AnyRef, ExnRef, ExternRef, Func, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
     store::AutoAssertNoGc,
@@ -140,38 +140,7 @@ impl VMStructRef {
         field: usize,
     ) -> Val {
         let offset = layout.fields[field].offset;
-        let data = store.unwrap_gc_store_mut().gc_object_data(self.as_gc_ref());
-        match ty {
-            StorageType::I8 => Val::I32(data.read_u8(offset).into()),
-            StorageType::I16 => Val::I32(data.read_u16(offset).into()),
-            StorageType::ValType(ValType::I32) => Val::I32(data.read_i32(offset)),
-            StorageType::ValType(ValType::I64) => Val::I64(data.read_i64(offset)),
-            StorageType::ValType(ValType::F32) => Val::F32(data.read_u32(offset)),
-            StorageType::ValType(ValType::F64) => Val::F64(data.read_u64(offset)),
-            StorageType::ValType(ValType::V128) => Val::V128(data.read_v128(offset)),
-            StorageType::ValType(ValType::Ref(r)) => match r.heap_type().top() {
-                HeapType::Extern => {
-                    let raw = data.read_u32(offset);
-                    Val::ExternRef(ExternRef::_from_raw(store, raw))
-                }
-                HeapType::Any => {
-                    let raw = data.read_u32(offset);
-                    Val::AnyRef(AnyRef::_from_raw(store, raw))
-                }
-                HeapType::Func => {
-                    let func_ref_id = data.read_u32(offset);
-                    let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
-                    let func_ref = store
-                        .unwrap_gc_store()
-                        .func_ref_table
-                        .get_untyped(func_ref_id);
-                    Val::FuncRef(unsafe {
-                        func_ref.map(|p| Func::from_vm_func_ref(store, p.as_non_null()))
-                    })
-                }
-                otherwise => unreachable!("not a top type: {otherwise:?}"),
-            },
-        }
+        read_field_impl(self.as_gc_ref(), store, ty, offset)
     }
 
     /// Write the given value into this struct at the given offset.
@@ -240,6 +209,17 @@ impl VMStructRef {
                 let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
             }
+            Val::ExnRef(e) => {
+                let raw = data.read_u32(offset);
+                let mut gc_ref = VMGcRef::from_raw_u32(raw);
+                let e = match e {
+                    Some(e) => Some(e.try_gc_ref(store)?.unchecked_copy()),
+                    None => None,
+                };
+                store.gc_store_mut()?.write_gc_ref(&mut gc_ref, e.as_ref());
+                let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
+                data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
+            }
 
             Val::FuncRef(f) => {
                 let f = f.map(|f| SendSyncPtr::new(f.vm_func_ref(store)));
@@ -287,69 +267,137 @@ impl VMStructRef {
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
         let offset = layout.fields[field].offset;
-        match val {
-            Val::I32(i) if ty.is_i8() => store
-                .gc_store_mut()?
-                .gc_object_data(self.as_gc_ref())
-                .write_i8(offset, truncate_i32_to_i8(i)),
-            Val::I32(i) if ty.is_i16() => store
-                .gc_store_mut()?
-                .gc_object_data(self.as_gc_ref())
-                .write_i16(offset, truncate_i32_to_i16(i)),
-            Val::I32(i) => store
-                .gc_store_mut()?
-                .gc_object_data(self.as_gc_ref())
-                .write_i32(offset, i),
-            Val::I64(i) => store
-                .gc_store_mut()?
-                .gc_object_data(self.as_gc_ref())
-                .write_i64(offset, i),
-            Val::F32(f) => store
-                .gc_store_mut()?
-                .gc_object_data(self.as_gc_ref())
-                .write_u32(offset, f),
-            Val::F64(f) => store
-                .gc_store_mut()?
-                .gc_object_data(self.as_gc_ref())
-                .write_u64(offset, f),
-            Val::V128(v) => store
-                .gc_store_mut()?
-                .gc_object_data(self.as_gc_ref())
-                .write_v128(offset, v),
-
-            // NB: We don't need to do a write barrier when initializing a
-            // field, because there is nothing being overwritten. Therefore, we
-            // just the clone barrier.
-            Val::ExternRef(x) => {
-                let x = match x {
-                    None => 0,
-                    Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),
-                };
-                store
-                    .gc_store_mut()?
-                    .gc_object_data(self.as_gc_ref())
-                    .write_u32(offset, x);
-            }
-            Val::AnyRef(x) => {
-                let x = match x {
-                    None => 0,
-                    Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),
-                };
-                store
-                    .gc_store_mut()?
-                    .gc_object_data(self.as_gc_ref())
-                    .write_u32(offset, x);
-            }
-
-            Val::FuncRef(f) => {
-                let f = f.map(|f| SendSyncPtr::new(f.vm_func_ref(store)));
-                let id = unsafe { store.gc_store_mut()?.func_ref_table.intern(f) };
-                store
-                    .gc_store_mut()?
-                    .gc_object_data(self.as_gc_ref())
-                    .write_u32(offset, id.into_raw());
-            }
-        }
-        Ok(())
+        initialize_field_impl(self.as_gc_ref(), store, ty, offset, val)
     }
+}
+
+/// Read a field from a GC object at a given offset.
+///
+/// This factored-out function allows a shared implementation for both
+/// structs (this module) and exception objects.
+pub(crate) fn read_field_impl(
+    gc_ref: &VMGcRef,
+    store: &mut AutoAssertNoGc,
+    ty: &StorageType,
+    offset: u32,
+) -> Val {
+    let data = store.unwrap_gc_store_mut().gc_object_data(gc_ref);
+    match ty {
+        StorageType::I8 => Val::I32(data.read_u8(offset).into()),
+        StorageType::I16 => Val::I32(data.read_u16(offset).into()),
+        StorageType::ValType(ValType::I32) => Val::I32(data.read_i32(offset)),
+        StorageType::ValType(ValType::I64) => Val::I64(data.read_i64(offset)),
+        StorageType::ValType(ValType::F32) => Val::F32(data.read_u32(offset)),
+        StorageType::ValType(ValType::F64) => Val::F64(data.read_u64(offset)),
+        StorageType::ValType(ValType::V128) => Val::V128(data.read_v128(offset)),
+        StorageType::ValType(ValType::Ref(r)) => match r.heap_type().top() {
+            HeapType::Extern => {
+                let raw = data.read_u32(offset);
+                Val::ExternRef(ExternRef::_from_raw(store, raw))
+            }
+            HeapType::Any => {
+                let raw = data.read_u32(offset);
+                Val::AnyRef(AnyRef::_from_raw(store, raw))
+            }
+            HeapType::Exn => {
+                let raw = data.read_u32(offset);
+                Val::ExnRef(ExnRef::_from_raw(store, raw))
+            }
+            HeapType::Func => {
+                let func_ref_id = data.read_u32(offset);
+                let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
+                let func_ref = store
+                    .unwrap_gc_store()
+                    .func_ref_table
+                    .get_untyped(func_ref_id);
+                Val::FuncRef(unsafe {
+                    func_ref.map(|p| Func::from_vm_func_ref(store.id(), p.as_non_null()))
+                })
+            }
+            otherwise => unreachable!("not a top type: {otherwise:?}"),
+        },
+    }
+}
+
+pub(crate) fn initialize_field_impl(
+    gc_ref: &VMGcRef,
+    store: &mut AutoAssertNoGc,
+    ty: &StorageType,
+    offset: u32,
+    val: Val,
+) -> Result<()> {
+    match val {
+        Val::I32(i) if ty.is_i8() => store
+            .gc_store_mut()?
+            .gc_object_data(gc_ref)
+            .write_i8(offset, truncate_i32_to_i8(i)),
+        Val::I32(i) if ty.is_i16() => store
+            .gc_store_mut()?
+            .gc_object_data(gc_ref)
+            .write_i16(offset, truncate_i32_to_i16(i)),
+        Val::I32(i) => store
+            .gc_store_mut()?
+            .gc_object_data(gc_ref)
+            .write_i32(offset, i),
+        Val::I64(i) => store
+            .gc_store_mut()?
+            .gc_object_data(gc_ref)
+            .write_i64(offset, i),
+        Val::F32(f) => store
+            .gc_store_mut()?
+            .gc_object_data(gc_ref)
+            .write_u32(offset, f),
+        Val::F64(f) => store
+            .gc_store_mut()?
+            .gc_object_data(gc_ref)
+            .write_u64(offset, f),
+        Val::V128(v) => store
+            .gc_store_mut()?
+            .gc_object_data(gc_ref)
+            .write_v128(offset, v),
+
+        // NB: We don't need to do a write barrier when initializing a
+        // field, because there is nothing being overwritten. Therefore, we
+        // just the clone barrier.
+        Val::ExternRef(x) => {
+            let x = match x {
+                None => 0,
+                Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),
+            };
+            store
+                .gc_store_mut()?
+                .gc_object_data(gc_ref)
+                .write_u32(offset, x);
+        }
+        Val::AnyRef(x) => {
+            let x = match x {
+                None => 0,
+                Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),
+            };
+            store
+                .gc_store_mut()?
+                .gc_object_data(gc_ref)
+                .write_u32(offset, x);
+        }
+        Val::ExnRef(x) => {
+            let x = match x {
+                None => 0,
+                Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),
+            };
+            store
+                .gc_store_mut()?
+                .gc_object_data(gc_ref)
+                .write_u32(offset, x);
+        }
+
+        Val::FuncRef(f) => {
+            let f = f.map(|f| SendSyncPtr::new(f.vm_func_ref(store)));
+            let id = unsafe { store.gc_store_mut()?.func_ref_table.intern(f) };
+            store
+                .gc_store_mut()?
+                .gc_object_data(gc_ref)
+                .write_u32(offset, id.into_raw());
+        }
+    }
+    Ok(())
 }

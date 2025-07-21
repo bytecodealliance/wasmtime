@@ -189,7 +189,7 @@ pub mod foo {
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostConcurrent: wasmtime::component::HasData + Send {
                 fn a<T: 'static>(
-                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                    accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send
                 where
                     Self: Sized;
@@ -209,7 +209,7 @@ pub mod foo {
                 let mut inst = linker.instance("foo:foo/a")?;
                 inst.func_wrap_concurrent(
                     "a",
-                    move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
+                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &mut unsafe { caller.with_data(host_getter) };
                             let r = <D as HostConcurrent>::a(accessor).await;
@@ -232,7 +232,7 @@ pub mod foo {
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostConcurrent: wasmtime::component::HasData + Send {
                 fn a<T: 'static>(
-                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                    accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send
                 where
                     Self: Sized;
@@ -252,7 +252,7 @@ pub mod foo {
                 let mut inst = linker.instance("foo:foo/b")?;
                 inst.func_wrap_concurrent(
                     "a",
-                    move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
+                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &mut unsafe { caller.with_data(host_getter) };
                             let r = <D as HostConcurrent>::a(accessor).await;
@@ -275,7 +275,7 @@ pub mod foo {
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostConcurrent: wasmtime::component::HasData + Send {
                 fn a<T: 'static>(
-                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                    accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send
                 where
                     Self: Sized;
@@ -295,7 +295,7 @@ pub mod foo {
                 let mut inst = linker.instance("foo:foo/c")?;
                 inst.func_wrap_concurrent(
                     "a",
-                    move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
+                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &mut unsafe { caller.with_data(host_getter) };
                             let r = <D as HostConcurrent>::a(accessor).await;
@@ -320,7 +320,7 @@ pub mod d {
     #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
     pub trait HostConcurrent: wasmtime::component::HasData + Send {
         fn b<T: 'static>(
-            accessor: &mut wasmtime::component::Accessor<T, Self>,
+            accessor: &wasmtime::component::Accessor<T, Self>,
         ) -> impl ::core::future::Future<Output = Foo> + Send
         where
             Self: Sized;
@@ -340,7 +340,7 @@ pub mod d {
         let mut inst = linker.instance("d")?;
         inst.func_wrap_concurrent(
             "b",
-            move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
+            move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                 wasmtime::component::__internal::Box::pin(async move {
                     let accessor = &mut unsafe { caller.with_data(host_getter) };
                     let r = <D as HostConcurrent>::b(accessor).await;

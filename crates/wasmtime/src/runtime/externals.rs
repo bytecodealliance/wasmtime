@@ -130,23 +130,17 @@ impl Extern {
         store: &StoreOpaque,
     ) -> Extern {
         match wasmtime_export {
-            crate::runtime::vm::Export::Function(f) => {
-                Extern::Func(Func::from_wasmtime_function(f, store))
-            }
-            crate::runtime::vm::Export::Memory(m) => {
-                if m.memory.shared {
-                    Extern::SharedMemory(SharedMemory::from_wasmtime_memory(m, store))
+            crate::runtime::vm::Export::Function(f) => Extern::Func(f),
+            crate::runtime::vm::Export::Memory { memory, shared } => {
+                if shared {
+                    Extern::SharedMemory(SharedMemory::from_memory(memory, store))
                 } else {
-                    Extern::Memory(Memory::from_wasmtime_memory(m, store))
+                    Extern::Memory(memory)
                 }
             }
-            crate::runtime::vm::Export::Global(g) => {
-                Extern::Global(Global::from_wasmtime_global(g, store))
-            }
-            crate::runtime::vm::Export::Table(t) => {
-                Extern::Table(Table::from_wasmtime_table(t, store))
-            }
-            crate::runtime::vm::Export::Tag(t) => Extern::Tag(Tag::from_wasmtime_tag(t, store)),
+            crate::runtime::vm::Export::Global(g) => Extern::Global(g),
+            crate::runtime::vm::Export::Table(t) => Extern::Table(t),
+            crate::runtime::vm::Export::Tag(t) => Extern::Tag(t),
         }
     }
 

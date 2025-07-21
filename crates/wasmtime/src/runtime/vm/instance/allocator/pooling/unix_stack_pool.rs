@@ -190,11 +190,16 @@ impl StackPool {
         let rest = stack_size
             .checked_sub(size_to_memset)
             .expect("stack_size >= size_to_memset");
-        std::ptr::write_bytes(
-            (bottom_of_stack + rest.byte_count()) as *mut u8,
-            0,
-            size_to_memset.byte_count(),
-        );
+
+        // SAFETY: this function's own contract requires that the stack is not
+        // in use so it's safe to pave over part of it with zero.
+        unsafe {
+            std::ptr::write_bytes(
+                (bottom_of_stack + rest.byte_count()) as *mut u8,
+                0,
+                size_to_memset.byte_count(),
+            );
+        }
 
         // Use the system to reset remaining stack pages to zero.
         decommit(bottom_of_stack as _, rest.byte_count());

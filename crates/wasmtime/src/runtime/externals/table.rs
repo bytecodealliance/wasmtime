@@ -1,10 +1,10 @@
 use crate::prelude::*;
-use crate::runtime::vm::{self as runtime};
+use crate::runtime::vm::{self as runtime, GcStore};
 use crate::store::{AutoAssertNoGc, StoreInstanceId, StoreOpaque};
 use crate::trampoline::generate_table_export;
-use crate::{AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, Ref, TableType};
+use crate::{AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, Ref, TableType, Trap};
 use core::iter;
-use wasmtime_environ::{DefinedTableIndex, TypeTrace};
+use wasmtime_environ::DefinedTableIndex;
 
 /// A WebAssembly `table`, or an array of values.
 ///
@@ -115,14 +115,11 @@ impl Table {
     }
 
     fn _new(store: &mut StoreOpaque, ty: TableType, init: Ref) -> Result<Table> {
-        let wasmtime_export = generate_table_export(store, &ty)?;
+        let table = generate_table_export(store, &ty)?;
         let init = init.into_table_element(store, ty.element())?;
-        unsafe {
-            let table = Table::from_wasmtime_table(wasmtime_export, store);
-            let wasmtime_table = table.wasmtime_table(store, iter::empty());
-            (*wasmtime_table).fill(store.optional_gc_store_mut(), 0, init, ty.minimum())?;
-            Ok(table)
-        }
+        let (wasmtime_table, gc_store) = table.wasmtime_table(store, iter::empty());
+        wasmtime_table.fill(gc_store, 0, init, ty.minimum())?;
+        Ok(table)
     }
 
     /// Returns the underlying type of this table, including its element type as
@@ -139,18 +136,24 @@ impl Table {
         TableType::from_wasmtime_table(store.engine(), self.wasmtime_ty(store))
     }
 
-    fn wasmtime_table(
+    /// Returns the `runtime::Table` within `store` as well as the optional
+    /// `GcStore` in use within `store`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this table does not belong to `store`.
+    fn wasmtime_table<'a>(
         &self,
-        store: &mut StoreOpaque,
+        store: &'a mut StoreOpaque,
         lazy_init_range: impl Iterator<Item = u64>,
-    ) -> *mut runtime::Table {
-        unsafe {
-            let instance = &store[self.instance];
-            let vmctx = instance.vmctx();
-            crate::runtime::vm::Instance::from_vmctx(vmctx, |handle| {
-                handle.get_defined_table_with_lazy_init(self.index, lazy_init_range)
-            })
-        }
+    ) -> (&'a mut runtime::Table, Option<&'a mut GcStore>) {
+        self.instance.assert_belongs_to(store.id());
+        let (store, instance) = store.optional_gc_store_and_instance_mut(self.instance.instance());
+
+        (
+            instance.get_defined_table_with_lazy_init(self.index, lazy_init_range),
+            store,
+        )
     }
 
     /// Returns the table element value at `index`.
@@ -162,48 +165,47 @@ impl Table {
     /// Panics if `store` does not own this table.
     pub fn get(&self, mut store: impl AsContextMut, index: u64) -> Option<Ref> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        let table = self.wasmtime_table(&mut store, iter::once(index));
-        let gc_store = store.optional_gc_store_mut();
-        unsafe {
-            match (*table).get(gc_store, index)? {
-                runtime::TableElement::FuncRef(f) => {
-                    let func = f.map(|f| Func::from_vm_func_ref(&store, f));
-                    Some(func.into())
-                }
+        let (table, gc_store) = self.wasmtime_table(&mut store, iter::once(index));
+        match table.get(gc_store, index)? {
+            runtime::TableElement::FuncRef(f) => {
+                // SAFETY: the `table` belongs to `store`, so elements within
+                // the table must also belong to the store.
+                let func = unsafe { f.map(|f| Func::from_vm_func_ref(store.id(), f)) };
+                Some(func.into())
+            }
 
-                runtime::TableElement::UninitFunc => {
-                    unreachable!("lazy init above should have converted UninitFunc")
-                }
+            runtime::TableElement::UninitFunc => {
+                unreachable!("lazy init above should have converted UninitFunc")
+            }
 
-                runtime::TableElement::GcRef(None) => {
-                    Some(Ref::null(self._ty(&store).element().heap_type()))
-                }
+            runtime::TableElement::GcRef(None) => {
+                Some(Ref::null(self._ty(&store).element().heap_type()))
+            }
 
-                #[cfg_attr(
-                    not(feature = "gc"),
-                    expect(unreachable_code, unused_variables, reason = "definitions cfg'd off")
-                )]
-                runtime::TableElement::GcRef(Some(x)) => {
-                    match self._ty(&store).element().heap_type().top() {
-                        HeapType::Any => {
-                            let x = AnyRef::from_cloned_gc_ref(&mut store, x);
-                            Some(x.into())
-                        }
-                        HeapType::Extern => {
-                            let x = ExternRef::from_cloned_gc_ref(&mut store, x);
-                            Some(x.into())
-                        }
-                        HeapType::Func => {
-                            unreachable!("never have TableElement::GcRef for func tables")
-                        }
-                        ty => unreachable!("not a top type: {ty:?}"),
+            #[cfg_attr(
+                not(feature = "gc"),
+                expect(unreachable_code, unused_variables, reason = "definitions cfg'd off")
+            )]
+            runtime::TableElement::GcRef(Some(x)) => {
+                match self._ty(&store).element().heap_type().top() {
+                    HeapType::Any => {
+                        let x = AnyRef::from_cloned_gc_ref(&mut store, x);
+                        Some(x.into())
                     }
+                    HeapType::Extern => {
+                        let x = ExternRef::from_cloned_gc_ref(&mut store, x);
+                        Some(x.into())
+                    }
+                    HeapType::Func => {
+                        unreachable!("never have TableElement::GcRef for func tables")
+                    }
+                    ty => unreachable!("not a top type: {ty:?}"),
                 }
+            }
 
-                runtime::TableElement::ContRef(_c) => {
-                    // TODO(#10248) Required to support stack switching in the embedder API.
-                    unimplemented!()
-                }
+            runtime::TableElement::ContRef(_c) => {
+                // TODO(#10248) Required to support stack switching in the embedder API.
+                unimplemented!()
             }
         }
     }
@@ -223,12 +225,10 @@ impl Table {
         let store = store.as_context_mut().0;
         let ty = self.ty(&store);
         let val = val.into_table_element(store, ty.element())?;
-        let table = self.wasmtime_table(store, iter::empty());
-        unsafe {
-            (*table)
-                .set(index, val)
-                .map_err(|()| anyhow!("table element index out of bounds"))
-        }
+        let (table, _) = self.wasmtime_table(store, iter::empty());
+        table
+            .set(index, val)
+            .map_err(|()| anyhow!("table element index out of bounds"))
     }
 
     /// Returns the current size of this table.
@@ -271,7 +271,9 @@ impl Table {
         let store = store.as_context_mut().0;
         let ty = self.ty(&store);
         let init = init.into_table_element(store, ty.element())?;
-        let table = self.wasmtime_table(store, iter::empty());
+        let (table, _gc_store) = self.wasmtime_table(store, iter::empty());
+        // FIXME(#11179) shouldn't need to subvert the borrow checker
+        let table: *mut _ = table;
         unsafe {
             match (*table).grow(delta, init, store)? {
                 Some(size) => {
@@ -342,20 +344,74 @@ impl Table {
                  destination table's element type",
             )?;
 
-        let dst_table = dst_table.wasmtime_table(store, iter::empty());
-        let src_range = src_index..(src_index.checked_add(len).unwrap_or(u64::MAX));
-        let src_table = src_table.wasmtime_table(store, src_range);
+        // SAFETY: the the two tables have the same type, as type-checked above.
         unsafe {
-            runtime::Table::copy(
-                store.optional_gc_store_mut(),
-                dst_table,
-                src_table,
+            Self::copy_raw(store, dst_table, dst_index, src_table, src_index, len)?;
+        }
+        Ok(())
+    }
+
+    /// Copies the elements of `src_table` to `dst_table`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the either table doesn't belong to `store`.
+    ///
+    /// # Safety
+    ///
+    /// Requires that the two tables have previously been type-checked to have
+    /// the same type.
+    pub(crate) unsafe fn copy_raw(
+        store: &mut StoreOpaque,
+        dst_table: &Table,
+        dst_index: u64,
+        src_table: &Table,
+        src_index: u64,
+        len: u64,
+    ) -> Result<(), Trap> {
+        // Handle lazy initialization of the source table first before doing
+        // anything else.
+        let src_range = src_index..(src_index.checked_add(len).unwrap_or(u64::MAX));
+        src_table.wasmtime_table(store, src_range);
+
+        // validate `dst_table` belongs to `store`.
+        dst_table.wasmtime_table(store, iter::empty());
+
+        // Figure out which of the three cases we're in:
+        //
+        // 1. Cross-instance table copy.
+        // 2. Intra-instance table copy.
+        // 3. Intra-table copy.
+        let src_instance = src_table.instance.instance();
+        let dst_instance = dst_table.instance.instance();
+        if src_instance != dst_instance {
+            // SAFETY: accessing two instances requires only accessing defined items
+            // on each instance which is done below with `get_defined_*` methods.
+            let (gc_store, [src_instance, dst_instance]) =
+                unsafe { store.optional_gc_store_and_instances_mut([src_instance, dst_instance]) };
+            src_instance.get_defined_table(src_table.index).copy_to(
+                dst_instance.get_defined_table(dst_table.index),
+                gc_store,
                 dst_index,
                 src_index,
                 len,
-            )?;
+            )
+        } else if src_table.index != dst_table.index {
+            assert_eq!(src_instance, dst_instance);
+            let (gc_store, instance) = store.optional_gc_store_and_instance_mut(src_instance);
+            let [(_, src_table), (_, dst_table)] = instance
+                .tables_mut()
+                .get_disjoint_mut([src_table.index, dst_table.index])
+                .unwrap();
+            src_table.copy_to(dst_table, gc_store, dst_index, src_index, len)
+        } else {
+            assert_eq!(src_instance, dst_instance);
+            assert_eq!(src_table.index, dst_table.index);
+            let (gc_store, instance) = store.optional_gc_store_and_instance_mut(src_instance);
+            instance
+                .get_defined_table(src_table.index)
+                .copy_within(gc_store, dst_index, src_index, len)
         }
-        Ok(())
     }
 
     /// Fill `table[dst..(dst + len)]` with the given value.
@@ -379,10 +435,8 @@ impl Table {
         let ty = self.ty(&store);
         let val = val.into_table_element(store, ty.element())?;
 
-        let table = self.wasmtime_table(store, iter::empty());
-        unsafe {
-            (*table).fill(store.optional_gc_store_mut(), dst, val, len)?;
-        }
+        let (table, gc_store) = self.wasmtime_table(store, iter::empty());
+        table.fill(gc_store, dst, val, len)?;
 
         Ok(())
     }
@@ -401,8 +455,8 @@ impl Table {
             return;
         }
 
-        let table = self.wasmtime_table(store, iter::empty());
-        for gc_ref in unsafe { (*table).gc_refs_mut() } {
+        let (table, _) = self.wasmtime_table(store, iter::empty());
+        for gc_ref in table.gc_refs_mut() {
             if let Some(gc_ref) = gc_ref {
                 unsafe {
                     gc_roots_list.add_root(gc_ref.into(), "Wasm table element");
@@ -413,22 +467,6 @@ impl Table {
 
     pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedTableIndex) -> Table {
         Table { instance, index }
-    }
-
-    pub(crate) unsafe fn from_wasmtime_table(
-        wasmtime_export: crate::runtime::vm::ExportTable,
-        store: &StoreOpaque,
-    ) -> Table {
-        debug_assert!(
-            wasmtime_export
-                .table
-                .ref_type
-                .is_canonicalized_for_runtime_usage()
-        );
-        Table {
-            instance: store.vmctx_id(wasmtime_export.vmctx),
-            index: wasmtime_export.index,
-        }
     }
 
     pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreOpaque) -> &'a wasmtime_environ::Table {

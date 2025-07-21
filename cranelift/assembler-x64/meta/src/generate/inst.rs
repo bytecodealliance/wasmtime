@@ -128,6 +128,7 @@ impl dsl::Inst {
                     match &self.encoding {
                         dsl::Encoding::Rex(rex) => self.format.generate_rex_encoding(f, rex),
                         dsl::Encoding::Vex(vex) => self.format.generate_vex_encoding(f, vex),
+                        dsl::Encoding::Evex(evex) => self.format.generate_evex_encoding(f, evex),
                     }
                 }
             },
@@ -276,6 +277,7 @@ impl dsl::Inst {
             },
         );
     }
+
     /// `impl From<struct> for Inst { ... }`
     pub fn generate_from_impl(&self, f: &mut Formatter) {
         let struct_name_r = self.struct_name_with_generic();

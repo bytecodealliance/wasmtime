@@ -221,7 +221,7 @@ pub mod foo {
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostConcurrent: wasmtime::component::HasData + Send {
                 fn option_test<T: 'static>(
-                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                    accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<
                         Option<wasmtime::component::__internal::String>,
@@ -246,7 +246,7 @@ pub mod foo {
                 let mut inst = linker.instance("foo:foo/anon")?;
                 inst.func_wrap_concurrent(
                     "option-test",
-                    move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
+                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &mut unsafe { caller.with_data(host_getter) };
                             let r = <D as HostConcurrent>::option_test(accessor).await;
@@ -384,19 +384,15 @@ pub mod exports {
                     }
                 }
                 impl Guest {
-                    pub fn call_option_test<S: wasmtime::AsContextMut>(
+                    pub async fn call_option_test<_T, _D>(
                         &self,
-                        mut store: S,
-                    ) -> impl wasmtime::component::__internal::Future<
-                        Output = wasmtime::Result<
-                            Result<
-                                Option<wasmtime::component::__internal::String>,
-                                Error,
-                            >,
-                        >,
-                    > + Send + 'static + use<S>
+                        accessor: &wasmtime::component::Accessor<_T, _D>,
+                    ) -> wasmtime::Result<
+                        Result<Option<wasmtime::component::__internal::String>, Error>,
+                    >
                     where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                        _T: Send,
+                        _D: wasmtime::component::HasData,
                     {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
@@ -409,11 +405,8 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.option_test)
                         };
-                        let future = callee.call_concurrent(store.as_context_mut(), ());
-                        async move {
-                            let (ret0,) = future.await?;
-                            Ok(ret0)
-                        }
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        Ok(ret0)
                     }
                 }
             }

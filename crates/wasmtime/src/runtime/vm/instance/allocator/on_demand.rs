@@ -133,10 +133,12 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
             ty,
             tunables,
             creator,
-            request
-                .store
-                .get()
-                .expect("if module has memory plans, store is not empty"),
+            unsafe {
+                request
+                    .store
+                    .get()
+                    .expect("if module has memory plans, store is not empty")
+            },
             image,
         )?;
         Ok((allocation_index, memory))
@@ -160,14 +162,12 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         _table_index: DefinedTableIndex,
     ) -> Result<(TableAllocationIndex, Table)> {
         let allocation_index = TableAllocationIndex::default();
-        let table = Table::new_dynamic(
-            ty,
-            tunables,
+        let table = Table::new_dynamic(ty, tunables, unsafe {
             request
                 .store
                 .get()
-                .expect("if module has table plans, store is not empty"),
-        )?;
+                .expect("if module has table plans, store is not empty")
+        })?;
         Ok((allocation_index, table))
     }
 

@@ -17,7 +17,7 @@ use crate::{
 use core::ptr::NonNull;
 use core::{alloc::Layout, any::Any, num::NonZeroU32};
 use wasmtime_environ::{
-    GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
+    GcArrayLayout, GcExceptionLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
     null::NullTypeLayouts,
 };
 
@@ -168,8 +168,8 @@ impl NullHeap {
         let aligned = NonZeroU32::new(aligned).unwrap();
         let gc_ref = VMGcRef::from_heap_index(aligned).unwrap();
 
-        debug_assert_eq!(header.reserved_u27(), 0);
-        header.set_reserved_u27(size);
+        debug_assert_eq!(header.reserved_u26(), 0);
+        header.set_reserved_u26(size);
         *self.header_mut(&gc_ref) = header;
 
         Ok(Ok(gc_ref))
@@ -270,7 +270,7 @@ unsafe impl GcHeap for NullHeap {
     }
 
     fn object_size(&self, gc_ref: &VMGcRef) -> usize {
-        let size = self.header(gc_ref).reserved_u27();
+        let size = self.header(gc_ref).reserved_u26();
         usize::try_from(size).unwrap()
     }
 
@@ -325,6 +325,20 @@ unsafe impl GcHeap for NullHeap {
         let arrayref = VMNullArrayHeader::typed_ref(self, arrayref);
         self.index(arrayref).length
     }
+
+    fn alloc_uninit_exn(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        layout: &GcExceptionLayout,
+    ) -> Result<Result<VMExnRef, u64>> {
+        self.alloc(
+            VMGcHeader::from_kind_and_index(VMGcKind::ExnRef, ty),
+            layout.layout(),
+        )
+        .map(|r| r.map(|r| r.into_exnref_unchecked()))
+    }
+
+    fn dealloc_uninit_exn(&mut self, _exnref: VMExnRef) {}
 
     fn gc<'a>(
         &'a mut self,

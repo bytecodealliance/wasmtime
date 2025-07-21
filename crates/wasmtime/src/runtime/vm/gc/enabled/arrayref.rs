@@ -1,6 +1,6 @@
 use super::{truncate_i32_to_i8, truncate_i32_to_i16};
 use crate::{
-    AnyRef, ExternRef, Func, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
+    AnyRef, ExnRef, ExternRef, Func, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
     store::{AutoAssertNoGc, StoreOpaque},
@@ -164,6 +164,10 @@ impl VMArrayRef {
                     let raw = data.read_u32(offset);
                     Val::AnyRef(AnyRef::_from_raw(store, raw))
                 }
+                HeapType::Exn => {
+                    let raw = data.read_u32(offset);
+                    Val::ExnRef(ExnRef::_from_raw(store, raw))
+                }
                 HeapType::Func => {
                     let func_ref_id = data.read_u32(offset);
                     let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
@@ -172,7 +176,7 @@ impl VMArrayRef {
                         .func_ref_table
                         .get_untyped(func_ref_id);
                     Val::FuncRef(unsafe {
-                        func_ref.map(|p| Func::from_vm_func_ref(store, p.as_non_null()))
+                        func_ref.map(|p| Func::from_vm_func_ref(store.id(), p.as_non_null()))
                     })
                 }
                 otherwise => unreachable!("not a top type: {otherwise:?}"),
@@ -243,6 +247,17 @@ impl VMArrayRef {
                     None => None,
                 };
                 store.gc_store_mut()?.write_gc_ref(&mut gc_ref, a.as_ref());
+                let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
+                data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
+            }
+            Val::ExnRef(e) => {
+                let raw = data.read_u32(offset);
+                let mut gc_ref = VMGcRef::from_raw_u32(raw);
+                let e = match e {
+                    Some(e) => Some(e.try_gc_ref(store)?.unchecked_copy()),
+                    None => None,
+                };
+                store.gc_store_mut()?.write_gc_ref(&mut gc_ref, e.as_ref());
                 let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
             }
@@ -340,6 +355,16 @@ impl VMArrayRef {
                     .write_u32(offset, x);
             }
             Val::AnyRef(x) => {
+                let x = match x {
+                    None => 0,
+                    Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),
+                };
+                store
+                    .gc_store_mut()?
+                    .gc_object_data(self.as_gc_ref())
+                    .write_u32(offset, x);
+            }
+            Val::ExnRef(x) => {
                 let x = match x {
                     None => 0,
                     Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),

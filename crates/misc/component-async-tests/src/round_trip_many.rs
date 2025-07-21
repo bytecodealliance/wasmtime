@@ -30,7 +30,7 @@ use bindings::local::local::many::Stuff;
 
 impl bindings::local::local::many::HostConcurrent for Ctx {
     async fn foo<T>(
-        _: &mut Accessor<T, Self>,
+        _: &Accessor<T, Self>,
         a: String,
         b: u32,
         c: Vec<u8>,

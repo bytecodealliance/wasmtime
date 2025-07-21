@@ -18,10 +18,10 @@
 use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
     FlatType, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
-    PREPARE_ASYNC_WITH_RESULT, StringEncoding, Transcode, TypeComponentLocalErrorContextTableIndex,
-    TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex,
-    TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
-    TypeVariantIndex, VariantInfo,
+    PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
+    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex,
+    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
+    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -494,7 +494,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // callback) or zero (if there's no callback).  We conservatively use
         // one here to ensure the host provides room for the result, if any.
         self.instruction(I32Const(1));
-        self.instruction(I32Const(super::START_FLAG_ASYNC_CALLEE));
+        self.instruction(I32Const(START_FLAG_ASYNC_CALLEE));
         self.instruction(Call(start_call.as_u32()));
 
         self.finish()

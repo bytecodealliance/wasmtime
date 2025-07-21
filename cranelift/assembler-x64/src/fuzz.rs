@@ -267,7 +267,7 @@ fn fix_up(dis: &str) -> std::borrow::Cow<'_, str> {
 /// Fuzz-specific registers.
 ///
 /// For the fuzzer, we do not need any fancy register types; see [`FuzzReg`].
-#[derive(Arbitrary, Debug)]
+#[derive(Clone, Arbitrary, Debug)]
 pub struct FuzzRegs;
 
 impl Registers for FuzzRegs {
@@ -295,6 +295,25 @@ impl AsReg for FuzzReg {
     }
     fn enc(&self) -> u8 {
         self.0
+    }
+}
+
+impl Arbitrary<'_> for AmodeOffset {
+    fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+        // Custom implementation to try to generate some "interesting" offsets.
+        // For example choose either an arbitrary 8-bit or 32-bit number as the
+        // base, and then optionally shift that number to the left to create
+        // multiples of constants. This can help stress some of the more
+        // interesting encodings in EVEX instructions for example.
+        let base = if u.arbitrary()? {
+            i32::from(u.arbitrary::<i8>()?)
+        } else {
+            u.arbitrary::<i32>()?
+        };
+        Ok(match u.int_in_range(0..=5)? {
+            0 => AmodeOffset::ZERO,
+            n => AmodeOffset::new(base << (n - 1)),
+        })
     }
 }
 

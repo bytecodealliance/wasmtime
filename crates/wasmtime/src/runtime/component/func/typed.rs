@@ -5,23 +5,17 @@ use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
 use crate::prelude::*;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
-use alloc::sync::Arc;
 use core::fmt;
 use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
-    StringEncoding, VariantInfo,
+    CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, StringEncoding, VariantInfo,
 };
 
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, PreparedCall};
-#[cfg(feature = "component-model-async")]
-use core::future::Future;
-#[cfg(feature = "component-model-async")]
-use core::pin::Pin;
+use crate::component::concurrent::{self, AsAccessor, PreparedCall};
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -238,7 +232,7 @@ where
             let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
             self.func
                 .instance
-                .run(wrapper.store.as_context_mut(), result)
+                .run_concurrent(wrapper.store.as_context_mut(), async |_| result.await)
                 .await?
         }
         #[cfg(not(feature = "component-model-async"))]
@@ -258,42 +252,36 @@ where
     /// (if any) automatically when the guest task completes -- no need to
     /// explicitly call `Func::post_return` afterward.
     ///
-    /// Note that the `Future` returned by this method will panic if polled or
-    /// `.await`ed outside of the event loop of the component instance this
-    /// function belongs to; use `Instance::run`, `Instance::run_with`, or
-    /// `Instance::spawn` to poll it from within the event loop.  See
-    /// [`Instance::run`] for examples.
-    //
-    // FIXME: this function should return `impl Future` but that forces
-    // capturing all type parameters in scope at this time. The future
-    // intentionally does not close over `store` but returning `impl Future`
-    // implicitly does so. In a future version of Rust maybe this limitation
-    // will be lifted? Maybe rust-lang/rust#130043. Unsure.
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this function.
     #[cfg(feature = "component-model-async")]
-    pub fn call_concurrent(
+    pub async fn call_concurrent(
         self,
-        mut store: impl AsContextMut<Data: Send>,
+        accessor: impl AsAccessor<Data: Send>,
         params: Params,
-    ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send>>
+    ) -> Result<Return>
     where
         Params: 'static,
         Return: 'static,
     {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_concurrent` when async support is not enabled on the config"
-        );
+        let accessor = accessor.as_accessor();
+        let result = accessor.with(|mut store| {
+            let mut store = store.as_context_mut();
+            assert!(
+                store.0.async_support(),
+                "cannot use `call_concurrent` when async support is not enabled on the config"
+            );
 
-        let result = (|| {
             let prepared =
                 self.prepare_call(store.as_context_mut(), true, true, move |cx, ty, dst| {
                     Self::lower_args(cx, ty, dst, &params)
                 })?;
             concurrent::queue_call(store, prepared)
-        })();
+        });
 
-        Box::pin(async move { result?.await })
+        result?.await
     }
 
     fn lower_args<T>(
@@ -1851,10 +1839,6 @@ pub struct WasmList<T> {
     len: usize,
     options: Options,
     elem: InterfaceType,
-    // NB: it would probably be more efficient to store a non-atomic index-style
-    // reference to something inside a `StoreOpaque`, but that's not easily
-    // available at this time, so it's left as a future exercise.
-    types: Arc<ComponentTypes>,
     instance: Instance,
     _marker: marker::PhantomData<T>,
 }
@@ -1881,7 +1865,6 @@ impl<T: Lift> WasmList<T> {
             len,
             options: *cx.options,
             elem,
-            types: cx.types.clone(),
             instance: cx.instance_handle(),
             _marker: marker::PhantomData,
         })
@@ -1910,7 +1893,7 @@ impl<T: Lift> WasmList<T> {
     pub fn get(&self, mut store: impl AsContextMut, index: usize) -> Option<Result<T>> {
         let store = store.as_context_mut().0;
         self.options.store_id().assert_belongs_to(store.id());
-        let mut cx = LiftContext::new(store, &self.options, &self.types, self.instance);
+        let mut cx = LiftContext::new(store, &self.options, self.instance);
         self.get_from_store(&mut cx, index)
     }
 
@@ -1938,7 +1921,7 @@ impl<T: Lift> WasmList<T> {
     ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
         let store = store.into().0;
         self.options.store_id().assert_belongs_to(store.id());
-        let mut cx = LiftContext::new(store, &self.options, &self.types, self.instance);
+        let mut cx = LiftContext::new(store, &self.options, self.instance);
         (0..self.len).map(move |i| self.get_from_store(&mut cx, i).unwrap())
     }
 }

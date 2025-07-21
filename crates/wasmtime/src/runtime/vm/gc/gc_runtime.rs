@@ -9,7 +9,11 @@ use crate::vm::VMMemoryDefinition;
 use core::ptr::NonNull;
 use core::slice;
 use core::{alloc::Layout, any::Any, marker, mem, ops::Range, ptr};
-use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMSharedTypeIndex};
+use wasmtime_environ::{
+    GcArrayLayout, GcExceptionLayout, GcStructLayout, GcTypeLayouts, VMSharedTypeIndex,
+};
+
+use super::VMExnRef;
 
 /// Trait for integrating a garbage collector with the runtime.
 ///
@@ -196,7 +200,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// Return values:
     ///
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
     /// * `Ok(Err(n))`: There is currently not enough available space for this
     ///   allocation of size `n`. The caller should either grow the heap or run
@@ -253,7 +257,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// Return values:
     ///
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
     /// * `Ok(Err(n))`: There is currently not enough available space for this
     ///   allocation of size `n`. The caller should either grow the heap or run
@@ -278,7 +282,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// Return values:
     ///
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
     /// * `Ok(Err(n))`: There is currently not enough available space for this
     ///   allocation of size `n`. The caller should either grow the heap or run
@@ -337,6 +341,46 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// do so is memory safe, but may result in general failures such as panics
     /// or incorrect results.
     fn array_len(&self, arrayref: &VMArrayRef) -> u32;
+
+    /// Allocate a GC-managed exception object of the given type and
+    /// layout, with the given tag.
+    ///
+    /// The exception object's fields are left uninitialized. It is
+    /// the caller's responsibility to initialize them before exposing
+    /// the object to Wasm or triggering a GC.
+    ///
+    /// The `ty` and `layout` must match, and the tag's function type
+    /// must have a matching signature to the exception layout's.
+    ///
+    /// Failure to do either of the above is memory safe, but may result in
+    /// general failures such as panics or incorrect results.
+    ///
+    /// Return values:
+    ///
+    /// * `Ok(Ok(_))`: The allocation was successful.
+    ///
+    /// * `Ok(Err(n))`: There is currently not enough available space for this
+    ///   allocation of size `n`. The caller should either grow the heap or run
+    ///   a collection to reclaim space, and then try allocating again.
+    ///
+    /// * `Err(_)`: The collector cannot satisfy this allocation request, and
+    ///   would not be able to even after the caller were to trigger a
+    ///   collection. This could be because, for example, the requested
+    ///   allocation is larger than this collector's implementation limit for
+    ///   object size.
+    fn alloc_uninit_exn(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        layout: &GcExceptionLayout,
+    ) -> Result<Result<VMExnRef, u64>>;
+
+    /// Deallocate an uninitialized, GC-managed exception object.
+    ///
+    /// This is useful for if initialization of the struct's fields fails, so
+    /// that the struct's allocation can be eagerly reclaimed, and so that the
+    /// collector doesn't attempt to treat any of the uninitialized fields as
+    /// valid GC references, or something like that.
+    fn dealloc_uninit_exn(&mut self, exnref: VMExnRef);
 
     ////////////////////////////////////////////////////////////////////////////
     // Garbage Collection Methods

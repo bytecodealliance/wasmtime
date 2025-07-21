@@ -16,11 +16,7 @@ use wasmtime_environ::component::{
 };
 
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, PreparedCall};
-#[cfg(feature = "component-model-async")]
-use core::future::Future;
-#[cfg(feature = "component-model-async")]
-use core::pin::Pin;
+use crate::component::concurrent::{self, AsAccessor, PreparedCall};
 
 mod host;
 mod options;
@@ -280,33 +276,51 @@ impl Func {
         results: &mut [Val],
     ) -> Result<()> {
         let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_async` without enabling async support in the config"
-        );
+
         #[cfg(feature = "component-model-async")]
         {
-            let future =
-                self.call_concurrent_dynamic(store.as_context_mut(), params.to_vec(), false);
-            let run_results = self.instance.run(store, future).await??;
-            assert_eq!(run_results.len(), results.len());
-            for (result, slot) in run_results.into_iter().zip(results) {
-                *slot = result;
-            }
-            Ok(())
+            self.instance
+                .run_concurrent(&mut store, async |store| {
+                    self.call_concurrent_dynamic(store, params, results, false)
+                        .await
+                })
+                .await?
         }
         #[cfg(not(feature = "component-model-async"))]
         {
+            assert!(
+                store.0.async_support(),
+                "cannot use `call_async` without enabling async support in the config"
+            );
             store
                 .on_fiber(|store| self.call_impl(store, params, results))
                 .await?
         }
     }
 
-    fn check_param_count<T>(&self, store: StoreContextMut<T>, count: usize) -> Result<()> {
+    fn check_params_results<T>(
+        &self,
+        store: StoreContextMut<T>,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
         let param_tys = self.params(&store);
-        if param_tys.len() != count {
-            bail!("expected {} argument(s), got {count}", param_tys.len());
+        if param_tys.len() != params.len() {
+            bail!(
+                "expected {} argument(s), got {}",
+                param_tys.len(),
+                params.len(),
+            );
+        }
+
+        let result_tys = self.results(&store);
+
+        if result_tys.len() != results.len() {
+            bail!(
+                "expected {} result(s), got {}",
+                result_tys.len(),
+                results.len(),
+            );
         }
 
         Ok(())
@@ -321,45 +335,51 @@ impl Func {
     /// (if any) automatically when the guest task completes -- no need to
     /// explicitly call `Func::post_return` afterward.
     ///
-    /// Note that the `Future` returned by this method will panic if polled or
-    /// `.await`ed outside of the event loop of the component instance this
-    /// function belongs to; use `Instance::run`, `Instance::run_with`, or
-    /// `Instance::spawn` to poll it from within the event loop.  See
-    /// [`Instance::run`] for examples.
+    /// # Panics
+    ///
+    /// Panics if the store that the [`Accessor`] is derived from does not own
+    /// this function.
     #[cfg(feature = "component-model-async")]
-    pub fn call_concurrent<T: Send + 'static>(
+    pub async fn call_concurrent(
         self,
-        mut store: impl AsContextMut<Data = T>,
-        params: Vec<Val>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Val>>> + Send + 'static>> {
-        let store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_concurrent` when async support is not enabled on the config"
-        );
-
-        self.call_concurrent_dynamic(store, params, true)
+        accessor: impl AsAccessor<Data: Send>,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
+        self.call_concurrent_dynamic(accessor.as_accessor(), params, results, true)
+            .await
     }
 
     /// Internal helper function for `call_async` and `call_concurrent`.
     #[cfg(feature = "component-model-async")]
-    fn call_concurrent_dynamic<'a, T: Send + 'static>(
+    async fn call_concurrent_dynamic(
         self,
-        mut store: StoreContextMut<'a, T>,
-        params: Vec<Val>,
+        store: impl AsAccessor<Data: Send>,
+        params: &[Val],
+        results: &mut [Val],
         call_post_return_automatically: bool,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Val>>> + Send + 'static>> {
-        let result = (|| {
-            self.check_param_count(store.as_context_mut(), params.len())?;
+    ) -> Result<()> {
+        let store = store.as_accessor();
+        let result = store.with(|mut store| {
+            assert!(
+                store.as_context_mut().0.async_support(),
+                "cannot use `call_concurrent` when async support is not enabled on the config"
+            );
+            self.check_params_results(store.as_context_mut(), params, results)?;
             let prepared = self.prepare_call_dynamic(
                 store.as_context_mut(),
-                params,
+                params.to_vec(),
                 call_post_return_automatically,
             )?;
-            concurrent::queue_call(store, prepared)
-        })();
+            concurrent::queue_call(store.as_context_mut(), prepared)
+        })?;
 
-        Box::pin(async move { result?.await })
+        let run_results = result.await?;
+        assert_eq!(run_results.len(), results.len());
+        for (result, slot) in run_results.into_iter().zip(results) {
+            *slot = result;
+        }
+        Ok(())
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
@@ -406,17 +426,7 @@ impl Func {
     ) -> Result<()> {
         let mut store = store.as_context_mut();
 
-        self.check_param_count(store.as_context_mut(), params.len())?;
-
-        let result_tys = self.results(&store);
-
-        if result_tys.len() != results.len() {
-            bail!(
-                "expected {} result(s), got {}",
-                result_tys.len(),
-                results.len()
-            );
-        }
+        self.check_params_results(store.as_context_mut(), params, results)?;
 
         if self.abi_async(store.0) {
             unreachable!(
@@ -471,7 +481,7 @@ impl Func {
             def.clone()
         };
         match self.instance.lookup_vmdef(store, &def) {
-            Export::Function(f) => f.func_ref,
+            Export::Function(f) => f.vm_func_ref(store),
             _ => unreachable!(),
         }
     }
@@ -926,10 +936,8 @@ impl Func {
         lift: impl FnOnce(&mut LiftContext, InterfaceType) -> Result<R>,
     ) -> Result<R> {
         let (options, _flags, ty, _) = self.abi_info(store);
-        let types = self.instance.id().get(store).component().types().clone();
-        lift(
-            &mut LiftContext::new(store, &options, &types, self.instance),
-            InterfaceType::Tuple(types[ty].results),
-        )
+        let mut cx = LiftContext::new(store, &options, self.instance);
+        let ty = InterfaceType::Tuple(cx.types[ty].results);
+        lift(&mut cx, ty)
     }
 }

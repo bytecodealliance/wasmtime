@@ -1,7 +1,7 @@
 use crate::runtime::vm::TableElement;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    AnyRef, ArrayRef, AsContext, AsContextMut, ExternRef, Func, HeapType, RefType, Rooted,
+    AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapType, RefType, Rooted,
     RootedGcRefImpl, StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
@@ -47,6 +47,9 @@ pub enum Val {
 
     /// An internal reference.
     AnyRef(Option<Rooted<AnyRef>>),
+
+    /// An exception reference.
+    ExnRef(Option<Rooted<ExnRef>>),
 }
 
 macro_rules! accessors {
@@ -162,6 +165,8 @@ impl Val {
             )),
             Val::AnyRef(None) => ValType::NULLREF,
             Val::AnyRef(Some(a)) => ValType::Ref(RefType::new(false, a._ty(store)?)),
+            Val::ExnRef(None) => ValType::NULLEXNREF,
+            Val::ExnRef(Some(e)) => ValType::Ref(RefType::new(false, e._ty(store)?.into())),
         })
     }
 
@@ -191,6 +196,7 @@ impl Val {
                 Ref::from(*e)._matches_ty(store, ref_ty)?
             }
             (Val::AnyRef(a), ValType::Ref(ref_ty)) => Ref::from(*a)._matches_ty(store, ref_ty)?,
+            (Val::ExnRef(e), ValType::Ref(ref_ty)) => Ref::from(*e)._matches_ty(store, ref_ty)?,
 
             (Val::I32(_), _)
             | (Val::I64(_), _)
@@ -199,7 +205,8 @@ impl Val {
             | (Val::V128(_), _)
             | (Val::FuncRef(_), _)
             | (Val::ExternRef(_), _)
-            | (Val::AnyRef(_), _) => false,
+            | (Val::AnyRef(_), _)
+            | (Val::ExnRef(_), _) => false,
         })
     }
 
@@ -239,6 +246,10 @@ impl Val {
                 Some(e) => e.to_raw(store)?,
             })),
             Val::AnyRef(e) => Ok(ValRaw::anyref(match e {
+                None => 0,
+                Some(e) => e.to_raw(store)?,
+            })),
+            Val::ExnRef(e) => Ok(ValRaw::exnref(match e {
                 None => 0,
                 Some(e) => e.to_raw(store)?,
             })),
@@ -299,6 +310,11 @@ impl Val {
                         AnyRef::_from_raw(store, raw.get_anyref()).into()
                     }
 
+                    HeapType::Exn | HeapType::ConcreteExn(_) => {
+                        ExnRef::_from_raw(store, raw.get_exnref()).into()
+                    }
+                    HeapType::NoExn => Ref::Exn(None),
+
                     HeapType::None => Ref::Any(None),
                 };
                 assert!(
@@ -330,6 +346,7 @@ impl Val {
             Val::FuncRef(f) => Some(Ref::Func(f)),
             Val::ExternRef(e) => Some(Ref::Extern(e)),
             Val::AnyRef(a) => Some(Ref::Any(a)),
+            Val::ExnRef(e) => Some(Ref::Exn(e)),
             Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => None,
         }
     }
@@ -396,6 +413,37 @@ impl Val {
         self.anyref().expect("expected anyref")
     }
 
+    /// Attempt to access the underlying `exnref` value of this `Val`.
+    ///
+    /// If this is not an `exnref`, then `None` is returned.
+    ///
+    /// If this is a null `exnref`, then `Some(None)` is returned.
+    ///
+    /// If this is a non-null `exnref`, then `Some(Some(..))` is returned.
+    #[inline]
+    pub fn exnref(&self) -> Option<Option<&Rooted<ExnRef>>> {
+        match self {
+            Val::ExnRef(None) => Some(None),
+            Val::ExnRef(Some(e)) => Some(Some(e)),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying `exnref` value of this `Val`, panicking if it's the
+    /// wrong type.
+    ///
+    /// If this is a null `exnref`, then `None` is returned.
+    ///
+    /// If this is a non-null `exnref`, then `Some(..)` is returned.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not a (nullable) `exnref`.
+    #[inline]
+    pub fn unwrap_exnref(&self) -> Option<&Rooted<ExnRef>> {
+        self.exnref().expect("expected exnref")
+    }
+
     /// Attempt to access the underlying `funcref` value of this `Val`.
     ///
     /// If this is not an `funcref`, then `None` is returned.
@@ -438,6 +486,9 @@ impl Val {
 
             Val::AnyRef(Some(a)) => a.comes_from_same_store(store),
             Val::AnyRef(None) => true,
+
+            Val::ExnRef(Some(e)) => e.comes_from_same_store(store),
+            Val::ExnRef(None) => true,
 
             // Integers, floats, and vectors have no association with any
             // particular store, so they're always considered as "yes I came
@@ -482,6 +533,7 @@ impl From<Ref> for Val {
             Ref::Extern(e) => Val::ExternRef(e),
             Ref::Func(f) => Val::FuncRef(f),
             Ref::Any(a) => Val::AnyRef(a),
+            Ref::Exn(e) => Val::ExnRef(e),
         }
     }
 }
@@ -539,6 +591,20 @@ impl From<Option<Rooted<ArrayRef>>> for Val {
     #[inline]
     fn from(val: Option<Rooted<ArrayRef>>) -> Val {
         Val::AnyRef(val.map(Into::into))
+    }
+}
+
+impl From<Rooted<ExnRef>> for Val {
+    #[inline]
+    fn from(val: Rooted<ExnRef>) -> Val {
+        Val::ExnRef(Some(val))
+    }
+}
+
+impl From<Option<Rooted<ExnRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Rooted<ExnRef>>) -> Val {
+        Val::ExnRef(val)
     }
 }
 
@@ -654,6 +720,14 @@ pub enum Ref {
     /// Unlike `externref`, Wasm guests can directly allocate `anyref`s, and
     /// does not need to rely on the host to do that.
     Any(Option<Rooted<AnyRef>>),
+
+    /// An exception-object reference.
+    ///
+    /// The `ExnRef` type represents WebAssembly `exnref`
+    /// values. These are references to exception objects as caught by
+    /// `catch_ref` clauses on `try_table` instructions, or as
+    /// allocated via the host API.
+    Exn(Option<Rooted<ExnRef>>),
 }
 
 impl From<Func> for Ref {
@@ -726,6 +800,20 @@ impl From<Option<Rooted<ArrayRef>>> for Ref {
     }
 }
 
+impl From<Rooted<ExnRef>> for Ref {
+    #[inline]
+    fn from(e: Rooted<ExnRef>) -> Ref {
+        Ref::Exn(Some(e))
+    }
+}
+
+impl From<Option<Rooted<ExnRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Rooted<ExnRef>>) -> Ref {
+        Ref::Exn(e)
+    }
+}
+
 impl Ref {
     /// Create a null reference to the given heap type.
     #[inline]
@@ -742,8 +830,10 @@ impl Ref {
     #[inline]
     pub fn is_null(&self) -> bool {
         match self {
-            Ref::Any(None) | Ref::Extern(None) | Ref::Func(None) => true,
-            Ref::Any(Some(_)) | Ref::Extern(Some(_)) | Ref::Func(Some(_)) => false,
+            Ref::Any(None) | Ref::Extern(None) | Ref::Func(None) | Ref::Exn(None) => true,
+            Ref::Any(Some(_)) | Ref::Extern(Some(_)) | Ref::Func(Some(_)) | Ref::Exn(Some(_)) => {
+                false
+            }
         }
     }
 
@@ -820,6 +910,39 @@ impl Ref {
         self.as_any().expect("Ref::unwrap_any on non-any reference")
     }
 
+    /// Is this an `exn` reference?
+    #[inline]
+    pub fn is_exn(&self) -> bool {
+        matches!(self, Ref::Exn(_))
+    }
+
+    /// Get the underlying `exn` reference, if any.
+    ///
+    /// Returns `None` if this `Ref` is not an `exn` reference, eg it is a
+    /// `func` reference.
+    ///
+    /// Returns `Some(None)` if this `Ref` is a null `exn` reference.
+    ///
+    /// Returns `Some(Some(_))` if this `Ref` is a non-null `exn` reference.
+    #[inline]
+    pub fn as_exn(&self) -> Option<Option<&Rooted<ExnRef>>> {
+        match self {
+            Ref::Exn(e) => Some(e.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Get the underlying `exn` reference, panicking if this is a different
+    /// kind of reference.
+    ///
+    /// Returns `None` if this `Ref` is a null `exn` reference.
+    ///
+    /// Returns `Some(_)` if this `Ref` is a non-null `exn` reference.
+    #[inline]
+    pub fn unwrap_exn(&self) -> Option<&Rooted<ExnRef>> {
+        self.as_exn().expect("Ref::unwrap_exn on non-exn reference")
+    }
+
     /// Is this a `func` reference?
     #[inline]
     pub fn is_func(&self) -> bool {
@@ -883,6 +1006,9 @@ impl Ref {
 
                 Ref::Any(None) => HeapType::None,
                 Ref::Any(Some(a)) => a._ty(store)?,
+
+                Ref::Exn(None) => HeapType::None,
+                Ref::Exn(Some(e)) => e._ty(store)?.into(),
             },
         ))
     }
@@ -938,6 +1064,13 @@ impl Ref {
                 | HeapType::Eq,
             ) => true,
             (Ref::Any(_), _) => false,
+
+            (Ref::Exn(_), HeapType::Exn) => true,
+            (Ref::Exn(None), HeapType::NoExn | HeapType::ConcreteExn(_)) => true,
+            (Ref::Exn(Some(e)), HeapType::ConcreteExn(_)) => {
+                e._matches_ty(store, &ty.heap_type())?
+            }
+            (Ref::Exn(_), _) => false,
         })
     }
 
@@ -964,6 +1097,8 @@ impl Ref {
             Ref::Extern(None) => true,
             Ref::Any(Some(a)) => a.comes_from_same_store(store),
             Ref::Any(None) => true,
+            Ref::Exn(Some(e)) => e.comes_from_same_store(store),
+            Ref::Exn(None) => true,
         }
     }
 
@@ -1007,6 +1142,17 @@ impl Ref {
                 }
                 Some(a) => {
                     let gc_ref = a.try_clone_gc_ref(&mut store)?;
+                    Ok(TableElement::GcRef(Some(gc_ref)))
+                }
+            },
+
+            (Ref::Exn(e), HeapType::Exn) => match e {
+                None => {
+                    assert!(ty.is_nullable());
+                    Ok(TableElement::GcRef(None))
+                }
+                Some(e) => {
+                    let gc_ref = e.try_clone_gc_ref(&mut store)?;
                     Ok(TableElement::GcRef(Some(gc_ref)))
                 }
             },

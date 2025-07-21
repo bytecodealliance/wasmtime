@@ -205,12 +205,12 @@ impl<T: Send + Sync + 'static> ReadBuffer<T> for Option<T> {
 }
 
 /// A `WriteBuffer` implementation, backed by a `Vec`.
-pub struct VecBuffer<T: Send + Sync + 'static> {
+pub struct VecBuffer<T> {
     buffer: Vec<MaybeUninit<T>>,
     offset: usize,
 }
 
-impl<T: Send + Sync + 'static> VecBuffer<T> {
+impl<T> VecBuffer<T> {
     /// Create a new instance with the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
@@ -222,25 +222,20 @@ impl<T: Send + Sync + 'static> VecBuffer<T> {
     /// Reset the state of this buffer, removing all items and preserving its
     /// capacity.
     pub fn reset(&mut self) {
-        self.skip(self.remaining().len());
+        self.skip_(self.remaining_().len());
         self.buffer.clear();
         self.offset = 0;
     }
-}
 
-// SAFETY: the `take` implementation below guarantees that the `fun` closure is
-// provided with fully initialized items due to `self.offset`-and-onwards being
-// always initialized.
-unsafe impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
-    fn remaining(&self) -> &[T] {
+    fn remaining_(&self) -> &[T] {
         // SAFETY: This relies on the invariant (upheld in the other methods of
         // this type) that all the elements from `self.offset` onward are
         // initialized and valid for `self.buffer`.
         unsafe { mem::transmute::<&[MaybeUninit<T>], &[T]>(&self.buffer[self.offset..]) }
     }
 
-    fn skip(&mut self, count: usize) {
-        assert!(count <= self.remaining().len());
+    fn skip_(&mut self, count: usize) {
+        assert!(count <= self.remaining_().len());
         for item in &mut self.buffer[self.offset..][..count] {
             // Note that the offset is incremented first here to ensure that if
             // any destructors panic we don't attempt to re-drop the item.
@@ -250,6 +245,19 @@ unsafe impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
                 item.assume_init_drop();
             }
         }
+    }
+}
+
+// SAFETY: the `take` implementation below guarantees that the `fun` closure is
+// provided with fully initialized items due to `self.offset`-and-onwards being
+// always initialized.
+unsafe impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
+    fn remaining(&self) -> &[T] {
+        self.remaining_()
+    }
+
+    fn skip(&mut self, count: usize) {
+        self.skip_(count)
     }
 
     fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<T>])) {
@@ -262,7 +270,7 @@ unsafe impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
     }
 }
 
-impl<T: Send + Sync + 'static> From<Vec<T>> for VecBuffer<T> {
+impl<T> From<Vec<T>> for VecBuffer<T> {
     fn from(buffer: Vec<T>) -> Self {
         Self {
             // SAFETY: Transmuting from `Vec<T>` to `Vec<MaybeUninit<T>>` should
@@ -273,7 +281,7 @@ impl<T: Send + Sync + 'static> From<Vec<T>> for VecBuffer<T> {
     }
 }
 
-impl<T: Send + Sync + 'static> Drop for VecBuffer<T> {
+impl<T> Drop for VecBuffer<T> {
     fn drop(&mut self) {
         self.reset();
     }

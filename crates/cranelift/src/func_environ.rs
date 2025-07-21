@@ -119,7 +119,6 @@ pub struct FuncEnvironment<'module_environment> {
     #[cfg(feature = "gc")]
     gc_heap_bound: Option<ir::GlobalValue>,
 
-    #[cfg(feature = "wmemcheck")]
     translation: &'module_environment ModuleTranslation<'module_environment>,
 
     /// Heaps implementing WebAssembly linear memories.
@@ -235,7 +234,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // functions should consume at least some fuel.
             fuel_consumed: 1,
 
-            #[cfg(feature = "wmemcheck")]
             translation,
 
             stack_limit_at_function_entry: None,
@@ -1335,26 +1333,34 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 .vmctx_vmfunction_import_wasm_call(callee_index),
         )
         .unwrap();
-        let func_addr = self
-            .builder
-            .ins()
-            .load(pointer_type, mem_flags, base, body_offset);
 
         // First append the callee vmctx address.
         let vmctx_offset =
             i32::try_from(self.env.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
-        let vmctx = self
+        let callee_vmctx = self
             .builder
             .ins()
             .load(pointer_type, mem_flags, base, vmctx_offset);
-        real_call_args.push(vmctx);
+        real_call_args.push(callee_vmctx);
         real_call_args.push(caller_vmctx);
 
         // Then append the regular call arguments.
         real_call_args.extend_from_slice(call_args);
 
-        // Finally, make the indirect call!
-        Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+        // If we statically know the imported function (e.g. this is a
+        // component-to-component call where we statically know both components)
+        // then we can actually still make a direct call (although we do have to
+        // pass the callee's vmctx that we just loaded, not our own). Otherwise,
+        // we really do an indirect call.
+        if self.env.translation.known_imported_functions[callee_index].is_some() {
+            Ok(self.direct_call_inst(callee, &real_call_args))
+        } else {
+            let func_addr = self
+                .builder
+                .ins()
+                .load(pointer_type, mem_flags, base, body_offset);
+            Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+        }
     }
 
     /// Do an indirect call through the given funcref table.
@@ -1526,6 +1532,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             | WasmHeapType::ConcreteArray(_)
             | WasmHeapType::Struct
             | WasmHeapType::ConcreteStruct(_)
+            | WasmHeapType::Exn
+            | WasmHeapType::ConcreteExn(_)
+            | WasmHeapType::NoExn
             | WasmHeapType::Cont
             | WasmHeapType::ConcreteCont(_)
             | WasmHeapType::NoCont
@@ -1756,7 +1765,7 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     fn reference_type(&self, wasm_ty: WasmHeapType) -> (ir::Type, bool) {
         let ty = crate::reference_type(wasm_ty, self.pointer_type());
         let needs_stack_map = match wasm_ty.top() {
-            WasmHeapTopType::Extern | WasmHeapTopType::Any => true,
+            WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => true,
             WasmHeapTopType::Func => false,
             // TODO(#10248) Once continuations can be stored on the GC heap, we
             // will need stack maps for continuation objects.
@@ -1831,7 +1840,7 @@ impl FuncEnvironment<'_> {
 
         let mut args: SmallVec<[_; 6]> = smallvec![table_vmctx, defined_table_index, delta];
         let grow = match ty.top() {
-            WasmHeapTopType::Extern | WasmHeapTopType::Any => {
+            WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
                 args.push(init_value);
                 gc::builtins::table_grow_gc_ref(self, pos.func)?
             }
@@ -1865,7 +1874,7 @@ impl FuncEnvironment<'_> {
         let heap_ty = table.ref_type.heap_type;
         match heap_ty.top() {
             // GC-managed types.
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
                 let (src, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::gc_compiler(self)?.translate_read_gc_reference(
                     self,
@@ -1908,7 +1917,7 @@ impl FuncEnvironment<'_> {
         let heap_ty = table.ref_type.heap_type;
         match heap_ty.top() {
             // GC-managed types.
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
                 let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::gc_compiler(self)?.translate_write_gc_reference(
                     self,
@@ -1959,27 +1968,25 @@ impl FuncEnvironment<'_> {
         let mut pos = builder.cursor();
         let table = self.table(table_index);
         let ty = table.ref_type.heap_type;
-        let vmctx = self.vmctx_val(&mut pos);
-        let index_type = table.idx_type;
-        let table_index_arg = builder.ins().iconst(I32, table_index.as_u32() as i64);
-        let dst = self.cast_index_to_i64(&mut builder.cursor(), dst, index_type);
-        let len = self.cast_index_to_i64(&mut builder.cursor(), len, index_type);
-        let mut args: SmallVec<[_; 6]> = smallvec![vmctx, table_index_arg, dst];
+        let dst = self.cast_index_to_i64(&mut pos, dst, table.idx_type);
+        let len = self.cast_index_to_i64(&mut pos, len, table.idx_type);
+        let (table_vmctx, table_index) = self.table_vmctx_and_defined_index(&mut pos, table_index);
+
+        let mut args: SmallVec<[_; 6]> = smallvec![table_vmctx, table_index, dst];
         let libcall = match ty.top() {
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
                 args.push(val);
-                gc::builtins::table_fill_gc_ref(self, &mut builder.cursor().func)?
+                gc::builtins::table_fill_gc_ref(self, &mut pos.func)?
             }
             WasmHeapTopType::Func => {
                 args.push(val);
-                self.builtin_functions
-                    .table_fill_func_ref(&mut builder.func)
+                self.builtin_functions.table_fill_func_ref(&mut pos.func)
             }
             WasmHeapTopType::Cont => {
                 let (revision, contref) =
-                    stack_switching::fatpointer::deconstruct(self, &mut builder.cursor(), val);
+                    stack_switching::fatpointer::deconstruct(self, &mut pos, val);
                 args.extend_from_slice(&[contref, revision]);
-                stack_switching::builtins::table_fill_cont_obj(self, &mut builder.func)?
+                stack_switching::builtins::table_fill_cont_obj(self, &mut pos.func)?
             }
         };
 
@@ -2305,7 +2312,9 @@ impl FuncEnvironment<'_> {
         Ok(match ht.top() {
             WasmHeapTopType::Func => pos.ins().iconst(self.pointer_type(), 0),
             // NB: null GC references don't need to be in stack maps.
-            WasmHeapTopType::Any | WasmHeapTopType::Extern => pos.ins().iconst(types::I32, 0),
+            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
+                pos.ins().iconst(types::I32, 0)
+            }
             WasmHeapTopType::Cont => {
                 let zero = pos.ins().iconst(self.pointer_type(), 0);
                 stack_switching::fatpointer::construct(self, &mut pos, zero, zero)
@@ -2709,7 +2718,8 @@ impl FuncEnvironment<'_> {
             // wasm module (e.g. imports or libcalls) are either encoded through
             // the `vmcontext` as relative jumps (hence no relocations) or
             // they're libcalls with absolute relocations.
-            colocated: self.module.defined_func_index(index).is_some(),
+            colocated: self.module.defined_func_index(index).is_some()
+                || self.translation.known_imported_functions[index].is_some(),
         }))
     }
 

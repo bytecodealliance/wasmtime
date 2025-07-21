@@ -438,7 +438,6 @@ impl<'a> LiftContext<'a> {
     pub fn new(
         store: &'a mut StoreOpaque,
         options: &'a Options,
-        types: &'a Arc<ComponentTypes>,
         instance_handle: Instance,
     ) -> LiftContext<'a> {
         // From `&mut StoreOpaque` provided the goal here is to project out
@@ -452,11 +451,12 @@ impl<'a> LiftContext<'a> {
             .map(|_| options.memory(unsafe { &*(store as *const StoreOpaque) }));
         let (calls, host_table, host_resource_data, instance) =
             store.component_resource_state_with_instance(instance_handle);
+        let (component, instance) = instance.component_and_self();
 
         LiftContext {
             memory,
             options,
-            types,
+            types: component.types(),
             instance,
             instance_handle,
             calls,

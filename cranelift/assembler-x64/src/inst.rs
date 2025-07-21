@@ -5,6 +5,7 @@
 
 use crate::Fixed;
 use crate::api::{AsReg, CodeSink, RegisterVisitor, Registers, TrapCode};
+use crate::evex::EvexPrefix;
 use crate::gpr::{self, Gpr, Size};
 use crate::imm::{Extension, Imm8, Imm16, Imm32, Imm64, Simm8, Simm32};
 use crate::mem::{Amode, GprMem, XmmMem};

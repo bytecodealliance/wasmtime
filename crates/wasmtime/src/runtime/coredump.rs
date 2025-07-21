@@ -204,6 +204,12 @@ impl WasmCoreDump {
                     Val::AnyRef(_) => {
                         wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::ANY)
                     }
+                    Val::ExnRef(_) => {
+                        wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Abstract {
+                            shared: false,
+                            ty: wasm_encoder::AbstractHeapType::Exn,
+                        })
+                    }
                 };
                 globals.global(
                     wasm_encoder::GlobalType {
@@ -253,14 +259,14 @@ impl WasmCoreDump {
                 let module_index = module_to_index[&module.id()];
 
                 let memories = instance
-                    .all_memories(&mut store.0)
+                    .all_memories(store.0)
                     .collect::<Vec<_>>()
                     .into_iter()
                     .map(|(_i, memory)| memory_to_idx[&memory.hash_key(&store.0)])
                     .collect::<Vec<_>>();
 
                 let globals = instance
-                    .all_globals(&mut store.0)
+                    .all_globals(store.0)
                     .collect::<Vec<_>>()
                     .into_iter()
                     .map(|(_i, global)| global_to_idx[&global.hash_key(&store.0)])

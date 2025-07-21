@@ -187,13 +187,6 @@ impl EvexInstruction {
         self
     }
 
-    /// Set the imm byte.
-    #[inline(always)]
-    pub fn imm(mut self, imm: u8) -> Self {
-        self.imm = Some(imm);
-        self
-    }
-
     /// Emit the EVEX-encoded instruction to the code sink:
     ///
     /// - the 4-byte EVEX prefix;

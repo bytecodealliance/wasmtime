@@ -104,6 +104,7 @@ impl Artifacts {
             }
             let adapter = match test.name.as_str() {
                 "reactor" => &reactor_adapter,
+                s if s.starts_with("p3_") => &reactor_adapter,
                 s if s.starts_with("api_proxy") => &proxy_adapter,
                 _ => &command_adapter,
             };

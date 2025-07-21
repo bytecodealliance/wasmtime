@@ -2,7 +2,6 @@ use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, Module, TableSegment,
     TableSegmentElements,
 };
-use crate::prelude::*;
 use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     EntityIndex, EntityType, FuncIndex, GlobalIndex, IndexType, InitMemory, MemoryIndex,
@@ -10,7 +9,9 @@ use crate::{
     TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert, TypeIndex, Unsigned,
     WasmError, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
+use crate::{StaticModuleIndex, prelude::*};
 use anyhow::{Result, bail};
+use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -53,6 +54,13 @@ pub struct ModuleTranslation<'data> {
 
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+
+    /// For each imported function, the single statically-known defined function
+    /// that satisfies that import, if any. This is used to turn what would
+    /// otherwise be indirect calls through the imports table into direct calls,
+    /// when possible.
+    pub known_imported_functions:
+        SecondaryMap<FuncIndex, Option<(StaticModuleIndex, DefinedFuncIndex)>>,
 
     /// A list of type signatures which are considered exported from this
     /// module, or those that can possibly be called. This list is sorted, and
@@ -1220,7 +1228,10 @@ impl ModuleTranslation<'_> {
                 // initializer won't trap so we could continue processing
                 // segments, but that's left as a future optimization if
                 // necessary.
-                WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Cont => break,
+                WasmHeapTopType::Any
+                | WasmHeapTopType::Extern
+                | WasmHeapTopType::Cont
+                | WasmHeapTopType::Exn => break,
             }
 
             // Function indices can be optimized here, but fully general

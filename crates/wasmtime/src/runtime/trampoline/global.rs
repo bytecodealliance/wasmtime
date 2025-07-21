@@ -1,9 +1,9 @@
-use crate::runtime::vm::{ExportGlobalKind, StoreBox, VMGlobalDefinition};
+use crate::runtime::vm::{StoreBox, VMGlobalDefinition};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::type_registry::RegisteredType;
 use crate::{GlobalType, Mutability, Result, RootedGcRefImpl, Val};
-use core::ptr::{self, NonNull};
-use wasmtime_environ::{DefinedGlobalIndex, EntityRef, Global};
+use core::ptr;
+use wasmtime_environ::Global;
 
 #[repr(C)]
 pub struct VMHostGlobalContext {
@@ -17,7 +17,7 @@ pub fn generate_global_export(
     store: &mut StoreOpaque,
     ty: GlobalType,
     val: Val,
-) -> Result<crate::runtime::vm::ExportGlobal> {
+) -> Result<crate::Global> {
     let global = wasmtime_environ::Global {
         wasm_ty: ty.content().to_wasm_type(),
         mutability: match ty.mutability() {
@@ -32,7 +32,9 @@ pub fn generate_global_export(
     });
 
     let mut store = AutoAssertNoGc::new(store);
-    let definition = unsafe {
+    // SAFETY: the global that this is pointing to is rooted in `ctx` above and
+    // is safe to initialize.
+    unsafe {
         let global = &mut ctx.get().as_mut().global;
         match val {
             Val::I32(x) => *global.as_i32_mut() = x,
@@ -60,16 +62,17 @@ pub fn generate_global_export(
                 let new = new.as_ref();
                 global.write_gc_ref(store.gc_store_mut()?, new);
             }
+            Val::ExnRef(e) => {
+                let new = match e {
+                    None => None,
+                    Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
+                };
+                let new = new.as_ref();
+                global.write_gc_ref(store.gc_store_mut()?, new);
+            }
         }
-        global
-    };
+    }
 
-    let globals = store.host_globals();
-    let index = DefinedGlobalIndex::new(globals.len());
-    store.host_globals_mut().push(ctx);
-    Ok(crate::runtime::vm::ExportGlobal {
-        definition: NonNull::from(definition),
-        kind: ExportGlobalKind::Host(index),
-        global,
-    })
+    let index = store.host_globals_mut().push(ctx);
+    Ok(crate::Global::from_host(store.id(), index))
 }

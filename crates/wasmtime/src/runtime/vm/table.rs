@@ -376,6 +376,7 @@ pub(crate) fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
         WasmHeapTopType::Func => TableElementType::Func,
         WasmHeapTopType::Any | WasmHeapTopType::Extern => TableElementType::GcRef,
         WasmHeapTopType::Cont => TableElementType::Cont,
+        WasmHeapTopType::Exn => TableElementType::GcRef,
     }
 }
 
@@ -900,52 +901,79 @@ impl Table {
         Ok(())
     }
 
+    /// Copy `len` elements from `self[src_index..][..len]` into
+    /// `dst_table[dst_index..][..len]`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the range is out of bounds of either the source or
+    /// destination tables.
+    pub fn copy_to(
+        &self,
+        dst: &mut Table,
+        gc_store: Option<&mut GcStore>,
+        dst_index: u64,
+        src_index: u64,
+        len: u64,
+    ) -> Result<(), Trap> {
+        let (src_range, dst_range) = Table::validate_copy(self, dst, dst_index, src_index, len)?;
+        Self::copy_elements(gc_store, dst, self, dst_range, src_range);
+        Ok(())
+    }
+
+    /// Copy `len` elements from `self[src_index..][..len]` into
+    /// `self[dst_index..][..len]`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the range is out of bounds of either the source or
+    /// destination tables.
+    pub fn copy_within(
+        &mut self,
+        gc_store: Option<&mut GcStore>,
+        dst_index: u64,
+        src_index: u64,
+        len: u64,
+    ) -> Result<(), Trap> {
+        let (src_range, dst_range) = Table::validate_copy(self, self, dst_index, src_index, len)?;
+        self.copy_elements_within(gc_store, dst_range, src_range);
+        Ok(())
+    }
+
     /// Copy `len` elements from `src_table[src_index..]` into `dst_table[dst_index..]`.
     ///
     /// # Errors
     ///
     /// Returns an error if the range is out of bounds of either the source or
     /// destination tables.
-    pub unsafe fn copy(
-        gc_store: Option<&mut GcStore>,
-        dst_table: *mut Self,
-        src_table: *mut Self,
+    fn validate_copy(
+        src: &Table,
+        dst: &Table,
         dst_index: u64,
         src_index: u64,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<(Range<usize>, Range<usize>), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-copy
 
         let src_index = usize::try_from(src_index).map_err(|_| Trap::TableOutOfBounds)?;
         let dst_index = usize::try_from(dst_index).map_err(|_| Trap::TableOutOfBounds)?;
         let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
 
-        if src_index
-            .checked_add(len)
-            .map_or(true, |n| n > (*src_table).size())
-            || dst_index
-                .checked_add(len)
-                .map_or(true, |m| m > (*dst_table).size())
+        if src_index.checked_add(len).map_or(true, |n| n > src.size())
+            || dst_index.checked_add(len).map_or(true, |m| m > dst.size())
         {
             return Err(Trap::TableOutOfBounds);
         }
 
         debug_assert!(
-            (*dst_table).element_type() == (*src_table).element_type(),
+            dst.element_type() == src.element_type(),
             "table element type mismatch"
         );
 
         let src_range = src_index..src_index + len;
         let dst_range = dst_index..dst_index + len;
 
-        // Check if the tables are the same as we cannot mutably borrow and also borrow the same `RefCell`
-        if ptr::eq(dst_table, src_table) {
-            (*dst_table).copy_elements_within(gc_store, dst_range, src_range);
-        } else {
-            Self::copy_elements(gc_store, &mut *dst_table, &*src_table, dst_range, src_range);
-        }
-
-        Ok(())
+        Ok((src_range, dst_range))
     }
 
     /// Return a `VMTableDefinition` for exposing the table to compiled wasm code.

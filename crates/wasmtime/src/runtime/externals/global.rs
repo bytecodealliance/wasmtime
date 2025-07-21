@@ -1,16 +1,14 @@
 use crate::prelude::*;
-use crate::runtime::vm::{
-    self, ExportGlobalKind, VMGlobalDefinition, VMGlobalKind, VMOpaqueContext,
-};
+use crate::runtime::vm::{self, VMGlobalDefinition, VMGlobalKind, VMOpaqueContext};
 use crate::{
     AnyRef, AsContext, AsContextMut, ExternRef, Func, GlobalType, HeapType, Mutability, Ref,
     RootedGcRefImpl, Val, ValType,
-    store::{AutoAssertNoGc, InstanceId, StoreId, StoreOpaque},
+    store::{AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque},
     trampoline::generate_global_export,
 };
 use core::ptr;
 use core::ptr::NonNull;
-use wasmtime_environ::{DefinedGlobalIndex, TypeTrace};
+use wasmtime_environ::DefinedGlobalIndex;
 
 /// A WebAssembly `global` value which can be read and written to.
 ///
@@ -99,10 +97,7 @@ impl Global {
         val.ensure_matches_ty(store, ty.content()).context(
             "type mismatch: initial value provided does not match the type of this global",
         )?;
-        unsafe {
-            let wasmtime_export = generate_global_export(store, ty, val)?;
-            Ok(Global::from_wasmtime_global(wasmtime_export, store))
-        }
+        generate_global_export(store, ty, val)
     }
 
     pub(crate) fn new_host(store: &StoreOpaque, index: DefinedGlobalIndex) -> Global {
@@ -180,13 +175,17 @@ impl Global {
                         | HeapType::Struct
                         | HeapType::ConcreteStruct(_)
                         | HeapType::Array
-                        | HeapType::ConcreteArray(_) => definition
+                        | HeapType::ConcreteArray(_)
+                        | HeapType::Exn
+                        | HeapType::ConcreteExn(_) => definition
                             .as_gc_ref()
                             .map(|r| {
                                 let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
                                 AnyRef::from_cloned_gc_ref(&mut store, r)
                             })
                             .into(),
+
+                        HeapType::NoExn => Ref::Exn(None),
 
                         HeapType::None => Ref::Any(None),
                     };
@@ -247,6 +246,14 @@ impl Global {
                     let new = new.as_ref();
                     definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
                 }
+                Val::ExnRef(e) => {
+                    let new = match e {
+                        None => None,
+                        Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
+                    };
+                    let new = new.as_ref();
+                    definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
+                }
             }
         }
         Ok(())
@@ -267,34 +274,31 @@ impl Global {
         }
     }
 
-    pub(crate) unsafe fn from_wasmtime_global(
-        wasmtime_export: vm::ExportGlobal,
-        store: &StoreOpaque,
-    ) -> Global {
-        debug_assert!(
-            wasmtime_export
-                .global
-                .wasm_ty
-                .is_canonicalized_for_runtime_usage()
-        );
-        let (instance, kind) = match wasmtime_export.kind {
-            ExportGlobalKind::Host(index) => (0, VMGlobalKind::Host(index)),
-            ExportGlobalKind::Instance(vmctx, index) => (
-                vm::Instance::from_vmctx(vmctx, |i| i.id().as_u32()),
-                VMGlobalKind::Instance(index),
-            ),
-            #[cfg(feature = "component-model")]
-            ExportGlobalKind::ComponentFlags(vmctx, index) => (
-                vm::component::ComponentInstance::from_vmctx(vmctx, |_, i| {
-                    i.id().instance().as_u32()
-                }),
-                VMGlobalKind::ComponentFlags(index),
-            ),
-        };
+    pub(crate) fn from_host(store: StoreId, index: DefinedGlobalIndex) -> Global {
         Global {
-            store: store.id(),
-            instance,
-            kind,
+            store,
+            instance: 0,
+            kind: VMGlobalKind::Host(index),
+        }
+    }
+
+    pub(crate) fn from_core(instance: StoreInstanceId, index: DefinedGlobalIndex) -> Global {
+        Global {
+            store: instance.store_id(),
+            instance: instance.instance().as_u32(),
+            kind: VMGlobalKind::Instance(index),
+        }
+    }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn from_component_flags(
+        instance: crate::component::store::StoreComponentInstanceId,
+        index: wasmtime_environ::component::RuntimeComponentInstanceIndex,
+    ) -> Global {
+        Global {
+            store: instance.store_id(),
+            instance: instance.instance().as_u32(),
+            kind: VMGlobalKind::ComponentFlags(index),
         }
     }
 

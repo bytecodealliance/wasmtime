@@ -55,8 +55,9 @@ impl<R: AsReg> Amode<R> {
         sink: &mut impl CodeSink,
         enc_reg: u8,
         bytes_at_end: u8,
+        evex_scaling: Option<i8>,
     ) {
-        emit_modrm_sib_disp(sink, enc_reg, self, bytes_at_end, None);
+        emit_modrm_sib_disp(sink, enc_reg, self, bytes_at_end, evex_scaling);
     }
 
     /// Return the registers for encoding the `b` and `x` bits (e.g., in a VEX
@@ -76,7 +77,6 @@ impl<R: AsReg> Amode<R> {
 
 /// A 32-bit immediate for address offsets.
 #[derive(Clone, Copy, Debug, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct AmodeOffset(i32);
 
 impl AmodeOffset {
@@ -286,13 +286,14 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
         sink: &mut impl CodeSink,
         enc_reg: u8,
         bytes_at_end: u8,
+        evex_scaling: Option<i8>,
     ) {
         match self {
             GprMem::Gpr(gpr) => {
                 sink.put1(encode_modrm(0b11, enc_reg & 0b111, gpr.enc() & 0b111));
             }
             GprMem::Mem(amode) => {
-                amode.encode_rex_suffixes(sink, enc_reg, bytes_at_end);
+                amode.encode_rex_suffixes(sink, enc_reg, bytes_at_end, evex_scaling);
             }
         }
     }
@@ -354,13 +355,14 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
         sink: &mut impl CodeSink,
         enc_reg: u8,
         bytes_at_end: u8,
+        evex_scaling: Option<i8>,
     ) {
         match self {
             XmmMem::Xmm(xmm) => {
                 sink.put1(encode_modrm(0b11, enc_reg & 0b111, xmm.enc() & 0b111));
             }
             XmmMem::Mem(amode) => {
-                amode.encode_rex_suffixes(sink, enc_reg, bytes_at_end);
+                amode.encode_rex_suffixes(sink, enc_reg, bytes_at_end, evex_scaling);
             }
         }
     }

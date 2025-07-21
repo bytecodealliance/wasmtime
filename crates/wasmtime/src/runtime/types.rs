@@ -5,6 +5,7 @@ use crate::runtime::externals::Table as RuntimeTable;
 use crate::{AsContextMut, Extern, Func, Val};
 use crate::{Engine, type_registry::RegisteredType};
 use core::fmt::{self, Display, Write};
+use wasmtime_environ::WasmExnType;
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,
     Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeInnerType, WasmCompositeType,
@@ -163,6 +164,12 @@ impl ValType {
 
     /// The `nullcontref` type, aka. `(ref null nocont)`.
     pub const NULLCONTREF: Self = ValType::Ref(RefType::NULLCONTREF);
+
+    /// The `exnref` type, aka `(ref null exn)`.
+    pub const EXNREF: Self = ValType::Ref(RefType::EXNREF);
+
+    /// The `nullexnref` type, aka `(ref null noexn)`.
+    pub const NULLEXNREF: Self = ValType::Ref(RefType::NULLEXNREF);
 
     /// Returns true if `ValType` matches any of the numeric types. (e.g. `I32`,
     /// `I64`, `F32`, `F64`).
@@ -495,6 +502,18 @@ impl RefType {
         heap_type: HeapType::NoCont,
     };
 
+    /// The `exnref` type, aka `(ref null exn)`.
+    pub const EXNREF: Self = RefType {
+        is_nullable: true,
+        heap_type: HeapType::Exn,
+    };
+
+    /// The `nullexnref` type, aka `(ref null noexn)`.
+    pub const NULLEXNREF: Self = RefType {
+        is_nullable: true,
+        heap_type: HeapType::NoExn,
+    };
+
     /// Construct a new reference type.
     pub fn new(is_nullable: bool, heap_type: HeapType) -> RefType {
         RefType {
@@ -587,7 +606,8 @@ impl RefType {
 ///
 /// 1. Function types
 /// 2. External types
-/// 3. Internal types
+/// 3. Internal (struct and array) types
+/// 4. Exception types
 ///
 /// Each hierarchy has a top type (the common supertype of which everything else
 /// in its hierarchy is a subtype of) and a bottom type (the common subtype of
@@ -672,6 +692,21 @@ impl RefType {
 /// concrete struct and array types respectively, if that was declared in their
 /// definitions. Once again, this is omitted from the above diagram for
 /// simplicity.
+///
+/// ## Exceptions
+///
+/// The top of the exception types hierarchy is `exn`; the bottom is
+/// `noexn`. At the WebAssembly level, there are no concrete types in
+/// this hierachy. However, internally we do reify a heap type for
+/// each tag, similar to how continuation objects work.
+///
+/// ```text
+///   exn
+///  / | \
+/// (exn $t) ...
+///  \ | /
+/// noexn
+/// ```
 ///
 /// # Subtyping and Equality
 ///
@@ -759,6 +794,20 @@ pub enum HeapType {
     /// of `any` and `eq`) and supertypes of the `none` heap type.
     ConcreteStruct(StructType),
 
+    /// The abstract `exn` heap type represents a reference to any
+    /// kind of exception.
+    ///
+    /// This is a supertype of the internal concrete exception heap
+    /// types and the `noexn` heap type.
+    Exn,
+
+    /// A concrete exception object with a specific tag.
+    ///
+    /// These are internal, not exposed at the Wasm level, but useful
+    /// in our implementation and host API. These are subtypes of
+    /// `exn` and supertypes of `noexn`.
+    ConcreteExn(ExnType),
+
     /// A reference to a continuation of a specific, concrete type.
     ///
     /// These are subtypes of `cont` and supertypes of `nocont`.
@@ -781,6 +830,11 @@ pub enum HeapType {
     /// This is the bottom type for the internal type hierarchy, and therefore
     /// `none` is a subtype of internal types.
     None,
+
+    /// The `noexn` heap type represents the null exception object.
+    ///
+    /// This is the bottom type for the exception objects type hierarchy.
+    NoExn,
 }
 
 impl Display for HeapType {
@@ -800,8 +854,11 @@ impl Display for HeapType {
             HeapType::ConcreteArray(ty) => write!(f, "(concrete array {:?})", ty.type_index()),
             HeapType::ConcreteStruct(ty) => write!(f, "(concrete struct {:?})", ty.type_index()),
             HeapType::ConcreteCont(ty) => write!(f, "(concrete cont {:?})", ty.type_index()),
+            HeapType::ConcreteExn(ty) => write!(f, "(concrete exn {:?})", ty.type_index()),
             HeapType::Cont => write!(f, "cont"),
             HeapType::NoCont => write!(f, "nocont"),
+            HeapType::Exn => write!(f, "exn"),
+            HeapType::NoExn => write!(f, "noexn"),
         }
     }
 }
@@ -831,6 +888,13 @@ impl From<ContType> for HeapType {
     #[inline]
     fn from(f: ContType) -> Self {
         HeapType::ConcreteCont(f)
+    }
+}
+
+impl From<ExnType> for HeapType {
+    #[inline]
+    fn from(e: ExnType) -> Self {
+        HeapType::ConcreteExn(e)
     }
 }
 
@@ -870,6 +934,16 @@ impl HeapType {
         matches!(self, HeapType::Cont)
     }
 
+    /// Is this the abstract `exn` heap type?
+    pub fn is_exn(&self) -> bool {
+        matches!(self, HeapType::Exn)
+    }
+
+    /// Is this the abstract `noexn` heap type?
+    pub fn is_no_exn(&self) -> bool {
+        matches!(self, HeapType::NoExn)
+    }
+
     /// Is this an abstract type?
     ///
     /// Types that are not abstract are concrete, user-defined types.
@@ -888,6 +962,7 @@ impl HeapType {
                 | HeapType::ConcreteArray(_)
                 | HeapType::ConcreteStruct(_)
                 | HeapType::ConcreteCont(_)
+                | HeapType::ConcreteExn(_)
         )
     }
 
@@ -975,6 +1050,21 @@ impl HeapType {
         self.as_concrete_struct().unwrap()
     }
 
+    /// Is this a concrete, user-defined exception type?
+    pub fn is_concrete_exn(&self) -> bool {
+        matches!(self, HeapType::ConcreteExn(_))
+    }
+
+    /// Get the underlying concrete, user-defined exception type, if any.
+    ///
+    /// Returns `None` if this is not a concrete exception type.
+    pub fn as_concrete_exn(&self) -> Option<&ExnType> {
+        match self {
+            HeapType::ConcreteExn(e) => Some(e),
+            _ => None,
+        }
+    }
+
     /// Get the top type of this heap type's type hierarchy.
     ///
     /// The returned heap type is a supertype of all types in this heap type's
@@ -996,6 +1086,8 @@ impl HeapType {
             | HeapType::None => HeapType::Any,
 
             HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapType::Cont,
+
+            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapType::Exn,
         }
     }
 
@@ -1003,7 +1095,9 @@ impl HeapType {
     #[inline]
     pub fn is_top(&self) -> bool {
         match self {
-            HeapType::Any | HeapType::Extern | HeapType::Func | HeapType::Cont => true,
+            HeapType::Any | HeapType::Extern | HeapType::Func | HeapType::Cont | HeapType::Exn => {
+                true
+            }
             _ => false,
         }
     }
@@ -1029,6 +1123,8 @@ impl HeapType {
             | HeapType::None => HeapType::None,
 
             HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapType::NoCont,
+
+            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapType::NoExn,
         }
     }
 
@@ -1036,7 +1132,11 @@ impl HeapType {
     #[inline]
     pub fn is_bottom(&self) -> bool {
         match self {
-            HeapType::None | HeapType::NoExtern | HeapType::NoFunc | HeapType::NoCont => true,
+            HeapType::None
+            | HeapType::NoExtern
+            | HeapType::NoFunc
+            | HeapType::NoCont
+            | HeapType::NoExn => true,
             _ => false,
         }
     }
@@ -1131,6 +1231,16 @@ impl HeapType {
 
             (HeapType::Any, HeapType::Any) => true,
             (HeapType::Any, _) => false,
+
+            (HeapType::NoExn, HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn) => true,
+            (HeapType::NoExn, _) => true,
+
+            (HeapType::ConcreteExn(_), HeapType::Exn) => true,
+            (HeapType::ConcreteExn(a), HeapType::ConcreteExn(b)) => a.matches(b),
+            (HeapType::ConcreteExn(_), _) => false,
+
+            (HeapType::Exn, HeapType::Exn) => true,
+            (HeapType::Exn, _) => false,
         }
     }
 
@@ -1171,11 +1281,14 @@ impl HeapType {
             | HeapType::Struct
             | HeapType::Cont
             | HeapType::NoCont
+            | HeapType::Exn
+            | HeapType::NoExn
             | HeapType::None => true,
             HeapType::ConcreteFunc(ty) => ty.comes_from_same_engine(engine),
             HeapType::ConcreteArray(ty) => ty.comes_from_same_engine(engine),
             HeapType::ConcreteStruct(ty) => ty.comes_from_same_engine(engine),
             HeapType::ConcreteCont(ty) => ty.comes_from_same_engine(engine),
+            HeapType::ConcreteExn(ty) => ty.comes_from_same_engine(engine),
         }
     }
 
@@ -1204,6 +1317,11 @@ impl HeapType {
             HeapType::NoCont => WasmHeapType::NoCont,
             HeapType::ConcreteCont(c) => {
                 WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::Engine(c.type_index()))
+            }
+            HeapType::Exn => WasmHeapType::Exn,
+            HeapType::NoExn => WasmHeapType::NoExn,
+            HeapType::ConcreteExn(e) => {
+                WasmHeapType::ConcreteExn(EngineOrModuleTypeIndex::Engine(e.type_index()))
             }
         }
     }
@@ -1237,13 +1355,20 @@ impl HeapType {
             | WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::Module(_))
             | WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::RecGroup(_))
             | WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::Module(_))
-            | WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::RecGroup(_)) => {
+            | WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::RecGroup(_))
+            | WasmHeapType::ConcreteExn(EngineOrModuleTypeIndex::Module(_))
+            | WasmHeapType::ConcreteExn(EngineOrModuleTypeIndex::RecGroup(_)) => {
                 panic!("HeapType::from_wasm_type on non-canonicalized-for-runtime-usage heap type")
             }
             WasmHeapType::Cont => HeapType::Cont,
             WasmHeapType::NoCont => HeapType::NoCont,
             WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::Engine(idx)) => {
                 HeapType::ConcreteCont(ContType::from_shared_type_index(engine, *idx))
+            }
+            WasmHeapType::Exn => HeapType::Exn,
+            WasmHeapType::NoExn => HeapType::NoExn,
+            WasmHeapType::ConcreteExn(EngineOrModuleTypeIndex::Engine(idx)) => {
+                HeapType::ConcreteExn(ExnType::from_shared_type_index(engine, *idx))
             }
         }
     }
@@ -1254,6 +1379,7 @@ impl HeapType {
             HeapType::ConcreteFunc(f) => Some(&f.registered_type),
             HeapType::ConcreteArray(a) => Some(&a.registered_type),
             HeapType::ConcreteStruct(a) => Some(&a.registered_type),
+            HeapType::ConcreteExn(e) => Some(&e.registered_type),
 
             HeapType::Extern
             | HeapType::NoExtern
@@ -1266,6 +1392,8 @@ impl HeapType {
             | HeapType::Struct
             | HeapType::Cont
             | HeapType::NoCont
+            | HeapType::Exn
+            | HeapType::NoExn
             | HeapType::None => None,
         }
     }
@@ -1298,8 +1426,9 @@ impl HeapType {
             ConcreteArray(ty) => Some(ty.registered_type),
             ConcreteStruct(ty) => Some(ty.registered_type),
             ConcreteCont(ty) => Some(ty.registered_type),
+            ConcreteExn(ty) => Some(ty.registered_type),
             Extern | NoExtern | Func | NoFunc | Any | Eq | I31 | Array | Struct | Cont | NoCont
-            | None => Option::None,
+            | Exn | NoExn | None => Option::None,
         }
     }
 }
@@ -2633,6 +2762,192 @@ impl ContType {
     }
 }
 
+// Exception types
+
+/// A WebAssembly exception-object signature type.
+///
+/// This type captures the *signature* of an exception object. Note
+/// that the WebAssembly standard does not define concrete types in
+/// the heap-type lattice between `exn` (any exception object -- the
+/// top type) and `noexn` (the uninhabited bottom type). Wasmtime
+/// defines concrete types based on the *signature* -- that is, the
+/// function type that describes the signature of the exception
+/// payload values -- rather than the tag. The tag is a per-instance
+/// nominal entity (similar to a memory or a table) and is associated
+/// only with particular exception *objects*.
+#[derive(Debug, Clone, Hash)]
+pub struct ExnType {
+    func_ty: FuncType,
+    registered_type: RegisteredType,
+}
+
+impl fmt::Display for ExnType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(exn {}", self.func_ty)?;
+        for field in self.fields() {
+            write!(f, " (field {field})")?;
+        }
+        write!(f, ")")?;
+        Ok(())
+    }
+}
+
+impl ExnType {
+    /// Create a new `ExnType`.
+    ///
+    /// This function creates a new exception object type with the
+    /// given signature, i.e., list of payload value types. This
+    /// signature implies a tag type, and when instantiated at
+    /// runtime, it must be associated with a tag of that type.
+    pub fn new(engine: &Engine, fields: impl IntoIterator<Item = ValType>) -> Result<ExnType> {
+        let fields = fields.into_iter().collect::<Vec<_>>();
+
+        // First, construct/intern a FuncType: we need this to exist
+        // so we can hand out a TagType, and it also roots any nested registrations.
+        let func_ty = FuncType::new(engine, fields.clone(), []);
+
+        Ok(Self::_new(engine, fields, func_ty))
+    }
+
+    /// Create a new `ExnType` from an existing `TagType`.
+    ///
+    /// This function creates a new exception object type with the
+    /// signature represented by the tag. The signature must have no
+    /// result values, i.e., must be of the form `(T1, T2, ...) ->
+    /// ()`.
+    pub fn from_tag_type(tag: &TagType) -> Result<ExnType> {
+        let func_ty = tag.ty();
+
+        // Check that the tag's signature type has no results.
+        ensure!(
+            func_ty.results().len() == 0,
+            "Cannot create an exception type from a tag type with results in the signature"
+        );
+
+        Ok(Self::_new(
+            tag.ty.engine(),
+            func_ty.params(),
+            func_ty.clone(),
+        ))
+    }
+
+    fn _new(
+        engine: &Engine,
+        fields: impl IntoIterator<Item = ValType>,
+        func_ty: FuncType,
+    ) -> ExnType {
+        let fields = fields
+            .into_iter()
+            .map(|ty| {
+                assert!(ty.comes_from_same_engine(engine));
+                WasmFieldType {
+                    element_type: WasmStorageType::Val(ty.to_wasm_type()),
+                    mutable: false,
+                }
+            })
+            .collect();
+
+        let ty = RegisteredType::new(
+            engine,
+            WasmSubType {
+                is_final: true,
+                supertype: None,
+                composite_type: WasmCompositeType {
+                    shared: false,
+                    inner: WasmCompositeInnerType::Exn(WasmExnType {
+                        func_ty: EngineOrModuleTypeIndex::Engine(func_ty.type_index()),
+                        fields,
+                    }),
+                },
+            },
+        );
+
+        Self {
+            func_ty,
+            registered_type: ty,
+        }
+    }
+
+    /// Get the tag type that this exception type is associated with.
+    pub fn tag_type(&self) -> TagType {
+        TagType {
+            ty: self.func_ty.clone(),
+        }
+    }
+
+    /// Get the `i`th field type.
+    ///
+    /// Returns `None` if `i` is out of bounds.
+    pub fn field(&self, i: usize) -> Option<FieldType> {
+        let engine = self.engine();
+        self.as_wasm_exn_type()
+            .fields
+            .get(i)
+            .map(|ty| FieldType::from_wasm_field_type(engine, ty))
+    }
+
+    /// Returns the list of field types for this function.
+    #[inline]
+    pub fn fields(&self) -> impl ExactSizeIterator<Item = FieldType> + '_ {
+        let engine = self.engine();
+        self.as_wasm_exn_type()
+            .fields
+            .iter()
+            .map(|ty| FieldType::from_wasm_field_type(engine, ty))
+    }
+
+    /// Get the engine that this exception type is associated with.
+    pub fn engine(&self) -> &Engine {
+        self.registered_type.engine()
+    }
+
+    pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {
+        Engine::same(self.registered_type.engine(), engine)
+    }
+
+    pub(crate) fn as_wasm_exn_type(&self) -> &WasmExnType {
+        self.registered_type().unwrap_exn()
+    }
+
+    pub(crate) fn type_index(&self) -> VMSharedTypeIndex {
+        self.registered_type.index()
+    }
+
+    /// Does this exception type match the other exception type?
+    ///
+    /// That is, is this exception type a subtype of the other exception type?
+    ///
+    /// # Panics
+    ///
+    /// Panics if either type is associated with a different engine from the
+    /// other.
+    pub fn matches(&self, other: &ExnType) -> bool {
+        assert!(self.comes_from_same_engine(other.engine()));
+
+        // We have no concrete-exception-type subtyping; concrete
+        // exception types are only (mutually, trivially) subtypes if
+        // they are exactly equal.
+        self.type_index() == other.type_index()
+    }
+
+    pub(crate) fn registered_type(&self) -> &RegisteredType {
+        &self.registered_type
+    }
+
+    pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ExnType {
+        let ty = RegisteredType::root(engine, index);
+        assert!(ty.is_exn());
+        let func_ty = FuncType::from_shared_type_index(
+            engine,
+            ty.unwrap_exn().func_ty.unwrap_engine_type_index(),
+        );
+        Self {
+            func_ty,
+            registered_type: ty,
+        }
+    }
+}
+
 // Global Types
 
 /// A WebAssembly global descriptor.
@@ -2698,8 +3013,11 @@ impl GlobalType {
 
 /// A descriptor for a tag in a WebAssembly module.
 ///
-/// This type describes an instance of a tag in a WebAssembly
-/// module. Tags are local to an [`Instance`](crate::Instance).
+/// Note that tags are local to an [`Instance`](crate::Instance),
+/// i.e., are a runtime entity. However, a tag is associated with a
+/// function type, and so has a kind of static type. This descriptor
+/// is a thin wrapper around a `FuncType` representing the function
+/// type of a tag.
 #[derive(Debug, Clone, Hash)]
 pub struct TagType {
     ty: FuncType,

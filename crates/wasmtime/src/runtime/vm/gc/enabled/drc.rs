@@ -45,7 +45,7 @@
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
 use super::free_list::FreeList;
-use super::{VMArrayRef, VMStructRef};
+use super::{VMArrayRef, VMExnRef, VMStructRef};
 use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::runtime::vm::{
@@ -64,7 +64,8 @@ use core::{
 };
 use wasmtime_environ::drc::{ARRAY_LENGTH_OFFSET, DrcTypeLayouts};
 use wasmtime_environ::{
-    GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
+    GcArrayLayout, GcExceptionLayout, GcLayout, GcStructLayout, GcTypeLayouts, VMGcKind,
+    VMSharedTypeIndex,
 };
 
 #[expect(clippy::cast_possible_truncation, reason = "known to not overflow")]
@@ -291,6 +292,13 @@ impl DrcHeap {
             }
             GcLayout::Struct(l) => TraceInfo::Struct {
                 gc_ref_offsets: l
+                    .fields
+                    .iter()
+                    .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
+                    .collect(),
+            },
+            GcLayout::Exception(e) => TraceInfo::Struct {
+                gc_ref_offsets: e
                     .fields
                     .iter()
                     .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
@@ -574,19 +582,19 @@ impl VMDrcHeader {
     /// Is this object in the over-approximated stack roots list?
     #[inline]
     fn is_in_over_approximated_stack_roots(&self) -> bool {
-        self.header.reserved_u27() & wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT != 0
+        self.header.reserved_u26() & wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT != 0
     }
 
     /// Set whether this object is in the over-approximated stack roots list.
     #[inline]
     fn set_in_over_approximated_stack_roots_bit(&mut self, bit: bool) {
-        let reserved = self.header.reserved_u27();
+        let reserved = self.header.reserved_u26();
         let new_reserved = if bit {
             reserved | wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT
         } else {
             reserved & !wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT
         };
-        self.header.set_reserved_u27(new_reserved);
+        self.header.set_reserved_u26(new_reserved);
     }
 
     /// Get the next object after this one in the over-approximated-stack-roots
@@ -610,7 +618,7 @@ impl VMDrcHeader {
     /// Is this object marked?
     #[inline]
     fn is_marked(&self) -> bool {
-        self.header.reserved_u27() & wasmtime_environ::drc::HEADER_MARK_BIT != 0
+        self.header.reserved_u26() & wasmtime_environ::drc::HEADER_MARK_BIT != 0
     }
 
     /// Mark this object.
@@ -619,9 +627,9 @@ impl VMDrcHeader {
     /// have returned `false` before this call was made).
     #[inline]
     fn set_marked(&mut self) {
-        let reserved = self.header.reserved_u27();
+        let reserved = self.header.reserved_u26();
         self.header
-            .set_reserved_u27(reserved | wasmtime_environ::drc::HEADER_MARK_BIT);
+            .set_reserved_u26(reserved | wasmtime_environ::drc::HEADER_MARK_BIT);
     }
 
     /// Clear the mark bit for this object.
@@ -631,9 +639,9 @@ impl VMDrcHeader {
     #[inline]
     fn clear_marked(&mut self) -> bool {
         if self.is_marked() {
-            let reserved = self.header.reserved_u27();
+            let reserved = self.header.reserved_u26();
             self.header
-                .set_reserved_u27(reserved & !wasmtime_environ::drc::HEADER_MARK_BIT);
+                .set_reserved_u26(reserved & !wasmtime_environ::drc::HEADER_MARK_BIT);
             debug_assert!(!self.is_marked());
             true
         } else {
@@ -809,7 +817,7 @@ unsafe impl GcHeap for DrcHeap {
     fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>> {
         debug_assert!(layout.size() >= core::mem::size_of::<VMDrcHeader>());
         debug_assert!(layout.align() >= core::mem::align_of::<VMDrcHeader>());
-        debug_assert_eq!(header.reserved_u27(), 0);
+        debug_assert_eq!(header.reserved_u26(), 0);
 
         // We must have trace info for every GC type that we allocate in this
         // heap. The only kinds of GC objects we allocate that do not have an
@@ -886,6 +894,26 @@ unsafe impl GcHeap for DrcHeap {
         debug_assert!(arrayref.as_gc_ref().is_typed::<VMDrcArrayHeader>(self));
         self.index::<VMDrcArrayHeader>(arrayref.as_gc_ref().as_typed_unchecked())
             .length
+    }
+
+    fn alloc_uninit_exn(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        layout: &GcExceptionLayout,
+    ) -> Result<Result<VMExnRef, u64>> {
+        let gc_ref = match self.alloc_raw(
+            VMGcHeader::from_kind_and_index(VMGcKind::ExnRef, ty),
+            layout.layout(),
+        )? {
+            Err(n) => return Ok(Err(n)),
+            Ok(gc_ref) => gc_ref,
+        };
+
+        Ok(Ok(gc_ref.into_exnref_unchecked()))
+    }
+
+    fn dealloc_uninit_exn(&mut self, exnref: VMExnRef) {
+        self.dealloc(exnref.into());
     }
 
     fn gc<'a>(

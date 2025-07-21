@@ -646,10 +646,20 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         let mut queue = DecommitQueue::default();
         image
             .clear_and_remain_ready(self.memories.keep_resident, |ptr, len| {
-                queue.push_raw(ptr, len);
+                // SAFETY: the memory in `image` won't be used until this
+                // decommit queue is flushed, and by definition the memory is
+                // not in use when calling this function.
+                unsafe {
+                    queue.push_raw(ptr, len);
+                }
             })
             .expect("failed to reset memory image");
-        queue.push_memory(allocation_index, image);
+
+        // SAFETY: this image is not in use and its memory regions were enqueued
+        // with `push_raw` above.
+        unsafe {
+            queue.push_memory(allocation_index, image);
+        }
         self.merge_or_flush(queue);
     }
 
@@ -670,11 +680,21 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         mut table: Table,
     ) {
         let mut queue = DecommitQueue::default();
-        self.tables
-            .reset_table_pages_to_zero(allocation_index, &mut table, |ptr, len| {
-                queue.push_raw(ptr, len);
-            });
-        queue.push_table(allocation_index, table);
+        // SAFETY: This table is no longer in use by the allocator when this
+        // method is called and additionally all image ranges are pushed with
+        // the understanding that the memory won't get used until the whole
+        // queue is flushed.
+        unsafe {
+            self.tables
+                .reset_table_pages_to_zero(allocation_index, &mut table, |ptr, len| {
+                    queue.push_raw(ptr, len);
+                });
+        }
+
+        // SAFETY: the table has had all its memory regions enqueued above.
+        unsafe {
+            queue.push_table(allocation_index, table);
+        }
         self.merge_or_flush(queue);
     }
 
@@ -686,9 +706,17 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
     #[cfg(feature = "async")]
     unsafe fn deallocate_fiber_stack(&self, mut stack: wasmtime_fiber::FiberStack) {
         let mut queue = DecommitQueue::default();
-        self.stacks
-            .zero_stack(&mut stack, |ptr, len| queue.push_raw(ptr, len));
-        queue.push_stack(stack);
+        // SAFETY: the stack is no longer in use by definition when this
+        // function is called and memory ranges pushed here are otherwise no
+        // longer in use.
+        unsafe {
+            self.stacks
+                .zero_stack(&mut stack, |ptr, len| queue.push_raw(ptr, len));
+        }
+        // SAFETY: this stack's memory regions were enqueued above.
+        unsafe {
+            queue.push_stack(stack);
+        }
         self.merge_or_flush(queue);
     }
 

@@ -31,6 +31,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, btree_map},
     mem,
+    ops::Range,
 };
 
 use wasmtime_environ::CompiledFunctionBody;
@@ -42,6 +43,10 @@ use wasmtime_environ::{
     ModuleTranslation, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, RelocationTarget,
     StaticModuleIndex,
 };
+
+mod call_graph;
+mod scc;
+mod stratify;
 
 mod code_builder;
 pub use self::code_builder::{CodeBuilder, CodeHint, HashedEngineCompileEnv};
@@ -803,18 +808,26 @@ impl FunctionIndices {
             &compiled_funcs,
             &|caller_index: usize, callee: RelocationTarget| match callee {
                 RelocationTarget::Wasm(callee_index) => {
-                    let module = self
+                    let caller_module = self
                         .compiled_func_index_to_module
                         .get(&caller_index)
                         .copied()
                         .expect("should only reloc inside wasm function callers");
-                    let def_func_index = translations[module]
+                    let key = if let Some(def_func_index) = translations[caller_module]
                         .module
                         .defined_func_index(callee_index)
-                        .unwrap();
-                    self.indices[&CompileKind::WasmFunction]
-                        [&CompileKey::wasm_function(module, def_func_index)]
-                        .unwrap_function()
+                    {
+                        CompileKey::wasm_function(caller_module, def_func_index)
+                    } else {
+                        let (def_module, def_func_index) = translations[caller_module]
+                            .known_imported_functions[callee_index]
+                            .expect(
+                                "a direct call to an imported function must have a \
+                                 statically-known import",
+                            );
+                        CompileKey::wasm_function(def_module, def_func_index)
+                    };
+                    self.indices[&CompileKind::WasmFunction][&key].unwrap_function()
                 }
                 RelocationTarget::Builtin(builtin) => self.indices
                     [&CompileKind::WasmToBuiltinTrampoline]
@@ -1006,4 +1019,18 @@ impl Artifacts {
         assert!(self.trampolines.is_empty());
         self.modules.into_iter().next().unwrap().1
     }
+}
+
+/// Extend `dest` with `items` and return the range of indices in `dest` where
+/// they ended up.
+fn extend_with_range<T>(dest: &mut Vec<T>, items: impl IntoIterator<Item = T>) -> Range<u32> {
+    let start = dest.len();
+    let start = u32::try_from(start).unwrap();
+
+    dest.extend(items);
+
+    let end = dest.len();
+    let end = u32::try_from(end).unwrap();
+
+    start..end
 }
