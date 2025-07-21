@@ -1,4 +1,5 @@
 //! Generating series of `table.get` and `table.set` operations.
+use bincode::{Decode, Encode};
 use mutatis::mutators as m;
 use mutatis::{Candidates, Context, DefaultMutate, Generate, Mutate, Result as MutResult};
 use smallvec::SmallVec;
@@ -11,12 +12,12 @@ use wasm_encoder::{
 
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Encode, Decode)]
 pub struct TableOps {
     pub(crate) num_params: u32,
     pub(crate) num_globals: u32,
     pub(crate) table_size: i32,
-    ops: Vec<TableOp>,
+    pub(crate) ops: Vec<TableOp>,
 }
 
 const NUM_PARAMS_RANGE: RangeInclusive<u32> = 0..=10;
@@ -182,6 +183,10 @@ impl TableOps {
 
         self.ops = new_ops;
     }
+    /// Pops from the vector of the opcodes and returns bool
+    pub fn pop(&mut self) -> bool {
+        self.ops.pop().is_some()
+    }
 }
 
 /// A mutator for the table ops
@@ -283,7 +288,7 @@ macro_rules! define_table_ops {
             $op:ident $( ( $($limit:expr => $ty:ty),* ) )? : $params:expr => $results:expr ,
         )*
     ) => {
-        #[derive(Copy, Clone, Debug)]
+        #[derive(Copy, Clone, Debug, Encode, Decode)]
         pub(crate) enum TableOp {
             $(
                 $op ( $( $($ty),* )? ),
