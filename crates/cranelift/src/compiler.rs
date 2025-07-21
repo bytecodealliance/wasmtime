@@ -47,6 +47,10 @@ struct IncrementalCacheContext {
 }
 
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(
+    not(feature = "component-model"),
+    expect(dead_code, reason = "only used with component model compiler")
+)]
 enum Abi {
     Wasm,
     Array,
