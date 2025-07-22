@@ -23,7 +23,7 @@ reused with libFuzzer or AFL or any other fuzzing engine or driver.
 
 ## libFuzzer and `cargo fuzz` Fuzz Targets
 
-We combine a test case generator and one more more oracles into a *fuzz
+We combine a test case generator and one more oracles into a *fuzz
 target*. Because the target needs to pipe the raw input from a fuzzer into the
 test case generator, it is specific to a particular fuzzer. This is generally
 fine, since they're only a couple of lines of glue code.

@@ -30,7 +30,7 @@ impl Address {
         Self::Const(data)
     }
 
-    /// Check if the address is a made made of a base and offset.
+    /// Check if the address is a made of a base and offset.
     pub fn is_offset(&self) -> bool {
         match self {
             Self::Offset { .. } => true,
