@@ -7,7 +7,6 @@ use crate::ir::types::*;
 use crate::isa::x64::inst::Inst;
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::machinst::*;
-use smallvec::{SmallVec, smallvec};
 use std::fmt;
 use std::string::String;
 
@@ -763,57 +762,6 @@ pub(crate) enum InstructionSet {
     AVX512F,
     AVX512VBMI,
     AVX512VL,
-}
-
-#[derive(Copy, Clone, PartialEq)]
-#[expect(missing_docs, reason = "self-describing")]
-pub enum Avx512TupleType {
-    Full,
-    FullMem,
-    Mem128,
-}
-
-pub use crate::isa::x64::lower::isle::generated_code::Avx512Opcode;
-
-impl Avx512Opcode {
-    /// Which `InstructionSet`s support the opcode?
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            Avx512Opcode::Vcvtudq2ps | Avx512Opcode::Vpabsq => {
-                smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL]
-            }
-            Avx512Opcode::Vpermi2b => {
-                smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512VBMI]
-            }
-            Avx512Opcode::Vpmullq => smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512DQ],
-            Avx512Opcode::Vpopcntb => {
-                smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512BITALG]
-            }
-        }
-    }
-
-    /// What is the "TupleType" of this opcode, which affects the scaling factor
-    /// for 8-bit displacements when this instruction uses memory operands.
-    ///
-    /// This can be found in the encoding table for each instruction and is
-    /// interpreted according to Table 2-34 and 2-35 in the Intel instruction
-    /// manual.
-    pub fn tuple_type(&self) -> Avx512TupleType {
-        use Avx512Opcode::*;
-        use Avx512TupleType::*;
-
-        match self {
-            Vcvtudq2ps | Vpabsq | Vpmullq => Full,
-            Vpermi2b | Vpopcntb => FullMem,
-        }
-    }
-}
-
-impl fmt::Display for Avx512Opcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = format!("{self:?}");
-        f.write_str(&s.to_lowercase())
-    }
 }
 
 /// This defines the ways a value can be extended: either signed- or zero-extension, or none for

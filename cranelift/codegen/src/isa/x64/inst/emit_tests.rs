@@ -19,52 +19,6 @@ use crate::isa::x64::lower::isle::generated_code::{Atomic128RmwSeqOp, AtomicRmwS
 use alloc::vec::Vec;
 use cranelift_entity::EntityRef as _;
 
-impl Inst {
-    fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmUnaryRmREvex {
-            op,
-            src: XmmMem::unwrap_new(src),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
-    fn xmm_rm_r_evex(op: Avx512Opcode, src1: Reg, src2: RegMem, dst: Writable<Reg>) -> Self {
-        debug_assert_ne!(op, Avx512Opcode::Vpermi2b);
-        src2.assert_regclass_is(RegClass::Float);
-        debug_assert!(src1.class() == RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmRmREvex {
-            op,
-            src1: Xmm::unwrap_new(src1),
-            src2: XmmMem::unwrap_new(src2),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
-    fn xmm_rm_r_evex3(
-        op: Avx512Opcode,
-        src1: Reg,
-        src2: Reg,
-        src3: RegMem,
-        dst: Writable<Reg>,
-    ) -> Self {
-        debug_assert_eq!(op, Avx512Opcode::Vpermi2b);
-        src3.assert_regclass_is(RegClass::Float);
-        debug_assert!(src1.class() == RegClass::Float);
-        debug_assert!(src2.class() == RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmRmREvex3 {
-            op,
-            src1: Xmm::unwrap_new(src1),
-            src2: Xmm::unwrap_new(src2),
-            src3: XmmMem::unwrap_new(src3),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-}
-
 #[test]
 fn test_x64_emit() {
     let rax = regs::rax();
@@ -96,7 +50,7 @@ fn test_x64_emit() {
     let xmm11 = regs::xmm11();
     let xmm12 = regs::xmm12();
     let _xmm13 = regs::xmm13();
-    let xmm14 = regs::xmm14();
+    let _xmm14 = regs::xmm14();
     let _xmm15 = regs::xmm15();
 
     // And Writable<> versions of the same:
@@ -114,13 +68,13 @@ fn test_x64_emit() {
     let _w_r15 = Writable::<Reg>::from_reg(r15);
 
     let _w_xmm0 = Writable::<Reg>::from_reg(xmm0);
-    let w_xmm1 = Writable::<Reg>::from_reg(xmm1);
-    let w_xmm2 = Writable::<Reg>::from_reg(xmm2);
+    let _w_xmm1 = Writable::<Reg>::from_reg(xmm1);
+    let _w_xmm2 = Writable::<Reg>::from_reg(xmm2);
     let _w_xmm3 = Writable::<Reg>::from_reg(xmm3);
     let _w_xmm4 = Writable::<Reg>::from_reg(xmm4);
     let _w_xmm6 = Writable::<Reg>::from_reg(xmm6);
     let _w_xmm7 = Writable::<Reg>::from_reg(xmm7);
-    let w_xmm8 = Writable::<Reg>::from_reg(xmm8);
+    let _w_xmm8 = Writable::<Reg>::from_reg(xmm8);
     let _w_xmm9 = Writable::<Reg>::from_reg(xmm9);
     let _w_xmm10 = Writable::<Reg>::from_reg(xmm10);
     let _w_xmm11 = Writable::<Reg>::from_reg(xmm11);
@@ -221,61 +175,6 @@ fn test_x64_emit() {
 
     // ========================================================
     // JmpCondCompound isn't a real instruction
-
-    // ========================================================
-    // XMM_RM_R: Integer Packed
-
-    insns.push((
-        Inst::xmm_rm_r_evex(Avx512Opcode::Vpmullq, xmm10, RegMem::reg(xmm14), w_xmm1),
-        "62D2AD0840CE",
-        "vpmullq %xmm14, %xmm10, %xmm1",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r_evex3(
-            Avx512Opcode::Vpermi2b,
-            xmm1,
-            xmm10,
-            RegMem::reg(xmm14),
-            w_xmm1,
-        ),
-        "62D22D0875CE",
-        "vpermi2b %xmm14, %xmm10, %xmm1, %xmm1",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r_evex3(
-            Avx512Opcode::Vpermi2b,
-            xmm2,
-            xmm0,
-            RegMem::reg(xmm1),
-            w_xmm2,
-        ),
-        "62F27D0875D1",
-        "vpermi2b %xmm1, %xmm0, %xmm2, %xmm2",
-    ));
-
-    // ========================================================
-    // XMM_MOV: Packed Move
-
-    // XmmUnary: moves and unary float ops
-    insns.push((
-        Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpabsq, RegMem::reg(xmm2), w_xmm8),
-        "6272FD081FC2",
-        "vpabsq  %xmm2, %xmm8",
-    ));
-
-    insns.push((
-        Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vcvtudq2ps, RegMem::reg(xmm2), w_xmm8),
-        "62717F087AC2",
-        "vcvtudq2ps %xmm2, %xmm8",
-    ));
-
-    insns.push((
-        Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpopcntb, RegMem::reg(xmm2), w_xmm8),
-        "62727D0854C2",
-        "vpopcntb %xmm2, %xmm8",
-    ));
 
     // ========================================================
     // Pertaining to atomics.

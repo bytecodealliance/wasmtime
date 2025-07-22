@@ -1,5 +1,5 @@
-use crate::dsl::{Feature::*, Inst, Length::*, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, vex, w};
+use crate::dsl::{Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{align, evex, fmt, inst, r, rex, rw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -86,5 +86,8 @@ pub fn list() -> Vec<Inst> {
         inst("vpbroadcastw", fmt("A", [w(xmm1), r(xmm_m16)]), vex(L128)._66()._0f38().w0().op(0x79).r(), _64b | compat | avx2),
         inst("vpbroadcastd", fmt("A", [w(xmm1), r(xmm_m32)]), vex(L128)._66()._0f38().w0().op(0x58).r(), _64b | compat | avx2),
         inst("vpbroadcastq", fmt("A", [w(xmm1), r(xmm_m64)]), vex(L128)._66()._0f38().w0().op(0x59).r(), _64b | compat | avx2),
+
+        // AVX-512 permutations
+        inst("vpermi2b", fmt("A", [rw(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, FullMem)._66()._0f38().w0().op(0x75).r(), _64b | compat | avx512vl | avx512vbmi),
     ]
 }

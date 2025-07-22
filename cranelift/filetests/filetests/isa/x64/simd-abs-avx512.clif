@@ -12,7 +12,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpabsq  0(%rdi), %xmm0
+;   vpabsq (%rdi), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

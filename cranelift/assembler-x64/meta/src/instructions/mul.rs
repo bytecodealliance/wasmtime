@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*};
-use crate::dsl::{align, fmt, implicit, inst, r, rex, rw, sxl, sxq, sxw, vex, w};
+use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{align, evex, fmt, implicit, inst, r, rex, rw, sxl, sxq, sxw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -55,5 +55,8 @@ pub fn list() -> Vec<Inst> {
         inst("vpmulld", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x40), _64b | compat | avx),
         inst("vpmullw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xD5), _64b | compat | avx),
         inst("vpmuludq", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xF4), _64b | compat | avx),
+
+        inst("vpmulld", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Full)._66()._0f38().w0().op(0x40).r(), _64b | compat | avx512vl | avx512f),
+        inst("vpmullq", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Full)._66()._0f38().w1().op(0x40).r(), _64b | compat | avx512vl | avx512dq),
     ]
 }

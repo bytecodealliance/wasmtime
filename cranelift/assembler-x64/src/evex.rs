@@ -66,6 +66,19 @@ impl EvexPrefix {
     }
 
     /// Construct the [`EvexPrefix`] for an instruction.
+    pub fn two_op(
+        reg: u8,
+        (b, x): (Option<u8>, Option<u8>),
+        ll: u8,
+        pp: u8,
+        mmm: u8,
+        w: bool,
+        broadcast: bool,
+    ) -> Self {
+        EvexPrefix::new(reg, 0, (b, x), ll, pp, mmm, w, broadcast)
+    }
+
+    /// Construct the [`EvexPrefix`] for an instruction.
     pub fn three_op(
         reg: u8,
         vvvv: u8,

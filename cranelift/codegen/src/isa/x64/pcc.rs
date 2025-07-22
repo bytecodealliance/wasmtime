@@ -76,27 +76,6 @@ pub(crate) fn check(
 
         Inst::StackProbeLoop { tmp, .. } => ensure_no_fact(vcode, tmp.to_reg()),
 
-        // NOTE: it's assumed that all of these cases perform 128-bit loads, but this hasn't been
-        // verified. The effect of this will be spurious PCC failures when these instructions are
-        // involved.
-        Inst::XmmRmREvex { dst, ref src2, .. }
-        | Inst::XmmUnaryRmREvex {
-            dst, src: ref src2, ..
-        }
-        | Inst::XmmRmREvex3 {
-            dst,
-            src3: ref src2,
-            ..
-        } => {
-            match <&RegMem>::from(src2) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
-        }
-
         Inst::CvtUint64ToFloatSeq {
             dst,
             tmp_gpr1,
