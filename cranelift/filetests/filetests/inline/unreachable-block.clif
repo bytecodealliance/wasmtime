@@ -1,0 +1,46 @@
+test inline precise-output
+target x86_64
+
+function %f0(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    return v2
+
+;; This block is unreachable, despite it being in the function's layout! We
+;; should not include this block in callers' layouts when inlining because we
+;; will skip copying its instructions over into the caller due to how we use a
+;; reachability-based DFS traversal when inlining instructions. Ideally, we
+;; wouldn't even include it in callers' entity maps at all, but that is not
+;; required for correctness, while producing valid CLIF that does not have empty
+;; blocks without terminators is.
+block1:
+    trap user42
+
+}
+
+; (no functions inlined into %f0)
+
+function %f1() -> i32 {
+    fn0 = %f0(i32, i32) -> i32
+block0():
+    v0 = iconst.i32 10
+    v1 = call fn0(v0, v0)
+    return v1
+}
+
+; function %f1() -> i32 fast {
+;     sig0 = (i32, i32) -> i32 fast
+;     fn0 = %f0 sig0
+;
+; block0:
+;     v0 = iconst.i32 10
+;     jump block1
+;
+; block1:
+;     v3 = iadd.i32 v0, v0  ; v0 = 10, v0 = 10
+;     jump block3(v3)
+;
+; block3(v2: i32):
+;     v1 -> v2
+;     return v1
+; }
