@@ -127,6 +127,24 @@ criteria = []
 [policy.wasmtime-fuzzing]
 criteria = []
 
+[policy.wasmtime-internal-asm-macros]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-jit-icache-coherence]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-math]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-slab]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-unwinder]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-versioned-export-macros]
+audit-as-crates-io = true
+
 [policy.wasmtime-wasi]
 audit-as-crates-io = true
 

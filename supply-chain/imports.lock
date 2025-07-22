@@ -377,6 +377,30 @@ audited_as = "33.0.0"
 version = "35.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-internal-asm-macros]]
+version = "36.0.0"
+audited_as = "35.0.0"
+
+[[unpublished.wasmtime-internal-jit-icache-coherence]]
+version = "36.0.0"
+audited_as = "35.0.0"
+
+[[unpublished.wasmtime-internal-math]]
+version = "36.0.0"
+audited_as = "35.0.0"
+
+[[unpublished.wasmtime-internal-slab]]
+version = "36.0.0"
+audited_as = "35.0.0"
+
+[[unpublished.wasmtime-internal-unwinder]]
+version = "36.0.0"
+audited_as = "35.0.0"
+
+[[unpublished.wasmtime-internal-versioned-export-macros]]
+version = "36.0.0"
+audited_as = "35.0.0"
+
 [[unpublished.wasmtime-jit-debug]]
 version = "34.0.0"
 audited_as = "33.0.0"
@@ -1506,6 +1530,42 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-environ]]
 version = "34.0.1"
 when = "2025-06-24"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-internal-asm-macros]]
+version = "35.0.0"
+when = "2025-07-22"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-internal-jit-icache-coherence]]
+version = "35.0.0"
+when = "2025-07-22"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-internal-math]]
+version = "35.0.0"
+when = "2025-07-22"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-internal-slab]]
+version = "35.0.0"
+when = "2025-07-22"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-internal-unwinder]]
+version = "35.0.0"
+when = "2025-07-22"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-internal-versioned-export-macros]]
+version = "35.0.0"
+when = "2025-07-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
