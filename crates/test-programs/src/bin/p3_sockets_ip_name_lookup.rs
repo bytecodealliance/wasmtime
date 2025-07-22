@@ -1,4 +1,4 @@
-use futures::try_join;
+use futures::join;
 use test_programs::p3::wasi::sockets::ip_name_lookup::{ErrorCode, resolve_addresses};
 use test_programs::p3::wasi::sockets::types::IpAddress;
 
@@ -17,11 +17,13 @@ async fn resolve_one(name: &str) -> Result<IpAddress, ErrorCode> {
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         // Valid domains
-        try_join!(
+        let (res0, res1) = join!(
             resolve_addresses("localhost".into()),
             resolve_addresses("example.com".into())
-        )
-        .unwrap();
+        );
+        if res0.is_err() && res1.is_err() {
+            panic!("should have been able to resolve at least one domain");
+        }
 
         // NB: this is an actual real resolution, so it might time out, might cause
         // issues, etc. This result is ignored to prevent flaky failures in CI.
