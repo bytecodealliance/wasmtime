@@ -50,7 +50,7 @@ fn test_x64_emit() {
     let xmm11 = regs::xmm11();
     let xmm12 = regs::xmm12();
     let _xmm13 = regs::xmm13();
-    let xmm14 = regs::xmm14();
+    let _xmm14 = regs::xmm14();
     let _xmm15 = regs::xmm15();
 
     // And Writable<> versions of the same:
@@ -68,8 +68,8 @@ fn test_x64_emit() {
     let _w_r15 = Writable::<Reg>::from_reg(r15);
 
     let _w_xmm0 = Writable::<Reg>::from_reg(xmm0);
-    let w_xmm1 = Writable::<Reg>::from_reg(xmm1);
-    let w_xmm2 = Writable::<Reg>::from_reg(xmm2);
+    let _w_xmm1 = Writable::<Reg>::from_reg(xmm1);
+    let _w_xmm2 = Writable::<Reg>::from_reg(xmm2);
     let _w_xmm3 = Writable::<Reg>::from_reg(xmm3);
     let _w_xmm4 = Writable::<Reg>::from_reg(xmm4);
     let _w_xmm6 = Writable::<Reg>::from_reg(xmm6);
