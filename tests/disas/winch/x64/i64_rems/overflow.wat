@@ -15,7 +15,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x61
+;;       ja      0x65
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -24,12 +24,12 @@
 ;;       movabsq $9223372036854775808, %rax
 ;;       cqto
 ;;       cmpq    $-1, %rcx
-;;       jne     0x52
-;;   48: movl    $0, %edx
-;;       jmp     0x55
-;;   52: idivq   %rcx
+;;       jne     0x56
+;;   4c: movl    $0, %edx
+;;       jmp     0x59
+;;   56: idivq   %rcx
 ;;       movq    %rdx, %rax
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   61: ud2
+;;   65: ud2

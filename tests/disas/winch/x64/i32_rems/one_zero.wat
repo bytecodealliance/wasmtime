@@ -15,7 +15,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x56
+;;       ja      0x5a
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -24,12 +24,12 @@
 ;;       movl    $1, %eax
 ;;       cltd
 ;;       cmpl    $-1, %ecx
-;;       jne     0x49
-;;   3f: movl    $0, %edx
-;;       jmp     0x4b
-;;   49: idivl   %ecx
+;;       jne     0x4d
+;;   43: movl    $0, %edx
+;;       jmp     0x4f
+;;   4d: idivl   %ecx
 ;;       movl    %edx, %eax
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   56: ud2
+;;   5a: ud2
