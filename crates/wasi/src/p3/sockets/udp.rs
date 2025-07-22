@@ -3,20 +3,20 @@ use core::net::SocketAddr;
 
 use std::sync::Arc;
 
-use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt as _};
+use cap_net_ext::AddressFamily;
 use io_lifetimes::AsSocketlike as _;
 use io_lifetimes::raw::{FromRawSocketlike as _, IntoRawSocketlike as _};
-use rustix::fd::AsFd;
 use rustix::io::Errno;
-use rustix::net::{connect, connect_unspec};
+use rustix::net::connect;
 use tracing::debug;
 
 use crate::p3::bindings::sockets::types::{ErrorCode, IpAddressFamily, IpSocketAddress};
-use crate::p3::sockets::util::{
+use crate::runtime::with_ambient_tokio_runtime;
+use crate::sockets::util::{
     get_unicast_hop_limit, is_valid_address_family, is_valid_remote_address, receive_buffer_size,
     send_buffer_size, set_receive_buffer_size, set_send_buffer_size, set_unicast_hop_limit,
+    udp_bind, udp_disconnect, udp_socket,
 };
-use crate::runtime::with_ambient_tokio_runtime;
 use crate::sockets::{MAX_UDP_DATAGRAM_SIZE, SocketAddressFamily};
 
 /// The state of a UDP socket.
@@ -57,7 +57,7 @@ impl UdpSocket {
         // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
         //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
 
-        let fd = cap_std::net::UdpSocket::new(family, Blocking::No)?;
+        let fd = udp_socket(family)?;
 
         let socket_address_family = match family {
             AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
@@ -87,7 +87,7 @@ impl UdpSocket {
         if !is_valid_address_family(addr.ip(), self.family) {
             return Err(ErrorCode::InvalidArgument);
         }
-        bind(&self.socket, addr)?;
+        udp_bind(&self.socket, addr)?;
         self.udp_state = UdpState::Bound;
         Ok(())
     }
@@ -96,7 +96,7 @@ impl UdpSocket {
         if !matches!(self.udp_state, UdpState::Connected(..)) {
             return Err(ErrorCode::InvalidState);
         }
-        disconnect(&self.socket)?;
+        udp_disconnect(&self.socket)?;
         self.udp_state = UdpState::Bound;
         Ok(())
     }
@@ -114,12 +114,12 @@ impl UdpSocket {
 
         // Step #1: Disconnect
         if let UdpState::Connected(..) = self.udp_state {
-            disconnect(&self.socket)?;
+            udp_disconnect(&self.socket)?;
             self.udp_state = UdpState::Bound;
         }
         // Step #2: (Re)connect
         connect(&self.socket, &addr).map_err(|error| match error {
-            Errno::AFNOSUPPORT => ErrorCode::InvalidArgument, // See `bind` implementation.
+            Errno::AFNOSUPPORT => ErrorCode::InvalidArgument, // See `udp_bind` implementation.
             Errno::INPROGRESS => {
                 debug!("UDP connect returned EINPROGRESS, which should never happen");
                 ErrorCode::Unknown
@@ -226,15 +226,18 @@ impl UdpSocket {
     }
 
     pub fn unicast_hop_limit(&self) -> Result<u8, ErrorCode> {
-        get_unicast_hop_limit(&self.socket, self.family)
+        let n = get_unicast_hop_limit(&self.socket, self.family)?;
+        Ok(n)
     }
 
     pub fn set_unicast_hop_limit(&self, value: u8) -> Result<(), ErrorCode> {
-        set_unicast_hop_limit(&self.socket, self.family, value)
+        set_unicast_hop_limit(&self.socket, self.family, value)?;
+        Ok(())
     }
 
     pub fn receive_buffer_size(&self) -> Result<u64, ErrorCode> {
-        receive_buffer_size(&self.socket)
+        let n = receive_buffer_size(&self.socket)?;
+        Ok(n)
     }
 
     pub fn set_receive_buffer_size(&self, value: u64) -> Result<(), ErrorCode> {
@@ -243,43 +246,13 @@ impl UdpSocket {
     }
 
     pub fn send_buffer_size(&self) -> Result<u64, ErrorCode> {
-        send_buffer_size(&self.socket)
+        let n = send_buffer_size(&self.socket)?;
+        Ok(n)
     }
 
     pub fn set_send_buffer_size(&self, value: u64) -> Result<(), ErrorCode> {
         set_send_buffer_size(&self.socket, value)?;
         Ok(())
-    }
-}
-
-fn bind(sockfd: impl AsFd, addr: SocketAddr) -> Result<(), ErrorCode> {
-    rustix::net::bind(sockfd, &addr).map_err(|err| match err {
-        // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
-        // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-        #[cfg(windows)]
-        Errno::NOBUFS => ErrorCode::AddressInUse,
-        Errno::AFNOSUPPORT => ErrorCode::InvalidArgument,
-        _ => err.into(),
-    })
-}
-
-fn disconnect(sockfd: impl AsFd) -> Result<(), ErrorCode> {
-    match connect_unspec(sockfd) {
-        // BSD platforms return an error even if the UDP socket was disconnected successfully.
-        //
-        // MacOS was kind enough to document this: https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/connect.2.html
-        // > Datagram sockets may dissolve the association by connecting to an
-        // > invalid address, such as a null address or an address with the address
-        // > family set to AF_UNSPEC (the error EAFNOSUPPORT will be harmlessly
-        // > returned).
-        //
-        // ... except that this appears to be incomplete, because experiments
-        // have shown that MacOS actually returns EINVAL, depending on the
-        // address family of the socket.
-        #[cfg(target_os = "macos")]
-        Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
-        Err(err) => Err(err.into()),
-        Ok(()) => Ok(()),
     }
 }
 

@@ -1,6 +1,6 @@
 use core::net::SocketAddr;
 
-use crate::p2::bindings::sockets::network::{ErrorCode, Ipv4Address, Ipv6Address};
+use crate::p2::bindings::sockets::network::ErrorCode;
 use crate::sockets::SocketAddrCheck;
 use crate::{SocketAddrUse, TrappableError};
 
@@ -26,24 +26,31 @@ impl From<rustix::io::Errno> for SocketError {
     }
 }
 
-pub(crate) fn to_ipv4_addr(addr: Ipv4Address) -> std::net::Ipv4Addr {
-    let (x0, x1, x2, x3) = addr;
-    std::net::Ipv4Addr::new(x0, x1, x2, x3)
+impl From<crate::sockets::util::ErrorCode> for SocketError {
+    fn from(error: crate::sockets::util::ErrorCode) -> Self {
+        ErrorCode::from(error).into()
+    }
 }
 
-pub(crate) fn from_ipv4_addr(addr: std::net::Ipv4Addr) -> Ipv4Address {
-    let [x0, x1, x2, x3] = addr.octets();
-    (x0, x1, x2, x3)
-}
-
-pub(crate) fn to_ipv6_addr(addr: Ipv6Address) -> std::net::Ipv6Addr {
-    let (x0, x1, x2, x3, x4, x5, x6, x7) = addr;
-    std::net::Ipv6Addr::new(x0, x1, x2, x3, x4, x5, x6, x7)
-}
-
-pub(crate) fn from_ipv6_addr(addr: std::net::Ipv6Addr) -> Ipv6Address {
-    let [x0, x1, x2, x3, x4, x5, x6, x7] = addr.segments();
-    (x0, x1, x2, x3, x4, x5, x6, x7)
+impl From<crate::sockets::util::ErrorCode> for ErrorCode {
+    fn from(error: crate::sockets::util::ErrorCode) -> Self {
+        match error {
+            crate::sockets::util::ErrorCode::Unknown => Self::Unknown,
+            crate::sockets::util::ErrorCode::AccessDenied => Self::AccessDenied,
+            crate::sockets::util::ErrorCode::NotSupported => Self::NotSupported,
+            crate::sockets::util::ErrorCode::InvalidArgument => Self::InvalidArgument,
+            crate::sockets::util::ErrorCode::OutOfMemory => Self::OutOfMemory,
+            crate::sockets::util::ErrorCode::Timeout => Self::Timeout,
+            crate::sockets::util::ErrorCode::InvalidState => Self::InvalidState,
+            crate::sockets::util::ErrorCode::AddressNotBindable => Self::AddressNotBindable,
+            crate::sockets::util::ErrorCode::AddressInUse => Self::AddressInUse,
+            crate::sockets::util::ErrorCode::RemoteUnreachable => Self::RemoteUnreachable,
+            crate::sockets::util::ErrorCode::ConnectionRefused => Self::ConnectionRefused,
+            crate::sockets::util::ErrorCode::ConnectionReset => Self::ConnectionReset,
+            crate::sockets::util::ErrorCode::ConnectionAborted => Self::ConnectionAborted,
+            crate::sockets::util::ErrorCode::DatagramTooLarge => Self::DatagramTooLarge,
+        }
+    }
 }
 
 pub struct Network {
