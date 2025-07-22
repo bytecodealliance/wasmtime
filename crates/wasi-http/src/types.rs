@@ -121,8 +121,8 @@ pub trait WasiHttpView: IoView {
     }
 
     /// Whether a given header should be considered forbidden and not allowed.
-    fn is_forbidden_header(&mut self, _name: &HeaderName) -> bool {
-        false
+    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
+        DEFAULT_FORBIDDEN_HEADERS.contains(name)
     }
 
     /// Number of distinct write calls to the outgoing body's output-stream
@@ -269,22 +269,19 @@ impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
     }
 }
 
-/// Returns `true` when the header is forbidden according to this [`WasiHttpView`] implementation.
-pub(crate) fn is_forbidden_header(view: &mut dyn WasiHttpView, name: &HeaderName) -> bool {
-    static FORBIDDEN_HEADERS: [HeaderName; 9] = [
-        hyper::header::CONNECTION,
-        HeaderName::from_static("keep-alive"),
-        hyper::header::PROXY_AUTHENTICATE,
-        hyper::header::PROXY_AUTHORIZATION,
-        HeaderName::from_static("proxy-connection"),
-        hyper::header::TRANSFER_ENCODING,
-        hyper::header::UPGRADE,
-        hyper::header::HOST,
-        HeaderName::from_static("http2-settings"),
-    ];
-
-    FORBIDDEN_HEADERS.contains(name) || view.is_forbidden_header(name)
-}
+/// Set of [http::header::HeaderName], that are forbidden by default
+/// for requests and responses originating in the guest.
+pub const DEFAULT_FORBIDDEN_HEADERS: [http::header::HeaderName; 9] = [
+    hyper::header::CONNECTION,
+    HeaderName::from_static("keep-alive"),
+    hyper::header::PROXY_AUTHENTICATE,
+    hyper::header::PROXY_AUTHORIZATION,
+    HeaderName::from_static("proxy-connection"),
+    hyper::header::TRANSFER_ENCODING,
+    hyper::header::UPGRADE,
+    hyper::header::HOST,
+    HeaderName::from_static("http2-settings"),
+];
 
 /// Removes forbidden headers from a [`hyper::HeaderMap`].
 pub(crate) fn remove_forbidden_headers(
@@ -292,7 +289,7 @@ pub(crate) fn remove_forbidden_headers(
     headers: &mut hyper::HeaderMap,
 ) {
     let forbidden_keys = Vec::from_iter(headers.keys().filter_map(|name| {
-        if is_forbidden_header(view, name) {
+        if view.is_forbidden_header(name) {
             Some(name.clone())
         } else {
             None

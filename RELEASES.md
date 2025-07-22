@@ -6,6 +6,8 @@ Unreleased.
 
 ### Changed
 
+Users who implemented `WasiHttpView::is_forbidden_header` from `wasmtime-wasi-http` now need to include `DEFAULT_FORBIDDEN_HEADERS`, e.g. `DEFAULT_FORBIDDEN_HEADERS.contains(name) || name.as_str() == "custom-forbidden-header"` #11292
+
 ### Fixed
 
 * Fix a panic in the host caused by preview1 guests using `fd_renumber`.

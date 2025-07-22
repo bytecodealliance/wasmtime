@@ -7,7 +7,7 @@ use crate::{
     types::{
         FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
         HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
-        is_forbidden_header, remove_forbidden_headers,
+        remove_forbidden_headers,
     },
 };
 use anyhow::{Context, anyhow};
@@ -125,7 +125,7 @@ where
                 Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
             };
 
-            if is_forbidden_header(self, &header) {
+            if self.is_forbidden_header(&header) {
                 return Ok(Err(types::HeaderError::Forbidden));
             }
 
@@ -196,7 +196,7 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        if is_forbidden_header(self, &header) {
+        if self.is_forbidden_header(&header) {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
@@ -228,7 +228,7 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        if is_forbidden_header(self, &header) {
+        if self.is_forbidden_header(&header) {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
@@ -248,7 +248,7 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        if is_forbidden_header(self, &header) {
+        if self.is_forbidden_header(&header) {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
