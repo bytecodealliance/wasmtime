@@ -1,78 +1,12 @@
-use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use core::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
 
 use std::net::ToSocketAddrs;
 
-use rustix::fd::AsFd;
 use rustix::io::Errno;
-use rustix::net::sockopt;
 use tracing::debug;
 
-use crate::p3::bindings::sockets::types::{self, ErrorCode};
-use crate::sockets::SocketAddressFamily;
-
-fn is_deprecated_ipv4_compatible(addr: Ipv6Addr) -> bool {
-    matches!(addr.segments(), [0, 0, 0, 0, 0, 0, _, _])
-        && addr != Ipv6Addr::UNSPECIFIED
-        && addr != Ipv6Addr::LOCALHOST
-}
-
-pub fn is_valid_address_family(addr: IpAddr, socket_family: SocketAddressFamily) -> bool {
-    match (socket_family, addr) {
-        (SocketAddressFamily::Ipv4, IpAddr::V4(..)) => true,
-        (SocketAddressFamily::Ipv6, IpAddr::V6(ipv6)) => {
-            !is_deprecated_ipv4_compatible(ipv6) && ipv6.to_ipv4_mapped().is_none()
-        }
-        _ => false,
-    }
-}
-
-pub fn is_valid_remote_address(addr: SocketAddr) -> bool {
-    !addr.ip().to_canonical().is_unspecified() && addr.port() != 0
-}
-
-pub fn is_valid_unicast_address(addr: IpAddr) -> bool {
-    match addr.to_canonical() {
-        IpAddr::V4(ipv4) => !ipv4.is_multicast() && !ipv4.is_broadcast(),
-        IpAddr::V6(ipv6) => !ipv6.is_multicast(),
-    }
-}
-
-pub fn to_ipv4_addr(addr: types::Ipv4Address) -> Ipv4Addr {
-    let (x0, x1, x2, x3) = addr;
-    Ipv4Addr::new(x0, x1, x2, x3)
-}
-
-pub fn from_ipv4_addr(addr: Ipv4Addr) -> types::Ipv4Address {
-    let [x0, x1, x2, x3] = addr.octets();
-    (x0, x1, x2, x3)
-}
-
-pub fn to_ipv6_addr(addr: types::Ipv6Address) -> Ipv6Addr {
-    let (x0, x1, x2, x3, x4, x5, x6, x7) = addr;
-    Ipv6Addr::new(x0, x1, x2, x3, x4, x5, x6, x7)
-}
-
-pub fn from_ipv6_addr(addr: Ipv6Addr) -> types::Ipv6Address {
-    let [x0, x1, x2, x3, x4, x5, x6, x7] = addr.segments();
-    (x0, x1, x2, x3, x4, x5, x6, x7)
-}
-
-pub fn normalize_get_buffer_size(value: usize) -> usize {
-    if cfg!(target_os = "linux") {
-        // Linux doubles the value passed to setsockopt to allow space for bookkeeping overhead.
-        // getsockopt returns this internally doubled value.
-        // We'll half the value to at least get it back into the same ballpark that the application requested it in.
-        //
-        // This normalized behavior is tested for in: test-programs/src/bin/preview2_tcp_sockopts.rs
-        value / 2
-    } else {
-        value
-    }
-}
-
-pub fn normalize_set_buffer_size(value: usize) -> usize {
-    value.clamp(1, i32::MAX as usize)
-}
+use crate::p3::bindings::sockets::types;
+use crate::sockets::util::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
 
 impl From<IpAddr> for types::IpAddress {
     fn from(addr: IpAddr) -> Self {
@@ -271,86 +205,23 @@ impl From<&Errno> for types::ErrorCode {
     }
 }
 
-pub fn get_ip_ttl(fd: impl AsFd) -> Result<u8, ErrorCode> {
-    let v = sockopt::ip_ttl(fd)?;
-    let Ok(v) = v.try_into() else {
-        return Err(ErrorCode::NotSupported);
-    };
-    Ok(v)
-}
-
-pub fn get_ipv6_unicast_hops(fd: impl AsFd) -> Result<u8, ErrorCode> {
-    let v = sockopt::ipv6_unicast_hops(fd)?;
-    Ok(v)
-}
-
-pub fn get_unicast_hop_limit(fd: impl AsFd, family: SocketAddressFamily) -> Result<u8, ErrorCode> {
-    match family {
-        SocketAddressFamily::Ipv4 => get_ip_ttl(fd),
-        SocketAddressFamily::Ipv6 => get_ipv6_unicast_hops(fd),
-    }
-}
-
-pub fn set_unicast_hop_limit(
-    fd: impl AsFd,
-    family: SocketAddressFamily,
-    value: u8,
-) -> Result<(), ErrorCode> {
-    if value == 0 {
-        // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-        //
-        // A well-behaved IP application should never send out new packets with TTL 0.
-        // We validate the value ourselves because OS'es are not consistent in this.
-        // On Linux the validation is even inconsistent between their IPv4 and IPv6 implementation.
-        return Err(ErrorCode::InvalidArgument);
-    }
-    match family {
-        SocketAddressFamily::Ipv4 => {
-            sockopt::set_ip_ttl(fd, value.into())?;
-        }
-        SocketAddressFamily::Ipv6 => {
-            sockopt::set_ipv6_unicast_hops(fd, Some(value))?;
+impl From<crate::sockets::util::ErrorCode> for types::ErrorCode {
+    fn from(code: crate::sockets::util::ErrorCode) -> Self {
+        match code {
+            crate::sockets::util::ErrorCode::Unknown => Self::Unknown,
+            crate::sockets::util::ErrorCode::AccessDenied => Self::AccessDenied,
+            crate::sockets::util::ErrorCode::NotSupported => Self::NotSupported,
+            crate::sockets::util::ErrorCode::InvalidArgument => Self::InvalidArgument,
+            crate::sockets::util::ErrorCode::OutOfMemory => Self::OutOfMemory,
+            crate::sockets::util::ErrorCode::Timeout => Self::Timeout,
+            crate::sockets::util::ErrorCode::InvalidState => Self::InvalidState,
+            crate::sockets::util::ErrorCode::AddressNotBindable => Self::AddressNotBindable,
+            crate::sockets::util::ErrorCode::AddressInUse => Self::AddressInUse,
+            crate::sockets::util::ErrorCode::RemoteUnreachable => Self::RemoteUnreachable,
+            crate::sockets::util::ErrorCode::ConnectionRefused => Self::ConnectionRefused,
+            crate::sockets::util::ErrorCode::ConnectionReset => Self::ConnectionReset,
+            crate::sockets::util::ErrorCode::ConnectionAborted => Self::ConnectionAborted,
+            crate::sockets::util::ErrorCode::DatagramTooLarge => Self::DatagramTooLarge,
         }
     }
-    Ok(())
-}
-
-pub fn receive_buffer_size(fd: impl AsFd) -> Result<u64, ErrorCode> {
-    let v = sockopt::socket_recv_buffer_size(fd)?;
-    Ok(normalize_get_buffer_size(v).try_into().unwrap_or(u64::MAX))
-}
-
-pub fn set_receive_buffer_size(fd: impl AsFd, value: u64) -> Result<usize, ErrorCode> {
-    if value == 0 {
-        // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-        return Err(ErrorCode::InvalidArgument);
-    }
-    let value = value.try_into().unwrap_or(usize::MAX);
-    let value = normalize_set_buffer_size(value);
-    match sockopt::set_socket_recv_buffer_size(fd, value) {
-        Err(Errno::NOBUFS) => {}
-        Err(err) => return Err(err.into()),
-        _ => {}
-    };
-    Ok(value)
-}
-
-pub fn send_buffer_size(fd: impl AsFd) -> Result<u64, ErrorCode> {
-    let v = sockopt::socket_send_buffer_size(fd)?;
-    Ok(normalize_get_buffer_size(v).try_into().unwrap_or(u64::MAX))
-}
-
-pub fn set_send_buffer_size(fd: impl AsFd, value: u64) -> Result<usize, ErrorCode> {
-    if value == 0 {
-        // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-        return Err(ErrorCode::InvalidArgument);
-    }
-    let value = value.try_into().unwrap_or(usize::MAX);
-    let value = normalize_set_buffer_size(value);
-    match sockopt::set_socket_send_buffer_size(fd, value) {
-        Err(Errno::NOBUFS) => {}
-        Err(err) => return Err(err.into()),
-        _ => {}
-    };
-    Ok(value)
 }

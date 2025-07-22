@@ -7,15 +7,15 @@ use std::sync::Arc;
 use cap_net_ext::AddressFamily;
 use io_lifetimes::AsSocketlike as _;
 use io_lifetimes::views::SocketlikeView;
-use rustix::io::Errno;
 use rustix::net::sockopt;
 
 use crate::p3::bindings::sockets::types::{Duration, ErrorCode, IpAddressFamily, IpSocketAddress};
-use crate::p3::sockets::util::{
-    get_unicast_hop_limit, is_valid_address_family, is_valid_unicast_address, receive_buffer_size,
-    send_buffer_size, set_receive_buffer_size, set_send_buffer_size, set_unicast_hop_limit,
-};
 use crate::runtime::with_ambient_tokio_runtime;
+use crate::sockets::util::{
+    get_unicast_hop_limit, is_valid_address_family, is_valid_unicast_address, receive_buffer_size,
+    send_buffer_size, set_keep_alive_count, set_keep_alive_idle_time, set_keep_alive_interval,
+    set_receive_buffer_size, set_send_buffer_size, set_unicast_hop_limit, tcp_bind,
+};
 use crate::sockets::{DEFAULT_TCP_BACKLOG, SocketAddressFamily};
 
 /// The state of a TCP socket.
@@ -140,9 +140,9 @@ impl TcpSocket {
         }
         match mem::replace(&mut self.tcp_state, TcpState::Closed) {
             TcpState::Default(sock) => {
-                if let Err(err) = bind(&sock, addr) {
+                if let Err(err) = tcp_bind(&sock, addr) {
                     self.tcp_state = TcpState::Default(sock);
-                    Err(err)
+                    Err(err.into())
                 } else {
                     self.tcp_state = TcpState::Bound(sock);
                     Ok(())
@@ -247,21 +247,8 @@ impl TcpSocket {
     }
 
     pub fn set_keep_alive_idle_time(&mut self, value: Duration) -> Result<(), ErrorCode> {
-        const NANOS_PER_SEC: u64 = 1_000_000_000;
-
-        // Ensure that the value passed to the actual syscall never gets rounded down to 0.
-        const MIN: u64 = NANOS_PER_SEC;
-
-        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
-        const MAX: u64 = (i16::MAX as u64) * NANOS_PER_SEC;
-
         let fd = &*self.as_std_view()?;
-        if value == 0 {
-            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-            return Err(ErrorCode::InvalidArgument);
-        }
-        let value = value.clamp(MIN, MAX);
-        sockopt::set_tcp_keepidle(fd, core::time::Duration::from_nanos(value))?;
+        let value = set_keep_alive_idle_time(fd, value)?;
         #[cfg(target_os = "macos")]
         {
             self.keep_alive_idle_time
@@ -277,21 +264,8 @@ impl TcpSocket {
     }
 
     pub fn set_keep_alive_interval(&self, value: Duration) -> Result<(), ErrorCode> {
-        // Ensure that any fractional value passed to the actual syscall never gets rounded down to 0.
-        const MIN_SECS: core::time::Duration = core::time::Duration::from_secs(1);
-
-        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
-        const MAX_SECS: core::time::Duration = core::time::Duration::from_secs(i16::MAX as u64);
-
         let fd = &*self.as_std_view()?;
-        if value == 0 {
-            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-            return Err(ErrorCode::InvalidArgument);
-        }
-        sockopt::set_tcp_keepintvl(
-            fd,
-            core::time::Duration::from_nanos(value).clamp(MIN_SECS, MAX_SECS),
-        )?;
+        set_keep_alive_interval(fd, core::time::Duration::from_nanos(value))?;
         Ok(())
     }
 
@@ -302,22 +276,15 @@ impl TcpSocket {
     }
 
     pub fn set_keep_alive_count(&self, value: u32) -> Result<(), ErrorCode> {
-        const MIN_CNT: u32 = 1;
-        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
-        const MAX_CNT: u32 = i8::MAX as u32;
-
         let fd = &*self.as_std_view()?;
-        if value == 0 {
-            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
-            return Err(ErrorCode::InvalidArgument);
-        }
-        sockopt::set_tcp_keepcnt(fd, value.clamp(MIN_CNT, MAX_CNT))?;
+        set_keep_alive_count(fd, value)?;
         Ok(())
     }
 
     pub fn hop_limit(&self) -> Result<u8, ErrorCode> {
         let fd = &*self.as_std_view()?;
-        get_unicast_hop_limit(fd, self.family)
+        let n = get_unicast_hop_limit(fd, self.family)?;
+        Ok(n)
     }
 
     pub fn set_hop_limit(&self, value: u8) -> Result<(), ErrorCode> {
@@ -333,7 +300,8 @@ impl TcpSocket {
 
     pub fn receive_buffer_size(&self) -> Result<u64, ErrorCode> {
         let fd = &*self.as_std_view()?;
-        receive_buffer_size(fd)
+        let n = receive_buffer_size(fd)?;
+        Ok(n)
     }
 
     pub fn set_receive_buffer_size(&mut self, value: u64) -> Result<(), ErrorCode> {
@@ -354,7 +322,8 @@ impl TcpSocket {
 
     pub fn send_buffer_size(&self) -> Result<u64, ErrorCode> {
         let fd = &*self.as_std_view()?;
-        send_buffer_size(fd)
+        let n = send_buffer_size(fd)?;
+        Ok(n)
     }
 
     pub fn set_send_buffer_size(&mut self, value: u64) -> Result<(), ErrorCode> {
@@ -372,35 +341,4 @@ impl TcpSocket {
         }
         Ok(())
     }
-}
-
-fn bind(socket: &tokio::net::TcpSocket, local_address: SocketAddr) -> Result<(), ErrorCode> {
-    // Automatically bypass the TIME_WAIT state when binding to a specific port
-    // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
-    // This ensures we're not accidentally affected by any socket option
-    // state left behind by a previous failed call to this method.
-    eprintln!("set reuseaddr: {:?}", local_address.port() > 0);
-    #[cfg(not(windows))]
-    if let Err(err) = sockopt::set_socket_reuseaddr(&socket, local_address.port() > 0) {
-        return Err(err.into());
-    }
-
-    // Perform the OS bind call.
-    socket
-        .bind(local_address)
-        .map_err(|err| match Errno::from_io_error(&err) {
-            // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
-            // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
-            //
-            // The most common reasons for this error should have already
-            // been handled by our own validation slightly higher up in this
-            // function. This error mapping is here just in case there is
-            // an edge case we didn't catch.
-            Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
-            // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
-            // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-            #[cfg(windows)]
-            Some(Errno::NOBUFS) => ErrorCode::AddressInUse,
-            _ => err.into(),
-        })
 }

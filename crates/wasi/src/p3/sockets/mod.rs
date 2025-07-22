@@ -2,10 +2,10 @@ use crate::p3::bindings::sockets;
 use crate::sockets::{WasiSocketsCtxView, WasiSocketsView};
 use wasmtime::component::{HasData, Linker};
 
+mod conv;
 mod host;
 pub mod tcp;
 pub mod udp;
-pub mod util;
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///

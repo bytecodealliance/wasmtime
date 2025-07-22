@@ -24,7 +24,7 @@ use crate::p3::bindings::sockets::types::{
 };
 use crate::p3::sockets::WasiSockets;
 use crate::p3::sockets::tcp::TcpState;
-use crate::p3::sockets::util::{
+use crate::sockets::util::{
     is_valid_address_family, is_valid_remote_address, is_valid_unicast_address,
 };
 use crate::sockets::{SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};

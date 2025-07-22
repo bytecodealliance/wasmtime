@@ -1,9 +1,11 @@
+use core::future::Future;
 use core::ops::Deref;
 
-use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+
+pub(crate) mod util;
 
 use wasmtime::component::ResourceTable;
 
