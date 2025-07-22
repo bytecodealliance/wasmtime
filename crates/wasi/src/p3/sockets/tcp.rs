@@ -248,6 +248,7 @@ impl TcpSocket {
 
     pub fn set_keep_alive_idle_time(&mut self, value: Duration) -> Result<(), ErrorCode> {
         let fd = &*self.as_std_view()?;
+        #[cfg_attr(not(target_os = "macos"), expect(unused))]
         let value = set_keep_alive_idle_time(fd, value)?;
         #[cfg(target_os = "macos")]
         {
