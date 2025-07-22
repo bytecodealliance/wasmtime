@@ -49,7 +49,7 @@ postcard = { workspace = true }
 indexmap = { workspace = true }
 once_cell = { version = "1.12.0", optional = true }
 rayon = { version = "1.0", optional = true }
-object = { workspace = true }
+object = { workspace = true, features = ['unaligned'] }
 async-trait = { workspace = true, optional = true }
 trait-variant = { workspace = true, optional = true }
 encoding_rs = { version = "0.8.31", optional = true }
