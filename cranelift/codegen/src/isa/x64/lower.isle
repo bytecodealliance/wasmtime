@@ -3618,10 +3618,15 @@
   (lower_select (is_nonzero_cmp cond) x y))
 
 ;; Note that for GPR-based spectre guards everything is forced into a register
-;; so go straight to the `lower_select_gpr` helper forcing `x` to be in a `Gpr`
-;; not `GprMem`.
+;; not `GprMem`. The `lower_select_spectre_gpr` helper below handles "and"
+;; conditions which the `lower_select_gpr` helper does not.
 (rule 1 (lower (has_type (is_single_register_gpr_type ty) (select_spectre_guard cond x y)))
-  (lower_select_gpr ty (is_nonzero_cmp cond) (put_in_gpr x) y))
+  (lower_select_spectre_gpr ty (is_nonzero_cmp cond) (put_in_gpr x) y))
+
+(decl lower_select_spectre_gpr (Type CondResult Gpr Gpr) Gpr)
+(rule 0 (lower_select_spectre_gpr ty cond a b) (lower_select_gpr ty cond a b))
+(rule 1 (lower_select_spectre_gpr ty cond @ (CondResult.And _ _ _) a b)
+  (lower_select_gpr ty (cond_invert cond) b a))
 
 ;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
