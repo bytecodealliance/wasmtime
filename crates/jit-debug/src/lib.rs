@@ -4,6 +4,12 @@
 //! > you're interested in using this feel free to file an issue on the
 //! > Wasmtime repository to start a discussion about doing so, but otherwise
 //! > be aware that your usage of this crate is not supported.
+#![no_std]
+
+#[cfg(all(feature = "gdb_jit_int", not(feature = "std")))]
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 #[cfg(feature = "gdb_jit_int")]
 pub mod gdb_jit_int;

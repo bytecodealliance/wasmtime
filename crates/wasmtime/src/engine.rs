@@ -109,7 +109,7 @@ impl Engine {
             #[cfg(has_native_signals)]
             crate::runtime::vm::init_traps(config.macos_use_mach_ports);
             if !cfg!(miri) {
-                #[cfg(all(has_host_compiler_backend, feature = "debug-builtins"))]
+                #[cfg(feature = "debug-builtins")]
                 crate::runtime::vm::debug_builtins::init();
             }
         }
