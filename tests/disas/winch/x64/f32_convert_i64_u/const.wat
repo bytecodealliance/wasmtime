@@ -14,17 +14,17 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x67
+;;       ja      0x6b
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movl    $1, %ecx
 ;;       cmpq    $0, %rcx
-;;       jl      0x44
-;;   3a: cvtsi2ssq %rcx, %xmm0
-;;       jmp     0x5e
-;;   44: movq    %rcx, %r11
+;;       jl      0x48
+;;   3e: cvtsi2ssq %rcx, %xmm0
+;;       jmp     0x62
+;;   48: movq    %rcx, %r11
 ;;       shrq    $1, %r11
 ;;       movq    %rcx, %rax
 ;;       andq    $1, %rax
@@ -34,4 +34,4 @@
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   67: ud2
+;;   6b: ud2

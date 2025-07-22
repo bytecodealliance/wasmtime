@@ -15,29 +15,31 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x64
+;;       ja      0x70
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
-;;       movss   0x31(%rip), %xmm0
-;;       movss   0x31(%rip), %xmm1
+;;       movss   0x41(%rip), %xmm0
+;;       movss   0x41(%rip), %xmm1
 ;;       ucomiss %xmm0, %xmm1
-;;       jne     0x54
-;;       jp      0x4e
-;;   46: andps   %xmm0, %xmm1
-;;       jmp     0x58
-;;   4e: addss   %xmm0, %xmm1
-;;       jp      0x58
-;;   54: maxss   %xmm0, %xmm1
+;;       jne     0x60
+;;       jp      0x56
+;;   4e: andps   %xmm0, %xmm1
+;;       jmp     0x64
+;;   56: addss   %xmm0, %xmm1
+;;       jp      0x64
+;;   60: maxss   %xmm0, %xmm1
 ;;       movaps  %xmm1, %xmm0
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   64: ud2
-;;   66: addb    %al, (%rax)
-;;   68: int     $0xcc
-;;   6a: orb     $0x40, %al
-;;   6c: addb    %al, (%rax)
-;;   6e: addb    %al, (%rax)
-;;   70: int     $0xcc
+;;   70: ud2
+;;   72: addb    %al, (%rax)
+;;   74: addb    %al, (%rax)
+;;   76: addb    %al, (%rax)
+;;   78: int     $0xcc
+;;   7a: orb     $0x40, %al
+;;   7c: addb    %al, (%rax)
+;;   7e: addb    %al, (%rax)
+;;   80: int     $0xcc

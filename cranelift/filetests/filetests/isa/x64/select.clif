@@ -91,7 +91,7 @@ block0(v0: i8, v1: f16, v2: f16):
 ;   testb %dil, %dil
 ;   movdqa %xmm0, %xmm6
 ;   movdqa %xmm1, %xmm0
-;   je 0x14
+;   je 0x18
 ;   movaps %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -123,7 +123,7 @@ block0(v0: i8, v1: f32, v2: f32):
 ;   testb %dil, %dil
 ;   movdqa %xmm0, %xmm6
 ;   movdqa %xmm1, %xmm0
-;   je 0x14
+;   je 0x18
 ;   movaps %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -155,7 +155,7 @@ block0(v0: i8, v1: f64, v2: f64):
 ;   testb %dil, %dil
 ;   movdqa %xmm0, %xmm6
 ;   movdqa %xmm1, %xmm0
-;   je 0x14
+;   je 0x18
 ;   movaps %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -187,7 +187,7 @@ block0(v0: i8, v1: f128, v2: f128):
 ;   testb %dil, %dil
 ;   movdqa %xmm0, %xmm6
 ;   movdqa %xmm1, %xmm0
-;   je 0x15
+;   je 0x19
 ;   movdqa %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
