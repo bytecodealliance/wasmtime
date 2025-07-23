@@ -96,8 +96,7 @@ else()
         target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
             ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
     elseif(WASMTIME_TARGET MATCHES "darwin")
-        target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
-            "-framework CoreFoundation")
+        target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES})
     else()
         target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
             pthread dl m)
