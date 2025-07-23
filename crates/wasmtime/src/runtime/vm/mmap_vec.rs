@@ -260,9 +260,9 @@ impl MmapVec {
     pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
         match self {
             #[cfg(not(has_virtual_memory))]
-            MmapVec::Alloc { base, layout } => {
+            MmapVec::Alloc { base, layout } => unsafe {
                 core::slice::from_raw_parts_mut(base.as_mut(), layout.size())
-            }
+            },
             MmapVec::ExternallyOwned { .. } => {
                 panic!("Mutating externally owned memory is prohibited");
             }
