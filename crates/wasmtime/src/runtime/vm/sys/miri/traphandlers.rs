@@ -13,7 +13,7 @@ use crate::prelude::*;
 use crate::runtime::vm::VMContext;
 use core::ptr::NonNull;
 
-pub fn wasmtime_setjmp(
+pub unsafe fn wasmtime_setjmp(
     _jmp_buf: *mut *const u8,
     callback: extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,
     payload: *mut u8,
@@ -22,7 +22,7 @@ pub fn wasmtime_setjmp(
     callback(payload, callee)
 }
 
-pub fn wasmtime_longjmp(_jmp_buf: *const u8) -> ! {
+pub unsafe fn wasmtime_longjmp(_jmp_buf: *const u8) -> ! {
     unsafe {
         libc::abort();
     }
