@@ -75,11 +75,6 @@ fn spec_test_config(test: &Path) -> TestConfig {
     let mut ret = TestConfig::default();
     ret.spec_test = Some(true);
     match spec_proposal_from_path(test) {
-        Some("multi-memory") => {
-            ret.multi_memory = Some(true);
-            ret.reference_types = Some(true);
-            ret.simd = Some(true);
-        }
         Some("wide-arithmetic") => {
             ret.wide_arithmetic = Some(true);
         }
@@ -87,24 +82,8 @@ fn spec_test_config(test: &Path) -> TestConfig {
             ret.threads = Some(true);
             ret.reference_types = Some(false);
         }
-        Some("tail-call") => {
-            ret.tail_call = Some(true);
-            ret.reference_types = Some(true);
-        }
         Some("relaxed-simd") => {
             ret.relaxed_simd = Some(true);
-        }
-        Some("memory64") => {
-            ret.memory64 = Some(true);
-            ret.tail_call = Some(true);
-            ret.gc = Some(true);
-            ret.extended_const = Some(true);
-            ret.multi_memory = Some(true);
-            ret.relaxed_simd = Some(true);
-        }
-        Some("extended-const") => {
-            ret.extended_const = Some(true);
-            ret.reference_types = Some(true);
         }
         Some("custom-page-sizes") => {
             ret.custom_page_sizes = Some(true);
@@ -116,21 +95,6 @@ fn spec_test_config(test: &Path) -> TestConfig {
             if test.ends_with("memory_max.wast") || test.ends_with("memory_max_i64.wast") {
                 ret.hogs_memory = Some(true);
             }
-        }
-        Some("exception-handling") => {
-            ret.reference_types = Some(true);
-            ret.exceptions = Some(true);
-            if test.parent().unwrap().ends_with("legacy") {
-                ret.legacy_exceptions = Some(true);
-            }
-        }
-        Some("gc") => {
-            ret.gc = Some(true);
-            ret.tail_call = Some(true);
-        }
-        Some("function-references") => {
-            ret.function_references = Some(true);
-            ret.tail_call = Some(true);
         }
         Some("annotations") => {
             ret.simd = Some(true);
