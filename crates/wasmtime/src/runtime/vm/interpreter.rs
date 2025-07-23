@@ -104,7 +104,7 @@ unsafe impl Unwind for UnwindPulley {
     unsafe fn get_next_older_pc_from_fp(&self, fp: usize) -> usize {
         // The calling convention always pushes the return pointer (aka the PC
         // of the next older frame) just before this frame.
-        *(fp as *mut usize).offset(1)
+        unsafe { *(fp as *mut usize).offset(1) }
     }
     fn assert_fp_is_aligned(&self, fp: usize) {
         let expected = if cfg!(target_pointer_width = "32") {
@@ -209,16 +209,16 @@ impl InterpreterRef<'_> {
         // correct as it's not saving all callee-save state.
         let setjmp = setjmp(vm);
 
-        let old_lr = vm.call_start(&args);
+        let old_lr = unsafe { vm.call_start(&args) };
 
         // Run the interpreter as much as possible until it finishes, and then
         // handle each finish condition differently.
         let ret = loop {
-            match vm.call_run(bytecode) {
+            match unsafe { vm.call_run(bytecode) } {
                 // If the VM returned entirely then read the return value and
                 // return that (it indicates whether a trap happened or not.
                 DoneReason::ReturnToHost(()) => {
-                    match vm.call_end(old_lr, [RegType::XReg]).next().unwrap() {
+                    match unsafe { vm.call_end(old_lr, [RegType::XReg]).next().unwrap() } {
                         #[allow(
                             clippy::cast_possible_truncation,
                             reason = "intentionally reading the lower bits only"
@@ -238,7 +238,7 @@ impl InterpreterRef<'_> {
                         longjmp(vm, setjmp);
                         break false;
                     } else {
-                        vm = self.call_indirect_host(id);
+                        vm = unsafe { self.call_indirect_host(id) };
                         bytecode = resume;
                     }
                 }
@@ -300,7 +300,7 @@ impl InterpreterRef<'_> {
 
                 // Decode each argument according to this macro, pulling
                 // arguments from successive registers.
-                let ret = {
+                let ret = unsafe {
                     let mut vm = self.vm();
                     // Convert the pointer from pulley to a native function pointer.
                     union GetNative {

@@ -82,13 +82,13 @@ impl ConstEvalContext {
             .zip(struct_ty.fields())
             .map(|(raw, ty)| {
                 let ty = ty.element_type().unpack();
-                Val::_from_raw(store, *raw, ty)
+                unsafe { Val::_from_raw(store, *raw, ty) }
             })
             .collect::<Vec<_>>();
 
         let allocator = StructRefPre::_new(store, struct_ty);
         let struct_ref = unsafe { StructRef::new_maybe_async(store, &allocator, &fields)? };
-        let raw = struct_ref.to_anyref()._to_raw(store)?;
+        let raw = unsafe { struct_ref.to_anyref()._to_raw(store)? };
         Ok(ValRaw::anyref(raw))
     }
 
@@ -262,11 +262,9 @@ impl ConstExprEvaluator {
                     }
 
                     let start = self.stack.len() - len;
-                    let s = context.struct_new(
-                        &mut store,
-                        interned_type_index,
-                        &self.stack[start..],
-                    )?;
+                    let s = unsafe {
+                        context.struct_new(&mut store, interned_type_index, &self.stack[start..])?
+                    };
                     self.stack.truncate(start);
                     self.stack.push(s);
                 }
@@ -287,13 +285,15 @@ impl ConstExprEvaluator {
 
                     let len = self.pop()?.get_i32().unsigned();
 
-                    let elem = Val::_from_raw(&mut store, self.pop()?, ty.element_type().unpack());
+                    let elem = unsafe {
+                        Val::_from_raw(&mut store, self.pop()?, ty.element_type().unpack())
+                    };
 
                     let pre = ArrayRefPre::_new(&mut store, ty);
                     let array = unsafe { ArrayRef::new_maybe_async(&mut store, &pre, &elem, len)? };
 
                     self.stack
-                        .push(ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?));
+                        .push(unsafe { ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?) });
                 }
 
                 #[cfg(feature = "gc")]
@@ -311,7 +311,7 @@ impl ConstExprEvaluator {
                     let array = unsafe { ArrayRef::new_maybe_async(&mut store, &pre, &elem, len)? };
 
                     self.stack
-                        .push(ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?));
+                        .push(unsafe { ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?) });
                 }
 
                 #[cfg(feature = "gc")]
@@ -339,7 +339,7 @@ impl ConstExprEvaluator {
                     let elems = self
                         .stack
                         .drain(start..)
-                        .map(|raw| Val::_from_raw(&mut store, raw, elem_ty))
+                        .map(|raw| unsafe { Val::_from_raw(&mut store, raw, elem_ty) })
                         .collect::<SmallVec<[_; 8]>>();
 
                     let pre = ArrayRefPre::_new(&mut store, ty);
@@ -347,7 +347,7 @@ impl ConstExprEvaluator {
                         unsafe { ArrayRef::new_fixed_maybe_async(&mut store, &pre, &elems)? };
 
                     self.stack
-                        .push(ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?));
+                        .push(unsafe { ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?) });
                 }
 
                 #[cfg(feature = "gc")]
@@ -363,12 +363,13 @@ impl ConstExprEvaluator {
 
                 #[cfg(feature = "gc")]
                 ConstOp::AnyConvertExtern => {
-                    let result =
-                        match ExternRef::_from_raw(&mut store, self.pop()?.get_externref()) {
-                            Some(externref) => AnyRef::_convert_extern(&mut store, externref)?
-                                ._to_raw(&mut store)?,
-                            None => 0,
-                        };
+                    let result = match ExternRef::_from_raw(&mut store, self.pop()?.get_externref())
+                    {
+                        Some(externref) => unsafe {
+                            AnyRef::_convert_extern(&mut store, externref)?._to_raw(&mut store)?
+                        },
+                        None => 0,
+                    };
                     self.stack.push(ValRaw::anyref(result));
                 }
             }

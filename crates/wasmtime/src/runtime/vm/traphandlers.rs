@@ -84,7 +84,7 @@ fn lazy_per_thread_init() {
 /// stack. They will be skipped and not executed.
 #[cfg(has_host_compiler_backend)]
 pub(super) unsafe fn raise_preexisting_trap() -> ! {
-    tls::with(|info| info.unwrap().unwind())
+    tls::with(|info| unsafe { info.unwrap().unwind() })
 }
 
 /// Invokes the closure `f` and returns a `bool` if it succeeded.
@@ -406,21 +406,26 @@ where
         // interpreter since this branch is only ever taken if the interpreter
         // isn't present.
         #[cfg(has_host_compiler_backend)]
-        ExecutorRef::Native => traphandlers::wasmtime_setjmp(
-            cx.jmp_buf.as_ptr(),
-            {
-                extern "C" fn call_closure<F>(payload: *mut u8, caller: NonNull<VMContext>) -> bool
-                where
-                    F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
+        ExecutorRef::Native => unsafe {
+            traphandlers::wasmtime_setjmp(
+                cx.jmp_buf.as_ptr(),
                 {
-                    unsafe { (*(payload as *mut F))(caller, None) }
-                }
+                    extern "C" fn call_closure<F>(
+                        payload: *mut u8,
+                        caller: NonNull<VMContext>,
+                    ) -> bool
+                    where
+                        F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
+                    {
+                        unsafe { (*(payload as *mut F))(caller, None) }
+                    }
 
-                call_closure::<F>
-            },
-            &mut closure as *mut F as *mut u8,
-            caller,
-        ),
+                    call_closure::<F>
+                },
+                &mut closure as *mut F as *mut u8,
+                caller,
+            )
+        },
     });
 
     return match result {
@@ -521,22 +526,22 @@ mod call_thread_state {
 
         /// Get the saved FP upon exit from Wasm for the previous `CallThreadState`.
         pub unsafe fn old_last_wasm_exit_fp(&self) -> usize {
-            (&*self.old_state).last_wasm_exit_fp
+            unsafe { (&*self.old_state).last_wasm_exit_fp }
         }
 
         /// Get the saved PC upon exit from Wasm for the previous `CallThreadState`.
         pub unsafe fn old_last_wasm_exit_pc(&self) -> usize {
-            (&*self.old_state).last_wasm_exit_pc
+            unsafe { (&*self.old_state).last_wasm_exit_pc }
         }
 
         /// Get the saved FP upon entry into Wasm for the previous `CallThreadState`.
         pub unsafe fn old_last_wasm_entry_fp(&self) -> usize {
-            (&*self.old_state).last_wasm_entry_fp
+            unsafe { (&*self.old_state).last_wasm_entry_fp }
         }
 
         /// Get the saved `VMStackChain` for the previous `CallThreadState`.
         pub unsafe fn old_stack_chain(&self) -> VMStackChain {
-            (&*self.old_state).stack_chain.clone()
+            unsafe { (&*self.old_state).stack_chain.clone() }
         }
 
         /// Get the previous `CallThreadState`.
@@ -589,23 +594,25 @@ mod call_thread_state {
         #[cfg(feature = "async")]
         pub(super) unsafe fn swap(&self) {
             unsafe fn swap<T>(a: &core::cell::UnsafeCell<T>, b: &mut T) {
-                core::mem::swap(&mut *a.get(), b)
+                unsafe { core::mem::swap(&mut *a.get(), b) }
             }
 
-            let cx = self.vm_store_context.as_ref();
-            swap(
-                &cx.last_wasm_exit_fp,
-                &mut (*self.old_state).last_wasm_exit_fp,
-            );
-            swap(
-                &cx.last_wasm_exit_pc,
-                &mut (*self.old_state).last_wasm_exit_pc,
-            );
-            swap(
-                &cx.last_wasm_entry_fp,
-                &mut (*self.old_state).last_wasm_entry_fp,
-            );
-            swap(&cx.stack_chain, &mut (*self.old_state).stack_chain);
+            unsafe {
+                let cx = self.vm_store_context.as_ref();
+                swap(
+                    &cx.last_wasm_exit_fp,
+                    &mut (*self.old_state).last_wasm_exit_fp,
+                );
+                swap(
+                    &cx.last_wasm_exit_pc,
+                    &mut (*self.old_state).last_wasm_exit_pc,
+                );
+                swap(
+                    &cx.last_wasm_entry_fp,
+                    &mut (*self.old_state).last_wasm_entry_fp,
+                );
+                swap(&cx.stack_chain, &mut (*self.old_state).stack_chain);
+            }
         }
     }
 }
@@ -695,7 +702,9 @@ impl CallThreadState {
     unsafe fn unwind(&self) -> ! {
         debug_assert!(!self.jmp_buf.get().is_null());
         debug_assert!(self.jmp_buf.get() != CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
-        traphandlers::wasmtime_longjmp(self.jmp_buf.get());
+        unsafe {
+            traphandlers::wasmtime_longjmp(self.jmp_buf.get());
+        }
     }
 
     fn capture_backtrace(
@@ -1024,17 +1033,21 @@ pub(crate) mod tls {
             // saved in the oldest activation's state on the stack. The store's
             // current state then describes the youngest activation which is
             // restored via the loop below.
-            if let Some(state) = self.state.as_ref() {
-                state.swap();
+            unsafe {
+                if let Some(state) = self.state.as_ref() {
+                    state.swap();
+                }
             }
 
             // Our `state` pointer is a linked list of oldest-to-youngest so by
             // pushing in order of the list we restore the youngest-to-oldest
             // list as stored in the state of this current thread.
             let mut ptr = self.state;
-            while let Some(state) = ptr.as_ref() {
-                ptr = state.prev.replace(core::ptr::null_mut());
-                state.push();
+            unsafe {
+                while let Some(state) = ptr.as_ref() {
+                    ptr = state.prev.replace(core::ptr::null_mut());
+                    state.push();
+                }
             }
             ret
         }
@@ -1108,8 +1121,10 @@ pub(crate) mod tls {
                 // the store to hook things up again.
                 let ptr = raw::get();
                 if ptr == thread_head {
-                    if let Some(state) = ret.state.as_ref() {
-                        state.swap();
+                    unsafe {
+                        if let Some(state) = ret.state.as_ref() {
+                            state.swap();
+                        }
                     }
 
                     break ret;
@@ -1121,9 +1136,11 @@ pub(crate) mod tls {
                 // `AsyncWasmCallState` is stored in reverse order so a
                 // subsequent `push` later on pushes everything in the right
                 // order.
-                (*ptr).pop();
-                if let Some(state) = ret.state.as_ref() {
-                    (*ptr).prev.set(state);
+                unsafe {
+                    (*ptr).pop();
+                    if let Some(state) = ret.state.as_ref() {
+                        (*ptr).prev.set(state);
+                    }
                 }
                 ret.state = ptr;
             }

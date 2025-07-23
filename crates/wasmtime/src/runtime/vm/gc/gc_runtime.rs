@@ -619,22 +619,26 @@ impl GcRootsList {
     /// Add a GC root that is inside a Wasm stack frame to this list.
     #[inline]
     pub unsafe fn add_wasm_stack_root(&mut self, ptr_to_root: SendSyncPtr<u32>) {
-        log::trace!(
-            "Adding Wasm stack root: {:#p} -> {:#p}",
-            ptr_to_root,
-            VMGcRef::from_raw_u32(*ptr_to_root.as_ref()).unwrap()
-        );
-        debug_assert!(VMGcRef::from_raw_u32(*ptr_to_root.as_ref()).is_some());
+        unsafe {
+            log::trace!(
+                "Adding Wasm stack root: {:#p} -> {:#p}",
+                ptr_to_root,
+                VMGcRef::from_raw_u32(*ptr_to_root.as_ref()).unwrap()
+            );
+            debug_assert!(VMGcRef::from_raw_u32(*ptr_to_root.as_ref()).is_some());
+        }
         self.0.push(RawGcRoot::Stack(ptr_to_root));
     }
 
     /// Add a GC root to this list.
     #[inline]
     pub unsafe fn add_root(&mut self, ptr_to_root: SendSyncPtr<VMGcRef>, why: &str) {
-        log::trace!(
-            "Adding non-stack root: {why}: {:#p}",
-            ptr_to_root.as_ref().unchecked_copy()
-        );
+        unsafe {
+            log::trace!(
+                "Adding non-stack root: {why}: {:#p}",
+                ptr_to_root.as_ref().unchecked_copy()
+            );
+        }
         self.0.push(RawGcRoot::NonStack(ptr_to_root))
     }
 

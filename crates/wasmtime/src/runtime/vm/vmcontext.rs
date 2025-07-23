@@ -397,7 +397,7 @@ impl VMMemoryDefinition {
     /// `current_length`; see [`VMMemoryDefinition::current_length()`].
     #[inline]
     pub unsafe fn load(ptr: *mut Self) -> Self {
-        let other = &*ptr;
+        let other = unsafe { &*ptr };
         VMMemoryDefinition {
             base: other.base,
             current_length: other.current_length().into(),
@@ -550,28 +550,30 @@ impl VMGlobalDefinition {
         raw: ValRaw,
     ) -> Result<Self> {
         let mut global = Self::new();
-        match wasm_ty {
-            WasmValType::I32 => *global.as_i32_mut() = raw.get_i32(),
-            WasmValType::I64 => *global.as_i64_mut() = raw.get_i64(),
-            WasmValType::F32 => *global.as_f32_bits_mut() = raw.get_f32(),
-            WasmValType::F64 => *global.as_f64_bits_mut() = raw.get_f64(),
-            WasmValType::V128 => global.set_u128(raw.get_v128()),
-            WasmValType::Ref(r) => match r.heap_type.top() {
-                WasmHeapTopType::Extern => {
-                    let r = VMGcRef::from_raw_u32(raw.get_externref());
-                    global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
-                }
-                WasmHeapTopType::Any => {
-                    let r = VMGcRef::from_raw_u32(raw.get_anyref());
-                    global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
-                }
-                WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
-                WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
-                WasmHeapTopType::Exn => {
-                    let r = VMGcRef::from_raw_u32(raw.get_exnref());
-                    global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
-                }
-            },
+        unsafe {
+            match wasm_ty {
+                WasmValType::I32 => *global.as_i32_mut() = raw.get_i32(),
+                WasmValType::I64 => *global.as_i64_mut() = raw.get_i64(),
+                WasmValType::F32 => *global.as_f32_bits_mut() = raw.get_f32(),
+                WasmValType::F64 => *global.as_f64_bits_mut() = raw.get_f64(),
+                WasmValType::V128 => global.set_u128(raw.get_v128()),
+                WasmValType::Ref(r) => match r.heap_type.top() {
+                    WasmHeapTopType::Extern => {
+                        let r = VMGcRef::from_raw_u32(raw.get_externref());
+                        global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
+                    }
+                    WasmHeapTopType::Any => {
+                        let r = VMGcRef::from_raw_u32(raw.get_anyref());
+                        global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
+                    }
+                    WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
+                    WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
+                    WasmHeapTopType::Exn => {
+                        let r = VMGcRef::from_raw_u32(raw.get_exnref());
+                        global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
+                    }
+                },
+            }
         }
         Ok(global)
     }
@@ -586,113 +588,115 @@ impl VMGlobalDefinition {
         store: &mut StoreOpaque,
         wasm_ty: WasmValType,
     ) -> Result<ValRaw> {
-        Ok(match wasm_ty {
-            WasmValType::I32 => ValRaw::i32(*self.as_i32()),
-            WasmValType::I64 => ValRaw::i64(*self.as_i64()),
-            WasmValType::F32 => ValRaw::f32(*self.as_f32_bits()),
-            WasmValType::F64 => ValRaw::f64(*self.as_f64_bits()),
-            WasmValType::V128 => ValRaw::v128(self.get_u128()),
-            WasmValType::Ref(r) => match r.heap_type.top() {
-                WasmHeapTopType::Extern => ValRaw::externref(match self.as_gc_ref() {
-                    Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
-                    None => 0,
-                }),
-                WasmHeapTopType::Any => ValRaw::anyref({
-                    match self.as_gc_ref() {
+        unsafe {
+            Ok(match wasm_ty {
+                WasmValType::I32 => ValRaw::i32(*self.as_i32()),
+                WasmValType::I64 => ValRaw::i64(*self.as_i64()),
+                WasmValType::F32 => ValRaw::f32(*self.as_f32_bits()),
+                WasmValType::F64 => ValRaw::f64(*self.as_f64_bits()),
+                WasmValType::V128 => ValRaw::v128(self.get_u128()),
+                WasmValType::Ref(r) => match r.heap_type.top() {
+                    WasmHeapTopType::Extern => ValRaw::externref(match self.as_gc_ref() {
                         Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
                         None => 0,
-                    }
-                }),
-                WasmHeapTopType::Exn => ValRaw::exnref({
-                    match self.as_gc_ref() {
-                        Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
-                        None => 0,
-                    }
-                }),
-                WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
-                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
-            },
-        })
+                    }),
+                    WasmHeapTopType::Any => ValRaw::anyref({
+                        match self.as_gc_ref() {
+                            Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
+                            None => 0,
+                        }
+                    }),
+                    WasmHeapTopType::Exn => ValRaw::exnref({
+                        match self.as_gc_ref() {
+                            Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
+                            None => 0,
+                        }
+                    }),
+                    WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
+                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+                },
+            })
+        }
     }
 
     /// Return a reference to the value as an i32.
     pub unsafe fn as_i32(&self) -> &i32 {
-        &*(self.storage.as_ref().as_ptr().cast::<i32>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<i32>()) }
     }
 
     /// Return a mutable reference to the value as an i32.
     pub unsafe fn as_i32_mut(&mut self) -> &mut i32 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<i32>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<i32>()) }
     }
 
     /// Return a reference to the value as a u32.
     pub unsafe fn as_u32(&self) -> &u32 {
-        &*(self.storage.as_ref().as_ptr().cast::<u32>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u32>()) }
     }
 
     /// Return a mutable reference to the value as an u32.
     pub unsafe fn as_u32_mut(&mut self) -> &mut u32 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>()) }
     }
 
     /// Return a reference to the value as an i64.
     pub unsafe fn as_i64(&self) -> &i64 {
-        &*(self.storage.as_ref().as_ptr().cast::<i64>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<i64>()) }
     }
 
     /// Return a mutable reference to the value as an i64.
     pub unsafe fn as_i64_mut(&mut self) -> &mut i64 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<i64>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<i64>()) }
     }
 
     /// Return a reference to the value as an u64.
     pub unsafe fn as_u64(&self) -> &u64 {
-        &*(self.storage.as_ref().as_ptr().cast::<u64>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u64>()) }
     }
 
     /// Return a mutable reference to the value as an u64.
     pub unsafe fn as_u64_mut(&mut self) -> &mut u64 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>()) }
     }
 
     /// Return a reference to the value as an f32.
     pub unsafe fn as_f32(&self) -> &f32 {
-        &*(self.storage.as_ref().as_ptr().cast::<f32>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<f32>()) }
     }
 
     /// Return a mutable reference to the value as an f32.
     pub unsafe fn as_f32_mut(&mut self) -> &mut f32 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<f32>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<f32>()) }
     }
 
     /// Return a reference to the value as f32 bits.
     pub unsafe fn as_f32_bits(&self) -> &u32 {
-        &*(self.storage.as_ref().as_ptr().cast::<u32>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u32>()) }
     }
 
     /// Return a mutable reference to the value as f32 bits.
     pub unsafe fn as_f32_bits_mut(&mut self) -> &mut u32 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>()) }
     }
 
     /// Return a reference to the value as an f64.
     pub unsafe fn as_f64(&self) -> &f64 {
-        &*(self.storage.as_ref().as_ptr().cast::<f64>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<f64>()) }
     }
 
     /// Return a mutable reference to the value as an f64.
     pub unsafe fn as_f64_mut(&mut self) -> &mut f64 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<f64>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<f64>()) }
     }
 
     /// Return a reference to the value as f64 bits.
     pub unsafe fn as_f64_bits(&self) -> &u64 {
-        &*(self.storage.as_ref().as_ptr().cast::<u64>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u64>()) }
     }
 
     /// Return a mutable reference to the value as f64 bits.
     pub unsafe fn as_f64_bits_mut(&mut self) -> &mut u64 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>()) }
     }
 
     /// Gets the underlying 128-bit vector value.
@@ -700,7 +704,7 @@ impl VMGlobalDefinition {
     // Note that vectors are stored in little-endian format while other types
     // are stored in native-endian format.
     pub unsafe fn get_u128(&self) -> u128 {
-        u128::from_le(*(self.storage.as_ref().as_ptr().cast::<u128>()))
+        unsafe { u128::from_le(*(self.storage.as_ref().as_ptr().cast::<u128>())) }
     }
 
     /// Sets the 128-bit vector values.
@@ -708,23 +712,25 @@ impl VMGlobalDefinition {
     // Note that vectors are stored in little-endian format while other types
     // are stored in native-endian format.
     pub unsafe fn set_u128(&mut self, val: u128) {
-        *self.storage.as_mut().as_mut_ptr().cast::<u128>() = val.to_le();
+        unsafe {
+            *self.storage.as_mut().as_mut_ptr().cast::<u128>() = val.to_le();
+        }
     }
 
     /// Return a reference to the value as u128 bits.
     pub unsafe fn as_u128_bits(&self) -> &[u8; 16] {
-        &*(self.storage.as_ref().as_ptr().cast::<[u8; 16]>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<[u8; 16]>()) }
     }
 
     /// Return a mutable reference to the value as u128 bits.
     pub unsafe fn as_u128_bits_mut(&mut self) -> &mut [u8; 16] {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<[u8; 16]>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<[u8; 16]>()) }
     }
 
     /// Return a reference to the global value as a borrowed GC reference.
     pub unsafe fn as_gc_ref(&self) -> Option<&VMGcRef> {
         let raw_ptr = self.storage.as_ref().as_ptr().cast::<Option<VMGcRef>>();
-        let ret = (*raw_ptr).as_ref();
+        let ret = unsafe { (*raw_ptr).as_ref() };
         assert!(cfg!(feature = "gc") || ret.is_none());
         ret
     }
@@ -733,11 +739,13 @@ impl VMGlobalDefinition {
     pub unsafe fn init_gc_ref(&mut self, gc_store: &mut GcStore, gc_ref: Option<&VMGcRef>) {
         assert!(cfg!(feature = "gc") || gc_ref.is_none());
 
-        let dest = &mut *(self
-            .storage
-            .as_mut()
-            .as_mut_ptr()
-            .cast::<MaybeUninit<Option<VMGcRef>>>());
+        let dest = unsafe {
+            &mut *(self
+                .storage
+                .as_mut()
+                .as_mut_ptr()
+                .cast::<MaybeUninit<Option<VMGcRef>>>())
+        };
 
         gc_store.init_gc_ref(dest, gc_ref)
     }
@@ -746,7 +754,7 @@ impl VMGlobalDefinition {
     pub unsafe fn write_gc_ref(&mut self, gc_store: &mut GcStore, gc_ref: Option<&VMGcRef>) {
         assert!(cfg!(feature = "gc") || gc_ref.is_none());
 
-        let dest = &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>());
+        let dest = unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>()) };
         assert!(cfg!(feature = "gc") || dest.is_none());
 
         gc_store.write_gc_ref(dest, gc_ref)
@@ -754,12 +762,12 @@ impl VMGlobalDefinition {
 
     /// Return a reference to the value as a `VMFuncRef`.
     pub unsafe fn as_func_ref(&self) -> *mut VMFuncRef {
-        *(self.storage.as_ref().as_ptr().cast::<*mut VMFuncRef>())
+        unsafe { *(self.storage.as_ref().as_ptr().cast::<*mut VMFuncRef>()) }
     }
 
     /// Return a mutable reference to the value as a `VMFuncRef`.
     pub unsafe fn as_func_ref_mut(&mut self) -> &mut *mut VMFuncRef {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<*mut VMFuncRef>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<*mut VMFuncRef>()) }
     }
 }
 
@@ -904,8 +912,8 @@ impl VMFuncRef {
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         match pulley {
-            Some(vm) => Self::array_call_interpreted(me, vm, caller, args_and_results),
-            None => Self::array_call_native(me, caller, args_and_results),
+            Some(vm) => unsafe { Self::array_call_interpreted(me, vm, caller, args_and_results) },
+            None => unsafe { Self::array_call_native(me, caller, args_and_results) },
         }
     }
 
@@ -918,17 +926,19 @@ impl VMFuncRef {
         // If `caller` is actually a `VMArrayCallHostFuncContext` then skip the
         // interpreter, even though it's available, as `array_call` will be
         // native code.
-        if me.as_ref().vmctx.as_non_null().as_ref().magic
-            == wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC
-        {
-            return Self::array_call_native(me, caller, args_and_results);
+        unsafe {
+            if me.as_ref().vmctx.as_non_null().as_ref().magic
+                == wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC
+            {
+                return Self::array_call_native(me, caller, args_and_results);
+            }
+            vm.call(
+                me.as_ref().array_call.as_non_null().cast(),
+                me.as_ref().vmctx.as_non_null(),
+                caller,
+                args_and_results,
+            )
         }
-        vm.call(
-            me.as_ref().array_call.as_non_null().cast(),
-            me.as_ref().vmctx.as_non_null(),
-            caller,
-            args_and_results,
-        )
     }
 
     #[inline]
@@ -937,20 +947,22 @@ impl VMFuncRef {
         caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
-        union GetNativePointer {
-            native: VMArrayCallNative,
-            ptr: NonNull<VMArrayCallFunction>,
+        unsafe {
+            union GetNativePointer {
+                native: VMArrayCallNative,
+                ptr: NonNull<VMArrayCallFunction>,
+            }
+            let native = GetNativePointer {
+                ptr: me.as_ref().array_call.as_non_null(),
+            }
+            .native;
+            native(
+                me.as_ref().vmctx.as_non_null(),
+                caller,
+                args_and_results.cast(),
+                args_and_results.len(),
+            )
         }
-        let native = GetNativePointer {
-            ptr: me.as_ref().array_call.as_non_null(),
-        }
-        .native;
-        native(
-            me.as_ref().vmctx.as_non_null(),
-            caller,
-            args_and_results.cast(),
-            args_and_results.len(),
-        )
     }
 }
 
@@ -1269,7 +1281,9 @@ impl VMContext {
         // bugs, meaning we don't actually read the magic and act differently
         // at runtime depending what it is, so this is a debug assertion as
         // opposed to a regular assertion.
-        debug_assert_eq!(opaque.as_ref().magic, VMCONTEXT_MAGIC);
+        unsafe {
+            debug_assert_eq!(opaque.as_ref().magic, VMCONTEXT_MAGIC);
+        }
         opaque.cast()
     }
 }

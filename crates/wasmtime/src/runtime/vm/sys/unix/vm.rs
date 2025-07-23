@@ -7,22 +7,28 @@ use std::io;
 use std::sync::Arc;
 
 pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
-    mprotect(ptr.cast(), len, MprotectFlags::READ | MprotectFlags::WRITE)?;
+    unsafe {
+        mprotect(ptr.cast(), len, MprotectFlags::READ | MprotectFlags::WRITE)?;
+    }
     Ok(())
 }
 
 pub unsafe fn hide_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
-    mprotect(ptr.cast(), len, MprotectFlags::empty())?;
+    unsafe {
+        mprotect(ptr.cast(), len, MprotectFlags::empty())?;
+    }
     Ok(())
 }
 
 pub unsafe fn erase_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
-    let ret = mmap_anonymous(
-        ptr.cast(),
-        len,
-        ProtFlags::empty(),
-        MapFlags::PRIVATE | super::mmap::MMAP_NORESERVE_FLAG | MapFlags::FIXED,
-    )?;
+    let ret = unsafe {
+        mmap_anonymous(
+            ptr.cast(),
+            len,
+            ProtFlags::empty(),
+            MapFlags::PRIVATE | super::mmap::MMAP_NORESERVE_FLAG | MapFlags::FIXED,
+        )?
+    };
     assert_eq!(ptr, ret.cast());
     Ok(())
 }
@@ -159,12 +165,14 @@ impl MemoryImageSource {
     }
 
     pub unsafe fn remap_as_zeros_at(&self, base: *mut u8, len: usize) -> io::Result<()> {
-        let ptr = mmap_anonymous(
-            base.cast(),
-            len,
-            ProtFlags::READ | ProtFlags::WRITE,
-            MapFlags::PRIVATE | super::mmap::MMAP_NORESERVE_FLAG | MapFlags::FIXED,
-        )?;
+        let ptr = unsafe {
+            mmap_anonymous(
+                base.cast(),
+                len,
+                ProtFlags::READ | ProtFlags::WRITE,
+                MapFlags::PRIVATE | super::mmap::MMAP_NORESERVE_FLAG | MapFlags::FIXED,
+            )?
+        };
         assert_eq!(base, ptr.cast());
         Ok(())
     }

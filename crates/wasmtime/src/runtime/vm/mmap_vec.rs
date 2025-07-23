@@ -209,7 +209,7 @@ impl MmapVec {
         };
         assert!(range.start <= range.end);
         assert!(range.end <= len);
-        mmap.make_executable(range.start..range.end, enable_branch_protection)
+        unsafe { mmap.make_executable(range.start..range.end, enable_branch_protection) }
     }
 
     /// Makes the specified `range` within this `mmap` to be read-only.
@@ -223,7 +223,7 @@ impl MmapVec {
         };
         assert!(range.start <= range.end);
         assert!(range.end <= len);
-        mmap.make_readonly(range.start..range.end)
+        unsafe { mmap.make_readonly(range.start..range.end) }
     }
 
     /// Returns the underlying file that this mmap is mapping, if present.
@@ -260,14 +260,14 @@ impl MmapVec {
     pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
         match self {
             #[cfg(not(has_virtual_memory))]
-            MmapVec::Alloc { base, layout } => {
+            MmapVec::Alloc { base, layout } => unsafe {
                 core::slice::from_raw_parts_mut(base.as_mut(), layout.size())
-            }
+            },
             MmapVec::ExternallyOwned { .. } => {
                 panic!("Mutating externally owned memory is prohibited");
             }
             #[cfg(has_virtual_memory)]
-            MmapVec::Mmap { mmap, len } => mmap.slice_mut(0..*len),
+            MmapVec::Mmap { mmap, len } => unsafe { mmap.slice_mut(0..*len) },
         }
     }
 }

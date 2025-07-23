@@ -127,19 +127,23 @@ impl MemoryImage {
     }
 
     unsafe fn map_at(&self, mmap_base: &MmapOffset) -> Result<()> {
-        mmap_base.map_image_at(
-            &self.source,
-            self.source_offset,
-            self.linear_memory_offset,
-            self.len,
-        )
+        unsafe {
+            mmap_base.map_image_at(
+                &self.source,
+                self.source_offset,
+                self.linear_memory_offset,
+                self.len,
+            )
+        }
     }
 
     unsafe fn remap_as_zeros_at(&self, base: *mut u8) -> Result<()> {
-        self.source.remap_as_zeros_at(
-            base.add(self.linear_memory_offset.byte_count()),
-            self.len.byte_count(),
-        )?;
+        unsafe {
+            self.source.remap_as_zeros_at(
+                base.add(self.linear_memory_offset.byte_count()),
+                self.len.byte_count(),
+            )?;
+        }
         Ok(())
     }
 }
@@ -526,7 +530,9 @@ impl MemoryImageSlot {
                 self.reset_with_anon_memory()
             }
             DecommitBehavior::RestoreOriginalMapping => {
-                self.reset_with_original_mapping(keep_resident, decommit);
+                unsafe {
+                    self.reset_with_original_mapping(keep_resident, decommit);
+                }
                 Ok(())
             }
         }
@@ -587,36 +593,44 @@ impl MemoryImageSlot {
                     let remaining_memset = excess.min(mem_after_image);
 
                     // This is memset (1)
-                    ptr::write_bytes(
-                        self.base.as_mut_ptr(),
-                        0u8,
-                        image.linear_memory_offset.byte_count(),
-                    );
+                    unsafe {
+                        ptr::write_bytes(
+                            self.base.as_mut_ptr(),
+                            0u8,
+                            image.linear_memory_offset.byte_count(),
+                        );
+                    }
 
                     // This is madvise (2)
-                    self.restore_original_mapping(
-                        image.linear_memory_offset,
-                        image.len,
-                        &mut decommit,
-                    );
+                    unsafe {
+                        self.restore_original_mapping(
+                            image.linear_memory_offset,
+                            image.len,
+                            &mut decommit,
+                        );
+                    }
 
                     // This is memset (3)
-                    ptr::write_bytes(
-                        self.base.as_mut_ptr().add(image_end.byte_count()),
-                        0u8,
-                        remaining_memset.byte_count(),
-                    );
+                    unsafe {
+                        ptr::write_bytes(
+                            self.base.as_mut_ptr().add(image_end.byte_count()),
+                            0u8,
+                            remaining_memset.byte_count(),
+                        );
+                    }
 
                     // This is madvise (4)
-                    self.restore_original_mapping(
-                        image_end
-                            .checked_add(remaining_memset)
-                            .expect("image_end + remaining_memset is in bounds"),
-                        mem_after_image
-                            .checked_sub(remaining_memset)
-                            .expect("remaining_memset defined to be <= mem_after_image"),
-                        &mut decommit,
-                    );
+                    unsafe {
+                        self.restore_original_mapping(
+                            image_end
+                                .checked_add(remaining_memset)
+                                .expect("image_end + remaining_memset is in bounds"),
+                            mem_after_image
+                                .checked_sub(remaining_memset)
+                                .expect("remaining_memset defined to be <= mem_after_image"),
+                            &mut decommit,
+                        );
+                    }
                 } else {
                     // If the image starts after the `keep_resident` threshold
                     // then we memset the start of linear memory and then use
@@ -638,16 +652,20 @@ impl MemoryImageSlot {
                     // Note that the memset may be zero bytes here.
 
                     // This is memset (1)
-                    ptr::write_bytes(self.base.as_mut_ptr(), 0u8, keep_resident.byte_count());
+                    unsafe {
+                        ptr::write_bytes(self.base.as_mut_ptr(), 0u8, keep_resident.byte_count());
+                    }
 
                     // This is madvise (2)
-                    self.restore_original_mapping(
-                        keep_resident,
-                        self.accessible
-                            .checked_sub(keep_resident)
-                            .expect("keep_resident is a subset of accessible memory"),
-                        decommit,
-                    );
+                    unsafe {
+                        self.restore_original_mapping(
+                            keep_resident,
+                            self.accessible
+                                .checked_sub(keep_resident)
+                                .expect("keep_resident is a subset of accessible memory"),
+                            decommit,
+                        );
+                    }
                 };
             }
 
@@ -656,14 +674,16 @@ impl MemoryImageSlot {
             // the rest.
             None => {
                 let size_to_memset = keep_resident.min(self.accessible);
-                ptr::write_bytes(self.base.as_mut_ptr(), 0u8, size_to_memset.byte_count());
-                self.restore_original_mapping(
-                    size_to_memset,
-                    self.accessible
-                        .checked_sub(size_to_memset)
-                        .expect("size_to_memset is defined to be <= self.accessible"),
-                    decommit,
-                );
+                unsafe {
+                    ptr::write_bytes(self.base.as_mut_ptr(), 0u8, size_to_memset.byte_count());
+                    self.restore_original_mapping(
+                        size_to_memset,
+                        self.accessible
+                            .checked_sub(size_to_memset)
+                            .expect("size_to_memset is defined to be <= self.accessible"),
+                        decommit,
+                    );
+                }
             }
         }
     }
@@ -684,10 +704,12 @@ impl MemoryImageSlot {
             vm::decommit_behavior(),
             DecommitBehavior::RestoreOriginalMapping
         );
-        decommit(
-            self.base.as_mut_ptr().add(base.byte_count()),
-            len.byte_count(),
-        );
+        unsafe {
+            decommit(
+                self.base.as_mut_ptr().add(base.byte_count()),
+                len.byte_count(),
+            );
+        }
     }
 
     fn set_protection(&self, range: Range<HostAlignedByteCount>, readwrite: bool) -> Result<()> {

@@ -13,27 +13,31 @@ static mut VMCTX_AND_MEMORY: (NonNull<VMContext>, usize) = (NonNull::dangling(),
 
 #[versioned_export]
 pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
-    let ptr = std::ptr::read(p);
-    assert!(
-        VMCTX_AND_MEMORY.0 != NonNull::dangling(),
-        "must call `__vmctx->set()` before resolving Wasm pointers"
-    );
-    InstanceAndStore::from_vmctx(VMCTX_AND_MEMORY.0, |handle| {
-        let (handle, _) = handle.unpack_mut();
+    unsafe {
+        let ptr = std::ptr::read(p);
         assert!(
-            VMCTX_AND_MEMORY.1 < handle.env_module().memories.len(),
-            "memory index for debugger is out of bounds"
+            VMCTX_AND_MEMORY.0 != NonNull::dangling(),
+            "must call `__vmctx->set()` before resolving Wasm pointers"
         );
-        let index = MemoryIndex::new(VMCTX_AND_MEMORY.1);
-        let mem = handle.get_memory(index);
-        mem.base.as_ptr().add(ptr as usize)
-    })
+        InstanceAndStore::from_vmctx(VMCTX_AND_MEMORY.0, |handle| {
+            let (handle, _) = handle.unpack_mut();
+            assert!(
+                VMCTX_AND_MEMORY.1 < handle.env_module().memories.len(),
+                "memory index for debugger is out of bounds"
+            );
+            let index = MemoryIndex::new(VMCTX_AND_MEMORY.1);
+            let mem = handle.get_memory(index);
+            mem.base.as_ptr().add(ptr as usize)
+        })
+    }
 }
 
 #[versioned_export]
 pub unsafe extern "C" fn set_vmctx_memory(vmctx_ptr: *mut VMContext) {
-    // TODO multi-memory
-    VMCTX_AND_MEMORY = (NonNull::new(vmctx_ptr).unwrap(), 0);
+    unsafe {
+        // TODO multi-memory
+        VMCTX_AND_MEMORY = (NonNull::new(vmctx_ptr).unwrap(), 0);
+    }
 }
 
 /// A bit of a hack around various linkage things. The goal here is to force the

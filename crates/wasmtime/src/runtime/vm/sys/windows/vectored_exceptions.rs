@@ -21,7 +21,7 @@ impl TrapHandler {
         // our trap handler needs to go first, so that we can recover from
         // wasm faults and continue execution, so pass `1` as a true value
         // here.
-        let handle = AddVectoredExceptionHandler(1, Some(exception_handler));
+        let handle = unsafe { AddVectoredExceptionHandler(1, Some(exception_handler)) };
         if handle.is_null() {
             panic!(
                 "failed to add exception handler: {}",
@@ -57,7 +57,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
     // Check the kind of exception, since we only handle a subset within
     // wasm code. If anything else happens we want to defer to whatever
     // the rest of the system wants to do for this exception.
-    let record = &*(*exception_info).ExceptionRecord;
+    let record = unsafe { &*(*exception_info).ExceptionRecord };
     if record.ExceptionCode != EXCEPTION_ACCESS_VIOLATION
         && record.ExceptionCode != EXCEPTION_ILLEGAL_INSTRUCTION
         && record.ExceptionCode != EXCEPTION_INT_DIVIDE_BY_ZERO
@@ -85,7 +85,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
             Some(info) => info,
             None => return ExceptionContinueSearch,
         };
-        let context = &*(*exception_info).ContextRecord;
+        let context = unsafe { &*(*exception_info).ContextRecord };
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "x86_64")] {
                 let regs = TrapRegisters {
@@ -95,7 +95,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
             } else if #[cfg(target_arch = "aarch64")] {
                 let regs = TrapRegisters {
                     pc: context.Pc as usize,
-                    fp: context.Anonymous.Anonymous.Fp as usize,
+                    fp: unsafe { context.Anonymous.Anonymous.Fp as usize },
                 };
             } else if #[cfg(target_arch = "x86")] {
                 let regs = TrapRegisters {
@@ -119,7 +119,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
         match info.test_if_trap(regs, faulting_addr, |handler| handler(exception_info)) {
             TrapTest::NotWasm => ExceptionContinueSearch,
             TrapTest::HandledByEmbedder => ExceptionContinueExecution,
-            TrapTest::Trap { jmp_buf } => super::traphandlers::wasmtime_longjmp(jmp_buf),
+            TrapTest::Trap { jmp_buf } => unsafe { super::traphandlers::wasmtime_longjmp(jmp_buf) },
         }
     })
 }

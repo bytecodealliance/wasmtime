@@ -222,16 +222,28 @@ impl ComponentInstance {
     ///
     /// This is `unsafe` because `vmctx` cannot be guaranteed to be a valid
     /// pointer and it cannot be proven statically that it's safe to get a
-    /// mutable reference at this time to the instance from `vmctx`.
+    /// mutable reference at this time to the instance from `vmctx`. Note that
+    /// it must be also safe to borrow the store mutably, meaning it can't
+    /// already be in use elsewhere.
     pub unsafe fn from_vmctx<R>(
         vmctx: NonNull<VMComponentContext>,
         f: impl FnOnce(&mut dyn VMStore, Instance) -> R,
     ) -> R {
-        let mut ptr = vmctx
-            .byte_sub(mem::size_of::<ComponentInstance>())
-            .cast::<ComponentInstance>();
-        let reference = ptr.as_mut();
-        let store = &mut *reference.store.0.as_ptr();
+        // SAFETY: it's a contract of this function that `vmctx` is a valid
+        // allocation which can go backwards to a `ComponentInstance`.
+        let mut ptr = unsafe {
+            vmctx
+                .byte_sub(mem::size_of::<ComponentInstance>())
+                .cast::<ComponentInstance>()
+        };
+        // SAFETY: it's a contract of this function that it's safe to use `ptr`
+        // as a mutable reference.
+        let reference = unsafe { ptr.as_mut() };
+
+        // SAFETY: it's a contract of this function that it's safe to use the
+        // store mutably at this time.
+        let store = unsafe { &mut *reference.store.0.as_ptr() };
+
         let instance = Instance::from_wasmtime(store, reference.id);
         f(store, instance)
     }
@@ -245,11 +257,15 @@ impl ComponentInstance {
     pub(crate) unsafe fn vmctx_instance_id(
         vmctx: NonNull<VMComponentContext>,
     ) -> ComponentInstanceId {
-        vmctx
-            .byte_sub(mem::size_of::<ComponentInstance>())
-            .cast::<ComponentInstance>()
-            .as_ref()
-            .id
+        // SAFETY: it's a contract of this function that `vmctx` is a valid
+        // pointer with a `ComponentInstance` in front which can be read.
+        unsafe {
+            vmctx
+                .byte_sub(mem::size_of::<ComponentInstance>())
+                .cast::<ComponentInstance>()
+                .as_ref()
+                .id
+        }
     }
 
     /// Returns the layout corresponding to what would be an allocation of a
@@ -567,69 +583,118 @@ impl ComponentInstance {
 
     unsafe fn initialize_vmctx(mut self: Pin<&mut Self>) {
         let offset = self.offsets.magic();
-        *self.as_mut().vmctx_plus_offset_mut(offset) = VMCOMPONENT_MAGIC;
+        // SAFETY: it's safe to write the magic value during initialization and
+        // this is also the right type of value to write.
+        unsafe {
+            *self.as_mut().vmctx_plus_offset_mut(offset) = VMCOMPONENT_MAGIC;
+        }
+
         // Initialize the built-in functions
+        //
+        // SAFETY: it's safe to initialize the vmctx in this function and this
+        // is also the right type of value to store in the vmctx.
         static BUILTINS: libcalls::VMComponentBuiltins = libcalls::VMComponentBuiltins::INIT;
         let ptr = BUILTINS.expose_provenance();
         let offset = self.offsets.builtins();
-        *self.as_mut().vmctx_plus_offset_mut(offset) = VmPtr::from(ptr);
+        unsafe {
+            *self.as_mut().vmctx_plus_offset_mut(offset) = VmPtr::from(ptr);
+        }
+
+        // SAFETY: it's safe to initialize the vmctx in this function and this
+        // is also the right type of value to store in the vmctx.
         let offset = self.offsets.vm_store_context();
-        *self.as_mut().vmctx_plus_offset_mut(offset) =
-            VmPtr::from(self.store.0.as_ref().vm_store_context_ptr());
+        unsafe {
+            *self.as_mut().vmctx_plus_offset_mut(offset) =
+                VmPtr::from(self.store.0.as_ref().vm_store_context_ptr());
+        }
 
         for i in 0..self.offsets.num_runtime_component_instances {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
             let mut def = VMGlobalDefinition::new();
-            *def.as_i32_mut() = FLAG_MAY_ENTER | FLAG_MAY_LEAVE;
-            self.instance_flags(i).as_raw().write(def);
+            // SAFETY: this is a valid initialization of all globals which are
+            // 32-bit values.
+            unsafe {
+                *def.as_i32_mut() = FLAG_MAY_ENTER | FLAG_MAY_LEAVE;
+                self.instance_flags(i).as_raw().write(def);
+            }
         }
 
         // In debug mode set non-null bad values to all "pointer looking" bits
         // and pieces related to lowering and such. This'll help detect any
         // erroneous usage and enable debug assertions above as well to prevent
         // loading these before they're configured or setting them twice.
+        //
+        // SAFETY: it's valid to write a garbage pointer during initialization
+        // when this is otherwise uninitialized memory
         if cfg!(debug_assertions) {
             for i in 0..self.offsets.num_lowerings {
                 let i = LoweredIndex::from_u32(i);
                 let offset = self.offsets.lowering_callee(i);
-                *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
                 let offset = self.offsets.lowering_data(i);
-                *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
             }
             for i in 0..self.offsets.num_trampolines {
                 let i = TrampolineIndex::from_u32(i);
                 let offset = self.offsets.trampoline_func_ref(i);
-                *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
             }
             for i in 0..self.offsets.num_runtime_memories {
                 let i = RuntimeMemoryIndex::from_u32(i);
                 let offset = self.offsets.runtime_memory(i);
-                *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
             }
             for i in 0..self.offsets.num_runtime_reallocs {
                 let i = RuntimeReallocIndex::from_u32(i);
                 let offset = self.offsets.runtime_realloc(i);
-                *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
             }
             for i in 0..self.offsets.num_runtime_callbacks {
                 let i = RuntimeCallbackIndex::from_u32(i);
                 let offset = self.offsets.runtime_callback(i);
-                *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
             }
             for i in 0..self.offsets.num_runtime_post_returns {
                 let i = RuntimePostReturnIndex::from_u32(i);
                 let offset = self.offsets.runtime_post_return(i);
-                *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
             }
             for i in 0..self.offsets.num_resources {
                 let i = ResourceIndex::from_u32(i);
                 let offset = self.offsets.resource_destructor(i);
-                *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
             }
             for i in 0..self.offsets.num_runtime_tables {
                 let i = RuntimeTableIndex::from_u32(i);
                 let offset = self.offsets.runtime_table(i);
-                *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
             }
         }
     }
@@ -869,10 +934,20 @@ impl VMComponentContext {
 
     /// Helper function to cast between context types using a debug assertion to
     /// protect against some mistakes.
+    ///
+    /// # Safety
+    ///
+    /// The `opaque` value must be a valid pointer where it's safe to read its
+    /// "magic" value.
     #[inline]
     pub unsafe fn from_opaque(opaque: NonNull<VMOpaqueContext>) -> NonNull<VMComponentContext> {
         // See comments in `VMContext::from_opaque` for this debug assert
-        debug_assert_eq!(opaque.as_ref().magic, VMCOMPONENT_MAGIC);
+        //
+        // SAFETY: it's a contract of this function that it's safe to read
+        // `opaque`.
+        unsafe {
+            debug_assert_eq!(opaque.as_ref().magic, VMCOMPONENT_MAGIC);
+        }
         opaque.cast()
     }
 }
@@ -902,43 +977,49 @@ impl InstanceFlags {
 
     #[inline]
     pub unsafe fn may_leave(&self) -> bool {
-        *self.as_raw().as_ref().as_i32() & FLAG_MAY_LEAVE != 0
+        unsafe { *self.as_raw().as_ref().as_i32() & FLAG_MAY_LEAVE != 0 }
     }
 
     #[inline]
     pub unsafe fn set_may_leave(&mut self, val: bool) {
-        if val {
-            *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_LEAVE;
-        } else {
-            *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_LEAVE;
+        unsafe {
+            if val {
+                *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_LEAVE;
+            } else {
+                *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_LEAVE;
+            }
         }
     }
 
     #[inline]
     pub unsafe fn may_enter(&self) -> bool {
-        *self.as_raw().as_ref().as_i32() & FLAG_MAY_ENTER != 0
+        unsafe { *self.as_raw().as_ref().as_i32() & FLAG_MAY_ENTER != 0 }
     }
 
     #[inline]
     pub unsafe fn set_may_enter(&mut self, val: bool) {
-        if val {
-            *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_ENTER;
-        } else {
-            *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_ENTER;
+        unsafe {
+            if val {
+                *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_ENTER;
+            } else {
+                *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_ENTER;
+            }
         }
     }
 
     #[inline]
     pub unsafe fn needs_post_return(&self) -> bool {
-        *self.as_raw().as_ref().as_i32() & FLAG_NEEDS_POST_RETURN != 0
+        unsafe { *self.as_raw().as_ref().as_i32() & FLAG_NEEDS_POST_RETURN != 0 }
     }
 
     #[inline]
     pub unsafe fn set_needs_post_return(&mut self, val: bool) {
-        if val {
-            *self.as_raw().as_mut().as_i32_mut() |= FLAG_NEEDS_POST_RETURN;
-        } else {
-            *self.as_raw().as_mut().as_i32_mut() &= !FLAG_NEEDS_POST_RETURN;
+        unsafe {
+            if val {
+                *self.as_raw().as_mut().as_i32_mut() |= FLAG_NEEDS_POST_RETURN;
+            } else {
+                *self.as_raw().as_mut().as_i32_mut() &= !FLAG_NEEDS_POST_RETURN;
+            }
         }
     }
 

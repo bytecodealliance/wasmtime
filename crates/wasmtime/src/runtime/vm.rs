@@ -4,6 +4,10 @@
 // See documentation in crates/wasmtime/src/runtime.rs for why this is
 // selectively enabled here.
 #![warn(clippy::cast_sign_loss)]
+#![warn(
+    unsafe_op_in_unsafe_fn,
+    reason = "opt-in until the crate opts-in as a whole -- #11180"
+)]
 
 // Polyfill `std::simd::i8x16` etc. until they're stable.
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
@@ -282,7 +286,7 @@ impl dyn VMStore + '_ {
     /// This method is not safe as there's no static guarantee that `T` is
     /// correct for this store.
     pub(crate) unsafe fn unchecked_context_mut<T>(&mut self) -> StoreContextMut<'_, T> {
-        StoreContextMut(&mut *(self as *mut dyn VMStore as *mut StoreInner<T>))
+        unsafe { StoreContextMut(&mut *(self as *mut dyn VMStore as *mut StoreInner<T>)) }
     }
 }
 

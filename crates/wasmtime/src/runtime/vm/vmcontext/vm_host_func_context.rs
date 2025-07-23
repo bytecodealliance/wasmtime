@@ -71,7 +71,9 @@ impl VMArrayCallHostFuncContext {
         opaque: NonNull<VMOpaqueContext>,
     ) -> NonNull<VMArrayCallHostFuncContext> {
         // See comments in `VMContext::from_opaque` for this debug assert
-        debug_assert_eq!(opaque.as_ref().magic, VM_ARRAY_CALL_HOST_FUNC_MAGIC);
+        unsafe {
+            debug_assert_eq!(opaque.as_ref().magic, VM_ARRAY_CALL_HOST_FUNC_MAGIC);
+        }
         opaque.cast()
     }
 }

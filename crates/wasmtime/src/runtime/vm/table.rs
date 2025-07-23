@@ -392,9 +392,11 @@ pub(crate) fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
 /// `Option<T>`'s `None` variant is represented with zero.
 unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> {
     debug_assert!(
-        core::mem::MaybeUninit::<Option<T>>::zeroed()
-            .assume_init()
-            .is_none(),
+        unsafe {
+            core::mem::MaybeUninit::<Option<T>>::zeroed()
+                .assume_init()
+                .is_none()
+        },
         "null table elements are represented with zeroed memory"
     );
 
@@ -410,10 +412,10 @@ unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> 
 
     let layout = Layout::from_size_align(size, align)?;
 
-    let ptr = alloc::alloc::alloc_zeroed(layout);
+    let ptr = unsafe { alloc::alloc::alloc_zeroed(layout) };
     ensure!(!ptr.is_null(), "failed to allocate memory for table");
 
-    let elems = Vec::<Option<T>>::from_raw_parts(ptr.cast(), len, len);
+    let elems = unsafe { Vec::<Option<T>>::from_raw_parts(ptr.cast(), len, len) };
     debug_assert!(elems.iter().all(|e| e.is_none()));
 
     Ok(elems)
@@ -458,8 +460,10 @@ impl Table {
         match wasm_to_table_type(ty.ref_type) {
             TableElementType::Func => {
                 let len = {
-                    let data = data.as_non_null().as_ref();
-                    let (before, data, after) = data.align_to::<FuncTableElem>();
+                    let (before, data, after) = unsafe {
+                        let data = data.as_non_null().as_ref();
+                        data.align_to::<FuncTableElem>()
+                    };
                     assert!(before.is_empty());
                     assert!(after.is_empty());
                     data.len()
@@ -482,8 +486,10 @@ impl Table {
             }
             TableElementType::GcRef => {
                 let len = {
-                    let data = data.as_non_null().as_ref();
-                    let (before, data, after) = data.align_to::<Option<VMGcRef>>();
+                    let (before, data, after) = unsafe {
+                        let data = data.as_non_null().as_ref();
+                        data.align_to::<Option<VMGcRef>>()
+                    };
                     assert!(before.is_empty());
                     assert!(after.is_empty());
                     data.len()
@@ -502,8 +508,10 @@ impl Table {
             }
             TableElementType::Cont => {
                 let len = {
-                    let data = data.as_non_null().as_ref();
-                    let (before, data, after) = data.align_to::<ContTableElem>();
+                    let (before, data, after) = unsafe {
+                        let data = data.as_non_null().as_ref();
+                        data.align_to::<ContTableElem>()
+                    };
                     assert!(before.is_empty());
                     assert!(after.is_empty());
                     data.len()
