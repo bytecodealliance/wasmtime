@@ -9,6 +9,12 @@ WebAssembly proposals that want to be [tier 2 or above](./stability-tiers.md)
 are required to check all boxes in this matrix. An explanation of each matrix
 column is below.
 
+The emoji legend is:
+
+* ✅ - fully supported
+* 🚧 - work-in-progress
+* ❌ - not supported yet
+
 ## On-by-default proposals
 
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API |
@@ -20,7 +26,7 @@ column is below.
 | [`bulk-memory`]          | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`reference-types`]      | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`simd`]                 | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`component-model`]      | ❌[^1]  | ✅    | ✅       | ⚠️[^2]  | ✅  | ❌[^5]|
+| [`component-model`]      | ❌[^1]  | ✅    | ✅       | 🚧[^2] | ✅  | ❌[^5]|
 | [`relaxed-simd`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`multi-memory`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`threads`]              | ✅      | ✅    | ✅[^9]   | ❌[^3] | ✅  | ✅    |
@@ -44,12 +50,14 @@ column is below.
 
 ## Off-by-default proposals
 
-|  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API |
-|--------------------------|---------|-------|----------|--------|-----|-------|
-| [`function-references`]  | ✅      | ✅    | ✅       | ⚠️      | ✅  | ❌    |
-| [`gc`] [^6]              | ✅      | ✅    | ⚠️[^7]    | ⚠️[^8]  | ✅  | ❌    |
-| [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ❌    |
+|  Proposal                   | Phase 4 | Tests | Finished | Fuzzed | API | C API |
+|-----------------------------|---------|-------|----------|--------|-----|-------|
+| [`function-references`]     | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌    |
+| [`gc`] [^6]                 | ✅      | ✅    | 🚧[^7]   | 🚧[^8] | ✅  | ❌    |
+| [`wide-arithmetic`]         | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`custom-page-sizes`]       | ❌      | ✅    | ✅       | ✅     | ✅  | ❌    |
+| [`exception-handling`] [^10]| ✅      | ❌    | 🚧       | ❌     | 🚧  | ❌    |
+| [`stack-switching`] [^11]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
 
 [^6]: There is also a [tracking
     issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
@@ -62,16 +70,19 @@ column is below.
     whole-module fuzz targets like `differential`, but we would like to
     additionally [extend the `table_ops` fuzz target to exercise more of the GC
     proposal](https://github.com/bytecodealliance/wasmtime/issues/10327).
+[^10]: The exception-handling proposal is a work-in-progress being tracked
+    at [#3427](https://github.com/bytecodealliance/wasmtime/issues/3427)
+[^11]: The stack-switching proposal is a work-in-progress being tracked
+    at [#9465](https://github.com/bytecodealliance/wasmtime/issues/9465).
+    Currently the implementation is only for x86\_64 Linux.
 
 ## Unimplemented proposals
 
 | Proposal                      | Tracking Issue |
 |-------------------------------|----------------|
 | [`branch-hinting`]            | [#9463](https://github.com/bytecodealliance/wasmtime/issues/9463) |
-| [`exception-handling`]        | [#3427](https://github.com/bytecodealliance/wasmtime/issues/3427) |
 | [`flexible-vectors`]          | [#9464](https://github.com/bytecodealliance/wasmtime/issues/9464) |
 | [`memory-control`]            | [#9467](https://github.com/bytecodealliance/wasmtime/issues/9467) |
-| [`stack-switching`]           | [#9465](https://github.com/bytecodealliance/wasmtime/issues/9465) |
 | [`shared-everything-threads`] | [#9466](https://github.com/bytecodealliance/wasmtime/issues/9466) |
 
 [`mutable-globals`]: https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md
