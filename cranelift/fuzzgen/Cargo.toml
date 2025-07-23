@@ -20,3 +20,4 @@ cranelift-native = { workspace = true }
 anyhow = { workspace = true, features = ['std'] }
 arbitrary = { workspace = true }
 target-lexicon = { workspace = true, features = ["std"] }
+rand = { workspace = true }
