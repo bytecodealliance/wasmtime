@@ -16,11 +16,13 @@ pub unsafe fn wasmtime_setjmp(
     payload: *mut u8,
     callee: NonNull<VMContext>,
 ) -> bool {
-    let callback = mem::transmute::<
-        extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,
-        extern "C" fn(*mut u8, *mut u8) -> bool,
-    >(callback);
-    capi::wasmtime_setjmp(jmp_buf, callback, payload, callee.as_ptr().cast())
+    unsafe {
+        let callback = mem::transmute::<
+            extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,
+            extern "C" fn(*mut u8, *mut u8) -> bool,
+        >(callback);
+        capi::wasmtime_setjmp(jmp_buf, callback, payload, callee.as_ptr().cast())
+    }
 }
 
 #[cfg(has_native_signals)]
@@ -29,7 +31,9 @@ pub struct TrapHandler;
 #[cfg(has_native_signals)]
 impl TrapHandler {
     pub unsafe fn new(_macos_use_mach_ports: bool) -> TrapHandler {
-        capi::wasmtime_init_traps(handle_trap);
+        unsafe {
+            capi::wasmtime_init_traps(handle_trap);
+        }
         TrapHandler
     }
 

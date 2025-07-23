@@ -8,19 +8,21 @@ use core::ptr::{self, NonNull};
 use std::{fs::File, sync::Arc};
 
 pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> Result<()> {
-    cvt(capi::wasmtime_mprotect(
-        ptr.cast(),
-        len,
-        capi::PROT_READ | capi::PROT_WRITE,
-    ))
+    unsafe {
+        cvt(capi::wasmtime_mprotect(
+            ptr.cast(),
+            len,
+            capi::PROT_READ | capi::PROT_WRITE,
+        ))
+    }
 }
 
 pub unsafe fn hide_existing_mapping(ptr: *mut u8, len: usize) -> Result<()> {
-    cvt(capi::wasmtime_mprotect(ptr.cast(), len, 0))
+    unsafe { cvt(capi::wasmtime_mprotect(ptr.cast(), len, 0)) }
 }
 
 pub unsafe fn erase_existing_mapping(ptr: *mut u8, len: usize) -> Result<()> {
-    cvt(capi::wasmtime_mmap_remap(ptr.cast(), len, 0))
+    unsafe { cvt(capi::wasmtime_mmap_remap(ptr.cast(), len, 0)) }
 }
 
 #[cfg(feature = "pooling-allocator")]
@@ -36,11 +38,13 @@ pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> Result<()> {
         return Ok(());
     }
 
-    cvt(capi::wasmtime_mmap_remap(
-        addr,
-        len,
-        capi::PROT_READ | capi::PROT_WRITE,
-    ))
+    unsafe {
+        cvt(capi::wasmtime_mmap_remap(
+            addr,
+            len,
+            capi::PROT_READ | capi::PROT_WRITE,
+        ))
+    }
 }
 
 pub fn get_page_size() -> usize {
@@ -85,11 +89,13 @@ impl MemoryImageSource {
     }
 
     pub unsafe fn remap_as_zeros_at(&self, base: *mut u8, len: usize) -> Result<()> {
-        cvt(capi::wasmtime_mmap_remap(
-            base.cast(),
-            len,
-            capi::PROT_READ | capi::PROT_WRITE,
-        ))
+        unsafe {
+            cvt(capi::wasmtime_mmap_remap(
+                base.cast(),
+                len,
+                capi::PROT_READ | capi::PROT_WRITE,
+            ))
+        }
     }
 }
 
