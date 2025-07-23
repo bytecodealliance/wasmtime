@@ -279,7 +279,7 @@ here is:
 | [`wide-arithmetic`]                     | ✅        | ❌     |
 | [`custom-page-sizes`]                   | ✅        | ❌     |
 | [`exception-handling`]                  | 🚧        | ❌     |
-| [`stack-switching`]                     | 🚧        | ❌     |
+| [`stack-switching`]                     | ❌        | ❌     |
 
 ##### riscv64
 
