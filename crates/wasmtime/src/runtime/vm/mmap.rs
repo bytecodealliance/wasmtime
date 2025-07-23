@@ -187,7 +187,7 @@ impl Mmap<AlignedLength> {
             self.len_aligned()
         );
 
-        self.sys.make_accessible(start, len)
+        unsafe { self.sys.make_accessible(start, len) }
     }
 }
 
@@ -231,7 +231,9 @@ impl<T> Mmap<T> {
     pub unsafe fn slice(&self, range: Range<usize>) -> &[u8] {
         assert!(range.start <= range.end);
         assert!(range.end <= self.len());
-        core::slice::from_raw_parts(self.as_ptr().add(range.start), range.end - range.start)
+        unsafe {
+            core::slice::from_raw_parts(self.as_ptr().add(range.start), range.end - range.start)
+        }
     }
 
     /// Return the allocated memory as a mutable slice of u8.
@@ -247,7 +249,12 @@ impl<T> Mmap<T> {
     pub unsafe fn slice_mut(&mut self, range: Range<usize>) -> &mut [u8] {
         assert!(range.start <= range.end);
         assert!(range.end <= self.len());
-        core::slice::from_raw_parts_mut(self.as_mut_ptr().add(range.start), range.end - range.start)
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                self.as_mut_ptr().add(range.start),
+                range.end - range.start,
+            )
+        }
     }
 
     /// Return the allocated memory as a pointer to u8.
@@ -312,9 +319,11 @@ impl<T> Mmap<T> {
             return Ok(());
         }
 
-        self.sys
-            .make_executable(range, enable_branch_protection)
-            .context("failed to make memory executable")
+        unsafe {
+            self.sys
+                .make_executable(range, enable_branch_protection)
+                .context("failed to make memory executable")
+        }
     }
 
     /// Makes the specified `range` within this `Mmap` to be readonly.
@@ -334,9 +343,11 @@ impl<T> Mmap<T> {
             return Ok(());
         }
 
-        self.sys
-            .make_readonly(range)
-            .context("failed to make memory readonly")
+        unsafe {
+            self.sys
+                .make_readonly(range)
+                .context("failed to make memory readonly")
+        }
     }
 }
 
@@ -419,9 +430,11 @@ impl MmapOffset {
             .offset
             .checked_add(memory_offset)
             .expect("self.offset + memory_offset is in bounds");
-        self.mmap
-            .sys
-            .map_image_at(image_source, source_offset, total_offset, memory_len)
+        unsafe {
+            self.mmap
+                .sys
+                .map_image_at(image_source, source_offset, total_offset, memory_len)
+        }
     }
 }
 

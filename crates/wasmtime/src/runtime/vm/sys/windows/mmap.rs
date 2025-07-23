@@ -196,20 +196,24 @@ impl Mmap {
             PAGE_EXECUTE_READ
         };
         let mut old = 0;
-        let base = self.as_send_sync_ptr().as_ptr().add(range.start).cast();
-        let result = VirtualProtect(base, range.end - range.start, flags, &mut old);
-        if result == 0 {
-            bail!(io::Error::last_os_error());
+        unsafe {
+            let base = self.as_send_sync_ptr().as_ptr().add(range.start).cast();
+            let result = VirtualProtect(base, range.end - range.start, flags, &mut old);
+            if result == 0 {
+                bail!(io::Error::last_os_error());
+            }
         }
         Ok(())
     }
 
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
         let mut old = 0;
-        let base = self.as_send_sync_ptr().as_ptr().add(range.start).cast();
-        let result = VirtualProtect(base, range.end - range.start, PAGE_READONLY, &mut old);
-        if result == 0 {
-            bail!(io::Error::last_os_error());
+        unsafe {
+            let base = self.as_send_sync_ptr().as_ptr().add(range.start).cast();
+            let result = VirtualProtect(base, range.end - range.start, PAGE_READONLY, &mut old);
+            if result == 0 {
+                bail!(io::Error::last_os_error());
+            }
         }
         Ok(())
     }

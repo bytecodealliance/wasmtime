@@ -350,7 +350,7 @@ unsafe impl GcHeap for NullHeap {
     }
 
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
-        let ptr_to_next: *mut NonZeroU32 = self.next.get();
+        let ptr_to_next: *mut NonZeroU32 = unsafe { self.next.get() };
         NonNull::new(ptr_to_next).unwrap().cast()
     }
 }

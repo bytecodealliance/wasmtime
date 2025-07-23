@@ -2,11 +2,6 @@
 //! wasm module (except its callstack and register state). An
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
-#![warn(
-    unsafe_op_in_unsafe_fn,
-    reason = "opt-in until the crate opts-in as a whole -- #11180"
-)]
-
 use crate::prelude::*;
 use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::runtime::vm::export::Export;

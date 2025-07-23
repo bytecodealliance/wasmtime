@@ -25,12 +25,14 @@ impl UnwindRegistration {
         assert!(unwind_info as usize % 4 == 0);
         let unit_len = mem::size_of::<Entry>();
         assert!(unwind_len % unit_len == 0);
-        if !RtlAddFunctionTable(
-            unwind_info as *mut Entry,
-            (unwind_len / unit_len).try_into().unwrap(),
-            base_address as _,
-        ) {
-            bail!("failed to register function table");
+        unsafe {
+            if !RtlAddFunctionTable(
+                unwind_info as *mut Entry,
+                (unwind_len / unit_len).try_into().unwrap(),
+                base_address as _,
+            ) {
+                bail!("failed to register function table");
+            }
         }
 
         Ok(UnwindRegistration {

@@ -141,7 +141,7 @@ impl Mmap {
         range: Range<usize>,
         enable_branch_protection: bool,
     ) -> Result<()> {
-        let base = self.memory.as_ptr().byte_add(range.start).cast();
+        let base = unsafe { self.memory.as_ptr().byte_add(range.start).cast() };
         let len = range.end - range.start;
 
         let flags = MprotectFlags::READ | MprotectFlags::EXEC;
@@ -159,16 +159,20 @@ impl Mmap {
             flags
         };
 
-        mprotect(base, len, flags)?;
+        unsafe {
+            mprotect(base, len, flags)?;
+        }
 
         Ok(())
     }
 
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
-        let base = self.memory.as_ptr().byte_add(range.start).cast();
+        let base = unsafe { self.memory.as_ptr().byte_add(range.start).cast() };
         let len = range.end - range.start;
 
-        mprotect(base, len, MprotectFlags::READ)?;
+        unsafe {
+            mprotect(base, len, MprotectFlags::READ)?;
+        }
 
         Ok(())
     }

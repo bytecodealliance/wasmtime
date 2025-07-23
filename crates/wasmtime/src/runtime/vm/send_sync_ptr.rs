@@ -28,14 +28,14 @@ impl<T: ?Sized> SendSyncPtr<T> {
     /// valid to get a shared reference to it at this time.
     #[inline]
     pub unsafe fn as_ref<'a>(&self) -> &'a T {
-        self.0.as_ref()
+        unsafe { self.0.as_ref() }
     }
 
     /// Unsafely assert that this is a pointer to valid contents and it's also
     /// valid to get a mutable reference to it at this time.
     #[inline]
     pub unsafe fn as_mut<'a>(&mut self) -> &'a mut T {
-        self.0.as_mut()
+        unsafe { self.0.as_mut() }
     }
 
     /// Returns the underlying `NonNull<T>` wrapper.

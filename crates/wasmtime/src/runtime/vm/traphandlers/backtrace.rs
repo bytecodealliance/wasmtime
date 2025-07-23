@@ -67,10 +67,12 @@ impl Backtrace {
         trap_pc_and_fp: Option<(usize, usize)>,
     ) -> Backtrace {
         let mut frames = vec![];
-        Self::trace_with_trap_state(vm_store_context, unwind, state, trap_pc_and_fp, |frame| {
-            frames.push(frame);
-            ControlFlow::Continue(())
-        });
+        unsafe {
+            Self::trace_with_trap_state(vm_store_context, unwind, state, trap_pc_and_fp, |frame| {
+                frames.push(frame);
+                ControlFlow::Continue(())
+            });
+        }
         Backtrace(frames)
     }
 
@@ -156,14 +158,14 @@ impl Backtrace {
             }
             // Either there is no Wasm currently on the stack, or we exited Wasm
             // through the Wasm-to-host trampoline.
-            None => {
+            None => unsafe {
                 let pc = *(*vm_store_context).last_wasm_exit_pc.get();
                 let fp = *(*vm_store_context).last_wasm_exit_fp.get();
                 (pc, fp)
-            }
+            },
         };
 
-        let stack_chain = (*(*vm_store_context).stack_chain.get()).clone();
+        let stack_chain = unsafe { (*(*vm_store_context).stack_chain.get()).clone() };
 
         // The first value in `activations` is for the most recently running
         // wasm. We thus provide the stack chain of `first_wasm_state` to
@@ -172,40 +174,40 @@ impl Backtrace {
         // chain. This is justified because only the most recent execution of
         // wasm may execute off the initial stack (see comments in
         // `wasmtime::invoke_wasm_and_catch_traps` for details).
-        let activations = core::iter::once((
-            stack_chain,
-            last_wasm_exit_pc,
-            last_wasm_exit_fp,
-            *(*vm_store_context).last_wasm_entry_fp.get(),
-        ))
-        .chain(
-            state
-                .iter()
-                .flat_map(|state| state.iter())
-                .filter(|state| core::ptr::eq(vm_store_context, state.vm_store_context.as_ptr()))
-                .map(|state| {
-                    (
-                        state.old_stack_chain(),
-                        state.old_last_wasm_exit_pc(),
-                        state.old_last_wasm_exit_fp(),
-                        state.old_last_wasm_entry_fp(),
-                    )
-                }),
-        )
-        .take_while(|(chain, pc, fp, sp)| {
-            if *pc == 0 {
-                debug_assert_eq!(*fp, 0);
-                debug_assert_eq!(*sp, 0);
-            } else {
-                debug_assert_ne!(chain.clone(), VMStackChain::Absent)
-            }
-            *pc != 0
-        });
+        let activations =
+            core::iter::once((stack_chain, last_wasm_exit_pc, last_wasm_exit_fp, unsafe {
+                *(*vm_store_context).last_wasm_entry_fp.get()
+            }))
+            .chain(
+                state
+                    .iter()
+                    .flat_map(|state| state.iter())
+                    .filter(|state| {
+                        core::ptr::eq(vm_store_context, state.vm_store_context.as_ptr())
+                    })
+                    .map(|state| unsafe {
+                        (
+                            state.old_stack_chain(),
+                            state.old_last_wasm_exit_pc(),
+                            state.old_last_wasm_exit_fp(),
+                            state.old_last_wasm_entry_fp(),
+                        )
+                    }),
+            )
+            .take_while(|(chain, pc, fp, sp)| {
+                if *pc == 0 {
+                    debug_assert_eq!(*fp, 0);
+                    debug_assert_eq!(*sp, 0);
+                } else {
+                    debug_assert_ne!(chain.clone(), VMStackChain::Absent)
+                }
+                *pc != 0
+            });
 
         for (chain, pc, fp, sp) in activations {
-            if let ControlFlow::Break(()) =
-                Self::trace_through_continuations(unwind, chain, pc, fp, sp, &mut f)
-            {
+            let res =
+                unsafe { Self::trace_through_continuations(unwind, chain, pc, fp, sp, &mut f) };
+            if let ControlFlow::Break(()) = res {
                 log::trace!("====== Done Capturing Backtrace (closure break) ======");
                 return;
             }
@@ -234,7 +236,9 @@ impl Backtrace {
 
         // Handle the stack that is currently running (which may be a
         // continuation or the initial stack).
-        wasmtime_unwinder::visit_frames(unwind, pc, fp, trampoline_fp, &mut f)?;
+        unsafe {
+            wasmtime_unwinder::visit_frames(unwind, pc, fp, trampoline_fp, &mut f)?;
+        }
 
         // Note that the rest of this function has no effect if `chain` is
         // `Some(VMStackChain::InitialStack(_))` (i.e., there is only one stack to
@@ -242,9 +246,9 @@ impl Backtrace {
 
         assert_ne!(chain, VMStackChain::Absent);
         let stack_limits_vec: Vec<*mut VMStackLimits> =
-            chain.clone().into_stack_limits_iter().collect();
+            unsafe { chain.clone().into_stack_limits_iter().collect() };
         let continuations_vec: Vec<*mut VMContRef> =
-            chain.clone().into_continuation_iter().collect();
+            unsafe { chain.clone().into_continuation_iter().collect() };
 
         // The VMStackLimits of the currently running stack (whether that's a
         // continuation or the initial stack) contains undefined data, the
@@ -288,13 +292,15 @@ impl Backtrace {
                 debug_assert!(parent_stack_range.contains(&parent_limits.stack_limit));
             });
 
-            wasmtime_unwinder::visit_frames(
-                unwind,
-                resume_pc,
-                resume_fp,
-                parent_limits.last_wasm_entry_fp,
-                &mut f,
-            )?
+            unsafe {
+                wasmtime_unwinder::visit_frames(
+                    unwind,
+                    resume_pc,
+                    resume_fp,
+                    parent_limits.last_wasm_entry_fp,
+                    &mut f,
+                )?
+            }
         }
         ControlFlow::Continue(())
     }

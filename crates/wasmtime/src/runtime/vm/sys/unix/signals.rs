@@ -34,7 +34,7 @@ impl TrapHandler {
         assert!(!macos_use_mach_ports || !cfg!(target_vendor = "apple"));
 
         foreach_handler(|slot, signal| {
-            let mut handler: libc::sigaction = mem::zeroed();
+            let mut handler: libc::sigaction = unsafe { mem::zeroed() };
             // The flags here are relatively careful, and they are...
             //
             // SA_SIGINFO gives us access to information like the program
@@ -50,12 +50,14 @@ impl TrapHandler {
             // Breakpad handler by testing handlingSegFault.
             handler.sa_flags = libc::SA_SIGINFO | libc::SA_NODEFER | libc::SA_ONSTACK;
             handler.sa_sigaction = trap_handler as usize;
-            libc::sigemptyset(&mut handler.sa_mask);
-            if libc::sigaction(signal, &handler, slot) != 0 {
-                panic!(
-                    "unable to install signal handler: {}",
-                    io::Error::last_os_error(),
-                );
+            unsafe {
+                libc::sigemptyset(&mut handler.sa_mask);
+                if libc::sigaction(signal, &handler, slot) != 0 {
+                    panic!(
+                        "unable to install signal handler: {}",
+                        io::Error::last_os_error(),
+                    );
+                }
             }
         });
 
@@ -154,10 +156,10 @@ unsafe extern "C" fn trap_handler(
         // handling, and reset our trap handling flag. Then we figure
         // out what to do based on the result of the trap handling.
         let faulting_addr = match signum {
-            libc::SIGSEGV | libc::SIGBUS => Some((*siginfo).si_addr() as usize),
+            libc::SIGSEGV | libc::SIGBUS => unsafe { Some((*siginfo).si_addr() as usize) },
             _ => None,
         };
-        let regs = get_trap_registers(context, signum);
+        let regs = unsafe { get_trap_registers(context, signum) };
         let test = info.test_if_trap(regs, faulting_addr, |handler| {
             handler(signum, siginfo, context)
         });
@@ -169,7 +171,7 @@ unsafe extern "C" fn trap_handler(
         let jmp_buf = match test {
             TrapTest::NotWasm => {
                 if let Some(faulting_addr) = faulting_addr {
-                    let range = &info.vm_store_context.as_ref().async_guard_range;
+                    let range = unsafe { &info.vm_store_context.as_ref().async_guard_range };
                     if range.start.addr() <= faulting_addr && faulting_addr < range.end.addr() {
                         abort_stack_overflow();
                     }
@@ -210,19 +212,21 @@ unsafe extern "C" fn trap_handler(
         // code we blow away the stack anyway with a longjmp.
         if cfg!(target_vendor = "apple") {
             unsafe extern "C" fn wasmtime_longjmp_shim(jmp_buf: *const u8) {
-                wasmtime_longjmp(jmp_buf)
+                unsafe { wasmtime_longjmp(jmp_buf) }
             }
-            set_pc(context, wasmtime_longjmp_shim as usize, jmp_buf as usize);
+            unsafe {
+                set_pc(context, wasmtime_longjmp_shim as usize, jmp_buf as usize);
+            }
             return true;
         }
-        wasmtime_longjmp(jmp_buf)
+        unsafe { wasmtime_longjmp(jmp_buf) }
     });
 
     if handled {
         return;
     }
 
-    delegate_signal_to_previous_handler(previous, signum, siginfo, context)
+    unsafe { delegate_signal_to_previous_handler(previous, signum, siginfo, context) }
 }
 
 pub unsafe fn delegate_signal_to_previous_handler(
@@ -240,15 +244,18 @@ pub unsafe fn delegate_signal_to_previous_handler(
     // it. It will either crash synchronously, fix up the instruction
     // so that execution can continue and return, or trigger a crash by
     // returning the signal to it's original disposition and returning.
-    let previous = *previous;
-    if previous.sa_flags & libc::SA_SIGINFO != 0 {
-        mem::transmute::<usize, extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void)>(
-            previous.sa_sigaction,
-        )(signum, siginfo, context)
-    } else if previous.sa_sigaction == libc::SIG_DFL || previous.sa_sigaction == libc::SIG_IGN {
-        libc::sigaction(signum, &previous as *const _, ptr::null_mut());
-    } else {
-        mem::transmute::<usize, extern "C" fn(libc::c_int)>(previous.sa_sigaction)(signum)
+    unsafe {
+        let previous = *previous;
+        if previous.sa_flags & libc::SA_SIGINFO != 0 {
+            mem::transmute::<
+                usize,
+                extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void),
+            >(previous.sa_sigaction)(signum, siginfo, context)
+        } else if previous.sa_sigaction == libc::SIG_DFL || previous.sa_sigaction == libc::SIG_IGN {
+            libc::sigaction(signum, &previous as *const _, ptr::null_mut());
+        } else {
+            mem::transmute::<usize, extern "C" fn(libc::c_int)>(previous.sa_sigaction)(signum)
+        }
     }
 }
 
@@ -267,19 +274,19 @@ pub fn abort_stack_overflow() -> ! {
 unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> TrapRegisters {
     cfg_if::cfg_if! {
         if #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "illumos"), target_arch = "x86_64"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
+            let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_RIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "x86"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
+            let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_EIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_EBP as usize] as usize,
             }
         } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
+            let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.pc as usize,
                 fp: cx.uc_mcontext.regs[29] as usize,
@@ -299,49 +306,55 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 libc::SIGILL | libc::SIGFPE => 1,
                 _ => 0,
             };
-            let cx = &*(cx as *const libc::ucontext_t);
-            TrapRegisters {
-                pc: (cx.uc_mcontext.psw.addr - trap_offset) as usize,
-                fp: *(cx.uc_mcontext.gregs[15] as *const usize),
+            unsafe {
+                let cx = &*(cx as *const libc::ucontext_t);
+                TrapRegisters {
+                    pc: (cx.uc_mcontext.psw.addr - trap_offset) as usize,
+                    fp: *(cx.uc_mcontext.gregs[15] as *const usize),
+                }
             }
         } else if #[cfg(all(target_vendor = "apple", target_arch = "x86_64"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
-            TrapRegisters {
-                pc: (*cx.uc_mcontext).__ss.__rip as usize,
-                fp: (*cx.uc_mcontext).__ss.__rbp as usize,
+            unsafe {
+                let cx = &*(cx as *const libc::ucontext_t);
+                TrapRegisters {
+                    pc: (*cx.uc_mcontext).__ss.__rip as usize,
+                    fp: (*cx.uc_mcontext).__ss.__rbp as usize,
+                }
             }
         } else if #[cfg(all(target_vendor = "apple", target_arch = "aarch64"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
-            TrapRegisters {
-                pc: (*cx.uc_mcontext).__ss.__pc as usize,
-                fp: (*cx.uc_mcontext).__ss.__fp as usize,
+            unsafe {
+                let cx = &*(cx as *const libc::ucontext_t);
+                TrapRegisters {
+                    pc: (*cx.uc_mcontext).__ss.__pc as usize,
+                    fp: (*cx.uc_mcontext).__ss.__fp as usize,
+                }
             }
         } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
+            let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.mc_rip as usize,
                 fp: cx.uc_mcontext.mc_rbp as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
+            let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.__gregs[libc::REG_PC] as usize,
                 fp: cx.uc_mcontext.__gregs[libc::REG_S0] as usize,
             }
         } else if #[cfg(all(target_os = "freebsd", target_arch = "aarch64"))] {
-            let cx = &*(cx as *const libc::mcontext_t);
+            let cx = unsafe { &*(cx as *const libc::mcontext_t) };
             TrapRegisters {
                 pc: cx.mc_gpregs.gp_elr as usize,
                 fp: cx.mc_gpregs.gp_x[29] as usize,
             }
         } else if #[cfg(all(target_os = "openbsd", target_arch = "x86_64"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
+            let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.sc_rip as usize,
                 fp: cx.sc_rbp as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "arm"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
+            let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.arm_pc as usize,
                 fp: cx.uc_mcontext.arm_fp as usize,
@@ -363,25 +376,29 @@ unsafe fn set_pc(cx: *mut libc::c_void, pc: usize, arg1: usize) {
             let _ = (cx, pc, arg1);
             unreachable!(); // not used on these platforms
         } else if #[cfg(target_arch = "x86_64")] {
-            let cx = &mut *(cx as *mut libc::ucontext_t);
-            (*cx.uc_mcontext).__ss.__rip = pc as u64;
-            (*cx.uc_mcontext).__ss.__rdi = arg1 as u64;
-            // We're simulating a "pseudo-call" so we need to ensure
-            // stack alignment is properly respected, notably that on a
-            // `call` instruction the stack is 8/16-byte aligned, then
-            // the function adjusts itself to be 16-byte aligned.
-            //
-            // Most of the time the stack pointer is 16-byte aligned at
-            // the time of the trap but for more robust-ness with JIT
-            // code where it may ud2 in a prologue check before the
-            // stack is aligned we double-check here.
-            if (*cx.uc_mcontext).__ss.__rsp % 16 == 0 {
-                (*cx.uc_mcontext).__ss.__rsp -= 8;
+            unsafe {
+                let cx = &mut *(cx as *mut libc::ucontext_t);
+                (*cx.uc_mcontext).__ss.__rip = pc as u64;
+                (*cx.uc_mcontext).__ss.__rdi = arg1 as u64;
+                // We're simulating a "pseudo-call" so we need to ensure
+                // stack alignment is properly respected, notably that on a
+                // `call` instruction the stack is 8/16-byte aligned, then
+                // the function adjusts itself to be 16-byte aligned.
+                //
+                // Most of the time the stack pointer is 16-byte aligned at
+                // the time of the trap but for more robust-ness with JIT
+                // code where it may ud2 in a prologue check before the
+                // stack is aligned we double-check here.
+                if (*cx.uc_mcontext).__ss.__rsp % 16 == 0 {
+                    (*cx.uc_mcontext).__ss.__rsp -= 8;
+                }
             }
         } else if #[cfg(target_arch = "aarch64")] {
-            let cx = &mut *(cx as *mut libc::ucontext_t);
-            (*cx.uc_mcontext).__ss.__pc = pc as u64;
-            (*cx.uc_mcontext).__ss.__x[0] = arg1 as u64;
+            unsafe {
+                let cx = &mut *(cx as *mut libc::ucontext_t);
+                (*cx.uc_mcontext).__ss.__pc = pc as u64;
+                (*cx.uc_mcontext).__ss.__x[0] = arg1 as u64;
+            }
         } else {
             compile_error!("unsupported apple target architecture");
         }
@@ -479,8 +496,8 @@ pub fn lazy_per_thread_init() {
     unsafe fn allocate_sigaltstack() -> Option<Stack> {
         // Check to see if the existing sigaltstack, if it exists, is big
         // enough. If so we don't need to allocate our own.
-        let mut old_stack = mem::zeroed();
-        let r = libc::sigaltstack(ptr::null(), &mut old_stack);
+        let mut old_stack = unsafe { mem::zeroed() };
+        let r = unsafe { libc::sigaltstack(ptr::null(), &mut old_stack) };
         assert_eq!(
             r,
             0,
@@ -497,29 +514,33 @@ pub fn lazy_per_thread_init() {
         let guard_size = page_size;
         let alloc_size = guard_size + MIN_STACK_SIZE;
 
-        let ptr = rustix::mm::mmap_anonymous(
-            null_mut(),
-            alloc_size,
-            rustix::mm::ProtFlags::empty(),
-            rustix::mm::MapFlags::PRIVATE,
-        )
-        .expect("failed to allocate memory for sigaltstack");
+        let ptr = unsafe {
+            rustix::mm::mmap_anonymous(
+                null_mut(),
+                alloc_size,
+                rustix::mm::ProtFlags::empty(),
+                rustix::mm::MapFlags::PRIVATE,
+            )
+            .expect("failed to allocate memory for sigaltstack")
+        };
 
         // Prepare the stack with readable/writable memory and then register it
         // with `sigaltstack`.
         let stack_ptr = (ptr as usize + guard_size) as *mut std::ffi::c_void;
-        rustix::mm::mprotect(
-            stack_ptr,
-            MIN_STACK_SIZE,
-            rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE,
-        )
-        .expect("mprotect to configure memory for sigaltstack failed");
+        unsafe {
+            rustix::mm::mprotect(
+                stack_ptr,
+                MIN_STACK_SIZE,
+                rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE,
+            )
+            .expect("mprotect to configure memory for sigaltstack failed");
+        }
         let new_stack = libc::stack_t {
             ss_sp: stack_ptr,
             ss_flags: 0,
             ss_size: MIN_STACK_SIZE,
         };
-        let r = libc::sigaltstack(&new_stack, ptr::null_mut());
+        let r = unsafe { libc::sigaltstack(&new_stack, ptr::null_mut()) };
         assert_eq!(
             r,
             0,

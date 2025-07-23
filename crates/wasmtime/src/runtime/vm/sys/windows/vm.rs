@@ -10,7 +10,7 @@ pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()
     if len == 0 {
         return Ok(());
     }
-    if VirtualAlloc(ptr.cast(), len, MEM_COMMIT, PAGE_READWRITE).is_null() {
+    if unsafe { VirtualAlloc(ptr.cast(), len, MEM_COMMIT, PAGE_READWRITE).is_null() } {
         Err(std::io::Error::last_os_error())
     } else {
         Ok(())
@@ -18,14 +18,14 @@ pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()
 }
 
 pub unsafe fn hide_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
-    erase_existing_mapping(ptr, len)
+    unsafe { erase_existing_mapping(ptr, len) }
 }
 
 pub unsafe fn erase_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
     if len == 0 {
         return Ok(());
     }
-    if VirtualFree(ptr.cast(), len, MEM_DECOMMIT) == 0 {
+    if unsafe { VirtualFree(ptr.cast(), len, MEM_DECOMMIT) == 0 } {
         Err(std::io::Error::last_os_error())
     } else {
         Ok(())
@@ -34,12 +34,12 @@ pub unsafe fn erase_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()>
 
 #[cfg(feature = "pooling-allocator")]
 pub unsafe fn commit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
-    expose_existing_mapping(addr, len)
+    unsafe { expose_existing_mapping(addr, len) }
 }
 
 #[cfg(feature = "pooling-allocator")]
 pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
-    erase_existing_mapping(addr, len)
+    unsafe { erase_existing_mapping(addr, len) }
 }
 
 pub fn get_page_size() -> usize {
