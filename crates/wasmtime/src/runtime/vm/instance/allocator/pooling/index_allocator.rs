@@ -583,7 +583,7 @@ mod test {
     #[test]
     fn test_affinity_allocation_strategy_random() {
         use rand::Rng;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let ids = std::iter::repeat_with(|| {
             MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0))
@@ -598,12 +598,12 @@ mod test {
         let amt = if cfg!(miri) { 100 } else { 100_000 };
         for _ in 0..amt {
             loop {
-                if !allocated.is_empty() && rng.gen_bool(0.5) {
-                    let i = rng.gen_range(0..allocated.len());
+                if !allocated.is_empty() && rng.random_bool(0.5) {
+                    let i = rng.random_range(0..allocated.len());
                     let to_free_idx = allocated.swap_remove(i);
                     state.free(to_free_idx);
                 } else {
-                    let id = ids[rng.gen_range(0..ids.len())];
+                    let id = ids[rng.random_range(0..ids.len())];
                     let index = match state.alloc(Some(id)) {
                         Some(id) => id,
                         None => continue,
