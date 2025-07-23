@@ -95,7 +95,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
             } else if #[cfg(target_arch = "aarch64")] {
                 let regs = TrapRegisters {
                     pc: context.Pc as usize,
-                    fp: context.Anonymous.Anonymous.Fp as usize,
+                    fp: unsafe { context.Anonymous.Anonymous.Fp as usize },
                 };
             } else if #[cfg(target_arch = "x86")] {
                 let regs = TrapRegisters {
