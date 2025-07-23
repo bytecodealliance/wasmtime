@@ -72,7 +72,8 @@ impl WasiHttpView for Ctx {
     }
 
     fn is_forbidden_header(&mut self, name: &hyper::header::HeaderName) -> bool {
-        name.as_str() == "custom-forbidden-header"
+        types::DEFAULT_FORBIDDEN_HEADERS.contains(name)
+            || name.as_str() == "custom-forbidden-header"
     }
 }
 
