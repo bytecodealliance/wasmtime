@@ -418,8 +418,12 @@ impl Func {
     ) -> Self {
         assert!(ty.comes_from_same_engine(store.as_context().engine()));
         let store = store.as_context_mut().0;
-        let host = HostFunc::new_unchecked(store.engine(), ty, func);
-        host.into_func(store)
+
+        // SAFETY:
+        unsafe {
+            let host = HostFunc::new_unchecked(store.engine(), ty, func);
+            host.into_func(store)
+        }
     }
 
     /// Creates a new host-defined WebAssembly function which, when called,
@@ -534,7 +538,11 @@ impl Func {
     /// The safety of this function requires that `func_ref` is a valid function
     /// pointer owned by `store`.
     pub(crate) unsafe fn from_vm_func_ref(store: StoreId, func_ref: NonNull<VMFuncRef>) -> Func {
-        debug_assert!(func_ref.as_ref().type_index != VMSharedTypeIndex::default());
+        // SAFETY: given the contract of this function it's safe to read the
+        // `type_index` field.
+        unsafe {
+            debug_assert!(func_ref.as_ref().type_index != VMSharedTypeIndex::default());
+        }
         Func {
             store,
             unsafe_func_ref: func_ref.into(),
@@ -794,12 +802,11 @@ impl Func {
         T: 'static,
     {
         let store = store.as_context_mut().0;
-        // part of this unsafety is about matching the `T` to a `Store<T>`,
-        // which is done through the `AsContextMut` bound above.
-        unsafe {
-            let host = HostFunc::wrap(store.engine(), func);
-            host.into_func(store)
-        }
+        let host = HostFunc::wrap(store.engine(), func);
+
+        // SAFETY: The `T` the closure takes is the same as the `T` of the store
+        // we're inserting into via the type signature above.
+        unsafe { host.into_func(store) }
     }
 
     #[cfg(feature = "async")]
@@ -811,12 +818,11 @@ impl Func {
         T: 'static,
     {
         let store = store.as_context_mut().0;
-        // part of this unsafety is about matching the `T` to a `Store<T>`,
-        // which is done through the `AsContextMut` bound above.
-        unsafe {
-            let host = HostFunc::wrap_inner(store.engine(), func);
-            host.into_func(store)
-        }
+        let host = HostFunc::wrap_inner(store.engine(), func);
+
+        // SAFETY: The `T` the closure takes is the same as the `T` of the store
+        // we're inserting into via the type signature above.
+        unsafe { host.into_func(store) }
     }
 
     /// Same as [`Func::wrap`], except the closure asynchronously produces the
@@ -999,7 +1005,10 @@ impl Func {
         let mut store = store.as_context_mut();
         let func_ref = self.vm_func_ref(store.0);
         let params_and_returns = NonNull::new(params_and_returns).unwrap_or(NonNull::from(&mut []));
-        Self::call_unchecked_raw(&mut store, func_ref, params_and_returns)
+
+        // SAFETY: the safety of this function call is the same as the contract
+        // of this function.
+        unsafe { Self::call_unchecked_raw(&mut store, func_ref, params_and_returns) }
     }
 
     pub(crate) unsafe fn call_unchecked_raw<T>(
@@ -1007,7 +1016,9 @@ impl Func {
         func_ref: NonNull<VMFuncRef>,
         params_and_returns: NonNull<[ValRaw]>,
     ) -> Result<()> {
-        invoke_wasm_and_catch_traps(store, |caller, vm| {
+        // SAFETY: the safety of this function call is the same as the contract
+        // of this function.
+        invoke_wasm_and_catch_traps(store, |caller, vm| unsafe {
             VMFuncRef::array_call(func_ref, vm, caller, params_and_returns)
         })
     }
@@ -1024,14 +1035,21 @@ impl Func {
     /// caller must guarantee that `raw` is owned by the `store` provided and is
     /// valid within the `store`.
     pub unsafe fn from_raw(mut store: impl AsContextMut, raw: *mut c_void) -> Option<Func> {
-        Self::_from_raw(store.as_context_mut().0, raw)
+        // SAFETY: this function's own contract is that `raw` is owned by store
+        // to make this safe.
+        unsafe { Self::_from_raw(store.as_context_mut().0, raw) }
     }
 
+    /// Same as `from_raw`, but with the internal `StoreOpaque` type.
     pub(crate) unsafe fn _from_raw(store: &mut StoreOpaque, raw: *mut c_void) -> Option<Func> {
-        Some(Func::from_vm_func_ref(
-            store.id(),
-            NonNull::new(raw.cast())?,
-        ))
+        // SAFETY: this function's own contract is that `raw` is owned by store
+        // to make this safe.
+        unsafe {
+            Some(Func::from_vm_func_ref(
+                store.id(),
+                NonNull::new(raw.cast())?,
+            ))
+        }
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
@@ -1713,7 +1731,9 @@ where
         ptr: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {
         debug_assert!(ptr.len() > 0);
-        <Self as WasmTy>::store(self, store, ptr.get_unchecked_mut(0))
+        // SAFETY: the contract of this function/trait combo is such that `ptr`
+        // is valid to store this type's value, thus this lookup should be safe.
+        unsafe { <Self as WasmTy>::store(self, store, ptr.get_unchecked_mut(0)) }
     }
 
     fn may_gc() -> bool {
@@ -1751,7 +1771,9 @@ where
         store: &mut AutoAssertNoGc<'_>,
         ptr: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {
-        self.and_then(|val| val.store(store, ptr))
+        // SAFETY: the safety of calling this function is the same as calling
+        // the inner `store`.
+        unsafe { self.and_then(|val| val.store(store, ptr)) }
     }
 
     fn may_gc() -> bool {
@@ -1796,9 +1818,14 @@ macro_rules! impl_wasm_host_results {
                 let mut _cur = 0;
                 $(
                     debug_assert!(_cur < _ptr.len());
-                    let val = _ptr.get_unchecked_mut(_cur);
-                    _cur += 1;
-                    WasmTy::store($t, _store, val)?;
+                    // SAFETY: `store`'s unsafe contract is that `_ptr` is
+                    // appropriately sized and additionally safe to call `store`
+                    // for sub-types.
+                    unsafe {
+                        let val = _ptr.get_unchecked_mut(_cur);
+                        _cur += 1;
+                        WasmTy::store($t, _store, val)?;
+                    }
                 )*
                 Ok(())
             }
@@ -1955,9 +1982,13 @@ macro_rules! impl_wasm_ty_list {
                 let mut _cur = 0;
                 ($({
                     debug_assert!(_cur < _values.len());
-                    let ptr = _values.get_unchecked(_cur).assume_init_ref();
-                    _cur += 1;
-                    $args::load(_store, ptr)
+                    // SAFETY: this function's own contract means that `_values`
+                    // is appropriately sized/typed for the internal loads.
+                    unsafe {
+                        let ptr = _values.get_unchecked(_cur).assume_init_ref();
+                        _cur += 1;
+                        $args::load(_store, ptr)
+                    }
                 },)*)
             }
 
@@ -2006,36 +2037,48 @@ impl<T> Caller<'_, T> {
         self.caller
     }
 
+    /// Executes `f` with an appropriate `Caller`.
+    ///
+    /// This is the entrypoint for host functions in core wasm and converts from
+    /// `VMContext` to `Caller`
+    ///
+    /// # Safety
+    ///
+    /// This requires that `caller` is safe to wrap up as a `Caller`,
+    /// effectively meaning that we just entered the host from wasm.
+    /// Additionally this `Caller`'s `T` parameter must match the actual `T` in
+    /// the store of the vmctx of `caller`.
     unsafe fn with<F, R>(caller: NonNull<VMContext>, f: F) -> R
     where
-        // The closure must be valid for any `Caller` it is given; it doesn't
-        // get to choose the `Caller`'s lifetime.
-        F: for<'a> FnOnce(Caller<'a, T>) -> R,
-        // And the return value must not borrow from the caller/store.
-        R: 'static,
+        F: FnOnce(Caller<'_, T>) -> R,
     {
-        crate::runtime::vm::InstanceAndStore::from_vmctx(caller, |pair| {
-            let (instance, store) = pair.unpack_mut();
-            let mut store = store.unchecked_context_mut::<T>();
-            let caller = Instance::from_wasmtime(instance.id(), store.0);
+        // SAFETY: it's a contract of this function itself that `from_vmctx` is
+        // safe to call. Additionally it's a contract of this function itself
+        // that the `T` of `Caller` matches the store.
+        unsafe {
+            crate::runtime::vm::InstanceAndStore::from_vmctx(caller, |pair| {
+                let (instance, store) = pair.unpack_mut();
+                let mut store = store.unchecked_context_mut::<T>();
+                let caller = Instance::from_wasmtime(instance.id(), store.0);
 
-            let (gc_lifo_scope, ret) = {
-                let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
+                let (gc_lifo_scope, ret) = {
+                    let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
 
-                let ret = f(Caller {
-                    store: store.as_context_mut(),
-                    caller,
-                });
+                    let ret = f(Caller {
+                        store: store.as_context_mut(),
+                        caller,
+                    });
 
-                (gc_lifo_scope, ret)
-            };
+                    (gc_lifo_scope, ret)
+                };
 
-            // Safe to recreate a mutable borrow of the store because `ret`
-            // cannot be borrowing from the store.
-            store.0.exit_gc_lifo_scope(gc_lifo_scope);
+                // Safe to recreate a mutable borrow of the store because `ret`
+                // cannot be borrowing from the store.
+                store.0.exit_gc_lifo_scope(gc_lifo_scope);
 
-            ret
-        })
+                ret
+            })
+        }
     }
 
     fn sub_caller(&mut self) -> Caller<'_, T> {
@@ -2268,6 +2311,16 @@ impl HostContext {
         ctx.into()
     }
 
+    /// Raw entry trampoline for wasm for typed functions.
+    ///
+    /// # Safety
+    ///
+    /// The `callee_vmctx`, `caller_vmctx`, and `args` values must basically be
+    /// "all valid" in the sense that they're from the same store, appropriately
+    /// sized, appropriate to dereference, etc. This requires that `T` matches
+    /// the type of the store that the vmctx values point to. The `F` parameter
+    /// must match the state in `callee_vmctx`. The `P` and `R` type parameters
+    /// must accurately describe the params/results store in `args`.
     unsafe extern "C" fn array_call_trampoline<T, F, P, R>(
         callee_vmctx: NonNull<VMOpaqueContext>,
         caller_vmctx: NonNull<VMContext>,
@@ -2289,14 +2342,24 @@ impl HostContext {
         let run = move |mut caller: Caller<'_, T>| {
             let mut args =
                 NonNull::slice_from_raw_parts(args.cast::<MaybeUninit<ValRaw>>(), args_len);
-            let vmctx = VMArrayCallHostFuncContext::from_opaque(callee_vmctx);
-            let state = vmctx.as_ref().host_state();
+            // SAFETY: it's a safety contract of this function itself that
+            // `callee_vmctx` is safe to read.
+            let state = unsafe {
+                let vmctx = VMArrayCallHostFuncContext::from_opaque(callee_vmctx);
+                vmctx.as_ref().host_state()
+            };
 
             // Double-check ourselves in debug mode, but we control
             // the `Any` here so an unsafe downcast should also
             // work.
-            debug_assert!(state.is::<HostFuncState<F>>());
-            let state = &*(state as *const _ as *const HostFuncState<F>);
+            //
+            // SAFETY: all typed host functions use `HostFuncState<F>` as their
+            // state so this should be safe to effectively do an unchecked
+            // downcast.
+            let state = unsafe {
+                debug_assert!(state.is::<HostFuncState<F>>());
+                &*(state as *const _ as *const HostFuncState<F>)
+            };
             let func = &state.func;
 
             let ret = 'ret: {
@@ -2309,7 +2372,10 @@ impl HostContext {
                 } else {
                     unsafe { AutoAssertNoGc::disabled(caller.store.0) }
                 };
-                let params = P::load(&mut store, args.as_mut());
+                // SAFETY: this function requires `args` to be valid and the
+                // `WasmTyList` trait means that everything should be correctly
+                // ascribed/typed, making this valid to load from.
+                let params = unsafe { P::load(&mut store, args.as_mut()) };
                 let _ = &mut store;
                 drop(store);
 
@@ -2329,14 +2395,22 @@ impl HostContext {
                 } else {
                     unsafe { AutoAssertNoGc::disabled(caller.store.0) }
                 };
-                let ret = ret.store(&mut store, args.as_mut())?;
+                // SAFETY: this function requires that `args` is safe for this
+                // type signature, and the guarantees of `WasmRet` means that
+                // everything should be typed appropriately.
+                let ret = unsafe { ret.store(&mut store, args.as_mut())? };
                 Ok(ret)
             }
         };
 
         // With nothing else on the stack move `run` into this
         // closure and then run it as part of `Caller::with`.
-        crate::runtime::vm::catch_unwind_and_record_trap(move || Caller::with(caller_vmctx, run))
+        //
+        // SAFETY: this is an entrypoint of wasm which requires correct type
+        // ascription of `T` itself, meaning that this should be safe to call.
+        crate::runtime::vm::catch_unwind_and_record_trap(move || unsafe {
+            Caller::with(caller_vmctx, run)
+        })
     }
 }
 
@@ -2403,7 +2477,11 @@ impl HostFunc {
         T: 'static,
     {
         assert!(ty.comes_from_same_engine(engine));
-        let func = move |caller_vmctx, values: &mut [ValRaw]| {
+        // SAFETY: This is only only called in the raw entrypoint of wasm
+        // meaning that `caller_vmctx` is appropriate to read, and additionally
+        // the later usage of `{,in}to_func` will connect `T` to an actual
+        // store's `T` to ensure it's the same.
+        let func = move |caller_vmctx, values: &mut [ValRaw]| unsafe {
             Caller::<T>::with(caller_vmctx, |mut caller| {
                 caller.store.0.call_hook(CallHook::CallingHost)?;
                 let result = func(caller.sub_caller(), values)?;
@@ -2461,7 +2539,9 @@ impl HostFunc {
         self.validate_store(store);
         let (funcrefs, modules) = store.func_refs_and_modules();
         let funcref = funcrefs.push_arc_host(self.clone(), modules);
-        Func::from_vm_func_ref(store.id(), funcref)
+        // SAFETY: this funcref was just pushed within the store, so it's safe
+        // to say this store owns it.
+        unsafe { Func::from_vm_func_ref(store.id(), funcref) }
     }
 
     /// Inserts this `HostFunc` into a `Store`, returning the `Func` pointing to
@@ -2484,7 +2564,7 @@ impl HostFunc {
     /// `StoreOpaque::rooted_host_funcs`.
     ///
     /// Similarly, the caller must arrange for `rooted_func_ref` to be rooted in
-    /// the same store.
+    /// the same store and additionally be a valid pointer.
     pub unsafe fn to_func_store_rooted(
         self: &Arc<Self>,
         store: &mut StoreOpaque,
@@ -2494,12 +2574,22 @@ impl HostFunc {
 
         match rooted_func_ref {
             Some(funcref) => {
-                debug_assert!(funcref.as_ref().wasm_call.is_some());
-                Func::from_vm_func_ref(store.id(), funcref)
+                // SAFETY: it's a contract of this function itself that
+                // `funcref` is safe to read.
+                unsafe {
+                    debug_assert!(funcref.as_ref().wasm_call.is_some());
+                }
+                // SAFETY: it's a contract of this function that `funcref` is
+                // owned by `store`.
+                unsafe { Func::from_vm_func_ref(store.id(), funcref) }
             }
             None => {
                 debug_assert!(self.func_ref().wasm_call.is_some());
-                Func::from_vm_func_ref(store.id(), self.func_ref().into())
+
+                // SAFETY: it's an unsafe contract of this function that we are
+                // rooted within the store to say that the store owns a copy of
+                // this funcref.
+                unsafe { Func::from_vm_func_ref(store.id(), self.func_ref().into()) }
             }
         }
     }
@@ -2509,7 +2599,9 @@ impl HostFunc {
         self.validate_store(store);
         let (funcrefs, modules) = store.func_refs_and_modules();
         let funcref = funcrefs.push_box_host(Box::new(self), modules);
-        Func::from_vm_func_ref(store.id(), funcref)
+        // SAFETY: this funcref was just pushed within `store`, so it's safe to
+        // say it's owned by the store's id.
+        unsafe { Func::from_vm_func_ref(store.id(), funcref) }
     }
 
     fn validate_store(&self, store: &mut StoreOpaque) {

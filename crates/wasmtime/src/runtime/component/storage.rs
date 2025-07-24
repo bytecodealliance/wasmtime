@@ -12,20 +12,24 @@ fn assert_raw_slice_compat<T>() {
 pub unsafe fn storage_as_slice<T>(storage: &T) -> &[ValRaw] {
     assert_raw_slice_compat::<T>();
 
-    slice::from_raw_parts(
-        (storage as *const T).cast(),
-        mem::size_of_val(storage) / mem::size_of::<ValRaw>(),
-    )
+    unsafe {
+        slice::from_raw_parts(
+            (storage as *const T).cast(),
+            mem::size_of_val(storage) / mem::size_of::<ValRaw>(),
+        )
+    }
 }
 
 /// Same as `storage_as_slice`, but mutable.
 pub unsafe fn storage_as_slice_mut<T>(storage: &mut MaybeUninit<T>) -> &mut [MaybeUninit<ValRaw>] {
     assert_raw_slice_compat::<T>();
 
-    slice::from_raw_parts_mut(
-        (storage as *mut MaybeUninit<T>).cast(),
-        mem::size_of_val(storage) / mem::size_of::<ValRaw>(),
-    )
+    unsafe {
+        slice::from_raw_parts_mut(
+            (storage as *mut MaybeUninit<T>).cast(),
+            mem::size_of_val(storage) / mem::size_of::<ValRaw>(),
+        )
+    }
 }
 
 /// Same as `storage_as_slice`, but in reverse and mutable.
@@ -44,7 +48,7 @@ pub unsafe fn slice_to_storage_mut<T>(slice: &mut [MaybeUninit<ValRaw>]) -> &mut
         mem::size_of_val(slice)
     );
 
-    &mut *slice.as_mut_ptr().cast()
+    unsafe { &mut *slice.as_mut_ptr().cast() }
 }
 
 /// Same as `storage_as_slice`, but in reverse
@@ -61,5 +65,5 @@ pub unsafe fn slice_to_storage<T>(slice: &[ValRaw]) -> &T {
         mem::size_of_val(slice)
     );
 
-    &*slice.as_ptr().cast()
+    unsafe { &*slice.as_ptr().cast() }
 }

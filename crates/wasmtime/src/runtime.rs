@@ -25,6 +25,10 @@
 // explanation of why truncation shouldn't be happening at runtime. This
 // situation should be pretty rare though.
 #![warn(clippy::cast_possible_truncation)]
+#![warn(
+    unsafe_op_in_unsafe_fn,
+    reason = "opt-in until the crate opts-in as a whole -- #11180"
+)]
 
 #[macro_use]
 pub(crate) mod func;

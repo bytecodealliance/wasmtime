@@ -197,8 +197,10 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
         allocation_index: MemoryAllocationIndex,
         memory: Memory,
     ) {
-        self.ondemand
-            .deallocate_memory(memory_index, allocation_index, memory)
+        unsafe {
+            self.ondemand
+                .deallocate_memory(memory_index, allocation_index, memory)
+        }
     }
 
     fn allocate_table(
@@ -217,8 +219,10 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
         allocation_index: TableAllocationIndex,
         table: Table,
     ) {
-        self.ondemand
-            .deallocate_table(table_index, allocation_index, table)
+        unsafe {
+            self.ondemand
+                .deallocate_table(table_index, allocation_index, table)
+        }
     }
 
     #[cfg(feature = "async")]

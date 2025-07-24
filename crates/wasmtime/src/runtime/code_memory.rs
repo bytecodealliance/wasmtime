@@ -394,12 +394,14 @@ impl CodeMemory {
         {
             let text = self.text();
             let unwind_info = &self.mmap[self.unwind.clone()];
-            let registration = crate::runtime::vm::UnwindRegistration::new(
-                text.as_ptr(),
-                unwind_info.as_ptr(),
-                unwind_info.len(),
-            )
-            .context("failed to create unwind info registration")?;
+            let registration = unsafe {
+                crate::runtime::vm::UnwindRegistration::new(
+                    text.as_ptr(),
+                    unwind_info.as_ptr(),
+                    unwind_info.len(),
+                )
+                .context("failed to create unwind info registration")?
+            };
             self.unwind_registration = Some(registration);
             return Ok(());
         }

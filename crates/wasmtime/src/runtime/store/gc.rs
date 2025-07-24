@@ -194,7 +194,11 @@ impl StoreOpaque {
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                 Ok(oom) => {
                     let (value, oom) = oom.take_inner();
-                    self.maybe_async_gc(None, Some(oom.bytes_needed()))?;
+                    // SAFETY: it's the caller's responsibility to ensure that
+                    // this is on a fiber stack if necessary.
+                    unsafe {
+                        self.maybe_async_gc(None, Some(oom.bytes_needed()))?;
+                    }
                     alloc_func(self, value)
                 }
                 Err(e) => Err(e),
