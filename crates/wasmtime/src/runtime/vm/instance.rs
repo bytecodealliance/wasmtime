@@ -354,6 +354,14 @@ impl Instance {
     ///
     /// This function requires that the `vmctx` pointer is indeed valid and
     /// from the store that `self` belongs to.
+    ///
+    /// (Note that it is *NOT* required that `vmctx` be distinct from this
+    /// instance's `vmctx`, or that usage of the resulting instance is limited
+    /// to its defined items! The returned borrow has the same lifetime as
+    /// `self`, which means that this instance cannot be used while the
+    /// resulting instance is in use, and we therefore do not need to worry
+    /// about mutable aliasing between this instance and the resulting
+    /// instance.)
     #[inline]
     unsafe fn sibling_vmctx_mut<'a>(
         self: Pin<&'a mut Self>,
