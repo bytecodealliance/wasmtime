@@ -110,7 +110,7 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
 
     fn decrement_core_instance_count(&self) {}
 
-    unsafe fn allocate_memory(
+    fn allocate_memory(
         &self,
         request: &mut InstanceAllocationRequest,
         ty: &wasmtime_environ::Memory,
@@ -154,7 +154,7 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         // Normal destructors do all the necessary clean up.
     }
 
-    unsafe fn allocate_table(
+    fn allocate_table(
         &self,
         request: &mut InstanceAllocationRequest,
         ty: &wasmtime_environ::Table,
