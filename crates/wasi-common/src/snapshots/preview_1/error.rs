@@ -249,11 +249,9 @@ impl From<wiggle::GuestError> for Error {
             PtrOverflow { .. } | PtrOutOfBounds { .. } | PtrNotAligned { .. } => {
                 Error::trap(err.into())
             }
-            PtrBorrowed { .. } => Errno::Fault.into(),
             InvalidUtf8 { .. } => Errno::Ilseq.into(),
             TryFromIntError { .. } => Errno::Overflow.into(),
             SliceLengthsDiffer { .. } => Errno::Fault.into(),
-            BorrowCheckerOutOfHandles { .. } => Errno::Fault.into(),
             InFunc { err, .. } => Error::from(*err),
         }
     }
