@@ -100,15 +100,15 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             backpressure_set(vmctx: vmctx, caller_instance: u32, enabled: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            task_return(vmctx: vmctx, ty: u32, memory: ptr_u8, string_encoding: u8, storage: ptr_u8, storage_len: size) -> bool;
+            task_return(vmctx: vmctx, ty: u32, options: u32, storage: ptr_u8, storage_len: size) -> bool;
             #[cfg(feature = "component-model-async")]
             task_cancel(vmctx: vmctx, caller_instance: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             waitable_set_new(vmctx: vmctx, caller_instance: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            waitable_set_wait(vmctx: vmctx, caller_instance: u32, async_: u8, memory: ptr_u8, set: u32, payload: u32) -> u64;
+            waitable_set_wait(vmctx: vmctx, options: u32, set: u32, payload: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            waitable_set_poll(vmctx: vmctx, caller_instance: u32, async_: u8, memory: ptr_u8, set: u32, payload: u32) -> u64;
+            waitable_set_poll(vmctx: vmctx, options: u32, set: u32, payload: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             waitable_set_drop(vmctx: vmctx, caller_instance: u32, set: u32) -> bool;
             #[cfg(feature = "component-model-async")]
@@ -134,15 +134,15 @@ macro_rules! foreach_builtin_component_function {
                 storage_len: size
             ) -> bool;
             #[cfg(feature = "component-model-async")]
-            sync_start(vmctx: vmctx, callback: ptr_u8, callee: ptr_u8, param_count: u32, storage: ptr_u8, storage_len: size) -> bool;
+            sync_start(vmctx: vmctx, callback: ptr_u8, storage: ptr_u8, storage_len: size, callee: ptr_u8, param_count: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             async_start(vmctx: vmctx, callback: ptr_u8, post_return: ptr_u8, callee: ptr_u8, param_count: u32, result_count: u32, flags: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             future_new(vmctx: vmctx, ty: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            future_write(vmctx: vmctx, memory: ptr_u8, realloc: ptr_u8, string_encoding: u8, async_: u8, ty: u32, future: u32, address: u32) -> u64;
+            future_write(vmctx: vmctx, ty: u32, options: u32, future: u32, address: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            future_read(vmctx: vmctx, memory: ptr_u8, realloc: ptr_u8, string_encoding: u8, async_: u8, ty: u32, future: u32, address: u32) -> u64;
+            future_read(vmctx: vmctx, ty: u32, options: u32, future: u32, address: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             future_cancel_write(vmctx: vmctx, ty: u32, async_: u8, writer: u32) -> u64;
             #[cfg(feature = "component-model-async")]
@@ -154,9 +154,9 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             stream_new(vmctx: vmctx, ty: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            stream_write(vmctx: vmctx, memory: ptr_u8, realloc: ptr_u8, string_encoding: u8, async_: u8, ty: u32, stream: u32, address: u32, count: u32) -> u64;
+            stream_write(vmctx: vmctx, ty: u32, options: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            stream_read(vmctx: vmctx, memory: ptr_u8, realloc: ptr_u8, string_encoding: u8, async_: u8, ty: u32, stream: u32, address: u32, count: u32) -> u64;
+            stream_read(vmctx: vmctx, ty: u32, options: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             stream_cancel_write(vmctx: vmctx, ty: u32, async_: u8, writer: u32) -> u64;
             #[cfg(feature = "component-model-async")]
@@ -166,13 +166,13 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             stream_drop_readable(vmctx: vmctx, ty: u32, reader: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            flat_stream_write(vmctx: vmctx, memory: ptr_u8, realloc: ptr_u8, async_: u8, ty: u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
+            flat_stream_write(vmctx: vmctx, ty: u32, options:u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            flat_stream_read(vmctx: vmctx, memory: ptr_u8, realloc: ptr_u8, async_: u8, ty: u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
+            flat_stream_read(vmctx: vmctx, ty: u32, options: u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            error_context_new(vmctx: vmctx, memory: ptr_u8, realloc: ptr_u8, string_encoding: u8, ty: u32, debug_msg_address: u32, debug_msg_len: u32) -> u64;
+            error_context_new(vmctx: vmctx, ty: u32, options: u32, debug_msg_address: u32, debug_msg_len: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            error_context_debug_message(vmctx: vmctx, memory: ptr_u8, realloc: ptr_u8, string_encoding: u8, ty: u32, err_ctx_handle: u32, debug_msg_address: u32) -> bool;
+            error_context_debug_message(vmctx: vmctx, ty: u32, options: u32, err_ctx_handle: u32, debug_msg_address: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             error_context_drop(vmctx: vmctx, ty: u32, err_ctx_handle: u32) -> bool;
             #[cfg(feature = "component-model-async")]
@@ -186,7 +186,7 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             context_set(vmctx: vmctx, slot: u32, val: u32) -> bool;
 
-            trap(vmctx: vmctx, code: u8);
+            trap(vmctx: vmctx, code: u8) -> bool;
 
             utf8_to_utf8(vmctx: vmctx, src: ptr_u8, len: size, dst: ptr_u8) -> bool;
             utf16_to_utf16(vmctx: vmctx, src: ptr_u16, len: size, dst: ptr_u16) -> bool;

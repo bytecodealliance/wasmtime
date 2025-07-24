@@ -714,39 +714,25 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            WaitableSetWait {
-                func,
-                async_,
-                memory,
-            } => {
-                let (memory, _) = self.memory(frame, types, *memory);
-                let memory = self.result.memories.push(memory);
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::WaitableSetWait {
-                        instance: frame.instance,
-                        async_: *async_,
-                        memory,
-                    },
-                ));
-                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            WaitableSetWait { options } => {
+                let func = options.core_type;
+                let options = self.adapter_options(frame, types, options);
+                let options = self.canonical_options(options);
+                let index = self
+                    .result
+                    .trampolines
+                    .push((func, dfg::Trampoline::WaitableSetWait { options }));
+                frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
-            WaitableSetPoll {
-                func,
-                async_,
-                memory,
-            } => {
-                let (memory, _) = self.memory(frame, types, *memory);
-                let memory = self.result.memories.push(memory);
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::WaitableSetPoll {
-                        instance: frame.instance,
-                        async_: *async_,
-                        memory,
-                    },
-                ));
-                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            WaitableSetPoll { options } => {
+                let func = options.core_type;
+                let options = self.adapter_options(frame, types, options);
+                let options = self.canonical_options(options);
+                let index = self
+                    .result
+                    .trampolines
+                    .push((func, dfg::Trampoline::WaitableSetPoll { options }));
+                frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
             WaitableSetDrop { func } => {
                 let index = self.result.trampolines.push((
@@ -1433,7 +1419,7 @@ impl<'a> Inliner<'a> {
     /// memories/functions are inserted into the global initializer list for
     /// use at runtime. This is only used for lowered host functions and lifted
     /// functions exported to the host.
-    fn canonical_options(&mut self, options: AdapterOptions) -> dfg::CanonicalOptions {
+    fn canonical_options(&mut self, options: AdapterOptions) -> dfg::OptionsId {
         let data_model = match options.data_model {
             DataModel::Gc {} => dfg::CanonicalOptionsDataModel::Gc {},
             DataModel::LinearMemory {
@@ -1449,7 +1435,7 @@ impl<'a> Inliner<'a> {
         let post_return = options
             .post_return
             .map(|def| self.result.post_returns.push(def));
-        dfg::CanonicalOptions {
+        self.result.options.push(dfg::CanonicalOptions {
             instance: options.instance,
             string_encoding: options.string_encoding,
             callback,
@@ -1457,7 +1443,7 @@ impl<'a> Inliner<'a> {
             async_: options.async_,
             core_type: options.core_type,
             data_model,
-        }
+        })
     }
 
     fn record_export(

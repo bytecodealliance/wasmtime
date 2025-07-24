@@ -9,7 +9,7 @@ use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
 use crate::component::{AsAccessor, Instance, Lower, Val, WasmList, WasmStr};
 use crate::store::{StoreOpaque, StoreToken};
-use crate::vm::{VMFuncRef, VMMemoryDefinition, VMStore};
+use crate::vm::VMStore;
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{Context, Result, anyhow, bail};
 use buffers::Extender;
@@ -23,13 +23,12 @@ use std::future::Future;
 use std::iter;
 use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
-use std::ptr::NonNull;
 use std::string::{String, ToString};
 use std::sync::{Arc, Mutex};
 use std::task::{Poll, Waker};
 use std::vec::Vec;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, RuntimeComponentInstanceIndex, StringEncoding,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex, RuntimeComponentInstanceIndex,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
     TypeFutureTableIndex, TypeStreamTableIndex,
 };
@@ -2274,41 +2273,22 @@ impl Instance {
     }
 
     /// Write to the specified stream or future from the guest.
-    ///
-    /// SAFETY: `memory` and `realloc` must be either be valid pointers to their
-    /// respective guest entities or null if not applicable (e.g. for a future
-    /// or stream with no payload type).
-    pub(super) unsafe fn guest_write<T: 'static>(
+    pub(super) fn guest_write<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
-        memory: *mut VMMemoryDefinition,
-        realloc: *mut VMFuncRef,
-        string_encoding: u8,
-        async_: bool,
         ty: TableIndex,
+        options: OptionsIndex,
         flat_abi: Option<FlatAbi>,
         handle: u32,
         address: u32,
         count: u32,
     ) -> Result<ReturnCode> {
-        if !async_ {
-            bail!("synchronous stream and future writes not yet supported");
-        }
-
         let address = usize::try_from(address).unwrap();
         let count = usize::try_from(count).unwrap();
-        // SAFETY: Per this function's contract, `memory` and `realloc` are
-        // either valid or null.
-        let options = unsafe {
-            Options::new(
-                store.0.store_opaque().id(),
-                NonNull::new(memory),
-                NonNull::new(realloc),
-                StringEncoding::from_u8(string_encoding).unwrap(),
-                true,
-                None,
-            )
-        };
+        let options = Options::new_index(store.0, self, options);
+        if !options.async_() {
+            bail!("synchronous stream and future writes not yet supported");
+        }
         let concurrent_state = self.concurrent_state_mut(store.0);
         let (rep, state) = concurrent_state.get_mut_by_index(ty, handle)?;
         let StreamFutureState::Write { done } = *state else {
@@ -2510,40 +2490,21 @@ impl Instance {
     }
 
     /// Read from the specified stream or future from the guest.
-    ///
-    /// SAFETY: `memory` and `realloc` must be either be valid pointers to their
-    /// respective guest entities or null if not applicable (e.g. for a future
-    /// or stream with no payload type).
-    pub(super) unsafe fn guest_read<T: 'static>(
+    pub(super) fn guest_read<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
-        memory: *mut VMMemoryDefinition,
-        realloc: *mut VMFuncRef,
-        string_encoding: u8,
-        async_: bool,
         ty: TableIndex,
+        options: OptionsIndex,
         flat_abi: Option<FlatAbi>,
         handle: u32,
         address: u32,
         count: u32,
     ) -> Result<ReturnCode> {
-        if !async_ {
+        let address = usize::try_from(address).unwrap();
+        let options = Options::new_index(store.0, self, options);
+        if !options.async_() {
             bail!("synchronous stream and future reads not yet supported");
         }
-
-        let address = usize::try_from(address).unwrap();
-        // SAFETY: Per this function's contract, `memory` and `realloc` must be
-        // valid or null.
-        let options = unsafe {
-            Options::new(
-                store.0.store_opaque().id(),
-                NonNull::new(memory),
-                NonNull::new(realloc),
-                StringEncoding::from_u8(string_encoding).unwrap(),
-                true,
-                None,
-            )
-        };
         let concurrent_state = self.concurrent_state_mut(store.0);
         let (rep, state) = concurrent_state.get_mut_by_index(ty, handle)?;
         let StreamFutureState::Read { done } = *state else {
@@ -2769,33 +2730,15 @@ impl Instance {
     }
 
     /// Create a new error context for the given component.
-    ///
-    /// SAFETY: `memory` and `realloc` must be valid pointers to their
-    /// respective guest entities.
-    pub(crate) unsafe fn error_context_new(
+    pub(crate) fn error_context_new(
         self,
         store: &mut StoreOpaque,
-        memory: *mut VMMemoryDefinition,
-        realloc: *mut VMFuncRef,
-        string_encoding: u8,
         ty: TypeComponentLocalErrorContextTableIndex,
+        options: OptionsIndex,
         debug_msg_address: u32,
         debug_msg_len: u32,
     ) -> Result<u32> {
-        // SAFETY: Per this function's contract, `memory` and `realloc` must be
-        // valid.
-        let options = unsafe {
-            Options::new(
-                store.id(),
-                NonNull::new(memory),
-                NonNull::new(realloc),
-                StringEncoding::from_u8(string_encoding).ok_or_else(|| {
-                    anyhow::anyhow!("failed to convert u8 string encoding [{string_encoding}]")
-                })?,
-                false,
-                None,
-            )
-        };
+        let options = Options::new_index(store, self, options);
         let lift_ctx = &mut LiftContext::new(store, &options, self);
         //  Read string from guest memory
         let address = usize::try_from(debug_msg_address)?;
@@ -2841,21 +2784,15 @@ impl Instance {
     }
 
     /// Retrieve the debug message from the specified error context.
-    ///
-    /// SAFETY: `memory` and `realloc` must be valid pointers to their
-    /// respective guest entities.
-    pub(super) unsafe fn error_context_debug_message<T>(
+    pub(super) fn error_context_debug_message<T>(
         self,
         store: StoreContextMut<T>,
-        memory: *mut VMMemoryDefinition,
-        realloc: *mut VMFuncRef,
-        string_encoding: u8,
         ty: TypeComponentLocalErrorContextTableIndex,
+        options: OptionsIndex,
         err_ctx_handle: u32,
         debug_msg_address: u32,
     ) -> Result<()> {
         // Retrieve the error context and internal debug message
-        let id = store.0.store_opaque().id();
         let state = self.concurrent_state_mut(store.0);
         let (state_table_id_rep, _) = state
             .error_context_tables
@@ -2868,20 +2805,7 @@ impl Instance {
             state.get_mut(TableId::<ErrorContextState>::new(state_table_id_rep))?;
         let debug_msg = debug_msg.clone();
 
-        // SAFETY: Per this function's contract, `memory` and `realloc` are
-        // valid.
-        let options = unsafe {
-            Options::new(
-                id,
-                NonNull::new(memory),
-                NonNull::new(realloc),
-                StringEncoding::from_u8(string_encoding).ok_or_else(|| {
-                    anyhow::anyhow!("failed to convert u8 string encoding [{string_encoding}]")
-                })?,
-                false,
-                None,
-            )
-        };
+        let options = Options::new_index(store.0, self, options);
         let types = self.id().get(store.0).component().types().clone();
         let lower_cx = &mut LowerContext::new(store, &options, &types, self);
         let debug_msg_address = usize::try_from(debug_msg_address)?;
