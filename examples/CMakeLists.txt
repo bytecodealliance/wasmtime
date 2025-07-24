@@ -24,9 +24,6 @@ function(CREATE_TARGET TARGET TARGET_PATH)
 
   target_include_directories(wasmtime-${TARGET} PUBLIC wasmtime)
   target_link_libraries(wasmtime-${TARGET} PUBLIC wasmtime)
-  if(APPLE)
-    target_link_libraries(wasmtime-${TARGET} PRIVATE "-framework CoreFoundation")
-  endif()
   add_test(NAME ${TARGET}-c COMMAND wasmtime-${TARGET} WORKING_DIRECTORY ../..)
 endfunction()
 
