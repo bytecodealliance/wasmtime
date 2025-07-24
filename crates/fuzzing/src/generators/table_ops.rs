@@ -1,7 +1,7 @@
 //! Generating series of `table.get` and `table.set` operations.
-use bincode::{Decode, Encode};
 use mutatis::mutators as m;
 use mutatis::{Candidates, Context, DefaultMutate, Generate, Mutate, Result as MutResult};
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::ops::RangeInclusive;
 use wasm_encoder::{
@@ -12,7 +12,7 @@ use wasm_encoder::{
 
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
-#[derive(Debug, Default, Encode, Decode)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TableOps {
     pub(crate) num_params: u32,
     pub(crate) num_globals: u32,
@@ -183,7 +183,10 @@ impl TableOps {
 
         self.ops = new_ops;
     }
-    /// Pops from the vector of the opcodes and returns bool
+
+    /// Attempts to remove the last opcode from the sequence.
+    ///
+    /// Returns `true` if an opcode was successfully removed, or `false` if the list was already empty.
     pub fn pop(&mut self) -> bool {
         self.ops.pop().is_some()
     }
@@ -288,7 +291,7 @@ macro_rules! define_table_ops {
             $op:ident $( ( $($limit:expr => $ty:ty),* ) )? : $params:expr => $results:expr ,
         )*
     ) => {
-        #[derive(Copy, Clone, Debug, Encode, Decode)]
+        #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
         pub(crate) enum TableOp {
             $(
                 $op ( $( $($ty),* )? ),

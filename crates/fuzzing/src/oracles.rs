@@ -23,8 +23,7 @@ use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::{DiffEngine, DiffInstance};
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
-use arbitrary::{Arbitrary, Unstructured};
-use rand::{Rng, SeedableRng};
+use arbitrary::Arbitrary;
 pub use stacks::check_stacks;
 use std::future::Future;
 use std::pin::Pin;
@@ -1330,22 +1329,6 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
             }
         }
     }
-}
-
-/// Fuzz target for table operations that reconstructs config from seed.
-pub fn fuzz_table_ops((config_seed, ops): (u64, generators::table_ops::TableOps)) {
-    let mut buf = [0u8; 1024];
-    let mut rng = rand::rngs::StdRng::seed_from_u64(config_seed);
-
-    for b in buf.iter_mut() {
-        *b = rng.r#gen()
-    }
-
-    let u = Unstructured::new(&buf);
-    let config = generators::Config::arbitrary_take_rest(u)
-        .expect("should be able to generate config from seed");
-
-    let _ = crate::oracles::table_ops(config, ops);
 }
 
 #[cfg(test)]

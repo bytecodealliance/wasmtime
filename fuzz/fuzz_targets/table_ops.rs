@@ -1,45 +1,56 @@
 #![no_main]
 
+use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::{fuzz_mutator, fuzz_target, fuzzer_mutate};
 use mutatis::Session;
+use postcard::{from_bytes, to_slice};
+use rand::{Rng, SeedableRng};
 use wasmtime_fuzzing::generators::table_ops::TableOps;
-use wasmtime_fuzzing::oracles::fuzz_table_ops;
+use wasmtime_fuzzing::oracles::table_ops;
 
 fuzz_target!(|input: (u64, TableOps)| {
-    fuzz_table_ops(input);
+    let (seed, ops) = input;
+    let mut buf = [0u8; 1024];
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    for b in buf.iter_mut() {
+        *b = rng.r#gen();
+    }
+
+    let u = Unstructured::new(&buf);
+    let config = wasmtime_fuzzing::generators::Config::arbitrary_take_rest(u)
+        .expect("should be able to generate config from seed");
+
+    let _ = table_ops(config, ops);
 });
 
 fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {
     let _ = env_logger::try_init();
 
-    // With probability of about 1/8, just use the default mutator.
+    // With probability of about 1/8, use default mutator
     if seed.count_ones() % 8 == 0 {
         return fuzzer_mutate(data, size, max_size);
     }
 
-    // Fallback to default on decode failure
-    let mut tuple =
-        bincode::decode_from_slice::<(u64, TableOps), _>(data, bincode::config::standard())
-            .map_or_else(|_err| (0, TableOps::default()), |(tuple, _)| tuple);
+    // Try to decode using postcard; fallback to default input on failure
+    let mut tuple: (u64, TableOps) = from_bytes(&data[..size]).ok().unwrap_or_default();
 
     let mut session = Session::new().seed(seed.into()).shrink(max_size < size);
 
     if session.mutate(&mut tuple).is_ok() {
-        // Re-encode the mutated ops back into `data`.
         loop {
-            if let Ok(new_size) =
-                bincode::encode_into_slice(&tuple, data, bincode::config::standard())
-            {
-                return new_size;
+            if let Ok(encoded) = to_slice(&tuple, data) {
+                return encoded.len();
             }
-            // When re-encoding fails (presumably because `data` is not
-            // large enough) then pop an op off the end and try again.
+
+            // Attempt to shrink ops if encoding fails (e.g., buffer too small)
             if tuple.1.pop() {
                 continue;
             }
+
             break;
         }
     }
-    // Fall back to the fuzzer's default mutation strategies.
+
+    // Fallback to default libfuzzer mutator
     fuzzer_mutate(data, size, max_size)
 });

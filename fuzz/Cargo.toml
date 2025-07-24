@@ -13,7 +13,8 @@ cargo-fuzz = true
 
 [dependencies]
 mutatis = { workspace = true }
-bincode = "2.0.1"
+rand = { workspace = true }
+postcard = { workspace = true }
 anyhow = { workspace = true }
 env_logger = { workspace = true }
 cranelift-assembler-x64 = { workspace = true, features = ["fuzz"] }
