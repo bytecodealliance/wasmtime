@@ -548,27 +548,30 @@ impl ExternRef {
     /// This function assumes that `raw` is an externref value which is
     /// currently rooted within the [`Store`].
     ///
-    /// # Unsafety
+    /// # Correctness
     ///
-    /// This function is particularly `unsafe` because `raw` not only must be a
-    /// valid externref value produced prior by `to_raw` but it must also be
-    /// correctly rooted within the store. When arguments are provided to a
-    /// callback with [`Func::new_unchecked`], for example, or returned via
-    /// [`Func::call_unchecked`], if a GC is performed within the store then
-    /// floating externref values are not rooted and will be GC'd, meaning that
-    /// this function will no longer be safe to call with the values cleaned up.
-    /// This function must be invoked *before* possible GC operations can happen
-    /// (such as calling wasm).
+    /// This function is tricky to get right because `raw` not only must be a
+    /// valid `externref` value produced prior by [`ExternRef::to_raw`] but it
+    /// must also be correctly rooted within the store. When arguments are
+    /// provided to a callback with [`Func::new_unchecked`], for example, or
+    /// returned via [`Func::call_unchecked`], if a GC is performed within the
+    /// store then floating `externref` values are not rooted and will be GC'd,
+    /// meaning that this function will no longer be correct to call with the
+    /// values cleaned up. This function must be invoked *before* possible GC
+    /// operations can happen (such as calling Wasm).
     ///
-    /// When in doubt try to not use this. Instead use the safe Rust APIs of
-    /// [`TypedFunc`] and friends.
+    ///
+    /// When in doubt try to not use this. Instead use the Rust APIs of
+    /// [`TypedFunc`] and friends. Note though that this function is not
+    /// `unsafe` as any value can be passed in. Incorrect values can result in
+    /// runtime panics, however, so care must still be taken with this method.
     ///
     /// [`Func::call_unchecked`]: crate::Func::call_unchecked
     /// [`Func::new_unchecked`]: crate::Func::new_unchecked
     /// [`Store`]: crate::Store
     /// [`TypedFunc`]: crate::TypedFunc
     /// [`ValRaw`]: crate::ValRaw
-    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<ExternRef>> {
+    pub fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<ExternRef>> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         Self::_from_raw(&mut store, raw)
     }
@@ -585,14 +588,14 @@ impl ExternRef {
     ///
     /// Returns an error if this `externref` has been unrooted.
     ///
-    /// # Unsafety
+    /// # Correctness
     ///
-    /// Produces a raw value which is only safe to pass into a store if a GC
+    /// Produces a raw value which is only valid to pass into a store if a GC
     /// doesn't happen between when the value is produce and when it's passed
     /// into the store.
     ///
     /// [`ValRaw`]: crate::ValRaw
-    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
+    pub fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         self._to_raw(&mut store)
     }

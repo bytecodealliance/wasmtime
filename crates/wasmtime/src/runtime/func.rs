@@ -1015,7 +1015,8 @@ impl Func {
     /// Converts the raw representation of a `funcref` into an `Option<Func>`
     ///
     /// This is intended to be used in conjunction with [`Func::new_unchecked`],
-    /// [`Func::call_unchecked`], and [`ValRaw`] with its `funcref` field.
+    /// [`Func::call_unchecked`], and [`ValRaw`] with its `funcref` field. This
+    /// is the dual of [`Func::to_raw`].
     ///
     /// # Unsafety
     ///
@@ -1038,12 +1039,12 @@ impl Func {
     /// This function returns a value that's suitable for writing into the
     /// `funcref` field of the [`ValRaw`] structure.
     ///
-    /// # Unsafety
+    /// # Safety
     ///
-    /// The returned value is only valid for as long as the store is alive and
-    /// this function is properly rooted within it. Additionally this function
-    /// should not be liberally used since it's a very low-level knob.
-    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
+    /// The returned value is only valid for as long as the store is alive.
+    /// This value is safe to pass to [`Func::from_raw`] so long as the same
+    /// `store` is provided.
+    pub fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
         self.vm_func_ref(store.as_context_mut().0).as_ptr().cast()
     }
 
@@ -1155,9 +1156,7 @@ impl Func {
         debug_assert!(values_vec.is_empty());
         values_vec.resize_with(values_vec_size, || ValRaw::v128(0));
         for (arg, slot) in params.iter().cloned().zip(&mut values_vec) {
-            unsafe {
-                *slot = arg.to_raw(&mut *store)?;
-            }
+            *slot = arg.to_raw(&mut *store)?;
         }
 
         unsafe {
@@ -1255,9 +1254,7 @@ impl Func {
         for (i, (ret, ty)) in results.iter().zip(ty.results()).enumerate() {
             ret.ensure_matches_ty(caller.store.0, &ty)
                 .context("function attempted to return an incompatible value")?;
-            unsafe {
-                values_vec[i] = ret.to_raw(&mut caller.store)?;
-            }
+            values_vec[i] = ret.to_raw(&mut caller.store)?;
         }
 
         // Restore our `val_vec` back into the store so it's usable for the next
