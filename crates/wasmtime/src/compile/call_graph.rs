@@ -10,8 +10,6 @@
 //! schedule. For best results, however, every direct call that is potentially
 //! inlinable should be reported when constructing these call graphs.
 
-#![cfg_attr(not(test), expect(dead_code, reason = "used in upcoming PRs"))]
-
 use super::*;
 use core::{
     fmt::{self, Debug},
@@ -71,7 +69,7 @@ where
     /// calls.
     pub fn new(
         funcs: impl IntoIterator<Item = Node>,
-        get_calls: impl Fn(Node, &mut Vec<Node>) -> Result<()>,
+        mut get_calls: impl FnMut(Node, &mut Vec<Node>) -> Result<()>,
     ) -> Result<Self> {
         let funcs = funcs.into_iter();
 
