@@ -13,10 +13,6 @@ pub enum GuestError {
     PtrOutOfBounds(Region),
     #[error("Pointer not aligned to {1}: {0:?}")]
     PtrNotAligned(Region, u32),
-    #[error("Pointer already borrowed: {0:?}")]
-    PtrBorrowed(Region),
-    #[error("Borrow checker out of handles")]
-    BorrowCheckerOutOfHandles,
     #[error("Slice length mismatch")]
     SliceLengthsDiffer,
     #[error("In func {modulename}::{funcname} at {location}: {err}")]

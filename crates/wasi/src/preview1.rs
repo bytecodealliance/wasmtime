@@ -1044,11 +1044,9 @@ impl From<GuestError> for types::Error {
             PtrOverflow { .. } | PtrOutOfBounds { .. } | PtrNotAligned { .. } => {
                 types::Error::trap(err.into())
             }
-            PtrBorrowed { .. } => types::Errno::Fault.into(),
             InvalidUtf8 { .. } => types::Errno::Ilseq.into(),
             TryFromIntError { .. } => types::Errno::Overflow.into(),
             SliceLengthsDiffer { .. } => types::Errno::Fault.into(),
-            BorrowCheckerOutOfHandles { .. } => types::Errno::Fault.into(),
             InFunc { err, .. } => types::Error::from(*err),
         }
     }
