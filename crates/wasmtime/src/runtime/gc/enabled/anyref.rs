@@ -249,27 +249,30 @@ impl AnyRef {
     /// This function assumes that `raw` is an `anyref` value which is currently
     /// rooted within the [`Store`].
     ///
-    /// # Unsafety
+    /// # Correctness
     ///
-    /// This function is particularly `unsafe` because `raw` not only must be a
-    /// valid `anyref` value produced prior by [`AnyRef::to_raw`] but it must
-    /// also be correctly rooted within the store. When arguments are provided
-    /// to a callback with [`Func::new_unchecked`], for example, or returned via
-    /// [`Func::call_unchecked`], if a GC is performed within the store then
-    /// floating `anyref` values are not rooted and will be GC'd, meaning that
-    /// this function will no longer be safe to call with the values cleaned up.
-    /// This function must be invoked *before* possible GC operations can happen
-    /// (such as calling Wasm).
+    /// This function is tricky to get right because `raw` not only must be a
+    /// valid `anyref` value produced prior by [`AnyRef::to_raw`] but it
+    /// must also be correctly rooted within the store. When arguments are
+    /// provided to a callback with [`Func::new_unchecked`], for example, or
+    /// returned via [`Func::call_unchecked`], if a GC is performed within the
+    /// store then floating `anyref` values are not rooted and will be GC'd,
+    /// meaning that this function will no longer be correct to call with the
+    /// values cleaned up. This function must be invoked *before* possible GC
+    /// operations can happen (such as calling Wasm).
     ///
-    /// When in doubt try to not use this. Instead use the safe Rust APIs of
-    /// [`TypedFunc`] and friends.
+    ///
+    /// When in doubt try to not use this. Instead use the Rust APIs of
+    /// [`TypedFunc`] and friends. Note though that this function is not
+    /// `unsafe` as any value can be passed in. Incorrect values can result in
+    /// runtime panics, however, so care must still be taken with this method.
     ///
     /// [`Func::call_unchecked`]: crate::Func::call_unchecked
     /// [`Func::new_unchecked`]: crate::Func::new_unchecked
     /// [`Store`]: crate::Store
     /// [`TypedFunc`]: crate::TypedFunc
     /// [`ValRaw`]: crate::ValRaw
-    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<Self>> {
+    pub fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<Self>> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         Self::_from_raw(&mut store, raw)
     }
@@ -320,19 +323,19 @@ impl AnyRef {
     ///
     /// Returns an error if this `anyref` has been unrooted.
     ///
-    /// # Unsafety
+    /// # Correctness
     ///
-    /// Produces a raw value which is only safe to pass into a store if a GC
+    /// Produces a raw value which is only valid to pass into a store if a GC
     /// doesn't happen between when the value is produce and when it's passed
     /// into the store.
     ///
     /// [`ValRaw`]: crate::ValRaw
-    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
+    pub fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         self._to_raw(&mut store)
     }
 
-    pub(crate) unsafe fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
+    pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
         let raw = if gc_ref.is_i31() {
             gc_ref.as_raw_non_zero_u32()

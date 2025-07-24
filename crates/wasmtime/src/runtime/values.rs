@@ -230,11 +230,12 @@ impl Val {
     /// Returns an error if this value is a GC reference and the GC reference
     /// has been unrooted.
     ///
-    /// # Unsafety
+    /// # Safety
     ///
-    /// This method is unsafe for the reasons that [`ExternRef::to_raw`] and
-    /// [`Func::to_raw`] are unsafe.
-    pub unsafe fn to_raw(&self, store: impl AsContextMut) -> Result<ValRaw> {
+    /// The returned [`ValRaw`] does not carry type information and is only safe
+    /// to use within the context of this store itself. For more information see
+    /// [`ExternRef::to_raw`] and [`Func::to_raw`].
+    pub fn to_raw(&self, store: impl AsContextMut) -> Result<ValRaw> {
         match self {
             Val::I32(i) => Ok(ValRaw::i32(*i)),
             Val::I64(i) => Ok(ValRaw::i64(*i)),

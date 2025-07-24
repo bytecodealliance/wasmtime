@@ -818,8 +818,8 @@ fn to_raw_from_raw_doesnt_leak() -> Result<()> {
     {
         let mut scope = RootScope::new(&mut store);
         let x = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?;
-        let raw = unsafe { x.to_raw(&mut scope)? };
-        let _x = unsafe { ExternRef::from_raw(&mut scope, raw) };
+        let raw = x.to_raw(&mut scope)?;
+        let _x = ExternRef::from_raw(&mut scope, raw);
     }
 
     store.gc(None);
