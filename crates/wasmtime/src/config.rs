@@ -255,6 +255,9 @@ pub trait RecordWriter: Write + Send + Sync {}
 impl<T: Write + Send + Sync> RecordWriter for T {}
 
 /// Configuration for recording execution
+///
+/// ## Notes
+/// The writers are buffered internally as needed, so avoid using buffered writers as intializers
 #[derive(Clone)]
 pub struct RecordConfig {
     /// Closure that generates a writer for recording execution traces
@@ -283,6 +286,9 @@ pub trait ReplayReader: Read + Send + Sync {}
 impl<T: Read + Send + Sync> ReplayReader for T {}
 
 /// Configuration for replay execution
+///
+/// ## Notes
+/// The readers are buffered internally as needed, so avoid using buffered readers as intializers
 #[derive(Clone)]
 pub struct ReplayConfig {
     /// Closure that generates a reader for replaying execution traces

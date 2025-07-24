@@ -92,6 +92,9 @@ struct ComponentInner {
     /// `realloc`, to avoid the need to look up types in the registry and take
     /// locks when calling `realloc` via `TypedFunc::call_raw`.
     realloc_func_type: Arc<FuncType>,
+
+    /// The SHA-256 checksum of the source binary
+    checksum: [u8; 32],
 }
 
 pub(crate) struct AllCallFuncPointers {
@@ -402,6 +405,7 @@ impl Component {
             info,
             mut types,
             mut static_modules,
+            checksum,
         } = match artifacts {
             Some(artifacts) => artifacts,
             None => postcard::from_bytes(code_memory.wasmtime_info())?,
@@ -452,6 +456,7 @@ impl Component {
                 code,
                 info,
                 realloc_func_type,
+                checksum,
             }),
         })
     }
@@ -826,6 +831,10 @@ impl Component {
 
     pub(crate) fn realloc_func_ty(&self) -> &Arc<FuncType> {
         &self.inner.realloc_func_type
+    }
+
+    pub(crate) fn checksum(&self) -> &[u8; 32] {
+        &self.inner.checksum
     }
 
     /// Returns the `Export::LiftedFunction` metadata associated with `export`.

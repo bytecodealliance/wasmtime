@@ -26,6 +26,7 @@ use crate::Engine;
 use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::prelude::*;
+use sha2::{Digest, Sha256};
 use std::{
     any::Any,
     borrow::Cow,
@@ -198,6 +199,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         ty,
         types,
         static_modules: compilation_artifacts.modules,
+        checksum: Sha256::digest(binary).into(),
     };
     object.serialize_info(&artifacts);
 

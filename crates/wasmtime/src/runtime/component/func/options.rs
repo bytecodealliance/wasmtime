@@ -597,7 +597,9 @@ impl<'a, T: 'static> LowerContext<'a, T> {
                 RREvent::ComponentHostFuncEntry(_) => {
                     bail!("Cannot call back into host during lowering")
                 }
-                _ => {}
+                _ => {
+                    bail!("Invalid event \'{:?}\' encountered during lowering", event);
+                }
             };
         }
         Ok(())

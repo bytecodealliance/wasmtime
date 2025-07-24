@@ -18,6 +18,8 @@ pub struct ComponentArtifacts {
     pub types: ComponentTypes,
     /// Serialized metadata about all included core wasm modules.
     pub static_modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
+    /// A SHA-256 checksum of the source Wasm binary from which the component was compiled
+    pub checksum: [u8; 32],
 }
 
 /// Runtime state that a component retains to support its operation.

@@ -8,6 +8,7 @@ use crate::component::{
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
+use crate::rr::events::component_wasm::InstantiationEvent;
 use crate::runtime::vm::VMFuncRef;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::store::StoreOpaque;
@@ -845,6 +846,16 @@ impl<T: 'static> InstancePre<T> {
 
     fn instantiate_impl(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
         let mut store = store.as_context_mut();
+        {
+            store
+                .0
+                .record_event(|_| InstantiationEvent::from_component(&self.component));
+            store
+                .0
+                .next_replay_event_and(|event: InstantiationEvent, _| {
+                    event.validate(&self.component)
+                })?;
+        }
         store
             .engine()
             .allocator()

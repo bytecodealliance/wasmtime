@@ -1,11 +1,35 @@
 //! Module comprising of component model wasm events
 use super::*;
 #[allow(unused_imports)]
-use crate::component::ComponentType;
+use crate::component::{Component, ComponentType};
 use std::vec::Vec;
 use wasmtime_environ::component::InterfaceType;
 #[cfg(feature = "rr-type-validation")]
 use wasmtime_environ::component::TypeTuple;
+
+/// A [`Component`] instantiatation event
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstantiationEvent {
+    /// A checksum of the component bytecode
+    checksum: [u8; 32],
+}
+
+impl InstantiationEvent {
+    pub fn from_component(component: &Component) -> Self {
+        Self {
+            checksum: *component.checksum(),
+        }
+    }
+
+    /// Validate that checksums match
+    pub fn validate(self, component: &Component) -> Result<(), ReplayError> {
+        if self.checksum != *component.checksum() {
+            Err(ReplayError::FailedModuleValidation)
+        } else {
+            Ok(())
+        }
+    }
+}
 
 /// A call event from a Wasm component into the host
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

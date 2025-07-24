@@ -11,7 +11,7 @@ use postcard;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 #[allow(unused_imports, reason = "may be used in the future")]
-use std::io::{BufWriter, Read, Seek, Write};
+use std::io::{BufReader, BufWriter, Read, Seek, Write};
 
 /// Encapsulation of event types comprising an [`RREvent`] sum type
 pub mod events;
@@ -81,6 +81,8 @@ rr_event! {
 
     // REQUIRED events for replay
     //
+    /// Instantiation of a component
+    ComponentInstantiation(component_wasm::InstantiationEvent),
     /// Return from host function to component
     ComponentHostFuncReturn(component_wasm::HostFuncReturnEvent),
     /// Component ABI realloc call in linear wasm memory
@@ -109,8 +111,8 @@ rr_event! {
 pub enum ReplayError {
     EmptyBuffer,
     FailedFuncValidation,
+    FailedModuleValidation,
     IncorrectEventVariant,
-
     EventActionError(EventActionError),
 }
 
@@ -122,6 +124,9 @@ impl fmt::Display for ReplayError {
             }
             Self::FailedFuncValidation => {
                 write!(f, "func replay event validation failed")
+            }
+            Self::FailedModuleValidation => {
+                write!(f, "module load replay event validation failed")
             }
             Self::IncorrectEventVariant => {
                 write!(f, "event method invoked on incorrect variant")
