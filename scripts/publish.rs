@@ -550,6 +550,8 @@ fn verify(crates: &[Crate]) {
     }
 
     fn verify_and_vendor(krate: &Crate) {
+        verify_crates_io(krate);
+
         let mut cmd = Command::new("cargo");
         cmd.arg("package")
             .arg("--manifest-path")
@@ -606,5 +608,31 @@ fn verify(crates: &[Crate]) {
             C_HEADER_PATH,
             version
         );
+    }
+
+    fn verify_crates_io(krate: &Crate) {
+        let name = &krate.name;
+        let Some(owners) = curl(&format!("https://crates.io/api/v1/crates/{name}/owners")) else {
+            panic!("failed to get owners for {name}", name = name);
+        };
+
+        let assert_owner = |owner: &str| {
+            let owner_json = format!("\"{owner}\"");
+            if !owners.contains(&owner_json) {
+                panic!(
+                    "
+crate {name} is not owned by {owner}, please run:
+
+    cargo owner -a {owner} {name}
+",
+                    name = name
+                );
+            }
+        };
+
+        // the wasmtime-publish github user
+        assert_owner("wasmtime-publish");
+        // the BA team which can publish crates
+        assert_owner("github:bytecodealliance:wasmtime-publish");
     }
 }
