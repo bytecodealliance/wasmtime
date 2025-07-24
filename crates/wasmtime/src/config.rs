@@ -4,6 +4,7 @@ use bitflags::Flags;
 use core::fmt;
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
+use std::io::{Read, Write};
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 use wasmparser::WasmFeatures;
@@ -247,13 +248,19 @@ impl Default for RecordMetadata {
     }
 }
 
+/// A [`Write`] usable for recording in RR
+///
+/// Only constraint is that writer must be Send + Sync
+pub trait RecordWriter: Write + Send + Sync {}
+impl<T: Write + Send + Sync> RecordWriter for T {}
+
 /// Configuration for recording execution
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RecordConfig {
-    /// Filesystem path to write record trace
-    pub(crate) path: String,
+    /// Closure that generates a writer for recording execution traces
+    pub writer_initializer: Arc<dyn Fn() -> Box<dyn RecordWriter> + Send + Sync>,
     /// Associated metadata for configuring the recording strategy
-    pub(crate) metadata: RecordMetadata,
+    pub metadata: RecordMetadata,
 }
 
 /// Metadata for specifying replay strategy
@@ -269,17 +276,23 @@ impl Default for ReplayMetadata {
     }
 }
 
+/// A [`Read`] usable for replaying in RR
+///
+/// Only constraint is that reader must be Send + Sync
+pub trait ReplayReader: Read + Send + Sync {}
+impl<T: Read + Send + Sync> ReplayReader for T {}
+
 /// Configuration for replay execution
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ReplayConfig {
-    /// Filesystem path to read trace from
-    pub path: String,
+    /// Closure that generates a reader for replaying execution traces
+    pub reader_initializer: Arc<dyn Fn() -> Box<dyn ReplayReader> + Send + Sync>,
     /// Flag for dynamic validation checks when replaying events
     pub metadata: ReplayMetadata,
 }
 
 /// Configurations for record/replay (RR) executions
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum RRConfig {
     /// Record configuration
     Record(RecordConfig),
@@ -287,49 +300,36 @@ pub enum RRConfig {
     Replay(ReplayConfig),
 }
 
+impl From<RecordConfig> for RRConfig {
+    fn from(value: RecordConfig) -> Self {
+        Self::Record(value)
+    }
+}
+
+impl From<ReplayConfig> for RRConfig {
+    fn from(value: ReplayConfig) -> Self {
+        Self::Replay(value)
+    }
+}
+
 impl RRConfig {
-    /// Construct a record ([`RRConfig::Record`]) configuration.
-    /// If `metadata` is None, uses [`RecordMetadata::default()`]
-    pub fn record_cfg(path: String, metadata: Option<RecordMetadata>) -> Self {
-        Self::Record(RecordConfig {
-            path,
-            metadata: metadata.unwrap_or(RecordMetadata::default()),
-        })
-    }
-
-    /// Construct a replay ([`RRConfig::Replay`]) configuration.
-    /// If `metadata` is None, uses [`ReplayMetadata::default()`]
-    pub fn replay_cfg(path: String, metadata: Option<ReplayMetadata>) -> Self {
-        Self::Replay(ReplayConfig {
-            path,
-            metadata: metadata.unwrap_or(ReplayMetadata::default()),
-        })
-    }
-
-    /// Wrap the record config in [`RRConfig::Record`]
+    /// Obtain the record configuration
+    ///
+    /// Return [`None`] if it is not configured
     pub fn record(&self) -> Option<&RecordConfig> {
         match self {
             Self::Record(r) => Some(r),
             _ => None,
         }
     }
-    /// Extract the record config. Panics if not a [`RRConfig::Record`]
-    pub fn record_unwrap(&self) -> &RecordConfig {
-        self.record()
-            .expect("use of incorrectly initialized record configuration")
-    }
-
-    /// Wrap the replay config in [`RRConfig::Replay`]
+    /// Obtain the replay configuration
+    ///
+    /// Return [`None`] if it is not configured
     pub fn replay(&self) -> Option<&ReplayConfig> {
         match self {
             Self::Replay(r) => Some(r),
             _ => None,
         }
-    }
-    /// Extract the replay config. Panics if not a [`RRConfig::Replay`]
-    pub fn replay_unwrap(&self) -> &ReplayConfig {
-        self.replay()
-            .expect("use of incorrectly initialized replay configuration")
     }
 }
 

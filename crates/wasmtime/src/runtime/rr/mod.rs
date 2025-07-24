@@ -1,20 +1,17 @@
 //! Wasmtime's Record and Replay support
 //!
-//! This feature is currently experimental and hence not optimized.
+//! This feature is currently not optimized
 
 use crate::config::{
-    ModuleVersionStrategy, RecordConfig, RecordMetadata, ReplayConfig, ReplayMetadata,
+    ModuleVersionStrategy, RecordMetadata, RecordWriter, ReplayMetadata, ReplayReader,
 };
 use crate::prelude::*;
-#[allow(unused_imports)]
-use crate::runtime::Store;
 use core::fmt;
 use postcard;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::fs::File;
-#[allow(unused_imports)]
-use std::io::{BufWriter, Seek, Write};
+#[allow(unused_imports, reason = "may be used in the future")]
+use std::io::{BufWriter, Read, Seek, Write};
 
 /// Encapsulation of event types comprising an [`RREvent`] sum type
 pub mod events;
@@ -36,6 +33,8 @@ macro_rules! rr_event {
         /// of parameter/return types) may drop down to one or more [`RREvent`]s
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
         pub enum RREvent {
+            /// TOOD: Used temporarily only for eof detection. This is never generated, so remove in future
+            Eof,
             $(
                 $(#[doc = $doc])*
                 $variant($event),
@@ -45,6 +44,7 @@ macro_rules! rr_event {
         impl fmt::Display for RREvent {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 match self {
+                    Self::Eof => write!(f, "Eof event"),
                     $(
                     Self::$variant(e) => write!(f, "{:?}", e),
                     )*
@@ -143,8 +143,8 @@ impl From<EventActionError> for ReplayError {
 
 /// This trait provides the interface for a FIFO recorder
 pub trait Recorder {
-    /// Constructs a writer on new buffer
-    fn new_recorder(cfg: RecordConfig) -> Result<Self>
+    /// Construct a recorder with the writer backend
+    fn new_recorder(writer: Box<dyn RecordWriter>, metadata: RecordMetadata) -> Result<Self>
     where
         Self: Sized;
 
@@ -154,10 +154,10 @@ pub trait Recorder {
         T: Into<RREvent>,
         F: FnOnce(&RecordMetadata) -> T;
 
-    /// Flush memory contents to underlying persistent storage
+    /// Flush memory contents to underlying persistent storage writer
     ///
     /// Buffer should be emptied during this process
-    fn flush_to_file(&mut self) -> Result<()>;
+    fn flush(&mut self) -> Result<()>;
 
     /// Get metadata associated with the recording process
     fn metadata(&self) -> &RecordMetadata;
@@ -181,7 +181,7 @@ pub trait Recorder {
 /// essentially operates as an iterator over the recorded events
 pub trait Replayer: Iterator<Item = RREvent> {
     /// Constructs a reader on buffer
-    fn new_replayer(cfg: ReplayConfig) -> Result<Self>
+    fn new_replayer(reader: Box<dyn ReplayReader>, metadata: ReplayMetadata) -> Result<Self>
     where
         Self: Sized;
 
@@ -260,44 +260,32 @@ pub trait Replayer: Iterator<Item = RREvent> {
 /// The underlying serialized/deserialized type
 type RRBufferData = VecDeque<RREvent>;
 
-/// Common data for recorders and replayers
-///
-/// Flexibility of this struct can also be improved with:
-/// * Support for generic writers beyond [File] (will require a generic on [Store])
-#[derive(Debug)]
-pub struct RRDataCommon {
-    /// Ordered list of record/replay events
-    buf: RRBufferData,
-    /// Persistent storage-backed handle
-    rw: File,
-}
-
-#[derive(Debug)]
 /// Buffer to write recording data
 pub struct RecordBuffer {
-    data: RRDataCommon,
+    /// In-memory buffer with ordered list of record/replay events (fastest)
+    buf: RRBufferData,
+    /// Writer to persistent storage backing (typically slower)
+    writer: Box<dyn RecordWriter>,
+    /// Metadata for record configuration
     metadata: RecordMetadata,
 }
 
 impl RecordBuffer {
     /// Push a newly record event [`RREvent`] to the buffer
     fn push_event(&mut self, event: RREvent) -> () {
-        self.data.buf.push_back(event)
+        self.buf.push_back(event)
     }
 }
 
 impl Recorder for RecordBuffer {
-    fn new_recorder(cfg: RecordConfig) -> Result<Self> {
-        let mut file = File::create(cfg.path)?;
+    fn new_recorder(mut writer: Box<dyn RecordWriter>, metadata: RecordMetadata) -> Result<Self> {
         // Replay requires the Module version and RecordMetadata configuration
-        postcard::to_io(ModuleVersionStrategy::WasmtimeVersion.as_str(), &mut file)?;
-        postcard::to_io(&cfg.metadata, &mut file)?;
+        postcard::to_io(ModuleVersionStrategy::WasmtimeVersion.as_str(), &mut writer)?;
+        postcard::to_io(&metadata, &mut writer)?;
         Ok(RecordBuffer {
-            data: RRDataCommon {
-                buf: VecDeque::new(),
-                rw: file,
-            },
-            metadata: cfg.metadata,
+            buf: VecDeque::new(),
+            writer: writer,
+            metadata: metadata,
         })
     }
 
@@ -312,19 +300,16 @@ impl Recorder for RecordBuffer {
         self.push_event(event);
     }
 
-    fn flush_to_file(&mut self) -> Result<()> {
-        let data = &mut self.data;
+    fn flush(&mut self) -> Result<()> {
+        log::debug!("Flushing record buffer...");
         // Seralizing each event independently prevents checking for vector sizes
         // during deserialization
-        for v in &data.buf {
-            postcard::to_io(&v, &mut data.rw)?;
+        for v in &self.buf {
+            postcard::to_io(v, &mut self.writer)?;
         }
-        data.rw.flush()?;
-        data.buf.clear();
-        log::debug!(
-            "Flushing record buffer | File size: {:?} bytes",
-            data.rw.metadata()?.len()
-        );
+        self.writer.flush()?;
+        self.buf.clear();
+        log::debug!("Record buffer flush complete");
         Ok(())
     }
 
@@ -334,11 +319,16 @@ impl Recorder for RecordBuffer {
     }
 }
 
-#[derive(Debug)]
 /// Buffer to read replay data
 pub struct ReplayBuffer {
-    data: RRDataCommon,
+    /// In-memory buffer with ordered list of record/replay events (fastest)
+    buf: RRBufferData,
+    /// Reader from persistent storage backing (typically slower)
+    #[allow(dead_code, reason = "expected to be used in the future")]
+    reader: Box<dyn ReplayReader>,
+    /// Metadata for replay configuration
     metadata: ReplayMetadata,
+    /// Metadata for record configuration (encoded in the trace)
     trace_metadata: RecordMetadata,
 }
 
@@ -346,34 +336,35 @@ impl Iterator for ReplayBuffer {
     type Item = RREvent;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.data.buf.pop_front()
+        self.buf.pop_front()
     }
 }
 
 impl Replayer for ReplayBuffer {
-    fn new_replayer(cfg: ReplayConfig) -> Result<Self> {
-        let mut file = File::open(cfg.path)?;
-        let mut events = VecDeque::<RREvent>::new();
+    fn new_replayer(mut reader: Box<dyn ReplayReader>, metadata: ReplayMetadata) -> Result<Self> {
         // Ensure module versions match
         let mut scratch = [0u8; 12];
-        let (version, _) = postcard::from_io::<&str, _>((&mut file, &mut scratch))?;
+        let (version, _) = postcard::from_io::<&str, _>((&mut reader, &mut scratch))?;
         assert_eq!(
             version,
             ModuleVersionStrategy::WasmtimeVersion.as_str(),
             "Wasmtime version mismatch between engine used for record and replay"
         );
+        let (trace_metadata, _) = postcard::from_io((&mut reader, &mut [0; 0]))?;
+        let mut events = VecDeque::<RREvent>::new();
+
         // Read till EOF
-        let (trace_metadata, _) = postcard::from_io((&mut file, &mut [0; 0]))?;
-        while file.stream_position()? != file.metadata()?.len() {
-            let (event, _): (RREvent, _) = postcard::from_io((&mut file, &mut [0; 0]))?;
+        'event_loop: loop {
+            let (event, _) = postcard::from_io((&mut reader, &mut [0; 0]))?;
+            if let RREvent::Eof = event {
+                break 'event_loop;
+            }
             events.push_back(event);
         }
         Ok(ReplayBuffer {
-            data: RRDataCommon {
-                buf: events,
-                rw: file,
-            },
-            metadata: cfg.metadata,
+            buf: events,
+            reader: reader,
+            metadata: metadata,
             trace_metadata: trace_metadata,
         })
     }
@@ -393,44 +384,40 @@ impl Replayer for ReplayBuffer {
 mod tests {
     use super::*;
     use crate::ValRaw;
+    use std::fs::File;
     use std::path::Path;
     use tempfile::{NamedTempFile, TempPath};
 
     #[test]
     fn rr_buffers() -> Result<()> {
-        let tmp = NamedTempFile::new()?;
-
-        let tmppath = tmp.path().to_str().expect("Filename should be UTF-8");
-        let record_cfg = RecordConfig {
-            path: String::from(tmppath),
-            metadata: RecordMetadata {
-                add_validation: true,
-            },
+        let record_metadata = RecordMetadata {
+            add_validation: true,
         };
+        let tmp = NamedTempFile::new()?;
+        let tmppath = tmp.path().to_str().expect("Filename should be UTF-8");
 
         let values = vec![ValRaw::i32(1), ValRaw::f32(2), ValRaw::i64(3)];
 
         // Record values
-        let mut recorder = RecordBuffer::new_recorder(record_cfg)?;
+        let mut recorder =
+            RecordBuffer::new_recorder(Box::new(File::create(tmppath)?), record_metadata)?;
         let event = component_wasm::HostFuncReturnEvent::new(
             values.as_slice(),
             #[cfg(feature = "rr-type-validation")]
             None,
         );
         recorder.record_event(|_| event.clone());
-        recorder.flush_to_file()?;
+        recorder.flush()?;
 
         let tmp = tmp.into_temp_path();
         let tmppath = <TempPath as AsRef<Path>>::as_ref(&tmp)
             .to_str()
             .expect("Filename should be UTF-8");
+        let replay_metadata = ReplayMetadata { validate: true };
 
         // Assert that replayed values are identical
-        let replay_cfg = ReplayConfig {
-            path: String::from(tmppath),
-            metadata: ReplayMetadata { validate: true },
-        };
-        let mut replayer = ReplayBuffer::new_replayer(replay_cfg)?;
+        let mut replayer =
+            ReplayBuffer::new_replayer(Box::new(File::open(tmppath)?), replay_metadata)?;
         replayer.next_event_and(|store_event: component_wasm::HostFuncReturnEvent, _| {
             // Check replay matches record
             assert!(store_event == event);

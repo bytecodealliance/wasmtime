@@ -6,9 +6,10 @@ use serde::Deserialize;
 use std::{
     fmt, fs,
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
-use wasmtime::{Config, RRConfig, RecordMetadata, ReplayMetadata};
+use wasmtime::{Config, RRConfig, RecordConfig, RecordMetadata, ReplayConfig, ReplayMetadata};
 
 pub mod opt;
 
@@ -1043,20 +1044,20 @@ impl CommonOptions {
 
         let record = &self.record;
         let replay = &self.replay;
-        let rr_cfg = if let Some(path) = &record.path {
-            Some(RRConfig::record_cfg(
-                path.clone(),
-                Some(RecordMetadata {
+        let rr_cfg = if let Some(path) = record.path.clone() {
+            Some(RRConfig::from(RecordConfig {
+                writer_initializer: Arc::new(move || Box::new(fs::File::create(&path).unwrap())),
+                metadata: RecordMetadata {
                     add_validation: record.validation_metadata.unwrap_or(true),
-                }),
-            ))
-        } else if let Some(path) = &replay.path {
-            Some(RRConfig::replay_cfg(
-                path.clone(),
-                Some(ReplayMetadata {
+                },
+            }))
+        } else if let Some(path) = replay.path.clone() {
+            Some(RRConfig::from(ReplayConfig {
+                reader_initializer: Arc::new(move || Box::new(fs::File::open(&path).unwrap())),
+                metadata: ReplayMetadata {
                     validate: replay.validate.unwrap_or(true),
-                }),
-            ))
+                },
+            }))
         } else {
             None
         };

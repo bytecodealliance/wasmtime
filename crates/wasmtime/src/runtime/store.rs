@@ -537,6 +537,8 @@ impl<T> Store<T> {
 
         let pkey = engine.allocator().next_available_pkey();
 
+        let rr = engine.rr();
+
         let inner = StoreOpaque {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
@@ -589,13 +591,27 @@ impl<T> Store<T> {
                 debug_assert!(engine.target().is_pulley());
                 Executor::Interpreter(Interpreter::new(engine))
             },
-            record_buffer: engine.rr().and_then(|rr| {
-                rr.record()
-                    .and_then(|record| Some(RecordBuffer::new_recorder(record.clone()).unwrap()))
+            record_buffer: rr.and_then(|v| {
+                v.record().and_then(|record| {
+                    Some(
+                        RecordBuffer::new_recorder(
+                            (record.writer_initializer)(),
+                            record.metadata.clone(),
+                        )
+                        .unwrap(),
+                    )
+                })
             }),
-            replay_buffer: engine.rr().and_then(|rr| {
-                rr.replay()
-                    .and_then(|replay| Some(ReplayBuffer::new_replayer(replay.clone()).unwrap()))
+            replay_buffer: rr.and_then(|v| {
+                v.replay().and_then(|replay| {
+                    Some(
+                        ReplayBuffer::new_replayer(
+                            (replay.reader_initializer)(),
+                            replay.metadata.clone(),
+                        )
+                        .unwrap(),
+                    )
+                })
             }),
         };
         let mut inner = Box::new(StoreInner {
@@ -2128,7 +2144,7 @@ at https://bytecodealliance.org/security.
     /// This operation empties the buffer
     pub(crate) fn flush_record_buffer(&mut self) -> Result<()> {
         if let Some(buf) = self.record_buffer_mut() {
-            return Ok(buf.flush_to_file()?);
+            return Ok(buf.flush()?);
         }
         Ok(())
     }
