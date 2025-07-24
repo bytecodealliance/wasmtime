@@ -34,7 +34,7 @@ function %f0(i32) -> i32, f32, f64 {
 ;   movq %rcx, %xmm1
 ;   movdqu %xmm1, <offset:1>+(%rsp)
 ;   load_ext_name %g+0, %rdx
-;   call    *%rdx; jmp MachLabel(1); catch [None: MachLabel(2)]
+;   call    *%rdx; jmp MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
 ;   movl $0x1, %eax
 ;   movdqu <offset:1>+(%rsp), %xmm1
@@ -164,7 +164,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   movq %r10, %xmm1
 ;   movdqu %xmm1, <offset:1>+(%rsp)
 ;   load_ext_name %g+0, %r11
-;   call    *%r11; jmp MachLabel(6); catch [None: MachLabel(5)]
+;   call    *%r11; jmp MachLabel(6); catch [default: MachLabel(5)]
 ; block5:
 ;   movq %rax, %rsi
 ;   movq %rsi, %r11
@@ -298,7 +298,7 @@ function %f2(i32) -> i32, f32, f64 {
 ;   movq %rcx, %xmm1
 ;   movdqu %xmm1, <offset:1>+(%rsp)
 ;   load_ext_name %g+0, %rdx
-;   call    *%rdx; jmp MachLabel(1); catch [None: MachLabel(2)]
+;   call    *%rdx; jmp MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
 ;   movl $0x1, %eax
 ;   movdqu <offset:1>+(%rsp), %xmm1
@@ -404,4 +404,138 @@ block2:
 ;   callq *%rcx
 ; block2: ; offset 0x10
 ;   jmp 0x10
+
+function %f4(i64, i32) -> i32, f32, f64 {
+    sig0 = (i32) -> f32 tail
+    fn0 = %g(i32) -> f32 tail
+
+    block0(v0: i64, v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ context v0, tag0: block2(exn0), tag1: block2(exn0), context v1, tag0: block3  ]
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5, v3, v4
+
+    block2(v6: i64):
+        v7 = ireduce.i32 v6
+        v8 = iadd_imm.i32 v7, 1
+        v9 = f32const 0x0.0        
+        return v8, v9, v2
+
+    block3:
+        jump block2(v0)
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x50, %rsp
+;   movq %rbx, 0x20(%rsp)
+;   movq %r12, 0x28(%rsp)
+;   movq %r13, 0x30(%rsp)
+;   movq %r14, 0x38(%rsp)
+;   movq %r15, 0x40(%rsp)
+; block0:
+;   movq %rdi, <offset:1>+8(%rsp)
+;   movabsq $0x3ff0000000000000, %rdx
+;   movq %rdx, %xmm1
+;   movdqu %xmm1, <offset:1>+0x10(%rsp)
+;   load_ext_name %g+0, %r8
+;   movq %rsi, %rdi
+;   movq %rsi, <offset:1>+(%rsp)
+;   call    *%r8; jmp MachLabel(3); catch [context stack1, tag0: MachLabel(1), tag1: MachLabel(2), context stack0, tag0: MachLabel(4)]
+; block1:
+;   movq %rax, %rdi
+;   movdqu <offset:1>+0x10(%rsp), %xmm1
+;   jmp     label5
+; block2:
+;   movq %rax, %rdi
+;   movdqu <offset:1>+0x10(%rsp), %xmm1
+;   jmp     label5
+; block3:
+;   movl $0x1, %eax
+;   movdqu <offset:1>+0x10(%rsp), %xmm1
+;   movq 0x20(%rsp), %rbx
+;   movq 0x28(%rsp), %r12
+;   movq 0x30(%rsp), %r13
+;   movq 0x38(%rsp), %r14
+;   movq 0x40(%rsp), %r15
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block4:
+;   movdqu <offset:1>+0x10(%rsp), %xmm1
+;   movq <offset:1>+8(%rsp), %rdi
+;   jmp     label5
+; block5:
+;   leal 1(%rdi), %eax
+;   uninit  %xmm0
+;   xorps %xmm0, %xmm0
+;   movq 0x20(%rsp), %rbx
+;   movq 0x28(%rsp), %r12
+;   movq 0x30(%rsp), %r13
+;   movq 0x38(%rsp), %r14
+;   movq 0x40(%rsp), %r15
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x50, %rsp
+;   movq %rbx, 0x20(%rsp)
+;   movq %r12, 0x28(%rsp)
+;   movq %r13, 0x30(%rsp)
+;   movq %r14, 0x38(%rsp)
+;   movq %r15, 0x40(%rsp)
+; block1: ; offset 0x21
+;   movq %rdi, 8(%rsp)
+;   movabsq $0x3ff0000000000000, %rdx
+;   movq %rdx, %xmm1
+;   movdqu %xmm1, 0x10(%rsp)
+;   movabsq $0, %r8 ; reloc_external Abs8 %g 0
+;   movq %rsi, %rdi
+;   movq %rsi, (%rsp)
+;   callq *%r8
+;   jmp 0x70
+; block2: ; offset 0x54
+;   movq %rax, %rdi
+;   movdqu 0x10(%rsp), %xmm1
+;   jmp 0xa8
+; block3: ; offset 0x62
+;   movq %rax, %rdi
+;   movdqu 0x10(%rsp), %xmm1
+;   jmp 0xa8
+; block4: ; offset 0x70
+;   movl $1, %eax
+;   movdqu 0x10(%rsp), %xmm1
+;   movq 0x20(%rsp), %rbx
+;   movq 0x28(%rsp), %r12
+;   movq 0x30(%rsp), %r13
+;   movq 0x38(%rsp), %r14
+;   movq 0x40(%rsp), %r15
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block5: ; offset 0x9d
+;   movdqu 0x10(%rsp), %xmm1
+;   movq 8(%rsp), %rdi
+; block6: ; offset 0xa8
+;   leal 1(%rdi), %eax
+;   xorps %xmm0, %xmm0
+;   movq 0x20(%rsp), %rbx
+;   movq 0x28(%rsp), %r12
+;   movq 0x30(%rsp), %r13
+;   movq 0x38(%rsp), %r14
+;   movq 0x40(%rsp), %r15
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

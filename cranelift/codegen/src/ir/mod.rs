@@ -43,7 +43,7 @@ pub use crate::ir::entities::{
     GlobalValue, Immediate, Inst, JumpTable, MemoryType, SigRef, StackSlot, UserExternalNameRef,
     Value,
 };
-pub use crate::ir::exception_table::ExceptionTableData;
+pub use crate::ir::exception_table::{ExceptionTableData, ExceptionTableItem};
 pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
 };

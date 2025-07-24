@@ -528,6 +528,7 @@ where
         };
 
         FrameLayout {
+            word_bytes: u32::from(P::pointer_width().bytes()),
             incoming_args_size,
             tail_args_size,
             setup_area_size: setup_area_size.into(),

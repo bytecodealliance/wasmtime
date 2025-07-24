@@ -449,9 +449,9 @@ pub(crate) fn emit(
             }
 
             if let Some(try_call) = call_info.try_call_info.as_ref() {
-                sink.add_call_site(&try_call.exception_dests);
+                sink.add_try_call_site(try_call.exception_handlers(&state.frame_layout()));
             } else {
-                sink.add_call_site(&[]);
+                sink.add_call_site();
             }
 
             // Reclaim the outgoing argument area that was released by the
@@ -494,7 +494,7 @@ pub(crate) fn emit(
             // The addend adjusts for the difference between the end of the instruction and the
             // beginning of the immediate field.
             sink.add_reloc_at_offset(offset - 4, Reloc::X86CallPCRel4, &call_info.dest, -4);
-            sink.add_call_site(&[]);
+            sink.add_call_site();
         }
 
         Inst::ReturnCallUnknown { info: call_info } => {
@@ -503,7 +503,7 @@ pub(crate) fn emit(
             emit_return_call_common_sequence(sink, info, state, &call_info);
 
             asm::inst::jmpq_m::new(callee).emit(sink, info, state);
-            sink.add_call_site(&[]);
+            sink.add_call_site();
         }
 
         Inst::CallUnknown {
@@ -524,9 +524,9 @@ pub(crate) fn emit(
             }
 
             if let Some(try_call) = call_info.try_call_info.as_ref() {
-                sink.add_call_site(&try_call.exception_dests);
+                sink.add_try_call_site(try_call.exception_handlers(&state.frame_layout()));
             } else {
-                sink.add_call_site(&[]);
+                sink.add_call_site();
             }
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that

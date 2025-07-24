@@ -2950,9 +2950,9 @@ impl MachInstEmit for Inst {
                 }
 
                 if let Some(try_call) = info.try_call_info.as_ref() {
-                    sink.add_call_site(&try_call.exception_dests);
+                    sink.add_try_call_site(try_call.exception_handlers(&state.frame_layout));
                 } else {
-                    sink.add_call_site(&[]);
+                    sink.add_call_site();
                 }
 
                 if info.callee_pop_size > 0 {
@@ -2994,9 +2994,9 @@ impl MachInstEmit for Inst {
                 }
 
                 if let Some(try_call) = info.try_call_info.as_ref() {
-                    sink.add_call_site(&try_call.exception_dests);
+                    sink.add_try_call_site(try_call.exception_handlers(&state.frame_layout));
                 } else {
-                    sink.add_call_site(&[]);
+                    sink.add_call_site();
                 }
 
                 if info.callee_pop_size > 0 {
@@ -3035,7 +3035,7 @@ impl MachInstEmit for Inst {
                 // for the target, but rather a function relocation.
                 sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b000101, 0));
-                sink.add_call_site(&[]);
+                sink.add_call_site();
 
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check
@@ -3050,7 +3050,7 @@ impl MachInstEmit for Inst {
                     targets: vec![],
                 }
                 .emit(sink, emit_info, state);
-                sink.add_call_site(&[]);
+                sink.add_call_site();
 
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check

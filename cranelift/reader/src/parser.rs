@@ -1923,13 +1923,14 @@ impl<'a> Parser<'a> {
     // Parse an exception-table decl.
     //
     // exception-table ::= * SigRef(sig) "," BlockCall "," "[" (exception-table-entry ( "," exception-table-entry )*)? "]"
-    // exception-table-entry ::= * ExceptionTag(tag) ":" BlockCall
-    //                           * "default" ":" BlockCall
+    // exception-table-entry ::=   ExceptionTag(tag) ":" BlockCall
+    //                           | "default" ":" BlockCall
+    //                           | "context" value
     fn parse_exception_table(&mut self, ctx: &mut Context) -> ParseResult<ir::ExceptionTable> {
         let sig = self.match_sig("expected signature of called function")?;
         self.match_token(Token::Comma, "expected comma after signature argument")?;
 
-        let mut tags_and_targets = vec![];
+        let mut handlers = vec![];
 
         let block_num = self.match_block("expected branch destination block")?;
         let args = self.parse_opt_block_call_args()?;
@@ -1940,53 +1941,53 @@ impl<'a> Parser<'a> {
             "expected comma after normal-return destination",
         )?;
 
-        match self.token() {
-            Some(Token::LBracket) => {
-                self.consume();
-                loop {
-                    if let Some(Token::RBracket) = self.token() {
-                        break;
-                    }
-
-                    let tag = match self.token() {
-                        Some(Token::ExceptionTag(tag)) => {
-                            self.consume();
-                            Some(ir::ExceptionTag::from_u32(tag))
-                        }
-                        Some(Token::Identifier("default")) => {
-                            self.consume();
-                            None
-                        }
-                        _ => return err!(self.loc, "invalid token"),
-                    };
+        self.match_token(
+            Token::LBracket,
+            "expected an open-bracket for exception table list",
+        )?;
+        loop {
+            match self.token() {
+                Some(Token::RBracket) => {
+                    break;
+                }
+                Some(Token::ExceptionTag(tag)) => {
+                    self.consume();
                     self.match_token(Token::Colon, "expected ':' after exception tag")?;
-
+                    let tag = ir::ExceptionTag::from_u32(tag);
                     let block_num = self.match_block("expected branch destination block")?;
                     let args = self.parse_opt_block_call_args()?;
                     let block_call = ctx.function.dfg.block_call(block_num, &args);
-
-                    tags_and_targets.push((tag, block_call));
-
-                    if let Some(Token::Comma) = self.token() {
-                        self.consume();
-                    } else {
-                        break;
-                    }
+                    handlers.push(ir::ExceptionTableItem::Tag(tag, block_call));
                 }
-                self.match_token(Token::RBracket, "expected closing bracket")?;
+                Some(Token::Identifier("default")) => {
+                    self.consume();
+                    self.match_token(Token::Colon, "expected ':' after 'default'")?;
+                    let block_num = self.match_block("expected branch destination block")?;
+                    let args = self.parse_opt_block_call_args()?;
+                    let block_call = ctx.function.dfg.block_call(block_num, &args);
+                    handlers.push(ir::ExceptionTableItem::Default(block_call));
+                }
+                Some(Token::Identifier("context")) => {
+                    self.consume();
+                    let val = self.match_value("expected value for exception-handler context")?;
+                    handlers.push(ir::ExceptionTableItem::Context(val));
+                }
+                _ => return err!(self.loc, "invalid token"),
             }
-            _ => {}
-        };
+
+            if let Some(Token::Comma) = self.token() {
+                self.consume();
+            } else {
+                break;
+            }
+        }
+        self.match_token(Token::RBracket, "expected closing bracket")?;
 
         Ok(ctx
             .function
             .dfg
             .exception_tables
-            .push(ir::ExceptionTableData::new(
-                sig,
-                normal_return,
-                tags_and_targets,
-            )))
+            .push(ir::ExceptionTableData::new(sig, normal_return, handlers)))
     }
 
     // Parse a constant decl.

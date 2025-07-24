@@ -15,24 +15,36 @@ use object::{Bytes, LittleEndian, U32Bytes};
 #[cfg(feature = "cranelift")]
 use alloc::{vec, vec::Vec};
 #[cfg(feature = "cranelift")]
-use cranelift_codegen::{FinalizedMachCallSite, binemit::CodeOffset};
+use cranelift_codegen::{
+    ExceptionContextLoc, FinalizedMachCallSite, FinalizedMachExceptionHandler, binemit::CodeOffset,
+};
 
 /// Collector struct for exception handlers per call site.
 ///
 /// # Format
 ///
-/// We keep four different arrays (`Vec`s) that we build as we visit
+/// We keep five different arrays (`Vec`s) that we build as we visit
 /// callsites, in ascending offset (address relative to beginning of
-/// code segment) order: tags, destination offsets, callsite offsets,
-/// and tag/destination ranges.
+/// code segment) order: callsite offsets, tag/destination ranges,
+/// tags, tag context SP offset, destination offsets.
 ///
 /// The callsite offsets and tag/destination ranges logically form a
 /// sorted lookup array, allowing us to find information for any
-/// single callsite. The range denotes a range of indices in the tag
-/// and destination offset arrays, and those are sorted by tag per
-/// callsite. Ranges are stored with the (exclusive) *end* index only;
-/// the start index is implicit as the previous end, or zero if first
-/// element.
+/// single callsite. The range denotes a range of indices in the
+/// tag/context and destination offset arrays. Ranges are stored with
+/// the (exclusive) *end* index only; the start index is implicit as
+/// the previous end, or zero if first element.
+///
+/// The slices of tag, context, and handlers arrays named by `ranges`
+/// for each callsite specify a series of handler items for that
+/// callsite. The tag and context together allow a
+/// dynamic-tag-instance match in the unwinder: the context specifies
+/// an offset from SP at the callsite that contains a machine word
+/// (e.g. with vmctx) that, together with the static tag index, can be
+/// used to perform a dynamic match. A context of `-1` indicates no
+/// dynamic context, and a tag of `-1` indicates a catch-all
+/// handler. If a handler item matches, control should be transferred
+/// to the code offset given in the last array, `handlers`.
 ///
 /// # Example
 ///
@@ -42,6 +54,7 @@ use cranelift_codegen::{FinalizedMachCallSite, binemit::CodeOffset};
 /// callsites: [0x10, 0x50, 0xf0] // callsites (return addrs) at offsets 0x10, 0x50, 0xf0
 /// ranges: [2, 4, 5]             // corresponding ranges for each callsite
 /// tags: [1, 5, 1, -1, -1]       // tags for each handler at each callsite
+/// contexts: [-1, -1, 0x10, 0x20, 0x30] // SP-offset for context for each tag
 /// handlers: [0x40, 0x42, 0x6f, 0x71, 0xf5] // handler destinations at each callsite
 /// ```
 ///
@@ -64,6 +77,16 @@ use cranelift_codegen::{FinalizedMachCallSite, binemit::CodeOffset};
 ///     # tags for callsite 0xf0:
 ///     -1,  # "catch-all"
 /// ]
+/// contexts: [
+///     # SP-offsets for context for each tag at callsite 0x10:
+///     -1,
+///     -1,
+///     # for callsite 0x50:
+///     0x10,
+///     0x20,
+///     # for callsite 0xf0:
+///     0x30,
+/// ]
 /// handlers: [
 ///     # handlers for callsite 0x10:
 ///     0x40,  # relative PC to handle tag 1 (above)
@@ -81,6 +104,7 @@ pub struct ExceptionTableBuilder {
     pub callsites: Vec<U32Bytes<LittleEndian>>,
     pub ranges: Vec<U32Bytes<LittleEndian>>,
     pub tags: Vec<U32Bytes<LittleEndian>>,
+    pub contexts: Vec<U32Bytes<LittleEndian>>,
     pub handlers: Vec<U32Bytes<LittleEndian>>,
     last_start_offset: CodeOffset,
 }
@@ -107,22 +131,38 @@ impl ExceptionTableBuilder {
         for call_site in call_sites {
             let ret_addr = call_site.ret_addr.checked_add(start_offset).unwrap();
             handlers.extend(call_site.exception_handlers.iter().cloned());
-            handlers.sort_by_key(|(tag, _dest)| *tag);
-
-            if handlers.windows(2).any(|parts| parts[0].0 == parts[1].0) {
-                anyhow::bail!("Duplicate handler tag");
-            }
 
             let start_idx = u32::try_from(self.tags.len()).unwrap();
-            for (tag, dest) in handlers.drain(..) {
-                self.tags.push(U32Bytes::new(
-                    LittleEndian,
-                    tag.expand().map(|t| t.as_u32()).unwrap_or(u32::MAX),
-                ));
-                self.handlers.push(U32Bytes::new(
-                    LittleEndian,
-                    dest.checked_add(start_offset).unwrap(),
-                ));
+            let mut context = u32::MAX;
+            for handler in call_site.exception_handlers {
+                match handler {
+                    FinalizedMachExceptionHandler::Tag(tag, offset) => {
+                        self.tags.push(U32Bytes::new(LittleEndian, tag.as_u32()));
+                        self.contexts.push(U32Bytes::new(LittleEndian, context));
+                        self.handlers.push(U32Bytes::new(
+                            LittleEndian,
+                            offset.checked_add(start_offset).unwrap(),
+                        ));
+                    }
+                    FinalizedMachExceptionHandler::Default(offset) => {
+                        self.tags.push(U32Bytes::new(LittleEndian, u32::MAX));
+                        self.contexts.push(U32Bytes::new(LittleEndian, context));
+                        self.handlers.push(U32Bytes::new(
+                            LittleEndian,
+                            offset.checked_add(start_offset).unwrap(),
+                        ));
+                    }
+                    FinalizedMachExceptionHandler::Context(ExceptionContextLoc::SPOffset(
+                        offset,
+                    )) => {
+                        context = *offset;
+                    }
+                    FinalizedMachExceptionHandler::Context(ExceptionContextLoc::GPR(_)) => {
+                        panic!(
+                            "Wasmtime exception unwind info only supports dynamic contexts on the stack"
+                        );
+                    }
+                }
             }
             let end_idx = u32::try_from(self.tags.len()).unwrap();
 
@@ -151,6 +191,7 @@ impl ExceptionTableBuilder {
         f(object::bytes_of_slice(&self.callsites));
         f(object::bytes_of_slice(&self.ranges));
         f(object::bytes_of_slice(&self.tags));
+        f(object::bytes_of_slice(&self.contexts));
         f(object::bytes_of_slice(&self.handlers));
     }
 
@@ -173,6 +214,11 @@ pub struct ExceptionTable<'a> {
     callsites: &'a [U32Bytes<LittleEndian>],
     ranges: &'a [U32Bytes<LittleEndian>],
     tags: &'a [U32Bytes<LittleEndian>],
+    #[expect(
+        dead_code,
+        reason = "Will be used in subsequent PR for Wasm exception handling"
+    )]
+    contexts: &'a [U32Bytes<LittleEndian>],
     handlers: &'a [U32Bytes<LittleEndian>],
 }
 
@@ -197,6 +243,9 @@ impl<'a> ExceptionTable<'a> {
                 .map_err(|_| anyhow::anyhow!("Unable to read ranges slice"))?;
         let (tags, data) = object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, handler_count)
             .map_err(|_| anyhow::anyhow!("Unable to read tags slice"))?;
+        let (contexts, data) =
+            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, handler_count)
+                .map_err(|_| anyhow::anyhow!("Unable to read contexts slice"))?;
         let (handlers, data) =
             object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, handler_count)
                 .map_err(|_| anyhow::anyhow!("Unable to read handlers slice"))?;
@@ -209,6 +258,7 @@ impl<'a> ExceptionTable<'a> {
             callsites,
             ranges,
             tags,
+            contexts,
             handlers,
         })
     }
@@ -269,9 +319,9 @@ mod test {
             FinalizedMachCallSite {
                 ret_addr: 0x10,
                 exception_handlers: &[
-                    (Some(ExceptionTag::new(1)).into(), 0x20),
-                    (Some(ExceptionTag::new(2)).into(), 0x30),
-                    (None.into(), 0x40),
+                    FinalizedMachExceptionHandler::Tag(ExceptionTag::new(1), 0x20),
+                    FinalizedMachExceptionHandler::Tag(ExceptionTag::new(2), 0x30),
+                    FinalizedMachExceptionHandler::Default(0x40),
                 ],
             },
             FinalizedMachCallSite {
@@ -280,7 +330,7 @@ mod test {
             },
             FinalizedMachCallSite {
                 ret_addr: 0x50,
-                exception_handlers: &[(None.into(), 0x60)],
+                exception_handlers: &[FinalizedMachExceptionHandler::Default(0x60)],
             },
         ];
 

@@ -20,7 +20,7 @@
 //! Cranelift the body of the callee that is to be inlined.
 
 use crate::cursor::{Cursor as _, FuncCursor};
-use crate::ir::{self, InstBuilder as _};
+use crate::ir::{self, ExceptionTableData, ExceptionTableItem, InstBuilder as _};
 use crate::result::CodegenResult;
 use crate::trace;
 use crate::traversals::Dfs;
@@ -202,15 +202,6 @@ struct InliningAllocs {
     /// do not require set-membership testing, so a hash set is not a good
     /// choice either.
     calls_needing_exception_table_fixup: Vec<ir::Inst>,
-
-    /// The set of existing tags already caught by an inlined `try_call`
-    /// instruction's exception table, for filtering out duplicate tags when
-    /// merging exception tables.
-    ///
-    /// Note: this is a `HashSet`, and not an `EntitySet`, because tags indices
-    /// are completely arbitrary and there is no guarantee that they start from
-    /// zero or are contiguous.
-    existing_exception_tags: crate::HashSet<Option<ir::ExceptionTag>>,
 }
 
 impl InliningAllocs {
@@ -219,7 +210,6 @@ impl InliningAllocs {
             values,
             constants,
             calls_needing_exception_table_fixup,
-            existing_exception_tags,
         } = self;
 
         values.clear();
@@ -232,11 +222,6 @@ impl InliningAllocs {
         // `calls_needing_exception_table_fixup` because it is a sparse set and
         // we don't know how large it needs to be ahead of time.
         calls_needing_exception_table_fixup.clear();
-
-        // Note: We do not reserve capacity for `existing_exception_tags`
-        // because it is a sparse set and we don't know how large it needs to be
-        // ahead of time.
-        existing_exception_tags.clear();
     }
 
     fn set_inlined_value(
@@ -616,31 +601,24 @@ fn fixup_inlined_call_exception_tables(
                 exception,
                 ..
             } => {
-                // Gather the set of tags that this instruction's exception
-                // table already has entries for.
-                allocs.existing_exception_tags.clear();
-                allocs.existing_exception_tags.extend(
+                // Construct a new exception table that consists of
+                // the inlined instruction's exception table match
+                // sequence, with the inlining site's exception table
+                // appended. This will ensure that the first-match
+                // semantics emulates the original behavior of
+                // matching in the inner frame first.
+                let sig = func.dfg.exception_tables[exception].signature();
+                let normal_return = *func.dfg.exception_tables[exception].normal_return();
+                let exception_data = ExceptionTableData::new(
+                    sig,
+                    normal_return,
                     func.dfg.exception_tables[exception]
-                        .catches()
-                        .map(|(c, _)| c),
-                );
+                        .items()
+                        .chain(func.dfg.exception_tables[call_exception_table].items()),
+                )
+                .deep_clone(&mut func.dfg.value_lists);
 
-                // Add only the catch edges from our original `try_call`'s
-                // exception table that are not already handled by this
-                // instruction.
-                for i in 0..func.dfg.exception_tables[call_exception_table].len_catches() {
-                    let exception_tables = &mut func.stencil.dfg.exception_tables;
-                    let value_lists = &mut func.stencil.dfg.value_lists;
-
-                    let (tag, block_call) =
-                        exception_tables[call_exception_table].get_catch(i).unwrap();
-                    if allocs.existing_exception_tags.contains(&tag) {
-                        continue;
-                    }
-
-                    let block_call = block_call.deep_clone(value_lists);
-                    exception_tables[exception].push_catch(tag, block_call);
-                }
+                func.dfg.exception_tables[exception] = exception_data;
             }
 
             otherwise => unreachable!("unknown non-return call instruction: {otherwise:?}"),
@@ -829,8 +807,18 @@ impl<'a> ir::instructions::InstructionMapper for InliningInstRemapper<'a> {
         let inlined_sig_ref = self.map_sig_ref(exception_table.signature());
         let inlined_normal_return = self.map_block_call(*exception_table.normal_return());
         let inlined_table = exception_table
-            .catches()
-            .map(|(tag, callee_block_call)| (tag, self.map_block_call(*callee_block_call)))
+            .items()
+            .map(|item| match item {
+                ExceptionTableItem::Tag(tag, block_call) => {
+                    ExceptionTableItem::Tag(tag, self.map_block_call(block_call))
+                }
+                ExceptionTableItem::Default(block_call) => {
+                    ExceptionTableItem::Default(self.map_block_call(block_call))
+                }
+                ExceptionTableItem::Context(value) => {
+                    ExceptionTableItem::Context(self.map_value(value))
+                }
+            })
             .collect::<SmallVec<[_; 8]>>();
         self.func
             .dfg

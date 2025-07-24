@@ -622,16 +622,36 @@ macro_rules! isle_lower_prelude_methods {
             et: ExceptionTable,
             labels: &MachLabelSlice,
         ) -> OptionTryCallInfo {
-            let exception_dests = self.lower_ctx.dfg().exception_tables[et]
-                .catches()
-                .map(|(tag, _)| tag.into())
-                .zip(labels.iter().cloned())
-                .collect::<Vec<_>>()
-                .into_boxed_slice();
+            let mut exception_handlers = vec![];
+            let mut labels = labels.iter().cloned();
+            for item in self.lower_ctx.dfg().exception_tables[et].clone().items() {
+                match item {
+                    crate::ir::ExceptionTableItem::Tag(tag, _) => {
+                        exception_handlers.push(crate::machinst::abi::TryCallHandler::Tag(
+                            tag,
+                            labels.next().unwrap(),
+                        ));
+                    }
+                    crate::ir::ExceptionTableItem::Default(_) => {
+                        exception_handlers.push(crate::machinst::abi::TryCallHandler::Default(
+                            labels.next().unwrap(),
+                        ));
+                    }
+                    crate::ir::ExceptionTableItem::Context(ctx) => {
+                        let reg = self.put_in_reg(ctx);
+                        exception_handlers.push(crate::machinst::abi::TryCallHandler::Context(reg));
+                    }
+                }
+            }
+
+            let continuation = labels.next().unwrap();
+            assert_eq!(labels.next(), None);
+
+            let exception_handlers = exception_handlers.into_boxed_slice();
 
             Some(TryCallInfo {
-                continuation: *labels.last().unwrap(),
-                exception_dests,
+                continuation,
+                exception_handlers,
             })
         }
 

@@ -478,12 +478,21 @@ impl InstructionData {
         exception_tables: &mut ir::ExceptionTables,
         mut f: impl FnMut(Value) -> Value,
     ) {
+        // Map all normal operator args.
         for arg in self.arguments_mut(pool) {
             *arg = f(*arg);
         }
 
+        // Map all BlockCall args.
         for block in self.branch_destination_mut(jump_tables, exception_tables) {
             block.update_args(pool, |arg| arg.map_value(|val| f(val)));
+        }
+
+        // Map all context items.
+        if let Some(et) = self.exception_table() {
+            for ctx in exception_tables[et].contexts_mut() {
+                *ctx = f(*ctx);
+            }
         }
     }
 

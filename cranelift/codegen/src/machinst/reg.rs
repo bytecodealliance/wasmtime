@@ -496,6 +496,17 @@ pub trait OperandVisitorImpl: OperandVisitor {
             OperandPos::Late,
         );
     }
+
+    /// Add a use that can be allocated to either a register or a
+    /// spillslot, at the end of the instruction (`After` position).
+    fn any_late_use(&mut self, reg: &mut impl AsMut<Reg>) {
+        self.add_operand(
+            reg.as_mut(),
+            OperandConstraint::Any,
+            OperandKind::Use,
+            OperandPos::Late,
+        );
+    }
 }
 
 impl<T: OperandVisitor> OperandVisitorImpl for T {}

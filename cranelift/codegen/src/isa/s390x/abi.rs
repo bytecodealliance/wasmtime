@@ -964,6 +964,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         // Return FrameLayout structure.
         FrameLayout {
+            word_bytes: 8,
             incoming_args_size,
             // We already accounted for tail-call arguments above, so reset
             // this value to its default.

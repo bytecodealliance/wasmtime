@@ -107,7 +107,6 @@ use crate::settings::ProbestackStrategy;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
-use cranelift_entity::packed_option::PackedOption;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;
@@ -641,7 +640,20 @@ pub struct TryCallInfo {
     /// The target to jump to on a normal returhn.
     pub continuation: MachLabel,
     /// Exception tags to catch and corresponding destination labels.
-    pub exception_dests: Box<[(PackedOption<ExceptionTag>, MachLabel)]>,
+    pub exception_handlers: Box<[TryCallHandler]>,
+}
+
+/// Information about an individual handler at a try-call site.
+#[derive(Clone, Debug)]
+pub enum TryCallHandler {
+    /// If the tag matches (given the current context), recover at the
+    /// label.
+    Tag(ExceptionTag, MachLabel),
+    /// Recover at the label unconditionally.
+    Default(MachLabel),
+    /// Set the dynamic context for interpreting tags at this point in
+    /// the handler list.
+    Context(Reg),
 }
 
 impl<T> CallInfo<T> {
@@ -1013,6 +1025,10 @@ impl std::ops::Index<Sig> for SigSet {
 /// Structure describing the layout of a function's stack frame.
 #[derive(Clone, Debug, Default)]
 pub struct FrameLayout {
+    /// Word size in bytes, so this struct can be
+    /// monomorphic/independent of `ABIMachineSpec`.
+    pub word_bytes: u32,
+
     /// N.B. The areas whose sizes are given in this structure fully
     /// cover the current function's stack frame, from high to low
     /// stack addresses in the sequence below.  Each size contains
@@ -1088,6 +1104,16 @@ impl FrameLayout {
     /// Get the offset from the SP to the sized stack slots area.
     pub fn sp_to_sized_stack_slots(&self) -> u32 {
         self.outgoing_args_size
+    }
+
+    /// Get the offset of a spill slot from SP.
+    pub fn spillslot_offset(&self, spillslot: SpillSlot) -> i64 {
+        // Offset from beginning of spillslot area.
+        let islot = spillslot.index() as i64;
+        let spill_off = islot * self.word_bytes as i64;
+        let sp_off = self.stackslots_size as i64 + spill_off;
+
+        sp_off
     }
 }
 
@@ -2315,12 +2341,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 
     /// Get the spill slot offset relative to the fixed allocation area start.
     pub fn get_spillslot_offset(&self, slot: SpillSlot) -> i64 {
-        // Offset from beginning of spillslot area.
-        let islot = slot.index() as i64;
-        let spill_off = islot * M::word_bytes() as i64;
-        let sp_off = self.stackslots_size as i64 + spill_off;
-
-        sp_off
+        self.frame_layout().spillslot_offset(slot)
     }
 
     /// Generate a spill.
@@ -2459,6 +2480,52 @@ impl<T> CallInfo<T> {
                         emit(M::gen_load_stack(*amode, *vreg, *ty));
                     }
                 }
+            }
+        }
+    }
+}
+
+impl TryCallInfo {
+    pub(crate) fn exception_handlers(
+        &self,
+        layout: &FrameLayout,
+    ) -> impl Iterator<Item = MachExceptionHandler> {
+        self.exception_handlers.iter().map(|handler| match handler {
+            TryCallHandler::Tag(tag, label) => MachExceptionHandler::Tag(*tag, *label),
+            TryCallHandler::Default(label) => MachExceptionHandler::Default(*label),
+            TryCallHandler::Context(reg) => {
+                let loc = if let Some(spillslot) = reg.to_spillslot() {
+                    let offset = layout.spillslot_offset(spillslot);
+                    ExceptionContextLoc::SPOffset(u32::try_from(offset).expect("SP offset cannot be negative or larger than 4GiB"))
+                } else if let Some(realreg) = reg.to_real_reg() {
+                    ExceptionContextLoc::GPR(realreg.hw_enc())
+                } else {
+                    panic!("Virtual register present in try-call handler clause after register allocation");
+                };
+                MachExceptionHandler::Context(loc)
+            }
+        })
+    }
+
+    pub(crate) fn pretty_print_dests(&self) -> String {
+        self.exception_handlers
+            .iter()
+            .map(|handler| match handler {
+                TryCallHandler::Tag(tag, label) => format!("{tag:?}: {label:?}"),
+                TryCallHandler::Default(label) => format!("default: {label:?}"),
+                TryCallHandler::Context(loc) => format!("context {loc:?}"),
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    pub(crate) fn collect_operands(&mut self, collector: &mut impl OperandVisitor) {
+        for handler in &mut self.exception_handlers {
+            match handler {
+                TryCallHandler::Context(ctx) => {
+                    collector.any_late_use(ctx);
+                }
+                TryCallHandler::Tag(_, _) | TryCallHandler::Default(_) => {}
             }
         }
     }
