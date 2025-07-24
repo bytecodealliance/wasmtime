@@ -270,7 +270,13 @@ impl Instance {
     ///
     /// It is assumed the memory was properly aligned and the
     /// allocation was `alloc_size` in bytes.
-    fn new(
+    ///
+    /// # Safety
+    ///
+    /// The `req.imports` field must be appropriately sized/typed for the module
+    /// being allocated according to `req.runtime_info`. Additionally `memories`
+    /// and `tables` must have been allocated for `req.store`.
+    unsafe fn new(
         req: InstanceAllocationRequest,
         memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
         tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,

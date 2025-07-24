@@ -622,7 +622,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         self.live_core_instances.fetch_sub(1, Ordering::AcqRel);
     }
 
-    unsafe fn allocate_memory(
+    fn allocate_memory(
         &self,
         request: &mut InstanceAllocationRequest,
         ty: &wasmtime_environ::Memory,
@@ -663,7 +663,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         self.merge_or_flush(queue);
     }
 
-    unsafe fn allocate_table(
+    fn allocate_table(
         &self,
         request: &mut InstanceAllocationRequest,
         ty: &wasmtime_environ::Table,
