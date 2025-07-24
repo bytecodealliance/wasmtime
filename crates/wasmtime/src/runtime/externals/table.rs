@@ -382,35 +382,52 @@ impl Table {
         // 1. Cross-instance table copy.
         // 2. Intra-instance table copy.
         // 3. Intra-table copy.
+        //
+        // We handle each of them slightly differently.
         let src_instance = src_table.instance.instance();
         let dst_instance = dst_table.instance.instance();
-        if src_instance != dst_instance {
-            // SAFETY: accessing two instances requires only accessing defined items
-            // on each instance which is done below with `get_defined_*` methods.
-            let (gc_store, [src_instance, dst_instance]) =
-                unsafe { store.optional_gc_store_and_instances_mut([src_instance, dst_instance]) };
-            src_instance.get_defined_table(src_table.index).copy_to(
-                dst_instance.get_defined_table(dst_table.index),
-                gc_store,
-                dst_index,
-                src_index,
-                len,
-            )
-        } else if src_table.index != dst_table.index {
-            assert_eq!(src_instance, dst_instance);
-            let (gc_store, instance) = store.optional_gc_store_and_instance_mut(src_instance);
-            let [(_, src_table), (_, dst_table)] = instance
-                .tables_mut()
-                .get_disjoint_mut([src_table.index, dst_table.index])
-                .unwrap();
-            src_table.copy_to(dst_table, gc_store, dst_index, src_index, len)
-        } else {
-            assert_eq!(src_instance, dst_instance);
-            assert_eq!(src_table.index, dst_table.index);
-            let (gc_store, instance) = store.optional_gc_store_and_instance_mut(src_instance);
-            instance
-                .get_defined_table(src_table.index)
-                .copy_within(gc_store, dst_index, src_index, len)
+        match (
+            src_instance == dst_instance,
+            src_table.index == dst_table.index,
+        ) {
+            // 1. Cross-instance table copy: split the mutable store borrow into
+            // two mutable instance borrows, get each instance's defined table,
+            // and do the copy.
+            (false, _) => {
+                // SAFETY: accessing two instances mutably at the same time
+                // requires only accessing defined entities on each instance
+                // which is done below with `get_defined_*` methods.
+                let (gc_store, [src_instance, dst_instance]) = unsafe {
+                    store.optional_gc_store_and_instances_mut([src_instance, dst_instance])
+                };
+                src_instance.get_defined_table(src_table.index).copy_to(
+                    dst_instance.get_defined_table(dst_table.index),
+                    gc_store,
+                    dst_index,
+                    src_index,
+                    len,
+                )
+            }
+
+            // 2. Intra-instance, distinct-tables copy: split the mutable
+            // instance borrow into two distinct mutable table borrows and do
+            // the copy.
+            (true, false) => {
+                let (gc_store, instance) = store.optional_gc_store_and_instance_mut(src_instance);
+                let [(_, src_table), (_, dst_table)] = instance
+                    .tables_mut()
+                    .get_disjoint_mut([src_table.index, dst_table.index])
+                    .unwrap();
+                src_table.copy_to(dst_table, gc_store, dst_index, src_index, len)
+            }
+
+            // 3. Intra-table copy: get the table and copy within it!
+            (true, true) => {
+                let (gc_store, instance) = store.optional_gc_store_and_instance_mut(src_instance);
+                instance
+                    .get_defined_table(src_table.index)
+                    .copy_within(gc_store, dst_index, src_index, len)
+            }
         }
     }
 
