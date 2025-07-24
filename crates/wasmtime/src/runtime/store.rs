@@ -2138,27 +2138,6 @@ at https://bytecodealliance.org/security.
         let instance_id = vm::Instance::from_vmctx(vmctx, |i| i.id());
         StoreInstanceId::new(self.id(), instance_id)
     }
-
-    /// Flush the record buffer to the disk-backed storage
-    ///
-    /// This operation empties the buffer
-    pub(crate) fn flush_record_buffer(&mut self) -> Result<()> {
-        if let Some(buf) = self.record_buffer_mut() {
-            return Ok(buf.flush()?);
-        }
-        Ok(())
-    }
-
-    /// Panics if the replay buffer in the store is non-empty
-    pub(crate) fn check_empty_replay_buffer(&mut self) {
-        if let Some(buf) = self.replay_buffer_mut() {
-            if buf.next().is_some() {
-                log::warn!(
-                    "Replay buffer is expected to be empty (possibly incorrect execution encountered)"
-                );
-            }
-        }
-    }
 }
 
 /// Helper parameter to [`StoreOpaque::allocate_instance`].
@@ -2488,9 +2467,6 @@ impl Drop for StoreOpaque {
                 }
             }
         }
-
-        let _ = self.flush_record_buffer().unwrap();
-        self.check_empty_replay_buffer();
     }
 }
 

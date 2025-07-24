@@ -277,6 +277,15 @@ impl RecordBuffer {
     }
 }
 
+impl Drop for RecordBuffer {
+    /// Flush all the data to backing writer on drop
+    fn drop(&mut self) {
+        if let Err(e) = self.flush() {
+            log::error!("Cannot flush record buffer: {}", e);
+        }
+    }
+}
+
 impl Recorder for RecordBuffer {
     fn new_recorder(mut writer: Box<dyn RecordWriter>, metadata: RecordMetadata) -> Result<Self> {
         // Replay requires the Module version and RecordMetadata configuration
@@ -337,6 +346,16 @@ impl Iterator for ReplayBuffer {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.buf.pop_front()
+    }
+}
+
+impl Drop for ReplayBuffer {
+    fn drop(&mut self) {
+        if self.next().is_some() {
+            log::warn!(
+                "Replay buffer is dropped without being consumed completely... this may be an incorrect execution"
+            );
+        }
     }
 }
 
