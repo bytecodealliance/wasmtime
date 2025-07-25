@@ -197,7 +197,10 @@ impl Instance {
             !store.0.async_support(),
             "must use async instantiation when async support is enabled",
         );
-        Self::new_started_impl(store, module, imports)
+
+        // SAFETY: the safety contract of `new_started_impl` is the same as this
+        // function.
+        unsafe { Self::new_started_impl(store, module, imports) }
     }
 
     /// Internal function to create an instance and run the start function.
@@ -209,7 +212,9 @@ impl Instance {
         module: &Module,
         imports: Imports<'_>,
     ) -> Result<Instance> {
-        let (instance, start) = Instance::new_raw(store.0, module, imports)?;
+        // SAFETY: the safety contract of `new_raw` is the same as this
+        // function.
+        let (instance, start) = unsafe { Instance::new_raw(store.0, module, imports)? };
         if let Some(start) = start {
             instance.start_raw(store, start)?;
         }
@@ -234,7 +239,11 @@ impl Instance {
         );
 
         store
-            .on_fiber(|store| Self::new_started_impl(store, module, imports))
+            .on_fiber(|store| {
+                // SAFETY: the unsafe contract of `new_started_impl` is the same
+                // as this function.
+                unsafe { Self::new_started_impl(store, module, imports) }
+            })
             .await?
     }
 
@@ -277,11 +286,16 @@ impl Instance {
         // The first thing we do is issue an instance allocation request
         // to the instance allocator. This, on success, will give us an
         // instance handle.
-        let id = store.allocate_instance(
-            AllocateInstanceKind::Module(module_id),
-            &ModuleRuntimeInfo::Module(module.clone()),
-            imports,
-        )?;
+        //
+        // SAFETY: this module, by construction, was already validated within
+        // the store.
+        let id = unsafe {
+            store.allocate_instance(
+                AllocateInstanceKind::Module(module_id),
+                &ModuleRuntimeInfo::Module(module.clone()),
+                imports,
+            )?
+        };
 
         // Additionally, before we start doing fallible instantiation, we
         // do one more step which is to insert an `InstanceData`
@@ -412,6 +426,7 @@ impl Instance {
     /// the value, if found.
     ///
     /// Returns `None` if there was no export with a matching entity index.
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.

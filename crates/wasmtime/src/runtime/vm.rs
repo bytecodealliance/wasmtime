@@ -4,10 +4,6 @@
 // See documentation in crates/wasmtime/src/runtime.rs for why this is
 // selectively enabled here.
 #![warn(clippy::cast_sign_loss)]
-#![warn(
-    unsafe_op_in_unsafe_fn,
-    reason = "opt-in until the crate opts-in as a whole -- #11180"
-)]
 
 // Polyfill `std::simd::i8x16` etc. until they're stable.
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]

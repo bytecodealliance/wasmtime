@@ -1,5 +1,3 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-
 use crate::prelude::*;
 use crate::store::{Executor, StoreId, StoreInner, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};

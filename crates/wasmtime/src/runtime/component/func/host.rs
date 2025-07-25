@@ -255,19 +255,21 @@ where
     Params: Lift,
     Return: Lower + 'static,
 {
-    let options = Options::new(
-        store.0.store_opaque().id(),
-        NonNull::new(memory),
-        NonNull::new(realloc),
-        string_encoding,
-        async_,
-        None,
-    );
+    let options = unsafe {
+        Options::new(
+            store.0.store_opaque().id(),
+            NonNull::new(memory),
+            NonNull::new(realloc),
+            string_encoding,
+            async_,
+            None,
+        )
+    };
 
     // Perform a dynamic check that this instance can indeed be left. Exiting
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
-    if !flags.may_leave() {
+    if unsafe { !flags.may_leave() } {
         bail!("cannot leave component instance");
     }
 
@@ -279,7 +281,7 @@ where
     if async_ {
         #[cfg(feature = "component-model-async")]
         {
-            let mut storage = Storage::<'_, Params, u32>::new_async::<Return>(storage);
+            let mut storage = unsafe { Storage::<'_, Params, u32>::new_async::<Return>(storage) };
 
             // Lift the parameters, either from flat storage or from linear
             // memory.
@@ -309,10 +311,14 @@ where
             let mut lower_result = {
                 let types = types.clone();
                 move |store: StoreContextMut<T>, instance: Instance, ret: Return| {
-                    flags.set_may_leave(false);
+                    unsafe {
+                        flags.set_may_leave(false);
+                    }
                     let mut lower = LowerContext::new(store, &options, &types, instance);
                     ret.linear_lower_to_memory(&mut lower, result_tys, retptr)?;
-                    flags.set_may_leave(true);
+                    unsafe {
+                        flags.set_may_leave(true);
+                    }
                     lower.exit_call()?;
                     Ok(())
                 }
@@ -349,7 +355,7 @@ where
             );
         }
     } else {
-        let mut storage = Storage::<'_, Params, Return>::new_sync(storage);
+        let mut storage = unsafe { Storage::<'_, Params, Return>::new_sync(storage) };
         let mut lift = LiftContext::new(store.0.store_opaque_mut(), &options, instance);
         lift.enter_call();
         let params = storage.lift_params(&mut lift, param_tys)?;
@@ -362,10 +368,14 @@ where
             }
         };
 
-        flags.set_may_leave(false);
+        unsafe {
+            flags.set_may_leave(false);
+        }
         let mut lower = LowerContext::new(store, &options, &types, instance);
         storage.lower_results(&mut lower, result_tys, ret)?;
-        flags.set_may_leave(true);
+        unsafe {
+            flags.set_may_leave(true);
+        }
         lower.exit_call()?;
     }
 
@@ -691,17 +701,19 @@ unsafe fn call_host_and_handle_result<T>(
 where
     T: 'static,
 {
-    let cx = VMComponentContext::from_opaque(cx);
-    ComponentInstance::from_vmctx(cx, |store, instance| {
-        let mut store = store.unchecked_context_mut();
+    let cx = unsafe { VMComponentContext::from_opaque(cx) };
+    unsafe {
+        ComponentInstance::from_vmctx(cx, |store, instance| {
+            let mut store = store.unchecked_context_mut();
 
-        crate::runtime::vm::catch_unwind_and_record_trap(|| {
-            store.0.call_hook(CallHook::CallingHost)?;
-            let res = func(store.as_context_mut(), instance);
-            store.0.call_hook(CallHook::ReturningFromHost)?;
-            res
+            crate::runtime::vm::catch_unwind_and_record_trap(|| {
+                store.0.call_hook(CallHook::CallingHost)?;
+                let res = func(store.as_context_mut(), instance);
+                store.0.call_hook(CallHook::ReturningFromHost)?;
+                res
+            })
         })
-    })
+    }
 }
 
 unsafe fn call_host_dynamic<T, F>(
@@ -729,19 +741,21 @@ where
         + 'static,
     T: 'static,
 {
-    let options = Options::new(
-        store.0.store_opaque().id(),
-        NonNull::new(memory),
-        NonNull::new(realloc),
-        string_encoding,
-        async_,
-        None,
-    );
+    let options = unsafe {
+        Options::new(
+            store.0.store_opaque().id(),
+            NonNull::new(memory),
+            NonNull::new(realloc),
+            string_encoding,
+            async_,
+            None,
+        )
+    };
 
     // Perform a dynamic check that this instance can indeed be left. Exiting
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
-    if !flags.may_leave() {
+    if unsafe { !flags.may_leave() } {
         bail!("cannot leave component instance");
     }
 
@@ -759,14 +773,16 @@ where
         MAX_FLAT_PARAMS
     };
 
-    let ret_index = dynamic_params_load(
-        &mut lift,
-        &types,
-        storage,
-        param_tys,
-        &mut params_and_results,
-        max_flat,
-    )?;
+    let ret_index = unsafe {
+        dynamic_params_load(
+            &mut lift,
+            &types,
+            storage,
+            param_tys,
+            &mut params_and_results,
+            max_flat,
+        )?
+    };
     let result_start = params_and_results.len();
     for _ in 0..result_tys.types.len() {
         params_and_results.push(Val::Bool(false));
@@ -778,7 +794,7 @@ where
             let retptr = if result_tys.types.len() == 0 {
                 0
             } else {
-                let retptr = storage[ret_index].assume_init();
+                let retptr = unsafe { storage[ret_index].assume_init() };
                 let mut lower =
                     LowerContext::new(store.as_context_mut(), &options, &types, instance);
                 validate_inbounds_dynamic(&result_tys.abi, lower.as_slice_mut(), &retptr)?
@@ -799,7 +815,9 @@ where
                     let result_vals = &result_vals[result_start..];
                     assert_eq!(result_vals.len(), result_tys.types.len());
 
-                    flags.set_may_leave(false);
+                    unsafe {
+                        flags.set_may_leave(false);
+                    }
 
                     let mut lower = LowerContext::new(store, &options, &types, instance);
                     let mut ptr = retptr;
@@ -808,7 +826,9 @@ where
                         val.store(&mut lower, *ty, offset)?;
                     }
 
-                    flags.set_may_leave(true);
+                    unsafe {
+                        flags.set_may_leave(true);
+                    }
 
                     lower.exit_call()?;
 
@@ -842,7 +862,9 @@ where
             instance.poll_and_block(store.0.traitobj_mut(), future, caller_instance)?;
         let result_vals = &result_vals[result_start..];
 
-        flags.set_may_leave(false);
+        unsafe {
+            flags.set_may_leave(false);
+        }
 
         let mut cx = LowerContext::new(store, &options, &types, instance);
         if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
@@ -852,7 +874,7 @@ where
             }
             assert!(dst.next().is_none());
         } else {
-            let ret_ptr = storage[ret_index].assume_init_ref();
+            let ret_ptr = unsafe { storage[ret_index].assume_init_ref() };
             let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice_mut(), ret_ptr)?;
             for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
                 let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
@@ -860,7 +882,9 @@ where
             }
         }
 
-        flags.set_may_leave(true);
+        unsafe {
+            flags.set_may_leave(true);
+        }
 
         cx.exit_call()?;
     }

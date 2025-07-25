@@ -223,7 +223,9 @@ impl Component {
     /// lives for as long as the module and is nevery externally modified for
     /// the lifetime of the deserialized module.
     pub unsafe fn deserialize_raw(engine: &Engine, memory: NonNull<[u8]>) -> Result<Component> {
-        let code = engine.load_code_raw(memory, ObjectKind::Component)?;
+        // SAFETY: the contract required by `load_code_raw` is the same as this
+        // function.
+        let code = unsafe { engine.load_code_raw(memory, ObjectKind::Component)? };
         Component::from_parts(engine, code, None)
     }
 

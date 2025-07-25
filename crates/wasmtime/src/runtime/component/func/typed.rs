@@ -2404,8 +2404,8 @@ pub unsafe fn lower_payload<P, T>(
     let typed = typed_payload(payload);
     lower(typed)?;
 
-    let typed_len = storage_as_slice(typed).len();
-    let payload = storage_as_slice_mut(payload);
+    let typed_len = unsafe { storage_as_slice(typed).len() };
+    let payload = unsafe { storage_as_slice_mut(payload) };
     for slot in payload[typed_len..].iter_mut() {
         slot.write(ValRaw::u64(0));
     }

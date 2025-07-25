@@ -270,9 +270,11 @@ impl Val {
     /// otherwise that `raw` should have the type `ty` specified.
     pub unsafe fn from_raw(mut store: impl AsContextMut, raw: ValRaw, ty: ValType) -> Val {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        Self::_from_raw(&mut store, raw, &ty)
+        // SAFETY: `_from_raw` has the same contract as this function.
+        unsafe { Self::_from_raw(&mut store, raw, &ty) }
     }
 
+    /// Same as [`Self::from_raw`], but with a monomorphic store.
     pub(crate) unsafe fn _from_raw(
         store: &mut AutoAssertNoGc<'_>,
         raw: ValRaw,
@@ -286,9 +288,11 @@ impl Val {
             ValType::V128 => Val::V128(raw.get_v128().into()),
             ValType::Ref(ref_ty) => {
                 let ref_ = match ref_ty.heap_type() {
-                    HeapType::Func | HeapType::ConcreteFunc(_) => {
+                    // SAFETY: it's a safety contract of this function that the
+                    // funcref is valid and owned by the provided store.
+                    HeapType::Func | HeapType::ConcreteFunc(_) => unsafe {
                         Func::_from_raw(store, raw.get_funcref()).into()
-                    }
+                    },
 
                     HeapType::NoFunc => Ref::Func(None),
 

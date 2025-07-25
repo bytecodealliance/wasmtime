@@ -20,6 +20,11 @@ struct TrampolineState<F> {
 /// data and function together.
 ///
 /// Also shepherds panics and traps across Wasm.
+///
+/// # Safety
+///
+/// Requires that all parameters are valid from a wasm function call and
+/// additionally that `vmctx` is backed by `VMArrayCallHostFuncContext`.
 unsafe extern "C" fn array_call_shim<F>(
     vmctx: NonNull<VMOpaqueContext>,
     caller_vmctx: NonNull<VMContext>,
@@ -32,15 +37,27 @@ where
     // Be sure to catch Rust panics to manually shepherd them across the wasm
     // boundary, and then otherwise delegate as normal.
     crate::runtime::vm::catch_unwind_and_record_trap(|| {
-        let vmctx = VMArrayCallHostFuncContext::from_opaque(vmctx);
+        // SAFETY: this function itself requires that the `vmctx` is valid to
+        // use here.
+        let state = unsafe {
+            let vmctx = VMArrayCallHostFuncContext::from_opaque(vmctx);
+            vmctx.as_ref().host_state()
+        };
+
         // Double-check ourselves in debug mode, but we control
         // the `Any` here so an unsafe downcast should also
         // work.
-        let state = vmctx.as_ref().host_state();
-        debug_assert!(state.is::<TrampolineState<F>>());
-        let state = &*(state as *const _ as *const TrampolineState<F>);
+        //
+        // SAFETY: this function is only usable with `TrampolineState<F>`.
+        let state = unsafe {
+            debug_assert!(state.is::<TrampolineState<F>>());
+            &*(state as *const _ as *const TrampolineState<F>)
+        };
         let mut values_vec = NonNull::slice_from_raw_parts(values_vec, values_vec_len);
-        (state.func)(caller_vmctx, values_vec.as_mut())
+        // SAFETY: it's a contract of this function itself that the values
+        // provided are valid to view as a slice.
+        let values_vec = unsafe { values_vec.as_mut() };
+        (state.func)(caller_vmctx, values_vec)
     })
 }
 

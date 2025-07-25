@@ -1,5 +1,3 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-
 //! Runtime support for the Component Model Async ABI.
 //!
 //! This module and its submodules provide host runtime support for Component

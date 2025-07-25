@@ -102,6 +102,7 @@ impl FuncRefs {
     ///
     /// You may only access the return value on the same thread as this
     /// `FuncRefs` and only while the store holding this `FuncRefs` exists.
+    /// Additionally the `vmctx` field of `func_ref` must be valid to read.
     pub unsafe fn push(
         &mut self,
         func_ref: VMFuncRef,
@@ -109,7 +110,9 @@ impl FuncRefs {
     ) -> NonNull<VMFuncRef> {
         debug_assert!(func_ref.wasm_call.is_none());
         let func_ref = self.bump.alloc(func_ref);
-        let has_hole = !try_fill(func_ref, modules);
+        // SAFETY: it's a contract of this function itself that `func_ref` has a
+        // valid vmctx field to read.
+        let has_hole = unsafe { !try_fill(func_ref, modules) };
         let unpatched = SendSyncPtr::from(func_ref);
         if has_hole {
             self.with_holes.push(unpatched);
@@ -157,25 +160,27 @@ impl FuncRefs {
     ///
     /// You may only access the return value on the same thread as this
     /// `FuncRefs` and only while the store holding this `FuncRefs` exists.
-    pub unsafe fn push_arc_host(
+    pub fn push_arc_host(
         &mut self,
         func: Arc<HostFunc>,
         modules: &ModuleRegistry,
     ) -> NonNull<VMFuncRef> {
         debug_assert!(func.func_ref().wasm_call.is_none());
-        let ret = self.push(func.func_ref().clone(), modules);
+        // SAFETY: the vmctx field in the funcref of `HostFunc` is safe to read.
+        let ret = unsafe { self.push(func.func_ref().clone(), modules) };
         self.storage.push(Storage::ArcHost { func });
         ret
     }
 
     /// Same as `push_arc_host`, but for owned host functions.
-    pub unsafe fn push_box_host(
+    pub fn push_box_host(
         &mut self,
         func: Box<HostFunc>,
         modules: &ModuleRegistry,
     ) -> NonNull<VMFuncRef> {
         debug_assert!(func.func_ref().wasm_call.is_none());
-        let ret = self.push(func.func_ref().clone(), modules);
+        // SAFETY: the vmctx field in the funcref of `HostFunc` is safe to read.
+        let ret = unsafe { self.push(func.func_ref().clone(), modules) };
         self.storage.push(Storage::BoxHost { func });
         ret
     }

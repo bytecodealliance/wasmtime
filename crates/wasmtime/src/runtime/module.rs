@@ -416,7 +416,9 @@ impl Module {
     /// lives for as long as the module and is nevery externally modified for
     /// the lifetime of the deserialized module.
     pub unsafe fn deserialize_raw(engine: &Engine, memory: NonNull<[u8]>) -> Result<Module> {
-        let code = engine.load_code_raw(memory, ObjectKind::Module)?;
+        // SAFETY: the contract required by `load_code_raw` is the same as this
+        // function.
+        let code = unsafe { engine.load_code_raw(memory, ObjectKind::Module)? };
         Module::from_parts(engine, code, None)
     }
 
@@ -446,8 +448,12 @@ impl Module {
     #[cfg(feature = "std")]
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
         let file = open_file_for_mmap(path.as_ref())?;
-        Self::deserialize_open_file(engine, file)
-            .with_context(|| format!("failed deserialization for: {}", path.as_ref().display()))
+        // SAFETY: the contract of `deserialize_open_file` is the samea s this
+        // function.
+        unsafe {
+            Self::deserialize_open_file(engine, file)
+                .with_context(|| format!("failed deserialization for: {}", path.as_ref().display()))
+        }
     }
 
     /// Same as [`deserialize_file`], except that it takes an open `File`

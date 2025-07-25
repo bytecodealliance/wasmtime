@@ -2300,7 +2300,7 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
         root: Option<VMGcRef>,
         bytes_needed: Option<u64>,
     ) -> Result<Option<VMGcRef>> {
-        self.inner.maybe_async_gc(root, bytes_needed)
+        unsafe { self.inner.maybe_async_gc(root, bytes_needed) }
     }
 
     #[cfg(not(feature = "gc"))]
