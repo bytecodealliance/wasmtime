@@ -139,8 +139,6 @@ default = [
   'addr2line',
   'coredump',
   'debug-builtins',
-  'wasmtime-jit-debug/perf_jitdump',
-  'wasmtime-jit-debug/std',
   'runtime',
   'component-model',
   'threads',
