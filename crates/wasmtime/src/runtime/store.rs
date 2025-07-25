@@ -1383,13 +1383,15 @@ impl StoreOpaque {
     ///
     /// Convenience wrapper around [`Recorder::record_event`]
     #[inline]
-    pub(crate) fn record_event<T, F>(&mut self, f: F)
+    pub(crate) fn record_event<T, F>(&mut self, f: F) -> Result<()>
     where
         T: Into<RREvent>,
         F: FnOnce(&RecordMetadata) -> T,
     {
         if let Some(buf) = self.record_buffer_mut() {
-            buf.record_event(f);
+            buf.record_event(f)
+        } else {
+            Ok(())
         }
     }
 
@@ -1397,14 +1399,16 @@ impl StoreOpaque {
     ///
     /// Convenience wrapper around [`Recorder::record_event_if`]
     #[inline]
-    pub(crate) fn record_event_if<T, P, F>(&mut self, pred: P, f: F)
+    pub(crate) fn record_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<()>
     where
         T: Into<RREvent>,
         P: FnOnce(&RecordMetadata) -> bool,
         F: FnOnce(&RecordMetadata) -> T,
     {
         if let Some(buf) = self.record_buffer_mut() {
-            buf.record_event_if(pred, f);
+            buf.record_event_if(pred, f)
+        } else {
+            Ok(())
         }
     }
 

@@ -46,7 +46,8 @@ impl Drop for MemorySliceCell<'_> {
     /// Drop serves as a recording hook for stores to the memory slice
     fn drop(&mut self) {
         if let Some(buf) = &mut self.recorder {
-            buf.record_event(|_| MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()));
+            buf.record_event(|_| MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()))
+                .unwrap();
         }
     }
 }
@@ -102,7 +103,8 @@ impl<'a, const N: usize> Drop for ConstMemorySliceCell<'a, N> {
             buf.record_event_if(
                 |_| true,
                 |_| MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()),
-            );
+            )
+            .unwrap();
         }
     }
 }
@@ -405,11 +407,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     ) -> Result<usize> {
         self.store
             .0
-            .record_event(|_| ReallocEntryEvent::new(old, old_size, old_align, new_size));
+            .record_event(|_| ReallocEntryEvent::new(old, old_size, old_align, new_size))?;
         let result = self.realloc_inner(old, old_size, old_align, new_size);
         self.store
             .0
-            .record_event_if(|r| r.add_validation, |_| ReallocReturnEvent::new(&result));
+            .record_event_if(|r| r.add_validation, |_| ReallocReturnEvent::new(&result))?;
         result
     }
 

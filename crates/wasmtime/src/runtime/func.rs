@@ -2376,7 +2376,7 @@ impl HostContext {
                                 Some(wasm_func_type.clone()),
                             )
                         },
-                    );
+                    )?;
                     store.next_replay_event_if(
                         |_, r| r.add_validation,
                         |_event: HostFuncEntryEvent, _r: &ReplayMetadata| {
@@ -2442,7 +2442,7 @@ impl HostContext {
                     #[cfg(feature = "rr-type-validation")]
                     _rmeta.add_validation.then_some(wasm_func_type.clone()),
                 )
-            });
+            })?;
 
             Ok(ret)
         };

@@ -849,7 +849,7 @@ impl<T: 'static> InstancePre<T> {
         {
             store
                 .0
-                .record_event(|_| InstantiationEvent::from_component(&self.component));
+                .record_event(|_| InstantiationEvent::from_component(&self.component))?;
             store
                 .0
                 .next_replay_event_and(|event: InstantiationEvent, _| {

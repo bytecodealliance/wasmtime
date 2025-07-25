@@ -38,7 +38,7 @@ macro_rules! rr_host_func_entry_event {
                         Some($param_types),
                     )
                 },
-            );
+            )?;
             $store.next_replay_event_if(
                 |_, r| r.add_validation,
                 |_event: HostFuncEntryEvent, _r: &ReplayMetadata| {
@@ -62,7 +62,7 @@ macro_rules! record_host_func_return_event {
                 #[cfg(feature = "rr-type-validation")]
                 _r.add_validation.then_some($return_types),
             )
-        });
+        })?;
     }};
 }
 
@@ -70,7 +70,7 @@ macro_rules! record_host_func_return_event {
 macro_rules! record_lower_store_event_wrapper {
     { $lower_store:expr => $store:expr } => {{
         let store_result = $lower_store;
-        $store.record_event(|_| LowerStoreReturnEvent::new(&store_result));
+        $store.record_event(|_| LowerStoreReturnEvent::new(&store_result))?;
         store_result
     }};
 }
@@ -79,7 +79,7 @@ macro_rules! record_lower_store_event_wrapper {
 macro_rules! record_lower_event_wrapper {
     { $lower:expr => $store:expr } => {{
         let lower_result = $lower;
-        $store.record_event(|_| LowerReturnEvent::new(&lower_result));
+        $store.record_event(|_| LowerReturnEvent::new(&lower_result))?;
         lower_result
     }};
 }
