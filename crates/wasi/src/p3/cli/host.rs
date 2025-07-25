@@ -10,7 +10,7 @@ use bytes::BytesMut;
 use std::io::Cursor;
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
 use wasmtime::component::{
-    Accessor, AccessorTask, HasData, HostStream, Resource, StreamReader, StreamWriter,
+    Accessor, AccessorTask, HasData, Resource, StreamReader, StreamWriter, WithAccessor,
 };
 
 struct InputTask<T> {
@@ -24,16 +24,13 @@ where
     V: AsyncRead + Send + Sync + Unpin + 'static,
 {
     async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
+        let mut tx = WithAccessor::new(store, self.tx);
         let mut buf = BytesMut::with_capacity(8192);
-        while !self.tx.is_closed() {
+        while !tx.is_closed() {
             match self.rx.read_buf(&mut buf).await {
                 Ok(0) => return Ok(()),
                 Ok(_) => {
-                    buf = self
-                        .tx
-                        .write_all(store, Cursor::new(buf))
-                        .await
-                        .into_inner();
+                    buf = tx.write_all(store, Cursor::new(buf)).await.into_inner();
                     buf.clear();
                 }
                 Err(_err) => {
@@ -57,9 +54,10 @@ where
     V: AsyncWrite + Send + Sync + Unpin + 'static,
 {
     async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
+        let mut rx = WithAccessor::new(store, self.rx);
         let mut buf = BytesMut::with_capacity(8192);
-        while !self.rx.is_closed() {
-            buf = self.rx.read(store, buf).await;
+        while !rx.is_closed() {
+            buf = rx.read(store, buf).await;
             match self.tx.write_all(&buf).await {
                 Ok(()) => {
                     buf.clear();
