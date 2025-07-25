@@ -12,9 +12,8 @@ fuzz_target!(|input: (u64, TableOps)| {
     let (seed, ops) = input;
     let mut buf = [0u8; 1024];
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-    for b in buf.iter_mut() {
-        *b = rng.r#gen();
-    }
+
+    rng.fill(&mut buf);
 
     let u = Unstructured::new(&buf);
     let config = wasmtime_fuzzing::generators::Config::arbitrary_take_rest(u)
