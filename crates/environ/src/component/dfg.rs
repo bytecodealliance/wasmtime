@@ -139,7 +139,8 @@ pub struct ComponentDfg {
     /// performed during instantiation.
     pub side_effects: Vec<SideEffect>,
 
-    /// TODO
+    /// Interned map of id-to-`CanonicalOptions`, or all sets-of-options used by
+    /// this component.
     pub options: Intern<OptionsId, CanonicalOptions>,
 }
 

@@ -195,7 +195,8 @@ pub struct Component {
     /// testing reentrance.
     pub defined_resource_instances: PrimaryMap<DefinedResourceIndex, RuntimeComponentInstanceIndex>,
 
-    /// TODO
+    /// All canonical options used by this component. Stored as a table here
+    /// from index-to-options so the options can be consulted at runtime.
     pub options: PrimaryMap<OptionsIndex, CanonicalOptions>,
 }
 
