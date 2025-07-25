@@ -2,12 +2,10 @@
 //! the __jit_debug_register_code() and __jit_debug_descriptor to register
 //! or unregister generated object images with debuggers.
 
-#[cfg(not(feature = "std"))]
+extern crate alloc;
+
 use alloc::{boxed::Box, vec::Vec};
-#[cfg(not(feature = "std"))]
 use core::{pin::Pin, ptr};
-#[cfg(feature = "std")]
-use std::{boxed::Box, pin::Pin, ptr, vec::Vec};
 use wasmtime_versioned_export_macros::versioned_link;
 
 #[repr(C)]

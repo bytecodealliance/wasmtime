@@ -6,8 +6,6 @@
 //! > be aware that your usage of this crate is not supported.
 #![no_std]
 
-#[cfg(all(feature = "gdb_jit_int", not(feature = "std")))]
-extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
