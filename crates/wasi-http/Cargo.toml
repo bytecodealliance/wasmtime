@@ -11,6 +11,10 @@ description = "Experimental HTTP library for WebAssembly in Wasmtime"
 [lints]
 workspace = true
 
+[features]
+default = ["default-send-request"]
+default-send-request = ["dep:tokio-rustls", "dep:rustls", "dep:webpki-roots"]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -29,9 +33,9 @@ tracing = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-io = { workspace = true }
 wasmtime = { workspace = true, features = ['component-model'] }
-tokio-rustls = { workspace = true }
-rustls = { workspace = true }
-webpki-roots = { workspace = true }
+tokio-rustls = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+webpki-roots = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-programs-artifacts = { workspace = true }

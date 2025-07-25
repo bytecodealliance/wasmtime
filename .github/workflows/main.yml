@@ -394,6 +394,10 @@ jobs:
               -p wasmtime-c-api --no-default-features
               -p wasmtime-c-api --no-default-features --features wat
               -p wasmtime-c-api --no-default-features --features wasi
+
+          - name: wasmtime-wasi-http
+            checks: |
+              -p wasmtime-wasi-http --no-default-features
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
