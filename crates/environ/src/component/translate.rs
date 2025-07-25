@@ -204,14 +204,10 @@ enum LocalInitializer<'data> {
         func: ModuleInternedTypeIndex,
     },
     WaitableSetWait {
-        func: ModuleInternedTypeIndex,
-        async_: bool,
-        memory: MemoryIndex,
+        options: LocalCanonicalOptions,
     },
     WaitableSetPoll {
-        func: ModuleInternedTypeIndex,
-        async_: bool,
-        memory: MemoryIndex,
+        options: LocalCanonicalOptions,
     },
     WaitableSetDrop {
         func: ModuleInternedTypeIndex,
@@ -844,21 +840,37 @@ impl<'a, 'data> Translator<'a, 'data> {
                             LocalInitializer::WaitableSetNew { func }
                         }
                         wasmparser::CanonicalFunction::WaitableSetWait { async_, memory } => {
-                            let func = self.core_func_signature(core_func_index)?;
+                            let core_type = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::WaitableSetWait {
-                                func,
-                                async_,
-                                memory: MemoryIndex::from_u32(memory),
+                                options: LocalCanonicalOptions {
+                                    core_type,
+                                    async_,
+                                    data_model: LocalDataModel::LinearMemory {
+                                        memory: Some(MemoryIndex::from_u32(memory)),
+                                        realloc: None,
+                                    },
+                                    post_return: None,
+                                    callback: None,
+                                    string_encoding: StringEncoding::Utf8,
+                                },
                             }
                         }
                         wasmparser::CanonicalFunction::WaitableSetPoll { async_, memory } => {
-                            let func = self.core_func_signature(core_func_index)?;
+                            let core_type = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::WaitableSetPoll {
-                                func,
-                                async_,
-                                memory: MemoryIndex::from_u32(memory),
+                                options: LocalCanonicalOptions {
+                                    core_type,
+                                    async_,
+                                    data_model: LocalDataModel::LinearMemory {
+                                        memory: Some(MemoryIndex::from_u32(memory)),
+                                        realloc: None,
+                                    },
+                                    post_return: None,
+                                    callback: None,
+                                    string_encoding: StringEncoding::Utf8,
+                                },
                             }
                         }
                         wasmparser::CanonicalFunction::WaitableSetDrop => {

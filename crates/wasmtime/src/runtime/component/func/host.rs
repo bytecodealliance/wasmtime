@@ -6,11 +6,9 @@ use crate::component::storage::slice_to_storage_mut;
 use crate::component::{ComponentNamedList, ComponentType, Instance, Lift, Lower, Val};
 use crate::prelude::*;
 use crate::runtime::vm::component::{
-    ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
+    ComponentInstance, VMComponentContext, VMLowering, VMLoweringCallee,
 };
-use crate::runtime::vm::{
-    SendSyncPtr, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext, VMStore,
-};
+use crate::runtime::vm::{SendSyncPtr, VMOpaqueContext, VMStore};
 use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
@@ -20,7 +18,7 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS,
-    MAX_FLAT_RESULTS, RuntimeComponentInstanceIndex, StringEncoding, TypeFuncIndex, TypeTuple,
+    MAX_FLAT_RESULTS, OptionsIndex, TypeFuncIndex, TypeTuple,
 };
 
 pub struct HostFunc {
@@ -92,12 +90,7 @@ impl HostFunc {
         cx: NonNull<VMOpaqueContext>,
         data: NonNull<u8>,
         ty: u32,
-        caller_instance: u32,
-        flags: NonNull<VMGlobalDefinition>,
-        memory: *mut VMMemoryDefinition,
-        realloc: *mut VMFuncRef,
-        string_encoding: u8,
-        async_: u8,
+        options: u32,
         storage: NonNull<MaybeUninit<ValRaw>>,
         storage_len: usize,
     ) -> bool
@@ -114,12 +107,7 @@ impl HostFunc {
                     store,
                     instance,
                     TypeFuncIndex::from_u32(ty),
-                    RuntimeComponentInstanceIndex::from_u32(caller_instance),
-                    InstanceFlags::from_raw(flags),
-                    memory,
-                    realloc,
-                    StringEncoding::from_u8(string_encoding).unwrap(),
-                    async_ != 0,
+                    OptionsIndex::from_u32(options),
                     NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                     move |store, instance, args| (*data.as_ptr())(store, instance, args),
                 )
@@ -241,12 +229,7 @@ unsafe fn call_host<T, Params, Return, F>(
     mut store: StoreContextMut<'_, T>,
     instance: Instance,
     ty: TypeFuncIndex,
-    caller_instance: RuntimeComponentInstanceIndex,
-    mut flags: InstanceFlags,
-    memory: *mut VMMemoryDefinition,
-    realloc: *mut VMFuncRef,
-    string_encoding: StringEncoding,
-    async_: bool,
+    options_idx: OptionsIndex,
     storage: &mut [MaybeUninit<ValRaw>],
     closure: F,
 ) -> Result<()>
@@ -255,16 +238,12 @@ where
     Params: Lift,
     Return: Lower + 'static,
 {
-    let options = unsafe {
-        Options::new(
-            store.0.store_opaque().id(),
-            NonNull::new(memory),
-            NonNull::new(realloc),
-            string_encoding,
-            async_,
-            None,
-        )
-    };
+    let options = Options::new_index(store.0, instance, options_idx);
+    let vminstance = instance.id().get(store.0);
+    let opts = &vminstance.component().env_component().options[options_idx];
+    let async_ = opts.async_;
+    let caller_instance = opts.instance;
+    let mut flags = vminstance.instance_flags(caller_instance);
 
     // Perform a dynamic check that this instance can indeed be left. Exiting
     // the component is disallowed, for example, when the `realloc` function
@@ -273,7 +252,7 @@ where
         bail!("cannot leave component instance");
     }
 
-    let types = instance.id().get(store.0).component().types().clone();
+    let types = vminstance.component().types().clone();
     let ty = &types[ty];
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
@@ -720,12 +699,7 @@ unsafe fn call_host_dynamic<T, F>(
     mut store: StoreContextMut<'_, T>,
     instance: Instance,
     ty: TypeFuncIndex,
-    caller_instance: RuntimeComponentInstanceIndex,
-    mut flags: InstanceFlags,
-    memory: *mut VMMemoryDefinition,
-    realloc: *mut VMFuncRef,
-    string_encoding: StringEncoding,
-    async_: bool,
+    options_idx: OptionsIndex,
     storage: &mut [MaybeUninit<ValRaw>],
     closure: F,
 ) -> Result<()>
@@ -741,16 +715,12 @@ where
         + 'static,
     T: 'static,
 {
-    let options = unsafe {
-        Options::new(
-            store.0.store_opaque().id(),
-            NonNull::new(memory),
-            NonNull::new(realloc),
-            string_encoding,
-            async_,
-            None,
-        )
-    };
+    let options = Options::new_index(store.0, instance, options_idx);
+    let vminstance = instance.id().get(store.0);
+    let opts = &vminstance.component().env_component().options[options_idx];
+    let async_ = opts.async_;
+    let caller_instance = opts.instance;
+    let mut flags = vminstance.instance_flags(caller_instance);
 
     // Perform a dynamic check that this instance can indeed be left. Exiting
     // the component is disallowed, for example, when the `realloc` function
@@ -956,12 +926,7 @@ extern "C" fn dynamic_entrypoint<T: 'static, F>(
     cx: NonNull<VMOpaqueContext>,
     data: NonNull<u8>,
     ty: u32,
-    caller_instance: u32,
-    flags: NonNull<VMGlobalDefinition>,
-    memory: *mut VMMemoryDefinition,
-    realloc: *mut VMFuncRef,
-    string_encoding: u8,
-    async_: u8,
+    options: u32,
     storage: NonNull<MaybeUninit<ValRaw>>,
     storage_len: usize,
 ) -> bool
@@ -984,12 +949,7 @@ where
                 store,
                 instance,
                 TypeFuncIndex::from_u32(ty),
-                RuntimeComponentInstanceIndex::from_u32(caller_instance),
-                InstanceFlags::from_raw(flags),
-                memory,
-                realloc,
-                StringEncoding::from_u8(string_encoding).unwrap(),
-                async_ != 0,
+                OptionsIndex::from_u32(options),
                 NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                 move |store, instance, params, results| {
                     (*data.as_ptr())(store, instance, params, results)

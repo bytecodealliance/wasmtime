@@ -194,6 +194,10 @@ pub struct Component {
     /// This is used to determine which set of instance flags are inspected when
     /// testing reentrance.
     pub defined_resource_instances: PrimaryMap<DefinedResourceIndex, RuntimeComponentInstanceIndex>,
+
+    /// All canonical options used by this component. Stored as a table here
+    /// from index-to-options so the options can be consulted at runtime.
+    pub options: PrimaryMap<OptionsIndex, CanonicalOptions>,
 }
 
 impl Component {
@@ -451,7 +455,7 @@ pub enum Export {
         /// Which core WebAssembly export is being lifted.
         func: CoreDef,
         /// Any options, if present, associated with this lifting.
-        options: CanonicalOptions,
+        options: OptionsIndex,
     },
     /// A module defined within this component is exported.
     ModuleStatic {
@@ -673,7 +677,7 @@ pub enum Trampoline {
 
         /// The canonical ABI options used when lowering this function specified
         /// in the original component.
-        options: CanonicalOptions,
+        options: OptionsIndex,
     },
 
     /// Information about a string transcoding function required by an adapter
@@ -734,7 +738,7 @@ pub enum Trampoline {
         results: TypeTupleIndex,
 
         /// The canonical ABI options specified for this intrinsic.
-        options: CanonicalOptions,
+        options: OptionsIndex,
     },
 
     /// A `task.cancel` intrinsic, which acknowledges a `CANCELLED` event
@@ -755,24 +759,16 @@ pub enum Trampoline {
     /// outstanding async task/stream/future to make progress, returning the
     /// first such event.
     WaitableSetWait {
-        /// The specific component instance which is calling the intrinsic.
-        instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance maybe reentered.
-        async_: bool,
-        /// Memory to use when storing the event.
-        memory: RuntimeMemoryIndex,
+        /// Configuration options for this intrinsic call.
+        options: OptionsIndex,
     },
 
     /// A `waitable-set.poll` intrinsic, which checks whether any outstanding
     /// async task/stream/future has made progress.  Unlike `task.wait`, this
     /// does not block and may return nothing if no such event has occurred.
     WaitableSetPoll {
-        /// The specific component instance which is calling the intrinsic.
-        instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance maybe reentered.
-        async_: bool,
-        /// Memory to use when storing the event.
-        memory: RuntimeMemoryIndex,
+        /// Configuration options for this intrinsic call.
+        options: OptionsIndex,
     },
 
     /// A `waitable-set.drop` intrinsic.
@@ -823,7 +819,7 @@ pub enum Trampoline {
 
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
-        options: CanonicalOptions,
+        options: OptionsIndex,
     },
 
     /// A `stream.write` intrinsic to write to a `stream` of the specified type.
@@ -833,7 +829,7 @@ pub enum Trampoline {
 
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
-        options: CanonicalOptions,
+        options: OptionsIndex,
     },
 
     /// A `stream.cancel-read` intrinsic to cancel an in-progress read from a
@@ -884,7 +880,7 @@ pub enum Trampoline {
 
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
-        options: CanonicalOptions,
+        options: OptionsIndex,
     },
 
     /// A `future.write` intrinsic to write to a `future` of the specified type.
@@ -894,7 +890,7 @@ pub enum Trampoline {
 
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
-        options: CanonicalOptions,
+        options: OptionsIndex,
     },
 
     /// A `future.cancel-read` intrinsic to cancel an in-progress read from a
@@ -937,7 +933,7 @@ pub enum Trampoline {
         /// The table index for the `error-context` type in the caller instance.
         ty: TypeComponentLocalErrorContextTableIndex,
         /// String encoding, memory, etc. to use when loading debug message.
-        options: CanonicalOptions,
+        options: OptionsIndex,
     },
 
     /// A `error-context.debug-message` intrinsic to get the debug message for a
@@ -949,7 +945,7 @@ pub enum Trampoline {
         /// The table index for the `error-context` type in the caller instance.
         ty: TypeComponentLocalErrorContextTableIndex,
         /// String encoding, memory, etc. to use when storing debug message.
-        options: CanonicalOptions,
+        options: OptionsIndex,
     },
 
     /// A `error-context.drop` intrinsic to drop a specified `error-context`.

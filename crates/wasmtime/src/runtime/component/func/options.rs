@@ -11,7 +11,10 @@ use crate::{FuncType, StoreContextMut};
 use alloc::sync::Arc;
 use core::pin::Pin;
 use core::ptr::NonNull;
-use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
+use wasmtime_environ::component::{
+    CanonicalOptions, CanonicalOptionsDataModel, ComponentTypes, OptionsIndex, StringEncoding,
+    TypeResourceTableIndex,
+};
 
 /// Runtime representation of canonical ABI options in the component model.
 ///
@@ -61,24 +64,33 @@ unsafe impl Sync for Options {}
 impl Options {
     // FIXME(#4311): prevent a ctor where the memory is memory64
 
-    /// Creates a new set of options with the specified components.
+    /// Creates a new [`Options`] from the given [`OptionsIndex`] belonging to
+    /// the specified [`Instance`]
     ///
-    /// # Unsafety
+    /// # Panics
     ///
-    /// This is unsafety as there is no way to statically verify the validity of
-    /// the arguments. For example pointers must be valid pointers, the
-    /// `StoreId` must be valid for the pointers, etc.
-    pub unsafe fn new(
-        store_id: StoreId,
-        memory: Option<NonNull<VMMemoryDefinition>>,
-        realloc: Option<NonNull<VMFuncRef>>,
-        string_encoding: StringEncoding,
-        async_: bool,
-        callback: Option<NonNull<VMFuncRef>>,
-    ) -> Options {
+    /// Panics if `instance` is not owned by `store` or if `index` is not valid
+    /// for `instance`'s component.
+    pub fn new_index(store: &StoreOpaque, instance: Instance, index: OptionsIndex) -> Options {
+        let instance = instance.id().get(store);
+        let CanonicalOptions {
+            string_encoding,
+            async_,
+            callback,
+            ref data_model,
+            ..
+        } = instance.component().env_component().options[index];
+        let (memory, realloc) = match data_model {
+            CanonicalOptionsDataModel::Gc { .. } => (None, None),
+            CanonicalOptionsDataModel::LinearMemory(o) => (o.memory, o.realloc),
+        };
+        let memory = memory.map(|i| NonNull::new(instance.runtime_memory(i)).unwrap());
+        let realloc = realloc.map(|i| instance.runtime_realloc(i));
+        let callback = callback.map(|i| instance.runtime_callback(i));
         let _ = callback;
+
         Options {
-            store_id,
+            store_id: store.id(),
             memory,
             realloc,
             string_encoding,

@@ -138,17 +138,8 @@ pub struct ComponentInstance {
 ///   which this function pointer was registered.
 /// * `ty` - the type index, relative to the tables in `vmctx`, that is the
 ///   type of the function being called.
-/// * `caller_instance` - the `RuntimeComponentInstanceIndex` representing the
-///   caller component instance, used to track the owner of an async host task.
-/// * `flags` - the component flags for may_enter/leave corresponding to the
-///   component instance that the lowering happened within.
-/// * `opt_memory` - this nullable pointer represents the memory configuration
-///   option for the canonical ABI options.
-/// * `opt_realloc` - this nullable pointer represents the realloc configuration
-///   option for the canonical ABI options.
-/// * `string_encoding` - this is the configured string encoding for the
-///   canonical ABI this lowering corresponds to.
-/// * `async_` - whether the caller is using the async ABI.
+/// * `options` - the `OptionsIndex` which indicates the canonical ABI options
+///   in use for this call.
 /// * `args_and_results` - pointer to stack-allocated space in the caller where
 ///   all the arguments are stored as well as where the results will be written
 ///   to. The size and initialized bytes of this depends on the core wasm type
@@ -159,21 +150,11 @@ pub struct ComponentInstance {
 /// This function returns a `bool` which indicates whether the call succeeded
 /// or not. On failure this function records trap information in TLS which
 /// should be suitable for reading later.
-//
-// FIXME: 11 arguments is probably too many. The `data` through `string-encoding`
-// parameters should probably get packaged up into the `VMComponentContext`.
-// Needs benchmarking one way or another though to figure out what the best
-// balance is here.
 pub type VMLoweringCallee = extern "C" fn(
     vmctx: NonNull<VMOpaqueContext>,
     data: NonNull<u8>,
     ty: u32,
-    caller_instance: u32,
-    flags: NonNull<VMGlobalDefinition>,
-    opt_memory: *mut VMMemoryDefinition,
-    opt_realloc: *mut VMFuncRef,
-    string_encoding: u8,
-    async_: u8,
+    options: u32,
     args_and_results: NonNull<mem::MaybeUninit<ValRaw>>,
     nargs_and_results: usize,
 ) -> bool;
