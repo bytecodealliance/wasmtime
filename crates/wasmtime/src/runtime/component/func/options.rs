@@ -451,6 +451,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// # Panics
     ///
     /// Refer to [`get`](Self::get).
+    #[inline]
     pub fn get_dyn(&mut self, offset: usize, size: usize) -> MemorySliceCell {
         let (slice_mut, recorder) = self.as_slice_mut_with_recorder();
         MemorySliceCell {

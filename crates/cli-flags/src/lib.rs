@@ -1048,14 +1048,14 @@ impl CommonOptions {
             Some(RRConfig::from(RecordConfig {
                 writer_initializer: Arc::new(move || Box::new(fs::File::create(&path).unwrap())),
                 metadata: RecordMetadata {
-                    add_validation: record.validation_metadata.unwrap_or(true),
+                    add_validation: record.validation_metadata.unwrap_or(false),
                 },
             }))
         } else if let Some(path) = replay.path.clone() {
             Some(RRConfig::from(ReplayConfig {
                 reader_initializer: Arc::new(move || Box::new(fs::File::open(&path).unwrap())),
                 metadata: ReplayMetadata {
-                    validate: replay.validate.unwrap_or(true),
+                    validate: replay.validate.unwrap_or(false),
                 },
             }))
         } else {
