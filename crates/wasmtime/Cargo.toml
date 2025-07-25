@@ -19,7 +19,7 @@ all-features = true
 [dependencies]
 wasmtime-asm-macros = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
-wasmtime-jit-debug = { workspace = true, features = [], optional = true }
+wasmtime-jit-debug = { workspace = true, optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
