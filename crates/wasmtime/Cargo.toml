@@ -180,9 +180,7 @@ profiling = [
   "rustix/thread",
   "dep:serde_json",
   "std",
-  "wasmtime-jit-debug/gdb_jit_int",
   "wasmtime-jit-debug/perf_jitdump",
-  "wasmtime-jit-debug/std",
 ]
 
 # Enables parallel compilation of WebAssembly code.
@@ -338,6 +336,7 @@ std = [
   'addr2line?/std',
   "dep:rustix",
   "wasmtime-jit-icache-coherence",
+  "wasmtime-jit-debug?/std",
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom
