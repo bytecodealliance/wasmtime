@@ -419,11 +419,13 @@ impl Func {
         assert!(ty.comes_from_same_engine(store.as_context().engine()));
         let store = store.as_context_mut().0;
 
-        // SAFETY:
-        unsafe {
-            let host = HostFunc::new_unchecked(store.engine(), ty, func);
-            host.into_func(store)
-        }
+        // SAFETY: the contract required by `new_unchecked` is the same as the
+        // contract required by this function itself.
+        let host = unsafe { HostFunc::new_unchecked(store.engine(), ty, func) };
+
+        // SAFETY: the `T` used by `func` matches the `T` of the store we're
+        // inserting into via this function's type signature.
+        unsafe { host.into_func(store) }
     }
 
     /// Creates a new host-defined WebAssembly function which, when called,
@@ -2468,6 +2470,12 @@ impl HostFunc {
     ///
     /// Panics if the given function type is not associated with the given
     /// engine.
+    ///
+    /// # Safety
+    ///
+    /// The `func` provided must operate according to the `ty` provided to
+    /// ensure it's reading the correctly-typed parameters and writing the
+    /// correctly-typed results.
     pub unsafe fn new_unchecked<T>(
         engine: &Engine,
         ty: FuncType,
