@@ -36,7 +36,7 @@ unsafe extern "C" {
 
 #[cfg(feature = "std")]
 mod gdb_registration {
-    use std::sync::Mutex;
+    use std::sync::{Mutex, MutexGuard};
 
     /// The process controls access to the __jit_debug_descriptor by itself --
     /// the GDB/LLDB accesses this structure and its data at the process startup
@@ -47,25 +47,29 @@ mod gdb_registration {
     pub static GDB_REGISTRATION: Mutex<()> = Mutex::new(());
 
     /// The lock guard for the GDB registration lock.
-    /// The field is not used directly, but it is needed to ensure that the lock
-    /// is held until the `LockGuard` is dropped.
-    #[allow(
+    #[expect(
         dead_code,
         reason = "field used to hold the lock until the end of the scope"
     )]
-    pub struct LockGuard<'a>(std::sync::MutexGuard<'a, ()>);
+    pub struct LockGuard<'a>(MutexGuard<'a, ()>);
 
     pub fn lock() -> LockGuard<'static> {
         LockGuard(GDB_REGISTRATION.lock().unwrap())
     }
 }
 
+/// For no_std there's no access to synchronization primitives so a primitive
+/// fallback for now is to panic-on-contention which is, in theory, rare to come
+/// up as threads are rarer in no_std mode too.
+///
+/// This provides the guarantee that the debugger will see consistent state at
+/// least, but if this panic is hit in practice it'll require some sort of
+/// no_std synchronization mechanism one way or another.
 #[cfg(not(feature = "std"))]
 mod gdb_registration {
     use core::sync::atomic::{AtomicBool, Ordering};
 
-    /// In no_std mode, we use an atomic boolean to control access to the
-    /// __jit_debug_descriptor. This is a simple lock mechanism.
+    /// Whether or not a lock is held or not.
     pub static GDB_REGISTRATION: AtomicBool = AtomicBool::new(false);
 
     /// The lock guard for the GDB registration lock.
@@ -81,7 +85,6 @@ mod gdb_registration {
 
     /// Locks the GDB registration lock. If the lock is already held, it panics
     pub fn lock() -> LockGuard {
-        // Try to acquire the lock. If already held, panic as per PR feedback.
         if GDB_REGISTRATION
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
