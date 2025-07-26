@@ -901,6 +901,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
                 uses,
                 defs,
                 clobbers,
+                try_call_info,
                 ..
             } = &mut **info;
             match dest {
@@ -919,6 +920,9 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             let mut clobbers = *clobbers;
             clobbers.add(link.to_reg().to_real_reg().unwrap().into());
             collector.reg_clobbers(clobbers);
+            if let Some(try_call_info) = try_call_info {
+                try_call_info.collect_operands(collector);
+            }
         }
         Inst::ReturnCall { info } => {
             let ReturnCallInfo { dest, uses, .. } = &mut **info;
@@ -3184,13 +3188,11 @@ impl Inst {
                 }
                 state.outgoing_sp_offset = 0;
                 let try_call = if let Some(try_call_info) = &info.try_call_info {
-                    let dests = try_call_info
-                        .exception_dests
-                        .iter()
-                        .map(|(tag, label)| format!("{tag:?}: {label:?}"))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    format!("; jg {:?}; catch [{dests}]", try_call_info.continuation)
+                    format!(
+                        "; jg {:?}; catch [{}]",
+                        try_call_info.continuation,
+                        try_call_info.pretty_print_dests()
+                    )
                 } else {
                     "".to_string()
                 };

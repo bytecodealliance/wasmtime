@@ -11,7 +11,6 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::{CodegenError, CodegenResult, settings};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 use core::slice;
 use cranelift_assembler_x64 as asm;
 use cranelift_entity::{Signed, Unsigned};
@@ -860,13 +859,11 @@ impl PrettyPrint for Inst {
 }
 
 fn pretty_print_try_call(info: &TryCallInfo) -> String {
-    let dests = info
-        .exception_dests
-        .iter()
-        .map(|(tag, label)| format!("{tag:?}: {label:?}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("; jmp {:?}; catch [{dests}]", info.continuation)
+    format!(
+        "; jmp {:?}; catch [{}]",
+        info.continuation,
+        info.pretty_print_dests()
+    )
 }
 
 impl fmt::Debug for Inst {
@@ -990,6 +987,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 defs,
                 clobbers,
                 dest,
+                try_call_info,
                 ..
             } = &mut **info;
             debug_assert_ne!(*dest, ExternalName::LibCall(LibCall::Probestack));
@@ -1003,6 +1001,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 }
             }
             collector.reg_clobbers(*clobbers);
+            if let Some(try_call_info) = try_call_info {
+                try_call_info.collect_operands(collector);
+            }
         }
 
         Inst::CallUnknown { info } => {
@@ -1012,6 +1013,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 clobbers,
                 callee_conv,
                 dest,
+                try_call_info,
                 ..
             } = &mut **info;
             match dest {
@@ -1033,6 +1035,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 }
             }
             collector.reg_clobbers(*clobbers);
+            if let Some(try_call_info) = try_call_info {
+                try_call_info.collect_operands(collector);
+            }
         }
         Inst::StackSwitchBasic {
             store_context_ptr,

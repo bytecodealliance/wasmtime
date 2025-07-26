@@ -938,6 +938,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         // Return FrameLayout structure.
         FrameLayout {
+            word_bytes: 8,
             incoming_args_size,
             tail_args_size: align_to(tail_args_size, 16),
             setup_area_size,

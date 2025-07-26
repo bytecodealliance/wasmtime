@@ -1158,6 +1158,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         // Return FrameLayout structure.
         FrameLayout {
+            word_bytes: 8,
             incoming_args_size,
             tail_args_size,
             setup_area_size,

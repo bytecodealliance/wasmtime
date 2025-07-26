@@ -23,7 +23,7 @@ extern crate std;
 #[cfg(not(feature = "std"))]
 use hashbrown::{HashMap, HashSet, hash_map};
 #[cfg(feature = "std")]
-use std::collections::{HashMap, HashSet, hash_map};
+use std::collections::{HashMap, hash_map};
 
 pub use crate::context::Context;
 pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};
@@ -63,8 +63,9 @@ pub mod write;
 
 pub use crate::entity::packed_option;
 pub use crate::machinst::buffer::{
-    FinalizedMachCallSite, FinalizedMachReloc, FinalizedRelocTarget, MachCallSite, MachSrcLoc,
-    MachTextSectionBuilder, MachTrap, OpenPatchRegion, PatchRegion,
+    ExceptionContextLoc, FinalizedMachCallSite, FinalizedMachExceptionHandler, FinalizedMachReloc,
+    FinalizedRelocTarget, MachCallSite, MachSrcLoc, MachTextSectionBuilder, MachTrap,
+    OpenPatchRegion, PatchRegion,
 };
 pub use crate::machinst::{
     CallInfo, CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit,

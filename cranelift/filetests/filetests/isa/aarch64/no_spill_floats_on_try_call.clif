@@ -49,7 +49,7 @@ block2(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   bl 0; b MachLabel(1); catch [Some(tag0): MachLabel(2)]
+;   bl 0; b MachLabel(1); catch [tag0: MachLabel(2)]
 ; block1:
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -67,3 +67,4 @@ block2(v0: i64):
 ;   ret
 ; block3: ; offset 0x14
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+

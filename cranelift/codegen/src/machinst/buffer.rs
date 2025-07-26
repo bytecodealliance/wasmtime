@@ -182,7 +182,6 @@ use crate::{MachInstEmitState, ir};
 use crate::{VCodeConstantData, timing};
 use core::ops::Range;
 use cranelift_control::ControlPlane;
-use cranelift_entity::packed_option::PackedOption;
 use cranelift_entity::{PrimaryMap, entity_impl};
 use smallvec::SmallVec;
 use std::cmp::Ordering;
@@ -252,7 +251,7 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Any call site records referring to this code.
     call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any exception-handler records referred to at call sites.
-    exception_handlers: SmallVec<[(PackedOption<ir::ExceptionTag>, MachLabel); 16]>,
+    exception_handlers: SmallVec<[MachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
     srclocs: SmallVec<[MachSrcLoc<Stencil>; 64]>,
     /// Any user stack maps for this code.
@@ -365,7 +364,7 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     /// Any call site records referring to this code.
     pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any exception-handler records referred to at call sites.
-    pub(crate) exception_handlers: SmallVec<[(PackedOption<ir::ExceptionTag>, CodeOffset); 16]>,
+    pub(crate) exception_handlers: SmallVec<[FinalizedMachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
     pub(crate) srclocs: SmallVec<[T::MachSrcLocType; 64]>,
     /// Any user stack maps for this code.
@@ -1523,7 +1522,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         let finalized_exception_handlers = self
             .exception_handlers
             .iter()
-            .map(|(tag, label)| (*tag, self.resolve_label_offset(*label)))
+            .map(|handler| handler.finalize(|label| self.resolve_label_offset(label)))
             .collect();
 
         let mut srclocs = self.srclocs;
@@ -1610,18 +1609,25 @@ impl<I: VCodeInst> MachBuffer<I> {
         });
     }
 
-    /// Add a call-site record at the current offset, optionally with exception handlers.
-    pub fn add_call_site(
+    /// Add a call-site record at the current offset.
+    pub fn add_call_site(&mut self) {
+        self.add_try_call_site(core::iter::empty());
+    }
+
+    /// Add a call-site record at the current offset with exception
+    /// handlers.
+    pub fn add_try_call_site(
         &mut self,
-        exception_handlers: &[(PackedOption<ExceptionTag>, MachLabel)],
+        exception_handlers: impl Iterator<Item = MachExceptionHandler>,
     ) {
         let start = u32::try_from(self.exception_handlers.len()).unwrap();
-        self.exception_handlers
-            .extend(exception_handlers.into_iter().copied());
+        self.exception_handlers.extend(exception_handlers);
         let end = u32::try_from(self.exception_handlers.len()).unwrap();
+        let exception_handler_range = start..end;
+
         self.call_sites.push(MachCallSite {
             ret_addr: self.data.len() as CodeOffset,
-            exception_handler_range: start..end,
+            exception_handler_range,
         });
     }
 
@@ -1774,14 +1780,77 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     ///   call site.
     pub fn call_sites(&self) -> impl Iterator<Item = FinalizedMachCallSite<'_>> + '_ {
         self.call_sites.iter().map(|call_site| {
-            let range = call_site.exception_handler_range.clone();
-            let range = usize::try_from(range.start).unwrap()..usize::try_from(range.end).unwrap();
+            let handler_range = call_site.exception_handler_range.clone();
+            let handler_range = usize::try_from(handler_range.start).unwrap()
+                ..usize::try_from(handler_range.end).unwrap();
             FinalizedMachCallSite {
                 ret_addr: call_site.ret_addr,
-                exception_handlers: &self.exception_handlers[range],
+                exception_handlers: &self.exception_handlers[handler_range],
             }
         })
     }
+}
+
+/// An item in the exception-handler list for a callsite, with label
+/// references.  Items are interpreted in left-to-right order and the
+/// first match wins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MachExceptionHandler {
+    /// A specific tag (in the current dynamic context) should be
+    /// handled by the code at the given offset.
+    Tag(ExceptionTag, MachLabel),
+    /// All exceptions should be handled by the code at the given
+    /// offset.
+    Default(MachLabel),
+    /// The dynamic context for interpreting tags is updated to the
+    /// value stored in the given machine location (in this frame's
+    /// context).
+    Context(ExceptionContextLoc),
+}
+
+impl MachExceptionHandler {
+    fn finalize<F: Fn(MachLabel) -> CodeOffset>(self, f: F) -> FinalizedMachExceptionHandler {
+        match self {
+            Self::Tag(tag, label) => FinalizedMachExceptionHandler::Tag(tag, f(label)),
+            Self::Default(label) => FinalizedMachExceptionHandler::Default(f(label)),
+            Self::Context(loc) => FinalizedMachExceptionHandler::Context(loc),
+        }
+    }
+}
+
+/// An item in the exception-handler list for a callsite, with final
+/// (lowered) code offsets. Items are interpreted in left-to-right
+/// order and the first match wins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub enum FinalizedMachExceptionHandler {
+    /// A specific tag (in the current dynamic context) should be
+    /// handled by the code at the given offset.
+    Tag(ExceptionTag, CodeOffset),
+    /// All exceptions should be handled by the code at the given
+    /// offset.
+    Default(CodeOffset),
+    /// The dynamic context for interpreting tags is updated to the
+    /// value stored in the given machine location (in this frame's
+    /// context).
+    Context(ExceptionContextLoc),
+}
+
+/// A location for a dynamic exception context value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub enum ExceptionContextLoc {
+    /// An offset from SP at the callsite.
+    SPOffset(u32),
+    /// A GPR at the callsite. The physical register number for the
+    /// GPR register file on the target architecture is used.
+    GPR(u8),
 }
 
 /// Metadata about a constant.
@@ -1962,7 +2031,7 @@ pub struct FinalizedMachCallSite<'a> {
 
     /// Exception handlers at this callsite, with target offsets
     /// *relative to the start of the buffer*.
-    pub exception_handlers: &'a [(PackedOption<ir::ExceptionTag>, CodeOffset)],
+    pub exception_handlers: &'a [FinalizedMachExceptionHandler],
 }
 
 /// A source-location mapping resulting from a compilation.
@@ -2507,10 +2576,13 @@ mod test {
         buf.put1(2);
         buf.add_trap(TrapCode::INTEGER_OVERFLOW);
         buf.add_trap(TrapCode::INTEGER_DIVISION_BY_ZERO);
-        buf.add_call_site(&[
-            (None.into(), label(1)),
-            (Some(ExceptionTag::new(42)).into(), label(2)),
-        ]);
+        buf.add_try_call_site(
+            [
+                MachExceptionHandler::Tag(ExceptionTag::new(42), label(2)),
+                MachExceptionHandler::Default(label(1)),
+            ]
+            .into_iter(),
+        );
         buf.add_reloc(
             Reloc::Abs4,
             &ExternalName::User(UserExternalNameRef::new(0)),
@@ -2546,7 +2618,10 @@ mod test {
         assert_eq!(call_sites[0].ret_addr, 2);
         assert_eq!(
             call_sites[0].exception_handlers,
-            &[(None.into(), 4), (Some(ExceptionTag::new(42)).into(), 5)]
+            &[
+                FinalizedMachExceptionHandler::Tag(ExceptionTag::new(42), 5),
+                FinalizedMachExceptionHandler::Default(4)
+            ],
         );
         assert_eq!(
             buf.relocs()

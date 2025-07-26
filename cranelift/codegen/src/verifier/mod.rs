@@ -68,6 +68,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::dominator_tree::DominatorTreePreorder;
 use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
+use crate::ir::ExceptionTableItem;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{self, ArgumentExtension, BlockArg, ExceptionTable};
@@ -1413,8 +1414,19 @@ impl<'a> Verifier<'a> {
                     BlockCallTargetType::ExNormalRet,
                     errors,
                 )?;
-                for (_tag, block) in exdata.catches() {
-                    self.typecheck_block_call(inst, block, BlockCallTargetType::Exception, errors)?;
+                for item in exdata.items() {
+                    match item {
+                        ExceptionTableItem::Tag(_, block_call)
+                        | ExceptionTableItem::Default(block_call) => {
+                            self.typecheck_block_call(
+                                inst,
+                                &block_call,
+                                BlockCallTargetType::Exception,
+                                errors,
+                            )?;
+                        }
+                        ExceptionTableItem::Context(_) => {}
+                    }
                 }
             }
             inst => debug_assert!(!inst.opcode().is_branch()),
