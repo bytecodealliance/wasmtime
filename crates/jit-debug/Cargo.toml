@@ -26,5 +26,6 @@ wasmtime-versioned-export-macros = { workspace = true }
 rustix = { workspace = true, features = ["mm", "time"], optional = true }
 
 [features]
+std = []
 gdb_jit_int = []
-perf_jitdump = ["rustix", "object"]
+perf_jitdump = ["rustix", "object", "std"]

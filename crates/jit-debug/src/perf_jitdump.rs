@@ -16,6 +16,8 @@ use std::io;
 use std::io::Write;
 use std::path::Path;
 use std::ptr;
+use std::string::String;
+use std::vec::Vec;
 use std::{mem, process};
 
 /// Defines jitdump record types

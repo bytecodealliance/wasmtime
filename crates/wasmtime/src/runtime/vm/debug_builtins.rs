@@ -14,7 +14,7 @@ static mut VMCTX_AND_MEMORY: (NonNull<VMContext>, usize) = (NonNull::dangling(),
 #[versioned_export]
 pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
     unsafe {
-        let ptr = std::ptr::read(p);
+        let ptr = core::ptr::read(p);
         assert!(
             VMCTX_AND_MEMORY.0 != NonNull::dangling(),
             "must call `__vmctx->set()` before resolving Wasm pointers"

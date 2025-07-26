@@ -2,9 +2,10 @@
 //! the __jit_debug_register_code() and __jit_debug_descriptor to register
 //! or unregister generated object images with debuggers.
 
-use std::pin::Pin;
-use std::ptr;
-use std::sync::Mutex;
+extern crate alloc;
+
+use alloc::{boxed::Box, vec::Vec};
+use core::{pin::Pin, ptr};
 use wasmtime_versioned_export_macros::versioned_link;
 
 #[repr(C)]
@@ -33,13 +34,66 @@ unsafe extern "C" {
     fn __jit_debug_register_code();
 }
 
-/// The process controls access to the __jit_debug_descriptor by itself --
-/// the GDB/LLDB accesses this structure and its data at the process startup
-/// and when paused in __jit_debug_register_code.
+#[cfg(feature = "std")]
+mod gdb_registration {
+    use std::sync::{Mutex, MutexGuard};
+
+    /// The process controls access to the __jit_debug_descriptor by itself --
+    /// the GDB/LLDB accesses this structure and its data at the process startup
+    /// and when paused in __jit_debug_register_code.
+    ///
+    /// The GDB_REGISTRATION lock is needed for GdbJitImageRegistration to protect
+    /// access to the __jit_debug_descriptor within this process.
+    pub static GDB_REGISTRATION: Mutex<()> = Mutex::new(());
+
+    /// The lock guard for the GDB registration lock.
+    #[expect(
+        dead_code,
+        reason = "field used to hold the lock until the end of the scope"
+    )]
+    pub struct LockGuard<'a>(MutexGuard<'a, ()>);
+
+    pub fn lock() -> LockGuard<'static> {
+        LockGuard(GDB_REGISTRATION.lock().unwrap())
+    }
+}
+
+/// For no_std there's no access to synchronization primitives so a primitive
+/// fallback for now is to panic-on-contention which is, in theory, rare to come
+/// up as threads are rarer in no_std mode too.
 ///
-/// The GDB_REGISTRATION lock is needed for GdbJitImageRegistration to protect
-/// access to the __jit_debug_descriptor within this process.
-static GDB_REGISTRATION: Mutex<()> = Mutex::new(());
+/// This provides the guarantee that the debugger will see consistent state at
+/// least, but if this panic is hit in practice it'll require some sort of
+/// no_std synchronization mechanism one way or another.
+#[cfg(not(feature = "std"))]
+mod gdb_registration {
+    use core::sync::atomic::{AtomicBool, Ordering};
+
+    /// Whether or not a lock is held or not.
+    pub static GDB_REGISTRATION: AtomicBool = AtomicBool::new(false);
+
+    /// The lock guard for the GDB registration lock.
+    pub struct LockGuard;
+
+    /// When the `LockGuard` is dropped, it releases the lock by setting
+    /// `GDB_REGISTRATION` to false.
+    impl Drop for LockGuard {
+        fn drop(&mut self) {
+            GDB_REGISTRATION.store(false, Ordering::Release);
+        }
+    }
+
+    /// Locks the GDB registration lock. If the lock is already held, it panics
+    pub fn lock() -> LockGuard {
+        if GDB_REGISTRATION
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            panic!("GDB JIT registration lock contention detected in no_std mode");
+        }
+        LockGuard
+    }
+}
 
 /// Registration for JIT image
 pub struct GdbJitImageRegistration {
@@ -87,7 +141,7 @@ unsafe impl Sync for GdbJitImageRegistration {}
 
 unsafe fn register_gdb_jit_image(entry: *mut JITCodeEntry) {
     unsafe {
-        let _lock = GDB_REGISTRATION.lock().unwrap();
+        let _lock = gdb_registration::lock();
         let desc = &mut *wasmtime_jit_debug_descriptor();
 
         // Add it to the linked list in the JIT descriptor.
@@ -109,7 +163,7 @@ unsafe fn register_gdb_jit_image(entry: *mut JITCodeEntry) {
 
 unsafe fn unregister_gdb_jit_image(entry: *mut JITCodeEntry) {
     unsafe {
-        let _lock = GDB_REGISTRATION.lock().unwrap();
+        let _lock = gdb_registration::lock();
         let desc = &mut *wasmtime_jit_debug_descriptor();
 
         // Remove the code entry corresponding to the code from the linked list.
