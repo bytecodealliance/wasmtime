@@ -1,9 +1,13 @@
-use crate::net::{SocketAddrUse, SocketAddressFamily};
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network};
 use crate::p2::bindings::sockets::udp;
-use crate::p2::host::network::util;
 use crate::p2::udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState};
 use crate::p2::{IoView, Pollable, SocketError, SocketResult, WasiImpl, WasiView};
+use crate::sockets::util::{
+    get_ip_ttl, get_ipv6_unicast_hops, is_valid_address_family, is_valid_remote_address,
+    receive_buffer_size, send_buffer_size, set_receive_buffer_size, set_send_buffer_size,
+    set_unicast_hop_limit, udp_bind, udp_disconnect,
+};
+use crate::sockets::{MAX_UDP_DATAGRAM_SIZE, SocketAddrUse, SocketAddressFamily};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;
@@ -12,11 +16,6 @@ use std::net::SocketAddr;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::poll::DynPollable;
-
-/// Theoretical maximum byte size of a UDP datagram, the real limit is lower,
-/// but we do not account for e.g. the transport layer here for simplicity.
-/// In practice, datagrams are typically less than 1500 bytes.
-const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
 impl<T> udp::Host for WasiImpl<T> where T: WasiView {}
 
@@ -49,23 +48,15 @@ where
         let socket = table.get(&this)?;
         let local_address: SocketAddr = local_address.into();
 
-        util::validate_address_family(&local_address, &socket.family)?;
+        if !is_valid_address_family(local_address.ip(), socket.family) {
+            return Err(ErrorCode::InvalidArgument.into());
+        }
 
         {
             check.check(local_address, SocketAddrUse::UdpBind).await?;
 
             // Perform the OS bind call.
-            util::udp_bind(socket.udp_socket(), &local_address).map_err(|error| match error {
-                // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
-                // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
-                //
-                // The most common reasons for this error should have already
-                // been handled by our own validation slightly higher up in this
-                // function. This error mapping is here just in case there is
-                // an edge case we didn't catch.
-                Errno::AFNOSUPPORT => ErrorCode::InvalidArgument,
-                _ => ErrorCode::from(error),
-            })?;
+            udp_bind(socket.udp_socket(), local_address)?;
         }
 
         let socket = table.get_mut(&this)?;
@@ -121,7 +112,7 @@ where
 
         // Step #1: Disconnect
         if let UdpState::Connected = socket.udp_state {
-            util::udp_disconnect(socket.udp_socket())?;
+            udp_disconnect(socket.udp_socket())?;
             socket.udp_state = UdpState::Bound;
         }
 
@@ -130,8 +121,11 @@ where
             let Some(check) = socket.socket_addr_check.as_ref() else {
                 return Err(ErrorCode::InvalidState.into());
             };
-            util::validate_remote_address(&connect_addr)?;
-            util::validate_address_family(&connect_addr, &socket.family)?;
+            if !is_valid_remote_address(connect_addr)
+                || !is_valid_address_family(connect_addr.ip(), socket.family)
+            {
+                return Err(ErrorCode::InvalidArgument.into());
+            }
             check.check(connect_addr, SocketAddrUse::UdpConnect).await?;
 
             rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
@@ -218,8 +212,8 @@ where
         let socket = table.get(&this)?;
 
         let ttl = match socket.family {
-            SocketAddressFamily::Ipv4 => util::get_ip_ttl(socket.udp_socket())?,
-            SocketAddressFamily::Ipv6 => util::get_ipv6_unicast_hops(socket.udp_socket())?,
+            SocketAddressFamily::Ipv4 => get_ip_ttl(socket.udp_socket())?,
+            SocketAddressFamily::Ipv6 => get_ipv6_unicast_hops(socket.udp_socket())?,
         };
 
         Ok(ttl)
@@ -233,10 +227,7 @@ where
         let table = self.table();
         let socket = table.get(&this)?;
 
-        match socket.family {
-            SocketAddressFamily::Ipv4 => util::set_ip_ttl(socket.udp_socket(), value)?,
-            SocketAddressFamily::Ipv6 => util::set_ipv6_unicast_hops(socket.udp_socket(), value)?,
-        }
+        set_unicast_hop_limit(socket.udp_socket(), socket.family, value)?;
 
         Ok(())
     }
@@ -245,8 +236,8 @@ where
         let table = self.table();
         let socket = table.get(&this)?;
 
-        let value = util::get_socket_recv_buffer_size(socket.udp_socket())?;
-        Ok(value as u64)
+        let value = receive_buffer_size(socket.udp_socket())?;
+        Ok(value)
     }
 
     fn set_receive_buffer_size(
@@ -256,9 +247,8 @@ where
     ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get(&this)?;
-        let value = value.try_into().unwrap_or(usize::MAX);
 
-        util::set_socket_recv_buffer_size(socket.udp_socket(), value)?;
+        set_receive_buffer_size(socket.udp_socket(), value)?;
         Ok(())
     }
 
@@ -266,8 +256,8 @@ where
         let table = self.table();
         let socket = table.get(&this)?;
 
-        let value = util::get_socket_send_buffer_size(socket.udp_socket())?;
-        Ok(value as u64)
+        let value = send_buffer_size(socket.udp_socket())?;
+        Ok(value)
     }
 
     fn set_send_buffer_size(
@@ -277,9 +267,8 @@ where
     ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get(&this)?;
-        let value = value.try_into().unwrap_or(usize::MAX);
 
-        util::set_socket_send_buffer_size(socket.udp_socket(), value)?;
+        set_send_buffer_size(socket.udp_socket(), value)?;
         Ok(())
     }
 
@@ -448,8 +437,10 @@ where
                 _ => return Err(ErrorCode::InvalidArgument.into()),
             };
 
-            util::validate_remote_address(&addr)?;
-            util::validate_address_family(&addr, &stream.family)?;
+            if !is_valid_remote_address(addr) || !is_valid_address_family(addr.ip(), stream.family)
+            {
+                return Err(ErrorCode::InvalidArgument.into());
+            }
 
             if stream.remote_address == Some(addr) {
                 stream.inner.try_send(&datagram.data)?;

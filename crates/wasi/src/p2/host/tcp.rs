@@ -1,9 +1,9 @@
-use crate::net::{SocketAddrUse, SocketAddressFamily};
 use crate::p2::bindings::{
     sockets::network::{IpAddressFamily, IpSocketAddress, Network},
     sockets::tcp::{self, ShutdownType},
 };
 use crate::p2::{SocketResult, WasiImpl, WasiView};
+use crate::sockets::{SocketAddrUse, SocketAddressFamily};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -197,8 +197,7 @@ where
     ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
-        let duration = Duration::from_nanos(value);
-        socket.set_keep_alive_idle_time(duration)
+        socket.set_keep_alive_idle_time(value)
     }
 
     fn keep_alive_interval(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
@@ -249,7 +248,7 @@ where
         let table = self.table();
         let socket = table.get(&this)?;
 
-        Ok(socket.receive_buffer_size()? as u64)
+        Ok(socket.receive_buffer_size()?)
     }
 
     fn set_receive_buffer_size(
@@ -259,7 +258,6 @@ where
     ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
-        let value = value.try_into().unwrap_or(usize::MAX);
         socket.set_receive_buffer_size(value)
     }
 
@@ -267,7 +265,7 @@ where
         let table = self.table();
         let socket = table.get(&this)?;
 
-        Ok(socket.send_buffer_size()? as u64)
+        Ok(socket.send_buffer_size()?)
     }
 
     fn set_send_buffer_size(
@@ -277,7 +275,6 @@ where
     ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
-        let value = value.try_into().unwrap_or(usize::MAX);
         socket.set_send_buffer_size(value)
     }
 

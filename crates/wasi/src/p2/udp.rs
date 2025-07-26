@@ -1,8 +1,8 @@
-use crate::net::{SocketAddrCheck, SocketAddressFamily};
-use crate::p2::host::network::util;
 use crate::runtime::with_ambient_tokio_runtime;
+use crate::sockets::util::udp_socket;
+use crate::sockets::{SocketAddrCheck, SocketAddressFamily};
 use async_trait::async_trait;
-use cap_net_ext::{AddressFamily, Blocking};
+use cap_net_ext::AddressFamily;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::net::SocketAddr;
@@ -59,7 +59,7 @@ impl UdpSocket {
     pub fn new(family: AddressFamily) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
         // by our async implementation.
-        let fd = util::udp_socket(family, Blocking::No)?;
+        let fd = udp_socket(family)?;
 
         let socket_address_family = match family {
             AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
@@ -69,7 +69,7 @@ impl UdpSocket {
             }
         };
 
-        let socket = Self::setup_tokio_udp_socket(fd)?;
+        let socket = Self::setup_tokio_udp_socket(fd.into())?;
 
         Ok(UdpSocket {
             inner: Arc::new(socket),

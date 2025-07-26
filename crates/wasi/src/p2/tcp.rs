@@ -1,11 +1,16 @@
-use crate::net::{DEFAULT_TCP_BACKLOG, SocketAddressFamily};
 use crate::p2::bindings::sockets::tcp::ErrorCode;
-use crate::p2::host::network;
 use crate::p2::{
     DynInputStream, DynOutputStream, InputStream, OutputStream, Pollable, SocketError,
     SocketResult, StreamError,
 };
 use crate::runtime::{AbortOnDropJoinHandle, with_ambient_tokio_runtime};
+use crate::sockets::util::{
+    get_unicast_hop_limit, is_valid_address_family, is_valid_remote_address,
+    is_valid_unicast_address, receive_buffer_size, send_buffer_size, set_keep_alive_count,
+    set_keep_alive_idle_time, set_keep_alive_interval, set_receive_buffer_size,
+    set_send_buffer_size, set_unicast_hop_limit, tcp_bind,
+};
+use crate::sockets::{DEFAULT_TCP_BACKLOG, SocketAddressFamily};
 use anyhow::Result;
 use cap_net_ext::AddressFamily;
 use futures::Future;
@@ -96,13 +101,13 @@ pub struct TcpSocket {
     // on all platforms. So we keep track of which options have been explicitly
     // set and manually apply those values to newly accepted clients.
     #[cfg(target_os = "macos")]
-    receive_buffer_size: Option<usize>,
+    receive_buffer_size: Option<u64>,
     #[cfg(target_os = "macos")]
-    send_buffer_size: Option<usize>,
+    send_buffer_size: Option<u64>,
     #[cfg(target_os = "macos")]
     hop_limit: Option<u8>,
     #[cfg(target_os = "macos")]
-    keep_alive_idle_time: Option<std::time::Duration>,
+    keep_alive_idle_time: Option<u64>,
 }
 
 impl TcpSocket {
@@ -166,49 +171,21 @@ impl TcpSocket {
 }
 
 impl TcpSocket {
-    pub fn start_bind(&mut self, local_address: SocketAddr) -> io::Result<()> {
+    pub fn start_bind(&mut self, local_address: SocketAddr) -> Result<(), ErrorCode> {
         let tokio_socket = match &self.tcp_state {
             TcpState::Default(socket) => socket,
             TcpState::BindStarted(..) => return Err(Errno::ALREADY.into()),
-            _ => return Err(Errno::ISCONN.into()),
+            _ => return Err(ErrorCode::InvalidState),
         };
 
-        network::util::validate_unicast(&local_address)?;
-        network::util::validate_address_family(&local_address, &self.family)?;
+        if !is_valid_unicast_address(local_address.ip())
+            || !is_valid_address_family(local_address.ip(), self.family)
+        {
+            return Err(ErrorCode::InvalidArgument);
+        };
 
         {
-            // Automatically bypass the TIME_WAIT state when the user is trying
-            // to bind to a specific port:
-            let reuse_addr = local_address.port() > 0;
-
-            // Unconditionally (re)set SO_REUSEADDR, even when the value is false.
-            // This ensures we're not accidentally affected by any socket option
-            // state left behind by a previous failed call to this method (start_bind).
-            network::util::set_tcp_reuseaddr(&tokio_socket, reuse_addr)?;
-
-            // Perform the OS bind call.
-            tokio_socket.bind(local_address).map_err(|error| {
-                match Errno::from_io_error(&error) {
-                    // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
-                    // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
-                    //
-                    // The most common reasons for this error should have already
-                    // been handled by our own validation slightly higher up in this
-                    // function. This error mapping is here just in case there is
-                    // an edge case we didn't catch.
-                    Some(Errno::AFNOSUPPORT) =>  io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "The specified address is not a valid address for the address family of the specified socket",
-                    ),
-
-                    // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
-                    // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-                    #[cfg(windows)]
-                    Some(Errno::NOBUFS) => io::Error::new(io::ErrorKind::AddrInUse, "no more free local ports"),
-
-                    _ => error,
-                }
-            })?;
+            tcp_bind(&tokio_socket, local_address)?;
 
             self.tcp_state = match std::mem::replace(&mut self.tcp_state, TcpState::Closed) {
                 TcpState::Default(socket) => TcpState::BindStarted(socket),
@@ -244,9 +221,12 @@ impl TcpSocket {
             _ => return Err(ErrorCode::InvalidState.into()),
         };
 
-        network::util::validate_unicast(&remote_address)?;
-        network::util::validate_remote_address(&remote_address)?;
-        network::util::validate_address_family(&remote_address, &self.family)?;
+        if !is_valid_unicast_address(remote_address.ip())
+            || !is_valid_remote_address(remote_address)
+            || !is_valid_address_family(remote_address.ip(), self.family)
+        {
+            return Err(ErrorCode::InvalidArgument.into());
+        };
 
         let (TcpState::Default(tokio_socket) | TcpState::Bound(tokio_socket)) =
             std::mem::replace(&mut self.tcp_state, TcpState::Closed)
@@ -420,20 +400,20 @@ impl TcpSocket {
             // and only if a specific value was explicitly set on the listener.
 
             if let Some(size) = self.receive_buffer_size {
-                _ = network::util::set_socket_recv_buffer_size(&client, size); // Ignore potential error.
+                _ = set_receive_buffer_size(&client, size); // Ignore potential error.
             }
 
             if let Some(size) = self.send_buffer_size {
-                _ = network::util::set_socket_send_buffer_size(&client, size); // Ignore potential error.
+                _ = set_send_buffer_size(&client, size); // Ignore potential error.
             }
 
             // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
             if let (SocketAddressFamily::Ipv6, Some(ttl)) = (self.family, self.hop_limit) {
-                _ = network::util::set_ipv6_unicast_hops(&client, ttl); // Ignore potential error.
+                _ = rustix::net::sockopt::set_ipv6_unicast_hops(&client, Some(ttl)); // Ignore potential error.
             }
 
             if let Some(value) = self.keep_alive_idle_time {
-                _ = network::util::set_tcp_keepidle(&client, value); // Ignore potential error.
+                _ = set_keep_alive_idle_time(&client, value); // Ignore potential error.
             }
         }
 
@@ -530,15 +510,15 @@ impl TcpSocket {
         Ok(sockopt::tcp_keepidle(view)?)
     }
 
-    pub fn set_keep_alive_idle_time(&mut self, duration: std::time::Duration) -> SocketResult<()> {
+    pub fn set_keep_alive_idle_time(&mut self, value: u64) -> SocketResult<()> {
         {
             let view = &*self.as_std_view()?;
-            network::util::set_tcp_keepidle(view, duration)?;
+            set_keep_alive_idle_time(view, value)?;
         }
 
         #[cfg(target_os = "macos")]
         {
-            self.keep_alive_idle_time = Some(duration);
+            self.keep_alive_idle_time = Some(value);
         }
 
         Ok(())
@@ -551,7 +531,7 @@ impl TcpSocket {
 
     pub fn set_keep_alive_interval(&self, duration: std::time::Duration) -> SocketResult<()> {
         let view = &*self.as_std_view()?;
-        Ok(network::util::set_tcp_keepintvl(view, duration)?)
+        Ok(set_keep_alive_interval(view, duration)?)
     }
 
     pub fn keep_alive_count(&self) -> SocketResult<u32> {
@@ -561,17 +541,13 @@ impl TcpSocket {
 
     pub fn set_keep_alive_count(&self, value: u32) -> SocketResult<()> {
         let view = &*self.as_std_view()?;
-        Ok(network::util::set_tcp_keepcnt(view, value)?)
+        Ok(set_keep_alive_count(view, value)?)
     }
 
     pub fn hop_limit(&self) -> SocketResult<u8> {
         let view = &*self.as_std_view()?;
 
-        let ttl = match self.family {
-            SocketAddressFamily::Ipv4 => network::util::get_ip_ttl(view)?,
-            SocketAddressFamily::Ipv6 => network::util::get_ipv6_unicast_hops(view)?,
-        };
-
+        let ttl = get_unicast_hop_limit(view, self.family)?;
         Ok(ttl)
     }
 
@@ -579,10 +555,7 @@ impl TcpSocket {
         {
             let view = &*self.as_std_view()?;
 
-            match self.family {
-                SocketAddressFamily::Ipv4 => network::util::set_ip_ttl(view, value)?,
-                SocketAddressFamily::Ipv6 => network::util::set_ipv6_unicast_hops(view, value)?,
-            }
+            set_unicast_hop_limit(view, self.family, value)?;
         }
 
         #[cfg(target_os = "macos")]
@@ -593,17 +566,17 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn receive_buffer_size(&self) -> SocketResult<usize> {
+    pub fn receive_buffer_size(&self) -> SocketResult<u64> {
         let view = &*self.as_std_view()?;
 
-        Ok(network::util::get_socket_recv_buffer_size(view)?)
+        Ok(receive_buffer_size(view)?)
     }
 
-    pub fn set_receive_buffer_size(&mut self, value: usize) -> SocketResult<()> {
+    pub fn set_receive_buffer_size(&mut self, value: u64) -> SocketResult<()> {
         {
             let view = &*self.as_std_view()?;
 
-            network::util::set_socket_recv_buffer_size(view, value)?;
+            set_receive_buffer_size(view, value)?;
         }
 
         #[cfg(target_os = "macos")]
@@ -614,17 +587,17 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn send_buffer_size(&self) -> SocketResult<usize> {
+    pub fn send_buffer_size(&self) -> SocketResult<u64> {
         let view = &*self.as_std_view()?;
 
-        Ok(network::util::get_socket_send_buffer_size(view)?)
+        Ok(send_buffer_size(view)?)
     }
 
-    pub fn set_send_buffer_size(&mut self, value: usize) -> SocketResult<()> {
+    pub fn set_send_buffer_size(&mut self, value: u64) -> SocketResult<()> {
         {
             let view = &*self.as_std_view()?;
 
-            network::util::set_socket_send_buffer_size(view, value)?;
+            set_send_buffer_size(view, value)?;
         }
 
         #[cfg(target_os = "macos")]

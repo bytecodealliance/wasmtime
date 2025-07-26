@@ -98,6 +98,11 @@ async fn run(path: &str) -> anyhow::Result<()> {
 foreach_p3!(assert_test_exists);
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_cli() -> anyhow::Result<()> {
+    run(P3_CLI_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_clocks_sleep() -> anyhow::Result<()> {
     run(P3_CLOCKS_SLEEP_COMPONENT).await
 }
@@ -108,6 +113,61 @@ async fn p3_random_imports() -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p3_cli() -> anyhow::Result<()> {
-    run(P3_CLI_COMPONENT).await
+async fn p3_sockets_ip_name_lookup() -> anyhow::Result<()> {
+    run(P3_SOCKETS_IP_NAME_LOOKUP_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_tcp_bind() -> anyhow::Result<()> {
+    run(P3_SOCKETS_TCP_BIND_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_tcp_connect() -> anyhow::Result<()> {
+    run(P3_SOCKETS_TCP_CONNECT_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_tcp_sample_application() -> anyhow::Result<()> {
+    run(P3_SOCKETS_TCP_SAMPLE_APPLICATION_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_tcp_sockopts() -> anyhow::Result<()> {
+    run(P3_SOCKETS_TCP_SOCKOPTS_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_tcp_states() -> anyhow::Result<()> {
+    run(P3_SOCKETS_TCP_STATES_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_tcp_streams() -> anyhow::Result<()> {
+    run(P3_SOCKETS_TCP_STREAMS_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_udp_bind() -> anyhow::Result<()> {
+    run(P3_SOCKETS_UDP_BIND_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_udp_connect() -> anyhow::Result<()> {
+    run(P3_SOCKETS_UDP_CONNECT_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_udp_sample_application() -> anyhow::Result<()> {
+    run(P3_SOCKETS_UDP_SAMPLE_APPLICATION_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_udp_sockopts() -> anyhow::Result<()> {
+    run(P3_SOCKETS_UDP_SOCKOPTS_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_udp_states() -> anyhow::Result<()> {
+    run(P3_SOCKETS_UDP_STATES_COMPONENT).await
 }
