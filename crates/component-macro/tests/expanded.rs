@@ -11,22 +11,22 @@ macro_rules! genexpand {
 
         process_expanded($path, "_async", wasmtime::component::bindgen!({
             path: $path,
-            async: true,
             stringify: true,
+            imports: { default: async },
+            exports: { default: async },
         }))?;
 
         process_expanded($path, "_concurrent", wasmtime::component::bindgen!({
             path: $path,
-            async: true,
-            concurrent_imports: true,
-            concurrent_exports: true,
+            imports: { default: async | store },
+            exports: { default: async | store },
             stringify: true,
         }))?;
 
         process_expanded($path, "_tracing_async", wasmtime::component::bindgen!({
             path: $path,
-            async: true,
-            tracing: true,
+            imports: { default: async | tracing },
+            exports: { default: async | tracing },
             stringify: true,
         }))?;
     };

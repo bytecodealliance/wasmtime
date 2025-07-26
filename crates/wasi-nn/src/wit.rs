@@ -118,7 +118,6 @@ pub(crate) mod generated_ {
     wasmtime::component::bindgen!({
         world: "ml",
         path: "wit/wasi-nn.wit",
-        trappable_imports: true,
         with: {
             // Configure all WIT http resources to be defined types in this
             // crate to use the `ResourceTable` helper methods.
@@ -127,6 +126,7 @@ pub(crate) mod generated_ {
             "wasi:nn/inference/graph-execution-context": crate::ExecutionContext,
             "wasi:nn/errors/error": super::Error,
         },
+        imports: { default: trappable },
         trappable_error_type: {
             "wasi:nn/errors/error" => super::Error,
         },

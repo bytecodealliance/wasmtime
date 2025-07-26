@@ -4,29 +4,23 @@ use wasmtime::component::Accessor;
 
 pub mod bindings {
     wasmtime::component::bindgen!({
-        trappable_imports: true,
         path: "wit",
         world: "round-trip",
-        concurrent_imports: true,
-        concurrent_exports: true,
-        async: true,
     });
 }
 
 pub mod non_concurrent_export_bindings {
     wasmtime::component::bindgen!({
-        trappable_imports: true,
         path: "wit",
         world: "round-trip",
-        concurrent_imports: true,
-        async: true,
+        exports: { default: ignore_wit | async },
     });
 }
 
-impl bindings::local::local::baz::HostConcurrent for Ctx {
-    async fn foo<T>(_: &Accessor<T, Self>, s: String) -> wasmtime::Result<String> {
+impl bindings::local::local::baz::HostWithStore for Ctx {
+    async fn foo<T>(_: &Accessor<T, Self>, s: String) -> String {
         crate::util::sleep(Duration::from_millis(10)).await;
-        Ok(format!("{s} - entered host - exited host"))
+        format!("{s} - entered host - exited host")
     }
 }
 

@@ -52,6 +52,17 @@ impl<_T: 'static> HttpInterfacePre<_T> {
         self.indices.load(&mut store, &instance)
     }
 }
+impl<_T: Send + 'static> HttpInterfacePre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<HttpInterface> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
 /// Auto-generated bindings for index of the exports of
 /// `http-interface`.
 ///
@@ -143,6 +154,19 @@ const _: () = {
         ) -> wasmtime::Result<HttpInterface> {
             let indices = HttpInterfaceIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`HttpInterfacePre::new`] and
+        /// [`HttpInterfacePre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<HttpInterface>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            HttpInterfacePre::new(pre)?.instantiate_async(store).await
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
@@ -311,7 +335,7 @@ pub mod exports {
                         .ok_or_else(|| {
                             anyhow::anyhow!(
                                 "instance export `http-handler` does \
-            not have export `{name}`"
+              not have export `{name}`"
                             )
                         })
                 };

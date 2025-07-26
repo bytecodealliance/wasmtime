@@ -8,14 +8,8 @@ mod generated {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "wasi:http/proxy",
-        tracing: true,
-        // Flag this as "possibly async" which will cause the exports to be
-        // generated as async, but none of the imports here are async since
-        // all the blocking-ness happens in wasi:io
-        async: {
-            only_imports: ["nonexistent"],
-        },
-        trappable_imports: true,
+        imports: { default: tracing | trappable },
+        exports: { default: async },
         require_store_data_send: true,
         with: {
             // Upstream package dependencies
@@ -55,8 +49,7 @@ pub mod sync {
     mod generated {
         wasmtime::component::bindgen!({
             world: "wasi:http/proxy",
-            tracing: true,
-            async: false,
+            imports: { default: tracing },
             with: {
                 // http is in this crate
                 "wasi:http": crate::bindings::http,

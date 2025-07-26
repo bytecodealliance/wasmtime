@@ -93,7 +93,7 @@ async fn test_round_trip_direct(
         wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
         linker
             .root()
-            .func_new_concurrent("foo", |_, params, results| {
+            .func_new_concurrent("[async]foo", |_, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let Some(Val::String(s)) = params.into_iter().next() else {
@@ -108,7 +108,7 @@ async fn test_round_trip_direct(
 
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let foo_function = instance
-            .get_export_index(&mut store, None, "foo")
+            .get_export_index(&mut store, None, "[async]foo")
             .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)

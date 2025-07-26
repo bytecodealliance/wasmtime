@@ -9,22 +9,22 @@ macro_rules! gentest {
             mod async_ {
                 wasmtime::component::bindgen!({
                     path: $path,
-                    async: true,
+                    imports: { default: async },
+                    exports: { default: async },
                 });
             }
             mod concurrent {
                 wasmtime::component::bindgen!({
                     path: $path,
-                    async: true,
-                    concurrent_imports: true,
-                    concurrent_exports: true,
+                    imports: { default: async | store },
+                    exports: { default: async | store },
                 });
             }
             mod tracing {
                 wasmtime::component::bindgen!({
                     path: $path,
-                    tracing: true,
-                    verbose_tracing: true,
+                    imports: { default: tracing | verbose_tracing },
+                    exports: { default: tracing | verbose_tracing },
                     ownership: Borrowing {
                         duplicate_if_necessary: true
                     }
@@ -361,7 +361,6 @@ mod trappable_imports {
                     import foo: func();
                 }
             ",
-            trappable_imports: false,
         });
         struct X;
 
@@ -379,7 +378,7 @@ mod trappable_imports {
                     import foo: func();
                 }
             ",
-            trappable_imports: true,
+            imports: { default: trappable },
         });
         struct X;
 
@@ -400,7 +399,7 @@ mod trappable_imports {
                     import bar: func();
                 }
             ",
-            trappable_imports: ["foo"],
+            imports: { "foo": trappable },
         });
         struct X;
 
@@ -441,7 +440,11 @@ mod trappable_imports {
 
                 }
             ",
-            trappable_imports: ["foo"],
+            imports: {
+                "foo": trappable | exact,
+                "i/foo": trappable,
+                "foo:foo/a/foo": trappable,
+            },
             with: { "foo:foo/a/r": R },
         });
 
@@ -501,11 +504,11 @@ mod trappable_imports {
 
                 }
             ",
-            trappable_imports: [
-                "[constructor]r",
-                "[method]r.foo",
-                "[static]r.bar",
-            ],
+            imports: {
+                "foo:foo/a/[constructor]r": trappable,
+                "foo:foo/a/[method]r.foo": trappable,
+                "foo:foo/a/[static]r.bar": trappable,
+            },
             with: { "foo:foo/a/r": R },
         });
 
@@ -600,8 +603,8 @@ mod with_and_mixing_async {
                     import bar;
                 }
             ",
-            async: {
-                only_imports: ["bar"],
+            imports: {
+                "my:inline/bar/bar": async,
             },
         });
     }

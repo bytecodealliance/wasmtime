@@ -8,12 +8,7 @@ pub mod bindings {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "borrowing-host",
-        trappable_imports: true,
-        concurrent_imports: true,
-        concurrent_exports: true,
-        async: {
-            only_imports: []
-        },
+        imports: { default: trappable },
         with: {
             "local:local/borrowing-types/x": super::MyX,
         }

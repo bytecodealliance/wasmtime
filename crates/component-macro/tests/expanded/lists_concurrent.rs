@@ -43,13 +43,21 @@ impl<_T: 'static> TheListsPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheLists> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> TheListsPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<TheLists>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<TheLists> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -73,13 +81,13 @@ pub struct TheListsIndices {
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`TheLists::instantiate_async`] which only needs a
+///   [`TheLists::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`TheListsPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`TheListsPre::instantiate_async`] to
+///   method then uses [`TheListsPre::instantiate`] to
 ///   create a [`TheLists`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -129,6 +137,25 @@ const _: () = {
     }
     impl TheLists {
         /// Convenience wrapper around [`TheListsPre::new`] and
+        /// [`TheListsPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheLists> {
+            let pre = linker.instantiate_pre(component)?;
+            TheListsPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`TheListsIndices::new`] and
+        /// [`TheListsIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<TheLists> {
+            let indices = TheListsIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`TheListsPre::new`] and
         /// [`TheListsPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -141,21 +168,12 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             TheListsPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`TheListsIndices::new`] and
-        /// [`TheListsIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<TheLists> {
-            let indices = TheListsIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
-        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::lists::HostConcurrent + Send,
+            D: foo::foo::lists::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::lists::Host + Send,
             T: 'static + Send,
         {
@@ -353,163 +371,116 @@ pub mod foo {
                     >::ALIGN32
                 );
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait HostConcurrent: wasmtime::component::HasData + Send {
+            pub trait HostWithStore: wasmtime::component::HasData + Send {
                 fn list_u8_param<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<u8>,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn list_u16_param<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<u16>,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn list_u32_param<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<u32>,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn list_u64_param<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<u64>,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn list_s8_param<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<i8>,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn list_s16_param<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<i16>,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn list_s32_param<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<i32>,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn list_s64_param<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<i64>,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn list_f32_param<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<f32>,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn list_f64_param<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<f64>,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn list_u8_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u8>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn list_u16_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u16>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn list_u32_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u32>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn list_u64_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u64>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn list_s8_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<i8>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn list_s16_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<i16>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn list_s32_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<i32>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn list_s64_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<i64>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn list_f32_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<f32>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn list_f64_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<f64>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn tuple_list<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<(u8, i8)>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<(i64, u32)>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn string_list_arg<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::String,
                     >,
-                ) -> impl ::core::future::Future<Output = ()> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn string_list_ret<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::String,
                     >,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn tuple_string_list<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<
@@ -519,9 +490,7 @@ pub mod foo {
                     Output = wasmtime::component::__internal::Vec<
                         (wasmtime::component::__internal::String, u8),
                     >,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn string_list<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<
@@ -531,41 +500,30 @@ pub mod foo {
                     Output = wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::String,
                     >,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn record_list<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<SomeRecord>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<OtherRecord>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn record_list_reverse<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<OtherRecord>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<SomeRecord>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn variant_list<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<SomeVariant>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<OtherVariant>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
                 fn load_store_everything<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: LoadStoreAllSizes,
-                ) -> impl ::core::future::Future<Output = LoadStoreAllSizes> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = LoadStoreAllSizes> + Send;
             }
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -573,7 +531,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostConcurrent,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -585,8 +543,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<u8>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_u8_param(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_u8_param(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -599,8 +557,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<u16>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_u16_param(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_u16_param(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -613,8 +571,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<u32>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_u32_param(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_u32_param(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -627,8 +585,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<u64>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_u64_param(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_u64_param(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -641,8 +599,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<i8>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_s8_param(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_s8_param(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -655,8 +613,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<i16>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_s16_param(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_s16_param(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -669,8 +627,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<i32>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_s32_param(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_s32_param(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -683,8 +641,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<i64>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_s64_param(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_s64_param(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -697,8 +655,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<f32>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_f32_param(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_f32_param(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -711,8 +669,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<f64>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_f64_param(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_f64_param(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -722,8 +680,8 @@ pub mod foo {
                     "list-u8-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_u8_ret(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_u8_ret(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -732,8 +690,8 @@ pub mod foo {
                     "list-u16-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_u16_ret(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_u16_ret(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -742,8 +700,8 @@ pub mod foo {
                     "list-u32-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_u32_ret(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_u32_ret(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -752,8 +710,8 @@ pub mod foo {
                     "list-u64-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_u64_ret(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_u64_ret(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -762,8 +720,8 @@ pub mod foo {
                     "list-s8-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_s8_ret(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_s8_ret(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -772,8 +730,8 @@ pub mod foo {
                     "list-s16-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_s16_ret(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_s16_ret(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -782,8 +740,8 @@ pub mod foo {
                     "list-s32-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_s32_ret(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_s32_ret(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -792,8 +750,8 @@ pub mod foo {
                     "list-s64-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_s64_ret(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_s64_ret(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -802,8 +760,8 @@ pub mod foo {
                     "list-f32-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_f32_ret(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_f32_ret(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -812,8 +770,8 @@ pub mod foo {
                     "list-f64-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::list_f64_ret(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::list_f64_ret(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -825,8 +783,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<(u8, i8)>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::tuple_list(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::tuple_list(accessor, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -845,11 +803,8 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::string_list_arg(
-                                    accessor,
-                                    arg0,
-                                )
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::string_list_arg(accessor, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -859,8 +814,8 @@ pub mod foo {
                     "string-list-ret",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::string_list_ret(accessor)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::string_list_ret(accessor)
                                 .await;
                             Ok((r,))
                         })
@@ -879,8 +834,8 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::tuple_string_list(
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::tuple_string_list(
                                     accessor,
                                     arg0,
                                 )
@@ -902,8 +857,8 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::string_list(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::string_list(accessor, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -916,8 +871,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<SomeRecord>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::record_list(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::record_list(accessor, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -930,8 +885,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<OtherRecord>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::record_list_reverse(
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::record_list_reverse(
                                     accessor,
                                     arg0,
                                 )
@@ -947,8 +902,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<SomeVariant>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::variant_list(accessor, arg0)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::variant_list(accessor, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -961,8 +916,8 @@ pub mod foo {
                         (arg0,): (LoadStoreAllSizes,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::load_store_everything(
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::load_store_everything(
                                     accessor,
                                     arg0,
                                 )

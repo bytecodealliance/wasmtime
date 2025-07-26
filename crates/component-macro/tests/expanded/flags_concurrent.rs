@@ -43,13 +43,21 @@ impl<_T: 'static> TheFlagsPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheFlags> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> TheFlagsPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<TheFlags>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<TheFlags> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -73,13 +81,13 @@ pub struct TheFlagsIndices {
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`TheFlags::instantiate_async`] which only needs a
+///   [`TheFlags::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`TheFlagsPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`TheFlagsPre::instantiate_async`] to
+///   method then uses [`TheFlagsPre::instantiate`] to
 ///   create a [`TheFlags`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -129,6 +137,25 @@ const _: () = {
     }
     impl TheFlags {
         /// Convenience wrapper around [`TheFlagsPre::new`] and
+        /// [`TheFlagsPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheFlags> {
+            let pre = linker.instantiate_pre(component)?;
+            TheFlagsPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`TheFlagsIndices::new`] and
+        /// [`TheFlagsIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<TheFlags> {
+            let indices = TheFlagsIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`TheFlagsPre::new`] and
         /// [`TheFlagsPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -141,21 +168,12 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             TheFlagsPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`TheFlagsIndices::new`] and
-        /// [`TheFlagsIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<TheFlags> {
-            let indices = TheFlagsIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
-        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::flegs::HostConcurrent + Send,
+            D: foo::foo::flegs::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::flegs::Host + Send,
             T: 'static + Send,
         {
@@ -287,52 +305,36 @@ pub mod foo {
                 assert!(8 == < Flag64 as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait HostConcurrent: wasmtime::component::HasData + Send {
+            pub trait HostWithStore: wasmtime::component::HasData + Send {
                 fn roundtrip_flag1<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag1,
-                ) -> impl ::core::future::Future<Output = Flag1> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = Flag1> + Send;
                 fn roundtrip_flag2<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag2,
-                ) -> impl ::core::future::Future<Output = Flag2> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = Flag2> + Send;
                 fn roundtrip_flag4<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag4,
-                ) -> impl ::core::future::Future<Output = Flag4> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = Flag4> + Send;
                 fn roundtrip_flag8<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag8,
-                ) -> impl ::core::future::Future<Output = Flag8> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = Flag8> + Send;
                 fn roundtrip_flag16<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag16,
-                ) -> impl ::core::future::Future<Output = Flag16> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = Flag16> + Send;
                 fn roundtrip_flag32<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag32,
-                ) -> impl ::core::future::Future<Output = Flag32> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = Flag32> + Send;
                 fn roundtrip_flag64<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag64,
-                ) -> impl ::core::future::Future<Output = Flag64> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = Flag64> + Send;
             }
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -340,7 +342,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostConcurrent,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -349,11 +351,8 @@ pub mod foo {
                     "roundtrip-flag1",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag1,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::roundtrip_flag1(
-                                    accessor,
-                                    arg0,
-                                )
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::roundtrip_flag1(accessor, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -363,11 +362,8 @@ pub mod foo {
                     "roundtrip-flag2",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag2,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::roundtrip_flag2(
-                                    accessor,
-                                    arg0,
-                                )
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::roundtrip_flag2(accessor, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -377,11 +373,8 @@ pub mod foo {
                     "roundtrip-flag4",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag4,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::roundtrip_flag4(
-                                    accessor,
-                                    arg0,
-                                )
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::roundtrip_flag4(accessor, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -391,11 +384,8 @@ pub mod foo {
                     "roundtrip-flag8",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag8,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::roundtrip_flag8(
-                                    accessor,
-                                    arg0,
-                                )
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::roundtrip_flag8(accessor, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -405,8 +395,8 @@ pub mod foo {
                     "roundtrip-flag16",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag16,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::roundtrip_flag16(
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::roundtrip_flag16(
                                     accessor,
                                     arg0,
                                 )
@@ -419,8 +409,8 @@ pub mod foo {
                     "roundtrip-flag32",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag32,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::roundtrip_flag32(
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::roundtrip_flag32(
                                     accessor,
                                     arg0,
                                 )
@@ -433,8 +423,8 @@ pub mod foo {
                     "roundtrip-flag64",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag64,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::roundtrip_flag64(
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::roundtrip_flag64(
                                     accessor,
                                     arg0,
                                 )

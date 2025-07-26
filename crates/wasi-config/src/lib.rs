@@ -75,7 +75,7 @@ mod gen_ {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "wasi:config/imports",
-        trappable_imports: true,
+        imports: { default: trappable },
     });
 }
 use self::gen_::wasi::config::store as generated;

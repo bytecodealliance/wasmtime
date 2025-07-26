@@ -6,37 +6,33 @@ use super::Ctx;
 
 pub mod bindings {
     wasmtime::component::bindgen!({
-        trappable_imports: true,
         path: "wit",
         world: "read-resource-stream",
-        concurrent_imports: true,
-        concurrent_exports: true,
-        async: true,
         with: {
             "local:local/resource-stream/x": super::ResourceStreamX,
-        }
+        },
+        imports: {
+            "local:local/resource-stream/foo": async | store | trappable,
+            default: trappable,
+        },
     });
 }
 
 pub struct ResourceStreamX;
 
-impl bindings::local::local::resource_stream::HostXConcurrent for Ctx {
-    async fn foo<T>(accessor: &Accessor<T, Self>, x: Resource<ResourceStreamX>) -> Result<()> {
-        accessor.with(|mut view| {
-            _ = view.get().table().get(&x)?;
-            Ok(())
-        })
-    }
-}
-
 impl bindings::local::local::resource_stream::HostX for Ctx {
-    async fn drop(&mut self, x: Resource<ResourceStreamX>) -> Result<()> {
+    fn foo(&mut self, x: Resource<ResourceStreamX>) -> Result<()> {
+        self.table().get(&x)?;
+        Ok(())
+    }
+
+    fn drop(&mut self, x: Resource<ResourceStreamX>) -> Result<()> {
         IoView::table(self).delete(x)?;
         Ok(())
     }
 }
 
-impl bindings::local::local::resource_stream::HostConcurrent for Ctx {
+impl bindings::local::local::resource_stream::HostWithStore for Ctx {
     async fn foo<T: 'static>(
         accessor: &Accessor<T, Self>,
         count: u32,

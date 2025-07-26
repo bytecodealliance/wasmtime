@@ -40,5 +40,5 @@ prettyplease = "0.2.31"
 similar = { workspace = true }
 
 [features]
-async = []
+async = ['wasmtime-wit-bindgen/async']
 component-model-async = ['async', 'wasmtime-wit-bindgen/component-model-async']

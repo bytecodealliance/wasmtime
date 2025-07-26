@@ -43,13 +43,21 @@ impl<_T: 'static> WasiPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<Wasi> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> WasiPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Wasi>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<Wasi> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -71,13 +79,13 @@ pub struct WasiIndices {}
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`Wasi::instantiate_async`] which only needs a
+///   [`Wasi::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`WasiPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`WasiPre::instantiate_async`] to
+///   method then uses [`WasiPre::instantiate`] to
 ///   create a [`Wasi`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -123,6 +131,25 @@ const _: () = {
     }
     impl Wasi {
         /// Convenience wrapper around [`WasiPre::new`] and
+        /// [`WasiPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<Wasi> {
+            let pre = linker.instantiate_pre(component)?;
+            WasiPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`WasiIndices::new`] and
+        /// [`WasiIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<Wasi> {
+            let indices = WasiIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`WasiPre::new`] and
         /// [`WasiPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -135,21 +162,12 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             WasiPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`WasiIndices::new`] and
-        /// [`WasiIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Wasi> {
-            let indices = WasiIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
-        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::wasi_filesystem::HostConcurrent + Send,
+            D: foo::foo::wasi_filesystem::HostWithStore + Send,
             for<'a> D::Data<
                 'a,
             >: foo::foo::wasi_filesystem::Host + foo::foo::wall_clock::Host + Send,
@@ -228,22 +246,16 @@ pub mod foo {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait HostConcurrent: wasmtime::component::HasData + Send {
+            pub trait HostWithStore: wasmtime::component::HasData + Send {
                 fn create_directory_at<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
-                ) -> impl ::core::future::Future<Output = Result<(), Errno>> + Send
-                where
-                    Self: Sized;
+                ) -> impl ::core::future::Future<Output = Result<(), Errno>> + Send;
                 fn stat<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<DescriptorStat, Errno>,
-                > + Send
-                where
-                    Self: Sized;
+                > + Send;
             }
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -251,7 +263,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostConcurrent,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -260,8 +272,8 @@ pub mod foo {
                     "create-directory-at",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::create_directory_at(accessor)
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::create_directory_at(accessor)
                                 .await;
                             Ok((r,))
                         })
@@ -271,8 +283,8 @@ pub mod foo {
                     "stat",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::stat(accessor).await;
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostWithStore>::stat(accessor).await;
                             Ok((r,))
                         })
                     },
@@ -303,9 +315,8 @@ pub mod foo {
                     1 == < WallClock as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait Host: Send {}
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
+            pub trait Host {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -313,7 +324,7 @@ pub mod foo {
             where
                 D: wasmtime::component::HasData,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/wall-clock")?;
                 Ok(())

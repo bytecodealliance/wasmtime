@@ -3899,17 +3899,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "trait-variant"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70977707304198400eb4835a78f6a9f928bf41bba420deb8fdb175cd965d77a7"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.100",
-]
-
-[[package]]
 name = "try-lock"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4448,7 +4437,6 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "tempfile",
- "trait-variant",
  "wasi-common",
  "wasm-encoder",
  "wasm-wave",
@@ -4559,7 +4547,6 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "trait-variant",
  "walkdir",
  "wasi-common",
  "wasm-encoder",
@@ -4890,6 +4877,7 @@ name = "wasmtime-internal-wit-bindgen"
 version = "36.0.0"
 dependencies = [
  "anyhow",
+ "bitflags 2.6.0",
  "heck 0.5.0",
  "indexmap 2.7.0",
  "wit-parser",
