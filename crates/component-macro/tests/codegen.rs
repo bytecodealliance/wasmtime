@@ -16,9 +16,8 @@ macro_rules! gentest {
             mod concurrent {
                 wasmtime::component::bindgen!({
                     path: $path,
-                    async: true,
-                    concurrent_imports: true,
-                    concurrent_exports: true,
+                    imports: { default: async | store },
+                    exports: { default: async | store },
                 });
             }
             mod tracing {

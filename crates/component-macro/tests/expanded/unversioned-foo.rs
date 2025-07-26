@@ -52,6 +52,17 @@ impl<_T: 'static> NopePre<_T> {
         self.indices.load(&mut store, &instance)
     }
 }
+impl<_T: Send + 'static> NopePre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<Nope> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
 /// Auto-generated bindings for index of the exports of
 /// `nope`.
 ///
@@ -137,6 +148,19 @@ const _: () = {
         ) -> wasmtime::Result<Nope> {
             let indices = NopeIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`NopePre::new`] and
+        /// [`NopePre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<Nope>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            NopePre::new(pre)?.instantiate_async(store).await
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,

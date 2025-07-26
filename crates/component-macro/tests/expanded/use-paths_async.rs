@@ -43,13 +43,21 @@ impl<_T: 'static> DPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<D> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> DPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<D>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<D> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -71,13 +79,13 @@ pub struct DIndices {}
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`D::instantiate_async`] which only needs a
+///   [`D::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`DPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`DPre::instantiate_async`] to
+///   method then uses [`DPre::instantiate`] to
 ///   create a [`D`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -123,6 +131,25 @@ const _: () = {
     }
     impl D {
         /// Convenience wrapper around [`DPre::new`] and
+        /// [`DPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<D> {
+            let pre = linker.instantiate_pre(component)?;
+            DPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`DIndices::new`] and
+        /// [`DIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<D> {
+            let indices = DIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`DPre::new`] and
         /// [`DPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -134,15 +161,6 @@ const _: () = {
         {
             let pre = linker.instantiate_pre(component)?;
             DPre::new(pre)?.instantiate_async(store).await
-        }
-        /// Convenience wrapper around [`DIndices::new`] and
-        /// [`DIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<D> {
-            let indices = DIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
@@ -185,13 +203,12 @@ pub mod foo {
                 assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
-                async fn a(&mut self) -> Foo;
+                fn a(&mut self) -> impl ::core::future::Future<Output = Foo> + Send;
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn a(&mut self) -> Foo {
-                    Host::a(*self).await
+                fn a(&mut self) -> impl ::core::future::Future<Output = Foo> + Send {
+                    async move { Host::a(*self).await }
                 }
             }
             pub fn add_to_linker<T, D>(
@@ -226,13 +243,12 @@ pub mod foo {
                 assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
-                async fn a(&mut self) -> Foo;
+                fn a(&mut self) -> impl ::core::future::Future<Output = Foo> + Send;
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn a(&mut self) -> Foo {
-                    Host::a(*self).await
+                fn a(&mut self) -> impl ::core::future::Future<Output = Foo> + Send {
+                    async move { Host::a(*self).await }
                 }
             }
             pub fn add_to_linker<T, D>(
@@ -267,13 +283,12 @@ pub mod foo {
                 assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
-                async fn a(&mut self) -> Foo;
+                fn a(&mut self) -> impl ::core::future::Future<Output = Foo> + Send;
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn a(&mut self) -> Foo {
-                    Host::a(*self).await
+                fn a(&mut self) -> impl ::core::future::Future<Output = Foo> + Send {
+                    async move { Host::a(*self).await }
                 }
             }
             pub fn add_to_linker<T, D>(
@@ -310,13 +325,12 @@ pub mod d {
         assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
         assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
     };
-    #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
     pub trait Host: Send {
-        async fn b(&mut self) -> Foo;
+        fn b(&mut self) -> impl ::core::future::Future<Output = Foo> + Send;
     }
     impl<_T: Host + ?Sized + Send> Host for &mut _T {
-        async fn b(&mut self) -> Foo {
-            Host::b(*self).await
+        fn b(&mut self) -> impl ::core::future::Future<Output = Foo> + Send {
+            async move { Host::b(*self).await }
         }
     }
     pub fn add_to_linker<T, D>(

@@ -52,6 +52,17 @@ impl<_T: 'static> EmptyPre<_T> {
         self.indices.load(&mut store, &instance)
     }
 }
+impl<_T: Send + 'static> EmptyPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<Empty> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
 /// Auto-generated bindings for index of the exports of
 /// `empty`.
 ///
@@ -137,6 +148,19 @@ const _: () = {
         ) -> wasmtime::Result<Empty> {
             let indices = EmptyIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`EmptyPre::new`] and
+        /// [`EmptyPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<Empty>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            EmptyPre::new(pre)?.instantiate_async(store).await
         }
     }
 };

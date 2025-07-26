@@ -43,13 +43,21 @@ impl<_T: 'static> EmptyPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<Empty> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> EmptyPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Empty>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<Empty> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -71,13 +79,13 @@ pub struct EmptyIndices {}
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`Empty::instantiate_async`] which only needs a
+///   [`Empty::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`EmptyPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`EmptyPre::instantiate_async`] to
+///   method then uses [`EmptyPre::instantiate`] to
 ///   create a [`Empty`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -123,6 +131,25 @@ const _: () = {
     }
     impl Empty {
         /// Convenience wrapper around [`EmptyPre::new`] and
+        /// [`EmptyPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<Empty> {
+            let pre = linker.instantiate_pre(component)?;
+            EmptyPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`EmptyIndices::new`] and
+        /// [`EmptyIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<Empty> {
+            let indices = EmptyIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`EmptyPre::new`] and
         /// [`EmptyPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -134,15 +161,6 @@ const _: () = {
         {
             let pre = linker.instantiate_pre(component)?;
             EmptyPre::new(pre)?.instantiate_async(store).await
-        }
-        /// Convenience wrapper around [`EmptyIndices::new`] and
-        /// [`EmptyIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Empty> {
-            let indices = EmptyIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
         }
     }
 };
