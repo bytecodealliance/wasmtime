@@ -134,7 +134,7 @@ typedef wasmtime_error_t *(*wasmtime_component_func_callback_t)(
 WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_func(
     wasmtime_component_linker_instance_t *linker_instance, const char *name,
     size_t name_len, wasmtime_component_func_callback_t callback, void *data,
-    void (*finalizer)());
+    void (*finalizer)(void *));
 
 #ifdef WASMTIME_FEATURE_WASI
 
