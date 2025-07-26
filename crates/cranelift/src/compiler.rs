@@ -13,7 +13,7 @@ use cranelift_codegen::isa::{
     unwind::{UnwindInfo, UnwindInfoKind},
 };
 use cranelift_codegen::print_errors::pretty_error;
-use cranelift_codegen::{CompiledCode, Context};
+use cranelift_codegen::{CompiledCode, Context, FinalizedMachCallSite};
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
 use object::write::{Object, StandardSegment, SymbolId};
@@ -26,12 +26,14 @@ use std::ops::Range;
 use std::path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
+use wasmtime_environ::obj::ELF_WASMTIME_EXCEPTIONS;
 use wasmtime_environ::{
     AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
     DefinedFuncIndex, FlagValue, FunctionBodyData, FunctionLoc, HostCall, ModuleTranslation,
     ModuleTypesBuilder, PtrSize, RelocationTarget, StackMapSection, StaticModuleIndex,
     TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, VMOffsets, WasmFuncType, WasmValType,
 };
+use wasmtime_unwinder::ExceptionTableBuilder;
 
 #[cfg(feature = "component-model")]
 mod component;
@@ -455,6 +457,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
         let mut stack_maps = StackMapSection::default();
+        let mut exception_tables = ExceptionTableBuilder::default();
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
@@ -470,6 +473,11 @@ impl wasmtime_environ::Compiler for Compiler {
                 func.buffer.user_stack_maps(),
             );
             traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
+            clif_to_env_exception_tables(
+                &mut exception_tables,
+                range.clone(),
+                func.buffer.call_sites(),
+            )?;
             builder.append_padding(self.linkopts.padding_between_functions);
             let info = FunctionLoc {
                 start: u32::try_from(range.start).unwrap(),
@@ -485,6 +493,15 @@ impl wasmtime_environ::Compiler for Compiler {
         }
         stack_maps.append_to(obj);
         traps.append_to(obj);
+
+        let exception_section = obj.add_section(
+            obj.segment_name(StandardSegment::Data).to_vec(),
+            ELF_WASMTIME_EXCEPTIONS.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        exception_tables.serialize(|bytes| {
+            obj.append_section_data(exception_section, bytes, 1);
+        });
 
         Ok(ret)
     }
@@ -1099,6 +1116,21 @@ fn clif_to_env_stack_maps(
         assert!(code_offset < range.end);
         section.push(code_offset, *frame_size, frame_offsets.into_iter());
     }
+}
+
+/// Convert from Cranelift's representation of exception handler
+/// metadata to Wasmtime's compiler-agnostic representation.
+///
+/// Here `builder` is the wasmtime-unwinder exception section being
+/// created and `range` is the range of the function being added. The
+/// `call_sites` iterator is the raw iterator over callsite metadata
+/// (including exception handlers) from Cranelift.
+fn clif_to_env_exception_tables<'a>(
+    builder: &mut ExceptionTableBuilder,
+    range: Range<u64>,
+    call_sites: impl Iterator<Item = FinalizedMachCallSite<'a>>,
+) -> anyhow::Result<()> {
+    builder.add_func(CodeOffset::try_from(range.start).unwrap(), call_sites)
 }
 
 fn declare_and_call(

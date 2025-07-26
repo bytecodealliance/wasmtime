@@ -107,6 +107,10 @@ pub enum Trap {
     /// that all host tasks have completed and any/all host-owned stream/future
     /// handles have been dropped.
     AsyncDeadlock,
+
+    /// An exception was thrown out of Wasm into the host and this is
+    /// not supported in the current configuration.
+    ExceptionToHost,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -148,6 +152,7 @@ impl Trap {
             ContinuationAlreadyConsumed
             DisabledOpcode
             AsyncDeadlock
+            ExceptionToHost
         }
 
         None
@@ -183,6 +188,7 @@ impl fmt::Display for Trap {
             ContinuationAlreadyConsumed => "continuation already consumed",
             DisabledOpcode => "pulley opcode disabled at compile time was executed",
             AsyncDeadlock => "deadlock detected: event loop cannot make further progress",
+            ExceptionToHost => "Wasm exception thrown across host boundary",
         };
         write!(f, "wasm trap: {desc}")
     }

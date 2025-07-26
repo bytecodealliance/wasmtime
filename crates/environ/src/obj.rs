@@ -98,6 +98,17 @@ pub const ELF_WASMTIME_STACK_MAP: &str = ".wasmtime.stackmap";
 /// to the 32-bit encodings for offsets this doesn't support images >=4gb.
 pub const ELF_WASMTIME_TRAPS: &str = ".wasmtime.traps";
 
+/// A custom binary-encoded section of the wasmtime compilation
+/// artifacts which encodes exception tables.
+///
+/// This section is used at runtime to allow the unwinder to find
+/// exception handler blocks active at particular callsites.
+///
+/// This section's format is defined by the
+/// [`wasmtime_unwinder::ExceptionTableBuilder`] data structure. Its
+/// code offsets are relative to the start of the text segment.
+pub const ELF_WASMTIME_EXCEPTIONS: &str = ".wasmtime.exceptions";
+
 /// A custom section which consists of just 1 byte which is either 0 or 1 as to
 /// whether BTI is enabled.
 pub const ELF_WASM_BTI: &str = ".wasmtime.bti";

@@ -392,8 +392,6 @@ wasmtime_option_group! {
         pub extended_const: Option<bool>,
         /// Configure support for the exceptions proposal.
         pub exceptions: Option<bool>,
-        /// DEPRECATED: Configure support for the legacy exceptions proposal.
-        pub legacy_exceptions: Option<bool>,
     }
 
     enum Wasm {
@@ -1012,13 +1010,6 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.extended_const.or(all) {
             config.wasm_extended_const(enable);
         }
-        if let Some(enable) = self.wasm.exceptions.or(all) {
-            config.wasm_exceptions(enable);
-        }
-        if let Some(enable) = self.wasm.legacy_exceptions.or(all) {
-            #[expect(deprecated, reason = "forwarding CLI flag")]
-            config.wasm_legacy_exceptions(enable);
-        }
 
         macro_rules! handle_conditionally_compiled {
             ($(($feature:tt, $field:tt, $method:tt))*) => ($(
@@ -1043,6 +1034,7 @@ impl CommonOptions {
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
             ("gc", function_references, wasm_function_references)
+            ("gc", exceptions, wasm_exceptions)
             ("stack-switching", stack_switching, wasm_stack_switching)
         }
 
