@@ -5,30 +5,24 @@ use wasmtime::component::Accessor;
 
 pub mod bindings {
     wasmtime::component::bindgen!({
-        trappable_imports: true,
         path: "wit",
         world: "round-trip-many",
-        concurrent_imports: true,
-        concurrent_exports: true,
-        async: true,
         additional_derives: [ Eq, PartialEq ],
     });
 }
 
 pub mod non_concurrent_export_bindings {
     wasmtime::component::bindgen!({
-        trappable_imports: true,
         path: "wit",
         world: "round-trip-many",
-        concurrent_imports: true,
-        async: true,
         additional_derives: [ Eq, PartialEq ],
+        exports: { default: ignore_wit | async },
     });
 }
 
 use bindings::local::local::many::Stuff;
 
-impl bindings::local::local::many::HostConcurrent for Ctx {
+impl bindings::local::local::many::HostWithStore for Ctx {
     async fn foo<T>(
         _: &Accessor<T, Self>,
         a: String,
@@ -38,7 +32,7 @@ impl bindings::local::local::many::HostConcurrent for Ctx {
         e: Stuff,
         f: Option<Stuff>,
         g: Result<Stuff, ()>,
-    ) -> wasmtime::Result<(
+    ) -> (
         String,
         u32,
         Vec<u8>,
@@ -46,9 +40,9 @@ impl bindings::local::local::many::HostConcurrent for Ctx {
         Stuff,
         Option<Stuff>,
         Result<Stuff, ()>,
-    )> {
+    ) {
         crate::util::sleep(Duration::from_millis(10)).await;
-        Ok((
+        (
             format!("{a} - entered host - exited host"),
             b,
             c,
@@ -56,7 +50,7 @@ impl bindings::local::local::many::HostConcurrent for Ctx {
             e,
             f,
             g,
-        ))
+        )
     }
 }
 

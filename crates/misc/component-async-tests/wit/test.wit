@@ -38,8 +38,8 @@ world round-trip-many {
 }
 
 world round-trip-direct {
-  import foo: func(s: string) -> string;
-  export foo: func(s: string) -> string;
+  import foo: async func(s: string) -> string;
+  export foo: async func(s: string) -> string;
 }
 
 interface ready {
@@ -124,8 +124,8 @@ interface resource-stream {
 }
 
 interface closed {
-  read-stream: func(rx: stream<u8>, expected: list<u8>);
-  read-future: func(rx: future<u8>, expected: u8, rx-ignore: future<u8>);
+  read-stream: async func(rx: stream<u8>, expected: list<u8>);
+  read-future: async func(rx: future<u8>, expected: u8, rx-ignore: future<u8>);
 }
 
 interface sleep {

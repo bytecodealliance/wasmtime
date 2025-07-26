@@ -19,7 +19,7 @@ mod empty_error {
 
             export empty-error: func(a: f64) -> result<f64>;
         }",
-        trappable_imports: true,
+        imports: {default: trappable},
     });
 
     #[test]
@@ -123,7 +123,7 @@ mod string_error {
 
             export string-error: func(a: f64) -> result<f64, string>;
         }",
-        trappable_imports: true,
+        imports: { default: trappable },
     });
 
     #[test]
@@ -246,7 +246,7 @@ mod enum_error {
             }
         }",
         trappable_error_type: { "inline:inline/imports/e1" => TrappableE1 },
-        trappable_imports: true,
+        imports: { default: trappable },
     });
 
     // You can create concrete trap types which make it all the way out to the
@@ -428,7 +428,7 @@ mod record_error {
             }
         }",
         trappable_error_type: { "inline:inline/imports/e2" => TrappableE2 },
-        trappable_imports: true,
+        imports: { default: trappable },
     });
 
     pub enum TrappableE2 {
@@ -601,7 +601,7 @@ mod variant_error {
             }
         }",
         trappable_error_type: { "inline:inline/imports/e3" => TrappableE3 },
-        trappable_imports: true,
+        imports: { default: trappable },
     });
 
     pub enum TrappableE3 {
@@ -798,7 +798,7 @@ mod multiple_interfaces_error {
             }
         }",
         trappable_error_type: { "inline:inline/types/e1" => TrappableE1 },
-        trappable_imports: true,
+        imports: { default: trappable },
     });
 
     pub enum TrappableE1 {
@@ -982,7 +982,7 @@ mod with_remapping {
             import imports: interface {
                 empty-error: func(a: f64) -> result<f64>;
             }",
-            trappable_imports: true,
+            imports: { default: trappable },
         });
     }
 
@@ -999,7 +999,7 @@ mod with_remapping {
         with: {
             "imports": interfaces::imports,
         },
-        trappable_imports: true,
+        imports: { default: trappable },
     });
 
     #[test]

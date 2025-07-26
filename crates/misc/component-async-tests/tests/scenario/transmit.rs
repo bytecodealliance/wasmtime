@@ -32,11 +32,7 @@ pub mod cancel {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "cancel-host",
-        concurrent_imports: true,
-        concurrent_exports: true,
-        async: {
-            only_imports: [],
-        }
+        exports: { default: async | store },
     });
 }
 
