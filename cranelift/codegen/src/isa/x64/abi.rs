@@ -101,6 +101,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
         let is_fastcall = call_conv == CallConv::WindowsFastcall;
+        let is_tail = call_conv == CallConv::Tail;
 
         let mut next_gpr = 0;
         let mut next_vreg = 0;
@@ -181,6 +182,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             //   This is consistent with LLVM's behavior, and is needed for
             //   some uses of Cranelift (e.g., the rustc backend).
             //
+            // - Otherwise, if the calling convention is Tail, we behave as in
+            //   the previous case, even if `enable_llvm_abi_extensions` is not
+            //   set in the flags: This is a custom calling convention defined
+            //   by Cranelift, LLVM doesn't know about it.
+            //
             // - Otherwise, both SysV and Fastcall specify behavior (use of
             //   vector register, a register pair, or passing by reference
             //   depending on the case), but for simplicity, we will just panic if
@@ -194,6 +200,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             if param.value_type.bits() > 64
                 && !(param.value_type.is_vector() || param.value_type.is_float())
                 && !flags.enable_llvm_abi_extensions()
+                && !is_tail
             {
                 panic!(
                     "i128 args/return values not supported unless LLVM ABI extensions are enabled"
