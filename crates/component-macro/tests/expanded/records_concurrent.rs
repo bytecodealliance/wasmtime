@@ -414,7 +414,7 @@ pub mod foo {
                         (arg0,): ((char, u32),)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::tuple_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -425,7 +425,7 @@ pub mod foo {
                     "tuple-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::tuple_result(accessor).await;
                             Ok((r,))
                         })
@@ -435,7 +435,7 @@ pub mod foo {
                     "empty-arg",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Empty,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::empty_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -446,7 +446,7 @@ pub mod foo {
                     "empty-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::empty_result(accessor).await;
                             Ok((r,))
                         })
@@ -459,7 +459,7 @@ pub mod foo {
                         (arg0,): (Scalars,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::scalar_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -470,7 +470,7 @@ pub mod foo {
                     "scalar-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::scalar_result(accessor).await;
                             Ok((r,))
                         })
@@ -483,7 +483,7 @@ pub mod foo {
                         (arg0,): (ReallyFlags,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::flags_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -494,7 +494,7 @@ pub mod foo {
                     "flags-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::flags_result(accessor).await;
                             Ok((r,))
                         })
@@ -507,7 +507,7 @@ pub mod foo {
                         (arg0,): (Aggregates,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::aggregate_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -518,7 +518,7 @@ pub mod foo {
                     "aggregate-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::aggregate_result(accessor)
                                 .await;
                             Ok((r,))
@@ -532,7 +532,7 @@ pub mod foo {
                         (arg0,): (TupleTypedef2,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let accessor = &caller.with_data(host_getter);
                             let r = <D as HostConcurrent>::typedef_inout(accessor, arg0)
                                 .await;
                             Ok((r,))
