@@ -8,11 +8,13 @@ use rand::{Rng, SeedableRng};
 use wasmtime_fuzzing::generators::table_ops::TableOps;
 use wasmtime_fuzzing::oracles::table_ops;
 
-fuzz_target!(|input: (u64, TableOps)| {
-    let (seed, ops) = input;
+fuzz_target!(|data: &[u8]| {
+    let Ok((seed, ops)) = postcard::from_bytes::<(u64, TableOps)>(data) else {
+        return;
+    };
+
     let mut buf = [0u8; 1024];
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-
     rng.fill(&mut buf);
 
     let u = Unstructured::new(&buf);

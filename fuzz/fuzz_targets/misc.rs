@@ -64,7 +64,6 @@ run_fuzzers! {
     pulley_roundtrip
     assembler_roundtrip
     memory_accesses
-    table_ops
     stacks
     api_calls
     dominator_tree
@@ -84,12 +83,6 @@ fn assembler_roundtrip(u: Unstructured<'_>) -> Result<()> {
 
 fn memory_accesses(u: Unstructured<'_>) -> Result<()> {
     wasmtime_fuzzing::oracles::memory::check_memory_accesses(Arbitrary::arbitrary_take_rest(u)?);
-    Ok(())
-}
-
-fn table_ops(u: Unstructured<'_>) -> Result<()> {
-    let (config, ops) = Arbitrary::arbitrary_take_rest(u)?;
-    let _ = wasmtime_fuzzing::oracles::table_ops(config, ops);
     Ok(())
 }
 
