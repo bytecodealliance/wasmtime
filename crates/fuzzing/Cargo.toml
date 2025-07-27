@@ -36,6 +36,7 @@ wasmi = { version = "0.43.1", default-features = false, features = ["std", "simd
 futures = { workspace = true }
 wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
 serde_json = { workspace = true }
+serde = { workspace = true }
 
 [dependencies.wasmtime-cli-flags]
 workspace = true
