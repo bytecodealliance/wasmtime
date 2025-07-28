@@ -267,28 +267,6 @@ impl Config {
             Some(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info);
         cfg.codegen.parallel_compilation = Some(false);
 
-        cfg.codegen.inlining = self.wasmtime.inlining;
-        if let Some(option) = self.wasmtime.inlining_intra_module {
-            cfg.codegen.cranelift.push((
-                "wasmtime_inlining_intra_module".to_string(),
-                Some(option.to_string()),
-            ));
-        }
-        if let Some(size) = self.wasmtime.inlining_small_callee_size {
-            cfg.codegen.cranelift.push((
-                "wasmtime_inlining_small_callee_size".to_string(),
-                // Clamp to avoid extreme code size blow up.
-                Some(std::cmp::min(1000, size).to_string()),
-            ));
-        }
-        if let Some(size) = self.wasmtime.inlining_sum_size_threshold {
-            cfg.codegen.cranelift.push((
-                "wasmtime_inlining_sum_size_threshold".to_string(),
-                // Clamp to avoid extreme code size blow up.
-                Some(std::cmp::min(1000, size).to_string()),
-            ));
-        }
-
         cfg.debug.address_map = Some(self.wasmtime.generate_address_map);
         cfg.opts.opt_level = Some(self.wasmtime.opt_level.to_wasmtime());
         cfg.opts.regalloc_algorithm = Some(self.wasmtime.regalloc_algorithm.to_wasmtime());
@@ -349,9 +327,32 @@ impl Config {
             && self.wasmtime.pcc
             && !self.module_config.config.memory64_enabled;
 
+        cfg.codegen.inlining = self.wasmtime.inlining;
+
         // Only set cranelift specific flags when the Cranelift strategy is
         // chosen.
         if cranelift_strategy {
+            if let Some(option) = self.wasmtime.inlining_intra_module {
+                cfg.codegen.cranelift.push((
+                    "wasmtime_inlining_intra_module".to_string(),
+                    Some(option.to_string()),
+                ));
+            }
+            if let Some(size) = self.wasmtime.inlining_small_callee_size {
+                cfg.codegen.cranelift.push((
+                    "wasmtime_inlining_small_callee_size".to_string(),
+                    // Clamp to avoid extreme code size blow up.
+                    Some(std::cmp::min(1000, size).to_string()),
+                ));
+            }
+            if let Some(size) = self.wasmtime.inlining_sum_size_threshold {
+                cfg.codegen.cranelift.push((
+                    "wasmtime_inlining_sum_size_threshold".to_string(),
+                    // Clamp to avoid extreme code size blow up.
+                    Some(std::cmp::min(1000, size).to_string()),
+                ));
+            }
+
             // If the wasm-smith-generated module use nan canonicalization then we
             // don't need to enable it, but if it doesn't enable it already then we
             // enable this codegen option.
