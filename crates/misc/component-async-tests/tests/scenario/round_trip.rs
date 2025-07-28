@@ -341,7 +341,7 @@ pub async fn test_round_trip(
                     *expected,
                     &round_trip
                         .local_local_baz()
-                        .call_foo(&mut store, (*input).to_owned())
+                        .call_foo(&mut store, input)
                         .await?
                 );
             }

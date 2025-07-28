@@ -50,13 +50,13 @@ impl ComponentRunStates {
 bindgen!({
     path: "./examples/resource-component/kv-store.wit",
     world: "kv-database",
-    async: true,
+    // Interactions with `ResourceTable` can possibly trap so enable the ability
+    // to return traps from generated functions.
+    imports: { default: async | trappable },
+    exports: { default: async },
     with: {
         "example:kv-store/kvdb/connection": Connection
     },
-    // Interactions with `ResourceTable` can possibly trap so enable the ability
-    // to return traps from generated functions.
-    trappable_imports: true,
 });
 
 pub struct Connection {

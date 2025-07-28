@@ -43,13 +43,21 @@ impl<_T: 'static> TheWorldPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheWorld> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> TheWorldPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<TheWorld>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<TheWorld> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -73,13 +81,13 @@ pub struct TheWorldIndices {
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`TheWorld::instantiate_async`] which only needs a
+///   [`TheWorld::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`TheWorldPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`TheWorldPre::instantiate_async`] to
+///   method then uses [`TheWorldPre::instantiate`] to
 ///   create a [`TheWorld`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -131,6 +139,25 @@ const _: () = {
     }
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`TheWorldIndices::new`] and
+        /// [`TheWorldIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<TheWorld> {
+            let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -143,21 +170,12 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             TheWorldPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`TheWorldIndices::new`] and
-        /// [`TheWorldIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<TheWorld> {
-            let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
-        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::integers::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::integers::Host + Send,
             T: 'static + Send,
         {
@@ -175,17 +193,45 @@ pub mod foo {
         pub mod integers {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait HostWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
             pub trait Host: Send {
-                async fn a1(&mut self, x: u8) -> ();
-                async fn a2(&mut self, x: i8) -> ();
-                async fn a3(&mut self, x: u16) -> ();
-                async fn a4(&mut self, x: i16) -> ();
-                async fn a5(&mut self, x: u32) -> ();
-                async fn a6(&mut self, x: i32) -> ();
-                async fn a7(&mut self, x: u64) -> ();
-                async fn a8(&mut self, x: i64) -> ();
-                async fn a9(
+                fn a1(
+                    &mut self,
+                    x: u8,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn a2(
+                    &mut self,
+                    x: i8,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn a3(
+                    &mut self,
+                    x: u16,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn a4(
+                    &mut self,
+                    x: i16,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn a5(
+                    &mut self,
+                    x: u32,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn a6(
+                    &mut self,
+                    x: i32,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn a7(
+                    &mut self,
+                    x: u64,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn a8(
+                    &mut self,
+                    x: i64,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn a9(
                     &mut self,
                     p1: u8,
                     p2: i8,
@@ -195,43 +241,69 @@ pub mod foo {
                     p6: i32,
                     p7: u64,
                     p8: i64,
-                ) -> ();
-                async fn r1(&mut self) -> u8;
-                async fn r2(&mut self) -> i8;
-                async fn r3(&mut self) -> u16;
-                async fn r4(&mut self) -> i16;
-                async fn r5(&mut self) -> u32;
-                async fn r6(&mut self) -> i32;
-                async fn r7(&mut self) -> u64;
-                async fn r8(&mut self) -> i64;
-                async fn pair_ret(&mut self) -> (i64, u8);
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn r1(&mut self) -> impl ::core::future::Future<Output = u8> + Send;
+                fn r2(&mut self) -> impl ::core::future::Future<Output = i8> + Send;
+                fn r3(&mut self) -> impl ::core::future::Future<Output = u16> + Send;
+                fn r4(&mut self) -> impl ::core::future::Future<Output = i16> + Send;
+                fn r5(&mut self) -> impl ::core::future::Future<Output = u32> + Send;
+                fn r6(&mut self) -> impl ::core::future::Future<Output = i32> + Send;
+                fn r7(&mut self) -> impl ::core::future::Future<Output = u64> + Send;
+                fn r8(&mut self) -> impl ::core::future::Future<Output = i64> + Send;
+                fn pair_ret(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = (i64, u8)> + Send;
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn a1(&mut self, x: u8) -> () {
-                    Host::a1(*self, x).await
+                fn a1(
+                    &mut self,
+                    x: u8,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::a1(*self, x).await }
                 }
-                async fn a2(&mut self, x: i8) -> () {
-                    Host::a2(*self, x).await
+                fn a2(
+                    &mut self,
+                    x: i8,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::a2(*self, x).await }
                 }
-                async fn a3(&mut self, x: u16) -> () {
-                    Host::a3(*self, x).await
+                fn a3(
+                    &mut self,
+                    x: u16,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::a3(*self, x).await }
                 }
-                async fn a4(&mut self, x: i16) -> () {
-                    Host::a4(*self, x).await
+                fn a4(
+                    &mut self,
+                    x: i16,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::a4(*self, x).await }
                 }
-                async fn a5(&mut self, x: u32) -> () {
-                    Host::a5(*self, x).await
+                fn a5(
+                    &mut self,
+                    x: u32,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::a5(*self, x).await }
                 }
-                async fn a6(&mut self, x: i32) -> () {
-                    Host::a6(*self, x).await
+                fn a6(
+                    &mut self,
+                    x: i32,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::a6(*self, x).await }
                 }
-                async fn a7(&mut self, x: u64) -> () {
-                    Host::a7(*self, x).await
+                fn a7(
+                    &mut self,
+                    x: u64,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::a7(*self, x).await }
                 }
-                async fn a8(&mut self, x: i64) -> () {
-                    Host::a8(*self, x).await
+                fn a8(
+                    &mut self,
+                    x: i64,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::a8(*self, x).await }
                 }
-                async fn a9(
+                fn a9(
                     &mut self,
                     p1: u8,
                     p2: i8,
@@ -241,35 +313,37 @@ pub mod foo {
                     p6: i32,
                     p7: u64,
                     p8: i64,
-                ) -> () {
-                    Host::a9(*self, p1, p2, p3, p4, p5, p6, p7, p8).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::a9(*self, p1, p2, p3, p4, p5, p6, p7, p8).await }
                 }
-                async fn r1(&mut self) -> u8 {
-                    Host::r1(*self).await
+                fn r1(&mut self) -> impl ::core::future::Future<Output = u8> + Send {
+                    async move { Host::r1(*self).await }
                 }
-                async fn r2(&mut self) -> i8 {
-                    Host::r2(*self).await
+                fn r2(&mut self) -> impl ::core::future::Future<Output = i8> + Send {
+                    async move { Host::r2(*self).await }
                 }
-                async fn r3(&mut self) -> u16 {
-                    Host::r3(*self).await
+                fn r3(&mut self) -> impl ::core::future::Future<Output = u16> + Send {
+                    async move { Host::r3(*self).await }
                 }
-                async fn r4(&mut self) -> i16 {
-                    Host::r4(*self).await
+                fn r4(&mut self) -> impl ::core::future::Future<Output = i16> + Send {
+                    async move { Host::r4(*self).await }
                 }
-                async fn r5(&mut self) -> u32 {
-                    Host::r5(*self).await
+                fn r5(&mut self) -> impl ::core::future::Future<Output = u32> + Send {
+                    async move { Host::r5(*self).await }
                 }
-                async fn r6(&mut self) -> i32 {
-                    Host::r6(*self).await
+                fn r6(&mut self) -> impl ::core::future::Future<Output = i32> + Send {
+                    async move { Host::r6(*self).await }
                 }
-                async fn r7(&mut self) -> u64 {
-                    Host::r7(*self).await
+                fn r7(&mut self) -> impl ::core::future::Future<Output = u64> + Send {
+                    async move { Host::r7(*self).await }
                 }
-                async fn r8(&mut self) -> i64 {
-                    Host::r8(*self).await
+                fn r8(&mut self) -> impl ::core::future::Future<Output = i64> + Send {
+                    async move { Host::r8(*self).await }
                 }
-                async fn pair_ret(&mut self) -> (i64, u8) {
-                    Host::pair_ret(*self).await
+                fn pair_ret(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = (i64, u8)> + Send {
+                    async move { Host::pair_ret(*self).await }
                 }
             }
             pub fn add_to_linker<T, D>(
@@ -277,7 +351,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -563,7 +637,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/integers` does \
-                not have export `{name}`"
+                                                    not have export `{name}`"
                                     )
                                 })
                         };

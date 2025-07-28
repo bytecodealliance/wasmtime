@@ -1,4 +1,9 @@
 pub enum WorldResource {}
+pub trait HostWorldResourceWithStore: wasmtime::component::HasData {}
+impl<_T: ?Sized> HostWorldResourceWithStore for _T
+where
+    _T: wasmtime::component::HasData,
+{}
 pub trait HostWorldResource {
     fn new(&mut self) -> wasmtime::component::Resource<WorldResource>;
     fn foo(&mut self, self_: wasmtime::component::Resource<WorldResource>) -> ();
@@ -79,6 +84,17 @@ impl<_T: 'static> TheWorldPre<_T> {
         self.indices.load(&mut store, &instance)
     }
 }
+impl<_T: Send + 'static> TheWorldPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheWorld> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
 /// Auto-generated bindings for index of the exports of
 /// `the-world`.
 ///
@@ -120,6 +136,11 @@ pub struct TheWorld {
     interface1: exports::foo::foo::uses_resource_transitively::Guest,
     some_world_func2: wasmtime::component::Func,
 }
+pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostWorldResourceWithStore {}
+impl<_T: ?Sized> TheWorldImportsWithStore for _T
+where
+    _T: wasmtime::component::HasData + HostWorldResourceWithStore,
+{}
 pub trait TheWorldImports: HostWorldResource {
     fn some_world_func(&mut self) -> wasmtime::component::Resource<WorldResource>;
 }
@@ -222,12 +243,25 @@ const _: () = {
             let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
+        /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate_async(store).await
+        }
         pub fn add_to_linker_imports<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: TheWorldImportsWithStore,
             for<'a> D::Data<'a>: TheWorldImports,
             T: 'static,
         {
@@ -289,7 +323,13 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::resources::HostWithStore
+                + foo::foo::long_use_chain1::HostWithStore
+                + foo::foo::long_use_chain2::HostWithStore
+                + foo::foo::long_use_chain3::HostWithStore
+                + foo::foo::long_use_chain4::HostWithStore
+                + foo::foo::transitive_interface_with_resource::HostWithStore
+                + TheWorldImportsWithStore,
             for<'a> D::Data<
                 'a,
             >: foo::foo::resources::Host + foo::foo::long_use_chain1::Host
@@ -338,6 +378,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Bar {}
+            pub trait HostBarWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostBarWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait HostBar {
                 fn new(&mut self) -> wasmtime::component::Resource<Bar>;
                 fn static_a(&mut self) -> u32;
@@ -422,6 +467,11 @@ pub mod foo {
                     4 == < SomeHandle as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
+            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostBarWithStore,
+            {}
             pub trait Host: HostBar {
                 fn bar_own_arg(&mut self, x: wasmtime::component::Resource<Bar>) -> ();
                 fn bar_borrow_arg(
@@ -585,7 +635,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -838,6 +888,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum A {}
+            pub trait HostAWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostAWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait HostA {
                 fn drop(
                     &mut self,
@@ -852,6 +907,11 @@ pub mod foo {
                     HostA::drop(*self, rep)
                 }
             }
+            pub trait HostWithStore: wasmtime::component::HasData + HostAWithStore {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostAWithStore,
+            {}
             pub trait Host: HostA {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -859,7 +919,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -882,6 +942,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -889,7 +954,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -902,6 +967,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -909,7 +979,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -922,6 +992,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain3::A;
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {
                 fn foo(&mut self) -> wasmtime::component::Resource<A>;
             }
@@ -935,7 +1010,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -956,6 +1031,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Foo {}
+            pub trait HostFooWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostFooWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait HostFoo {
                 fn drop(
                     &mut self,
@@ -970,6 +1050,11 @@ pub mod foo {
                     HostFoo::drop(*self, rep)
                 }
             }
+            pub trait HostWithStore: wasmtime::component::HasData + HostFooWithStore {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostFooWithStore,
+            {}
             pub trait Host: HostFoo {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -977,7 +1062,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -1038,7 +1123,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
-                      not have export `{name}`"
+                                                                            not have export `{name}`"
                                     )
                                 })
                         };

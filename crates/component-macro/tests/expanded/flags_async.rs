@@ -43,13 +43,21 @@ impl<_T: 'static> TheFlagsPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheFlags> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> TheFlagsPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<TheFlags>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<TheFlags> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -73,13 +81,13 @@ pub struct TheFlagsIndices {
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`TheFlags::instantiate_async`] which only needs a
+///   [`TheFlags::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`TheFlagsPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`TheFlagsPre::instantiate_async`] to
+///   method then uses [`TheFlagsPre::instantiate`] to
 ///   create a [`TheFlags`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -129,6 +137,25 @@ const _: () = {
     }
     impl TheFlags {
         /// Convenience wrapper around [`TheFlagsPre::new`] and
+        /// [`TheFlagsPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheFlags> {
+            let pre = linker.instantiate_pre(component)?;
+            TheFlagsPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`TheFlagsIndices::new`] and
+        /// [`TheFlagsIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<TheFlags> {
+            let indices = TheFlagsIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`TheFlagsPre::new`] and
         /// [`TheFlagsPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -141,21 +168,12 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             TheFlagsPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`TheFlagsIndices::new`] and
-        /// [`TheFlagsIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<TheFlags> {
-            let indices = TheFlagsIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
-        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::flegs::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::flegs::Host + Send,
             T: 'static + Send,
         {
@@ -287,37 +305,83 @@ pub mod foo {
                 assert!(8 == < Flag64 as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait HostWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
             pub trait Host: Send {
-                async fn roundtrip_flag1(&mut self, x: Flag1) -> Flag1;
-                async fn roundtrip_flag2(&mut self, x: Flag2) -> Flag2;
-                async fn roundtrip_flag4(&mut self, x: Flag4) -> Flag4;
-                async fn roundtrip_flag8(&mut self, x: Flag8) -> Flag8;
-                async fn roundtrip_flag16(&mut self, x: Flag16) -> Flag16;
-                async fn roundtrip_flag32(&mut self, x: Flag32) -> Flag32;
-                async fn roundtrip_flag64(&mut self, x: Flag64) -> Flag64;
+                fn roundtrip_flag1(
+                    &mut self,
+                    x: Flag1,
+                ) -> impl ::core::future::Future<Output = Flag1> + Send;
+                fn roundtrip_flag2(
+                    &mut self,
+                    x: Flag2,
+                ) -> impl ::core::future::Future<Output = Flag2> + Send;
+                fn roundtrip_flag4(
+                    &mut self,
+                    x: Flag4,
+                ) -> impl ::core::future::Future<Output = Flag4> + Send;
+                fn roundtrip_flag8(
+                    &mut self,
+                    x: Flag8,
+                ) -> impl ::core::future::Future<Output = Flag8> + Send;
+                fn roundtrip_flag16(
+                    &mut self,
+                    x: Flag16,
+                ) -> impl ::core::future::Future<Output = Flag16> + Send;
+                fn roundtrip_flag32(
+                    &mut self,
+                    x: Flag32,
+                ) -> impl ::core::future::Future<Output = Flag32> + Send;
+                fn roundtrip_flag64(
+                    &mut self,
+                    x: Flag64,
+                ) -> impl ::core::future::Future<Output = Flag64> + Send;
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn roundtrip_flag1(&mut self, x: Flag1) -> Flag1 {
-                    Host::roundtrip_flag1(*self, x).await
+                fn roundtrip_flag1(
+                    &mut self,
+                    x: Flag1,
+                ) -> impl ::core::future::Future<Output = Flag1> + Send {
+                    async move { Host::roundtrip_flag1(*self, x).await }
                 }
-                async fn roundtrip_flag2(&mut self, x: Flag2) -> Flag2 {
-                    Host::roundtrip_flag2(*self, x).await
+                fn roundtrip_flag2(
+                    &mut self,
+                    x: Flag2,
+                ) -> impl ::core::future::Future<Output = Flag2> + Send {
+                    async move { Host::roundtrip_flag2(*self, x).await }
                 }
-                async fn roundtrip_flag4(&mut self, x: Flag4) -> Flag4 {
-                    Host::roundtrip_flag4(*self, x).await
+                fn roundtrip_flag4(
+                    &mut self,
+                    x: Flag4,
+                ) -> impl ::core::future::Future<Output = Flag4> + Send {
+                    async move { Host::roundtrip_flag4(*self, x).await }
                 }
-                async fn roundtrip_flag8(&mut self, x: Flag8) -> Flag8 {
-                    Host::roundtrip_flag8(*self, x).await
+                fn roundtrip_flag8(
+                    &mut self,
+                    x: Flag8,
+                ) -> impl ::core::future::Future<Output = Flag8> + Send {
+                    async move { Host::roundtrip_flag8(*self, x).await }
                 }
-                async fn roundtrip_flag16(&mut self, x: Flag16) -> Flag16 {
-                    Host::roundtrip_flag16(*self, x).await
+                fn roundtrip_flag16(
+                    &mut self,
+                    x: Flag16,
+                ) -> impl ::core::future::Future<Output = Flag16> + Send {
+                    async move { Host::roundtrip_flag16(*self, x).await }
                 }
-                async fn roundtrip_flag32(&mut self, x: Flag32) -> Flag32 {
-                    Host::roundtrip_flag32(*self, x).await
+                fn roundtrip_flag32(
+                    &mut self,
+                    x: Flag32,
+                ) -> impl ::core::future::Future<Output = Flag32> + Send {
+                    async move { Host::roundtrip_flag32(*self, x).await }
                 }
-                async fn roundtrip_flag64(&mut self, x: Flag64) -> Flag64 {
-                    Host::roundtrip_flag64(*self, x).await
+                fn roundtrip_flag64(
+                    &mut self,
+                    x: Flag64,
+                ) -> impl ::core::future::Future<Output = Flag64> + Send {
+                    async move { Host::roundtrip_flag64(*self, x).await }
                 }
             }
             pub fn add_to_linker<T, D>(
@@ -325,7 +389,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -626,7 +690,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/flegs` does \
-                not have export `{name}`"
+                              not have export `{name}`"
                                     )
                                 })
                         };

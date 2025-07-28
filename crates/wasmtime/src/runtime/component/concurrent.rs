@@ -200,14 +200,14 @@ const START_FLAG_ASYNC_CALLEE: u32 = wasmtime_environ::component::START_FLAG_ASY
 /// instance to which the current host task belongs.
 ///
 /// See [`Accessor::with`] for details.
-pub struct Access<'a, T: 'static, D: HasData = HasSelf<T>> {
+pub struct Access<'a, T: 'static, D: HasData + ?Sized = HasSelf<T>> {
     accessor: &'a Accessor<T, D>,
     store: StoreContextMut<'a, T>,
 }
 
 impl<'a, T, D> Access<'a, T, D>
 where
-    D: HasData,
+    D: HasData + ?Sized,
     T: 'static,
 {
     /// Get mutable access to the store data.
@@ -243,7 +243,7 @@ where
 
 impl<'a, T, D> AsContext for Access<'a, T, D>
 where
-    D: HasData,
+    D: HasData + ?Sized,
     T: 'static,
 {
     type Data = T;
@@ -255,7 +255,7 @@ where
 
 impl<'a, T, D> AsContextMut for Access<'a, T, D>
 where
-    D: HasData,
+    D: HasData + ?Sized,
     T: 'static,
 {
     fn as_context_mut(&mut self) -> StoreContextMut<'_, T> {
@@ -324,7 +324,7 @@ where
 /// feel free to file an issue on the Wasmtime repository.
 pub struct Accessor<T: 'static, D = HasSelf<T>>
 where
-    D: HasData,
+    D: HasData + ?Sized,
 {
     token: StoreToken<T>,
     get_data: fn(&mut T) -> D::Data<'_>,
@@ -352,7 +352,7 @@ pub trait AsAccessor {
 
     /// The `D` in `Accessor<T, D>`, or the projection out of
     /// `Self::Data`.
-    type AccessorData: HasData;
+    type AccessorData: HasData + ?Sized;
 
     /// Returns the accessor that this is referring to.
     fn as_accessor(&self) -> &Accessor<Self::Data, Self::AccessorData>;
@@ -367,7 +367,7 @@ impl<T: AsAccessor + ?Sized> AsAccessor for &T {
     }
 }
 
-impl<T, D: HasData> AsAccessor for Accessor<T, D> {
+impl<T, D: HasData + ?Sized> AsAccessor for Accessor<T, D> {
     type Data = T;
     type AccessorData = D;
 
@@ -426,7 +426,7 @@ impl<T> Accessor<T> {
 
 impl<T, D> Accessor<T, D>
 where
-    D: HasData,
+    D: HasData + ?Sized,
 {
     /// Run the specified closure, passing it mutable access to the store.
     ///
@@ -541,7 +541,7 @@ where
 // { ... }`).  So this seems to be the best we can do for the time being.
 pub trait AccessorTask<T, D, R>: Send + 'static
 where
-    D: HasData,
+    D: HasData + ?Sized,
 {
     /// Run the task.
     fn run(self, accessor: &Accessor<T, D>) -> impl Future<Output = R> + Send;
@@ -1327,7 +1327,7 @@ impl Instance {
     ) -> AbortHandle
     where
         T: 'static,
-        D: HasData,
+        D: HasData + ?Sized,
     {
         let store = store.as_context_mut();
 

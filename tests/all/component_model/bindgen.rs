@@ -77,14 +77,12 @@ mod no_imports_concurrent {
 
             world no-imports {
                 export foo: interface {
-                    foo: func();
+                    foo: async func();
                 }
 
-                export bar: func();
+                export bar: async func();
             }
         ",
-        async: true,
-        concurrent_exports: true,
     });
 
     #[tokio::test]
@@ -111,11 +109,11 @@ mod no_imports_concurrent {
                         (with "" (instance (export "task.return" (func $task-return))))
                     ))
 
-                    (func $f (export "bar")
+                    (func $f (export "[async]bar")
                         (canon lift (core func $i "bar") async (callback (func $i "callback")))
                     )
 
-                    (instance $i (export "foo" (func $f)))
+                    (instance $i (export "[async]foo" (func $f)))
                     (export "foo" (instance $i))
                 )
             "#,
@@ -212,15 +210,12 @@ mod one_import_concurrent {
 
             world no-imports {
                 import foo: interface {
-                    foo: func();
+                    foo: async func();
                 }
 
-                export bar: func();
+                export bar: async func();
             }
         ",
-        async: true,
-        concurrent_imports: true,
-        concurrent_exports: true,
     });
 
     #[tokio::test]
@@ -235,7 +230,7 @@ mod one_import_concurrent {
             r#"
                 (component
                     (import "foo" (instance $foo-instance
-                        (export "foo" (func))
+                        (export "[async]foo" (func))
                     ))
                     (core module $libc
                         (memory (export "memory") 1)
@@ -252,7 +247,7 @@ mod one_import_concurrent {
                         )
                         (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
                     )
-                    (core func $foo (canon lower (func $foo-instance "foo") async (memory $libc-instance "memory")))
+                    (core func $foo (canon lower (func $foo-instance "[async]foo") async (memory $libc-instance "memory")))
                     (core func $task-return (canon task.return))
                     (core instance $i (instantiate $m
                         (with "" (instance
@@ -261,11 +256,11 @@ mod one_import_concurrent {
                         ))
                     ))
 
-                    (func $f (export "bar")
+                    (func $f (export "[async]bar")
                         (canon lift (core func $i "bar") async (callback (func $i "callback")))
                     )
 
-                    (instance $i (export "foo" (func $f)))
+                    (instance $i (export "[async]foo" (func $f)))
                     (export "foo" (instance $i))
                 )
             "#,
@@ -280,7 +275,7 @@ mod one_import_concurrent {
             type Data<'a> = &'a mut MyImports;
         }
 
-        impl foo::HostConcurrent for MyImports {
+        impl foo::HostWithStore for MyImports {
             async fn foo<T>(accessor: &Accessor<T, Self>) {
                 accessor.with(|mut view| view.get().hit = true);
             }
@@ -515,7 +510,8 @@ mod async_config {
                 export z: func();
             }
         ",
-        async: true,
+        imports: { default: async },
+        exports: { default: async },
     });
 
     #[expect(dead_code, reason = "just here for bindings")]
@@ -541,9 +537,11 @@ mod async_config {
                 export z: func();
             }
         ",
-        async: {
-            except_imports: ["x"],
+        imports: {
+            "x": tracing,
+            default: async,
         },
+        exports: { default: async },
     });
 
     impl T2Imports for T {
@@ -566,9 +564,8 @@ mod async_config {
                 export z: func();
             }
         ",
-        async: {
-            only_imports: ["x"],
-        },
+        imports: { "x": async },
+        exports: { default: async },
     });
 
     impl T3Imports for T {

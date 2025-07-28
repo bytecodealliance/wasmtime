@@ -138,7 +138,7 @@ impl terminal_stderr::Host for WasiCliCtxView<'_> {
     }
 }
 
-impl stdin::HostConcurrent for WasiCli {
+impl stdin::HostWithStore for WasiCli {
     async fn get_stdin<U>(store: &Accessor<U, Self>) -> wasmtime::Result<HostStream<u8>> {
         store.with(|mut view| {
             let instance = view.instance();
@@ -157,7 +157,7 @@ impl stdin::HostConcurrent for WasiCli {
 
 impl stdin::Host for WasiCliCtxView<'_> {}
 
-impl stdout::HostConcurrent for WasiCli {
+impl stdout::HostWithStore for WasiCli {
     async fn set_stdout<U>(
         store: &Accessor<U, Self>,
         data: HostStream<u8>,
@@ -176,7 +176,7 @@ impl stdout::HostConcurrent for WasiCli {
 
 impl stdout::Host for WasiCliCtxView<'_> {}
 
-impl stderr::HostConcurrent for WasiCli {
+impl stderr::HostWithStore for WasiCli {
     async fn set_stderr<U>(
         store: &Accessor<U, Self>,
         data: HostStream<u8>,

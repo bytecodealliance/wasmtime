@@ -33,7 +33,7 @@ bindgen!({
 
     // Interactions with `ResourceTable` can possibly trap so enable the ability
     // to return traps from generated functions.
-    trappable_imports: true,
+    imports: { default: trappable },
 });
 
 /// A sample host-defined type which contains arbitrary host-defined data.
