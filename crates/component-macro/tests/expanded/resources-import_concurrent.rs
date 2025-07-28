@@ -339,8 +339,12 @@ const _: () = {
         ) -> wasmtime::Result<()>
         where
             D: foo::foo::resources::HostWithStore
-                + foo::foo::long_use_chain4::HostWithStore + TheWorldImportsWithStore
-                + Send,
+                + foo::foo::long_use_chain1::HostWithStore
+                + foo::foo::long_use_chain2::HostWithStore
+                + foo::foo::long_use_chain3::HostWithStore
+                + foo::foo::long_use_chain4::HostWithStore
+                + foo::foo::transitive_interface_with_resource::HostWithStore
+                + TheWorldImportsWithStore + Send,
             for<'a> D::Data<
                 'a,
             >: foo::foo::resources::Host + foo::foo::long_use_chain1::Host
@@ -900,6 +904,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum A {}
+            pub trait HostAWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostAWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait HostA {
                 fn drop(
                     &mut self,
@@ -914,6 +923,11 @@ pub mod foo {
                     HostA::drop(*self, rep).await
                 }
             }
+            pub trait HostWithStore: wasmtime::component::HasData + HostAWithStore + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostAWithStore + Send,
+            {}
             pub trait Host: HostA + Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -921,7 +935,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -947,6 +961,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -954,7 +973,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -967,6 +986,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -974,7 +998,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -1024,6 +1048,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Foo {}
+            pub trait HostFooWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostFooWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait HostFoo {
                 fn drop(
                     &mut self,
@@ -1038,6 +1067,11 @@ pub mod foo {
                     HostFoo::drop(*self, rep).await
                 }
             }
+            pub trait HostWithStore: wasmtime::component::HasData + HostFooWithStore + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostFooWithStore + Send,
+            {}
             pub trait Host: HostFoo + Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -1045,7 +1079,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {

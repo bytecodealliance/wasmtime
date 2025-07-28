@@ -175,7 +175,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::simple_lists::HostWithStore,
             for<'a> D::Data<'a>: foo::foo::simple_lists::Host,
             T: 'static,
         {
@@ -193,6 +193,11 @@ pub mod foo {
         pub mod simple_lists {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {
                 fn simple_list1(
                     &mut self,
@@ -252,7 +257,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {

@@ -167,7 +167,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: imports::HostWithStore + Send,
             for<'a> D::Data<'a>: imports::Host + Send,
             T: 'static + Send,
         {
@@ -180,6 +180,11 @@ const _: () = {
 pub mod imports {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::{anyhow, Box};
+    pub trait HostWithStore: wasmtime::component::HasData + Send {}
+    impl<_T: ?Sized> HostWithStore for _T
+    where
+        _T: wasmtime::component::HasData + Send,
+    {}
     pub trait Host: Send {
         fn y(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
     }
@@ -193,7 +198,7 @@ pub mod imports {
         host_getter: fn(&mut T) -> D::Data<'_>,
     ) -> wasmtime::Result<()>
     where
-        D: wasmtime::component::HasData,
+        D: HostWithStore,
         for<'a> D::Data<'a>: Host,
         T: 'static + Send,
     {

@@ -98,6 +98,11 @@ pub struct Host_Indices {}
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Host_ {}
+pub trait Host_ImportsWithStore: wasmtime::component::HasData + Send {}
+impl<_T: ?Sized> Host_ImportsWithStore for _T
+where
+    _T: wasmtime::component::HasData + Send,
+{}
 pub trait Host_Imports: Send {
     fn foo(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
 }
@@ -175,7 +180,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: Host_ImportsWithStore,
             for<'a> D::Data<'a>: Host_Imports,
             T: 'static + Send,
         {
@@ -211,7 +216,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: Host_ImportsWithStore + Send,
             for<'a> D::Data<'a>: Host_Imports + Send,
             T: 'static + Send,
         {

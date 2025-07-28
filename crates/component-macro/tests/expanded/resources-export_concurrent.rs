@@ -203,7 +203,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::transitive_import::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::transitive_import::Host + Send,
             T: 'static + Send,
         {
@@ -237,6 +237,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Y {}
+            pub trait HostYWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostYWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait HostY {
                 fn drop(
                     &mut self,
@@ -251,6 +256,11 @@ pub mod foo {
                     HostY::drop(*self, rep).await
                 }
             }
+            pub trait HostWithStore: wasmtime::component::HasData + HostYWithStore + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostYWithStore + Send,
+            {}
             pub trait Host: HostY + Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -258,7 +268,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {

@@ -167,7 +167,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: paths::path1::test::HostWithStore,
             for<'a> D::Data<'a>: paths::path1::test::Host,
             T: 'static,
         {
@@ -182,6 +182,11 @@ pub mod paths {
         pub mod test {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -189,7 +194,7 @@ pub mod paths {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {

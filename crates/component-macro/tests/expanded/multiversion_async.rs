@@ -180,7 +180,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: my::dep0_1_0::a::HostWithStore + my::dep0_2_0::a::HostWithStore + Send,
             for<'a> D::Data<'a>: my::dep0_1_0::a::Host + my::dep0_2_0::a::Host + Send,
             T: 'static + Send,
         {
@@ -202,6 +202,11 @@ pub mod my {
         pub mod a {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
+            pub trait HostWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
             pub trait Host: Send {
                 fn x(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
             }
@@ -215,7 +220,7 @@ pub mod my {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -239,6 +244,11 @@ pub mod my {
         pub mod a {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
+            pub trait HostWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
             pub trait Host: Send {
                 fn x(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
             }
@@ -252,7 +262,7 @@ pub mod my {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {

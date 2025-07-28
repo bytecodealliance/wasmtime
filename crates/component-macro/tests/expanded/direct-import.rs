@@ -98,6 +98,11 @@ pub struct FooIndices {}
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Foo {}
+pub trait FooImportsWithStore: wasmtime::component::HasData {}
+impl<_T: ?Sized> FooImportsWithStore for _T
+where
+    _T: wasmtime::component::HasData,
+{}
 pub trait FooImports {
     fn foo(&mut self) -> ();
 }
@@ -175,7 +180,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: FooImportsWithStore,
             for<'a> D::Data<'a>: FooImports,
             T: 'static,
         {
@@ -196,7 +201,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: FooImportsWithStore,
             for<'a> D::Data<'a>: FooImports,
             T: 'static,
         {

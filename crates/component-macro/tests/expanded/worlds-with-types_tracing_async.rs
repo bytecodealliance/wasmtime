@@ -214,7 +214,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::i::HostWithStore,
             for<'a> D::Data<'a>: foo::foo::i::Host,
             T: 'static,
         {
@@ -256,6 +256,11 @@ pub mod foo {
                 assert!(2 == < T as wasmtime::component::ComponentType >::SIZE32);
                 assert!(2 == < T as wasmtime::component::ComponentType >::ALIGN32);
             };
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -263,7 +268,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {

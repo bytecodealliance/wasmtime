@@ -175,7 +175,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::manyarg::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::manyarg::Host + Send,
             T: 'static + Send,
         {
@@ -274,6 +274,11 @@ pub mod foo {
                     4 == < BigStruct as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
+            pub trait HostWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
             pub trait Host: Send {
                 fn many_args(
                     &mut self,
@@ -354,7 +359,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {

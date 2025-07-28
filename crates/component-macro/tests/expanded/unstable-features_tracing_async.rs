@@ -79,6 +79,11 @@ impl core::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions 
     }
 }
 pub enum Baz {}
+pub trait HostBazWithStore: wasmtime::component::HasData + Send {}
+impl<_T: ?Sized> HostBazWithStore for _T
+where
+    _T: wasmtime::component::HasData + Send,
+{}
 pub trait HostBaz: Send {
     fn foo(
         &mut self,
@@ -203,6 +208,11 @@ pub struct TheWorldIndices {}
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
 pub struct TheWorld {}
+pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostBazWithStore + Send {}
+impl<_T: ?Sized> TheWorldImportsWithStore for _T
+where
+    _T: wasmtime::component::HasData + HostBazWithStore + Send,
+{}
 pub trait TheWorldImports: HostBaz + Send {
     fn foo(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
 }
@@ -281,7 +291,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: TheWorldImportsWithStore,
             for<'a> D::Data<'a>: TheWorldImports,
             T: 'static + Send,
         {
@@ -370,7 +380,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::the_interface::HostWithStore + TheWorldImportsWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::the_interface::Host + TheWorldImports + Send,
             T: 'static + Send,
         {
@@ -433,6 +443,11 @@ pub mod foo {
                 }
             }
             pub enum Bar {}
+            pub trait HostBarWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostBarWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
             pub trait HostBar: Send {
                 fn foo(
                     &mut self,
@@ -457,6 +472,11 @@ pub mod foo {
                     HostBar::drop(*self, rep).await
                 }
             }
+            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostBarWithStore + Send,
+            {}
             pub trait Host: HostBar + Send {
                 fn foo(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
             }
@@ -471,7 +491,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
