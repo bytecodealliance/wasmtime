@@ -164,10 +164,9 @@ pub trait Recorder {
         T: Into<RREvent>,
         F: FnOnce(&RecordMetadata) -> T;
 
-    /// Trigger an explicit flush of buffer to (persistent) storage
+    /// Trigger an explicit flush of any buffered data to the writer
     ///
     /// Buffer should be emptied during this process
-    #[allow(dead_code)]
     fn flush(&mut self) -> Result<()>;
 
     /// Get metadata associated with the recording process

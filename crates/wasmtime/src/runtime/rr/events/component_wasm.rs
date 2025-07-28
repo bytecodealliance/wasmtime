@@ -1,6 +1,6 @@
 //! Module comprising of component model wasm events
 use super::*;
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "used for doc-links")]
 use crate::component::{Component, ComponentType};
 use std::vec::Vec;
 use wasmtime_environ::component::InterfaceType;
@@ -112,7 +112,7 @@ macro_rules! generic_new_result_events {
         ),*
     ) => (
         $(
-            $(#[doc= $doc])*
+            $(#[doc = $doc])*
             #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
             pub struct $event {
                 ret: Result<$ok_ty, EventActionError>,
@@ -125,7 +125,6 @@ macro_rules! generic_new_result_events {
                     }
                 }
                 #[inline]
-                #[allow(dead_code)]
                 pub fn ret(self) -> Result<$ok_ty, EventActionError> { self.ret }
             }
         )*
@@ -154,7 +153,6 @@ macro_rules! generic_new_events {
         )*
         $(
             impl $struct {
-                #[allow(dead_code)]
                 pub fn new($($field: $field_ty),*) -> Self {
                     Self {
                         $($field),*

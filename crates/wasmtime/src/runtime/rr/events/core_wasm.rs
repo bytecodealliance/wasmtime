@@ -1,6 +1,6 @@
 //! Module comprising of core wasm events
 use super::*;
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "used for doc-links")]
 use wasmtime_environ::{WasmFuncType, WasmValType};
 
 /// Note: Switch [`CoreFuncArgTypes`] to use [`Vec<WasmValType>`] for better efficiency
