@@ -3,6 +3,13 @@
 # Helper script to execute a `*.wast` test in Miri. This is only lightly used on
 # CI and is provided here to assist with development of anything that ends up
 # using unsafe for example.
+#
+# Example usage is:
+#
+#   ./ci/miri-wast.sh ./tests/spec_testsuite/br_if.wast
+#
+# extra flags to this script are passed to `cargo run wast` which means they
+# must be suitable flags for the `wast` subcommand.
 
 set -ex
 

@@ -1134,6 +1134,12 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.json-from-wast]]
+version = "0.236.0"
+when = "2025-07-28"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.libc]]
 version = "0.2.146"
 when = "2023-06-06"
