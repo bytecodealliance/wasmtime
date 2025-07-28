@@ -795,12 +795,11 @@ the use case.
         // trampolines being in their own stack frame when we save the entry and
         // exit SP, FP, and PC for backtraces in trampolines.
         let call_graph = CallGraph::<OutputIndex>::new(wasm_functions(&outputs), {
-            let mut func_indices = vec![];
+            let mut func_indices = IndexSet::default();
             let outputs = &outputs;
             let pair_to_output = &pair_to_output;
             move |output_index, calls| {
                 debug_assert!(calls.is_empty());
-                debug_assert!(func_indices.is_empty());
 
                 let output = outputs[output_index].as_ref().unwrap();
                 debug_assert_eq!(output.key.kind(), CompileKind::WasmFunction);
@@ -814,6 +813,7 @@ the use case.
                 };
 
                 // Get this function's call graph edges as `FuncIndex`es.
+                func_indices.clear();
                 inlining_compiler.calls(func, &mut func_indices)?;
 
                 // Translate each of those to (module, defined-function-index)
@@ -823,7 +823,7 @@ the use case.
                 let translation = output
                     .translation
                     .expect("all wasm functions have translations");
-                calls.extend(func_indices.drain(..).filter_map(|callee_func| {
+                calls.extend(func_indices.iter().copied().filter_map(|callee_func| {
                     if let Some(callee_def_func) =
                         translation.module.defined_func_index(callee_func)
                     {

@@ -469,7 +469,7 @@ pub trait Compiler: Send + Sync {
 /// An inlining compiler.
 pub trait InliningCompiler: Sync + Send {
     /// Enumerate the function calls that the given `func` makes.
-    fn calls(&self, func: &CompiledFunctionBody, calls: &mut Vec<FuncIndex>) -> Result<()>;
+    fn calls(&self, func: &CompiledFunctionBody, calls: &mut IndexSet<FuncIndex>) -> Result<()>;
 
     /// Get the abstract size of the given function, for the purposes of
     /// inlining heuristics.

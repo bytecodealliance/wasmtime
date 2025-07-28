@@ -700,7 +700,11 @@ impl wasmtime_environ::Compiler for Compiler {
 }
 
 impl InliningCompiler for Compiler {
-    fn calls(&self, func_body: &CompiledFunctionBody, calls: &mut Vec<FuncIndex>) -> Result<()> {
+    fn calls(
+        &self,
+        func_body: &CompiledFunctionBody,
+        calls: &mut wasmtime_environ::prelude::IndexSet<FuncIndex>,
+    ) -> Result<()> {
         let cx = func_body
             .code
             .downcast_ref::<Option<CompilerContext>>()

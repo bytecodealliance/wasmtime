@@ -266,6 +266,19 @@ impl Config {
         cfg.codegen.native_unwind_info =
             Some(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info);
         cfg.codegen.parallel_compilation = Some(false);
+        cfg.codegen.inlining = Some(self.wasmtime.compiler_inlining);
+        cfg.codegen.inlining_intra_module =
+            Some(self.wasmtime.compiler_inlining_intra_module.to_wasmtime());
+        cfg.codegen.inlining_small_callee_size = Some(std::cmp::min(
+            // Clamp to avoid extreme code size blow up.
+            1000,
+            self.wasmtime.compiler_inlining_small_callee_size,
+        ));
+        cfg.codegen.inlining_sum_size_threshold = Some(std::cmp::min(
+            // Clamp to avoid extreme code size blow up.
+            10_000,
+            self.wasmtime.compiler_inlining_sum_size_threshold,
+        ));
         cfg.debug.address_map = Some(self.wasmtime.generate_address_map);
         cfg.opts.opt_level = Some(self.wasmtime.opt_level.to_wasmtime());
         cfg.opts.regalloc_algorithm = Some(self.wasmtime.regalloc_algorithm.to_wasmtime());
@@ -275,19 +288,6 @@ impl Config {
             // images during fuzzing.
             16 << 20,
             self.wasmtime.memory_guaranteed_dense_image_size,
-        ));
-        cfg.opts.compiler_inlining = Some(self.wasmtime.compiler_inlining);
-        cfg.opts.compiler_inlining_intra_module =
-            Some(self.wasmtime.compiler_inlining_intra_module.to_wasmtime());
-        cfg.opts.compiler_inlining_small_callee_size = Some(std::cmp::min(
-            // Clamp to avoid extreme code size blow up.
-            1000,
-            self.wasmtime.compiler_inlining_small_callee_size,
-        ));
-        cfg.opts.compiler_inlining_sum_size_threshold = Some(std::cmp::min(
-            // Clamp to avoid extreme code size blow up.
-            10_000,
-            self.wasmtime.compiler_inlining_sum_size_threshold,
         ));
         cfg.wasm.async_stack_zeroing = Some(self.wasmtime.async_stack_zeroing);
         cfg.wasm.bulk_memory = Some(true);
