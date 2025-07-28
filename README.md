@@ -63,7 +63,7 @@ rustup target add wasm32-wasip2
 rustc hello.rs --target wasm32-wasip2
 ```
 
-Once compiled, you can can run your component:
+Once compiled, you can run your component:
 
 ```console
 wasmtime hello.wasm
