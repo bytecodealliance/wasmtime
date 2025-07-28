@@ -111,27 +111,6 @@ wasmtime_option_group! {
         /// dense.
         pub memory_guaranteed_dense_image_size: Option<u64>,
 
-        /// Whether to perform function inlining during compilation.
-        pub compiler_inlining: Option<bool>,
-
-        /// Whether to perform function inlining within the same core Wasm
-        /// module or only for calls from one module into a different
-        /// module. Only exposed for fuzzing.
-        #[doc(hidden)]
-        #[serde(default)]
-        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
-        pub compiler_inlining_intra_module: Option<wasmtime::IntraModuleInlining>,
-
-        /// Configure the "small-callee" size for function inlining
-        /// heuristics. Only exposed for fuzzing.
-        #[doc(hidden)]
-        pub compiler_inlining_small_callee_size: Option<u32>,
-
-        /// Configure the "sum size threshold" for function inlining
-        /// heuristics. Only exposed for fuzzing.
-        #[doc(hidden)]
-        pub compiler_inlining_sum_size_threshold: Option<u32>,
-
         /// The maximum number of WebAssembly instances which can be created
         /// with the pooling allocator.
         pub pooling_total_core_instances: Option<u32>,
@@ -257,6 +236,27 @@ wasmtime_option_group! {
         /// Controls whether native unwind information is present in compiled
         /// object files.
         pub native_unwind_info: Option<bool>,
+
+        /// Whether to perform function inlining during compilation.
+        pub inlining: Option<bool>,
+
+        /// Whether to perform function inlining within the same core Wasm
+        /// module or only for calls from one module into a different
+        /// module. Only exposed for fuzzing.
+        #[doc(hidden)]
+        #[serde(default)]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
+        pub inlining_intra_module: Option<wasmtime::IntraModuleInlining>,
+
+        /// Configure the "small-callee" size for function inlining
+        /// heuristics. Only exposed for fuzzing.
+        #[doc(hidden)]
+        pub inlining_small_callee_size: Option<u32>,
+
+        /// Configure the "sum size threshold" for function inlining
+        /// heuristics. Only exposed for fuzzing.
+        #[doc(hidden)]
+        pub inlining_sum_size_threshold: Option<u32>,
 
         #[prefixed = "cranelift"]
         #[serde(default)]
@@ -837,23 +837,23 @@ impl CommonOptions {
         if let Some(size) = self.opts.memory_guaranteed_dense_image_size {
             config.memory_guaranteed_dense_image_size(size);
         }
-        if let Some(enable) = self.opts.compiler_inlining {
-            config.compiler_inlining(enable);
-        }
-        if let Some(cfg) = self.opts.compiler_inlining_intra_module {
-            config.compiler_inlining_intra_module(cfg);
-        }
-        if let Some(size) = self.opts.compiler_inlining_small_callee_size {
-            config.compiler_inlining_small_callee_size(size);
-        }
-        if let Some(size) = self.opts.compiler_inlining_sum_size_threshold {
-            config.compiler_inlining_sum_size_threshold(size);
-        }
         if let Some(enable) = self.opts.signals_based_traps {
             config.signals_based_traps(enable);
         }
         if let Some(enable) = self.codegen.native_unwind_info {
             config.native_unwind_info(enable);
+        }
+        if let Some(enable) = self.codegen.inlining {
+            config.compiler_inlining(enable);
+        }
+        if let Some(cfg) = self.codegen.inlining_intra_module {
+            config.compiler_inlining_intra_module(cfg);
+        }
+        if let Some(size) = self.codegen.inlining_small_callee_size {
+            config.compiler_inlining_small_callee_size(size);
+        }
+        if let Some(size) = self.codegen.inlining_sum_size_threshold {
+            config.compiler_inlining_sum_size_threshold(size);
         }
 
         // async_stack_size enabled by either async or stack-switching, so
