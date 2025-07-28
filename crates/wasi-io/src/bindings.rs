@@ -15,7 +15,6 @@ wasmtime::component::bindgen!({
         "wasi:io/streams/[drop]input-stream": async | trappable,
         "wasi:io/streams/[method]output-stream.blocking-splice": async | trappable,
         "wasi:io/streams/[method]output-stream.blocking-flush": async | trappable,
-        // "wasi:io/streams/[method]output-stream.blocking-write": async | trappable,
         "wasi:io/streams/[method]output-stream.blocking-write-and-flush": async | trappable,
         "wasi:io/streams/[method]output-stream.blocking-write-zeroes-and-flush": async | trappable,
         "wasi:io/streams/[drop]output-stream": async | trappable,

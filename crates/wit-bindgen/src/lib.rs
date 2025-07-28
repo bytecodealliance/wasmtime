@@ -2881,7 +2881,7 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, "}}");
 
         // If `*WithStore` is empty, generate a blanket impl for the trait since
-        // it's otherwies not necessary to implement it manually.
+        // it's otherwise not necessary to implement it manually.
         if partition.with_store.is_empty() {
             uwriteln!(self.src, "impl<_T: ?Sized> {trait_name}WithStore for _T");
             uwriteln!(
@@ -2911,7 +2911,7 @@ impl<'a> InterfaceGenerator<'a> {
                     ret.all_func_flags |= flags;
                     uwrite!(
                         self.src,
-                        "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> " // {wt}::Result<()>;"
+                        "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> "
                     );
                     if flags.contains(FunctionFlags::ASYNC) {
                         uwrite!(self.src, "impl ::core::future::Future<Output =");
