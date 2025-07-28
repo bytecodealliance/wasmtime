@@ -65,16 +65,27 @@ impl CompilerBuilder for Builder {
 
     fn set(&mut self, name: &str, value: &str) -> Result<()> {
         // Special wasmtime-cranelift-only settings first
-        if name == "wasmtime_linkopt_padding_between_functions" {
-            self.linkopts.padding_between_functions = value.parse()?;
-            return Ok(());
+        match name {
+            "wasmtime_linkopt_padding_between_functions" => {
+                self.linkopts.padding_between_functions = value.parse()?;
+            }
+            "wasmtime_linkopt_force_jump_veneer" => {
+                self.linkopts.force_jump_veneers = value.parse()?;
+            }
+            "wasmtime_inlining_intra_module" => {
+                self.tunables.as_mut().unwrap().inlining_intra_module = value.parse()?;
+            }
+            "wasmtime_inlining_small_callee_size" => {
+                self.tunables.as_mut().unwrap().inlining_small_callee_size = value.parse()?;
+            }
+            "wasmtime_inlining_sum_size_threshold" => {
+                self.tunables.as_mut().unwrap().inlining_sum_size_threshold = value.parse()?;
+            }
+            _ => {
+                self.inner.set(name, value)?;
+            }
         }
-        if name == "wasmtime_linkopt_force_jump_veneer" {
-            self.linkopts.force_jump_veneers = value.parse()?;
-            return Ok(());
-        }
-
-        self.inner.set(name, value)
+        Ok(())
     }
 
     fn enable(&mut self, name: &str) -> Result<()> {

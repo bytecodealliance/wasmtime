@@ -2046,33 +2046,6 @@ impl Config {
         self
     }
 
-    /// Whether to inline function calls within the same module or not.
-    ///
-    /// Only exposed for fuzzing.
-    #[doc(hidden)]
-    pub fn compiler_inlining_intra_module(&mut self, inlining: IntraModuleInlining) -> &mut Self {
-        self.tunables.inlining_intra_module = Some(inlining.to_env());
-        self
-    }
-
-    /// Set the "small-callee" size for the function inlining heuristic.
-    ///
-    /// Only exposed for fuzzing.
-    #[doc(hidden)]
-    pub fn compiler_inlining_small_callee_size(&mut self, size: u32) -> &mut Self {
-        self.tunables.inlining_small_callee_size = Some(size);
-        self
-    }
-
-    /// Set the "sum size threshold" for the function inlining heuristic.
-    ///
-    /// Only exposed for fuzzing.
-    #[doc(hidden)]
-    pub fn compiler_inlining_sum_size_threshold(&mut self, size: u32) -> &mut Self {
-        self.tunables.inlining_sum_size_threshold = Some(size);
-        self
-    }
-
     /// Returns the set of features that the currently selected compiler backend
     /// does not support at all and may panic on.
     ///
@@ -2890,27 +2863,6 @@ impl Collector {
                  collectors are available; enable one of the following \
                  features: `gc-drc`, `gc-null`",
             ),
-        }
-    }
-}
-
-/// Whether to inline function calls within the same module.
-///
-/// Only exposed for fuzzing.
-#[doc(hidden)]
-#[derive(PartialEq, Eq, Clone, Debug, Copy)]
-pub enum IntraModuleInlining {
-    Yes,
-    No,
-    WhenUsingGc,
-}
-
-impl IntraModuleInlining {
-    fn to_env(&self) -> wasmtime_environ::IntraModuleInlining {
-        match self {
-            IntraModuleInlining::Yes => wasmtime_environ::IntraModuleInlining::Yes,
-            IntraModuleInlining::No => wasmtime_environ::IntraModuleInlining::No,
-            IntraModuleInlining::WhenUsingGc => wasmtime_environ::IntraModuleInlining::WhenUsingGc,
         }
     }
 }

@@ -558,30 +558,6 @@ impl WasmtimeOptionValue for wasmtime::MpkEnabled {
     }
 }
 
-impl WasmtimeOptionValue for wasmtime::IntraModuleInlining {
-    const VAL_HELP: &'static str = "[=y|n|gc]";
-
-    fn parse(val: Option<&str>) -> Result<Self> {
-        match val {
-            None | Some("n") | Some("no") | Some("false") => Ok(wasmtime::IntraModuleInlining::Yes),
-            Some("y") | Some("yes") | Some("true") => Ok(wasmtime::IntraModuleInlining::No),
-            Some("gc") => Ok(wasmtime::IntraModuleInlining::WhenUsingGc),
-            Some(s) => bail!(
-                "unknown compiler intra-module inlining flag `{s}`, \
-                 only yes,no,gc,<nothing> accepted"
-            ),
-        }
-    }
-
-    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            wasmtime::IntraModuleInlining::Yes => f.write_str("y"),
-            wasmtime::IntraModuleInlining::No => f.write_str("n"),
-            wasmtime::IntraModuleInlining::WhenUsingGc => f.write_str("gc"),
-        }
-    }
-}
-
 impl WasmtimeOptionValue for WasiNnGraph {
     const VAL_HELP: &'static str = "=<format>::<dir>";
     fn parse(val: Option<&str>) -> Result<Self> {

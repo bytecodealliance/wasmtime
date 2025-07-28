@@ -266,19 +266,29 @@ impl Config {
         cfg.codegen.native_unwind_info =
             Some(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info);
         cfg.codegen.parallel_compilation = Some(false);
-        cfg.codegen.inlining = Some(self.wasmtime.compiler_inlining);
-        cfg.codegen.inlining_intra_module =
-            Some(self.wasmtime.compiler_inlining_intra_module.to_wasmtime());
-        cfg.codegen.inlining_small_callee_size = Some(std::cmp::min(
-            // Clamp to avoid extreme code size blow up.
-            1000,
-            self.wasmtime.compiler_inlining_small_callee_size,
-        ));
-        cfg.codegen.inlining_sum_size_threshold = Some(std::cmp::min(
-            // Clamp to avoid extreme code size blow up.
-            10_000,
-            self.wasmtime.compiler_inlining_sum_size_threshold,
-        ));
+
+        cfg.codegen.inlining = self.wasmtime.inlining;
+        if let Some(option) = self.wasmtime.inlining_intra_module {
+            cfg.codegen.cranelift.push((
+                "wasmtime_inlining_intra_module".to_string(),
+                Some(option.to_string()),
+            ));
+        }
+        if let Some(size) = self.wasmtime.inlining_small_callee_size {
+            cfg.codegen.cranelift.push((
+                "wasmtime_inlining_small_callee_size".to_string(),
+                // Clamp to avoid extreme code size blow up.
+                Some(std::cmp::min(1000, size).to_string()),
+            ));
+        }
+        if let Some(size) = self.wasmtime.inlining_sum_size_threshold {
+            cfg.codegen.cranelift.push((
+                "wasmtime_inlining_sum_size_threshold".to_string(),
+                // Clamp to avoid extreme code size blow up.
+                Some(std::cmp::min(1000, size).to_string()),
+            ));
+        }
+
         cfg.debug.address_map = Some(self.wasmtime.generate_address_map);
         cfg.opts.opt_level = Some(self.wasmtime.opt_level.to_wasmtime());
         cfg.opts.regalloc_algorithm = Some(self.wasmtime.regalloc_algorithm.to_wasmtime());
@@ -567,10 +577,10 @@ pub struct WasmtimeConfig {
     force_jump_veneers: bool,
     memory_init_cow: bool,
     memory_guaranteed_dense_image_size: u64,
-    compiler_inlining: bool,
-    compiler_inlining_intra_module: IntraModuleInlining,
-    compiler_inlining_small_callee_size: u32,
-    compiler_inlining_sum_size_threshold: u32,
+    inlining: Option<bool>,
+    inlining_intra_module: Option<IntraModuleInlining>,
+    inlining_small_callee_size: Option<u32>,
+    inlining_sum_size_threshold: Option<u32>,
     use_precompiled_cwasm: bool,
     async_stack_zeroing: bool,
     /// Configuration for the instance allocation strategy to use.
@@ -841,19 +851,19 @@ impl RegallocAlgorithm {
     }
 }
 
-#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Arbitrary, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum IntraModuleInlining {
     Yes,
     No,
     WhenUsingGc,
 }
 
-impl IntraModuleInlining {
-    fn to_wasmtime(&self) -> wasmtime::IntraModuleInlining {
+impl std::fmt::Display for IntraModuleInlining {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            IntraModuleInlining::Yes => wasmtime::IntraModuleInlining::Yes,
-            IntraModuleInlining::No => wasmtime::IntraModuleInlining::No,
-            IntraModuleInlining::WhenUsingGc => wasmtime::IntraModuleInlining::WhenUsingGc,
+            IntraModuleInlining::Yes => write!(f, "yes"),
+            IntraModuleInlining::No => write!(f, "no"),
+            IntraModuleInlining::WhenUsingGc => write!(f, "gc"),
         }
     }
 }

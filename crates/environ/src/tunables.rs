@@ -1,6 +1,6 @@
 use crate::{IndexType, Limits, Memory, TripleExt};
-use anyhow::{Result, anyhow, bail};
-use core::fmt;
+use anyhow::{Error, Result, anyhow, bail};
+use core::{fmt, str::FromStr};
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
 
@@ -294,4 +294,20 @@ pub enum IntraModuleInlining {
     Yes,
     No,
     WhenUsingGc,
+}
+
+impl FromStr for IntraModuleInlining {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "y" | "yes" | "true" => Ok(Self::Yes),
+            "n" | "no" | "false" => Ok(Self::No),
+            "gc" => Ok(Self::WhenUsingGc),
+            _ => bail!(
+                "invalid intra-module inlining option string: `{s}`, \
+                 only yes,no,gc accepted"
+            ),
+        }
+    }
 }

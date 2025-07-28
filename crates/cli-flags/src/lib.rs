@@ -240,14 +240,6 @@ wasmtime_option_group! {
         /// Whether to perform function inlining during compilation.
         pub inlining: Option<bool>,
 
-        /// Whether to perform function inlining within the same core Wasm
-        /// module or only for calls from one module into a different
-        /// module. Only exposed for fuzzing.
-        #[doc(hidden)]
-        #[serde(default)]
-        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
-        pub inlining_intra_module: Option<wasmtime::IntraModuleInlining>,
-
         /// Configure the "small-callee" size for function inlining
         /// heuristics. Only exposed for fuzzing.
         #[doc(hidden)]
@@ -845,15 +837,6 @@ impl CommonOptions {
         }
         if let Some(enable) = self.codegen.inlining {
             config.compiler_inlining(enable);
-        }
-        if let Some(cfg) = self.codegen.inlining_intra_module {
-            config.compiler_inlining_intra_module(cfg);
-        }
-        if let Some(size) = self.codegen.inlining_small_callee_size {
-            config.compiler_inlining_small_callee_size(size);
-        }
-        if let Some(size) = self.codegen.inlining_sum_size_threshold {
-            config.compiler_inlining_sum_size_threshold(size);
         }
 
         // async_stack_size enabled by either async or stack-switching, so
