@@ -293,6 +293,7 @@ impl RecordBuffer {
 
 impl Drop for RecordBuffer {
     fn drop(&mut self) {
+        // Insert End of trace delimiter
         self.push_event(RREvent::Eof).unwrap();
         self.flush().unwrap();
     }
@@ -375,8 +376,9 @@ impl Drop for ReplayBuffer {
                 log::warn!(
                     "Replay buffer is dropped without being consumed completely... this may be an incorrect execution"
                 );
-                while let Some(e) = self.next() {
-                    log::warn!("Event remaining => {}", e);
+                log::warn!("Event remaining => {}", event);
+                while let Some(rem_event) = self.next() {
+                    log::warn!("Event remaining => {}", rem_event);
                 }
             }
         }
