@@ -413,6 +413,19 @@ struct CompileOutput<'a> {
     func_body: Option<wasmparser::FunctionBody<'a>>,
 }
 
+/// Inputs to our inlining heuristics.
+struct InlineHeuristicParams<'a> {
+    tunables: &'a Tunables,
+    caller_size: u32,
+    caller_module: StaticModuleIndex,
+    caller_def_func: DefinedFuncIndex,
+    caller_needs_gc_heap: bool,
+    callee_size: u32,
+    callee_module: StaticModuleIndex,
+    callee_def_func: DefinedFuncIndex,
+    callee_needs_gc_heap: bool,
+}
+
 /// The collection of things we need to compile for a Wasm module or component.
 #[derive(Default)]
 struct CompileInputs<'a> {
@@ -895,8 +908,8 @@ the use case.
 
                         let callee_size = inlining_compiler.size(callee);
 
-                        if Self::should_inline(
-                            engine.tunables(),
+                        if Self::should_inline(InlineHeuristicParams {
+                            tunables: engine.tunables(),
                             caller_size,
                             caller_module,
                             caller_def_func,
@@ -905,7 +918,7 @@ the use case.
                             callee_module,
                             callee_def_func,
                             callee_needs_gc_heap,
-                        ) {
+                        }) {
                             caller_size = caller_size.saturating_add(callee_size);
                             Some(callee)
                         } else {
@@ -964,15 +977,17 @@ the use case.
     ///   hint sources, rather than being stuck with the sequence hard-coded in
     ///   the decision tree below.
     fn should_inline(
-        tunables: &Tunables,
-        caller_size: u32,
-        caller_module: StaticModuleIndex,
-        caller_def_func: DefinedFuncIndex,
-        caller_needs_gc_heap: bool,
-        callee_size: u32,
-        callee_module: StaticModuleIndex,
-        callee_def_func: DefinedFuncIndex,
-        callee_needs_gc_heap: bool,
+        InlineHeuristicParams {
+            tunables,
+            caller_size,
+            caller_module,
+            caller_def_func,
+            caller_needs_gc_heap,
+            callee_size,
+            callee_module,
+            callee_def_func,
+            callee_needs_gc_heap,
+        }: InlineHeuristicParams,
     ) -> bool {
         log::trace!(
             "considering inlining:\n\
