@@ -2516,6 +2516,7 @@ impl Config {
         }
 
         // Apply compiler settings and flags
+        compiler.set_tunables(tunables.clone())?;
         for (k, v) in self.compiler_config.settings.iter() {
             compiler.set(k, v)?;
         }
@@ -2528,7 +2529,6 @@ impl Config {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }
 
-        compiler.set_tunables(tunables.clone())?;
         compiler.wmemcheck(self.compiler_config.wmemcheck);
 
         Ok((self, compiler.build()?))
