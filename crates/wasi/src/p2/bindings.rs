@@ -39,7 +39,7 @@
 //!     with: {
 //!         "wasi": wasmtime_wasi::p2::bindings,
 //!     },
-//!     async: true,
+//!     imports: { default: async },
 //! });
 //!
 //! struct MyState {

@@ -1341,10 +1341,14 @@ impl Wasmtime {
             without_store.push(format!("{path}::Host"));
             let flags = self.import_interface_all_func_flags(id);
             without_store_async = without_store_async || flags.contains(FunctionFlags::ASYNC);
-            if flags.contains(FunctionFlags::STORE) {
-                with_store.push(format!("{path}::HostWithStore"));
-                with_store_async = with_store_async || flags.contains(FunctionFlags::ASYNC);
-            }
+
+            // Note that the requirement of `HostWithStore` is technically
+            // dependent on `FunctionFlags::STORE`, but when `with` is in use we
+            // don't necessarily know whether the other bindings generation
+            // specified this flag or not. To handle that always assume that a
+            // `HostWithStore` bound is needed.
+            with_store.push(format!("{path}::HostWithStore"));
+            with_store_async = with_store_async || flags.contains(FunctionFlags::ASYNC);
         }
         if let Some(world_trait) = world_trait {
             without_store.push(world_trait.name.clone());
@@ -2303,14 +2307,6 @@ impl<'a> InterfaceGenerator<'a> {
             ""
         };
 
-        let d_bound = if generated_trait
-            .all_func_flags
-            .contains(FunctionFlags::STORE)
-        {
-            "HostWithStore".to_string()
-        } else {
-            format!("{wt}::component::HasData")
-        };
         uwriteln!(
             self.src,
             "
@@ -2320,7 +2316,7 @@ impl<'a> InterfaceGenerator<'a> {
                     host_getter: fn(&mut T) -> D::Data<'_>,
                 ) -> {wt}::Result<()>
                     where
-                        D: {d_bound},
+                        D: HostWithStore,
                         for<'a> D::Data<'a>: {sync_bounds},
                         T: 'static {opt_t_send_bound},
                 {{
@@ -2865,27 +2861,35 @@ impl<'a> InterfaceGenerator<'a> {
                 ret.all_func_flags |= *flags;
             }
             ret.all_func_flags |= self.import_resource_drop_flags(name);
-            if !funcs.with_store.is_empty() {
-                with_store_supertraits.push(format!("Host{camel}WithStore"));
-            }
+            with_store_supertraits.push(format!("Host{camel}WithStore"));
         }
         if ret.all_func_flags.contains(FunctionFlags::ASYNC) {
             with_store_supertraits.push("Send".to_string());
             without_store_supertraits.push("Send".to_string());
         }
 
-        if !partition.with_store.is_empty() {
+        uwriteln!(
+            self.src,
+            "pub trait {trait_name}WithStore: {} {{",
+            with_store_supertraits.join(" + "),
+        );
+        ret.with_store_name = Some(format!("{trait_name}WithStore"));
+        for (func, flags) in partition.with_store.iter() {
+            self.generate_function_trait_sig(func, *flags);
+            self.push_str(";\n");
+        }
+        uwriteln!(self.src, "}}");
+
+        // If `*WithStore` is empty, generate a blanket impl for the trait since
+        // it's otherwies not necessary to implement it manually.
+        if partition.with_store.is_empty() {
+            uwriteln!(self.src, "impl<_T: ?Sized> {trait_name}WithStore for _T");
             uwriteln!(
                 self.src,
-                "pub trait {trait_name}WithStore: {} {{",
-                with_store_supertraits.join(" + "),
+                " where _T: {}",
+                with_store_supertraits.join(" + ")
             );
-            ret.with_store_name = Some(format!("{trait_name}WithStore"));
-            for (func, flags) in partition.with_store.iter() {
-                self.generate_function_trait_sig(func, *flags);
-                self.push_str(";\n");
-            }
-            uwriteln!(self.src, "}}");
+            uwriteln!(self.src, "{{}}");
         }
 
         uwriteln!(

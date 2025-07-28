@@ -40,7 +40,7 @@ impl wall_clock::Host for WasiClocksCtx {
     }
 }
 
-impl monotonic_clock::HostConcurrent for WasiClocks {
+impl monotonic_clock::HostWithStore for WasiClocks {
     async fn wait_until<U>(
         store: &Accessor<U, Self>,
         when: monotonic_clock::Instant,

@@ -133,7 +133,9 @@ fn api_proxy_forward_request() {}
 wasmtime::component::bindgen!({
     path: "src/p2/wit",
     world: "test-reactor",
-    async: true,
+    imports: { default: async },
+    exports: { default: async },
+    require_store_data_send: true,
     with: { "wasi": wasmtime_wasi::p2::bindings },
     ownership: Borrowing {
         duplicate_if_necessary: false
