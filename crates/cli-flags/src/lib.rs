@@ -240,16 +240,6 @@ wasmtime_option_group! {
         /// Whether to perform function inlining during compilation.
         pub inlining: Option<bool>,
 
-        /// Configure the "small-callee" size for function inlining
-        /// heuristics. Only exposed for fuzzing.
-        #[doc(hidden)]
-        pub inlining_small_callee_size: Option<u32>,
-
-        /// Configure the "sum size threshold" for function inlining
-        /// heuristics. Only exposed for fuzzing.
-        #[doc(hidden)]
-        pub inlining_sum_size_threshold: Option<u32>,
-
         #[prefixed = "cranelift"]
         #[serde(default)]
         /// Set a cranelift-specific option. Use `wasmtime settings` to see
