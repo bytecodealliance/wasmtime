@@ -127,6 +127,57 @@ criteria = []
 [policy.wasmtime-fuzzing]
 criteria = []
 
+[policy.wasmtime-internal-asm-macros]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-c-api-macros]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-cache]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-component-macro]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-component-util]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-cranelift]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-explorer]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-fiber]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-jit-debug]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-jit-icache-coherence]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-math]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-slab]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-unwinder]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-versioned-export-macros]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-winch]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-wit-bindgen]
+audit-as-crates-io = true
+
+[policy.wasmtime-internal-wmemcheck]
+audit-as-crates-io = true
+
 [policy.wasmtime-wasi]
 audit-as-crates-io = true
 
@@ -149,6 +200,9 @@ audit-as-crates-io = true
 audit-as-crates-io = true
 
 [policy.wasmtime-wasi-tls]
+audit-as-crates-io = true
+
+[policy.wasmtime-wasi-tls-nativetls]
 audit-as-crates-io = true
 
 [policy.wasmtime-wast]
