@@ -238,12 +238,15 @@ impl Default for CompilerConfig {
 pub struct RecordMetadata {
     /// Flag to include additional signatures for replay validation
     pub add_validation: bool,
+    /// Maximum window size of internal event buffer
+    pub event_window_size: usize,
 }
 
 impl Default for RecordMetadata {
     fn default() -> Self {
         Self {
-            add_validation: true,
+            add_validation: false,
+            event_window_size: 16,
         }
     }
 }

@@ -3,6 +3,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use serde::Deserialize;
+use std::io::{BufReader, BufWriter};
 use std::{
     fmt, fs,
     path::{Path, PathBuf},
@@ -488,6 +489,9 @@ wasmtime_option_group! {
         /// Include (optional) signatures to facilitate validation checks during replay
         /// (see `validate` in replay options).
         pub validation_metadata: Option<bool>,
+        /// Window size of internal buffering for record events (large windows offer more opportunities
+        /// for coalescing events at the cost of memory usage).
+        pub event_window_size: Option<usize>,
     }
 
     enum Record {
@@ -1045,17 +1049,28 @@ impl CommonOptions {
         let record = &self.record;
         let replay = &self.replay;
         let rr_cfg = if let Some(path) = record.path.clone() {
+            let default_settings = RecordMetadata::default();
             Some(RRConfig::from(RecordConfig {
-                writer_initializer: Arc::new(move || Box::new(fs::File::create(&path).unwrap())),
+                writer_initializer: Arc::new(move || {
+                    Box::new(BufWriter::new(fs::File::create(&path).unwrap()))
+                }),
                 metadata: RecordMetadata {
-                    add_validation: record.validation_metadata.unwrap_or(false),
+                    add_validation: record
+                        .validation_metadata
+                        .unwrap_or(default_settings.add_validation),
+                    event_window_size: record
+                        .event_window_size
+                        .unwrap_or(default_settings.event_window_size),
                 },
             }))
         } else if let Some(path) = replay.path.clone() {
+            let default_settings = ReplayMetadata::default();
             Some(RRConfig::from(ReplayConfig {
-                reader_initializer: Arc::new(move || Box::new(fs::File::open(&path).unwrap())),
+                reader_initializer: Arc::new(move || {
+                    Box::new(BufReader::new(fs::File::open(&path).unwrap()))
+                }),
                 metadata: ReplayMetadata {
-                    validate: replay.validate.unwrap_or(false),
+                    validate: replay.validate.unwrap_or(default_settings.validate),
                 },
             }))
         } else {

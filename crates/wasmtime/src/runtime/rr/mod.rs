@@ -13,7 +13,6 @@ use crate::prelude::*;
 use core::fmt;
 use postcard;
 use serde::{Deserialize, Serialize};
-use std::io::{BufRead, BufReader, BufWriter, Write};
 
 /// Encapsulation of event types comprising an [`RREvent`] sum type
 pub mod events;
@@ -35,7 +34,7 @@ macro_rules! rr_event {
         /// of parameter/return types) may drop down to one or more [`RREvent`]s
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
         pub enum RREvent {
-            /// TOOD: Used temporarily only for eof detection. This is never generated, so remove in future
+            /// Event signalling the end of a trace
             Eof,
             $(
                 $(#[doc = $doc])*
@@ -225,8 +224,7 @@ pub trait Replayer: Iterator<Item = RREvent> {
     ///
     /// ## Errors
     ///
-    /// Returns a `ReplayError::EmptyBuffer` if the buffer is empty or a
-    /// `ReplayError::IncorrectEventVariant` if it failed to convert type safely
+    /// See [`next_event_and`](Self::next_event_and)
     #[inline]
     fn next_event_typed<T>(&mut self) -> Result<T, ReplayError>
     where
@@ -270,29 +268,46 @@ pub trait Replayer: Iterator<Item = RREvent> {
     }
 }
 
-/// Buffer to write recording data
+/// Buffer to write recording data.
+///
+/// This type can be optimized for [`RREvent`] data configurations.
 pub struct RecordBuffer {
-    /// Buffered writer over recording trace writer
-    buf: BufWriter<Box<dyn RecordWriter>>,
+    /// In-memory event buffer to enable windows for coalescing
+    buf: Vec<RREvent>,
+    /// Writer to store data into
+    writer: Box<dyn RecordWriter>,
     /// Metadata for record configuration
     metadata: RecordMetadata,
 }
 
 impl RecordBuffer {
-    /// Push a newly record event [`RREvent`] to the buffer
+    /// Push a new record event [`RREvent`] to the buffer
     fn push_event(&mut self, event: RREvent) -> Result<()> {
-        let _ = postcard::to_io(&event, &mut self.buf)?;
+        self.buf.push(event);
+        if self.buf.len() >= self.metadata().event_window_size {
+            self.flush()?;
+        }
         Ok(())
     }
 }
 
+impl Drop for RecordBuffer {
+    fn drop(&mut self) {
+        self.push_event(RREvent::Eof).unwrap();
+        self.flush().unwrap();
+    }
+}
+
 impl Recorder for RecordBuffer {
-    fn new_recorder(writer: Box<dyn RecordWriter>, metadata: RecordMetadata) -> Result<Self> {
-        let mut buf = BufWriter::new(writer);
+    fn new_recorder(mut writer: Box<dyn RecordWriter>, metadata: RecordMetadata) -> Result<Self> {
         // Replay requires the Module version and RecordMetadata configuration
-        postcard::to_io(ModuleVersionStrategy::WasmtimeVersion.as_str(), &mut buf)?;
-        postcard::to_io(&metadata, &mut buf)?;
-        Ok(RecordBuffer { buf, metadata })
+        postcard::to_io(ModuleVersionStrategy::WasmtimeVersion.as_str(), &mut writer)?;
+        postcard::to_io(&metadata, &mut writer)?;
+        Ok(RecordBuffer {
+            buf: Vec::new(),
+            writer: writer,
+            metadata: metadata,
+        })
     }
 
     #[inline]
@@ -306,10 +321,12 @@ impl Recorder for RecordBuffer {
         self.push_event(event)
     }
 
-    #[allow(dead_code)]
     fn flush(&mut self) -> Result<()> {
-        log::debug!("Explicit flushing of record buffer...");
-        Ok(self.buf.flush()?)
+        log::debug!("Flushing record buffer...");
+        for e in self.buf.drain(..) {
+            postcard::to_io(&e, &mut self.writer)?;
+        }
+        return Ok(());
     }
 
     #[inline]
@@ -320,8 +337,8 @@ impl Recorder for RecordBuffer {
 
 /// Buffer to read replay data
 pub struct ReplayBuffer {
-    /// Buffered reader over replay trace reader
-    buf: BufReader<Box<dyn ReplayReader>>,
+    /// Reader to read replay trace from
+    reader: Box<dyn ReplayReader>,
     /// Metadata for replay configuration
     metadata: ReplayMetadata,
     /// Metadata for record configuration (encoded in the trace)
@@ -333,31 +350,44 @@ impl Iterator for ReplayBuffer {
 
     fn next(&mut self) -> Option<Self::Item> {
         // Check for EoF
-        if self.buf.fill_buf().unwrap().is_empty() {
-            None
-        } else {
-            Some(postcard::from_io((&mut self.buf, &mut [0; 0])).unwrap().0)
+        let result = postcard::from_io((&mut self.reader, &mut [0; 0]));
+        match result {
+            Err(e) => {
+                log::error!("Erroneous replay read: {}", e);
+                None
+            }
+            Ok((event, _)) => {
+                if let RREvent::Eof = event {
+                    None
+                } else {
+                    Some(event)
+                }
+            }
         }
     }
 }
 
 impl Drop for ReplayBuffer {
     fn drop(&mut self) {
-        if self.next().is_some() {
-            log::warn!(
-                "Replay buffer is dropped without being consumed completely... this may be an incorrect execution"
-            );
+        if let Some(event) = self.next() {
+            if let RREvent::Eof = event {
+            } else {
+                log::warn!(
+                    "Replay buffer is dropped without being consumed completely... this may be an incorrect execution"
+                );
+                while let Some(e) = self.next() {
+                    log::warn!("Event remaining => {}", e);
+                }
+            }
         }
     }
 }
 
 impl Replayer for ReplayBuffer {
-    fn new_replayer(reader: Box<dyn ReplayReader>, metadata: ReplayMetadata) -> Result<Self> {
-        let mut buf = BufReader::new(reader);
-
+    fn new_replayer(mut reader: Box<dyn ReplayReader>, metadata: ReplayMetadata) -> Result<Self> {
         // Ensure module versions match
         let mut scratch = [0u8; 12];
-        let (version, _) = postcard::from_io::<&str, _>((&mut buf, &mut scratch))?;
+        let (version, _) = postcard::from_io::<&str, _>((&mut reader, &mut scratch))?;
         assert_eq!(
             version,
             ModuleVersionStrategy::WasmtimeVersion.as_str(),
@@ -365,10 +395,10 @@ impl Replayer for ReplayBuffer {
         );
 
         // Read the recording metadata
-        let (trace_metadata, _) = postcard::from_io((&mut buf, &mut [0; 0]))?;
+        let (trace_metadata, _) = postcard::from_io((&mut reader, &mut [0; 0]))?;
 
         Ok(ReplayBuffer {
-            buf: buf,
+            reader: reader,
             metadata: metadata,
             trace_metadata: trace_metadata,
         })
@@ -395,9 +425,7 @@ mod tests {
 
     #[test]
     fn rr_buffers() -> Result<()> {
-        let record_metadata = RecordMetadata {
-            add_validation: true,
-        };
+        let record_metadata = RecordMetadata::default();
         let tmp = NamedTempFile::new()?;
         let tmppath = tmp.path().to_str().expect("Filename should be UTF-8");
 
