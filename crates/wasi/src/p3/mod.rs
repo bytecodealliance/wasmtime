@@ -26,6 +26,9 @@ use crate::sockets::WasiSocketsCtxView;
 pub use self::ctx::{WasiCtx, WasiCtxBuilder};
 pub use self::view::{WasiCtxView, WasiView};
 
+// Default buffer capacity to use for reads of byte-sized values.
+const DEFAULT_BUFFER_CAPACITY: usize = 8192;
+
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///
 /// This function will add all interfaces implemented by this module to the

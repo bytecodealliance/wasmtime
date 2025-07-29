@@ -18,6 +18,7 @@ use wasmtime::component::{
     StreamWriter,
 };
 
+use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::sockets::types::{
     Duration, ErrorCode, HostTcpSocket, HostTcpSocketConcurrent, IpAddressFamily, IpSocketAddress,
     TcpSocket,
@@ -195,12 +196,11 @@ struct ReceiveTask {
 
 impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
     async fn run(mut self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
-        loop {
-            let mut buf = BytesMut::with_capacity(8192);
+        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
+        let res = loop {
             match self.stream.try_read_buf(&mut buf) {
                 Ok(0) => {
-                    _ = self.result_tx.write(store, Ok(()));
-                    break;
+                    break Ok(());
                 }
                 Ok(..) => {
                     buf = self
@@ -209,8 +209,7 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
                         .await
                         .into_inner();
                     if self.data_tx.is_closed() {
-                        _ = self.result_tx.write(store, Ok(()));
-                        break;
+                        break Ok(());
                     }
                     buf.clear();
                 }
@@ -224,20 +223,18 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
                         })
                         .await
                     }) else {
-                        _ = self.result_tx.write(store, Ok(()));
-                        break;
+                        break Ok(());
                     };
                     if let Err(err) = res {
-                        _ = self.result_tx.write(store, Err(err.into()));
-                        break;
+                        break Err(err.into());
                     }
                 }
                 Err(err) => {
-                    _ = self.result_tx.write(store, Err(err.into()));
-                    break;
+                    break Err(err.into());
                 }
             }
-        }
+        };
+        self.result_tx.write(store, res).await;
         _ = self
             .stream
             .as_socketlike_view::<std::net::TcpStream>()
