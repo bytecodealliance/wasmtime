@@ -58,5 +58,5 @@ interface ip-name-lookup {
     /// - <https://learn.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo>
     /// - <https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3>
     @since(version = 0.3.0)
-    resolve-addresses: func(name: string) -> result<list<ip-address>, error-code>;
+    resolve-addresses: async func(name: string) -> result<list<ip-address>, error-code>;
 }

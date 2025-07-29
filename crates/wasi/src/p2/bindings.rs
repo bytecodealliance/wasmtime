@@ -396,7 +396,7 @@ mod async_io {
 
             // Configure all other resources to be concrete types defined in
             // this crate
-            "wasi:sockets/network/network": crate::net::Network,
+            "wasi:sockets/network/network": crate::p2::network::Network,
             "wasi:sockets/tcp/tcp-socket": crate::p2::tcp::TcpSocket,
             "wasi:sockets/udp/udp-socket": crate::p2::udp::UdpSocket,
             "wasi:sockets/udp/incoming-datagram-stream": crate::p2::udp::IncomingDatagramStream,

@@ -1,5 +1,6 @@
 use crate::I32Exit;
 use crate::cli::IsTerminal;
+use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::cli::{
     environment, exit, stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr,
     terminal_stdin, terminal_stdout,
@@ -24,7 +25,7 @@ where
     V: AsyncRead + Send + Sync + Unpin + 'static,
 {
     async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
-        let mut buf = BytesMut::with_capacity(8192);
+        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
         while !self.tx.is_closed() {
             match self.rx.read_buf(&mut buf).await {
                 Ok(0) => return Ok(()),
@@ -57,7 +58,7 @@ where
     V: AsyncWrite + Send + Sync + Unpin + 'static,
 {
     async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
-        let mut buf = BytesMut::with_capacity(8192);
+        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
         while !self.rx.is_closed() {
             buf = self.rx.read(store, buf).await;
             match self.tx.write_all(&buf).await {

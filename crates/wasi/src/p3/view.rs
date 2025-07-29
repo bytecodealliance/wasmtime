@@ -2,11 +2,6 @@ use wasmtime::component::ResourceTable;
 
 use crate::p3::ctx::WasiCtx;
 
-pub struct WasiCtxView<'a> {
-    pub ctx: &'a mut WasiCtx,
-    pub table: &'a mut ResourceTable,
-}
-
 /// A trait which provides access to the [`WasiCtx`] inside the embedder's `T`
 /// of [`Store<T>`][`Store`].
 ///
@@ -19,7 +14,7 @@ pub struct WasiCtxView<'a> {
 /// # Example
 ///
 /// ```
-/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiView, WasiCtxView};
+/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 /// use wasmtime::component::ResourceTable;
 ///
 /// struct MyState {
@@ -55,4 +50,9 @@ impl<T: ?Sized + WasiView> WasiView for Box<T> {
     fn ctx(&mut self) -> WasiCtxView<'_> {
         T::ctx(self)
     }
+}
+
+pub struct WasiCtxView<'a> {
+    pub ctx: &'a mut WasiCtx,
+    pub table: &'a mut ResourceTable,
 }

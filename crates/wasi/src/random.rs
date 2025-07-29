@@ -1,27 +1,5 @@
 use cap_rand::{Rng as _, RngCore, SeedableRng as _};
 
-impl<T: WasiRandomView> WasiRandomView for &mut T {
-    fn random(&mut self) -> &mut WasiRandomCtx {
-        T::random(self)
-    }
-}
-
-impl<T: WasiRandomView> WasiRandomView for Box<T> {
-    fn random(&mut self) -> &mut WasiRandomCtx {
-        T::random(self)
-    }
-}
-
-impl WasiRandomView for WasiRandomCtx {
-    fn random(&mut self) -> &mut WasiRandomCtx {
-        self
-    }
-}
-
-pub trait WasiRandomView: Send {
-    fn random(&mut self) -> &mut WasiRandomCtx;
-}
-
 pub struct WasiRandomCtx {
     pub random: Box<dyn RngCore + Send>,
     pub insecure_random: Box<dyn RngCore + Send>,
@@ -46,6 +24,28 @@ impl Default for WasiRandomCtx {
             insecure_random,
             insecure_random_seed,
         }
+    }
+}
+
+pub trait WasiRandomView: Send {
+    fn random(&mut self) -> &mut WasiRandomCtx;
+}
+
+impl<T: WasiRandomView> WasiRandomView for &mut T {
+    fn random(&mut self) -> &mut WasiRandomCtx {
+        T::random(self)
+    }
+}
+
+impl<T: WasiRandomView> WasiRandomView for Box<T> {
+    fn random(&mut self) -> &mut WasiRandomCtx {
+        T::random(self)
+    }
+}
+
+impl WasiRandomView for WasiRandomCtx {
+    fn random(&mut self) -> &mut WasiRandomCtx {
+        self
     }
 }
 
