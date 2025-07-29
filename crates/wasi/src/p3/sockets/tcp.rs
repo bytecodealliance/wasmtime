@@ -61,18 +61,6 @@ impl Debug for TcpState {
     }
 }
 
-// The socket options below are not automatically inherited from the listener
-// on all platforms. So we keep track of which options have been explicitly
-// set and manually apply those values to newly accepted clients.
-#[cfg(target_os = "macos")]
-#[derive(Default)]
-pub struct NonInheritedOptions {
-    pub receive_buffer_size: core::sync::atomic::AtomicUsize,
-    pub send_buffer_size: core::sync::atomic::AtomicUsize,
-    pub hop_limit: core::sync::atomic::AtomicU8,
-    pub keep_alive_idle_time: core::sync::atomic::AtomicU64, // nanoseconds
-}
-
 /// A host TCP socket, plus associated bookkeeping.
 pub struct TcpSocket {
     /// The current state in the bind/listen/accept/connect progression.
@@ -83,8 +71,7 @@ pub struct TcpSocket {
 
     pub family: SocketAddressFamily,
 
-    #[cfg(target_os = "macos")]
-    pub options: Arc<NonInheritedOptions>,
+    pub options: NonInheritedOptions,
 }
 
 impl TcpSocket {
@@ -113,8 +100,7 @@ impl TcpSocket {
             tcp_state: state,
             listen_backlog_size: DEFAULT_TCP_BACKLOG,
             family,
-            #[cfg(target_os = "macos")]
-            options: Arc::default(),
+            options: Default::default(),
         }
     }
 
@@ -244,15 +230,11 @@ impl TcpSocket {
     }
 
     pub fn set_keep_alive_idle_time(&mut self, value: Duration) -> Result<(), ErrorCode> {
-        let fd = &*self.as_std_view()?;
-        #[cfg_attr(not(target_os = "macos"), expect(unused))]
-        let value = set_keep_alive_idle_time(fd, value)?;
-        #[cfg(target_os = "macos")]
-        {
-            self.options
-                .keep_alive_idle_time
-                .store(value, core::sync::atomic::Ordering::Relaxed);
-        }
+        let value = {
+            let fd = self.as_std_view()?;
+            set_keep_alive_idle_time(&*fd, value)?
+        };
+        self.options.set_keep_alive_idle_time(value);
         Ok(())
     }
 
@@ -286,15 +268,12 @@ impl TcpSocket {
         Ok(n)
     }
 
-    pub fn set_hop_limit(&self, value: u8) -> Result<(), ErrorCode> {
-        let fd = &*self.as_std_view()?;
-        set_unicast_hop_limit(fd, self.family, value)?;
-        #[cfg(target_os = "macos")]
+    pub fn set_hop_limit(&mut self, value: u8) -> Result<(), ErrorCode> {
         {
-            self.options
-                .hop_limit
-                .store(value, core::sync::atomic::Ordering::Relaxed);
+            let fd = &*self.as_std_view()?;
+            set_unicast_hop_limit(fd, self.family, value)?;
         }
+        self.options.set_hop_limit(value);
         Ok(())
     }
 
@@ -305,19 +284,11 @@ impl TcpSocket {
     }
 
     pub fn set_receive_buffer_size(&mut self, value: u64) -> Result<(), ErrorCode> {
-        let fd = &*self.as_std_view()?;
-        let res = set_receive_buffer_size(fd, value);
-        #[cfg(target_os = "macos")]
-        {
-            let value = res?;
-            self.options
-                .receive_buffer_size
-                .store(value, core::sync::atomic::Ordering::Relaxed);
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            res?;
-        }
+        let res = {
+            let fd = &*self.as_std_view()?;
+            set_receive_buffer_size(fd, value)?
+        };
+        self.options.set_receive_buffer_size(res);
         Ok(())
     }
 
@@ -328,19 +299,111 @@ impl TcpSocket {
     }
 
     pub fn set_send_buffer_size(&mut self, value: u64) -> Result<(), ErrorCode> {
-        let fd = &*self.as_std_view()?;
-        let res = set_send_buffer_size(fd, value);
-        #[cfg(target_os = "macos")]
-        {
-            let value = res?;
-            self.options
-                .send_buffer_size
-                .store(value, core::sync::atomic::Ordering::Relaxed);
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            res?;
-        }
+        let res = {
+            let fd = &*self.as_std_view()?;
+            set_send_buffer_size(fd, value)?
+        };
+        self.options.set_send_buffer_size(res);
         Ok(())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub use inherits_option::*;
+#[cfg(not(target_os = "macos"))]
+mod inherits_option {
+    use crate::sockets::SocketAddressFamily;
+    use tokio::net::TcpStream;
+
+    #[derive(Default, Clone)]
+    pub struct NonInheritedOptions;
+
+    impl NonInheritedOptions {
+        pub fn set_keep_alive_idle_time(&mut self, _value: u64) {}
+
+        pub fn set_hop_limit(&mut self, _value: u8) {}
+
+        pub fn set_receive_buffer_size(&mut self, _value: usize) {}
+
+        pub fn set_send_buffer_size(&mut self, _value: usize) {}
+
+        pub fn apply(&self, _family: SocketAddressFamily, _stream: &TcpStream) {}
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub use does_not_inherit_options::*;
+#[cfg(target_os = "macos")]
+mod does_not_inherit_options {
+    use crate::sockets::SocketAddressFamily;
+    use rustix::net::sockopt;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU8, AtomicU64, AtomicUsize, Ordering::Relaxed};
+    use std::time::Duration;
+    use tokio::net::TcpStream;
+
+    // The socket options below are not automatically inherited from the listener
+    // on all platforms. So we keep track of which options have been explicitly
+    // set and manually apply those values to newly accepted clients.
+    #[derive(Default, Clone)]
+    pub struct NonInheritedOptions(Arc<Inner>);
+
+    #[derive(Default)]
+    struct Inner {
+        receive_buffer_size: AtomicUsize,
+        send_buffer_size: AtomicUsize,
+        hop_limit: AtomicU8,
+        keep_alive_idle_time: AtomicU64, // nanoseconds
+    }
+
+    impl NonInheritedOptions {
+        pub fn set_keep_alive_idle_time(&mut self, value: u64) {
+            self.0.keep_alive_idle_time.store(value, Relaxed);
+        }
+
+        pub fn set_hop_limit(&mut self, value: u8) {
+            self.0.hop_limit.store(value, Relaxed);
+        }
+
+        pub fn set_receive_buffer_size(&mut self, value: usize) {
+            self.0.receive_buffer_size.store(value, Relaxed);
+        }
+
+        pub fn set_send_buffer_size(&mut self, value: usize) {
+            self.0.send_buffer_size.store(value, Relaxed);
+        }
+
+        pub fn apply(&self, family: SocketAddressFamily, stream: &TcpStream) {
+            // Manually inherit socket options from listener. We only have to
+            // do this on platforms that don't already do this automatically
+            // and only if a specific value was explicitly set on the listener.
+
+            let receive_buffer_size = self.0.receive_buffer_size.load(Relaxed);
+            if receive_buffer_size > 0 {
+                // Ignore potential error.
+                _ = sockopt::set_socket_recv_buffer_size(&stream, receive_buffer_size);
+            }
+
+            let send_buffer_size = self.0.send_buffer_size.load(Relaxed);
+            if send_buffer_size > 0 {
+                // Ignore potential error.
+                _ = sockopt::set_socket_send_buffer_size(&stream, send_buffer_size);
+            }
+
+            // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
+            if family == SocketAddressFamily::Ipv6 {
+                let hop_limit = self.0.hop_limit.load(Relaxed);
+                if hop_limit > 0 {
+                    // Ignore potential error.
+                    _ = sockopt::set_ipv6_unicast_hops(&stream, Some(hop_limit));
+                }
+            }
+
+            let keep_alive_idle_time = self.0.keep_alive_idle_time.load(Relaxed);
+            if keep_alive_idle_time > 0 {
+                // Ignore potential error.
+                _ = sockopt::set_tcp_keepidle(&stream, Duration::from_nanos(keep_alive_idle_time));
+            }
+        }
     }
 }

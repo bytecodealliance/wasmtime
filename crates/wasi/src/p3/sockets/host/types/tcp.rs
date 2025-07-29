@@ -24,7 +24,7 @@ use crate::p3::bindings::sockets::types::{
     TcpSocket,
 };
 use crate::p3::sockets::WasiSockets;
-use crate::p3::sockets::tcp::TcpState;
+use crate::p3::sockets::tcp::{NonInheritedOptions, TcpState};
 use crate::sockets::util::{
     is_valid_address_family, is_valid_remote_address, is_valid_unicast_address,
 };
@@ -58,8 +58,7 @@ struct ListenTask {
     listener: Arc<TcpListener>,
     family: SocketAddressFamily,
     tx: StreamWriter<Option<Resource<TcpSocket>>>,
-    #[cfg(target_os = "macos")]
-    options: Arc<crate::p3::sockets::tcp::NonInheritedOptions>,
+    options: NonInheritedOptions,
 }
 
 impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
@@ -78,63 +77,7 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
             };
             let state = match res {
                 Ok((stream, _addr)) => {
-                    #[cfg(target_os = "macos")]
-                    {
-                        // Manually inherit socket options from listener. We only have to
-                        // do this on platforms that don't already do this automatically
-                        // and only if a specific value was explicitly set on the listener.
-
-                        let receive_buffer_size = self
-                            .options
-                            .receive_buffer_size
-                            .load(core::sync::atomic::Ordering::Relaxed);
-                        if receive_buffer_size > 0 {
-                            // Ignore potential error.
-                            _ = rustix::net::sockopt::set_socket_recv_buffer_size(
-                                &stream,
-                                receive_buffer_size,
-                            );
-                        }
-
-                        let send_buffer_size = self
-                            .options
-                            .send_buffer_size
-                            .load(core::sync::atomic::Ordering::Relaxed);
-                        if send_buffer_size > 0 {
-                            // Ignore potential error.
-                            _ = rustix::net::sockopt::set_socket_send_buffer_size(
-                                &stream,
-                                send_buffer_size,
-                            );
-                        }
-
-                        // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
-                        if self.family == SocketAddressFamily::Ipv6 {
-                            let hop_limit = self
-                                .options
-                                .hop_limit
-                                .load(core::sync::atomic::Ordering::Relaxed);
-                            if hop_limit > 0 {
-                                // Ignore potential error.
-                                _ = rustix::net::sockopt::set_ipv6_unicast_hops(
-                                    &stream,
-                                    Some(hop_limit),
-                                );
-                            }
-                        }
-
-                        let keep_alive_idle_time = self
-                            .options
-                            .keep_alive_idle_time
-                            .load(core::sync::atomic::Ordering::Relaxed);
-                        if keep_alive_idle_time > 0 {
-                            // Ignore potential error.
-                            _ = rustix::net::sockopt::set_tcp_keepidle(
-                                &stream,
-                                core::time::Duration::from_nanos(keep_alive_idle_time),
-                            );
-                        }
-                    }
+                    self.options.apply(self.family, &stream);
                     TcpState::Connected(Arc::new(stream))
                 }
                 Err(err) => {
@@ -354,7 +297,6 @@ impl HostTcpSocketWithStore for WasiSockets {
                 tcp_state,
                 listen_backlog_size,
                 family,
-                #[cfg(target_os = "macos")]
                 options,
             } = get_socket_mut(view.get().table, &socket)?;
             let sock = match mem::replace(tcp_state, TcpState::Closed) {
@@ -390,8 +332,7 @@ impl HostTcpSocketWithStore for WasiSockets {
                 listener,
                 family: *family,
                 tx,
-                #[cfg(target_os = "macos")]
-                options: Arc::clone(&options),
+                options: options.clone(),
             };
             view.spawn(task);
             Ok(Ok(rx.into()))
@@ -602,7 +543,7 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
         socket: Resource<TcpSocket>,
         value: u8,
     ) -> wasmtime::Result<Result<(), ErrorCode>> {
-        let sock = get_socket(self.table, &socket)?;
+        let sock = get_socket_mut(self.table, &socket)?;
         Ok(sock.set_hop_limit(value))
     }
 
