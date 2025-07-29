@@ -20,7 +20,7 @@ use wasmtime::component::{
 
 use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::sockets::types::{
-    Duration, ErrorCode, HostTcpSocket, HostTcpSocketConcurrent, IpAddressFamily, IpSocketAddress,
+    Duration, ErrorCode, HostTcpSocket, HostTcpSocketWithStore, IpAddressFamily, IpSocketAddress,
     TcpSocket,
 };
 use crate::p3::sockets::WasiSockets;
@@ -192,6 +192,18 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
     }
 }
 
+struct ResultWriteTask {
+    result: Result<(), ErrorCode>,
+    result_tx: FutureWriter<Result<(), ErrorCode>>,
+}
+
+impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ResultWriteTask {
+    async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
+        self.result_tx.write(store, self.result).await;
+        Ok(())
+    }
+}
+
 struct ReceiveTask {
     stream: Arc<TcpStream>,
     data_tx: StreamWriter<Cursor<BytesMut>>,
@@ -238,16 +250,22 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
                 }
             }
         };
-        self.result_tx.write(store, res).await;
         _ = self
             .stream
             .as_socketlike_view::<std::net::TcpStream>()
             .shutdown(Shutdown::Read);
+
+        // Write the result async from a separate task to ensure that all resources used by this
+        // task are freed
+        store.spawn(ResultWriteTask {
+            result: res,
+            result_tx: self.result_tx,
+        });
         Ok(())
     }
 }
 
-impl HostTcpSocketConcurrent for WasiSockets {
+impl HostTcpSocketWithStore for WasiSockets {
     async fn bind<T>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
@@ -283,7 +301,7 @@ impl HostTcpSocketConcurrent for WasiSockets {
                 || !is_valid_remote_address(remote_address)
                 || !is_valid_address_family(ip, socket.family)
             {
-                return Ok(Err(ErrorCode::InvalidArgument));
+                return anyhow::Ok(Err(ErrorCode::InvalidArgument));
             }
             match mem::replace(&mut socket.tcp_state, TcpState::Connecting) {
                 TcpState::Default(sock) | TcpState::Bound(sock) => Ok(Ok(sock)),
@@ -433,25 +451,28 @@ impl HostTcpSocketConcurrent for WasiSockets {
             let (data_tx, data_rx) = instance
                 .stream::<_, _, BytesMut>(&mut view)
                 .context("failed to create stream")?;
-            let (result_tx, result_rx) = instance
-                .future(|| unreachable!(), &mut view)
-                .context("failed to create future")?;
             let TcpSocket { tcp_state, .. } = get_socket_mut(view.get().table, &socket)?;
             match mem::replace(tcp_state, TcpState::Closed) {
                 TcpState::Connected(stream) => {
                     *tcp_state = TcpState::Receiving(Arc::clone(&stream));
+                    let (result_tx, result_rx) = instance
+                        .future(|| unreachable!(), &mut view)
+                        .context("failed to create future")?;
                     view.spawn(ReceiveTask {
                         stream,
                         data_tx,
                         result_tx,
                     });
+                    Ok((data_rx.into(), result_rx.into()))
                 }
                 prev => {
                     *tcp_state = prev;
-                    _ = result_tx.write(store, Err(ErrorCode::InvalidState));
+                    let (_, result_rx) = instance
+                        .future(|| Err(ErrorCode::InvalidState), &mut view)
+                        .context("failed to create future")?;
+                    Ok((data_rx.into(), result_rx.into()))
                 }
-            };
-            Ok((data_rx.into(), result_rx.into()))
+            }
         })
     }
 }

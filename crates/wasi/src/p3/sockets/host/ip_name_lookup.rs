@@ -1,13 +1,13 @@
 use tokio::net::lookup_host;
 use wasmtime::component::Accessor;
 
-use crate::p3::bindings::sockets::ip_name_lookup::{ErrorCode, Host, HostConcurrent};
+use crate::p3::bindings::sockets::ip_name_lookup::{ErrorCode, Host, HostWithStore};
 use crate::p3::bindings::sockets::types;
 use crate::p3::sockets::WasiSockets;
 use crate::sockets::WasiSocketsCtxView;
 use crate::sockets::util::{from_ipv4_addr, from_ipv6_addr, parse_host};
 
-impl HostConcurrent for WasiSockets {
+impl HostWithStore for WasiSockets {
     async fn resolve_addresses<U>(
         store: &Accessor<U, Self>,
         name: String,

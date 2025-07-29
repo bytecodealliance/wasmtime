@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use wasmtime::component::{Accessor, Resource, ResourceTable};
 
 use crate::p3::bindings::sockets::types::{
-    ErrorCode, HostUdpSocket, HostUdpSocketConcurrent, IpAddressFamily, IpSocketAddress,
+    ErrorCode, HostUdpSocket, HostUdpSocketWithStore, IpAddressFamily, IpSocketAddress,
 };
 use crate::p3::sockets::WasiSockets;
 use crate::p3::sockets::udp::UdpSocket;
@@ -34,7 +34,7 @@ fn get_socket_mut<'a>(
         .context("failed to get socket resource from table")
 }
 
-impl HostUdpSocketConcurrent for WasiSockets {
+impl HostUdpSocketWithStore for WasiSockets {
     async fn bind<T>(
         store: &Accessor<T, Self>,
         socket: Resource<UdpSocket>,
