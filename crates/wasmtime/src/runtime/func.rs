@@ -2359,7 +2359,7 @@ impl HostContext {
                 // (only when validation is enabled).
                 // Function type unwraps should never panic since they are
                 // lazily evaluated
-                #[cfg(any(feature = "rr-type-validation", feature = "rr-args-validation"))]
+                #[cfg(any(feature = "rr-type-validation"))]
                 {
                     use crate::config::ReplayMetadata;
                     use crate::rr::events::core_wasm::HostFuncEntryEvent;

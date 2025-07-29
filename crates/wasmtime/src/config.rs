@@ -1126,7 +1126,7 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/relaxed-simd
     pub fn relaxed_simd_deterministic(&mut self, enable: bool) -> &mut Self {
         assert!(
-            enable || !self.check_determinism(),
+            !(self.check_determinism() && !enable),
             "Deterministic relaxed SIMD cannot be disabled when record/replay is enabled"
         );
         self.tunables.relaxed_simd_deterministic = Some(enable);
@@ -1432,7 +1432,7 @@ impl Config {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
         assert!(
-            enable || !self.check_determinism(),
+            !(self.check_determinism() && !enable),
             "NaN canonicalization cannot be disabled when record/replay is enabled"
         );
         let val = if enable { "true" } else { "false" };
@@ -2770,10 +2770,10 @@ impl Config {
         self
     }
 
-    /// Repeal determinstic execution configurations (opposite
-    /// effect of [`Config::enforce_determinism`])
+    /// Remove determinstic execution enforcements (if any) applied
+    /// by [`Config::enforce_determinism`]
     #[inline]
-    pub fn repeal_determinism(&mut self) -> &mut Self {
+    pub fn remove_determinism_enforcement(&mut self) -> &mut Self {
         self.cranelift_nan_canonicalization(false)
             .relaxed_simd_deterministic(false);
         self
@@ -2788,18 +2788,33 @@ impl Config {
         self.rr.is_some()
     }
 
-    /// Configure the record/replay options for use by the runtime
+    /// Enable execution trace recording with the provided configuration
     ///
     /// This method implicitly enforces determinism (see [`Config::enforce_determinism`]
     /// for details).
-    pub fn rr(&mut self, rr: Option<RRConfig>) -> &mut Self {
-        // Set appropriate configurations for determinstic execution
-        if rr.is_some() {
-            self.enforce_determinism();
-        } else if self.rr.is_some() {
-            self.repeal_determinism();
-        }
-        self.rr = rr;
+    pub fn enable_record(&mut self, record: RecordConfig) -> &mut Self {
+        self.enforce_determinism();
+        self.rr = Some(RRConfig::from(record));
+        self
+    }
+
+    /// Enable replay execution based on the provided configuration
+    ///
+    /// This method implicitly enforces determinism (see [`Config::enforce_determinism`]
+    /// for details).
+    pub fn enable_replay(&mut self, replay: ReplayConfig) -> &mut Self {
+        self.enforce_determinism();
+        self.rr = Some(RRConfig::from(replay));
+        self
+    }
+
+    /// Disable the currently active record/replay configuration
+    ///
+    /// Note: A common option is used for both record/replay here
+    /// since record and replay can never be set simultaneously
+    pub fn disable_record_replay(&mut self) -> &mut Self {
+        self.remove_determinism_enforcement();
+        self.rr = None;
         self
     }
 }

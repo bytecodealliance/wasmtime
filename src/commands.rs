@@ -39,3 +39,6 @@ pub use self::settings::*;
 mod objdump;
 #[cfg(feature = "objdump")]
 pub use self::objdump::*;
+
+mod replay;
+pub use self::replay::*;

@@ -25,7 +25,7 @@ use wasmtime_environ::component::{
 /// Record/replay stubs for host function entry events
 macro_rules! rr_host_func_entry_event {
     { $args:expr, $param_types:expr => $store:expr } => {
-        #[cfg(any(feature = "rr-type-validation", feature = "rr-args-validation"))]
+        #[cfg(feature = "rr-type-validation")]
         {
             use crate::config::ReplayMetadata;
             use crate::runtime::rr::events::component_wasm::HostFuncEntryEvent;

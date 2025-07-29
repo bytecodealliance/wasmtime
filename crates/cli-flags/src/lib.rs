@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use wasmtime::{Config, RRConfig, RecordConfig, RecordMetadata, ReplayConfig, ReplayMetadata};
+use wasmtime::{Config, RecordConfig, RecordMetadata, ReplayConfig, ReplayMetadata};
 
 pub mod opt;
 
@@ -1048,9 +1048,9 @@ impl CommonOptions {
 
         let record = &self.record;
         let replay = &self.replay;
-        let rr_cfg = if let Some(path) = record.path.clone() {
+        if let Some(path) = record.path.clone() {
             let default_settings = RecordMetadata::default();
-            Some(RRConfig::from(RecordConfig {
+            config.enable_record(RecordConfig {
                 writer_initializer: Arc::new(move || {
                     Box::new(BufWriter::new(fs::File::create(&path).unwrap()))
                 }),
@@ -1062,21 +1062,18 @@ impl CommonOptions {
                         .event_window_size
                         .unwrap_or(default_settings.event_window_size),
                 },
-            }))
+            });
         } else if let Some(path) = replay.path.clone() {
             let default_settings = ReplayMetadata::default();
-            Some(RRConfig::from(ReplayConfig {
+            config.enable_replay(ReplayConfig {
                 reader_initializer: Arc::new(move || {
                     Box::new(BufReader::new(fs::File::open(&path).unwrap()))
                 }),
                 metadata: ReplayMetadata {
                     validate: replay.validate.unwrap_or(default_settings.validate),
                 },
-            }))
-        } else {
-            None
-        };
-        config.rr(rr_cfg);
+            });
+        }
 
         Ok(config)
     }

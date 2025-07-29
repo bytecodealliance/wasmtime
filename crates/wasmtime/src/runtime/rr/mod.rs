@@ -373,12 +373,9 @@ impl Drop for ReplayBuffer {
             if let RREvent::Eof = event {
             } else {
                 log::warn!(
-                    "Replay buffer is dropped without being consumed completely... this may be an incorrect execution"
+                    "Replay buffer is dropped with {} remaining events, and is likely an invalid execution",
+                    self.count() - 1
                 );
-                log::warn!("Event remaining => {}", event);
-                while let Some(rem_event) = self.next() {
-                    log::warn!("Event remaining => {}", rem_event);
-                }
             }
         }
     }

@@ -89,6 +89,16 @@ enum Subcommand {
     /// Inspect `*.cwasm` files output from Wasmtime
     #[cfg(feature = "objdump")]
     Objdump(wasmtime_cli::commands::ObjdumpCommand),
+
+    /// Replay execution of a recorded execution trace
+    ///
+    /// The options below are the superset of the `run` command. The notable options
+    /// added for replay are:
+    ///
+    /// * `--trace` to specify the recorded trace to replay
+    ///
+    /// * Settings for replay operation (e.g. `--validate`)
+    Replay(wasmtime_cli::commands::ReplayCommand),
 }
 
 impl Wasmtime {
@@ -101,7 +111,7 @@ impl Wasmtime {
 
         match subcommand {
             #[cfg(feature = "run")]
-            Subcommand::Run(c) => c.execute(),
+            Subcommand::Run(c) => c.execute(None),
 
             #[cfg(feature = "cache")]
             Subcommand::Config(c) => c.execute(),
@@ -126,6 +136,8 @@ impl Wasmtime {
 
             #[cfg(feature = "objdump")]
             Subcommand::Objdump(c) => c.execute(),
+
+            Subcommand::Replay(c) => c.execute(),
         }
     }
 }

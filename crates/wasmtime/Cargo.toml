@@ -397,17 +397,10 @@ component-model-async = [
 
 # Enables support for record/replay
 rr = ["rr-component", "rr-core"]
-
-# Component model RR support
+# RR for components
 rr-component = ["component-model", "std"]
-
-# Core wasm RR support
+# RR for core wasm
 rr-core = ["std"]
-
-# Support for type information of recorded events for replay validation
+# Support for validation signatures/checks during record/replay respectively
 rr-type-validation = []
 
-# Support for input values to recorded events for replay validation.
-#
-# This can be used to check whether the entire module is truly deterministic
-rr-args-validation = []
