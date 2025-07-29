@@ -110,7 +110,7 @@ impl RunCommand {
         }
 
         if let Some(cfg) = replay_cfg {
-            config.enable_replay(cfg);
+            config.enable_replay(cfg)?;
         }
 
         let engine = Engine::new(&config)?;

@@ -2792,25 +2792,43 @@ impl Config {
     ///
     /// This method implicitly enforces determinism (see [`Config::enforce_determinism`]
     /// for details).
-    pub fn enable_record(&mut self, record: RecordConfig) -> &mut Self {
+    ///
+    /// ## Errors
+    ///
+    /// Errors if record/replay are simultaneously enabled
+    pub fn enable_record(&mut self, record: RecordConfig) -> Result<&mut Self> {
         self.enforce_determinism();
+        if let Some(cfg) = &self.rr {
+            if let RRConfig::Replay(_) = cfg {
+                bail!("Cannot enable recording when replay is already enabled");
+            }
+        }
         self.rr = Some(RRConfig::from(record));
-        self
+        Ok(self)
     }
 
     /// Enable replay execution based on the provided configuration
     ///
     /// This method implicitly enforces determinism (see [`Config::enforce_determinism`]
     /// for details).
-    pub fn enable_replay(&mut self, replay: ReplayConfig) -> &mut Self {
+    ///
+    /// ## Errors
+    ///
+    /// Errors if record/replay are simultaneously enabled
+    pub fn enable_replay(&mut self, replay: ReplayConfig) -> Result<&mut Self> {
         self.enforce_determinism();
+        if let Some(cfg) = &self.rr {
+            if let RRConfig::Record(_) = cfg {
+                bail!("Cannot enable replay when recording is already enabled");
+            }
+        }
         self.rr = Some(RRConfig::from(replay));
-        self
+        Ok(self)
     }
 
     /// Disable the currently active record/replay configuration
     ///
-    /// Note: A common option is used for both record/replay here
+    /// A common option is used for both record/replay here
     /// since record and replay can never be set simultaneously
     pub fn disable_record_replay(&mut self) -> &mut Self {
         self.remove_determinism_enforcement();

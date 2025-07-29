@@ -3,14 +3,14 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use serde::Deserialize;
-use std::io::{BufReader, BufWriter};
+use std::io::BufWriter;
 use std::{
     fmt, fs,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
-use wasmtime::{Config, RecordConfig, RecordMetadata, ReplayConfig, ReplayMetadata};
+use wasmtime::{Config, RecordConfig, RecordMetadata};
 
 pub mod opt;
 
@@ -487,7 +487,7 @@ wasmtime_option_group! {
         /// Filesystem endpoint to store the recorded execution trace
         pub path: Option<String>,
         /// Include (optional) signatures to facilitate validation checks during replay
-        /// (see `validate` in replay options).
+        /// (see `wasmtime replay` for details).
         pub validation_metadata: Option<bool>,
         /// Window size of internal buffering for record events (large windows offer more opportunities
         /// for coalescing events at the cost of memory usage).
@@ -495,22 +495,6 @@ wasmtime_option_group! {
     }
 
     enum Record {
-        ...
-    }
-}
-
-wasmtime_option_group! {
-    #[derive(PartialEq, Clone, Deserialize)]
-    #[serde(rename_all = "kebab-case", deny_unknown_fields)]
-    pub struct ReplayOptions {
-        /// Filesystem endpoint to read the recorded execution trace from
-        pub path: Option<String>,
-        /// Dynamic validation checks of record signatures to guarantee faithful replay.
-        /// Requires record traces to be generated with `validation_metadata` enabled.
-        pub validate: Option<bool>,
-    }
-
-    enum Replay {
         ...
     }
 }
@@ -569,24 +553,13 @@ pub struct CommonOptions {
     ///
     /// Generates of a serialized trace of the Wasm module execution that captures all
     /// non-determinism observable by the module. This trace can subsequently be
-    /// re-executed in a determinstic, embedding-agnostic manner (see the `--replay` option).
+    /// re-executed in a determinstic, embedding-agnostic manner (see the `wasmtime replay` command).
     ///
     /// Note: Minimal configs for deterministic Wasm semantics will be
     /// enforced during recording by default (NaN canonicalization, deterministic relaxed SIMD)
     #[arg(short = 'R', long = "record", value_name = "KEY[=VAL[,..]]")]
     #[serde(skip)]
     record_raw: Vec<opt::CommaSeparated<Record>>,
-
-    /// Options to enable and configure execution replay, `-P help` to see all.
-    ///
-    /// Run a determinstic, embedding-agnostic replay execution of the Wasm module
-    /// according to a prior recorded execution trace (see the `--record` option).
-    ///
-    /// Note: Minimal configs for deterministic Wasm semantics will be
-    /// enforced during replay by default (NaN canonicalization, deterministic relaxed SIMD)
-    #[arg(short = 'P', long = "replay", value_name = "KEY[=VAL[,..]]")]
-    #[serde(skip)]
-    replay_raw: Vec<opt::CommaSeparated<Replay>>,
 
     // These fields are filled in by the `configure` method below via the
     // options parsed from the CLI above. This is what the CLI should use.
@@ -617,10 +590,6 @@ pub struct CommonOptions {
     #[arg(skip)]
     #[serde(rename = "record", default)]
     pub record: RecordOptions,
-
-    #[arg(skip)]
-    #[serde(rename = "replay", default)]
-    pub replay: ReplayOptions,
 
     /// The target triple; default is the host triple
     #[arg(long, value_name = "TARGET")]
@@ -669,7 +638,6 @@ impl CommonOptions {
             wasm_raw: Vec::new(),
             wasi_raw: Vec::new(),
             record_raw: Vec::new(),
-            replay_raw: Vec::new(),
             configured: true,
             opts: Default::default(),
             codegen: Default::default(),
@@ -677,7 +645,6 @@ impl CommonOptions {
             wasm: Default::default(),
             wasi: Default::default(),
             record: Default::default(),
-            replay: Default::default(),
             target: None,
             config: None,
         }
@@ -696,7 +663,6 @@ impl CommonOptions {
             self.wasm = toml_options.wasm;
             self.wasi = toml_options.wasi;
             self.record = toml_options.record;
-            self.replay = toml_options.replay;
         }
         self.opts.configure_with(&self.opts_raw);
         self.codegen.configure_with(&self.codegen_raw);
@@ -704,7 +670,6 @@ impl CommonOptions {
         self.wasm.configure_with(&self.wasm_raw);
         self.wasi.configure_with(&self.wasi_raw);
         self.record.configure_with(&self.record_raw);
-        self.replay.configure_with(&self.replay_raw);
         Ok(())
     }
 
@@ -1047,7 +1012,6 @@ impl CommonOptions {
         }
 
         let record = &self.record;
-        let replay = &self.replay;
         if let Some(path) = record.path.clone() {
             let default_settings = RecordMetadata::default();
             config.enable_record(RecordConfig {
@@ -1062,17 +1026,7 @@ impl CommonOptions {
                         .event_window_size
                         .unwrap_or(default_settings.event_window_size),
                 },
-            });
-        } else if let Some(path) = replay.path.clone() {
-            let default_settings = ReplayMetadata::default();
-            config.enable_replay(ReplayConfig {
-                reader_initializer: Arc::new(move || {
-                    Box::new(BufReader::new(fs::File::open(&path).unwrap()))
-                }),
-                metadata: ReplayMetadata {
-                    validate: replay.validate.unwrap_or(default_settings.validate),
-                },
-            });
+            })?;
         }
 
         Ok(config)
@@ -1180,7 +1134,6 @@ mod tests {
             [wasm]
             [wasi]
             [record]
-            [replay]
         "#;
         let mut common_options: CommonOptions = toml::from_str(basic_toml).unwrap();
         common_options.config(None).unwrap();
@@ -1304,8 +1257,6 @@ impl fmt::Display for CommonOptions {
             wasi,
             record_raw,
             record,
-            replay_raw,
-            replay,
             configured,
             target,
             config,
@@ -1323,7 +1274,6 @@ impl fmt::Display for CommonOptions {
         let wasm_flags;
         let debug_flags;
         let record_flags;
-        let replay_flags;
 
         if *configured {
             codegen_flags = codegen.to_options();
@@ -1332,7 +1282,6 @@ impl fmt::Display for CommonOptions {
             wasm_flags = wasm.to_options();
             opts_flags = opts.to_options();
             record_flags = record.to_options();
-            replay_flags = replay.to_options();
         } else {
             codegen_flags = codegen_raw
                 .iter()
@@ -1344,11 +1293,6 @@ impl fmt::Display for CommonOptions {
             wasm_flags = wasm_raw.iter().flat_map(|t| t.0.iter()).cloned().collect();
             opts_flags = opts_raw.iter().flat_map(|t| t.0.iter()).cloned().collect();
             record_flags = record_raw
-                .iter()
-                .flat_map(|t| t.0.iter())
-                .cloned()
-                .collect();
-            replay_flags = replay_raw
                 .iter()
                 .flat_map(|t| t.0.iter())
                 .cloned()
@@ -1372,9 +1316,6 @@ impl fmt::Display for CommonOptions {
         }
         for flag in record_flags {
             write!(f, "-R{flag} ")?;
-        }
-        for flag in replay_flags {
-            write!(f, "-P{flag} ")?;
         }
 
         Ok(())

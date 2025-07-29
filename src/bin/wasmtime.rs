@@ -90,14 +90,16 @@ enum Subcommand {
     #[cfg(feature = "objdump")]
     Objdump(wasmtime_cli::commands::ObjdumpCommand),
 
-    /// Replay execution of a recorded execution trace
+    /// Run a determinstic, embedding-agnostic replay execution of the Wasm module
+    /// according to a prior recorded execution trace (e.g. generated with the
+    /// `--record` option under `wasmtime run`).
     ///
     /// The options below are the superset of the `run` command. The notable options
-    /// added for replay are:
+    /// added for replay are `--trace` (to specify the recorded traces) and
+    /// corresponding settings (e.g. `--validate`)
     ///
-    /// * `--trace` to specify the recorded trace to replay
-    ///
-    /// * Settings for replay operation (e.g. `--validate`)
+    /// Note: Minimal configs for deterministic Wasm semantics will be
+    /// enforced during replay by default (NaN canonicalization, deterministic relaxed SIMD)
     Replay(wasmtime_cli::commands::ReplayCommand),
 }
 
