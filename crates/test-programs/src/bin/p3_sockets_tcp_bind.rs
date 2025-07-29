@@ -100,6 +100,7 @@ async fn test_tcp_bind_reuseaddr(ip: IpAddress) {
         let listener2 = TcpSocket::new(ip.family());
         if listener2.bind(bind_addr).is_ok() {
             listener2.listen().unwrap();
+            return;
         }
         yield_blocking();
     }
