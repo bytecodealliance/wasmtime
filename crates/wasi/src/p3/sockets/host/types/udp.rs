@@ -199,9 +199,9 @@ impl HostUdpSocket for WasiSocketsCtxView<'_> {
         Ok(sock.set_send_buffer_size(value))
     }
 
-    fn drop(&mut self, rep: Resource<UdpSocket>) -> wasmtime::Result<()> {
+    fn drop(&mut self, sock: Resource<UdpSocket>) -> wasmtime::Result<()> {
         self.table
-            .delete(rep)
+            .delete(sock)
             .context("failed to delete socket resource from table")?;
         Ok(())
     }

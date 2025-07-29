@@ -292,8 +292,10 @@ impl HostTcpSocketConcurrent for WasiSockets {
                     Ok(Err(ErrorCode::InvalidState))
                 }
             }
-        }) {
-            Ok(Ok(sock)) => {
+        })? {
+            Ok(sock) => {
+                // FIXME: handle possible cancellation of the outer `connect`
+                // https://github.com/bytecodealliance/wasmtime/pull/11291#discussion_r2223917986
                 let res = sock.connect(remote_address).await;
                 store.with(|mut view| {
                     let socket = get_socket_mut(view.get().table, &socket)?;
@@ -313,8 +315,7 @@ impl HostTcpSocketConcurrent for WasiSockets {
                     }
                 })
             }
-            Ok(Err(err)) => Ok(Err(err)),
-            Err(err) => Err(err),
+            Err(err) => Ok(Err(err)),
         }
     }
 
@@ -617,9 +618,9 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
         Ok(sock.set_send_buffer_size(value))
     }
 
-    fn drop(&mut self, rep: Resource<TcpSocket>) -> wasmtime::Result<()> {
+    fn drop(&mut self, sock: Resource<TcpSocket>) -> wasmtime::Result<()> {
         self.table
-            .delete(rep)
+            .delete(sock)
             .context("failed to delete socket resource from table")?;
         Ok(())
     }
