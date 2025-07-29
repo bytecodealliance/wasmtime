@@ -2,7 +2,6 @@
 use super::*;
 #[expect(unused_imports, reason = "used for doc-links")]
 use crate::component::{Component, ComponentType};
-use std::vec::Vec;
 use wasmtime_environ::component::InterfaceType;
 #[cfg(feature = "rr-type-validation")]
 use wasmtime_environ::component::TypeTuple;

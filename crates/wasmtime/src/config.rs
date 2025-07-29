@@ -4,7 +4,6 @@ use bitflags::Flags;
 use core::fmt;
 use core::str::FromStr;
 use serde::{Deserialize, Serialize};
-use std::io::{Read, Write};
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 use wasmparser::WasmFeatures;
@@ -32,6 +31,8 @@ pub use crate::runtime::code_memory::CustomCodeMemory;
 pub use wasmtime_cache::{Cache, CacheConfig};
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
+
+use crate::rr::{RecordWriter, ReplayReader};
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
@@ -251,16 +252,7 @@ impl Default for RecordMetadata {
     }
 }
 
-/// A [`Write`] usable for recording in RR
-///
-/// Only constraint is that writer must be Send + Sync
-pub trait RecordWriter: Write + Send + Sync {}
-impl<T: Write + Send + Sync> RecordWriter for T {}
-
 /// Configuration for recording execution
-///
-/// ## Notes
-/// The writers are buffered internally as needed, so avoid using buffered writers as intializers
 #[derive(Clone)]
 pub struct RecordConfig {
     /// Closure that generates a writer for recording execution traces
@@ -282,16 +274,7 @@ impl Default for ReplayMetadata {
     }
 }
 
-/// A [`Read`] usable for replaying in RR
-///
-/// Only constraint is that reader must be Send + Sync
-pub trait ReplayReader: Read + Send + Sync {}
-impl<T: Read + Send + Sync> ReplayReader for T {}
-
 /// Configuration for replay execution
-///
-/// ## Notes
-/// The readers are buffered internally as needed, so avoid using buffered readers as intializers
 #[derive(Clone)]
 pub struct ReplayConfig {
     /// Closure that generates a reader for replaying execution traces
@@ -1126,7 +1109,7 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/relaxed-simd
     pub fn relaxed_simd_deterministic(&mut self, enable: bool) -> &mut Self {
         assert!(
-            !(self.check_determinism() && !enable),
+            !(self.is_determinism_enforced() && !enable),
             "Deterministic relaxed SIMD cannot be disabled when record/replay is enabled"
         );
         self.tunables.relaxed_simd_deterministic = Some(enable);
@@ -1432,7 +1415,7 @@ impl Config {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
         assert!(
-            !(self.check_determinism() && !enable),
+            !(self.is_determinism_enforced() && !enable),
             "NaN canonicalization cannot be disabled when record/replay is enabled"
         );
         let val = if enable { "true" } else { "false" };
@@ -2758,11 +2741,11 @@ impl Config {
         self
     }
 
-    /// Enforce deterministic execution configurations
+    /// Enforce deterministic execution configurations. Currently, means the following:
+    /// * Enabling NaN canonicalization with [`Config::cranelift_nan_canonicalization`]
+    /// * Enabling deterministic relaxed SIMD with [`Config::relaxed_simd_deterministic`]
     ///
-    /// Required for faithful record/replay execution. Currently, this does the following:
-    /// * Enables NaN canonicalization with [`Config::cranelift_nan_canonicalization`]
-    /// * Enables deterministic relaxed SIMD with [`Config::relaxed_simd_deterministic`]
+    /// Required for faithful record/replay execution.
     #[inline]
     pub fn enforce_determinism(&mut self) -> &mut Self {
         self.cranelift_nan_canonicalization(true)
@@ -2784,7 +2767,7 @@ impl Config {
     ///
     /// Required for faithful record/replay execution
     #[inline]
-    pub fn check_determinism(&mut self) -> bool {
+    pub fn is_determinism_enforced(&mut self) -> bool {
         self.rr.is_some()
     }
 

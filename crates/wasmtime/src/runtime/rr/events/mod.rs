@@ -28,7 +28,7 @@ impl fmt::Display for EventActionError {
     }
 }
 
-impl std::error::Error for EventActionError {}
+impl core::error::Error for EventActionError {}
 
 type ValRawBytes = [u8; mem::size_of::<ValRaw>()];
 

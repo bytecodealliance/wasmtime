@@ -73,7 +73,7 @@ impl Drop for MemorySliceCell<'_> {
 /// ## Critical Invariants
 ///
 /// Typically recording would need to know both when the slice was borrowed AND when it was
-/// dropped, since memory movement with [`realloc`](LowerContext::realloc) can be interleave between
+/// dropped, since memory movement with [`realloc`](LowerContext::realloc) can be interleaved between
 /// borrows and drops, and replays would have to be aware of this. **However**, with this abstraction,
 /// we can be more efficient and get away with **only** recording drops, because of the implicit interaction between
 /// [`realloc`](LowerContext::realloc) and [`get`](LowerContext::get)/[`get_dyn`](LowerContext::get_dyn),
@@ -572,7 +572,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             let buf = self.store.0.replay_buffer_mut().unwrap();
             let event = buf.next_event()?;
             let _replay_metadata = buf.metadata();
-            let _ = match event {
+            match event {
                 RREvent::ComponentHostFuncReturn(e) => {
                     // End of lowering process
                     #[cfg(feature = "rr-type-validation")]

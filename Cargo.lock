@@ -1180,6 +1180,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
 
 [[package]]
+name = "embedded-io"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
+
+[[package]]
 name = "embedding"
 version = "35.0.0"
 dependencies = [
@@ -2575,7 +2581,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a55c51ee6c0db07e68448e336cf8ea4131a620edefebf9893e759b2d793420f8"
 dependencies = [
  "cobs",
- "embedded-io",
+ "embedded-io 0.4.0",
  "serde",
 ]
 
@@ -4149,6 +4155,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "cranelift-native",
+ "embedded-io 0.6.1",
  "encoding_rs",
  "env_logger 0.11.5",
  "futures",

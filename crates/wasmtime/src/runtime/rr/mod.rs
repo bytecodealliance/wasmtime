@@ -6,17 +6,18 @@
 //!
 //! This module does NOT support RR for component builtins yet.
 
-use crate::config::{
-    ModuleVersionStrategy, RecordMetadata, RecordWriter, ReplayMetadata, ReplayReader,
-};
+use crate::config::{ModuleVersionStrategy, RecordMetadata, ReplayMetadata};
 use crate::prelude::*;
 use core::fmt;
-use postcard;
 use serde::{Deserialize, Serialize};
 
 /// Encapsulation of event types comprising an [`RREvent`] sum type
 pub mod events;
 use events::*;
+
+/// I/O support for reading and writing traces
+mod io;
+pub use io::{RecordWriter, ReplayReader};
 
 /// Macro template for [`RREvent`] and its conversion to/from specific
 /// event types
@@ -139,7 +140,7 @@ impl fmt::Display for ReplayError {
     }
 }
 
-impl std::error::Error for ReplayError {}
+impl core::error::Error for ReplayError {}
 
 impl From<EventActionError> for ReplayError {
     fn from(value: EventActionError) -> Self {
@@ -301,8 +302,8 @@ impl Drop for RecordBuffer {
 impl Recorder for RecordBuffer {
     fn new_recorder(mut writer: Box<dyn RecordWriter>, metadata: RecordMetadata) -> Result<Self> {
         // Replay requires the Module version and RecordMetadata configuration
-        postcard::to_io(ModuleVersionStrategy::WasmtimeVersion.as_str(), &mut writer)?;
-        postcard::to_io(&metadata, &mut writer)?;
+        io::to_record_writer(ModuleVersionStrategy::WasmtimeVersion.as_str(), &mut writer)?;
+        io::to_record_writer(&metadata, &mut writer)?;
         Ok(RecordBuffer {
             buf: Vec::new(),
             writer: writer,
@@ -324,7 +325,7 @@ impl Recorder for RecordBuffer {
     fn flush(&mut self) -> Result<()> {
         log::debug!("Flushing record buffer...");
         for e in self.buf.drain(..) {
-            postcard::to_io(&e, &mut self.writer)?;
+            io::to_record_writer(&e, &mut self.writer)?;
         }
         return Ok(());
     }
@@ -350,13 +351,13 @@ impl Iterator for ReplayBuffer {
 
     fn next(&mut self) -> Option<Self::Item> {
         // Check for EoF
-        let result = postcard::from_io((&mut self.reader, &mut [0; 0]));
+        let result = io::from_replay_reader(&mut self.reader, &mut [0; 0]);
         match result {
             Err(e) => {
                 log::error!("Erroneous replay read: {}", e);
                 None
             }
-            Ok((event, _)) => {
+            Ok(event) => {
                 if let RREvent::Eof = event {
                     None
                 } else {
@@ -385,7 +386,7 @@ impl Replayer for ReplayBuffer {
     fn new_replayer(mut reader: Box<dyn ReplayReader>, metadata: ReplayMetadata) -> Result<Self> {
         // Ensure module versions match
         let mut scratch = [0u8; 12];
-        let (version, _) = postcard::from_io::<&str, _>((&mut reader, &mut scratch))?;
+        let version = io::from_replay_reader::<&str, _>(&mut reader, &mut scratch)?;
         assert_eq!(
             version,
             ModuleVersionStrategy::WasmtimeVersion.as_str(),
@@ -393,7 +394,7 @@ impl Replayer for ReplayBuffer {
         );
 
         // Read the recording metadata
-        let (trace_metadata, _) = postcard::from_io((&mut reader, &mut [0; 0]))?;
+        let trace_metadata = io::from_replay_reader(&mut reader, &mut [0; 0])?;
 
         Ok(ReplayBuffer {
             reader: reader,

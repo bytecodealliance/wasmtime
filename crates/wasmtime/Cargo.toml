@@ -45,7 +45,7 @@ wat = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true, optional = true }
-postcard = { workspace = true, features = ["use-std"] }
+postcard = { workspace = true, optional = true }
 indexmap = { workspace = true }
 once_cell = { version = "1.12.0", optional = true }
 rayon = { version = "1.0", optional = true }
@@ -62,6 +62,7 @@ smallvec = { workspace = true, optional = true }
 hashbrown = { workspace = true, features = ["default-hasher"] }
 bitflags = { workspace = true }
 futures = { workspace = true, features = ["alloc"], optional = true }
+embedded-io = { version = "0.6.1", features = ["alloc"], optional = true }
 sha2 = "0.10.2"
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
@@ -326,6 +327,7 @@ addr2line = ["dep:addr2line", "dep:gimli", "std"]
 # Many features of the Wasmtime crate implicitly require this `std` feature.
 # This will be automatically enabled if necessary.
 std = [
+  'dep:postcard',
   'postcard/use-std',
   'wasmtime-environ/std',
   'object/std',
@@ -398,9 +400,9 @@ component-model-async = [
 # Enables support for record/replay
 rr = ["rr-component", "rr-core"]
 # RR for components
-rr-component = ["component-model", "std"]
+rr-component = ["component-model", "dep:embedded-io", "dep:postcard"]
 # RR for core wasm
-rr-core = ["std"]
+rr-core = ["dep:embedded-io", "dep:postcard"]
 # Support for validation signatures/checks during record/replay respectively
 rr-type-validation = []
 
