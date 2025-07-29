@@ -2172,6 +2172,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "json-from-wast"
+version = "0.236.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be48c53af281152b0d01019f15b87b9f37f92c3a3c11b003a5ee3ccf2901bb35"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_derive",
+ "wast 236.0.0",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5117,8 +5129,12 @@ name = "wasmtime-wast"
 version = "36.0.0"
 dependencies = [
  "anyhow",
+ "json-from-wast",
  "log",
+ "object 0.37.1",
+ "serde_json",
  "tokio",
+ "wasmparser 0.236.0",
  "wasmtime",
  "wast 236.0.0",
 ]

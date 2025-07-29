@@ -3,15 +3,15 @@ use crate::component;
 use crate::core;
 use crate::spectest::*;
 use anyhow::{Context as _, anyhow, bail};
+use json_from_wast::{Action, Command, Const, WasmFile, WasmFileType};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str;
+use std::sync::Arc;
 use std::thread;
 use wasmtime::*;
-use wast::core::{EncodeOptions, GenerateDwarf};
 use wast::lexer::Lexer;
 use wast::parser::{self, ParseBuffer};
-use wast::{QuoteWat, Wast, WastArg, WastDirective, WastExecute, WastInvoke, WastRet, Wat};
 
 /// The wast test script language allows modules to be defined and actions
 /// to be performed on them.
@@ -26,6 +26,10 @@ pub struct WastContext<T: 'static> {
     pub(crate) store: Store<T>,
     pub(crate) async_runtime: Option<tokio::runtime::Runtime>,
     generate_dwarf: bool,
+    precompile_save: Option<PathBuf>,
+    precompile_load: Option<PathBuf>,
+
+    modules_by_filename: Arc<HashMap<String, Vec<u8>>>,
 }
 
 enum Outcome<T = Results> {
@@ -121,7 +125,24 @@ where
                 None
             },
             generate_dwarf: true,
+            precompile_save: None,
+            precompile_load: None,
+            modules_by_filename: Arc::default(),
         }
+    }
+
+    /// Saves precompiled modules/components into `path` instead of executing
+    /// test directives.
+    pub fn precompile_save(&mut self, path: impl AsRef<Path>) -> &mut Self {
+        self.precompile_save = Some(path.as_ref().into());
+        self
+    }
+
+    /// Loads precompiled modules/components from `path` instead of compiling
+    /// natively.
+    pub fn precompile_load(&mut self, path: impl AsRef<Path>) -> &mut Self {
+        self.precompile_load = Some(path.as_ref().into());
+        self
     }
 
     fn get_export(&mut self, module: Option<&str>, name: &str) -> Result<Export> {
@@ -190,88 +211,71 @@ where
     }
 
     /// Perform the action portion of a command.
-    fn perform_execute(
-        &mut self,
-        exec: WastExecute<'_>,
-        filename: &str,
-        wast: &str,
-    ) -> Result<Outcome> {
-        match exec {
-            WastExecute::Invoke(invoke) => self.perform_invoke(invoke),
-            WastExecute::Wat(module) => Ok(
-                match self.module_definition(QuoteWat::Wat(module), filename, wast)? {
-                    (_, ModuleKind::Core(module)) => self
-                        .instantiate_module(&module)?
-                        .map(|_| Results::Core(Vec::new())),
-                    #[cfg(feature = "component-model")]
-                    (_, ModuleKind::Component(component)) => self
-                        .instantiate_component(&component)?
-                        .map(|_| Results::Component(Vec::new())),
-                },
-            ),
-            WastExecute::Get { module, global, .. } => self.get(module.map(|s| s.name()), global),
-        }
-    }
+    fn perform_action(&mut self, action: &Action<'_>) -> Result<Outcome> {
+        match action {
+            Action::Invoke {
+                module,
+                field,
+                args,
+            } => match self.get_export(module.as_deref(), field)? {
+                Export::Core(export) => {
+                    let func = export
+                        .into_func()
+                        .ok_or_else(|| anyhow!("no function named `{field}`"))?;
+                    let values = args
+                        .iter()
+                        .map(|v| match v {
+                            Const::Core(v) => core::val(self, v),
+                            _ => bail!("expected core function, found other other argument {v:?}"),
+                        })
+                        .collect::<Result<Vec<_>>>()?;
 
-    fn perform_invoke(&mut self, exec: WastInvoke<'_>) -> Result<Outcome> {
-        match self.get_export(exec.module.map(|i| i.name()), exec.name)? {
-            Export::Core(export) => {
-                let func = export
-                    .into_func()
-                    .ok_or_else(|| anyhow!("no function named `{}`", exec.name))?;
-                let values = exec
-                    .args
-                    .iter()
-                    .map(|v| match v {
-                        WastArg::Core(v) => core::val(self, v),
-                        _ => bail!("expected core function, found other other argument {v:?}"),
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                let mut results = vec![Val::null_func_ref(); func.ty(&self.store).results().len()];
-                let result = match &self.async_runtime {
-                    Some(rt) => {
-                        rt.block_on(func.call_async(&mut self.store, &values, &mut results))
-                    }
-                    None => func.call(&mut self.store, &values, &mut results),
-                };
-
-                Ok(match result {
-                    Ok(()) => Outcome::Ok(Results::Core(results)),
-                    Err(e) => Outcome::Trap(e),
-                })
-            }
-            #[cfg(feature = "component-model")]
-            Export::Component(func) => {
-                let values = exec
-                    .args
-                    .iter()
-                    .map(|v| match v {
-                        WastArg::Component(v) => component::val(v),
-                        _ => bail!("expected component function, found other argument {v:?}"),
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                let mut results =
-                    vec![component::Val::Bool(false); func.results(&self.store).len()];
-                let result = match &self.async_runtime {
-                    Some(rt) => {
-                        rt.block_on(func.call_async(&mut self.store, &values, &mut results))
-                    }
-                    None => func.call(&mut self.store, &values, &mut results),
-                };
-                Ok(match result {
-                    Ok(()) => {
-                        match &self.async_runtime {
-                            Some(rt) => rt.block_on(func.post_return_async(&mut self.store))?,
-                            None => func.post_return(&mut self.store)?,
+                    let mut results =
+                        vec![Val::null_func_ref(); func.ty(&self.store).results().len()];
+                    let result = match &self.async_runtime {
+                        Some(rt) => {
+                            rt.block_on(func.call_async(&mut self.store, &values, &mut results))
                         }
+                        None => func.call(&mut self.store, &values, &mut results),
+                    };
 
-                        Outcome::Ok(Results::Component(results))
-                    }
-                    Err(e) => Outcome::Trap(e),
-                })
-            }
+                    Ok(match result {
+                        Ok(()) => Outcome::Ok(Results::Core(results)),
+                        Err(e) => Outcome::Trap(e),
+                    })
+                }
+                #[cfg(feature = "component-model")]
+                Export::Component(func) => {
+                    let values = args
+                        .iter()
+                        .map(|v| match v {
+                            Const::Component(v) => component::val(v),
+                            _ => bail!("expected component function, found other argument {v:?}"),
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+
+                    let mut results =
+                        vec![component::Val::Bool(false); func.results(&self.store).len()];
+                    let result = match &self.async_runtime {
+                        Some(rt) => {
+                            rt.block_on(func.call_async(&mut self.store, &values, &mut results))
+                        }
+                        None => func.call(&mut self.store, &values, &mut results),
+                    };
+                    Ok(match result {
+                        Ok(()) => {
+                            match &self.async_runtime {
+                                Some(rt) => rt.block_on(func.post_return_async(&mut self.store))?,
+                                None => func.post_return(&mut self.store)?,
+                            }
+
+                            Outcome::Ok(Results::Component(results))
+                        }
+                        Err(e) => Outcome::Trap(e),
+                    })
+                }
+            },
+            Action::Get { module, field, .. } => self.get(module.as_deref(), field),
         }
     }
 
@@ -330,39 +334,56 @@ where
     /// it, if any.
     ///
     /// This will not register the name within `self.modules`.
-    fn module_definition<'a>(
-        &mut self,
-        mut wat: QuoteWat<'a>,
-        filename: &str,
-        wast: &str,
-    ) -> Result<(Option<&'a str>, ModuleKind)> {
-        let (is_module, name) = match &wat {
-            QuoteWat::Wat(Wat::Module(m)) => (true, m.id),
-            QuoteWat::QuoteModule(..) => (true, None),
-            QuoteWat::Wat(Wat::Component(m)) => (false, m.id),
-            QuoteWat::QuoteComponent(..) => (false, None),
+    fn module_definition(&mut self, file: &WasmFile) -> Result<ModuleKind> {
+        let name = match file.module_type {
+            WasmFileType::Text => file
+                .binary_filename
+                .as_ref()
+                .ok_or_else(|| anyhow!("cannot compile module that isn't a valid binary"))?,
+            WasmFileType::Binary => &file.filename,
         };
-        let bytes = match &mut wat {
-            QuoteWat::Wat(wat) => {
-                let mut opts = EncodeOptions::new();
-                if self.generate_dwarf {
-                    opts.dwarf(filename.as_ref(), wast, GenerateDwarf::Lines);
+
+        match &self.precompile_load {
+            Some(path) => {
+                let cwasm = path.join(&name[..]).with_extension("cwasm");
+                match Engine::detect_precompiled_file(&cwasm)
+                    .with_context(|| format!("failed to read {cwasm:?}"))?
+                {
+                    Some(Precompiled::Module) => {
+                        let module =
+                            unsafe { Module::deserialize_file(self.store.engine(), &cwasm)? };
+                        Ok(ModuleKind::Core(module))
+                    }
+                    #[cfg(feature = "component-model")]
+                    Some(Precompiled::Component) => {
+                        let component = unsafe {
+                            component::Component::deserialize_file(self.store.engine(), &cwasm)?
+                        };
+                        Ok(ModuleKind::Component(component))
+                    }
+                    #[cfg(not(feature = "component-model"))]
+                    Some(Precompiled::Component) => {
+                        bail!("support for components disabled at compile time")
+                    }
+                    None => bail!("expected a cwasm file"),
                 }
-                opts.encode_wat(wat)?
             }
-            _ => wat.encode()?,
-        };
-        if is_module {
-            let module = Module::new(self.store.engine(), &bytes)?;
-            Ok((name.map(|n| n.name()), ModuleKind::Core(module)))
-        } else {
-            #[cfg(feature = "component-model")]
-            {
-                let component = component::Component::new(self.store.engine(), &bytes)?;
-                Ok((name.map(|n| n.name()), ModuleKind::Component(component)))
+            None => {
+                let bytes = &self.modules_by_filename[&name[..]];
+
+                if wasmparser::Parser::is_core_wasm(&bytes) {
+                    let module = Module::new(self.store.engine(), &bytes)?;
+                    Ok(ModuleKind::Core(module))
+                } else {
+                    #[cfg(feature = "component-model")]
+                    {
+                        let component = component::Component::new(self.store.engine(), &bytes)?;
+                        Ok(ModuleKind::Component(component))
+                    }
+                    #[cfg(not(feature = "component-model"))]
+                    bail!("component-model support not enabled");
+                }
             }
-            #[cfg(not(feature = "component-model"))]
-            bail!("component-model support not enabled");
         }
     }
 
@@ -404,7 +425,7 @@ where
         ])))
     }
 
-    fn assert_return(&mut self, result: Outcome, results: &[WastRet<'_>]) -> Result<()> {
+    fn assert_return(&mut self, result: Outcome, results: &[Const]) -> Result<()> {
         match result.into_result()? {
             Results::Core(values) => {
                 if values.len() != results.len() {
@@ -412,7 +433,7 @@ where
                 }
                 for (i, (v, e)) in values.iter().zip(results).enumerate() {
                     let e = match e {
-                        WastRet::Core(core) => core,
+                        Const::Core(core) => core,
                         _ => bail!("expected core value found other value {e:?}"),
                     };
                     core::match_val(&mut self.store, v, e)
@@ -426,7 +447,7 @@ where
                 }
                 for (i, (v, e)) in values.iter().zip(results).enumerate() {
                     let e = match e {
-                        WastRet::Component(val) => val,
+                        Const::Component(val) => val,
                         _ => bail!("expected component value found other value {e:?}"),
                     };
                     component::match_val(e, v)
@@ -459,7 +480,7 @@ where
     }
 
     /// Run a wast script from a byte buffer.
-    pub fn run_buffer(&mut self, filename: &str, wast: &[u8]) -> Result<()> {
+    pub fn run_wast(&mut self, filename: &str, wast: &[u8]) -> Result<()> {
         let wast = str::from_utf8(wast)?;
 
         let adjust_wast = |mut err: wast::Error| {
@@ -472,40 +493,56 @@ where
         lexer.allow_confusing_unicode(filename.ends_with("names.wast"));
         let mut buf = ParseBuffer::new_with_lexer(lexer).map_err(adjust_wast)?;
         buf.track_instr_spans(self.generate_dwarf);
-        let ast = parser::parse::<Wast>(&buf).map_err(adjust_wast)?;
+        let ast = parser::parse::<wast::Wast>(&buf).map_err(adjust_wast)?;
 
-        self.run_directives(ast.directives, filename, wast)
+        let mut ast = json_from_wast::Opts::default()
+            .dwarf(self.generate_dwarf)
+            .convert(filename, wast, ast)?;
+        let modules_by_filename = Arc::get_mut(&mut self.modules_by_filename).unwrap();
+        for (name, bytes) in ast.wasms.drain(..) {
+            let prev = modules_by_filename.insert(name, bytes);
+            assert!(prev.is_none());
+        }
+
+        match &self.precompile_save {
+            Some(path) => {
+                let json_path = path
+                    .join(Path::new(filename).file_name().unwrap())
+                    .with_extension("json");
+                let json = serde_json::to_string(&ast)?;
+                std::fs::write(&json_path, json)
+                    .with_context(|| format!("failed to write {json_path:?}"))?;
+                for (name, bytes) in self.modules_by_filename.iter() {
+                    let cwasm_path = path.join(name).with_extension("cwasm");
+                    let cwasm = if wasmparser::Parser::is_core_wasm(&bytes) {
+                        self.store.engine().precompile_module(bytes)
+                    } else {
+                        #[cfg(feature = "component-model")]
+                        {
+                            self.store.engine().precompile_component(bytes)
+                        }
+                        #[cfg(not(feature = "component-model"))]
+                        bail!("component-model support not enabled");
+                    };
+                    if let Ok(cwasm) = cwasm {
+                        std::fs::write(&cwasm_path, cwasm)
+                            .with_context(|| format!("failed to write {cwasm_path:?}"))?;
+                    }
+                }
+                Ok(())
+            }
+            None => self.run_directives(ast.commands, filename),
+        }
     }
 
-    fn run_directives(
-        &mut self,
-        directives: Vec<WastDirective<'_>>,
-        filename: &str,
-        wast: &str,
-    ) -> Result<()> {
-        let adjust_wast = |mut err: wast::Error| {
-            err.set_path(filename.as_ref());
-            err.set_text(wast);
-            err
-        };
-
+    fn run_directives(&mut self, directives: Vec<Command<'_>>, filename: &str) -> Result<()> {
         thread::scope(|scope| {
             let mut threads = HashMap::new();
             for directive in directives {
-                let sp = directive.span();
-                if log::log_enabled!(log::Level::Debug) {
-                    let (line, col) = sp.linecol_in(wast);
-                    log::debug!("running directive on {}:{}:{}", filename, line + 1, col);
-                }
-                self.run_directive(directive, filename, wast, &scope, &mut threads)
-                    .map_err(|e| match e.downcast() {
-                        Ok(err) => adjust_wast(err).into(),
-                        Err(e) => e,
-                    })
-                    .with_context(|| {
-                        let (line, col) = sp.linecol_in(wast);
-                        format!("failed directive on {}:{}:{}", filename, line + 1, col)
-                    })?;
+                let line = directive.line();
+                log::debug!("running directive on {filename}:{line}");
+                self.run_directive(directive, filename, &scope, &mut threads)
+                    .with_context(|| format!("failed directive on {filename}:{line}"))?;
             }
             Ok(())
         })
@@ -513,129 +550,146 @@ where
 
     fn run_directive<'a>(
         &mut self,
-        directive: WastDirective<'a>,
+        directive: Command<'a>,
         filename: &'a str,
-        wast: &'a str,
+        // wast: &'a str,
         scope: &'a thread::Scope<'a, '_>,
-        threads: &mut HashMap<&'a str, thread::ScopedJoinHandle<'a, Result<()>>>,
+        threads: &mut HashMap<String, thread::ScopedJoinHandle<'a, Result<()>>>,
     ) -> Result<()>
     where
         T: 'a,
     {
-        use wast::WastDirective::*;
+        use Command::*;
 
         match directive {
-            Module(module) => {
-                let (name, module) = self.module_definition(module, filename, wast)?;
-                self.module(name, &module)?;
+            Module {
+                name,
+                file,
+                line: _,
+            } => {
+                let module = self.module_definition(&file)?;
+                self.module(name.as_deref(), &module)?;
             }
-            ModuleDefinition(module) => {
-                let (name, module) = self.module_definition(module, filename, wast)?;
+            ModuleDefinition {
+                name,
+                file,
+                line: _,
+            } => {
+                let module = self.module_definition(&file)?;
                 if let Some(name) = name {
-                    self.modules.insert(name.to_string(), module.clone());
+                    self.modules.insert(name.to_string(), module);
                 }
             }
             ModuleInstance {
                 instance,
                 module,
-                span: _,
+                line: _,
             } => {
                 let module = module
-                    .and_then(|n| self.modules.get(n.name()))
+                    .as_deref()
+                    .and_then(|n| self.modules.get(n))
                     .cloned()
                     .ok_or_else(|| anyhow!("no module named {module:?}"))?;
-                self.module(instance.map(|n| n.name()), &module)?;
+                self.module(instance.as_deref(), &module)?;
             }
-            Register {
-                span: _,
-                name,
-                module,
-            } => {
-                self.register(module.map(|s| s.name()), name)?;
+            Register { line: _, name, as_ } => {
+                self.register(name.as_deref(), &as_)?;
             }
-            Invoke(i) => {
-                self.perform_invoke(i)?;
+            Action { action, line: _ } => {
+                self.perform_action(&action)?;
             }
             AssertReturn {
-                span: _,
-                exec,
-                results,
+                action,
+                expected,
+                line: _,
             } => {
-                let result = self.perform_execute(exec, filename, wast)?;
-                self.assert_return(result, &results)?;
+                let result = self.perform_action(&action)?;
+                self.assert_return(result, &expected)?;
             }
             AssertTrap {
-                span: _,
-                exec,
-                message,
+                action,
+                text,
+                line: _,
             } => {
-                let result = self.perform_execute(exec, filename, wast)?;
-                self.assert_trap(result, message)?;
+                let result = self.perform_action(&action)?;
+                self.assert_trap(result, &text)?;
+            }
+            AssertUninstantiable {
+                file,
+                text,
+                line: _,
+            } => {
+                let result = match self.module_definition(&file)? {
+                    ModuleKind::Core(module) => self
+                        .instantiate_module(&module)?
+                        .map(|_| Results::Core(Vec::new())),
+                    #[cfg(feature = "component-model")]
+                    ModuleKind::Component(component) => self
+                        .instantiate_component(&component)?
+                        .map(|_| Results::Component(Vec::new())),
+                };
+                self.assert_trap(result, &text)?;
             }
             AssertExhaustion {
-                span: _,
-                call,
-                message,
+                action,
+                text,
+                line: _,
             } => {
-                let result = self.perform_invoke(call)?;
-                self.assert_trap(result, message)?;
+                let result = self.perform_action(&action)?;
+                self.assert_trap(result, &text)?;
             }
             AssertInvalid {
-                span: _,
-                module,
-                message,
+                file,
+                text,
+                line: _,
             } => {
-                let err = match self.module_definition(module, filename, wast) {
+                let err = match self.module_definition(&file) {
                     Ok(_) => bail!("expected module to fail to build"),
                     Err(e) => e,
                 };
                 let error_message = format!("{err:?}");
-                if !is_matching_assert_invalid_error_message(filename, &message, &error_message) {
-                    bail!(
-                        "assert_invalid: expected \"{}\", got \"{}\"",
-                        message,
-                        error_message
-                    )
+                if !is_matching_assert_invalid_error_message(filename, &text, &error_message) {
+                    bail!("assert_invalid: expected \"{text}\", got \"{error_message}\"",)
                 }
             }
             AssertMalformed {
-                module,
-                span: _,
-                message: _,
+                file,
+                text: _,
+                line: _,
             } => {
-                if let Ok(_) = self.module_definition(module, filename, wast) {
+                if let Ok(_) = self.module_definition(&file) {
                     bail!("expected malformed module to fail to instantiate");
                 }
             }
             AssertUnlinkable {
-                span: _,
-                module,
-                message,
+                file,
+                text,
+                line: _,
             } => {
-                let (name, module) =
-                    self.module_definition(QuoteWat::Wat(module), filename, wast)?;
-                let err = match self.module(name, &module) {
+                let module = self.module_definition(&file)?;
+                let err = match self.module(None, &module) {
                     Ok(_) => bail!("expected module to fail to link"),
                     Err(e) => e,
                 };
                 let error_message = format!("{err:?}");
-                if !error_message.contains(&message) {
-                    bail!(
-                        "assert_unlinkable: expected {}, got {}",
-                        message,
-                        error_message
-                    )
+                if !error_message.contains(&text[..]) {
+                    bail!("assert_unlinkable: expected {text}, got {error_message}",)
                 }
             }
             AssertException { .. } => bail!("unimplemented assert_exception"),
 
-            Thread(thread) => {
+            Thread {
+                name,
+                shared_module,
+                commands,
+                line: _,
+            } => {
                 let mut core_linker = Linker::new(self.store.engine());
-                if let Some(id) = thread.shared_module {
+                if let Some(id) = shared_module {
                     let items = self
                         .core_linker
                         .iter(&mut self.store)
-                        .filter(|(module, _, _)| *module == id.name())
+                        .filter(|(module, _, _)| *module == &id[..])
                         .collect::<Vec<_>>();
                     for (module, name, item) in items {
                         core_linker.define(&mut self.store, module, name, item)?;
@@ -654,18 +708,17 @@ where
                             .unwrap()
                     }),
                     generate_dwarf: self.generate_dwarf,
+                    modules_by_filename: self.modules_by_filename.clone(),
+                    precompile_load: self.precompile_load.clone(),
+                    precompile_save: self.precompile_save.clone(),
                 };
-                let name = thread.name.name();
-                let child =
-                    scope.spawn(move || child_cx.run_directives(thread.directives, filename, wast));
-                threads.insert(name, child);
+                let child = scope.spawn(move || child_cx.run_directives(commands, filename));
+                threads.insert(name.to_string(), child);
             }
-
             Wait { thread, .. } => {
-                let name = thread.name();
                 threads
-                    .remove(name)
-                    .ok_or_else(|| anyhow!("no thread named `{name}`"))?
+                    .remove(&thread[..])
+                    .ok_or_else(|| anyhow!("no thread named `{thread}`"))?
                     .join()
                     .unwrap()?;
             }
@@ -680,9 +733,22 @@ where
 
     /// Run a wast script from a file.
     pub fn run_file(&mut self, path: &Path) -> Result<()> {
-        let bytes =
-            std::fs::read(path).with_context(|| format!("failed to read `{}`", path.display()))?;
-        self.run_buffer(path.to_str().unwrap(), &bytes)
+        match &self.precompile_load {
+            Some(precompile) => {
+                let file = precompile
+                    .join(path.file_name().unwrap())
+                    .with_extension("json");
+                let json = std::fs::read_to_string(&file)
+                    .with_context(|| format!("failed to read {file:?}"))?;
+                let wast = serde_json::from_str::<json_from_wast::Wast<'_>>(&json)?;
+                self.run_directives(wast.commands, &wast.source_filename)
+            }
+            None => {
+                let bytes = std::fs::read(path)
+                    .with_context(|| format!("failed to read `{}`", path.display()))?;
+                self.run_wast(path.to_str().unwrap(), &bytes)
+            }
+        }
     }
 
     /// Whether or not to generate DWARF debugging information in custom

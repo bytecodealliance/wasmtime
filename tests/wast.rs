@@ -244,7 +244,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
                 suppress_prints: true,
             })?;
             wast_context
-                .run_buffer(test.path.to_str().unwrap(), test.contents.as_bytes())
+                .run_wast(test.path.to_str().unwrap(), test.contents.as_bytes())
                 .with_context(|| format!("failed to run spec test with {desc} engine"))
         });
 
