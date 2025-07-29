@@ -204,11 +204,12 @@ impl TablePool {
     ) {
         assert!(table.is_static());
         let base = self.get(allocation_index);
-        let size = HostAlignedByteCount::new_rounded_up(self.data_size(table.element_type()))
+        let table_byte_size = table.size() * table.element_type().element_size();
+        let table_byte_size_page_aligned = HostAlignedByteCount::new_rounded_up(table_byte_size)
             .expect("table entry size doesn't overflow");
 
         // `memset` the first `keep_resident` bytes.
-        let size_to_memset = size.min(self.keep_resident);
+        let size_to_memset = table_byte_size_page_aligned.min(self.keep_resident);
 
         // SAFETY: the contract of this function requires that the table is not
         // actively in use so it's safe to pave over its allocation with zero
@@ -222,7 +223,8 @@ impl TablePool {
             // SAFETY: `size_to_memset` is less than the size of the allocation,
             // so it's safe to use the `add` intrinsic.
             unsafe { base.add(size_to_memset.byte_count()) },
-            size.checked_sub(size_to_memset)
+            table_byte_size_page_aligned
+                .checked_sub(size_to_memset)
                 .expect("size_to_memset <= size")
                 .byte_count(),
         );
