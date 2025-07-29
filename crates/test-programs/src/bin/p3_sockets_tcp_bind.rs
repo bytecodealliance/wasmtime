@@ -85,18 +85,26 @@ async fn test_tcp_bind_reuseaddr(ip: IpAddress) {
         bind_addr
     };
 
-    // The socket and `listen` stream have been dropped,
-    // yield to the host to ensure that the spawned task is aborted
-    yield_blocking();
-
-    {
+    // If SO_REUSEADDR was configured correctly, the following lines
+    // shouldn't be affected by the TIME_WAIT state of the just closed
+    // `listener1` socket.
+    //
+    // Note though that the way things are modeled in Wasmtime right now is that
+    // the TCP socket is kept alive by a spawned task created in `listen`
+    // meaning that to fully close the socket it requires the spawned task to
+    // shut down. That may require yielding to the host or similar so try a few
+    // times to let the host get around to closing the task while testing each
+    // time to see if we can reuse the address. This loop is bounded because it
+    // should complete "quickly".
+    for _ in 0..10 {
         let listener2 = TcpSocket::new(ip.family());
-
-        // If SO_REUSEADDR was configured correctly, the following lines shouldn't be
-        // affected by the TIME_WAIT state of the just closed `listener1` socket:
-        listener2.bind(bind_addr).unwrap();
-        listener2.listen().unwrap();
+        if listener2.bind(bind_addr).is_ok() {
+            listener2.listen().unwrap();
+        }
+        yield_blocking();
     }
+
+    panic!("looks like REUSEADDR isn't in use?");
 }
 
 // Try binding to an address that is not configured on the system.
