@@ -256,26 +256,30 @@ impl UdpSocket {
     }
 }
 
-async fn send(socket: &tokio::net::UdpSocket, mut buf: &[u8]) -> Result<(), ErrorCode> {
-    loop {
-        let n = socket.send(buf).await?;
-        if n == buf.len() {
-            return Ok(());
-        }
-        buf = &buf[n..]
+async fn send(socket: &tokio::net::UdpSocket, buf: &[u8]) -> Result<(), ErrorCode> {
+    let n = socket.send(buf).await?;
+    // From Rust stdlib docs:
+    // > Note that the operating system may refuse buffers larger than 65507.
+    // > However, partial writes are not possible until buffer sizes above `i32::MAX`.
+    //
+    // For example, on Windows, at most `i32::MAX` bytes will be written
+    if n != buf.len() {
+        Err(ErrorCode::Unknown)
+    } else {
+        Ok(())
     }
 }
 
 async fn send_to(
     socket: &tokio::net::UdpSocket,
-    mut buf: &[u8],
+    buf: &[u8],
     addr: SocketAddr,
 ) -> Result<(), ErrorCode> {
-    loop {
-        let n = socket.send_to(buf, addr).await?;
-        if n == buf.len() {
-            return Ok(());
-        }
-        buf = &buf[n..]
+    let n = socket.send_to(buf, addr).await?;
+    // See [`send`] documentation
+    if n != buf.len() {
+        Err(ErrorCode::Unknown)
+    } else {
+        Ok(())
     }
 }
