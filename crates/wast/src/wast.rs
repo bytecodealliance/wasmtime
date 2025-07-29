@@ -354,11 +354,16 @@ where
                             unsafe { Module::deserialize_file(self.store.engine(), &cwasm)? };
                         Ok(ModuleKind::Core(module))
                     }
+                    #[cfg(feature = "component-model")]
                     Some(Precompiled::Component) => {
                         let component = unsafe {
                             component::Component::deserialize_file(self.store.engine(), &cwasm)?
                         };
                         Ok(ModuleKind::Component(component))
+                    }
+                    #[cfg(not(feature = "component-model"))]
+                    Some(Precompiled::Component) => {
+                        bail!("support for components disabled at compile time")
                     }
                     None => bail!("expected a cwasm file"),
                 }

@@ -26,7 +26,7 @@ pub fn val<T>(ctx: &mut WastContext<T>, v: &CoreConst) -> Result<Val> {
         } => Val::ExternRef(if let Some(rt) = ctx.async_runtime.as_ref() {
             Some(rt.block_on(wasmtime::ExternRef::new_async(&mut ctx.store, x.0))?)
         } else {
-            Some(wasmtime::ExternRef::new(&mut ctx.store, *x)?)
+            Some(wasmtime::ExternRef::new(&mut ctx.store, x.0)?)
         }),
 
         AnyRef {
@@ -38,7 +38,7 @@ pub fn val<T>(ctx: &mut WastContext<T>, v: &CoreConst) -> Result<Val> {
             let x = if let Some(rt) = ctx.async_runtime.as_ref() {
                 rt.block_on(wasmtime::ExternRef::new_async(&mut ctx.store, x.0))?
             } else {
-                wasmtime::ExternRef::new(&mut ctx.store, *x)?
+                wasmtime::ExternRef::new(&mut ctx.store, x.0)?
             };
             let x = wasmtime::AnyRef::convert_extern(&mut ctx.store, x)?;
             Val::AnyRef(Some(x))
