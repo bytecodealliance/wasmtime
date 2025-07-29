@@ -237,6 +237,9 @@ wasmtime_option_group! {
         /// object files.
         pub native_unwind_info: Option<bool>,
 
+        /// Whether to perform function inlining during compilation.
+        pub inlining: Option<bool>,
+
         #[prefixed = "cranelift"]
         #[serde(default)]
         /// Set a cranelift-specific option. Use `wasmtime settings` to see
@@ -821,6 +824,9 @@ impl CommonOptions {
         }
         if let Some(enable) = self.codegen.native_unwind_info {
             config.native_unwind_info(enable);
+        }
+        if let Some(enable) = self.codegen.inlining {
+            config.compiler_inlining(enable);
         }
 
         // async_stack_size enabled by either async or stack-switching, so

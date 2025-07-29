@@ -266,6 +266,7 @@ impl Config {
         cfg.codegen.native_unwind_info =
             Some(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info);
         cfg.codegen.parallel_compilation = Some(false);
+
         cfg.debug.address_map = Some(self.wasmtime.generate_address_map);
         cfg.opts.opt_level = Some(self.wasmtime.opt_level.to_wasmtime());
         cfg.opts.regalloc_algorithm = Some(self.wasmtime.regalloc_algorithm.to_wasmtime());
@@ -326,9 +327,32 @@ impl Config {
             && self.wasmtime.pcc
             && !self.module_config.config.memory64_enabled;
 
+        cfg.codegen.inlining = self.wasmtime.inlining;
+
         // Only set cranelift specific flags when the Cranelift strategy is
         // chosen.
         if cranelift_strategy {
+            if let Some(option) = self.wasmtime.inlining_intra_module {
+                cfg.codegen.cranelift.push((
+                    "wasmtime_inlining_intra_module".to_string(),
+                    Some(option.to_string()),
+                ));
+            }
+            if let Some(size) = self.wasmtime.inlining_small_callee_size {
+                cfg.codegen.cranelift.push((
+                    "wasmtime_inlining_small_callee_size".to_string(),
+                    // Clamp to avoid extreme code size blow up.
+                    Some(std::cmp::min(1000, size).to_string()),
+                ));
+            }
+            if let Some(size) = self.wasmtime.inlining_sum_size_threshold {
+                cfg.codegen.cranelift.push((
+                    "wasmtime_inlining_sum_size_threshold".to_string(),
+                    // Clamp to avoid extreme code size blow up.
+                    Some(std::cmp::min(1000, size).to_string()),
+                ));
+            }
+
             // If the wasm-smith-generated module use nan canonicalization then we
             // don't need to enable it, but if it doesn't enable it already then we
             // enable this codegen option.
@@ -554,6 +578,10 @@ pub struct WasmtimeConfig {
     force_jump_veneers: bool,
     memory_init_cow: bool,
     memory_guaranteed_dense_image_size: u64,
+    inlining: Option<bool>,
+    inlining_intra_module: Option<IntraModuleInlining>,
+    inlining_small_callee_size: Option<u32>,
+    inlining_sum_size_threshold: Option<u32>,
     use_precompiled_cwasm: bool,
     async_stack_zeroing: bool,
     /// Configuration for the instance allocation strategy to use.
@@ -820,6 +848,23 @@ impl RegallocAlgorithm {
             // `arbitrary` mappings, we keep the `RegallocAlgorithm`
             // enum as it is and remap here to `Backtracking`.
             RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::Backtracking,
+        }
+    }
+}
+
+#[derive(Arbitrary, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum IntraModuleInlining {
+    Yes,
+    No,
+    WhenUsingGc,
+}
+
+impl std::fmt::Display for IntraModuleInlining {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IntraModuleInlining::Yes => write!(f, "yes"),
+            IntraModuleInlining::No => write!(f, "no"),
+            IntraModuleInlining::WhenUsingGc => write!(f, "gc"),
         }
     }
 }
