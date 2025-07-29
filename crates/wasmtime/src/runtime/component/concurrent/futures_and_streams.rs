@@ -510,7 +510,7 @@ impl<T> FutureWriter<T> {
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this future.
-    pub fn write(mut self, accessor: impl AsAccessor, value: T) -> impl Future<Output = bool>
+    pub async fn write(mut self, accessor: impl AsAccessor, value: T) -> bool
     where
         T: Send + 'static,
     {
@@ -527,13 +527,11 @@ impl<T> FutureWriter<T> {
             },
         );
         self.default = None;
-        async {
-            let v = rx.await;
-            drop(self);
-            match v {
-                Ok(HostResult { dropped, .. }) => !dropped,
-                Err(_) => todo!("guarantee buffer recovery if event loop errors or panics"),
-            }
+        let v = rx.await;
+        drop(self);
+        match v {
+            Ok(HostResult { dropped, .. }) => !dropped,
+            Err(_) => todo!("guarantee buffer recovery if event loop errors or panics"),
         }
     }
 
