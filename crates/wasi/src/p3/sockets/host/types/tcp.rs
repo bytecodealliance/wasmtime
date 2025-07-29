@@ -64,7 +64,7 @@ struct ListenTask {
 
 impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
     async fn run(mut self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
-        loop {
+        while !self.tx.is_closed() {
             let Some(res) = ({
                 let mut accept = pin!(self.listener.accept());
                 let mut tx = pin!(self.tx.watch_reader(store));
@@ -176,10 +176,10 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
                 view.get()
                     .table
                     .push(TcpSocket::from_state(state, self.family))
-                    .context("failed to push socket to table")
+                    .context("failed to push socket resource to table")
             })?;
             if let Some(socket) = self.tx.write(store, Some(socket)).await {
-                // Receiver exited
+                debug_assert!(self.tx.is_closed());
                 store.with(|mut view| {
                     view.get()
                         .table
@@ -189,6 +189,7 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
                 return Ok(());
             }
         }
+        Ok(())
     }
 }
 
