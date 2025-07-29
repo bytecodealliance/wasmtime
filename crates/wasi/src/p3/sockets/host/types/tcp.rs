@@ -178,7 +178,16 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
                     .push(TcpSocket::from_state(state, self.family))
                     .context("failed to push socket to table")
             })?;
-            self.tx.write(store, Some(socket)).await;
+            if let Some(socket) = self.tx.write(store, Some(socket)).await {
+                // Receiver exited
+                store.with(|mut view| {
+                    view.get()
+                        .table
+                        .delete(socket)
+                        .context("failed to delete socket resource from table")
+                })?;
+                return Ok(());
+            }
         }
     }
 }
