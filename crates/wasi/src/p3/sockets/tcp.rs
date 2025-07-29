@@ -61,6 +61,18 @@ impl Debug for TcpState {
     }
 }
 
+// The socket options below are not automatically inherited from the listener
+// on all platforms. So we keep track of which options have been explicitly
+// set and manually apply those values to newly accepted clients.
+#[cfg(target_os = "macos")]
+#[derive(Default)]
+pub struct NonInheritedOptions {
+    pub receive_buffer_size: core::sync::atomic::AtomicUsize,
+    pub send_buffer_size: core::sync::atomic::AtomicUsize,
+    pub hop_limit: core::sync::atomic::AtomicU8,
+    pub keep_alive_idle_time: core::sync::atomic::AtomicU64, // nanoseconds
+}
+
 /// A host TCP socket, plus associated bookkeeping.
 pub struct TcpSocket {
     /// The current state in the bind/listen/accept/connect progression.
@@ -71,17 +83,8 @@ pub struct TcpSocket {
 
     pub family: SocketAddressFamily,
 
-    // The socket options below are not automatically inherited from the listener
-    // on all platforms. So we keep track of which options have been explicitly
-    // set and manually apply those values to newly accepted clients.
     #[cfg(target_os = "macos")]
-    pub receive_buffer_size: Arc<core::sync::atomic::AtomicUsize>,
-    #[cfg(target_os = "macos")]
-    pub send_buffer_size: Arc<core::sync::atomic::AtomicUsize>,
-    #[cfg(target_os = "macos")]
-    pub hop_limit: Arc<core::sync::atomic::AtomicU8>,
-    #[cfg(target_os = "macos")]
-    pub keep_alive_idle_time: Arc<core::sync::atomic::AtomicU64>, // nanoseconds
+    pub options: Arc<NonInheritedOptions>,
 }
 
 impl TcpSocket {
@@ -111,13 +114,7 @@ impl TcpSocket {
             listen_backlog_size: DEFAULT_TCP_BACKLOG,
             family,
             #[cfg(target_os = "macos")]
-            receive_buffer_size: Arc::default(),
-            #[cfg(target_os = "macos")]
-            send_buffer_size: Arc::default(),
-            #[cfg(target_os = "macos")]
-            hop_limit: Arc::default(),
-            #[cfg(target_os = "macos")]
-            keep_alive_idle_time: Arc::default(),
+            options: Arc::default(),
         }
     }
 
@@ -252,7 +249,8 @@ impl TcpSocket {
         let value = set_keep_alive_idle_time(fd, value)?;
         #[cfg(target_os = "macos")]
         {
-            self.keep_alive_idle_time
+            self.options
+                .keep_alive_idle_time
                 .store(value, core::sync::atomic::Ordering::Relaxed);
         }
         Ok(())
@@ -293,7 +291,8 @@ impl TcpSocket {
         set_unicast_hop_limit(fd, self.family, value)?;
         #[cfg(target_os = "macos")]
         {
-            self.hop_limit
+            self.options
+                .hop_limit
                 .store(value, core::sync::atomic::Ordering::Relaxed);
         }
         Ok(())
@@ -311,7 +310,8 @@ impl TcpSocket {
         #[cfg(target_os = "macos")]
         {
             let value = res?;
-            self.receive_buffer_size
+            self.options
+                .receive_buffer_size
                 .store(value, core::sync::atomic::Ordering::Relaxed);
         }
         #[cfg(not(target_os = "macos"))]
@@ -333,7 +333,8 @@ impl TcpSocket {
         #[cfg(target_os = "macos")]
         {
             let value = res?;
-            self.send_buffer_size
+            self.options
+                .send_buffer_size
                 .store(value, core::sync::atomic::Ordering::Relaxed);
         }
         #[cfg(not(target_os = "macos"))]

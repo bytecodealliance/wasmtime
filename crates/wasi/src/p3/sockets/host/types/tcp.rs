@@ -58,18 +58,8 @@ struct ListenTask {
     listener: Arc<TcpListener>,
     family: SocketAddressFamily,
     tx: StreamWriter<Option<Resource<TcpSocket>>>,
-
-    // The socket options below are not automatically inherited from the listener
-    // on all platforms. So we keep track of which options have been explicitly
-    // set and manually apply those values to newly accepted clients.
     #[cfg(target_os = "macos")]
-    receive_buffer_size: Arc<core::sync::atomic::AtomicUsize>,
-    #[cfg(target_os = "macos")]
-    send_buffer_size: Arc<core::sync::atomic::AtomicUsize>,
-    #[cfg(target_os = "macos")]
-    hop_limit: Arc<core::sync::atomic::AtomicU8>,
-    #[cfg(target_os = "macos")]
-    keep_alive_idle_time: Arc<core::sync::atomic::AtomicU64>, // nanoseconds
+    options: Arc<crate::p3::sockets::tcp::NonInheritedOptions>,
 }
 
 impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
@@ -95,6 +85,7 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
                         // and only if a specific value was explicitly set on the listener.
 
                         let receive_buffer_size = self
+                            .options
                             .receive_buffer_size
                             .load(core::sync::atomic::Ordering::Relaxed);
                         if receive_buffer_size > 0 {
@@ -106,6 +97,7 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
                         }
 
                         let send_buffer_size = self
+                            .options
                             .send_buffer_size
                             .load(core::sync::atomic::Ordering::Relaxed);
                         if send_buffer_size > 0 {
@@ -118,8 +110,10 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
 
                         // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
                         if self.family == SocketAddressFamily::Ipv6 {
-                            let hop_limit =
-                                self.hop_limit.load(core::sync::atomic::Ordering::Relaxed);
+                            let hop_limit = self
+                                .options
+                                .hop_limit
+                                .load(core::sync::atomic::Ordering::Relaxed);
                             if hop_limit > 0 {
                                 // Ignore potential error.
                                 _ = rustix::net::sockopt::set_ipv6_unicast_hops(
@@ -130,6 +124,7 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
                         }
 
                         let keep_alive_idle_time = self
+                            .options
                             .keep_alive_idle_time
                             .load(core::sync::atomic::Ordering::Relaxed);
                         if keep_alive_idle_time > 0 {
@@ -331,13 +326,7 @@ impl HostTcpSocketConcurrent for WasiSockets {
                 listen_backlog_size,
                 family,
                 #[cfg(target_os = "macos")]
-                receive_buffer_size,
-                #[cfg(target_os = "macos")]
-                send_buffer_size,
-                #[cfg(target_os = "macos")]
-                hop_limit,
-                #[cfg(target_os = "macos")]
-                keep_alive_idle_time,
+                options,
             } = get_socket_mut(view.get().table, &socket)?;
             let sock = match mem::replace(tcp_state, TcpState::Closed) {
                 TcpState::Default(sock) | TcpState::Bound(sock) => sock,
@@ -373,13 +362,7 @@ impl HostTcpSocketConcurrent for WasiSockets {
                 family: *family,
                 tx,
                 #[cfg(target_os = "macos")]
-                receive_buffer_size: Arc::clone(&receive_buffer_size),
-                #[cfg(target_os = "macos")]
-                send_buffer_size: Arc::clone(&send_buffer_size),
-                #[cfg(target_os = "macos")]
-                hop_limit: Arc::clone(&hop_limit),
-                #[cfg(target_os = "macos")]
-                keep_alive_idle_time: Arc::clone(&keep_alive_idle_time),
+                options: Arc::clone(&options),
             };
             view.spawn(task);
             Ok(Ok(rx.into()))
