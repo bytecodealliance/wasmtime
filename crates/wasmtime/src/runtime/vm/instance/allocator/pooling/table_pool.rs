@@ -2,8 +2,7 @@ use super::{
     TableAllocationIndex,
     index_allocator::{SimpleIndexAllocator, SlotId},
 };
-use crate::runtime::vm::sys::pagemap::dirty_pages_in_region;
-use crate::runtime::vm::sys::vm::commit_pages;
+use crate::runtime::vm::sys::vm::{PageMap, commit_pages, reset_with_pagemap};
 use crate::runtime::vm::{
     InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig, SendSyncPtr, Table,
     mmap::AlignedLength,
@@ -199,9 +198,10 @@ impl TablePool {
     /// table pool once it is zeroed and decommitted.
     pub unsafe fn reset_table_pages_to_zero(
         &self,
+        pagemap: Option<&PageMap>,
         allocation_index: TableAllocationIndex,
         table: &mut Table,
-        mut decommit: impl FnMut(*mut u8, usize),
+        decommit: impl FnMut(*mut u8, usize),
     ) {
         assert!(table.is_static());
         let base = self.get(allocation_index);
@@ -209,38 +209,17 @@ impl TablePool {
         let table_byte_size_page_aligned = HostAlignedByteCount::new_rounded_up(table_byte_size)
             .expect("table entry size doesn't overflow");
 
-        // If possible, use `dirty_pages_in_region` to find specific dirty pages instead of
-        // unconditionally zeroing `self.keep_resident` bytes at the table's start.
-        match dirty_pages_in_region(base, size, self.keep_resident) {
-            Ok(dirty_pages) => {
-                // `memset` dirty pages up to `keep_resident` bytes.
-                for region in dirty_pages.regions.iter() {
-                    std::ptr::write_bytes(
-                        region.start as *mut u8,
-                        0,
-                        (region.end - region.start) as usize,
-                    );
-                }
-
-                // And decommit the rest of it.
-                decommit(
-                    base.add(dirty_pages.checked_bytes),
-                    size.byte_count() - dirty_pages.checked_bytes,
-                );
-            }
-            Err(_) => {
-                // `memset` the first `keep_resident` bytes.
-                let size_to_memset = size.min(self.keep_resident);
-                std::ptr::write_bytes(base, 0, size_to_memset.byte_count());
-
-                // And decommit the rest of it.
-                decommit(
-                    base.add(size_to_memset.byte_count()),
-                    size.checked_sub(size_to_memset)
-                        .expect("size_to_memset <= size")
-                        .byte_count(),
-                );
-            }
+        // SAFETY: The `base` pointer is valid for `size` bytes and is safe to
+        // mutate here given the contract of our own function.
+        unsafe {
+            reset_with_pagemap(
+                pagemap,
+                base,
+                table_byte_size_page_aligned,
+                self.keep_resident,
+                |slice| slice.fill(0),
+                decommit,
+            )
         }
     }
 }

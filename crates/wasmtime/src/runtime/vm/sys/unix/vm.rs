@@ -6,6 +6,8 @@ use std::io;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
+pub use super::pagemap::{PageMap, reset_with_pagemap};
+
 pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
     unsafe {
         mprotect(ptr.cast(), len, MprotectFlags::READ | MprotectFlags::WRITE)?;
