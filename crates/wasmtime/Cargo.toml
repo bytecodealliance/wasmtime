@@ -19,7 +19,7 @@ all-features = true
 [dependencies]
 wasmtime-asm-macros = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
-wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int", "perf_jitdump"], optional = true }
+wasmtime-jit-debug = { workspace = true, optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
@@ -174,12 +174,12 @@ incremental-cache = ["wasmtime-cranelift?/incremental-cache", "std"]
 # Enables support for profiling guest modules.
 profiling = [
   "dep:fxprof-processed-profile",
-  "dep:wasmtime-jit-debug",
   "dep:ittapi",
   "dep:rustix",
   "rustix/thread",
   "dep:serde_json",
   "std",
+  "wasmtime-jit-debug/perf_jitdump",
 ]
 
 # Enables parallel compilation of WebAssembly code.
@@ -241,7 +241,9 @@ coredump = ["dep:wasm-encoder", "runtime", "std"]
 
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.
-debug-builtins = ["dep:wasmtime-jit-debug", "std"]
+debug-builtins = [
+  "wasmtime-jit-debug/gdb_jit_int",
+]
 
 # Enable support for executing compiled Wasm modules.
 runtime = [
@@ -332,6 +334,7 @@ std = [
   'addr2line?/std',
   "dep:rustix",
   "wasmtime-jit-icache-coherence",
+  "wasmtime-jit-debug?/std",
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom

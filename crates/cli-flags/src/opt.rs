@@ -23,6 +23,7 @@ macro_rules! wasmtime_option_group {
         pub struct $opts:ident {
             $(
                 $(#[doc = $doc:tt])*
+                $(#[doc($doc_attr:meta)])?
                 $(#[serde($serde_attr:meta)])*
                 pub $opt:ident: $container:ident<$payload:ty>,
             )+
@@ -31,6 +32,7 @@ macro_rules! wasmtime_option_group {
                 #[prefixed = $prefix:tt]
                 $(#[serde($serde_attr2:meta)])*
                 $(#[doc = $prefixed_doc:tt])*
+                $(#[doc($prefixed_doc_attr:meta)])?
                 pub $prefixed:ident: Vec<(String, Option<String>)>,
             )?
         }
@@ -43,6 +45,7 @@ macro_rules! wasmtime_option_group {
         pub struct $opts {
             $(
                 $(#[serde($serde_attr)])*
+                $(#[doc($doc_attr)])?
                 pub $opt: $container<$payload>,
             )+
             $(

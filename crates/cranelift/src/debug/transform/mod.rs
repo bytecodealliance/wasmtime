@@ -163,8 +163,6 @@ pub fn transform_dwarf(
         )
         .flatten();
 
-    let reachable = build_dependencies(compilation, &dwarf_package, &transforms)?.get_reachable();
-
     let out_encoding = gimli::Encoding {
         format: gimli::Format::Dwarf32,
         version: 4, // TODO: this should be configurable
@@ -185,9 +183,8 @@ pub fn transform_dwarf(
 
         let addr_tr = &transforms[module];
         let di = &translation.debuginfo;
-        let context = DebugInputContext {
-            reachable: &reachable,
-        };
+        let reachable = build_dependencies(&di.dwarf, addr_tr)?.get_reachable();
+
         let out_module_synthetic_unit = ModuleSyntheticUnit::new(
             module,
             compilation,
@@ -202,25 +199,31 @@ pub fn transform_dwarf(
         while let Some(header) = iter.next().unwrap_or(None) {
             let unit = di.dwarf.unit(header)?;
 
-            let mut resolved_unit = None;
+            let mut split_unit = None;
             let mut split_dwarf = None;
+            let mut split_reachable = None;
 
             if unit.dwo_id.is_some() {
                 if let Some(dwarf_package) = &dwarf_package {
                     if let Some((fused, fused_dwarf)) =
                         replace_unit_from_split_dwarf(&unit, dwarf_package, &di.dwarf)
                     {
-                        resolved_unit = Some(fused);
+                        split_reachable =
+                            Some(build_dependencies(&fused_dwarf, addr_tr)?.get_reachable());
+                        split_unit = Some(fused);
                         split_dwarf = Some(fused_dwarf);
                     }
                 }
             }
+            let context = DebugInputContext {
+                reachable: split_reachable.as_ref().unwrap_or(&reachable),
+            };
 
             if let Some((id, ref_map, pending_refs)) = clone_unit(
                 compilation,
                 module,
                 &unit,
-                resolved_unit.as_ref(),
+                split_unit.as_ref(),
                 split_dwarf.as_ref(),
                 &context,
                 &addr_tr,

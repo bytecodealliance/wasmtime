@@ -11,8 +11,6 @@
 //!
 //! [Tarjan's algorithm]: https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
 
-#![cfg_attr(not(test), expect(dead_code, reason = "used in upcoming PRs"))]
-
 use super::*;
 use std::{
     collections::BTreeSet,
@@ -213,6 +211,7 @@ where
     ///
     /// Iteration happens in reverse-topological order (successors are visited
     /// before predecessors in the resulting SCC DAG).
+    #[cfg(test)]
     pub fn values(&self) -> impl ExactSizeIterator<Item = &[Node]> + '_ {
         self.components
             .values()

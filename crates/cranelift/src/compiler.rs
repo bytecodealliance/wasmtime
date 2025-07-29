@@ -6,6 +6,7 @@ use crate::{BuiltinFunctionSignatures, builder::LinkOptions, wasm_call_signature
 use crate::{CompiledFunction, ModuleTextBuilder, array_call_signature};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::binemit::CodeOffset;
+use cranelift_codegen::inline::InlineCommand;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
 use cranelift_codegen::isa::{
@@ -19,6 +20,7 @@ use cranelift_frontend::FunctionBuilder;
 use object::write::{Object, StandardSegment, SymbolId};
 use object::{RelocationEncoding, RelocationFlags, RelocationKind, SectionKind};
 use std::any::Any;
+use std::borrow::Cow;
 use std::cmp;
 use std::collections::HashMap;
 use std::mem;
@@ -28,9 +30,10 @@ use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
     AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
-    DefinedFuncIndex, FlagValue, FunctionBodyData, FunctionLoc, HostCall, ModuleTranslation,
-    ModuleTypesBuilder, PtrSize, RelocationTarget, StackMapSection, StaticModuleIndex,
-    TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, VMOffsets, WasmFuncType, WasmValType,
+    DefinedFuncIndex, FlagValue, FuncIndex, FunctionBodyData, FunctionLoc, HostCall,
+    InliningCompiler, ModuleTranslation, ModuleTypesBuilder, PtrSize, RelocationTarget,
+    StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables,
+    VMOffsets, WasmFuncType, WasmValType,
 };
 
 #[cfg(feature = "component-model")]
@@ -43,11 +46,25 @@ struct IncrementalCacheContext {
     num_cached: usize,
 }
 
+/// ABI signature of functions that are generated here.
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(
+    not(feature = "component-model"),
+    expect(dead_code, reason = "only used with component model compiler")
+)]
+enum Abi {
+    /// The "wasm" ABI, or suitable to be a `wasm_call` field of a `VMFuncRef`.
+    Wasm,
+    /// The "array" ABI, or suitable to be an `array_call` field.
+    Array,
+}
+
 struct CompilerContext {
     func_translator: FuncTranslator,
     codegen_context: Context,
     incremental_cache_ctx: Option<IncrementalCacheContext>,
     validator_allocations: FuncValidatorAllocations,
+    abi: Option<Abi>,
 }
 
 impl Default for CompilerContext {
@@ -57,6 +74,7 @@ impl Default for CompilerContext {
             codegen_context: Context::new(),
             incremental_cache_ctx: None,
             validator_allocations: Default::default(),
+            abi: None,
         }
     }
 }
@@ -181,6 +199,10 @@ impl Compiler {
 }
 
 impl wasmtime_environ::Compiler for Compiler {
+    fn inlining_compiler(&self) -> Option<&dyn wasmtime_environ::InliningCompiler> {
+        Some(self)
+    }
+
     fn compile_function(
         &self,
         translation: &ModuleTranslation<'_>,
@@ -276,14 +298,20 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut func_env,
         )?;
 
-        let func = compiler.finish_with_info(Some((&body, &self.tunables)), symbol)?;
+        if self.tunables.inlining {
+            compiler
+                .cx
+                .codegen_context
+                .legalize(isa)
+                .map_err(|e| CompileError::Codegen(e.to_string()))?;
+        }
 
         let timing = cranelift_codegen::timing::take_current();
-        log::debug!("{:?} translated in {:?}", func_index, timing.total());
-        log::trace!("{func_index:?} timing info\n{timing}");
+        log::debug!("`{symbol}` translated to CLIF in {:?}", timing.total());
+        log::trace!("`{symbol}` timing info\n{timing}");
 
         Ok(CompiledFunctionBody {
-            code: Box::new(func),
+            code: Box::new(Some(compiler.cx)),
             needs_gc_heap: func_env.needs_gc_heap(),
         })
     }
@@ -293,7 +321,7 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         def_func_index: DefinedFuncIndex,
-        symbol: &str,
+        _symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[func_index]
@@ -362,7 +390,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(compiler.finish(symbol)?),
+            code: Box::new(Some(compiler.cx)),
             needs_gc_heap: false,
         })
     }
@@ -370,7 +398,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
-        symbol: &str,
+        _symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
@@ -436,7 +464,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(compiler.finish(&symbol)?),
+            code: Box::new(Some(compiler.cx)),
             needs_gc_heap: false,
         })
     }
@@ -444,7 +472,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn append_code(
         &self,
         obj: &mut Object<'static>,
-        funcs: &[(String, Box<dyn Any + Send>)],
+        funcs: &[(String, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, RelocationTarget) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         let mut builder =
@@ -517,7 +545,7 @@ impl wasmtime_environ::Compiler for Compiler {
         get_func: &'a dyn Fn(
             StaticModuleIndex,
             DefinedFuncIndex,
-        ) -> (SymbolId, &'a (dyn Any + Send)),
+        ) -> (SymbolId, &'a (dyn Any + Send + Sync)),
         dwarf_package_bytes: Option<&'a [u8]>,
         tunables: &'a Tunables,
     ) -> Result<()> {
@@ -586,7 +614,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_builtin(
         &self,
         index: BuiltinFunctionIndex,
-        symbol: &str,
+        _symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let ptr_size = isa.pointer_bytes();
@@ -657,7 +685,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(compiler.finish(&symbol)?),
+            code: Box::new(Some(compiler.cx)),
             needs_gc_heap: false,
         })
     }
@@ -668,6 +696,130 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Box<dyn Iterator<Item = RelocationTarget> + 'a> {
         let func = func.downcast_ref::<CompiledFunction>().unwrap();
         Box::new(func.relocations().map(|r| r.reloc_target))
+    }
+}
+
+impl InliningCompiler for Compiler {
+    fn calls(
+        &self,
+        func_body: &CompiledFunctionBody,
+        calls: &mut wasmtime_environ::prelude::IndexSet<FuncIndex>,
+    ) -> Result<()> {
+        let cx = func_body
+            .code
+            .downcast_ref::<Option<CompilerContext>>()
+            .unwrap()
+            .as_ref()
+            .unwrap();
+        let func = &cx.codegen_context.func;
+        calls.extend(
+            func.params
+                .user_named_funcs()
+                .values()
+                .filter(|name| name.namespace == crate::NS_WASM_FUNC)
+                .map(|name| FuncIndex::from_u32(name.index)),
+        );
+        Ok(())
+    }
+
+    fn size(&self, func_body: &CompiledFunctionBody) -> u32 {
+        let cx = func_body
+            .code
+            .downcast_ref::<Option<CompilerContext>>()
+            .unwrap()
+            .as_ref()
+            .unwrap();
+        let func = &cx.codegen_context.func;
+        let size = func.dfg.values().len();
+        u32::try_from(size).unwrap()
+    }
+
+    fn inline<'a>(
+        &self,
+        func_body: &mut CompiledFunctionBody,
+        get_callee: &'a mut dyn FnMut(FuncIndex) -> Option<&'a CompiledFunctionBody>,
+    ) -> Result<()> {
+        let code = func_body
+            .code
+            .downcast_mut::<Option<CompilerContext>>()
+            .unwrap();
+        let cx = code.as_mut().unwrap();
+
+        cx.codegen_context.inline(Inliner(get_callee))?;
+        return Ok(());
+
+        struct Inliner<'a>(&'a mut dyn FnMut(FuncIndex) -> Option<&'a CompiledFunctionBody>);
+
+        impl cranelift_codegen::inline::Inline for Inliner<'_> {
+            fn inline(
+                &mut self,
+                caller: &ir::Function,
+                _call_inst: ir::Inst,
+                _call_opcode: ir::Opcode,
+                callee: ir::FuncRef,
+                _call_args: &[ir::Value],
+            ) -> InlineCommand<'_> {
+                let callee = &caller.dfg.ext_funcs[callee].name;
+                let callee = match callee {
+                    ir::ExternalName::User(callee) => *callee,
+                    ir::ExternalName::TestCase(_)
+                    | ir::ExternalName::LibCall(_)
+                    | ir::ExternalName::KnownSymbol(_) => return InlineCommand::KeepCall,
+                };
+                let callee = &caller.params.user_named_funcs()[callee];
+                let callee = if callee.namespace == crate::NS_WASM_FUNC {
+                    FuncIndex::from_u32(callee.index)
+                } else {
+                    return InlineCommand::KeepCall;
+                };
+                match (self.0)(callee) {
+                    None => InlineCommand::KeepCall,
+                    Some(func_body) => {
+                        let cx = func_body
+                            .code
+                            .downcast_ref::<Option<CompilerContext>>()
+                            .unwrap();
+                        InlineCommand::Inline(Cow::Borrowed(
+                            &cx.as_ref().unwrap().codegen_context.func,
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    fn finish_compiling(
+        &self,
+        func_body: &mut CompiledFunctionBody,
+        input: Option<wasmparser::FunctionBody<'_>>,
+        symbol: &str,
+    ) -> Result<()> {
+        let cx = func_body
+            .code
+            .downcast_mut::<Option<CompilerContext>>()
+            .unwrap()
+            .take()
+            .unwrap();
+        let compiler = FunctionCompiler { compiler: self, cx };
+
+        let symbol = match compiler.cx.abi {
+            None => Cow::Borrowed(symbol),
+            Some(Abi::Wasm) => Cow::Owned(format!("{symbol}_wasm_call")),
+            Some(Abi::Array) => Cow::Owned(format!("{symbol}_array_call")),
+        };
+
+        let compiled_func = if let Some(input) = input {
+            compiler.finish_with_info(Some((&input, &self.tunables)), &symbol)?
+        } else {
+            compiler.finish(&symbol)?
+        };
+
+        let timing = cranelift_codegen::timing::take_current();
+        log::debug!("`{symbol}` compiled in {:?}", timing.total());
+        log::trace!("`{symbol}` timing info\n{timing}");
+
+        func_body.code = Box::new(compiled_func);
+        Ok(())
     }
 }
 

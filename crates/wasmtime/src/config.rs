@@ -2027,6 +2027,25 @@ impl Config {
         self
     }
 
+    /// Whether to enable function inlining during compilation or not.
+    ///
+    /// This may result in faster execution at runtime, but adds additional
+    /// compilation time. Inlining may also enlarge the size of compiled
+    /// artifacts (for example, the size of the result of
+    /// [`Engine::precompile_component`]).
+    ///
+    /// Inlining is not supported by all of Wasmtime's compilation strategies;
+    /// currently, it only Cranelift supports it. This setting will be ignored
+    /// when using a compilation strategy that does not support inlining, like
+    /// Winch.
+    ///
+    /// Note that inlining is still somewhat experimental at the moment (as of
+    /// the Wasmtime version 36).
+    pub fn compiler_inlining(&mut self, inlining: bool) -> &mut Self {
+        self.tunables.inlining = Some(inlining);
+        self
+    }
+
     /// Returns the set of features that the currently selected compiler backend
     /// does not support at all and may panic on.
     ///
@@ -2497,6 +2516,7 @@ impl Config {
         }
 
         // Apply compiler settings and flags
+        compiler.set_tunables(tunables.clone())?;
         for (k, v) in self.compiler_config.settings.iter() {
             compiler.set(k, v)?;
         }
@@ -2509,7 +2529,6 @@ impl Config {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }
 
-        compiler.set_tunables(tunables.clone())?;
         compiler.wmemcheck(self.compiler_config.wmemcheck);
 
         Ok((self, compiler.build()?))

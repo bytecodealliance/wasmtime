@@ -288,6 +288,11 @@ impl Metadata<'_> {
             winch_callable,
             signals_based_traps,
             memory_init_cow,
+            inlining,
+            inlining_intra_module,
+            inlining_small_callee_size,
+            inlining_sum_size_threshold,
+
             // This doesn't affect compilation, it's just a runtime setting.
             memory_reservation_for_growth: _,
 
@@ -355,6 +360,18 @@ impl Metadata<'_> {
             other.memory_init_cow,
             "memory initialization with CoW",
         )?;
+        Self::check_bool(inlining, other.inlining, "function inlining")?;
+        Self::check_int(
+            inlining_small_callee_size,
+            other.inlining_small_callee_size,
+            "function inlining small-callee size",
+        )?;
+        Self::check_int(
+            inlining_sum_size_threshold,
+            other.inlining_sum_size_threshold,
+            "function inlining sum-size threshold",
+        )?;
+        Self::check_intra_module_inlining(inlining_intra_module, other.inlining_intra_module)?;
 
         Ok(())
     }
@@ -440,6 +457,28 @@ impl Metadata<'_> {
                 )
             }
         }
+    }
+
+    fn check_intra_module_inlining(
+        module: wasmtime_environ::IntraModuleInlining,
+        host: wasmtime_environ::IntraModuleInlining,
+    ) -> Result<()> {
+        if module == host {
+            return Ok(());
+        }
+
+        let desc = |cfg| match cfg {
+            wasmtime_environ::IntraModuleInlining::No => "without intra-module inlining",
+            wasmtime_environ::IntraModuleInlining::Yes => "with intra-module inlining",
+            wasmtime_environ::IntraModuleInlining::WhenUsingGc => {
+                "with intra-module inlining only when using GC"
+            }
+        };
+
+        let module = desc(module);
+        let host = desc(host);
+
+        bail!("module was compiled {module} however the host is configured {host}")
     }
 }
 
