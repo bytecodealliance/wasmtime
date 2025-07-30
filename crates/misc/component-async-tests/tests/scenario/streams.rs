@@ -15,8 +15,8 @@ use {
     wasmtime::{
         Engine, Store,
         component::{
-            GuardedFutureReader, GuardedStreamReader, GuardedStreamWriter, Linker, ResourceTable,
-            VecBuffer,
+            Accessor, GuardedFutureReader, GuardedStreamReader, GuardedStreamWriter, Linker,
+            ResourceTable, VecBuffer,
         },
     },
     wasmtime_wasi::p2::WasiCtxBuilder,
@@ -49,7 +49,7 @@ pub async fn async_watch_streams() -> Result<()> {
     let instance = linker.instantiate_async(&mut store, &component).await?;
 
     // Test watching and then dropping the read end of a stream.
-    let (mut tx, rx) = instance.stream::<u8>(&mut store)?;
+    let (mut tx, mut rx) = instance.stream::<u8>(&mut store)?;
     instance
         .run_concurrent(&mut store, async |store| {
             futures::join!(tx.watch_reader(store), async { rx.close_with(store) }).1
@@ -57,7 +57,7 @@ pub async fn async_watch_streams() -> Result<()> {
         .await?;
 
     // Test dropping and then watching the read end of a stream.
-    let (mut tx, rx) = instance.stream::<u8>(&mut store)?;
+    let (mut tx, mut rx) = instance.stream::<u8>(&mut store)?;
     instance
         .run_concurrent(&mut store, async |store| {
             rx.close_with(store);
@@ -66,7 +66,7 @@ pub async fn async_watch_streams() -> Result<()> {
         .await?;
 
     // Test watching and then dropping the write end of a stream.
-    let (tx, mut rx) = instance.stream::<u8>(&mut store)?;
+    let (mut tx, mut rx) = instance.stream::<u8>(&mut store)?;
     instance
         .run_concurrent(&mut store, async |store| {
             futures::join!(rx.watch_writer(store), async { tx.close_with(store) }).1
@@ -74,7 +74,7 @@ pub async fn async_watch_streams() -> Result<()> {
         .await?;
 
     // Test dropping and then watching the write end of a stream.
-    let (tx, mut rx) = instance.stream::<u8>(&mut store)?;
+    let (mut tx, mut rx) = instance.stream::<u8>(&mut store)?;
     instance
         .run_concurrent(&mut store, async |store| {
             tx.close_with(store);
@@ -83,7 +83,7 @@ pub async fn async_watch_streams() -> Result<()> {
         .await?;
 
     // Test watching and then dropping the read end of a future.
-    let (mut tx, rx) = instance.future::<u8>(&mut store, || 42)?;
+    let (mut tx, mut rx) = instance.future::<u8>(&mut store, || 42)?;
     instance
         .run_concurrent(&mut store, async |store| {
             futures::join!(tx.watch_reader(store), async { rx.close_with(store) }).1
@@ -91,7 +91,7 @@ pub async fn async_watch_streams() -> Result<()> {
         .await?;
 
     // Test dropping and then watching the read end of a future.
-    let (mut tx, rx) = instance.future::<u8>(&mut store, || 42)?;
+    let (mut tx, mut rx) = instance.future::<u8>(&mut store, || 42)?;
     instance
         .run_concurrent(&mut store, async |store| {
             rx.close_with(store);
@@ -100,7 +100,7 @@ pub async fn async_watch_streams() -> Result<()> {
         .await?;
 
     // Test watching and then dropping the write end of a future.
-    let (tx, mut rx) = instance.future::<u8>(&mut store, || 42)?;
+    let (mut tx, mut rx) = instance.future::<u8>(&mut store, || 42)?;
     instance
         .run_concurrent(&mut store, async |store| {
             futures::join!(rx.watch_writer(store), async { tx.close_with(store) }).1
@@ -108,7 +108,7 @@ pub async fn async_watch_streams() -> Result<()> {
         .await?;
 
     // Test dropping and then watching the write end of a future.
-    let (tx, mut rx) = instance.future::<u8>(&mut store, || 42)?;
+    let (mut tx, mut rx) = instance.future::<u8>(&mut store, || 42)?;
     instance
         .run_concurrent(&mut store, async |store| {
             tx.close_with(store);
@@ -117,8 +117,11 @@ pub async fn async_watch_streams() -> Result<()> {
         .await?;
 
     enum Event<'a> {
-        Write(Option<GuardedStreamWriter<'a, u8, Ctx>>),
-        Read(Option<GuardedStreamReader<'a, u8, Ctx>>, Option<u8>),
+        Write(Option<GuardedStreamWriter<u8, &'a Accessor<Ctx>>>),
+        Read(
+            Option<GuardedStreamReader<u8, &'a Accessor<Ctx>>>,
+            Option<u8>,
+        ),
     }
 
     // Test watching, then writing to, then dropping, then writing again to the
@@ -212,9 +215,9 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
     let instance = linker.instantiate_async(&mut store, &component).await?;
 
     enum StreamEvent<'a> {
-        FirstWrite(Option<GuardedStreamWriter<'a, u8, Ctx>>),
-        FirstRead(Option<GuardedStreamReader<'a, u8, Ctx>>, Vec<u8>),
-        SecondWrite(Option<GuardedStreamWriter<'a, u8, Ctx>>),
+        FirstWrite(Option<GuardedStreamWriter<u8, &'a Accessor<Ctx>>>),
+        FirstRead(Option<GuardedStreamReader<u8, &'a Accessor<Ctx>>>, Vec<u8>),
+        SecondWrite(Option<GuardedStreamWriter<u8, &'a Accessor<Ctx>>>),
         GuestCompleted,
     }
 

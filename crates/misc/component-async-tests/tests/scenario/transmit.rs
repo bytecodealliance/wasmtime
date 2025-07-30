@@ -359,15 +359,18 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
 
     enum Event<'a, Test: TransmitTest> {
         Result(Test::Result),
-        ControlWriteA(Option<GuardedStreamWriter<'a, Control, Ctx>>),
-        ControlWriteB(Option<GuardedStreamWriter<'a, Control, Ctx>>),
-        ControlWriteC(Option<GuardedStreamWriter<'a, Control, Ctx>>),
+        ControlWriteA(Option<GuardedStreamWriter<Control, &'a Accessor<Ctx>>>),
+        ControlWriteB(Option<GuardedStreamWriter<Control, &'a Accessor<Ctx>>>),
+        ControlWriteC(Option<GuardedStreamWriter<Control, &'a Accessor<Ctx>>>),
         ControlWriteD,
         WriteA,
         WriteB(bool),
-        ReadC(Option<GuardedStreamReader<'a, String, Ctx>>, Option<String>),
+        ReadC(
+            Option<GuardedStreamReader<String, &'a Accessor<Ctx>>>,
+            Option<String>,
+        ),
         ReadD(Option<String>),
-        ReadNone(Option<GuardedStreamReader<'a, String, Ctx>>),
+        ReadNone(Option<GuardedStreamReader<String, &'a Accessor<Ctx>>>),
     }
 
     let (control_tx, control_rx) = instance.stream(&mut store)?;
