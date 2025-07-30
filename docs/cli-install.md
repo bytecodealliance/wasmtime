@@ -68,7 +68,7 @@ If you have [Rust and Cargo](https://www.rust-lang.org/tools/install) available 
 cargo install wasmtime-cli
 ```
 
-This compiles and installs wasmtime into your Cargo bin directory (typically `$HOME/.cargo/bin`). Make sure that directory is in your `PATH` before running `wasmtime`. For example, add the following line to `~/.bashrc` or `~/.zshrc`:
+This compiles and installs `wasmtime` into your Cargo bin directory (typically `$HOME/.cargo/bin`). Make sure that directory is in your `PATH` before running `wasmtime`. For example, add the following line to `~/.bashrc` or `~/.zshrc`:
 
 ```console
 export PATH="$HOME/.cargo/bin:$PATH"'
