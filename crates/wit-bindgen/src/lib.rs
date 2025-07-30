@@ -1528,7 +1528,7 @@ impl Wasmtime {
                         move |caller: &{wt}::component::Accessor::<T>, rep| {{
                             {wt}::component::__internal::Box::pin(async move {{
                                 let accessor = &caller.with_data(host_getter);
-                                Host{camel}Concurrent::drop(accessor, {wt}::component::Resource::new_own(rep)).await
+                                Host{camel}WithStore::drop(accessor, {wt}::component::Resource::new_own(rep)).await
                             }})
                         }},
                     )?;"
@@ -2892,6 +2892,7 @@ impl<'a> InterfaceGenerator<'a> {
         );
         ret.with_store_name = Some(format!("{trait_name}WithStore"));
 
+        let mut extra_with_store_function = false;
         for extra in extra_functions {
             match extra {
                 ExtraTraitMethod::ResourceDrop { name } => {
@@ -2907,6 +2908,7 @@ impl<'a> InterfaceGenerator<'a> {
                         self.src,
                         "fn drop<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>) -> impl ::core::future::Future<Output = {wt}::Result<()>> + Send where Self: Sized;"
                     );
+                    extra_with_store_function = true;
                 }
                 ExtraTraitMethod::ErrorConvert { .. } => {}
             }
@@ -2920,7 +2922,7 @@ impl<'a> InterfaceGenerator<'a> {
 
         // If `*WithStore` is empty, generate a blanket impl for the trait since
         // it's otherwise not necessary to implement it manually.
-        if partition.with_store.is_empty() {
+        if partition.with_store.is_empty() && !extra_with_store_function {
             uwriteln!(self.src, "impl<_T: ?Sized> {trait_name}WithStore for _T");
             uwriteln!(
                 self.src,
@@ -2945,13 +2947,12 @@ impl<'a> InterfaceGenerator<'a> {
         for extra in extra_functions {
             match extra {
                 ExtraTraitMethod::ResourceDrop { name } => {
-                    let camel = name.to_upper_camel_case();
-
                     let flags = self.import_resource_drop_flags(name);
                     ret.all_func_flags |= flags;
                     if flags.contains(FunctionFlags::STORE) {
                         continue;
                     }
+                    let camel = name.to_upper_camel_case();
                     uwrite!(
                         self.src,
                         "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> "
@@ -3020,6 +3021,9 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) -> {wt}::Result<{camel}>
             match extra {
                 ExtraTraitMethod::ResourceDrop { name } => {
                     let flags = self.import_resource_drop_flags(name);
+                    if flags.contains(FunctionFlags::STORE) {
+                        continue;
+                    }
                     let camel = name.to_upper_camel_case();
                     let mut await_ = "";
                     if flags.contains(FunctionFlags::ASYNC) {

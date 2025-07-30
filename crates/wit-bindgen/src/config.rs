@@ -102,14 +102,7 @@ impl FunctionConfig {
         resource_name: &str,
     ) -> FunctionFlags {
         let mut ret = FunctionFlags::empty();
-
         self.add_function_flags(resolve, ns, &format!("[drop]{resource_name}"), &mut ret);
-
-        // FIXME: this currently isn't supported and fools the rest of the
-        // bindings generation to thinking a `*WithStore` trait is needed when
-        // it isn't, so forcibly remove it. This'll need updating after #11325.
-        ret.remove(FunctionFlags::STORE);
-
         ret
     }
 
