@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::vec::{self, Vec};
+use std::vec::Vec;
 
 pub struct TableId<T> {
     rep: u32,
