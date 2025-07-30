@@ -4277,9 +4277,9 @@ impl ConcurrentState {
         fibers: &mut Vec<StoreFiber<'static>>,
         futures: &mut Vec<FuturesUnordered<HostTaskFuture>>,
     ) {
-        for entry in mem::take(&mut self.table) {
-            if let Ok(set) = entry.downcast::<WaitableSet>() {
-                for mode in set.waiting.into_values() {
+        for entry in self.table.iter_mut() {
+            if let Some(set) = entry.downcast_mut::<WaitableSet>() {
+                for mode in mem::take(&mut set.waiting).into_values() {
                     if let WaitMode::Fiber(fiber) = mode {
                         fibers.push(fiber);
                     }
