@@ -67,6 +67,7 @@
   - [Cross Compiling](./contributing-cross-compiling.md)
   - [Coding Guidelines](./contributing-coding-guidelines.md)
   - [Development Process](./contributing-development-process.md)
+  - [RFC Process](./contributing-rfc-process.md)
   - [Implementing Wasm Proposals](./contributing-implementing-wasm-proposals.md)
   - [Maintainer Guidelines](./contributing-maintainer-guidelines.md)
     - [Code Review](./contributing-code-review.md)
