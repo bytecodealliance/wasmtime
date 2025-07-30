@@ -486,7 +486,7 @@ impl ExnRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn fields<'a, T: 'static>(
+    pub fn fields<'a, T: Send + 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {

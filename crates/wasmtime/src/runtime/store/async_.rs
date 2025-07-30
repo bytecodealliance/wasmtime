@@ -8,13 +8,13 @@ use crate::{AsContextMut, Store, StoreContextMut, UpdateDeadline};
 /// An object that can take callbacks when the runtime enters or exits hostcalls.
 #[cfg(feature = "call-hook")]
 #[async_trait::async_trait]
-pub trait CallHookHandler<T>: Send {
+pub trait CallHookHandler<T: Send>: Send {
     /// A callback to run when wasmtime is about to enter a host call, or when about to
     /// exit the hostcall.
     async fn handle_call_event(&self, t: StoreContextMut<'_, T>, ch: CallHook) -> Result<()>;
 }
 
-impl<T> Store<T> {
+impl<T: Send> Store<T> {
     /// Configures the [`ResourceLimiterAsync`](crate::ResourceLimiterAsync)
     /// used to limit resource creation within this [`Store`].
     ///
@@ -125,7 +125,7 @@ impl<T> Store<T> {
     }
 }
 
-impl<'a, T> StoreContextMut<'a, T> {
+impl<'a, T: Send> StoreContextMut<'a, T> {
     /// Perform garbage collection of `ExternRef`s.
     ///
     /// Same as [`Store::gc`].
@@ -150,7 +150,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     }
 }
 
-impl<T> StoreInner<T> {
+impl<T: Send> StoreInner<T> {
     #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
         assert!(
@@ -272,7 +272,7 @@ impl StoreOpaque {
     }
 }
 
-impl<T> StoreContextMut<'_, T> {
+impl<T: Send> StoreContextMut<'_, T> {
     /// Executes a synchronous computation `func` asynchronously on a new fiber.
     pub(crate) async fn on_fiber<R: Send + Sync>(
         &mut self,

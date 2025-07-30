@@ -187,7 +187,7 @@ mod gc;
 /// operations is incorrect. In other words it's considered a programmer error
 /// rather than a recoverable error for the wrong [`Store`] to be used when
 /// calling APIs.
-pub struct Store<T: 'static> {
+pub struct Store<T: Send + 'static> {
     // for comments about `ManuallyDrop`, see `Store::into_data`
     inner: ManuallyDrop<Box<StoreInner<T>>>,
 }
@@ -228,7 +228,7 @@ impl CallHook {
 /// The members of this struct are those that need to be generic over `T`, the
 /// store's internal type storage. Otherwise all things that don't rely on `T`
 /// should go into `StoreOpaque`.
-pub struct StoreInner<T: 'static> {
+pub struct StoreInner<T: Send + 'static> {
     /// Generic metadata about the store that doesn't need access to `T`.
     inner: StoreOpaque,
 
@@ -247,7 +247,7 @@ enum ResourceLimiterInner<T> {
     Async(Box<dyn (FnMut(&mut T) -> &mut dyn crate::ResourceLimiterAsync) + Send + Sync>),
 }
 
-enum CallHookInner<T: 'static> {
+enum CallHookInner<T: Send + 'static> {
     #[cfg(feature = "call-hook")]
     Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
     #[cfg(all(feature = "async", feature = "call-hook"))]
@@ -288,14 +288,14 @@ pub enum UpdateDeadline {
 }
 
 // Forward methods on `StoreOpaque` to also being on `StoreInner<T>`
-impl<T> Deref for StoreInner<T> {
+impl<T: Send> Deref for StoreInner<T> {
     type Target = StoreOpaque;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl<T> DerefMut for StoreInner<T> {
+impl<T: Send> DerefMut for StoreInner<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
@@ -541,7 +541,7 @@ enum StoreInstanceKind {
     Dummy,
 }
 
-impl<T> Store<T> {
+impl<T: Send> Store<T> {
     /// Creates a new [`Store`] to be associated with the given [`Engine`] and
     /// `data` provided.
     ///
@@ -991,7 +991,7 @@ impl<T> Store<T> {
     }
 }
 
-impl<'a, T> StoreContext<'a, T> {
+impl<'a, T: Send> StoreContext<'a, T> {
     pub(crate) fn async_support(&self) -> bool {
         self.0.async_support()
     }
@@ -1016,7 +1016,7 @@ impl<'a, T> StoreContext<'a, T> {
     }
 }
 
-impl<'a, T> StoreContextMut<'a, T> {
+impl<'a, T: Send> StoreContextMut<'a, T> {
     /// Access the underlying data owned by this `Store`.
     ///
     /// Same as [`Store::data`].
@@ -1084,7 +1084,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     }
 }
 
-impl<T> StoreInner<T> {
+impl<T: Send> StoreInner<T> {
     #[inline]
     fn data(&self) -> &T {
         &self.data
@@ -2218,7 +2218,7 @@ pub(crate) enum AllocateInstanceKind<'a> {
     },
 }
 
-unsafe impl<T> vm::VMStore for StoreInner<T> {
+unsafe impl<T: Send> vm::VMStore for StoreInner<T> {
     #[cfg(feature = "component-model-async")]
     fn component_async_store(
         &mut self,
@@ -2379,7 +2379,7 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
     }
 }
 
-impl<T> StoreInner<T> {
+impl<T: Send> StoreInner<T> {
     #[cfg(target_has_atomic = "64")]
     pub(crate) fn set_epoch_deadline(&mut self, delta: u64) {
         // Set a new deadline based on the "epoch deadline delta".
@@ -2410,13 +2410,13 @@ impl<T> StoreInner<T> {
     }
 }
 
-impl<T: Default> Default for Store<T> {
+impl<T: Default + Send> Default for Store<T> {
     fn default() -> Store<T> {
         Store::new(&Engine::default(), T::default())
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for Store<T> {
+impl<T: fmt::Debug + Send> fmt::Debug for Store<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let inner = &**self.inner as *const StoreInner<T>;
         f.debug_struct("Store")
@@ -2426,7 +2426,7 @@ impl<T: fmt::Debug> fmt::Debug for Store<T> {
     }
 }
 
-impl<T> Drop for Store<T> {
+impl<T: Send> Drop for Store<T> {
     fn drop(&mut self) {
         self.run_manual_drop_routines();
 

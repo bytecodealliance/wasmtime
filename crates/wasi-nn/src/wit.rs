@@ -149,7 +149,7 @@ pub use generated_::Ml as ML;
 
 /// Add the WIT-based version of the `wasi-nn` API to a
 /// [`wasmtime::component::Linker`].
-pub fn add_to_linker<T: 'static>(
+pub fn add_to_linker<T: Send + 'static>(
     l: &mut wasmtime::component::Linker<T>,
     f: fn(&mut T) -> WasiNnView<'_>,
 ) -> anyhow::Result<()> {

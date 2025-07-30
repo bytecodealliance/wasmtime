@@ -723,7 +723,7 @@ impl Expander for LowerExpander {
         let expanded = quote! {
             unsafe impl #impl_generics #wt::component::Lower for #name #ty_generics #where_clause {
                 #[inline]
-                fn linear_lower_to_flat<T>(
+                fn linear_lower_to_flat<T: Send>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -735,7 +735,7 @@ impl Expander for LowerExpander {
                 }
 
                 #[inline]
-                fn linear_lower_to_memory<T>(
+                fn linear_lower_to_memory<T: Send>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -821,7 +821,7 @@ impl Expander for LowerExpander {
         let expanded = quote! {
             unsafe impl #impl_generics #wt::component::Lower for #name #ty_generics #where_clause {
                 #[inline]
-                fn linear_lower_to_flat<T>(
+                fn linear_lower_to_flat<T: Send>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -834,7 +834,7 @@ impl Expander for LowerExpander {
                 }
 
                 #[inline]
-                fn linear_lower_to_memory<T>(
+                fn linear_lower_to_memory<T: Send>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -878,7 +878,7 @@ impl Expander for LowerExpander {
         let expanded = quote! {
             unsafe impl #wt::component::Lower for #name {
                 #[inline]
-                fn linear_lower_to_flat<T>(
+                fn linear_lower_to_flat<T: Send>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -891,7 +891,7 @@ impl Expander for LowerExpander {
                 }
 
                 #[inline]
-                fn linear_lower_to_memory<T>(
+                fn linear_lower_to_memory<T: Send>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -1467,7 +1467,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         #component_type_impl
 
         unsafe impl #wt::component::Lower for #name {
-            fn linear_lower_to_flat<T>(
+            fn linear_lower_to_flat<T: Send>(
                 &self,
                 cx: &mut #internal::LowerContext<'_, T>,
                 _ty: #internal::InterfaceType,
@@ -1483,7 +1483,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 Ok(())
             }
 
-            fn linear_lower_to_memory<T>(
+            fn linear_lower_to_memory<T: Send>(
                 &self,
                 cx: &mut #internal::LowerContext<'_, T>,
                 _ty: #internal::InterfaceType,

@@ -479,7 +479,7 @@ impl ExternRef {
         store: impl Into<StoreContext<'a, T>>,
     ) -> Result<Option<&'a (dyn Any + Send + Sync)>>
     where
-        T: 'static,
+        T: Send + 'static,
     {
         let store = store.into().0;
         let gc_ref = self.inner.try_gc_ref(&store)?;
@@ -530,7 +530,7 @@ impl ExternRef {
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> Result<Option<&'a mut (dyn Any + Send + Sync)>>
     where
-        T: 'static,
+        T: Send + 'static,
     {
         let store = store.into().0;
         // NB: need to do an unchecked copy to release the borrow on the store

@@ -349,7 +349,7 @@ impl Val {
     }
 
     /// Serialize this value as core Wasm stack values.
-    pub(crate) fn lower<T>(
+    pub(crate) fn lower<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -507,7 +507,7 @@ impl Val {
     }
 
     /// Serialize this value to the heap at the specified memory location.
-    pub(crate) fn store<T>(
+    pub(crate) fn store<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -882,7 +882,7 @@ impl GenericVariant<'_> {
         })
     }
 
-    fn lower<T>(
+    fn lower<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         dst: &mut IterMut<'_, MaybeUninit<ValRaw>>,
@@ -906,7 +906,7 @@ impl GenericVariant<'_> {
         Ok(())
     }
 
-    fn store<T>(&self, cx: &mut LowerContext<'_, T>, offset: usize) -> Result<()> {
+    fn store<T: Send>(&self, cx: &mut LowerContext<'_, T>, offset: usize) -> Result<()> {
         match self.info.size {
             DiscriminantSize::Size1 => u8::try_from(self.discriminant)
                 .unwrap()
@@ -1028,7 +1028,7 @@ fn lift_variant(
 }
 
 /// Lower a list with the specified element type and values.
-fn lower_list<T>(
+fn lower_list<T: Send>(
     cx: &mut LowerContext<'_, T>,
     element_type: InterfaceType,
     items: &[Val],

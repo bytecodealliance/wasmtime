@@ -372,7 +372,7 @@ impl Memory {
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    pub fn data<'a, T: 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
+    pub fn data<'a, T: Send + 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
         unsafe {
             let store = store.into();
             let definition = store[self.instance].memory(self.index);
@@ -389,7 +389,7 @@ impl Memory {
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    pub fn data_mut<'a, T: 'static>(
+    pub fn data_mut<'a, T: Send + 'static>(
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> &'a mut [u8] {
@@ -413,7 +413,7 @@ impl Memory {
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    pub fn data_and_store_mut<'a, T: 'static>(
+    pub fn data_and_store_mut<'a, T: Send + 'static>(
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> (&'a mut [u8], &'a mut T) {

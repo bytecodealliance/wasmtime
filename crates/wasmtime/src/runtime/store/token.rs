@@ -24,7 +24,7 @@ impl<T> Clone for StoreToken<T> {
 
 impl<T> Copy for StoreToken<T> {}
 
-impl<T: 'static> StoreToken<T> {
+impl<T: Send + 'static> StoreToken<T> {
     /// Create a new `StoreToken`, witnessing that this store has data type
     /// parameter `T`.
     pub fn new(store: StoreContextMut<T>) -> Self {

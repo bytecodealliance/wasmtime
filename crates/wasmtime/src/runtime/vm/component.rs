@@ -811,7 +811,7 @@ impl ComponentInstance {
     ///
     /// This function places no bounds on `T` so it's up to the caller to match
     /// that up appropriately with the store that this instance resides within.
-    pub unsafe fn instance_pre<T>(&self) -> InstancePre<T> {
+    pub unsafe fn instance_pre<T: Send>(&self) -> InstancePre<T> {
         // SAFETY: The `T` part of `new_unchecked` is forwarded as a contract of
         // this function, and otherwise the validity of the components of the
         // InstancePre should be guaranteed as it's what we were built with

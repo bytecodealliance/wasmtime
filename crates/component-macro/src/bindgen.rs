@@ -140,7 +140,6 @@ impl Parse for Config {
                     }
                     Opt::Stringify(val) => opts.stringify = val,
                     Opt::SkipMutForwardingImpls(val) => opts.skip_mut_forwarding_impls = val,
-                    Opt::RequireStoreDataSend(val) => opts.require_store_data_send = val,
                     Opt::WasmtimeCrate(f) => {
                         opts.wasmtime_crate = Some(f.into_token_stream().to_string())
                     }
@@ -280,7 +279,6 @@ mod kw {
     syn::custom_keyword!(additional_derives);
     syn::custom_keyword!(stringify);
     syn::custom_keyword!(skip_mut_forwarding_impls);
-    syn::custom_keyword!(require_store_data_send);
     syn::custom_keyword!(wasmtime_crate);
     syn::custom_keyword!(include_generated_code_from_file);
     syn::custom_keyword!(debug);
@@ -303,7 +301,6 @@ enum Opt {
     AdditionalDerives(Vec<syn::Path>),
     Stringify(bool),
     SkipMutForwardingImpls(bool),
-    RequireStoreDataSend(bool),
     WasmtimeCrate(syn::Path),
     IncludeGeneratedCodeFromFile(bool),
     Debug(bool),
@@ -419,12 +416,6 @@ impl Parse for Opt {
             input.parse::<kw::skip_mut_forwarding_impls>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::SkipMutForwardingImpls(
-                input.parse::<syn::LitBool>()?.value,
-            ))
-        } else if l.peek(kw::require_store_data_send) {
-            input.parse::<kw::require_store_data_send>()?;
-            input.parse::<Token![:]>()?;
-            Ok(Opt::RequireStoreDataSend(
                 input.parse::<syn::LitBool>()?.value,
             ))
         } else if l.peek(kw::wasmtime_crate) {

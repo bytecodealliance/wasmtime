@@ -8,7 +8,7 @@ wasmtime::component::bindgen!({
 });
 
 impl local::local::sleep::HostWithStore for Ctx {
-    async fn sleep_millis<T>(_: &Accessor<T, Self>, time_in_millis: u64) {
+    async fn sleep_millis<T: Send>(_: &Accessor<T, Self>, time_in_millis: u64) {
         crate::util::sleep(Duration::from_millis(time_in_millis)).await;
     }
 }

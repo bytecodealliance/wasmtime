@@ -109,7 +109,7 @@ pub(crate) enum Definition {
     Resource(ResourceType, Arc<crate::func::HostFunc>),
 }
 
-impl<T: 'static> Linker<T> {
+impl<T: Send + 'static> Linker<T> {
     /// Creates a new linker for the [`Engine`] specified with no items defined
     /// within it.
     pub fn new(engine: &Engine) -> Linker<T> {
@@ -319,7 +319,7 @@ impl<T: 'static> Linker<T> {
         use wasmtime_environ::component::ComponentTypes;
         use wasmtime_environ::component::TypeDef;
         // Recursively stub out all imports of the component with a function that traps.
-        fn stub_item<T>(
+        fn stub_item<T: Send>(
             linker: &mut LinkerInstance<T>,
             item_name: &str,
             item_def: &TypeDef,
@@ -379,7 +379,7 @@ impl<T: 'static> Linker<T> {
     }
 }
 
-impl<T: 'static> LinkerInstance<'_, T> {
+impl<T: Send + 'static> LinkerInstance<'_, T> {
     fn as_mut(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
             engine: self.engine,

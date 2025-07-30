@@ -13,7 +13,7 @@ fn build_engine(config: &mut Config) -> Result<Arc<Engine>> {
     Ok(Arc::new(Engine::new(&config)?))
 }
 
-fn make_env<T: 'static>(engine: &Engine) -> Linker<T> {
+fn make_env<T: Send + 'static>(engine: &Engine) -> Linker<T> {
     let mut linker = Linker::new(engine);
     let engine = engine.clone();
 

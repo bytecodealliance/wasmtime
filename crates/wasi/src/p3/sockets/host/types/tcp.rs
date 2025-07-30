@@ -49,7 +49,10 @@ struct ListenTask {
     options: NonInheritedOptions,
 }
 
-impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
+impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask
+where
+    T: Send + 'static,
+{
     async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
         let mut tx = GuardedStreamWriter::new(store, self.tx);
         while !tx.is_closed() {
@@ -93,7 +96,10 @@ struct ReceiveTask {
     result_tx: FutureWriter<Result<(), ErrorCode>>,
 }
 
-impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
+impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask
+where
+    T: Send + 'static,
+{
     async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
         let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
         let mut data_tx = GuardedStreamWriter::new(store, self.data_tx);
@@ -143,7 +149,7 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
 }
 
 impl HostTcpSocketWithStore for WasiSockets {
-    async fn bind<T>(
+    async fn bind<T: Send>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
         local_address: IpSocketAddress,
@@ -160,7 +166,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         })
     }
 
-    async fn connect<T>(
+    async fn connect<T: Send>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
         remote_address: IpSocketAddress,
@@ -184,7 +190,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         })
     }
 
-    async fn listen<T: 'static>(
+    async fn listen<T: Send>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
     ) -> SocketResult<StreamReader<Resource<TcpSocket>>> {
@@ -211,7 +217,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         })
     }
 
-    async fn send<T: 'static>(
+    async fn send<T: Send>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
         mut data: StreamReader<u8>,
@@ -249,7 +255,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         result
     }
 
-    async fn receive<T: 'static>(
+    async fn receive<T: Send>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {

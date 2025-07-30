@@ -369,11 +369,14 @@ impl Func {
     ///
     /// Panics if the given function type is not associated with this store's
     /// engine.
-    pub fn new<T: 'static>(
-        store: impl AsContextMut<Data = T>,
+    pub fn new<S>(
+        store: S,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
-    ) -> Self {
+        func: impl Fn(Caller<'_, S::Data>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
+    ) -> Self
+    where
+        S: AsContextMut,
+    {
         assert!(ty.comes_from_same_engine(store.as_context().engine()));
         let ty_clone = ty.clone();
         unsafe {
@@ -411,11 +414,14 @@ impl Func {
     ///
     /// Panics if the given function type is not associated with this store's
     /// engine.
-    pub unsafe fn new_unchecked<T: 'static>(
-        mut store: impl AsContextMut<Data = T>,
+    pub unsafe fn new_unchecked<S>(
+        mut store: S,
         ty: FuncType,
-        func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
-    ) -> Self {
+        func: impl Fn(Caller<'_, S::Data>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
+    ) -> Self
+    where
+        S: AsContextMut,
+    {
         assert!(ty.comes_from_same_engine(store.as_context().engine()));
         let store = store.as_context_mut().0;
 
@@ -501,17 +507,17 @@ impl Func {
     /// # }
     /// ```
     #[cfg(all(feature = "async", feature = "cranelift"))]
-    pub fn new_async<T, F>(store: impl AsContextMut<Data = T>, ty: FuncType, func: F) -> Func
+    pub fn new_async<S, F>(store: S, ty: FuncType, func: F) -> Func
     where
         F: for<'a> Fn(
-                Caller<'a, T>,
+                Caller<'a, S::Data>,
                 &'a [Val],
                 &'a mut [Val],
             ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
             + Send
             + Sync
             + 'static,
-        T: 'static,
+        S: AsContextMut,
     {
         assert!(
             store.as_context().async_support(),
@@ -796,12 +802,12 @@ impl Func {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn wrap<T, Params, Results>(
-        mut store: impl AsContextMut<Data = T>,
-        func: impl IntoFunc<T, Params, Results>,
+    pub fn wrap<S, Params, Results>(
+        mut store: S,
+        func: impl IntoFunc<S::Data, Params, Results>,
     ) -> Func
     where
-        T: 'static,
+        S: AsContextMut,
     {
         let store = store.as_context_mut().0;
         let host = HostFunc::wrap(store.engine(), func);
@@ -812,12 +818,12 @@ impl Func {
     }
 
     #[cfg(feature = "async")]
-    fn wrap_inner<F, T, Params, Results>(mut store: impl AsContextMut<Data = T>, func: F) -> Func
+    fn wrap_inner<F, S, Params, Results>(mut store: S, func: F) -> Func
     where
-        F: Fn(Caller<'_, T>, Params) -> Results + Send + Sync + 'static,
+        F: Fn(Caller<'_, S::Data>, Params) -> Results + Send + Sync + 'static,
         Params: WasmTyList,
         Results: WasmRet,
-        T: 'static,
+        S: AsContextMut,
     {
         let store = store.as_context_mut().0;
         let host = HostFunc::wrap_inner(store.engine(), func);
@@ -835,15 +841,15 @@ impl Func {
     ///
     /// This function will panic if called with a non-asynchronous store.
     #[cfg(feature = "async")]
-    pub fn wrap_async<T, F, P, R>(store: impl AsContextMut<Data = T>, func: F) -> Func
+    pub fn wrap_async<S, F, P, R>(store: S, func: F) -> Func
     where
-        F: for<'a> Fn(Caller<'a, T>, P) -> Box<dyn Future<Output = R> + Send + 'a>
+        F: for<'a> Fn(Caller<'a, S::Data>, P) -> Box<dyn Future<Output = R> + Send + 'a>
             + Send
             + Sync
             + 'static,
         P: WasmTyList,
         R: WasmRet,
-        T: 'static,
+        S: AsContextMut,
     {
         assert!(
             store.as_context().async_support(),
@@ -1013,7 +1019,7 @@ impl Func {
         unsafe { Self::call_unchecked_raw(&mut store, func_ref, params_and_returns) }
     }
 
-    pub(crate) unsafe fn call_unchecked_raw<T>(
+    pub(crate) unsafe fn call_unchecked_raw<T: Send>(
         store: &mut StoreContextMut<'_, T>,
         func_ref: NonNull<VMFuncRef>,
         params_and_returns: NonNull<[ValRaw]>,
@@ -1123,7 +1129,7 @@ impl Func {
     /// of arguments as well as making sure everything is from the same `Store`.
     ///
     /// This must be called just before `call_impl_do_call`.
-    fn call_impl_check_args<T>(
+    fn call_impl_check_args<T: Send>(
         &self,
         store: &mut StoreContextMut<'_, T>,
         params: &[Val],
@@ -1163,7 +1169,7 @@ impl Func {
     /// You must have type checked the arguments by calling
     /// `call_impl_check_args` immediately before calling this function. It is
     /// only safe to call this function if that one did not return an error.
-    unsafe fn call_impl_do_call<T>(
+    unsafe fn call_impl_do_call<T: Send>(
         &self,
         store: &mut StoreContextMut<'_, T>,
         params: &[Val],
@@ -1240,7 +1246,7 @@ impl Func {
         self.store == store.id()
     }
 
-    fn invoke_host_func_for_wasm<T>(
+    fn invoke_host_func_for_wasm<T: Send>(
         mut caller: Caller<'_, T>,
         ty: &FuncType,
         values_vec: &mut [ValRaw],
@@ -1490,7 +1496,7 @@ impl Func {
 ///
 /// The `closure` provided receives a default "caller" `VMContext` parameter it
 /// can pass to the called wasm function, if desired.
-pub(crate) fn invoke_wasm_and_catch_traps<T>(
+pub(crate) fn invoke_wasm_and_catch_traps<T: Send>(
     store: &mut StoreContextMut<'_, T>,
     closure: impl FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 ) -> Result<()> {
@@ -1555,7 +1561,7 @@ impl EntryStoreContext {
     ///   pointer that called into wasm.
     ///
     /// It also saves the different last_wasm_* values in the `VMStoreContext`.
-    pub fn enter_wasm<T>(
+    pub fn enter_wasm<T: Send>(
         store: &mut StoreContextMut<'_, T>,
         initial_stack_information: *mut VMCommonStackInformation,
     ) -> Self {
@@ -1883,7 +1889,7 @@ macro_rules! impl_into_func {
             F: Fn($arg) -> R + Send + Sync + 'static,
             $arg: WasmTy,
             R: WasmRet,
-            T: 'static,
+            T: Send + 'static,
         {
             fn into_func(self, engine: &Engine) -> HostContext {
                 let f = move |_: Caller<'_, T>, $arg: $arg| {
@@ -1900,7 +1906,7 @@ macro_rules! impl_into_func {
             F: Fn(Caller<'_, T>, $arg) -> R + Send + Sync + 'static,
             $arg: WasmTy,
             R: WasmRet,
-            T: 'static,
+            T: Send + 'static,
         {
             fn into_func(self, engine: &Engine) -> HostContext {
                 HostContext::from_closure(engine, move |caller: Caller<'_, T>, ($arg,)| {
@@ -1919,7 +1925,7 @@ macro_rules! impl_into_func {
             F: Fn($($args),*) -> R + Send + Sync + 'static,
             $($args: WasmTy,)*
             R: WasmRet,
-            T: 'static,
+            T: Send + 'static,
         {
             fn into_func(self, engine: &Engine) -> HostContext {
                 let f = move |_: Caller<'_, T>, $($args:$args),*| {
@@ -1936,7 +1942,7 @@ macro_rules! impl_into_func {
             F: Fn(Caller<'_, T>, $($args),*) -> R + Send + Sync + 'static,
             $($args: WasmTy,)*
             R: WasmRet,
-            T: 'static,
+            T: Send + 'static,
         {
             fn into_func(self, engine: &Engine) -> HostContext {
                 HostContext::from_closure(engine, move |caller: Caller<'_, T>, ( $( $args ),* )| {
@@ -2023,12 +2029,12 @@ for_each_function_signature!(impl_wasm_ty_list);
 ///
 /// Host functions which want access to [`Store`](crate::Store)-level state are
 /// recommended to use this type.
-pub struct Caller<'a, T: 'static> {
+pub struct Caller<'a, T: Send + 'static> {
     pub(crate) store: StoreContextMut<'a, T>,
     caller: Instance,
 }
 
-impl<T> Caller<'_, T> {
+impl<T: Send> Caller<'_, T> {
     #[cfg(feature = "async")]
     pub(crate) fn new(store: StoreContextMut<'_, T>, caller: Instance) -> Caller<'_, T> {
         Caller { store, caller }
@@ -2252,14 +2258,14 @@ impl<T> Caller<'_, T> {
     }
 }
 
-impl<T: 'static> AsContext for Caller<'_, T> {
+impl<T: Send + 'static> AsContext for Caller<'_, T> {
     type Data = T;
     fn as_context(&self) -> StoreContext<'_, T> {
         self.store.as_context()
     }
 }
 
-impl<T: 'static> AsContextMut for Caller<'_, T> {
+impl<T: Send + 'static> AsContextMut for Caller<'_, T> {
     fn as_context_mut(&mut self) -> StoreContextMut<'_, T> {
         self.store.as_context_mut()
     }
@@ -2292,7 +2298,7 @@ impl HostContext {
         F: Fn(Caller<'_, T>, P) -> R + Send + Sync + 'static,
         P: WasmTyList,
         R: WasmRet,
-        T: 'static,
+        T: Send + 'static,
     {
         let ty = R::func_type(engine, None::<ValType>.into_iter().chain(P::valtypes()));
         let type_index = ty.type_index();
@@ -2333,7 +2339,7 @@ impl HostContext {
         F: Fn(Caller<'_, T>, P) -> R + 'static,
         P: WasmTyList,
         R: WasmRet,
-        T: 'static,
+        T: Send + 'static,
     {
         // Note that this function is intentionally scoped into a
         // separate closure. Handling traps and panics will involve
@@ -2453,7 +2459,7 @@ impl HostFunc {
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Self
     where
-        T: 'static,
+        T: Send + 'static,
     {
         assert!(ty.comes_from_same_engine(engine));
         let ty_clone = ty.clone();
@@ -2482,7 +2488,7 @@ impl HostFunc {
         func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
     ) -> Self
     where
-        T: 'static,
+        T: Send + 'static,
     {
         assert!(ty.comes_from_same_engine(engine));
         // SAFETY: This is only only called in the raw entrypoint of wasm
@@ -2509,7 +2515,7 @@ impl HostFunc {
         F: Fn(Caller<'_, T>, Params) -> Results + Send + Sync + 'static,
         Params: WasmTyList,
         Results: WasmRet,
-        T: 'static,
+        T: Send + 'static,
     {
         let ctx = HostContext::from_closure(engine, func);
         HostFunc::_new(engine, ctx)
@@ -2521,7 +2527,7 @@ impl HostFunc {
         func: impl IntoFunc<T, Params, Results>,
     ) -> Self
     where
-        T: 'static,
+        T: Send + 'static,
     {
         let ctx = func.into_func(engine);
         HostFunc::_new(engine, ctx)

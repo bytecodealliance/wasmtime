@@ -188,7 +188,7 @@ impl Instance {
     /// Internal function to create an instance and run the start function.
     ///
     /// This function's unsafety is the same as `Instance::new_raw`.
-    pub(crate) unsafe fn new_started<T>(
+    pub(crate) unsafe fn new_started<T: Send>(
         store: &mut StoreContextMut<'_, T>,
         module: &Module,
         imports: Imports<'_>,
@@ -207,7 +207,7 @@ impl Instance {
     ///
     /// ONLY CALL THIS IF YOU HAVE ALREADY CHECKED FOR ASYNCNESS AND HANDLED
     /// THE FIBER NONSENSE
-    pub(crate) unsafe fn new_started_impl<T>(
+    pub(crate) unsafe fn new_started_impl<T: Send>(
         store: &mut StoreContextMut<'_, T>,
         module: &Module,
         imports: Imports<'_>,
@@ -337,7 +337,11 @@ impl Instance {
         }
     }
 
-    fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>, start: FuncIndex) -> Result<()> {
+    fn start_raw<T: Send>(
+        &self,
+        store: &mut StoreContextMut<'_, T>,
+        start: FuncIndex,
+    ) -> Result<()> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
         let store_id = store.0.id();
@@ -356,7 +360,10 @@ impl Instance {
     }
 
     /// Get this instance's module.
-    pub fn module<'a, T: 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a Module {
+    pub fn module<'a, T: Send + 'static>(
+        &self,
+        store: impl Into<StoreContext<'a, T>>,
+    ) -> &'a Module {
         self._module(store.into().0)
     }
 
@@ -369,7 +376,7 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn exports<'a, T: 'static>(
+    pub fn exports<'a, T: Send + 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
@@ -760,7 +767,7 @@ impl<T> Clone for InstancePre<T> {
     }
 }
 
-impl<T: 'static> InstancePre<T> {
+impl<T: Send + 'static> InstancePre<T> {
     /// Creates a new `InstancePre` which type-checks the `items` provided and
     /// on success is ready to instantiate a new instance.
     ///

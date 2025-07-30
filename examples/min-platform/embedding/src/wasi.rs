@@ -154,7 +154,6 @@ wasmtime::component::bindgen!({
     world: "wasi:cli/command",
     imports: { default: trappable },
     exports: { default: async },
-    require_store_data_send: true,
     // Important: tell bindgen that anywhere it encounters the wasi:io
     // package, refer to the bindings generated in the wasmtime_wasi_io crate.
     // This way, all uses of the streams and pollable in the bindings in this

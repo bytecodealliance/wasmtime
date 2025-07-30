@@ -122,7 +122,7 @@ impl AsStoreOpaque for StoreOpaque {
     }
 }
 
-impl<T: 'static> AsStoreOpaque for StoreInner<T> {
+impl<T: Send + 'static> AsStoreOpaque for StoreInner<T> {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque {
         self
     }
@@ -331,7 +331,7 @@ impl<'a, 'b> BlockingContext<'a, 'b> {
     }
 }
 
-impl<T> StoreContextMut<'_, T> {
+impl<T: Send> StoreContextMut<'_, T> {
     /// Blocks on the future computed by `f`.
     ///
     /// # Panics
@@ -358,7 +358,7 @@ impl<T> StoreContextMut<'_, T> {
     }
 }
 
-impl<T> crate::store::StoreInner<T> {
+impl<T: Send> crate::store::StoreInner<T> {
     /// Blocks on the future computed by `f`.
     ///
     /// # Panics

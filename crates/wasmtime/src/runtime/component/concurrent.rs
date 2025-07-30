@@ -201,15 +201,19 @@ const START_FLAG_ASYNC_CALLEE: u32 = wasmtime_environ::component::START_FLAG_ASY
 /// instance to which the current host task belongs.
 ///
 /// See [`Accessor::with`] for details.
-pub struct Access<'a, T: 'static, D: HasData + ?Sized = HasSelf<T>> {
+pub struct Access<'a, T, D = HasSelf<T>>
+where
+    T: Send + 'static,
+    D: HasData + ?Sized,
+{
     accessor: &'a Accessor<T, D>,
     store: StoreContextMut<'a, T>,
 }
 
 impl<'a, T, D> Access<'a, T, D>
 where
+    T: Send + 'static,
     D: HasData + ?Sized,
-    T: 'static,
 {
     /// Get mutable access to the store data.
     pub fn data_mut(&mut self) -> &mut T {
@@ -244,8 +248,8 @@ where
 
 impl<'a, T, D> AsContext for Access<'a, T, D>
 where
+    T: Send + 'static,
     D: HasData + ?Sized,
-    T: 'static,
 {
     type Data = T;
 
@@ -256,8 +260,8 @@ where
 
 impl<'a, T, D> AsContextMut for Access<'a, T, D>
 where
+    T: Send + 'static,
     D: HasData + ?Sized,
-    T: 'static,
 {
     fn as_context_mut(&mut self) -> StoreContextMut<'_, T> {
         self.store.as_context_mut()
@@ -323,8 +327,9 @@ where
 /// not use `Accessor` methods in anything connected to a `Drop` implementation
 /// as they will panic and have unintended results. If you run into this though
 /// feel free to file an issue on the Wasmtime repository.
-pub struct Accessor<T: 'static, D = HasSelf<T>>
+pub struct Accessor<T, D = HasSelf<T>>
 where
+    T: Send + 'static,
     D: HasData + ?Sized,
 {
     token: StoreToken<T>,
@@ -349,7 +354,7 @@ where
 /// [`Linker::func_wrap_concurrent`](crate::component::Linker::func_wrap_concurrent).
 pub trait AsAccessor {
     /// The `T` in `Store<T>` that this accessor refers to.
-    type Data: 'static;
+    type Data: Send + 'static;
 
     /// The `D` in `Accessor<T, D>`, or the projection out of
     /// `Self::Data`.
@@ -368,7 +373,7 @@ impl<T: AsAccessor + ?Sized> AsAccessor for &T {
     }
 }
 
-impl<T, D: HasData + ?Sized> AsAccessor for Accessor<T, D> {
+impl<T: Send, D: HasData + ?Sized> AsAccessor for Accessor<T, D> {
     type Data = T;
     type AccessorData = D;
 
@@ -404,7 +409,7 @@ const _: () = {
     assert::<Accessor<UnsafeCell<u32>>>();
 };
 
-impl<T> Accessor<T> {
+impl<T: Send> Accessor<T> {
     /// Creates a new `Accessor` backed by the specified functions.
     ///
     /// - `get`: used to retrieve the store
@@ -427,6 +432,7 @@ impl<T> Accessor<T> {
 
 impl<T, D> Accessor<T, D>
 where
+    T: Send,
     D: HasData + ?Sized,
 {
     /// Run the specified closure, passing it mutable access to the store.
@@ -542,6 +548,7 @@ where
 // { ... }`).  So this seems to be the best we can do for the time being.
 pub trait AccessorTask<T, D, R>: Send + 'static
 where
+    T: Send + 'static,
     D: HasData + ?Sized,
 {
     /// Run the task.
@@ -1069,24 +1076,24 @@ impl Instance {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn run_concurrent<T, R>(
+    pub async fn run_concurrent<S, R>(
         self,
-        mut store: impl AsContextMut<Data = T>,
-        fun: impl AsyncFnOnce(&Accessor<T>) -> R,
+        mut store: S,
+        fun: impl AsyncFnOnce(&Accessor<S::Data>) -> R,
     ) -> Result<R>
     where
-        T: 'static,
+        S: AsContextMut,
     {
         check_recursive_run();
         let mut store = store.as_context_mut();
         let token = StoreToken::new(store.as_context_mut());
 
-        struct Dropper<'a, T: 'static, V> {
+        struct Dropper<'a, T: Send + 'static, V> {
             store: StoreContextMut<'a, T>,
             value: ManuallyDrop<V>,
         }
 
-        impl<'a, T, V> Drop for Dropper<'a, T, V> {
+        impl<'a, T: Send, V> Drop for Dropper<'a, T, V> {
             fn drop(&mut self) {
                 tls::set(self.store.0.traitobj_mut(), || {
                     // SAFETY: Here we drop the value without moving it for the
@@ -1119,11 +1126,14 @@ impl Instance {
     /// for this instance is run.
     ///
     /// The returned [`SpawnHandle`] may be used to cancel the task.
-    pub fn spawn<U: 'static>(
+    pub fn spawn<S>(
         self,
-        mut store: impl AsContextMut<Data = U>,
-        task: impl AccessorTask<U, HasSelf<U>, Result<()>>,
-    ) -> JoinHandle {
+        mut store: S,
+        task: impl AccessorTask<S::Data, HasSelf<S::Data>, Result<()>>,
+    ) -> JoinHandle
+    where
+        S: AsContextMut,
+    {
         let mut store = store.as_context_mut();
         let accessor = Accessor::new(StoreToken::new(store.as_context_mut()), Some(self));
         self.spawn_with_accessor(store, accessor, task)
@@ -1138,7 +1148,7 @@ impl Instance {
         task: impl AccessorTask<T, D, Result<()>>,
     ) -> JoinHandle
     where
-        T: 'static,
+        T: Send + 'static,
         D: HasData + ?Sized,
     {
         let store = store.as_context_mut();
@@ -1161,7 +1171,7 @@ impl Instance {
     /// The returned future will resolve when either the specified future
     /// completes (in which case we return its result) or no further progress
     /// can be made (in which case we trap with `Trap::AsyncDeadlock`).
-    async fn poll_until<T, R>(
+    async fn poll_until<T: Send, R>(
         self,
         store: StoreContextMut<'_, T>,
         mut future: Pin<&mut impl Future<Output = R>>,
@@ -1597,7 +1607,7 @@ impl Instance {
     /// SAFETY: The raw pointer arguments must be valid references to guest
     /// functions (with the appropriate signatures) when the closures queued by
     /// this function are called.
-    unsafe fn queue_call<T: 'static>(
+    unsafe fn queue_call<T: Send + 'static>(
         self,
         mut store: StoreContextMut<T>,
         guest_task: TableId<GuestTask>,
@@ -1623,7 +1633,7 @@ impl Instance {
         ///
         /// SAFETY: `callee` must be a valid `*mut VMFuncRef` at the time when
         /// the returned closure is called.
-        unsafe fn make_call<T: 'static>(
+        unsafe fn make_call<T: Send + 'static>(
             store: StoreContextMut<T>,
             guest_task: TableId<GuestTask>,
             callee: SendSyncPtr<VMFuncRef>,
@@ -1894,7 +1904,7 @@ impl Instance {
     /// SAFETY: All the pointer arguments must be valid pointers to guest
     /// entities (and with the expected signatures for the function references
     /// -- see `wasmtime_environ::fact::trampoline::Compiler` for details).
-    unsafe fn prepare_call<T: 'static>(
+    unsafe fn prepare_call<T: Send + 'static>(
         self,
         mut store: StoreContextMut<T>,
         start: *mut VMFuncRef,
@@ -2067,7 +2077,7 @@ impl Instance {
     ///
     /// SAFETY: `function` must be a valid reference to a guest function of the
     /// correct signature for a callback.
-    unsafe fn call_callback<T>(
+    unsafe fn call_callback<T: Send>(
         self,
         mut store: StoreContextMut<T>,
         callee_instance: RuntimeComponentInstanceIndex,
@@ -2112,7 +2122,7 @@ impl Instance {
     /// If this is a call to an async-lowered import, the actual call may be
     /// deferred and run after this function returns, in which case the pointer
     /// arguments must also be valid when the call happens.
-    unsafe fn start_call<T: 'static>(
+    unsafe fn start_call<T: Send + 'static>(
         self,
         mut store: StoreContextMut<T>,
         callback: *mut VMFuncRef,
@@ -2290,7 +2300,7 @@ impl Instance {
         closure: F,
     ) -> impl Future<Output = Result<R>> + 'static
     where
-        T: 'static,
+        T: Send + 'static,
         F: FnOnce(&Accessor<T>) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
             + Send
             + Sync
@@ -2315,7 +2325,7 @@ impl Instance {
     /// Whether the future returns `Ready` immediately or later, the `lower`
     /// function will be used to lower the result, if any, into the guest caller's
     /// stack and linear memory unless the task has been cancelled.
-    pub(crate) fn first_poll<T: 'static, R: Send + 'static>(
+    pub(crate) fn first_poll<T: Send + 'static, R: Send + 'static>(
         self,
         mut store: StoreContextMut<T>,
         future: impl Future<Output = Result<R>> + Send + 'static,
@@ -3147,7 +3157,7 @@ pub trait VMComponentAsyncStore {
 }
 
 /// SAFETY: See trait docs.
-impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
+impl<T: Send + 'static> VMComponentAsyncStore for StoreInner<T> {
     unsafe fn prepare_call(
         &mut self,
         instance: Instance,
@@ -4373,7 +4383,7 @@ impl TaskId {
     /// task from the state; otherwise, it will be removed automatically.  Also,
     /// it should only be called once for a given task, and only after either
     /// the task has completed or the instance has trapped.
-    pub(crate) fn remove<T>(&self, store: StoreContextMut<T>) -> Result<()> {
+    pub(crate) fn remove<T: Send>(&self, store: StoreContextMut<T>) -> Result<()> {
         Waitable::Guest(self.task).delete_from(self.handle.instance().concurrent_state_mut(store.0))
     }
 }
@@ -4397,7 +4407,10 @@ pub(crate) fn prepare_call<T, R>(
     + Send
     + Sync
     + 'static,
-) -> Result<PreparedCall<R>> {
+) -> Result<PreparedCall<R>>
+where
+    T: Send + 'static,
+{
     let (options, _flags, ty, raw_options) = handle.abi_info(store.0);
 
     let instance = handle.instance().id().get(store.0);
@@ -4478,7 +4491,7 @@ pub(crate) fn prepare_call<T, R>(
 /// The returned future will resolve to the result once it is available, but
 /// must only be polled via the instance's event loop. See
 /// `Instance::run_concurrent` for details.
-pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
+pub(crate) fn queue_call<T: Send + 'static, R: Send + 'static>(
     mut store: StoreContextMut<T>,
     prepared: PreparedCall<R>,
 ) -> Result<impl Future<Output = Result<R>> + Send + 'static + use<T, R>> {
@@ -4504,7 +4517,7 @@ pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
 
 /// Queue a call previously prepared using `prepare_call` to be run as part of
 /// the associated `ComponentInstance`'s event loop.
-fn queue_call0<T: 'static>(
+fn queue_call0<T: Send + 'static>(
     store: StoreContextMut<T>,
     handle: Func,
     guest_task: TableId<GuestTask>,

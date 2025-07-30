@@ -30,7 +30,7 @@ fn get_socket_mut<'a>(
 }
 
 impl HostUdpSocketWithStore for WasiSockets {
-    async fn bind<T>(
+    async fn bind<T: Send>(
         store: &Accessor<T, Self>,
         socket: Resource<UdpSocket>,
         local_address: IpSocketAddress,
@@ -47,7 +47,7 @@ impl HostUdpSocketWithStore for WasiSockets {
         })
     }
 
-    async fn connect<T>(
+    async fn connect<T: Send>(
         store: &Accessor<T, Self>,
         socket: Resource<UdpSocket>,
         remote_address: IpSocketAddress,
@@ -63,7 +63,7 @@ impl HostUdpSocketWithStore for WasiSockets {
         })
     }
 
-    async fn send<T>(
+    async fn send<T: Send>(
         store: &Accessor<T, Self>,
         socket: Resource<UdpSocket>,
         data: Vec<u8>,
@@ -91,7 +91,7 @@ impl HostUdpSocketWithStore for WasiSockets {
         }
     }
 
-    async fn receive<T>(
+    async fn receive<T: Send>(
         store: &Accessor<T, Self>,
         socket: Resource<UdpSocket>,
     ) -> SocketResult<(Vec<u8>, IpSocketAddress)> {

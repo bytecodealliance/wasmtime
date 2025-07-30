@@ -45,7 +45,7 @@ impl HostFunc {
         F: Fn(StoreContextMut<'_, T>, Instance, P) -> HostResult<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
-        T: 'static,
+        T: Send + 'static,
     {
         let entrypoint = Self::entrypoint::<T, F, P, R>;
         Arc::new(HostFunc {
@@ -57,7 +57,7 @@ impl HostFunc {
 
     pub(crate) fn from_closure<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
-        T: 'static,
+        T: Send + 'static,
         F: Fn(StoreContextMut<T>, P) -> Result<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
@@ -70,7 +70,7 @@ impl HostFunc {
     #[cfg(feature = "component-model-async")]
     pub(crate) fn from_concurrent<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
-        T: 'static,
+        T: Send + 'static,
         F: Fn(&Accessor<T>, P) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
             + Send
             + Sync
@@ -99,7 +99,7 @@ impl HostFunc {
         F: Fn(StoreContextMut<'_, T>, Instance, P) -> HostResult<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift,
         R: ComponentNamedList + Lower + 'static,
-        T: 'static,
+        T: Send + 'static,
     {
         let data = SendSyncPtr::new(NonNull::new(data.as_ptr() as *mut F).unwrap());
         unsafe {
@@ -127,7 +127,7 @@ impl HostFunc {
             + Send
             + Sync
             + 'static,
-        T: 'static,
+        T: Send + 'static,
     {
         Arc::new(HostFunc {
             entrypoint: dynamic_entrypoint::<T, F>,
@@ -139,8 +139,9 @@ impl HostFunc {
         })
     }
 
-    pub(crate) fn new_dynamic<T: 'static, F>(func: F) -> Arc<HostFunc>
+    pub(crate) fn new_dynamic<T, F>(func: F) -> Arc<HostFunc>
     where
+        T: Send + 'static,
         F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     {
         Self::new_dynamic_canonical::<T, _>(
@@ -155,7 +156,7 @@ impl HostFunc {
     #[cfg(feature = "component-model-async")]
     pub(crate) fn new_dynamic_concurrent<T, F>(func: F) -> Arc<HostFunc>
     where
-        T: 'static,
+        T: Send + 'static,
         F: for<'a> Fn(
                 &'a Accessor<T>,
                 &'a [Val],
@@ -235,6 +236,7 @@ unsafe fn call_host<T, Params, Return, F>(
     closure: F,
 ) -> Result<()>
 where
+    T: Send,
     F: Fn(StoreContextMut<'_, T>, Instance, Params) -> HostResult<Return> + Send + Sync + 'static,
     Params: Lift,
     Return: Lower + 'static,
@@ -572,7 +574,7 @@ where
             }
         }
 
-        fn lower_results<T>(
+        fn lower_results<T: Send>(
             &mut self,
             cx: &mut LowerContext<'_, T>,
             ty: InterfaceType,
@@ -679,7 +681,7 @@ unsafe fn call_host_and_handle_result<T>(
     func: impl FnOnce(StoreContextMut<'_, T>, Instance) -> Result<()>,
 ) -> bool
 where
-    T: 'static,
+    T: Send + 'static,
 {
     let cx = unsafe { VMComponentContext::from_opaque(cx) };
     unsafe {
@@ -714,7 +716,7 @@ where
         + Send
         + Sync
         + 'static,
-    T: 'static,
+    T: Send + 'static,
 {
     let options = Options::new_index(store.0, instance, options_idx);
     let vminstance = instance.id().get(store.0);
@@ -941,7 +943,7 @@ where
         + Send
         + Sync
         + 'static,
-    T: 'static,
+    T: Send + 'static,
 {
     let data = SendSyncPtr::new(NonNull::new(data.as_ptr() as *mut F).unwrap());
     unsafe {

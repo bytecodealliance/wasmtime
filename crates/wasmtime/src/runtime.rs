@@ -132,7 +132,7 @@ fn _assertions_runtime() {
     _assert_send_and_sync::<InstancePre<()>>();
     _assert_send_and_sync::<InstancePre<*mut u8>>();
     _assert_send_and_sync::<Linker<()>>();
-    _assert_send_and_sync::<Linker<*mut u8>>();
+    _assert_send_and_sync::<Linker<vm::SendSyncPtr<u8>>>();
     _assert_send_and_sync::<Module>();
     _assert_send_and_sync::<Store<()>>();
     _assert_send_and_sync::<StoreContext<'_, ()>>();

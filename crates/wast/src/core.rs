@@ -5,7 +5,7 @@ use std::fmt::{Display, LowerHex};
 use wasmtime::{Store, Val};
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
-pub fn val<T>(ctx: &mut WastContext<T>, v: &CoreConst) -> Result<Val> {
+pub fn val<T: Send>(ctx: &mut WastContext<T>, v: &CoreConst) -> Result<Val> {
     use CoreConst::*;
 
     Ok(match v {
@@ -64,7 +64,7 @@ fn extract_lane_as_i64(bytes: u128, lane: usize) -> i64 {
     (bytes >> (lane * 64)) as i64
 }
 
-pub fn match_val<T>(store: &mut Store<T>, actual: &Val, expected: &CoreConst) -> Result<()> {
+pub fn match_val<T: Send>(store: &mut Store<T>, actual: &Val, expected: &CoreConst) -> Result<()> {
     match (actual, expected) {
         (_, CoreConst::Either { values }) => {
             for expected in values {

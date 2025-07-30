@@ -148,7 +148,7 @@ fn get_mut_by_index_from(
 
 /// Complete a write initiated by a host-owned future or stream by matching it
 /// with the specified `Reader`.
-fn accept_reader<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
+fn accept_reader<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: Send + 'static>(
     mut store: StoreContextMut<U>,
     instance: Instance,
     reader: Reader,
@@ -716,7 +716,7 @@ impl<T> fmt::Debug for FutureReader<T> {
 }
 
 /// Transfer ownership of the read end of a future from the host to a guest.
-pub(crate) fn lower_future_to_index<U>(
+pub(crate) fn lower_future_to_index<U: Send>(
     rep: u32,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
@@ -762,7 +762,7 @@ unsafe impl<T: Send + Sync> func::ComponentType for FutureReader<T> {
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
 unsafe impl<T: Send + Sync> func::Lower for FutureReader<T> {
-    fn linear_lower_to_flat<U>(
+    fn linear_lower_to_flat<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -775,7 +775,7 @@ unsafe impl<T: Send + Sync> func::Lower for FutureReader<T> {
         )
     }
 
-    fn linear_lower_to_memory<U>(
+    fn linear_lower_to_memory<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -1288,7 +1288,7 @@ impl<T> fmt::Debug for StreamReader<T> {
 }
 
 /// Transfer ownership of the read end of a stream from the host to a guest.
-pub(crate) fn lower_stream_to_index<U>(
+pub(crate) fn lower_stream_to_index<U: Send>(
     rep: u32,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
@@ -1334,7 +1334,7 @@ unsafe impl<T: Send + Sync> func::ComponentType for StreamReader<T> {
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
 unsafe impl<T: Send + Sync> func::Lower for StreamReader<T> {
-    fn linear_lower_to_flat<U>(
+    fn linear_lower_to_flat<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -1347,7 +1347,7 @@ unsafe impl<T: Send + Sync> func::Lower for StreamReader<T> {
         )
     }
 
-    fn linear_lower_to_memory<U>(
+    fn linear_lower_to_memory<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -1503,7 +1503,7 @@ impl ErrorContext {
     }
 }
 
-pub(crate) fn lower_error_context_to_index<U>(
+pub(crate) fn lower_error_context_to_index<U: Send>(
     rep: u32,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
@@ -1533,7 +1533,7 @@ unsafe impl func::ComponentType for ErrorContext {
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
 unsafe impl func::Lower for ErrorContext {
-    fn linear_lower_to_flat<T>(
+    fn linear_lower_to_flat<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1546,7 +1546,7 @@ unsafe impl func::Lower for ErrorContext {
         )
     }
 
-    fn linear_lower_to_memory<T>(
+    fn linear_lower_to_memory<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1790,7 +1790,7 @@ impl Instance {
     }
 
     /// Write to the specified stream or future from the host.
-    fn host_write<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U>(
+    fn host_write<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: Send>(
         self,
         mut store: StoreContextMut<U>,
         id: TableId<TransmitHandle>,
@@ -1957,7 +1957,7 @@ impl Instance {
     }
 
     /// Read from the specified stream or future from the host.
-    fn host_read<T: func::Lift + Send + 'static, B: ReadBuffer<T>, U>(
+    fn host_read<T: func::Lift + Send + 'static, B: ReadBuffer<T>, U: Send>(
         self,
         store: StoreContextMut<U>,
         id: TableId<TransmitHandle>,
@@ -2184,7 +2184,7 @@ impl Instance {
     }
 
     /// Drop the write end of a stream or future read from the host.
-    fn host_drop_writer<T: func::Lower + Send + 'static, U>(
+    fn host_drop_writer<T: func::Lower + Send + 'static, U: Send>(
         self,
         mut store: StoreContextMut<U>,
         id: TableId<TransmitHandle>,
@@ -2306,7 +2306,7 @@ impl Instance {
     }
 
     /// Drop the writable end of the specified stream or future from the guest.
-    pub(super) fn guest_drop_writable<T>(
+    pub(super) fn guest_drop_writable<T: Send>(
         self,
         store: StoreContextMut<T>,
         ty: TransmitIndex,
@@ -2338,7 +2338,7 @@ impl Instance {
 
     /// Copy `count` items from `read_address` to `write_address` for the
     /// specified stream or future.
-    fn copy<T: 'static>(
+    fn copy<T: Send + 'static>(
         self,
         mut store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
@@ -2476,7 +2476,7 @@ impl Instance {
     }
 
     /// Write to the specified stream or future from the guest.
-    pub(super) fn guest_write<T: 'static>(
+    pub(super) fn guest_write<T: Send + 'static>(
         self,
         mut store: StoreContextMut<T>,
         ty: TransmitIndex,
@@ -2693,7 +2693,7 @@ impl Instance {
     }
 
     /// Read from the specified stream or future from the guest.
-    pub(super) fn guest_read<T: 'static>(
+    pub(super) fn guest_read<T: Send + 'static>(
         self,
         mut store: StoreContextMut<T>,
         ty: TransmitIndex,
@@ -2977,7 +2977,7 @@ impl Instance {
     }
 
     /// Retrieve the debug message from the specified error context.
-    pub(super) fn error_context_debug_message<T>(
+    pub(super) fn error_context_debug_message<T: Send>(
         self,
         store: StoreContextMut<T>,
         ty: TypeComponentLocalErrorContextTableIndex,

@@ -12,7 +12,6 @@ mod generated {
             "wasi:tls/types/future-client-streams": crate::HostFutureClientStreams,
         },
         imports: { default: trappable },
-        require_store_data_send: true,
     });
 }
 

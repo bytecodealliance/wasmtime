@@ -140,7 +140,7 @@ impl generated::Host for WasiConfig<'_> {
 }
 
 /// Add all the `wasi-config` world's interfaces to a [`wasmtime::component::Linker`].
-pub fn add_to_linker<T: 'static>(
+pub fn add_to_linker<T: Send + 'static>(
     l: &mut wasmtime::component::Linker<T>,
     f: fn(&mut T) -> WasiConfig<'_>,
 ) -> Result<()> {

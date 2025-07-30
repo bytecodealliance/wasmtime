@@ -357,7 +357,10 @@ impl Instance {
     }
 
     /// Returns the [`InstancePre`] that was used to create this instance.
-    pub fn instance_pre<T>(&self, store: impl AsContext<Data = T>) -> InstancePre<T> {
+    pub fn instance_pre<S>(&self, store: S) -> InstancePre<S::Data>
+    where
+        S: AsContext,
+    {
         // This indexing operation asserts the Store owns the Instance.
         // Therefore, the InstancePre<T> must match the Store<T>.
         let data = self.id().get(store.as_context().0);
@@ -634,7 +637,7 @@ impl<'a> Instantiator<'a> {
         }
     }
 
-    fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
+    fn run<T: Send>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         let env_component = self.component.env_component();
 
         // Before all initializers are processed configure all destructors for
@@ -942,7 +945,7 @@ impl<T: 'static> Clone for InstancePre<T> {
     }
 }
 
-impl<T: 'static> InstancePre<T> {
+impl<T: Send + 'static> InstancePre<T> {
     /// This function is `unsafe` since there's no guarantee that the
     /// `RuntimeImport` items provided are guaranteed to work with the `T` of
     /// the store.

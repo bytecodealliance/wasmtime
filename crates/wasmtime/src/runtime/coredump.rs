@@ -103,7 +103,11 @@ impl WasmCoreDump {
         self._serialize(store, name)
     }
 
-    fn _serialize<T: 'static>(&self, mut store: StoreContextMut<'_, T>, name: &str) -> Vec<u8> {
+    fn _serialize<T: Send + 'static>(
+        &self,
+        mut store: StoreContextMut<'_, T>,
+        name: &str,
+    ) -> Vec<u8> {
         let mut core_dump = wasm_encoder::Module::new();
 
         core_dump.section(&wasm_encoder::CoreDumpSection::new(name));

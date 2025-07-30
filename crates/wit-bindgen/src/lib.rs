@@ -157,13 +157,6 @@ pub struct Opts {
     /// indings.
     pub skip_mut_forwarding_impls: bool,
 
-    /// Indicates that the `T` in `Store<T>` should be send even if async is not
-    /// enabled.
-    ///
-    /// This is helpful when sync bindings depend on generated functions from
-    /// async bindings as is the case with WASI in-tree.
-    pub require_store_data_send: bool,
-
     /// Path to the `wasmtime` crate if it's not the default path.
     pub wasmtime_crate: Option<String>,
 
@@ -568,7 +561,7 @@ impl Wasmtime {
 ///
 /// This constructor can be used to front-load string lookups to find exports
 /// within a component.
-pub fn new<_T>(
+pub fn new<_T: Send>(
     _instance_pre: &{wt}::component::InstancePre<_T>,
 ) -> {wt}::Result<{struct_name}Indices> {{
     let instance = _instance_pre.component().get_export_index(None, \"{instance_name}\")
@@ -758,7 +751,7 @@ impl<T: 'static> Clone for {camel}Pre<T> {{
     }}
 }}
 
-impl<_T: 'static> {camel}Pre<_T> {{
+impl<_T: Send + 'static> {camel}Pre<_T> {{
     /// Creates a new copy of `{camel}Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -887,7 +880,7 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
                 ///
                 /// This method may fail if the component does not have the
                 /// required exports.
-                pub fn new<_T>(_instance_pre: &{wt}::component::InstancePre<_T>) -> {wt}::Result<Self> {{
+                pub fn new<_T: Send>(_instance_pre: &{wt}::component::InstancePre<_T>) -> {wt}::Result<Self> {{
                     let _component = _instance_pre.component();
                     let _instance_type = _instance_pre.instance_type();
             ",
@@ -935,7 +928,7 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
             "impl {camel} {{
                 /// Convenience wrapper around [`{camel}Pre::new`] and
                 /// [`{camel}Pre::instantiate`].
-                pub fn instantiate<_T>(
+                pub fn instantiate<_T: Send>(
                     store: impl {wt}::AsContextMut<Data = _T>,
                     component: &{wt}::component::Component,
                     linker: &{wt}::component::Linker<_T>,
@@ -1395,13 +1388,6 @@ impl Wasmtime {
             all_func_flags |= i.all_func_flags;
         }
 
-        let opt_t_send_bound =
-            if all_func_flags.contains(FunctionFlags::ASYNC) || self.opts.require_store_data_send {
-                "+ Send"
-            } else {
-                ""
-            };
-
         let wt = self.wasmtime_path();
         if let Some(world_trait) = world_trait {
             let d_bound = match &world_trait.with_store_name {
@@ -1419,7 +1405,7 @@ impl Wasmtime {
                         where
                             D: {d_bound},
                             for<'a> D::Data<'a>: {name},
-                            T: 'static {opt_t_send_bound}
+                            T: Send + 'static,
                     {{
                         let mut linker = linker.root();
                 ",
@@ -1460,7 +1446,7 @@ impl Wasmtime {
                     where
                         D: {d_bounds},
                         for<'a> D::Data<'a>: {sync_bounds},
-                        T: 'static {opt_t_send_bound}
+                        T: Send + 'static,
                 {{
             "
         );
@@ -2286,7 +2272,7 @@ impl<'a> InterfaceGenerator<'a> {
         // Generate the `pub trait` which represents the host functionality for
         // this import which additionally inherits from all resource traits
         // for this interface defined by `type_resource`.
-        let generated_trait = self.generate_trait(
+        self.generate_trait(
             "Host",
             &iface
                 .functions
@@ -2302,15 +2288,6 @@ impl<'a> InterfaceGenerator<'a> {
             &extra_functions,
             &get_resources(self.resolve, id).collect::<Vec<_>>(),
         );
-
-        let opt_t_send_bound = if generated_trait
-            .all_func_flags
-            .contains(FunctionFlags::ASYNC)
-        {
-            "+ Send"
-        } else {
-            ""
-        };
 
         let mut sync_bounds = "Host".to_string();
 
@@ -2335,7 +2312,7 @@ impl<'a> InterfaceGenerator<'a> {
                     where
                         D: HostWithStore,
                         for<'a> D::Data<'a>: {sync_bounds},
-                        T: 'static {opt_t_send_bound},
+                        T: Send + 'static,
                 {{
             "
         );
@@ -2596,7 +2573,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(&rust_function_name(func));
         self.push_str(
             &if flags.contains(FunctionFlags::STORE | FunctionFlags::ASYNC) {
-                format!("<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, ")
+                format!("<T: Send>(accessor: &{wt}::component::Accessor<T, Self>, ")
             } else {
                 "(&mut self, ".to_string()
             },
@@ -2911,7 +2888,7 @@ impl<'a> InterfaceGenerator<'a> {
 
                     uwrite!(
                         self.src,
-                        "fn drop<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>) -> impl ::core::future::Future<Output = {wt}::Result<()>> + Send where Self: Sized;"
+                        "fn drop<T: Send>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>) -> impl ::core::future::Future<Output = {wt}::Result<()>> + Send where Self: Sized;"
                     );
                     extra_with_store_function = true;
                 }

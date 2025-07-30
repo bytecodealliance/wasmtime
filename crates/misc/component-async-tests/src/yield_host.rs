@@ -37,7 +37,7 @@ impl bindings::local::local::ready::Host for Ctx {
 }
 
 impl bindings::local::local::ready::HostWithStore for Ctx {
-    async fn when_ready<T>(accessor: &Accessor<T, Self>) {
+    async fn when_ready<T: Send>(accessor: &Accessor<T, Self>) {
         let wakers = accessor.with(|mut view| view.get().wakers.clone());
         future::poll_fn(move |cx| {
             let mut wakers = wakers.lock().unwrap();
