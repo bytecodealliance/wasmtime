@@ -241,6 +241,12 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         types: &'a ComponentTypes,
         instance: Instance,
     ) -> LowerContext<'a, T> {
+        #[cfg(all(debug_assertions, feature = "component-model-async"))]
+        if store.engine().config().async_support {
+            // Assert that we're running on a fiber, which is necessary in
+            // case we call the guest's realloc function.
+            store.0.with_blocking(|_, _| {});
+        }
         LowerContext {
             store,
             options,

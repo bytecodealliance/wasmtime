@@ -674,6 +674,12 @@ impl GuestCall {
     }
 }
 
+/// Job to be run on a worker fiber.
+enum WorkerItem {
+    GuestCall(GuestCall),
+    Function(Mutex<Box<dyn FnOnce(&mut dyn VMStore, Instance) -> Result<()> + Send>>),
+}
+
 /// Represents state related to an in-progress poll operation (e.g. `task.poll`
 /// or `CallbackCode.POLL`).
 #[derive(Debug)]
@@ -702,6 +708,8 @@ enum WorkItem {
     GuestCall(GuestCall),
     /// A pending `task.poll` or `CallbackCode.POLL` operation.
     Poll(PollParams),
+    /// A job to run on a worker fiber.
+    WorkerFunction(Mutex<Box<dyn FnOnce(&mut dyn VMStore, Instance) -> Result<()> + Send>>),
 }
 
 impl fmt::Debug for WorkItem {
@@ -711,6 +719,7 @@ impl fmt::Debug for WorkItem {
             Self::ResumeFiber(_) => f.debug_tuple("ResumeFiber").finish(),
             Self::GuestCall(call) => f.debug_tuple("GuestCall").field(call).finish(),
             Self::Poll(params) => f.debug_tuple("Poll").field(params).finish(),
+            Self::WorkerFunction(_) => f.debug_tuple("WorkerFunction").finish(),
         }
     }
 }
@@ -1403,8 +1412,22 @@ impl Instance {
                 // immediately if one of them fails.
                 let next = match self.set_tls(store.0, || next.as_mut().poll(cx)) {
                     Poll::Ready(Some(output)) => {
-                        if let Err(e) = output.consume(store.0.traitobj_mut(), self) {
-                            return Poll::Ready(Err(e));
+                        match output {
+                            HostTaskOutput::Result(Err(e)) => return Poll::Ready(Err(e)),
+                            HostTaskOutput::Result(Ok(())) => {}
+                            HostTaskOutput::Function(fun) => {
+                                // Defer calling this function to a worker fiber
+                                // in case it involves calling a guest realloc
+                                // function as part of a lowering operation.
+                                //
+                                // TODO: This isn't necessary for _all_
+                                // `HostOutput::Function`s, so we could optimize
+                                // by adding another variant to `HostOutput` to
+                                // distinguish which ones need it and which
+                                // don't.
+                                self.concurrent_state_mut(store.0)
+                                    .push_high_priority(WorkItem::WorkerFunction(Mutex::new(fun)))
+                            }
                         }
                         Poll::Ready(true)
                     }
@@ -1424,12 +1447,14 @@ impl Instance {
                     let ready = mem::take(&mut state.low_priority);
                     if ready.is_empty() {
                         return match next {
-                            // In this case, one of the futures in
-                            // `ConcurrentState::futures` completed
-                            // successfully, so we return now and continue the
-                            // outer loop in case there is another one ready to
-                            // complete.
-                            Poll::Ready(true) => Poll::Ready(Ok(Either::Right(Vec::new()))),
+                            Poll::Ready(true) => {
+                                // In this case, one of the futures in
+                                // `ConcurrentState::futures` completed
+                                // successfully, so we return now and continue
+                                // the outer loop in case there is another one
+                                // ready to complete.
+                                Poll::Ready(Ok(Either::Right(Vec::new())))
+                            }
                             Poll::Ready(false) => {
                                 // Poll the future we were passed one last time
                                 // in case one of `ConcurrentState::futures` had
@@ -1534,7 +1559,8 @@ impl Instance {
             WorkItem::GuestCall(call) => {
                 let state = self.concurrent_state_mut(store);
                 if call.is_ready(state)? {
-                    self.run_on_worker(store, call).await?;
+                    self.run_on_worker(store, WorkerItem::GuestCall(call))
+                        .await?;
                 } else {
                     let task = state.get_mut(call.task)?;
                     if !task.starting_sent {
@@ -1583,6 +1609,9 @@ impl Instance {
                     }));
                 }
             }
+            WorkItem::WorkerFunction(fun) => {
+                self.run_on_worker(store, WorkerItem::Function(fun)).await?;
+            }
         }
 
         Ok(())
@@ -1628,23 +1657,25 @@ impl Instance {
     }
 
     /// Execute the specified guest call on a worker fiber.
-    async fn run_on_worker(self, store: &mut StoreOpaque, call: GuestCall) -> Result<()> {
+    async fn run_on_worker(self, store: &mut StoreOpaque, item: WorkerItem) -> Result<()> {
         let worker = if let Some(fiber) = self.concurrent_state_mut(store).worker.take() {
             fiber
         } else {
             fiber::make_fiber(store.traitobj_mut(), move |store| {
                 loop {
-                    let call = self.concurrent_state_mut(store).guest_call.take().unwrap();
-                    self.handle_guest_call(store, call)?;
+                    match self.concurrent_state_mut(store).worker_item.take().unwrap() {
+                        WorkerItem::GuestCall(call) => self.handle_guest_call(store, call)?,
+                        WorkerItem::Function(fun) => fun.into_inner().unwrap()(store, self)?,
+                    }
 
                     self.suspend(store, SuspendReason::NeedWork)?;
                 }
             })?
         };
 
-        let guest_call = &mut self.concurrent_state_mut(store).guest_call;
-        assert!(guest_call.is_none());
-        *guest_call = Some(call);
+        let worker_item = &mut self.concurrent_state_mut(store).worker_item;
+        assert!(worker_item.is_none());
+        *worker_item = Some(item);
 
         self.resume_fiber(store, worker).await
     }
@@ -4187,7 +4218,7 @@ pub struct ConcurrentState {
     /// This helps us avoid creating a new fiber for each `GuestCall` work item.
     worker: Option<StoreFiber<'static>>,
     /// A place to stash the work item for which we're resuming a worker fiber.
-    guest_call: Option<GuestCall>,
+    worker_item: Option<WorkerItem>,
 
     /// (Sub)Component specific error context tracking
     ///
@@ -4249,7 +4280,7 @@ impl ConcurrentState {
             low_priority: Vec::new(),
             suspend_reason: None,
             worker: None,
-            guest_call: None,
+            worker_item: None,
             error_context_tables,
             global_error_context_ref_counts: BTreeMap::new(),
             component: component.clone(),
