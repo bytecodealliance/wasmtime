@@ -2823,7 +2823,6 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         index: MemoryIndex,
-        _heap: Heap,
         val: ir::Value,
     ) -> WasmResult<ir::Value> {
         let mut pos = builder.cursor();
@@ -2855,7 +2854,6 @@ impl FuncEnvironment<'_> {
         &mut self,
         mut pos: FuncCursor<'_>,
         index: MemoryIndex,
-        _heap: Heap,
     ) -> WasmResult<ir::Value> {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);
@@ -2940,9 +2938,7 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         src_index: MemoryIndex,
-        _src_heap: Heap,
         dst_index: MemoryIndex,
-        _dst_heap: Heap,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
@@ -2977,7 +2973,6 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         memory_index: MemoryIndex,
-        _heap: Heap,
         dst: ir::Value,
         val: ir::Value,
         len: ir::Value,
@@ -3001,7 +2996,6 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         memory_index: MemoryIndex,
-        _heap: Heap,
         seg_index: u32,
         dst: ir::Value,
         src: ir::Value,
@@ -3366,12 +3360,12 @@ impl FuncEnvironment<'_> {
     pub fn update_global(
         &mut self,
         builder: &mut FunctionBuilder,
-        global_index: u32,
+        global_index: GlobalIndex,
         value: ir::Value,
     ) {
         #[cfg(feature = "wmemcheck")]
         if self.compiler.wmemcheck {
-            if global_index == 0 {
+            if global_index.index() == 0 {
                 // We are making the assumption that global 0 is the auxiliary stack pointer.
                 let update_stack_pointer =
                     self.builtin_functions.update_stack_pointer(builder.func);

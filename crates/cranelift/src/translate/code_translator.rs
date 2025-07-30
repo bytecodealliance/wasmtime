@@ -180,7 +180,8 @@ pub fn translate_operator(
          *  `get_global` and `set_global` are handled by the environment.
          ***********************************************************************************/
         Operator::GlobalGet { global_index } => {
-            let val = match state.get_global(builder.func, *global_index, environ)? {
+            let global_index = GlobalIndex::from_u32(*global_index);
+            let val = match state.get_global(builder.func, global_index, environ)? {
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::trusted();
@@ -194,13 +195,15 @@ pub fn translate_operator(
                     flags.set_alias_region(Some(ir::AliasRegion::Table));
                     builder.ins().load(ty, flags, addr, offset)
                 }
-                GlobalVariable::Custom => environ
-                    .translate_custom_global_get(builder, GlobalIndex::from_u32(*global_index))?,
+                GlobalVariable::Custom => {
+                    environ.translate_custom_global_get(builder, global_index)?
+                }
             };
             state.push1(val);
         }
         Operator::GlobalSet { global_index } => {
-            match state.get_global(builder.func, *global_index, environ)? {
+            let global_index = GlobalIndex::from_u32(*global_index);
+            match state.get_global(builder.func, global_index, environ)? {
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::trusted();
@@ -217,15 +220,11 @@ pub fn translate_operator(
                     }
                     debug_assert_eq!(ty, builder.func.dfg.value_type(val));
                     builder.ins().store(flags, val, addr, offset);
-                    environ.update_global(builder, *global_index, val);
+                    environ.update_global(builder, global_index, val);
                 }
                 GlobalVariable::Custom => {
                     let val = state.pop1();
-                    environ.translate_custom_global_set(
-                        builder,
-                        GlobalIndex::from_u32(*global_index),
-                        val,
-                    )?;
+                    environ.translate_custom_global_set(builder, global_index, val)?;
                 }
             }
         }
@@ -623,7 +622,8 @@ pub fn translate_operator(
          * argument referring to an index in the external functions table of the module.
          ************************************************************************************/
         Operator::Call { function_index } => {
-            let (fref, num_args) = state.get_direct_func(builder.func, *function_index, environ)?;
+            let function_index = FuncIndex::from_u32(*function_index);
+            let (fref, num_args) = state.get_direct_func(builder.func, function_index, environ)?;
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
             let args = state.peekn_mut(num_args);
@@ -634,12 +634,7 @@ pub fn translate_operator(
                 builder,
             );
 
-            let call = environ.translate_call(
-                builder,
-                FuncIndex::from_u32(*function_index),
-                fref,
-                args,
-            )?;
+            let call = environ.translate_call(builder, function_index, fref, args)?;
             let inst_results = builder.inst_results(call);
             debug_assert_eq!(
                 inst_results.len(),
@@ -658,7 +653,8 @@ pub fn translate_operator(
             // `type_index` is the index of the function's signature and
             // `table_index` is the index of the table to search the function
             // in.
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
+            let type_index = TypeIndex::from_u32(*type_index);
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, type_index, environ)?;
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -669,7 +665,7 @@ pub fn translate_operator(
                 builder,
                 validator.features(),
                 TableIndex::from_u32(*table_index),
-                TypeIndex::from_u32(*type_index),
+                type_index,
                 sigref,
                 callee,
                 state.peekn(num_args),
@@ -698,7 +694,8 @@ pub fn translate_operator(
          * VM's runtime state via tables.
          ************************************************************************************/
         Operator::ReturnCall { function_index } => {
-            let (fref, num_args) = state.get_direct_func(builder.func, *function_index, environ)?;
+            let function_index = FuncIndex::from_u32(*function_index);
+            let (fref, num_args) = state.get_direct_func(builder.func, function_index, environ)?;
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
             let args = state.peekn_mut(num_args);
@@ -709,12 +706,7 @@ pub fn translate_operator(
                 builder,
             );
 
-            environ.translate_return_call(
-                builder,
-                FuncIndex::from_u32(*function_index),
-                fref,
-                args,
-            )?;
+            environ.translate_return_call(builder, function_index, fref, args)?;
 
             state.popn(num_args);
             state.reachable = false;
@@ -726,7 +718,8 @@ pub fn translate_operator(
             // `type_index` is the index of the function's signature and
             // `table_index` is the index of the table to search the function
             // in.
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
+            let type_index = TypeIndex::from_u32(*type_index);
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, type_index, environ)?;
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -737,7 +730,7 @@ pub fn translate_operator(
                 builder,
                 validator.features(),
                 TableIndex::from_u32(*table_index),
-                TypeIndex::from_u32(*type_index),
+                type_index,
                 sigref,
                 callee,
                 state.peekn(num_args),
@@ -750,7 +743,8 @@ pub fn translate_operator(
             // Get function signature
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
+            let type_index = TypeIndex::from_u32(*type_index);
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, type_index, environ)?;
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -769,16 +763,16 @@ pub fn translate_operator(
         Operator::MemoryGrow { mem } => {
             // The WebAssembly MVP only supports one linear memory, but we expect the reserved
             // argument to be a memory index.
-            let heap_index = MemoryIndex::from_u32(*mem);
-            let heap = state.get_heap(builder.func, *mem, environ)?;
+            let mem = MemoryIndex::from_u32(*mem);
+            let _heap = state.get_heap(builder.func, mem, environ)?;
             let val = state.pop1();
-            environ.before_memory_grow(builder, val, heap_index);
-            state.push1(environ.translate_memory_grow(builder, heap_index, heap, val)?)
+            environ.before_memory_grow(builder, val, mem);
+            state.push1(environ.translate_memory_grow(builder, mem, val)?)
         }
         Operator::MemorySize { mem } => {
-            let heap_index = MemoryIndex::from_u32(*mem);
-            let heap = state.get_heap(builder.func, *mem, environ)?;
-            state.push1(environ.translate_memory_size(builder.cursor(), heap_index, heap)?);
+            let mem = MemoryIndex::from_u32(*mem);
+            let _heap = state.get_heap(builder.func, mem, environ)?;
+            state.push1(environ.translate_memory_size(builder.cursor(), mem)?);
         }
         /******************************* Load instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cranelift.
@@ -1282,8 +1276,8 @@ pub fn translate_operator(
                 Operator::MemoryAtomicWait32 { .. } => I32,
                 _ => unreachable!(),
             };
-            let heap_index = MemoryIndex::from_u32(memarg.memory);
-            let heap = state.get_heap(builder.func, memarg.memory, environ)?;
+            let memory_index = MemoryIndex::from_u32(memarg.memory);
+            let heap = state.get_heap(builder.func, memory_index, environ)?;
             let timeout = state.pop1(); // 64 (fixed)
             let expected = state.pop1(); // 32 or 64 (per the `Ixx` in `IxxAtomicWait`)
             assert!(builder.func.dfg.value_type(expected) == implied_ty);
@@ -1299,7 +1293,7 @@ pub fn translate_operator(
             // code it needs to generate, if it wants.
             let res = environ.translate_atomic_wait(
                 builder,
-                heap_index,
+                memory_index,
                 heap,
                 effective_addr,
                 expected,
@@ -1308,8 +1302,8 @@ pub fn translate_operator(
             state.push1(res);
         }
         Operator::MemoryAtomicNotify { memarg } => {
-            let heap_index = MemoryIndex::from_u32(memarg.memory);
-            let heap = state.get_heap(builder.func, memarg.memory, environ)?;
+            let memory_index = MemoryIndex::from_u32(memarg.memory);
+            let heap = state.get_heap(builder.func, memory_index, environ)?;
             let count = state.pop1(); // 32 (fixed)
             let addr = state.pop1();
             let effective_addr = if memarg.offset == 0 {
@@ -1321,7 +1315,7 @@ pub fn translate_operator(
             };
             let res = environ.translate_atomic_notify(
                 builder,
-                heap_index,
+                memory_index,
                 heap,
                 effective_addr,
                 count,
@@ -1531,39 +1525,31 @@ pub fn translate_operator(
         }
         Operator::MemoryCopy { src_mem, dst_mem } => {
             let src_index = MemoryIndex::from_u32(*src_mem);
+            let _src_heap = state.get_heap(builder.func, src_index, environ)?;
+
             let dst_index = MemoryIndex::from_u32(*dst_mem);
-            let src_heap = state.get_heap(builder.func, *src_mem, environ)?;
-            let dst_heap = state.get_heap(builder.func, *dst_mem, environ)?;
+            let _dst_heap = state.get_heap(builder.func, dst_index, environ)?;
+
             let len = state.pop1();
             let src_pos = state.pop1();
             let dst_pos = state.pop1();
-            environ.translate_memory_copy(
-                builder, src_index, src_heap, dst_index, dst_heap, dst_pos, src_pos, len,
-            )?;
+            environ.translate_memory_copy(builder, src_index, dst_index, dst_pos, src_pos, len)?;
         }
         Operator::MemoryFill { mem } => {
-            let heap_index = MemoryIndex::from_u32(*mem);
-            let heap = state.get_heap(builder.func, *mem, environ)?;
+            let mem = MemoryIndex::from_u32(*mem);
+            let _heap = state.get_heap(builder.func, mem, environ)?;
             let len = state.pop1();
             let val = state.pop1();
             let dest = state.pop1();
-            environ.translate_memory_fill(builder, heap_index, heap, dest, val, len)?;
+            environ.translate_memory_fill(builder, mem, dest, val, len)?;
         }
         Operator::MemoryInit { data_index, mem } => {
-            let heap_index = MemoryIndex::from_u32(*mem);
-            let heap = state.get_heap(builder.func, *mem, environ)?;
+            let mem = MemoryIndex::from_u32(*mem);
+            let _heap = state.get_heap(builder.func, mem, environ)?;
             let len = state.pop1();
             let src = state.pop1();
             let dest = state.pop1();
-            environ.translate_memory_init(
-                builder,
-                heap_index,
-                heap,
-                *data_index,
-                dest,
-                src,
-                len,
-            )?;
+            environ.translate_memory_init(builder, mem, *data_index, dest, src, len)?;
         }
         Operator::DataDrop { data_index } => {
             environ.translate_data_drop(builder.cursor(), *data_index)?;
@@ -2498,7 +2484,8 @@ pub fn translate_operator(
             // Get function signature
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
+            let type_index = TypeIndex::from_u32(*type_index);
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, type_index, environ)?;
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -3224,7 +3211,9 @@ fn prepare_addr(
     environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<Reachability<(MemFlags, Value, Value)>> {
     let index = state.pop1();
-    let heap = state.get_heap(builder.func, memarg.memory, environ)?;
+
+    let memory_index = MemoryIndex::from_u32(memarg.memory);
+    let heap = state.get_heap(builder.func, memory_index, environ)?;
 
     // How exactly the bounds check is performed here and what it's performed
     // on is a bit tricky. Generally we want to rely on access violations (e.g.
