@@ -1516,9 +1516,25 @@ impl Wasmtime {
         let src = src.unwrap_or(&mut self.src);
         let gate = FeatureGate::open(src, stability);
         let camel = name.to_upper_camel_case();
+
         let flags = self.opts.imports.resource_drop_flags(resolve, key, name);
         if flags.contains(FunctionFlags::ASYNC) {
-            uwriteln!(
+            if flags.contains(FunctionFlags::STORE) {
+                uwriteln!(
+                    src,
+                    "{inst}.resource_concurrent(
+                        \"{name}\",
+                        {wt}::component::ResourceType::host::<{camel}>(),
+                        move |caller: &{wt}::component::Accessor::<T>, rep| {{
+                            {wt}::component::__internal::Box::pin(async move {{
+                                let accessor = &caller.with_data(host_getter);
+                                Host{camel}Concurrent::drop(accessor, {wt}::component::Resource::new_own(rep)).await
+                            }})
+                        }},
+                    )?;"
+                )
+            } else {
+                uwriteln!(
                 src,
                 "{inst}.resource_async(
                     \"{name}\",
@@ -1530,6 +1546,7 @@ impl Wasmtime {
                     }},
                 )?;"
             )
+            }
         } else {
             uwriteln!(
                 src,
@@ -2874,6 +2891,27 @@ impl<'a> InterfaceGenerator<'a> {
             with_store_supertraits.join(" + "),
         );
         ret.with_store_name = Some(format!("{trait_name}WithStore"));
+
+        for extra in extra_functions {
+            match extra {
+                ExtraTraitMethod::ResourceDrop { name } => {
+                    let flags = self.import_resource_drop_flags(name);
+                    if !flags.contains(FunctionFlags::STORE) {
+                        continue;
+                    }
+                    let camel = name.to_upper_camel_case();
+
+                    assert!(flags.contains(FunctionFlags::ASYNC));
+
+                    uwrite!(
+                        self.src,
+                        "fn drop<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>) -> impl ::core::future::Future<Output = {wt}::Result<()>> + Send where Self: Sized;"
+                    );
+                }
+                ExtraTraitMethod::ErrorConvert { .. } => {}
+            }
+        }
+
         for (func, flags) in partition.with_store.iter() {
             self.generate_function_trait_sig(func, *flags);
             self.push_str(";\n");
@@ -2889,6 +2927,7 @@ impl<'a> InterfaceGenerator<'a> {
                 " where _T: {}",
                 with_store_supertraits.join(" + ")
             );
+
             uwriteln!(self.src, "{{}}");
         }
 
@@ -2907,8 +2946,12 @@ impl<'a> InterfaceGenerator<'a> {
             match extra {
                 ExtraTraitMethod::ResourceDrop { name } => {
                     let camel = name.to_upper_camel_case();
+
                     let flags = self.import_resource_drop_flags(name);
                     ret.all_func_flags |= flags;
+                    if flags.contains(FunctionFlags::STORE) {
+                        continue;
+                    }
                     uwrite!(
                         self.src,
                         "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> "

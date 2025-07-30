@@ -32,8 +32,9 @@ impl ComponentStoreData {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn drop_fibers(store: &mut StoreOpaque) {
+    pub(crate) fn drop_fibers_and_futures(store: &mut StoreOpaque) {
         let mut fibers = Vec::new();
+        let mut futures = Vec::new();
         for (_, instance) in store.store_data_mut().components.instances.iter_mut() {
             let Some(instance) = instance.as_mut() else {
                 continue;
@@ -42,12 +43,14 @@ impl ComponentStoreData {
             instance
                 .get_mut()
                 .concurrent_state_mut()
-                .take_fibers(&mut fibers);
+                .take_fibers_and_futures(&mut fibers, &mut futures);
         }
 
         for mut fiber in fibers {
             fiber.dispose(store);
         }
+
+        crate::component::concurrent::tls::set(store.traitobj_mut(), move || drop(futures));
     }
 }
 
