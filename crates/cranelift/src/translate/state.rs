@@ -7,7 +7,8 @@ use crate::func_environ::FuncEnvironment;
 use crate::translate::Heap;
 use crate::translate::environ::GlobalVariable;
 use cranelift_codegen::ir::{self, Block, Inst, Value};
-use std::collections::hash_map::{Entry::Occupied, Entry::Vacant, HashMap};
+use cranelift_entity::SecondaryMap;
+use cranelift_entity::packed_option::PackedOption;
 use std::vec::Vec;
 use wasmtime_environ::{FuncIndex, GlobalIndex, MemoryIndex, TypeIndex, WasmResult};
 
@@ -226,20 +227,20 @@ pub struct FuncTranslationState {
     pub(crate) reachable: bool,
 
     // Map of global variables that have already been created by `FuncEnvironment::make_global`.
-    globals: HashMap<GlobalIndex, GlobalVariable>,
+    globals: SecondaryMap<GlobalIndex, Option<GlobalVariable>>,
 
     // Map of heaps that have been created by `FuncEnvironment::make_heap`.
-    memory_to_heap: HashMap<MemoryIndex, Heap>,
+    memory_to_heap: SecondaryMap<MemoryIndex, PackedOption<Heap>>,
 
     // Map of indirect call signatures that have been created by
     // `FuncEnvironment::make_indirect_sig()`.
     // Stores both the signature reference and the number of WebAssembly arguments
-    signatures: HashMap<TypeIndex, (ir::SigRef, usize)>,
+    signatures: SecondaryMap<TypeIndex, Option<(ir::SigRef, usize)>>,
 
     // Imported and local functions that have been created by
     // `FuncEnvironment::make_direct_func()`.
     // Stores both the function reference and the number of WebAssembly arguments
-    functions: HashMap<FuncIndex, (ir::FuncRef, usize)>,
+    functions: SecondaryMap<FuncIndex, Option<(ir::FuncRef, usize)>>,
 }
 
 // Public methods that are exposed to non- API consumers.
@@ -258,10 +259,10 @@ impl FuncTranslationState {
             stack: Vec::new(),
             control_stack: Vec::new(),
             reachable: true,
-            globals: HashMap::new(),
-            memory_to_heap: HashMap::new(),
-            signatures: HashMap::new(),
-            functions: HashMap::new(),
+            globals: SecondaryMap::new(),
+            memory_to_heap: SecondaryMap::new(),
+            signatures: SecondaryMap::new(),
+            functions: SecondaryMap::new(),
         }
     }
 
@@ -473,9 +474,13 @@ impl FuncTranslationState {
         environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<GlobalVariable> {
         let index = GlobalIndex::from_u32(index);
-        match self.globals.entry(index) {
-            Occupied(entry) => Ok(*entry.get()),
-            Vacant(entry) => Ok(*entry.insert(environ.make_global(func, index)?)),
+        match self.globals[index] {
+            Some(g) => Ok(g),
+            None => {
+                let g = environ.make_global(func, index)?;
+                self.globals[index] = Some(g);
+                Ok(g)
+            }
         }
     }
 
@@ -488,9 +493,13 @@ impl FuncTranslationState {
         environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<Heap> {
         let index = MemoryIndex::from_u32(index);
-        match self.memory_to_heap.entry(index) {
-            Occupied(entry) => Ok(*entry.get()),
-            Vacant(entry) => Ok(*entry.insert(environ.make_heap(func, index)?)),
+        match self.memory_to_heap[index].expand() {
+            Some(heap) => Ok(heap),
+            None => {
+                let heap = environ.make_heap(func, index)?;
+                self.memory_to_heap[index] = Some(heap).into();
+                Ok(heap)
+            }
         }
     }
 
@@ -505,11 +514,13 @@ impl FuncTranslationState {
         environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<(ir::SigRef, usize)> {
         let index = TypeIndex::from_u32(index);
-        match self.signatures.entry(index) {
-            Occupied(entry) => Ok(*entry.get()),
-            Vacant(entry) => {
+        match self.signatures[index] {
+            Some((sig, num_params)) => Ok((sig, num_params)),
+            None => {
                 let sig = environ.make_indirect_sig(func, index)?;
-                Ok(*entry.insert((sig, num_wasm_parameters(environ, &func.dfg.signatures[sig]))))
+                let num_params = num_wasm_parameters(environ, &func.dfg.signatures[sig]);
+                self.signatures[index] = Some((sig, num_params));
+                Ok((sig, num_params))
             }
         }
     }
@@ -525,15 +536,14 @@ impl FuncTranslationState {
         environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<(ir::FuncRef, usize)> {
         let index = FuncIndex::from_u32(index);
-        match self.functions.entry(index) {
-            Occupied(entry) => Ok(*entry.get()),
-            Vacant(entry) => {
+        match self.functions[index] {
+            Some((fref, num_args)) => Ok((fref, num_args)),
+            None => {
                 let fref = environ.make_direct_func(func, index)?;
                 let sig = func.dfg.ext_funcs[fref].signature;
-                Ok(*entry.insert((
-                    fref,
-                    num_wasm_parameters(environ, &func.dfg.signatures[sig]),
-                )))
+                let num_args = num_wasm_parameters(environ, &func.dfg.signatures[sig]);
+                self.functions[index] = Some((fref, num_args));
+                Ok((fref, num_args))
             }
         }
     }
