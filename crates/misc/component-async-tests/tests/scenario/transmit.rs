@@ -49,6 +49,11 @@ pub async fn async_cancel_caller() -> Result<()> {
 }
 
 #[tokio::test]
+pub async fn async_cancel_caller_leak_task_after_cancel() -> Result<()> {
+    test_cancel(Mode::LeakTaskAfterCancel).await
+}
+
+#[tokio::test]
 pub async fn async_trap_cancel_guest_after_start_cancelled() -> Result<()> {
     test_cancel_trap(Mode::TrapCancelGuestAfterStartCancelled).await
 }

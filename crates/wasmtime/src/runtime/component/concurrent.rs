@@ -2412,8 +2412,10 @@ impl Instance {
 
         // Use the caller's `GuestTask::sync_call_set` to register interest in
         // the subtask...
+        let guest_waitable = Waitable::Guest(guest_task);
+        let old_set = guest_waitable.common(state)?.set;
         let set = state.get_mut(caller)?.sync_call_set;
-        Waitable::Guest(guest_task).join(state, Some(set))?;
+        guest_waitable.join(state, Some(set))?;
 
         // ... and suspend this fiber temporarily while we wait for it to start.
         //
@@ -2468,7 +2470,7 @@ impl Instance {
 
         let state = self.concurrent_state_mut(store.0);
 
-        Waitable::Guest(guest_task).join(state, None)?;
+        guest_waitable.join(state, old_set)?;
 
         if let Some(storage) = storage {
             // The caller used a sync-lowered import to call an async-lifted
@@ -3167,10 +3169,14 @@ impl Instance {
                     if async_ {
                         return Ok(BLOCKED);
                     } else {
+                        let waitable = Waitable::Guest(guest_task);
+                        let old_set = waitable.common(concurrent_state)?.set;
                         let set = concurrent_state.get_mut(caller)?.sync_call_set;
-                        Waitable::Guest(guest_task).join(concurrent_state, Some(set))?;
+                        waitable.join(concurrent_state, Some(set))?;
 
                         self.suspend(store, SuspendReason::Waiting { set, task: caller })?;
+
+                        waitable.join(self.concurrent_state_mut(store), old_set)?;
                     }
                 }
             }
@@ -3945,6 +3951,8 @@ impl Waitable {
     /// remove it from any set it may currently belong to (when `set` is
     /// `None`).
     fn join(&self, state: &mut ConcurrentState, set: Option<TableId<WaitableSet>>) -> Result<()> {
+        log::trace!("waitable {self:?} join set {set:?}",);
+
         let old = mem::replace(&mut self.common(state)?.set, set);
 
         if let Some(old) = old {
