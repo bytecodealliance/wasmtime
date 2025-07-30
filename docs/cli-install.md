@@ -62,7 +62,7 @@ executed normally as the CLI would.
 
 ## Install via Cargo
 
-If you have [Rust and Cargo](https://www.rust-lang.org/tools/install) available in your system, you can install `wasmtime` from [crates.io](https://crates.io/crates/wasmtime-cli):
+If you have [Rust and Cargo](https://www.rust-lang.org/tools/install) available in your system, you can build and install an official `wasmtime` release from its [crates.io](https://crates.io/crates/wasmtime-cli) source:
 
 ```console
 cargo install wasmtime-cli
