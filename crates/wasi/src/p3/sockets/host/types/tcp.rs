@@ -414,8 +414,8 @@ impl HostTcpSocketWithStore for WasiSockets {
                     let (result_tx, result_rx) = instance
                         .future(&mut view, || Err(ErrorCode::InvalidState))
                         .context("failed to create future")?;
-                    result_tx.close(&mut view)?;
-                    data_tx.close(&mut view)?;
+                    result_tx.close(&mut view);
+                    data_tx.close(&mut view);
                     Ok((data_rx, result_rx))
                 }
             }

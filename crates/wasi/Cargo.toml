@@ -45,6 +45,7 @@ test-programs-artifacts = { workspace = true }
 tempfile = { workspace = true }
 wasmtime = { workspace = true, features = ['cranelift', 'incremental-cache'] }
 wasmtime-test-util = { workspace = true }
+env_logger = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["event", "fs", "net"] }

@@ -46,6 +46,7 @@ impl wasmtime_wasi::p2::IoView for Ctx {
 }
 
 async fn run(path: &str) -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
     let path = Path::new(path);
     let engine = test_programs_artifacts::engine(|config| {
         config.async_support(true);

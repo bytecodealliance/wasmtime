@@ -4979,6 +4979,7 @@ dependencies = [
  "cap-rand",
  "cap-std",
  "cap-time-ext",
+ "env_logger 0.11.5",
  "fs-set-times",
  "futures",
  "io-extras",
