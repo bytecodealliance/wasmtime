@@ -470,10 +470,9 @@ impl FuncTranslationState {
     pub(crate) fn get_global(
         &mut self,
         func: &mut ir::Function,
-        index: u32,
+        index: GlobalIndex,
         environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<GlobalVariable> {
-        let index = GlobalIndex::from_u32(index);
         match self.globals[index] {
             Some(g) => Ok(g),
             None => {
@@ -489,10 +488,9 @@ impl FuncTranslationState {
     pub(crate) fn get_heap(
         &mut self,
         func: &mut ir::Function,
-        index: u32,
+        index: MemoryIndex,
         environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<Heap> {
-        let index = MemoryIndex::from_u32(index);
         match self.memory_to_heap[index].expand() {
             Some(heap) => Ok(heap),
             None => {
@@ -510,10 +508,9 @@ impl FuncTranslationState {
     pub(crate) fn get_indirect_sig(
         &mut self,
         func: &mut ir::Function,
-        index: u32,
+        index: TypeIndex,
         environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<(ir::SigRef, usize)> {
-        let index = TypeIndex::from_u32(index);
         match self.signatures[index] {
             Some((sig, num_params)) => Ok((sig, num_params)),
             None => {
@@ -532,10 +529,9 @@ impl FuncTranslationState {
     pub(crate) fn get_direct_func(
         &mut self,
         func: &mut ir::Function,
-        index: u32,
+        index: FuncIndex,
         environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<(ir::FuncRef, usize)> {
-        let index = FuncIndex::from_u32(index);
         match self.functions[index] {
             Some((fref, num_args)) => Ok((fref, num_args)),
             None => {
