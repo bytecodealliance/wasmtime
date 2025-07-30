@@ -455,7 +455,7 @@ const I31_REF_DISCRIMINANT: u32 = 1;
 /// from reachable to unreachable state and the like from callees to callers.
 ///
 /// Marked `must_use` to force callers to update
-/// `FuncTranslationState::reachable` as necessary.
+/// `FuncTranslationStacks::reachable` as necessary.
 #[derive(PartialEq, Eq)]
 #[must_use]
 enum Reachability<T> {
@@ -463,6 +463,6 @@ enum Reachability<T> {
     Reachable(T),
     /// The Wasm execution state has been determined to be statically
     /// unreachable. It is the receiver of this value's responsibility to update
-    /// `FuncTranslationState::reachable` as necessary.
+    /// `FuncTranslationStacks::reachable` as necessary.
     Unreachable,
 }
