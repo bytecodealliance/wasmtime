@@ -71,7 +71,7 @@ cargo install wasmtime-cli
 This compiles and installs `wasmtime` into your Cargo bin directory (typically `$HOME/.cargo/bin`). Make sure that directory is in your `PATH` before running `wasmtime`. For example, add the following line to `~/.bashrc` or `~/.zshrc`:
 
 ```console
-export PATH="$HOME/.cargo/bin:$PATH"'
+export PATH="$HOME/.cargo/bin:$PATH"
 ```
 
 You can also use [`binstall`](https://github.com/cargo-bins/cargo-binstall) to automatically find and install the correct `wasmtime` binary for your system, matching a candidate from [GitHub Releases](https://github.com/bytecodealliance/wasmtime/releases):  
