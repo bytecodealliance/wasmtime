@@ -2622,37 +2622,55 @@ impl Config {
     /// Configures Wasmtime to not use signals-based trap handlers, for example
     /// disables `SIGILL` and `SIGSEGV` handler registration on Unix platforms.
     ///
+    /// > **Note:** this option has important performance ramifications, be sure
+    /// > to understand the implications. Wasm programs have been measured to
+    /// > run up to 2x slower when signals-based traps are disabled.
+    ///
     /// Wasmtime will by default leverage signals-based trap handlers (or the
     /// platform equivalent, for example "vectored exception handlers" on
-    /// Windows) to make generated code more efficient. For example an
-    /// out-of-bounds load in WebAssembly will result in a `SIGSEGV` on Unix
-    /// that is caught by a signal handler in Wasmtime by default. Another
-    /// example is divide-by-zero is reported by hardware rather than
-    /// explicitly checked and Wasmtime turns that into a trap.
+    /// Windows) to make generated code more efficient. For example, when
+    /// Wasmtime can use signals-based traps, it can elide explicit bounds
+    /// checks for Wasm linear memory accesses, instead relying on virtual
+    /// memory guard pages to raise a `SIGSEGV` (on Unix) for out-of-bounds
+    /// accesses, which Wasmtime's runtime then catches and handles. Another
+    /// example is divide-by-zero: with signals-based traps, Wasmtime can let
+    /// the hardware raise a trap when the divisor is zero. Without
+    /// signals-based traps, Wasmtime must explicitly emit additional
+    /// instructions to check for zero and conditionally branch to a trapping
+    /// code path.
     ///
-    /// Some environments however may not have easy access to signal handlers.
-    /// For example embedded scenarios may not support virtual memory. Other
+    /// Some environments however may not have access to signal handlers. For
+    /// example embedded scenarios may not support virtual memory. Other
     /// environments where Wasmtime is embedded within the surrounding
     /// environment may require that new signal handlers aren't registered due
     /// to the global nature of signal handlers. This option exists to disable
-    /// the signal handler registration when required.
+    /// the signal handler registration when required for these scenarios.
     ///
-    /// When signals-based trap handlers are disabled then generated code will
-    /// never rely on segfaults or other signals. Generated code will be slower
-    /// because bounds checks must be explicit along with other operations like
-    /// integer division which must check for zero.
+    /// When signals-based trap handlers are disabled, then Wasmtime and its
+    /// generated code will *never* rely on segfaults or other
+    /// signals. Generated code will be slower because bounds must be explicitly
+    /// checked along with other conditions like division by zero.
     ///
-    /// When this option is disable it additionally requires that the
+    /// The following additional factors can also affect Wasmtime's ability to
+    /// elide explicit bounds checks and leverage signals-based traps:
+    ///
+    /// * The [`Config::memory_reservation`] and [`Config::memory_guard_size`]
+    ///   settings
+    /// * The index type of the linear memory (e.g. 32-bit or 64-bit)
+    /// * The page size of the linear memory
+    ///
+    /// When this option is disabled, the
     /// `enable_heap_access_spectre_mitigation` and
-    /// `enable_table_access_spectre_mitigation` Cranelift settings are
+    /// `enable_table_access_spectre_mitigation` Cranelift settings must also be
     /// disabled. This means that generated code must have spectre mitigations
     /// disabled. This is because spectre mitigations rely on faults from
     /// loading from the null address to implement bounds checks.
     ///
-    /// This option defaults to `true` meaning that signals-based trap handlers
-    /// are enabled by default.
+    /// This option defaults to `true`: signals-based trap handlers are enabled
+    /// by default.
     ///
-    /// **Note** Disabling this option is not compatible with the Winch compiler.
+    /// > **Note:** Disabling this option is not compatible with the Winch
+    /// > compiler.
     pub fn signals_based_traps(&mut self, enable: bool) -> &mut Self {
         self.tunables.signals_based_traps = Some(enable);
         self
