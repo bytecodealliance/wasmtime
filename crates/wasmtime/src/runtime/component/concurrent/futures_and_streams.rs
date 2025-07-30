@@ -3,7 +3,7 @@ use super::{
     Event, GlobalErrorContextRefCount, LocalErrorContextRefCount, StateTable, Waitable,
     WaitableCommon, WaitableState,
 };
-use crate::component::concurrent::ConcurrentState;
+use crate::component::concurrent::{ConcurrentState, HostTaskOutput, tls};
 use crate::component::func::{self, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
@@ -1746,34 +1746,61 @@ impl Instance {
                 }
 
                 let read_handle = transmit.read_handle;
-                let (result, code) = accept_reader::<T, B, U>(
-                    store.as_context_mut(),
-                    self,
-                    Reader::Guest {
-                        options: &options,
-                        ty,
-                        address,
-                        count,
-                    },
-                    buffer,
-                    kind,
-                )?;
-
-                self.concurrent_state_mut(store.0).set_event(
-                    read_handle.rep(),
-                    match ty {
-                        TableIndex::Future(ty) => Event::FutureRead {
-                            code,
-                            pending: Some((ty, handle)),
+                let accept = move |mut store: StoreContextMut<U>| {
+                    let (result, code) = accept_reader::<T, B, U>(
+                        store.as_context_mut(),
+                        self,
+                        Reader::Guest {
+                            options: &options,
+                            ty,
+                            address,
+                            count,
                         },
-                        TableIndex::Stream(ty) => Event::StreamRead {
-                            code,
-                            pending: Some((ty, handle)),
-                        },
-                    },
-                )?;
+                        buffer,
+                        kind,
+                    )?;
 
-                Ok(result)
+                    self.concurrent_state_mut(store.0).set_event(
+                        read_handle.rep(),
+                        match ty {
+                            TableIndex::Future(ty) => Event::FutureRead {
+                                code,
+                                pending: Some((ty, handle)),
+                            },
+                            TableIndex::Stream(ty) => Event::StreamRead {
+                                code,
+                                pending: Some((ty, handle)),
+                            },
+                        },
+                    )?;
+
+                    anyhow::Ok(result)
+                };
+
+                if
+                // TODO: Check if payload is "flat"
+                false {
+                    // Optimize flat payloads (i.e. those which do not require
+                    // calling the guest's realloc function) by lowering
+                    // directly instead of using a oneshot::channel and
+                    // background task.
+                    Ok(accept(store)?)
+                } else {
+                    // Otherwise, for payloads which may require a realloc call,
+                    // use a oneshot::channel and background task.  This is
+                    // necessary because calling the guest while there are host
+                    // embedder frames on the stack is unsound.
+                    let (tx, rx) = oneshot::channel();
+                    let token = StoreToken::new(store.as_context_mut());
+                    self.concurrent_state_mut(store.0)
+                        .push_future(Box::pin(async move {
+                            HostTaskOutput::Result(tls::get(|store| {
+                                _ = tx.send(accept(token.as_context_mut(store))?);
+                                Ok(())
+                            }))
+                        }));
+                    Err(rx)
+                }
             }
 
             ReadState::HostReady { accept } => {
