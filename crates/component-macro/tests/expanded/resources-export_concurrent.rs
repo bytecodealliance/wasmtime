@@ -237,25 +237,16 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Y {}
-            pub trait HostYWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostYWithStore for _T
-            where
-                _T: wasmtime::component::HasData,
-            {}
-            pub trait HostY {
-                fn drop(
-                    &mut self,
+            pub trait HostYWithStore: wasmtime::component::HasData {
+                fn drop<T: 'static>(
+                    accessor: &wasmtime::component::Accessor<T, Self>,
                     rep: wasmtime::component::Resource<Y>,
-                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send;
+                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
+                where
+                    Self: Sized;
             }
-            impl<_T: HostY + ?Sized + Send> HostY for &mut _T {
-                async fn drop(
-                    &mut self,
-                    rep: wasmtime::component::Resource<Y>,
-                ) -> wasmtime::Result<()> {
-                    HostY::drop(*self, rep).await
-                }
-            }
+            pub trait HostY {}
+            impl<_T: HostY + ?Sized + Send> HostY for &mut _T {}
             pub trait HostWithStore: wasmtime::component::HasData + HostYWithStore + Send {}
             impl<_T: ?Sized> HostWithStore for _T
             where
@@ -273,13 +264,14 @@ pub mod foo {
                 T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/transitive-import")?;
-                inst.resource_async(
+                inst.resource_concurrent(
                     "y",
                     wasmtime::component::ResourceType::host::<Y>(),
-                    move |mut store, rep| {
-                        wasmtime::component::__internal::Box::new(async move {
-                            HostY::drop(
-                                    &mut host_getter(store.data_mut()),
+                    move |caller: &wasmtime::component::Accessor<T>, rep| {
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &caller.with_data(host_getter);
+                            HostYWithStore::drop(
+                                    accessor,
                                     wasmtime::component::Resource::new_own(rep),
                                 )
                                 .await
