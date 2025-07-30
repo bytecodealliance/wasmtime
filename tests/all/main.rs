@@ -13,6 +13,7 @@ mod custom_code_memory;
 mod debug;
 mod defaults;
 mod epoch_interruption;
+mod exceptions;
 mod exnrefs;
 mod externals;
 mod fuel;
@@ -117,6 +118,18 @@ pub(crate) fn gc_store() -> Result<wasmtime::Store<()>> {
     let mut config = wasmtime::Config::new();
     config.wasm_function_references(true);
     config.wasm_gc(true);
+
+    let engine = wasmtime::Engine::new(&config)?;
+    Ok(wasmtime::Store::new(&engine, ()))
+}
+
+pub(crate) fn gc_and_exceptions_store() -> Result<wasmtime::Store<()>> {
+    let _ = env_logger::try_init();
+
+    let mut config = wasmtime::Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.wasm_exceptions(true);
 
     let engine = wasmtime::Engine::new(&config)?;
     Ok(wasmtime::Store::new(&engine, ()))

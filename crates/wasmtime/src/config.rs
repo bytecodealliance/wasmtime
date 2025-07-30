@@ -1186,7 +1186,12 @@ impl Config {
         self
     }
 
-    #[doc(hidden)] // FIXME(#3427) - if/when implemented then un-hide this
+    /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
+    ///
+    /// This feature requires GC to be enabled as well.
+    ///
+    /// [proposal]: https://github.com/WebAssembly/exception-handling
+    #[cfg(feature = "gc")]
     pub fn wasm_exceptions(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::EXCEPTIONS, enable);
         self
@@ -2229,6 +2234,13 @@ impl Config {
         #[cfg(not(feature = "wmemcheck"))]
         if self.wmemcheck {
             bail!("wmemcheck (memory checker) was requested but is not enabled in this build");
+        }
+
+        #[cfg(feature = "gc")]
+        if self.enabled_features.contains(WasmFeatures::EXCEPTIONS)
+            && self.disabled_features.contains(WasmFeatures::GC)
+        {
+            bail!("exceptions support requires garbage collection (GC) to be enabled");
         }
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;

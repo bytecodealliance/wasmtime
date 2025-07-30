@@ -1543,3 +1543,23 @@ fn cont_new(
         crate::vm::stack_switching::cont_new(store, instance, func, param_count, result_count)?;
     Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
 }
+
+#[cfg(feature = "gc")]
+unsafe fn get_instance_id(_store: &mut dyn VMStore, instance: Pin<&mut Instance>) -> u32 {
+    instance.id().as_u32()
+}
+
+#[cfg(feature = "gc")]
+unsafe fn throw_ref(
+    store: &mut dyn VMStore,
+    _instance: Pin<&mut Instance>,
+    exnref: u32,
+) -> Result<()> {
+    let exnref = VMGcRef::from_raw_u32(exnref).ok_or_else(|| Trap::NullReference)?;
+    let exnref = exnref
+        .into_exnref(&*store.unwrap_gc_store().gc_heap)
+        .expect("gc ref should be an exception object");
+    unsafe {
+        store.store_opaque_mut().throw_ref(exnref);
+    }
+}

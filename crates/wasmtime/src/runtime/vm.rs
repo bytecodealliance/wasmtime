@@ -66,6 +66,8 @@ mod stack_switching;
 mod store_box;
 mod sys;
 mod table;
+#[cfg(feature = "gc")]
+mod throw;
 mod traphandlers;
 mod vmcontext;
 
@@ -116,6 +118,8 @@ pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
 #[cfg(has_host_compiler_backend)]
 pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
 pub use crate::runtime::vm::table::{Table, TableElement};
+#[cfg(feature = "gc")]
+pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,

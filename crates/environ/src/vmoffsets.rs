@@ -811,6 +811,18 @@ impl<P: PtrSize> VMOffsets<P> {
         0 * self.pointer_size()
     }
 
+    /// The offset of the `vmctx` field.
+    #[inline]
+    pub fn vmtag_import_vmctx(&self) -> u8 {
+        1 * self.pointer_size()
+    }
+
+    /// The offset of the `index` field.
+    #[inline]
+    pub fn vmtag_import_index(&self) -> u8 {
+        2 * self.pointer_size()
+    }
+
     /// Return the size of `VMTagImport`.
     #[inline]
     pub fn size_of_vmtag_import(&self) -> u8 {
@@ -1044,6 +1056,18 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmtag_import_from(&self, index: TagIndex) -> u32 {
         self.vmctx_vmtag_import(index) + u32::from(self.vmtag_import_from())
+    }
+
+    /// Return the offset to the `vmctx` field in `VMTagImport` index `index`.
+    #[inline]
+    pub fn vmctx_vmtag_import_vmctx(&self, index: TagIndex) -> u32 {
+        self.vmctx_vmtag_import(index) + u32::from(self.vmtag_import_vmctx())
+    }
+
+    /// Return the offset to the `index` field in `VMTagImport` index `index`.
+    #[inline]
+    pub fn vmctx_vmtag_import_index(&self, index: TagIndex) -> u32 {
+        self.vmctx_vmtag_import(index) + u32::from(self.vmtag_import_index())
     }
 }
 

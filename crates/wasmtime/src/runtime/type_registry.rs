@@ -1336,6 +1336,23 @@ impl TypeRegistry {
         inner.type_to_gc_layout.get(index).and_then(|l| l.clone())
     }
 
+    /// Borrow the GC layout for teh given index's type.
+    /// Returns `None` for types that do not have GC layouts (i.e. function
+    /// types).
+    pub fn with_layout<R>(
+        &self,
+        index: VMSharedTypeIndex,
+        mut f: impl FnMut(&GcLayout) -> R,
+    ) -> Option<R> {
+        let inner = self.0.read();
+        inner
+            .type_to_gc_layout
+            .get(index)
+            .unwrap()
+            .as_ref()
+            .map(|layout| f(layout))
+    }
+
     /// Get the trampoline type for the given function type index.
     ///
     /// Panics for non-function type indices.

@@ -89,6 +89,8 @@ use crate::prelude::*;
 use crate::runtime::vm::GcRootsList;
 #[cfg(feature = "stack-switching")]
 use crate::runtime::vm::VMContRef;
+#[cfg(feature = "gc")]
+use crate::runtime::vm::VMExnRef;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
@@ -2045,6 +2047,18 @@ at https://bytecodealliance.org/security.
         let ptr = continuation.deref_mut() as *mut VMContRef;
         self.continuations.push(continuation);
         Ok(ptr)
+    }
+
+    /// Throws an exception.
+    ///
+    /// # Safety
+    ///
+    /// Must be invoked when Wasm code is on the stack.
+    #[cfg(feature = "gc")]
+    pub(crate) unsafe fn throw_ref(&mut self, exnref: VMExnRef) -> ! {
+        let mut nogc = AutoAssertNoGc::new(self);
+        // SAFETY: this is invoked when Wasm is on the stack.
+        unsafe { vm::throw(&mut nogc, exnref) }
     }
 
     /// Constructs and executes an `InstanceAllocationRequest` and pushes the

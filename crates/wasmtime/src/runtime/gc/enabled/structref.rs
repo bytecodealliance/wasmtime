@@ -547,7 +547,6 @@ impl StructRef {
         match layout {
             GcLayout::Struct(s) => Ok(s),
             GcLayout::Array(_) => unreachable!(),
-            GcLayout::Exception(_) => unreachable!(),
         }
     }
 
