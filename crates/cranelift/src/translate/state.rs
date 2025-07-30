@@ -10,7 +10,9 @@ use cranelift_codegen::ir::{self, Block, Inst, Value};
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::PackedOption;
 use std::vec::Vec;
-use wasmtime_environ::{FuncIndex, GlobalIndex, MemoryIndex, TypeIndex, WasmResult};
+use wasmtime_environ::{
+    FuncIndex, GlobalIndex, MemoryIndex, ModuleInternedTypeIndex, TypeIndex, WasmResult,
+};
 
 /// Information about the presence of an associated `else` for an `if`, or the
 /// lack thereof.
@@ -235,7 +237,7 @@ pub struct FuncTranslationState {
     // Map of indirect call signatures that have been created by
     // `FuncEnvironment::make_indirect_sig()`.
     // Stores both the signature reference and the number of WebAssembly arguments
-    signatures: SecondaryMap<TypeIndex, Option<(ir::SigRef, usize)>>,
+    signatures: SecondaryMap<ModuleInternedTypeIndex, Option<(ir::SigRef, usize)>>,
 
     // Imported and local functions that have been created by
     // `FuncEnvironment::make_direct_func()`.
@@ -511,12 +513,13 @@ impl FuncTranslationState {
         index: TypeIndex,
         environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<(ir::SigRef, usize)> {
-        match self.signatures[index] {
+        let interned_index = environ.module.types[index].unwrap_module_type_index();
+        match self.signatures[interned_index] {
             Some((sig, num_params)) => Ok((sig, num_params)),
             None => {
-                let sig = environ.make_indirect_sig(func, index)?;
+                let sig = environ.make_indirect_sig(func, interned_index)?;
                 let num_params = num_wasm_parameters(environ, &func.dfg.signatures[sig]);
-                self.signatures[index] = Some((sig, num_params));
+                self.signatures[interned_index] = Some((sig, num_params));
                 Ok((sig, num_params))
             }
         }
