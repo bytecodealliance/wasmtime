@@ -14,8 +14,8 @@ use io_lifetimes::AsSocketlike as _;
 use rustix::io::Errno;
 use tokio::net::{TcpListener, TcpStream};
 use wasmtime::component::{
-    Accessor, AccessorTask, FutureWriter, HostFuture, HostStream, Resource, ResourceTable,
-    StreamWriter,
+    Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureWriter, GuardedStreamWriter,
+    Resource, ResourceTable, StreamReader, StreamWriter,
 };
 
 use crate::p3::DEFAULT_BUFFER_CAPACITY;
@@ -57,16 +57,17 @@ fn get_socket_mut<'a>(
 struct ListenTask {
     listener: Arc<TcpListener>,
     family: SocketAddressFamily,
-    tx: StreamWriter<Option<Resource<TcpSocket>>>,
+    tx: StreamWriter<Resource<TcpSocket>>,
     options: NonInheritedOptions,
 }
 
 impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
-    async fn run(mut self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
-        while !self.tx.is_closed() {
+    async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
+        let mut tx = GuardedStreamWriter::new(store, self.tx);
+        while !tx.is_closed() {
             let Some(res) = ({
                 let mut accept = pin!(self.listener.accept());
-                let mut tx = pin!(self.tx.watch_reader(store));
+                let mut tx = pin!(tx.watch_reader());
                 poll_fn(|cx| match tx.as_mut().poll(cx) {
                     Poll::Ready(()) => return Poll::Ready(None),
                     Poll::Pending => accept.as_mut().poll(cx).map(Some),
@@ -121,8 +122,8 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
                     .push(TcpSocket::from_state(state, self.family))
                     .context("failed to push socket resource to table")
             })?;
-            if let Some(socket) = self.tx.write(store, Some(socket)).await {
-                debug_assert!(self.tx.is_closed());
+            if let Some(socket) = tx.write(Some(socket)).await {
+                debug_assert!(tx.is_closed());
                 store.with(|mut view| {
                     view.get()
                         .table
@@ -143,32 +144,32 @@ struct ResultWriteTask {
 
 impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ResultWriteTask {
     async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
-        self.result_tx.write(store, self.result).await;
+        GuardedFutureWriter::new(store, self.result_tx)
+            .write(self.result)
+            .await;
         Ok(())
     }
 }
 
 struct ReceiveTask {
     stream: Arc<TcpStream>,
-    data_tx: StreamWriter<Cursor<BytesMut>>,
+    data_tx: StreamWriter<u8>,
     result_tx: FutureWriter<Result<(), ErrorCode>>,
 }
 
 impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
-    async fn run(mut self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
+    async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
         let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
+        let mut data_tx = GuardedStreamWriter::new(store, self.data_tx);
+        let result_tx = GuardedFutureWriter::new(store, self.result_tx);
         let res = loop {
             match self.stream.try_read_buf(&mut buf) {
                 Ok(0) => {
                     break Ok(());
                 }
                 Ok(..) => {
-                    buf = self
-                        .data_tx
-                        .write_all(store, Cursor::new(buf))
-                        .await
-                        .into_inner();
-                    if self.data_tx.is_closed() {
+                    buf = data_tx.write_all(Cursor::new(buf)).await.into_inner();
+                    if data_tx.is_closed() {
                         break Ok(());
                     }
                     buf.clear();
@@ -176,7 +177,7 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     let Some(res) = ({
                         let mut readable = pin!(self.stream.readable());
-                        let mut tx = pin!(self.data_tx.watch_reader(store));
+                        let mut tx = pin!(data_tx.watch_reader());
                         poll_fn(|cx| match tx.as_mut().poll(cx) {
                             Poll::Ready(()) => return Poll::Ready(None),
                             Poll::Pending => readable.as_mut().poll(cx).map(Some),
@@ -203,7 +204,7 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
         // task are freed
         store.spawn(ResultWriteTask {
             result: res,
-            result_tx: self.result_tx,
+            result_tx: result_tx.into(),
         });
         Ok(())
     }
@@ -284,14 +285,10 @@ impl HostTcpSocketWithStore for WasiSockets {
     async fn listen<T: 'static>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<HostStream<Resource<TcpSocket>>, ErrorCode>> {
+    ) -> wasmtime::Result<Result<StreamReader<Resource<TcpSocket>>, ErrorCode>> {
         store.with(|mut view| {
-            let (tx, rx) = view
-                .instance()
-                .stream::<_, _, Option<_>>(&mut view)
-                .context("failed to create stream")?;
             if !view.get().ctx.allowed_network_uses.tcp {
-                return Ok(Err(ErrorCode::AccessDenied));
+                return anyhow::Ok(Err(ErrorCode::AccessDenied));
             }
             let TcpSocket {
                 tcp_state,
@@ -328,24 +325,29 @@ impl HostTcpSocketWithStore for WasiSockets {
             };
             let listener = Arc::new(listener);
             *tcp_state = TcpState::Listening(Arc::clone(&listener));
+            let family = *family;
+            let options = options.clone();
+            let (tx, rx) = view
+                .instance()
+                .stream(&mut view)
+                .context("failed to create stream")?;
             let task = ListenTask {
                 listener,
-                family: *family,
+                family,
                 tx,
-                options: options.clone(),
+                options,
             };
             view.spawn(task);
-            Ok(Ok(rx.into()))
+            Ok(Ok(rx))
         })
     }
 
     async fn send<T: 'static>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
-        data: HostStream<u8>,
+        data: StreamReader<u8>,
     ) -> wasmtime::Result<Result<(), ErrorCode>> {
         let (stream, mut data) = match store.with(|mut view| -> wasmtime::Result<_> {
-            let data = data.into_reader::<Vec<_>>(&mut view);
             let sock = get_socket(view.get().table, &socket)?;
             if let TcpState::Connected(stream) | TcpState::Receiving(stream) = &sock.tcp_state {
                 Ok(Ok((Arc::clone(&stream), data)))
@@ -387,32 +389,34 @@ impl HostTcpSocketWithStore for WasiSockets {
     async fn receive<T: 'static>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<(HostStream<u8>, HostFuture<Result<(), ErrorCode>>)> {
+    ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
         store.with(|mut view| {
             let instance = view.instance();
             let (data_tx, data_rx) = instance
-                .stream::<_, _, BytesMut>(&mut view)
+                .stream(&mut view)
                 .context("failed to create stream")?;
             let TcpSocket { tcp_state, .. } = get_socket_mut(view.get().table, &socket)?;
             match mem::replace(tcp_state, TcpState::Closed) {
                 TcpState::Connected(stream) => {
                     *tcp_state = TcpState::Receiving(Arc::clone(&stream));
                     let (result_tx, result_rx) = instance
-                        .future(|| unreachable!(), &mut view)
+                        .future(&mut view, || unreachable!())
                         .context("failed to create future")?;
                     view.spawn(ReceiveTask {
                         stream,
                         data_tx,
                         result_tx,
                     });
-                    Ok((data_rx.into(), result_rx.into()))
+                    Ok((data_rx, result_rx))
                 }
                 prev => {
                     *tcp_state = prev;
-                    let (_, result_rx) = instance
-                        .future(|| Err(ErrorCode::InvalidState), &mut view)
+                    let (result_tx, result_rx) = instance
+                        .future(&mut view, || Err(ErrorCode::InvalidState))
                         .context("failed to create future")?;
-                    Ok((data_rx.into(), result_rx.into()))
+                    result_tx.close(&mut view)?;
+                    data_tx.close(&mut view)?;
+                    Ok((data_rx, result_rx))
                 }
             }
         })
