@@ -76,7 +76,7 @@ export PATH="$HOME/.cargo/bin:$PATH"'
 
 You can also use [`binstall`](https://github.com/cargo-bins/cargo-binstall) to automatically find and install the correct `wasmtime` binary for your system, matching a candidate from [GitHub Releases](https://github.com/bytecodealliance/wasmtime/releases):  
 
-```
+```console
 cargo binstall wasmtime-cli
 ```
 
