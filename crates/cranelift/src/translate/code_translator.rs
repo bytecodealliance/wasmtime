@@ -623,7 +623,8 @@ pub fn translate_operator(
          ************************************************************************************/
         Operator::Call { function_index } => {
             let function_index = FuncIndex::from_u32(*function_index);
-            let (fref, num_args) = state.get_direct_func(builder.func, function_index, environ)?;
+            let fref = state.get_direct_func(builder.func, function_index, environ)?;
+            let num_args = environ.num_params_for_func(function_index);
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
             let args = state.peekn_mut(num_args);
@@ -654,7 +655,8 @@ pub fn translate_operator(
             // `table_index` is the index of the table to search the function
             // in.
             let type_index = TypeIndex::from_u32(*type_index);
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, type_index, environ)?;
+            let sigref = state.get_indirect_sig(builder.func, type_index, environ)?;
+            let num_args = environ.num_params_for_function_type(type_index);
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -695,7 +697,8 @@ pub fn translate_operator(
          ************************************************************************************/
         Operator::ReturnCall { function_index } => {
             let function_index = FuncIndex::from_u32(*function_index);
-            let (fref, num_args) = state.get_direct_func(builder.func, function_index, environ)?;
+            let fref = state.get_direct_func(builder.func, function_index, environ)?;
+            let num_args = environ.num_params_for_func(function_index);
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
             let args = state.peekn_mut(num_args);
@@ -719,7 +722,8 @@ pub fn translate_operator(
             // `table_index` is the index of the table to search the function
             // in.
             let type_index = TypeIndex::from_u32(*type_index);
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, type_index, environ)?;
+            let sigref = state.get_indirect_sig(builder.func, type_index, environ)?;
+            let num_args = environ.num_params_for_function_type(type_index);
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -744,7 +748,8 @@ pub fn translate_operator(
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
             let type_index = TypeIndex::from_u32(*type_index);
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, type_index, environ)?;
+            let sigref = state.get_indirect_sig(builder.func, type_index, environ)?;
+            let num_args = environ.num_params_for_function_type(type_index);
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -2485,7 +2490,8 @@ pub fn translate_operator(
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
             let type_index = TypeIndex::from_u32(*type_index);
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, type_index, environ)?;
+            let sigref = state.get_indirect_sig(builder.func, type_index, environ)?;
+            let num_args = environ.num_params_for_function_type(type_index);
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
