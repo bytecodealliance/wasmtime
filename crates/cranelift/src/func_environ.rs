@@ -95,7 +95,7 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 pub struct FuncEnvironment<'module_environment> {
     compiler: &'module_environment Compiler,
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
-    module: &'module_environment Module,
+    pub(crate) module: &'module_environment Module,
     types: &'module_environment ModuleTypesBuilder,
     wasm_func_ty: &'module_environment WasmFuncType,
     sig_ref_to_ty: SecondaryMap<ir::SigRef, Option<&'module_environment WasmFuncType>>,
@@ -2611,10 +2611,9 @@ impl FuncEnvironment<'_> {
     pub fn make_indirect_sig(
         &mut self,
         func: &mut ir::Function,
-        index: TypeIndex,
+        index: ModuleInternedTypeIndex,
     ) -> WasmResult<ir::SigRef> {
-        let interned_index = self.module.types[index].unwrap_module_type_index();
-        let wasm_func_ty = self.types[interned_index].unwrap_func();
+        let wasm_func_ty = self.types[index].unwrap_func();
         let sig = crate::wasm_call_signature(self.isa, wasm_func_ty, &self.tunables);
         let sig_ref = func.import_signature(sig);
         self.sig_ref_to_ty[sig_ref] = Some(wasm_func_ty);
