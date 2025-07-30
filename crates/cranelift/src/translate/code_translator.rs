@@ -588,25 +588,21 @@ pub fn translate_operator(
          ************************************************************************************/
         Operator::Call { function_index } => {
             let function_index = FuncIndex::from_u32(*function_index);
-            let fref = environ.get_or_create_func_ref(builder.func, function_index);
+            let ty = environ.module.functions[function_index]
+                .signature
+                .unwrap_module_type_index();
+            let sig_ref = environ.get_or_create_interned_sig_ref(builder.func, ty);
             let num_args = environ.num_params_for_func(function_index);
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
             let args = stack.peekn_mut(num_args);
-            bitcast_wasm_params(
-                environ,
-                builder.func.dfg.ext_funcs[fref].signature,
-                args,
-                builder,
-            );
+            bitcast_wasm_params(environ, sig_ref, args, builder);
 
-            let call = environ.translate_call(builder, function_index, fref, args)?;
+            let call = environ.translate_call(builder, function_index, sig_ref, args)?;
             let inst_results = builder.inst_results(call);
             debug_assert_eq!(
                 inst_results.len(),
-                builder.func.dfg.signatures[builder.func.dfg.ext_funcs[fref].signature]
-                    .returns
-                    .len(),
+                builder.func.dfg.signatures[sig_ref].returns.len(),
                 "translate_call results should match the call signature"
             );
             stack.popn(num_args);
@@ -662,19 +658,17 @@ pub fn translate_operator(
          ************************************************************************************/
         Operator::ReturnCall { function_index } => {
             let function_index = FuncIndex::from_u32(*function_index);
-            let fref = environ.get_or_create_func_ref(builder.func, function_index);
+            let ty = environ.module.functions[function_index]
+                .signature
+                .unwrap_module_type_index();
+            let sig_ref = environ.get_or_create_interned_sig_ref(builder.func, ty);
             let num_args = environ.num_params_for_func(function_index);
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
             let args = stack.peekn_mut(num_args);
-            bitcast_wasm_params(
-                environ,
-                builder.func.dfg.ext_funcs[fref].signature,
-                args,
-                builder,
-            );
+            bitcast_wasm_params(environ, sig_ref, args, builder);
 
-            environ.translate_return_call(builder, function_index, fref, args)?;
+            environ.translate_return_call(builder, function_index, sig_ref, args)?;
 
             stack.popn(num_args);
             stack.reachable = false;
