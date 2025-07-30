@@ -3,7 +3,7 @@ use super::{
     Event, GlobalErrorContextRefCount, LocalErrorContextRefCount, StateTable, Waitable,
     WaitableCommon, WaitableState,
 };
-use crate::component::concurrent::{ConcurrentState, HostTaskOutput, tls};
+use crate::component::concurrent::{ConcurrentState, WorkItem};
 use crate::component::func::{self, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
@@ -24,7 +24,7 @@ use std::iter;
 use std::marker::PhantomData;
 use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::string::{String, ToString};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::task::{Poll, Waker};
 use std::vec::Vec;
 use wasmtime_environ::component::{
@@ -1792,13 +1792,12 @@ impl Instance {
                     // embedder frames on the stack is unsound.
                     let (tx, rx) = oneshot::channel();
                     let token = StoreToken::new(store.as_context_mut());
-                    self.concurrent_state_mut(store.0)
-                        .push_future(Box::pin(async move {
-                            HostTaskOutput::Result(tls::get(|store| {
-                                _ = tx.send(accept(token.as_context_mut(store))?);
-                                Ok(())
-                            }))
-                        }));
+                    self.concurrent_state_mut(store.0).push_high_priority(
+                        WorkItem::WorkerFunction(Mutex::new(Box::new(move |store, _| {
+                            _ = tx.send(accept(token.as_context_mut(store))?);
+                            Ok(())
+                        }))),
+                    );
                     Err(rx)
                 }
             }
