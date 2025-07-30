@@ -79,6 +79,7 @@
 use crate::RootSet;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
+#[cfg(feature = "rr")]
 use crate::runtime::rr::{RREvent, RecordBuffer, Recorder, ReplayBuffer, ReplayError, Replayer};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
@@ -93,7 +94,8 @@ use crate::runtime::vm::{
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Memory, Table, Uninhabited};
-use crate::{RecordMetadata, ReplayMetadata};
+#[cfg(feature = "rr")]
+use crate::{RecordSettings, ReplaySettings};
 use alloc::sync::Arc;
 use core::fmt;
 use core::marker;
@@ -400,10 +402,12 @@ pub struct StoreOpaque {
     /// Storage for recording execution
     ///
     /// `None` implies recording is disabled for this store
+    #[cfg(feature = "rr")]
     record_buffer: Option<RecordBuffer>,
     /// Storage for replaying execution
     ///
     /// `None` implies replay is disabled for this store
+    #[cfg(feature = "rr")]
     replay_buffer: Option<ReplayBuffer>,
 }
 
@@ -537,8 +541,6 @@ impl<T> Store<T> {
 
         let pkey = engine.allocator().next_available_pkey();
 
-        let rr = engine.rr();
-
         let inner = StoreOpaque {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
@@ -591,23 +593,25 @@ impl<T> Store<T> {
                 debug_assert!(engine.target().is_pulley());
                 Executor::Interpreter(Interpreter::new(engine))
             },
-            record_buffer: rr.and_then(|v| {
+            #[cfg(feature = "rr")]
+            record_buffer: engine.rr().and_then(|v| {
                 v.record().and_then(|record| {
                     Some(
                         RecordBuffer::new_recorder(
                             (record.writer_initializer)(),
-                            record.metadata.clone(),
+                            record.settings.clone(),
                         )
                         .unwrap(),
                     )
                 })
             }),
-            replay_buffer: rr.and_then(|v| {
+            #[cfg(feature = "rr")]
+            replay_buffer: engine.rr().and_then(|v| {
                 v.replay().and_then(|replay| {
                     Some(
                         ReplayBuffer::new_replayer(
                             (replay.reader_initializer)(),
-                            replay.metadata.clone(),
+                            replay.settings.clone(),
                         )
                         .unwrap(),
                     )
@@ -1369,11 +1373,13 @@ impl StoreOpaque {
         &self.vm_store_context
     }
 
+    #[cfg(feature = "rr")]
     #[inline]
     pub fn record_buffer_mut(&mut self) -> Option<&mut RecordBuffer> {
         self.record_buffer.as_mut()
     }
 
+    #[cfg(feature = "rr")]
     #[inline]
     pub fn replay_buffer_mut(&mut self) -> Option<&mut ReplayBuffer> {
         self.replay_buffer.as_mut()
@@ -1382,11 +1388,12 @@ impl StoreOpaque {
     /// Record the given event into the store's record buffer
     ///
     /// Convenience wrapper around [`Recorder::record_event`]
+    #[cfg(feature = "rr")]
     #[inline]
     pub(crate) fn record_event<T, F>(&mut self, f: F) -> Result<()>
     where
         T: Into<RREvent>,
-        F: FnOnce(&RecordMetadata) -> T,
+        F: FnOnce(&RecordSettings) -> T,
     {
         if let Some(buf) = self.record_buffer_mut() {
             buf.record_event(f)
@@ -1398,12 +1405,13 @@ impl StoreOpaque {
     /// Conditionally record the given event into the store's record buffer
     ///
     /// Convenience wrapper around [`Recorder::record_event_if`]
+    #[cfg(feature = "rr")]
     #[inline]
     pub(crate) fn record_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<()>
     where
         T: Into<RREvent>,
-        P: FnOnce(&RecordMetadata) -> bool,
-        F: FnOnce(&RecordMetadata) -> T,
+        P: FnOnce(&RecordSettings) -> bool,
+        F: FnOnce(&RecordSettings) -> T,
     {
         if let Some(buf) = self.record_buffer_mut() {
             buf.record_event_if(pred, f)
@@ -1415,12 +1423,13 @@ impl StoreOpaque {
     /// Process the next replay event from the store's replay buffer
     ///
     /// Convenience wrapper around [`Replayer::next_event_and`]
+    #[cfg(feature = "rr")]
     #[inline]
     pub(crate) fn next_replay_event_and<T, F>(&mut self, f: F) -> Result<(), ReplayError>
     where
         T: TryFrom<RREvent>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
-        F: FnOnce(T, &ReplayMetadata) -> Result<(), ReplayError>,
+        F: FnOnce(T, &ReplaySettings) -> Result<(), ReplayError>,
     {
         if let Some(buf) = self.replay_buffer_mut() {
             buf.next_event_and(f)
@@ -1432,14 +1441,14 @@ impl StoreOpaque {
     /// Conditionally process the next replay event from the store's replay buffer
     ///
     /// Convenience wrapper around [`Replayer::next_event_if`]
+    #[cfg(feature = "rr")]
     #[inline]
-    #[allow(dead_code)]
     pub(crate) fn next_replay_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<(), ReplayError>
     where
         T: TryFrom<RREvent>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
-        P: FnOnce(&ReplayMetadata, &RecordMetadata) -> bool,
-        F: FnOnce(T, &ReplayMetadata) -> Result<(), ReplayError>,
+        P: FnOnce(&ReplaySettings, &RecordSettings) -> bool,
+        F: FnOnce(T, &ReplaySettings) -> Result<(), ReplayError>,
     {
         if let Some(buf) = self.replay_buffer_mut() {
             buf.next_event_if(pred, f)
@@ -1448,16 +1457,18 @@ impl StoreOpaque {
         }
     }
 
-    /// Check if recording or replaying is enabled for the Store
-    #[inline]
-    pub fn rr_enabled(&self) -> bool {
-        self.record_buffer.is_some() || self.replay_buffer.is_some()
-    }
-
     /// Check if replay is enabled for the Store
-    #[inline]
+    ///
+    /// Note: Defaults to false when `rr` feature is disabled
+    #[inline(always)]
     pub fn replay_enabled(&self) -> bool {
-        self.replay_buffer.is_some()
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "rr")] {
+                self.replay_buffer.is_some()
+            } else {
+                false
+            }
+        }
     }
 
     #[inline(never)]

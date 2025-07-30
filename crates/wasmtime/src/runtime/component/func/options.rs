@@ -1,17 +1,21 @@
+#[cfg(feature = "rr-component")]
+use crate::ValRaw;
 use crate::component::ResourceType;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::prelude::*;
-use crate::runtime::rr::events::component_wasm::{
+#[cfg(feature = "rr-component")]
+use crate::runtime::rr::component_events::{
     MemorySliceWriteEvent, ReallocEntryEvent, ReallocReturnEvent,
 };
+#[cfg(feature = "rr-component")]
 use crate::runtime::rr::{RREvent, RecordBuffer, Recorder, Replayer};
 use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
 };
 use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
-use crate::{FuncType, StoreContextMut, ValRaw};
+use crate::{FuncType, StoreContextMut};
 use alloc::sync::Arc;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
@@ -29,6 +33,7 @@ use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTa
 pub struct MemorySliceCell<'a> {
     offset: usize,
     bytes: &'a mut [u8],
+    #[cfg(feature = "rr-component")]
     recorder: Option<&'a mut RecordBuffer>,
 }
 impl<'a> Deref for MemorySliceCell<'a> {
@@ -45,6 +50,7 @@ impl DerefMut for MemorySliceCell<'_> {
 impl Drop for MemorySliceCell<'_> {
     /// Drop serves as a recording hook for stores to the memory slice
     fn drop(&mut self) {
+        #[cfg(feature = "rr-component")]
         if let Some(buf) = &mut self.recorder {
             buf.record_event(|_| MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()))
                 .unwrap();
@@ -83,6 +89,7 @@ impl Drop for MemorySliceCell<'_> {
 pub struct ConstMemorySliceCell<'a, const N: usize> {
     offset: usize,
     bytes: &'a mut [u8; N],
+    #[cfg(feature = "rr-component")]
     recorder: Option<&'a mut RecordBuffer>,
 }
 impl<'a, const N: usize> Deref for ConstMemorySliceCell<'a, N> {
@@ -99,6 +106,7 @@ impl<'a, const N: usize> DerefMut for ConstMemorySliceCell<'a, N> {
 impl<'a, const N: usize> Drop for ConstMemorySliceCell<'a, N> {
     /// Drops serves as a recording hook for stores to the memory slice
     fn drop(&mut self) {
+        #[cfg(feature = "rr-component")]
         if let Some(buf) = &mut self.recorder {
             buf.record_event_if(
                 |_| true,
@@ -252,6 +260,7 @@ impl Options {
     }
 
     /// Same as [`memory_mut`](Self::memory_mut), but with the record buffer from the encapsulating store
+    #[cfg(feature = "rr-component")]
     fn memory_mut_with_recorder<'a>(
         &self,
         store: &'a mut StoreOpaque,
@@ -341,6 +350,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// # Panics
     ///
     /// See [`as_slice`](Self::as_slice)
+    #[cfg(feature = "rr-component")]
     fn as_slice_mut_with_recorder(&mut self) -> (&mut [u8], Option<&mut RecordBuffer>) {
         self.options.memory_mut_with_recorder(self.store.0)
     }
@@ -405,10 +415,12 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         old_align: u32,
         new_size: usize,
     ) -> Result<usize> {
+        #[cfg(feature = "rr-component")]
         self.store
             .0
             .record_event(|_| ReallocEntryEvent::new(old, old_size, old_align, new_size))?;
         let result = self.realloc_inner(old, old_size, old_align, new_size);
+        #[cfg(feature = "rr-component")]
         self.store
             .0
             .record_event_if(|r| r.add_validation, |_| ReallocReturnEvent::new(&result))?;
@@ -427,7 +439,13 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// (e.g. it wasn't present during the specification of canonical options).
     #[inline]
     pub fn get<const N: usize>(&mut self, offset: usize) -> ConstMemorySliceCell<N> {
-        let (slice_mut, recorder) = self.as_slice_mut_with_recorder();
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "rr-component")] {
+                let (slice_mut, recorder) = self.as_slice_mut_with_recorder();
+            } else {
+                let slice_mut = self.as_slice_mut();
+            }
+        }
         // FIXME: this bounds check shouldn't actually be necessary, all
         // callers of `ComponentType::store` have already performed a bounds
         // check so we're guaranteed that `offset..offset+N` is in-bounds. That
@@ -441,6 +459,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         ConstMemorySliceCell {
             offset: offset,
             bytes: slice_mut[offset..].first_chunk_mut().unwrap(),
+            #[cfg(feature = "rr-component")]
             recorder: recorder,
         }
     }
@@ -453,10 +472,17 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// Refer to [`get`](Self::get).
     #[inline]
     pub fn get_dyn(&mut self, offset: usize, size: usize) -> MemorySliceCell {
-        let (slice_mut, recorder) = self.as_slice_mut_with_recorder();
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "rr-component")] {
+                let (slice_mut, recorder) = self.as_slice_mut_with_recorder();
+            } else {
+                let slice_mut = self.as_slice_mut();
+            }
+        }
         MemorySliceCell {
             offset: offset,
             bytes: &mut slice_mut[offset..][..size],
+            #[cfg(feature = "rr-component")]
             recorder: recorder,
         }
     }
@@ -559,6 +585,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// ## Important Notes
     ///
     /// * It is assumed that this is only invoked at the root lower/store calls
+    #[cfg(feature = "rr-component")]
     pub fn replay_lowering(
         &mut self,
         mut result_storage: Option<&mut [ValRaw]>,
@@ -571,12 +598,12 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         while !complete {
             let buf = self.store.0.replay_buffer_mut().unwrap();
             let event = buf.next_event()?;
-            let _replay_metadata = buf.metadata();
+            let _replay_settings = buf.settings();
             match event {
                 RREvent::ComponentHostFuncReturn(e) => {
                     // End of lowering process
                     #[cfg(feature = "rr-type-validation")]
-                    if _replay_metadata.validate {
+                    if _replay_settings.validate {
                         e.validate(result_tys)?
                     }
                     if let Some(storage) = result_storage.as_deref_mut() {

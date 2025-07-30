@@ -7,8 +7,8 @@ use crate::runtime::vm::{
 use crate::store::{AllocateInstanceKind, InstanceId, StoreInstanceId, StoreOpaque};
 use crate::types::matching;
 use crate::{
-    AsContextMut, Engine, Export, Extern, ExternType, Func, Global, Memory, Module, ModuleExport,
-    SharedMemory, StoreContext, StoreContextMut, Table, Tag, TypedFunc,
+    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, ModuleExport, SharedMemory,
+    StoreContext, StoreContextMut, Table, Tag, TypedFunc,
 };
 use alloc::sync::Arc;
 use core::ptr::NonNull;
@@ -923,8 +923,10 @@ fn pre_instantiate_raw(
         imports.push(&item, store);
     }
 
+    #[cfg(feature = "rr")]
     if module.engine().rr().is_some()
         && module.exports().any(|export| {
+            use crate::ExternType;
             if let ExternType::Memory(_) = export.ty() {
                 true
             } else {
@@ -932,7 +934,7 @@ fn pre_instantiate_raw(
             }
         })
     {
-        bail!("Cannot enable record/replay for core wasm modules when a memory is exported");
+        bail!("Cannot support record/replay for core wasm modules when a memory is exported");
     }
 
     Ok(imports)

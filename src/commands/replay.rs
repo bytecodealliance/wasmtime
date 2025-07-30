@@ -4,7 +4,7 @@ use crate::commands::run::RunCommand;
 use anyhow::Result;
 use clap::Parser;
 use std::{fs, io::BufReader, path::PathBuf, sync::Arc};
-use wasmtime::{ReplayConfig, ReplayMetadata};
+use wasmtime::{ReplayConfig, ReplaySettings};
 
 #[derive(Parser)]
 /// Replay-specific options for CLI
@@ -44,7 +44,7 @@ impl ReplayCommand {
                     fs::File::open(&self.replay_opts.trace).unwrap(),
                 ))
             }),
-            metadata: ReplayMetadata {
+            settings: ReplaySettings {
                 validate: self.replay_opts.validate,
             },
         };

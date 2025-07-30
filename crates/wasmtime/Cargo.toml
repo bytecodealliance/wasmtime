@@ -397,12 +397,15 @@ component-model-async = [
   "dep:futures"
 ]
 
-# Enables support for record/replay
-rr = ["rr-component", "rr-core"]
 # RR for components
-rr-component = ["component-model", "dep:embedded-io", "dep:postcard"]
-# RR for core wasm
-rr-core = ["dep:embedded-io", "dep:postcard"]
-# Support for validation signatures/checks during record/replay respectively
-rr-type-validation = []
+rr-component = ["component-model", "rr"]
 
+# RR for core wasm
+rr-core = ["rr"]
+
+# Support for validation signatures/checks during record/replay respectively.
+# This feature only makes sense if 'rr-component' or 'rr-core' is enabled
+rr-type-validation = ["rr"]
+
+# Base primtives for any rr capability
+rr = ["dep:embedded-io", "dep:postcard"]

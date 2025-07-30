@@ -1,4 +1,5 @@
 //! Module comprising of component model wasm events
+
 use super::*;
 #[expect(unused_imports, reason = "used for doc-links")]
 use crate::component::{Component, ComponentType};

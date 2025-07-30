@@ -109,5 +109,5 @@ where
     }
 }
 
-pub mod component_wasm;
-pub mod core_wasm;
+pub mod component_events;
+pub mod core_events;

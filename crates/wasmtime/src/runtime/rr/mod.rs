@@ -1,3 +1,4 @@
+#![cfg(feature = "rr")]
 //! Wasmtime's Record and Replay support.
 //!
 //! This feature is currently not optimized and under development
@@ -6,14 +7,17 @@
 //!
 //! This module does NOT support RR for component builtins yet.
 
-use crate::config::{ModuleVersionStrategy, RecordMetadata, ReplayMetadata};
+use crate::config::{ModuleVersionStrategy, RecordSettings, ReplaySettings};
 use crate::prelude::*;
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
 /// Encapsulation of event types comprising an [`RREvent`] sum type
-pub mod events;
-use events::*;
+mod events;
+use events::EventActionError;
+
+pub use events::component_events;
+pub use events::core_events;
 
 /// I/O support for reading and writing traces
 mod io;
@@ -77,35 +81,35 @@ macro_rules! rr_event {
 // Set of supported record/replay events
 rr_event! {
     /// Call into host function from Core Wasm
-    CoreHostFuncEntry(core_wasm::HostFuncEntryEvent),
+    CoreHostFuncEntry(core_events::HostFuncEntryEvent),
     /// Return from host function to Core Wasm
-    CoreHostFuncReturn(core_wasm::HostFuncReturnEvent),
+    CoreHostFuncReturn(core_events::HostFuncReturnEvent),
 
     // REQUIRED events for replay
     //
     /// Instantiation of a component
-    ComponentInstantiation(component_wasm::InstantiationEvent),
+    ComponentInstantiation(component_events::InstantiationEvent),
     /// Return from host function to component
-    ComponentHostFuncReturn(component_wasm::HostFuncReturnEvent),
+    ComponentHostFuncReturn(component_events::HostFuncReturnEvent),
     /// Component ABI realloc call in linear wasm memory
-    ComponentReallocEntry(component_wasm::ReallocEntryEvent),
+    ComponentReallocEntry(component_events::ReallocEntryEvent),
     /// Return from a type lowering operation
-    ComponentLowerReturn(component_wasm::LowerReturnEvent),
+    ComponentLowerReturn(component_events::LowerReturnEvent),
     /// Return from a store during a type lowering operation
-    ComponentLowerStoreReturn(component_wasm::LowerStoreReturnEvent),
+    ComponentLowerStoreReturn(component_events::LowerStoreReturnEvent),
     /// An attempt to obtain a mutable slice into Wasm linear memory
-    ComponentMemorySliceWrite(component_wasm::MemorySliceWriteEvent),
+    ComponentMemorySliceWrite(component_events::MemorySliceWriteEvent),
 
     // OPTIONAL events for replay validation
     //
     /// Call into host function from component
-    ComponentHostFuncEntry(component_wasm::HostFuncEntryEvent),
+    ComponentHostFuncEntry(component_events::HostFuncEntryEvent),
     /// Call into [Lower::lower] for type lowering
-    ComponentLowerEntry(component_wasm::LowerEntryEvent),
+    ComponentLowerEntry(component_events::LowerEntryEvent),
     /// Call into [Lower::store] during type lowering
-    ComponentLowerStoreEntry(component_wasm::LowerStoreEntryEvent),
+    ComponentLowerStoreEntry(component_events::LowerStoreEntryEvent),
     /// Return from Component ABI realloc call
-    ComponentReallocReturn(component_wasm::ReallocReturnEvent)
+    ComponentReallocReturn(component_events::ReallocReturnEvent)
 }
 
 /// Error type signalling failures during a replay run
@@ -151,7 +155,7 @@ impl From<EventActionError> for ReplayError {
 /// This trait provides the interface for a FIFO recorder
 pub trait Recorder {
     /// Construct a recorder with the writer backend
-    fn new_recorder(writer: Box<dyn RecordWriter>, metadata: RecordMetadata) -> Result<Self>
+    fn new_recorder(writer: Box<dyn RecordWriter>, settings: RecordSettings) -> Result<Self>
     where
         Self: Sized;
 
@@ -163,26 +167,26 @@ pub trait Recorder {
     fn record_event<T, F>(&mut self, f: F) -> Result<()>
     where
         T: Into<RREvent>,
-        F: FnOnce(&RecordMetadata) -> T;
+        F: FnOnce(&RecordSettings) -> T;
 
     /// Trigger an explicit flush of any buffered data to the writer
     ///
     /// Buffer should be emptied during this process
     fn flush(&mut self) -> Result<()>;
 
-    /// Get metadata associated with the recording process
-    fn metadata(&self) -> &RecordMetadata;
+    /// Get settings associated with the recording process
+    fn settings(&self) -> &RecordSettings;
 
     // Provided methods
 
-    /// Conditionally [`record_event`](Self::record_event) when `pred` is true
+    /// Conditionally [`record_event`](Recorder::record_event) when `pred` is true
     fn record_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<()>
     where
         T: Into<RREvent>,
-        P: FnOnce(&RecordMetadata) -> bool,
-        F: FnOnce(&RecordMetadata) -> T,
+        P: FnOnce(&RecordSettings) -> bool,
+        F: FnOnce(&RecordSettings) -> T,
     {
-        if pred(self.metadata()) {
+        if pred(self.settings()) {
             self.record_event(f)?;
         }
         Ok(())
@@ -193,15 +197,15 @@ pub trait Recorder {
 /// essentially operates as an iterator over the recorded events
 pub trait Replayer: Iterator<Item = RREvent> {
     /// Constructs a reader on buffer
-    fn new_replayer(reader: Box<dyn ReplayReader>, metadata: ReplayMetadata) -> Result<Self>
+    fn new_replayer(reader: Box<dyn ReplayReader>, settings: ReplaySettings) -> Result<Self>
     where
         Self: Sized;
 
-    /// Get metadata associated with the replay process
-    fn metadata(&self) -> &ReplayMetadata;
+    /// Get settings associated with the replay process
+    fn settings(&self) -> &ReplaySettings;
 
-    /// Get the metadata embedded within the trace during recording
-    fn trace_metadata(&self) -> &RecordMetadata;
+    /// Get the settings (embedded within the trace) during recording
+    fn trace_settings(&self) -> &RecordSettings;
 
     // Provided Methods
 
@@ -209,7 +213,7 @@ pub trait Replayer: Iterator<Item = RREvent> {
     ///
     /// ## Errors
     ///
-    /// Returns a `ReplayError::EmptyBuffer` if the buffer is empty
+    /// Returns a [`ReplayError::EmptyBuffer`] if the buffer is empty
     #[inline]
     fn next_event(&mut self) -> Result<RREvent, ReplayError> {
         let event = self.next().ok_or(ReplayError::EmptyBuffer);
@@ -224,7 +228,7 @@ pub trait Replayer: Iterator<Item = RREvent> {
     ///
     /// ## Errors
     ///
-    /// See [`next_event_and`](Self::next_event_and)
+    /// See [`next_event_and`](Replayer::next_event_and)
     #[inline]
     fn next_event_typed<T>(&mut self) -> Result<T, ReplayError>
     where
@@ -245,22 +249,22 @@ pub trait Replayer: Iterator<Item = RREvent> {
     where
         T: TryFrom<RREvent>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
-        F: FnOnce(T, &ReplayMetadata) -> Result<(), ReplayError>,
+        F: FnOnce(T, &ReplaySettings) -> Result<(), ReplayError>,
     {
         let call_event = self.next_event_typed()?;
-        Ok(f(call_event, self.metadata())?)
+        Ok(f(call_event, self.settings())?)
     }
 
-    /// Conditionally execute [`next_event_and`](Self::next_event_and) when `pred` is true
+    /// Conditionally execute [`next_event_and`](Replayer::next_event_and) when `pred` is true
     #[inline]
     fn next_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<(), ReplayError>
     where
         T: TryFrom<RREvent>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
-        P: FnOnce(&ReplayMetadata, &RecordMetadata) -> bool,
-        F: FnOnce(T, &ReplayMetadata) -> Result<(), ReplayError>,
+        P: FnOnce(&ReplaySettings, &RecordSettings) -> bool,
+        F: FnOnce(T, &ReplaySettings) -> Result<(), ReplayError>,
     {
-        if pred(self.metadata(), self.trace_metadata()) {
+        if pred(self.settings(), self.trace_settings()) {
             self.next_event_and(f)
         } else {
             Ok(())
@@ -276,15 +280,15 @@ pub struct RecordBuffer {
     buf: Vec<RREvent>,
     /// Writer to store data into
     writer: Box<dyn RecordWriter>,
-    /// Metadata for record configuration
-    metadata: RecordMetadata,
+    /// Settings in record configuration
+    settings: RecordSettings,
 }
 
 impl RecordBuffer {
     /// Push a new record event [`RREvent`] to the buffer
     fn push_event(&mut self, event: RREvent) -> Result<()> {
         self.buf.push(event);
-        if self.buf.len() >= self.metadata().event_window_size {
+        if self.buf.len() >= self.settings().event_window_size {
             self.flush()?;
         }
         Ok(())
@@ -300,14 +304,14 @@ impl Drop for RecordBuffer {
 }
 
 impl Recorder for RecordBuffer {
-    fn new_recorder(mut writer: Box<dyn RecordWriter>, metadata: RecordMetadata) -> Result<Self> {
-        // Replay requires the Module version and RecordMetadata configuration
+    fn new_recorder(mut writer: Box<dyn RecordWriter>, settings: RecordSettings) -> Result<Self> {
+        // Replay requires the Module version and record settings
         io::to_record_writer(ModuleVersionStrategy::WasmtimeVersion.as_str(), &mut writer)?;
-        io::to_record_writer(&metadata, &mut writer)?;
+        io::to_record_writer(&settings, &mut writer)?;
         Ok(RecordBuffer {
             buf: Vec::new(),
             writer: writer,
-            metadata: metadata,
+            settings: settings,
         })
     }
 
@@ -315,9 +319,9 @@ impl Recorder for RecordBuffer {
     fn record_event<T, F>(&mut self, f: F) -> Result<()>
     where
         T: Into<RREvent>,
-        F: FnOnce(&RecordMetadata) -> T,
+        F: FnOnce(&RecordSettings) -> T,
     {
-        let event = f(self.metadata()).into();
+        let event = f(self.settings()).into();
         log::debug!("Recording event => {}", &event);
         self.push_event(event)
     }
@@ -331,8 +335,8 @@ impl Recorder for RecordBuffer {
     }
 
     #[inline]
-    fn metadata(&self) -> &RecordMetadata {
-        &self.metadata
+    fn settings(&self) -> &RecordSettings {
+        &self.settings
     }
 }
 
@@ -340,10 +344,10 @@ impl Recorder for RecordBuffer {
 pub struct ReplayBuffer {
     /// Reader to read replay trace from
     reader: Box<dyn ReplayReader>,
-    /// Metadata for replay configuration
-    metadata: ReplayMetadata,
-    /// Metadata for record configuration (encoded in the trace)
-    trace_metadata: RecordMetadata,
+    /// Settings in replay configuration
+    settings: ReplaySettings,
+    /// Settings for record configuration (encoded in the trace)
+    trace_settings: RecordSettings,
 }
 
 impl Iterator for ReplayBuffer {
@@ -375,7 +379,7 @@ impl Drop for ReplayBuffer {
             } else {
                 log::warn!(
                     "Replay buffer is dropped with {} remaining events, and is likely an invalid execution",
-                    self.count() - 1
+                    self.count()
                 );
             }
         }
@@ -383,7 +387,7 @@ impl Drop for ReplayBuffer {
 }
 
 impl Replayer for ReplayBuffer {
-    fn new_replayer(mut reader: Box<dyn ReplayReader>, metadata: ReplayMetadata) -> Result<Self> {
+    fn new_replayer(mut reader: Box<dyn ReplayReader>, settings: ReplaySettings) -> Result<Self> {
         // Ensure module versions match
         let mut scratch = [0u8; 12];
         let version = io::from_replay_reader::<&str, _>(&mut reader, &mut scratch)?;
@@ -393,24 +397,24 @@ impl Replayer for ReplayBuffer {
             "Wasmtime version mismatch between engine used for record and replay"
         );
 
-        // Read the recording metadata
-        let trace_metadata = io::from_replay_reader(&mut reader, &mut [0; 0])?;
+        // Read the recording settings
+        let trace_settings = io::from_replay_reader(&mut reader, &mut [0; 0])?;
 
         Ok(ReplayBuffer {
-            reader: reader,
-            metadata: metadata,
-            trace_metadata: trace_metadata,
+            reader,
+            settings,
+            trace_settings,
         })
     }
 
     #[inline]
-    fn metadata(&self) -> &ReplayMetadata {
-        &self.metadata
+    fn settings(&self) -> &ReplaySettings {
+        &self.settings
     }
 
     #[inline]
-    fn trace_metadata(&self) -> &RecordMetadata {
-        &self.trace_metadata
+    fn trace_settings(&self) -> &RecordSettings {
+        &self.trace_settings
     }
 }
 
@@ -424,7 +428,7 @@ mod tests {
 
     #[test]
     fn rr_buffers() -> Result<()> {
-        let record_metadata = RecordMetadata::default();
+        let record_settings = RecordSettings::default();
         let tmp = NamedTempFile::new()?;
         let tmppath = tmp.path().to_str().expect("Filename should be UTF-8");
 
@@ -432,7 +436,7 @@ mod tests {
 
         // Record values
         let mut recorder =
-            RecordBuffer::new_recorder(Box::new(File::create(tmppath)?), record_metadata)?;
+            RecordBuffer::new_recorder(Box::new(File::create(tmppath)?), record_settings)?;
         let event = component_wasm::HostFuncReturnEvent::new(
             values.as_slice(),
             #[cfg(feature = "rr-type-validation")]
@@ -445,11 +449,11 @@ mod tests {
         let tmppath = <TempPath as AsRef<Path>>::as_ref(&tmp)
             .to_str()
             .expect("Filename should be UTF-8");
-        let replay_metadata = ReplayMetadata { validate: true };
+        let replay_settings = ReplaySettings { validate: true };
 
         // Assert that replayed values are identical
         let mut replayer =
-            ReplayBuffer::new_replayer(Box::new(File::open(tmppath)?), replay_metadata)?;
+            ReplayBuffer::new_replayer(Box::new(File::open(tmppath)?), replay_settings)?;
         replayer.next_event_and(|store_event: component_wasm::HostFuncReturnEvent, _| {
             // Check replay matches record
             assert!(store_event == event);

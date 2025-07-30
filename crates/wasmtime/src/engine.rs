@@ -1,4 +1,5 @@
 use crate::Config;
+#[cfg(feature = "rr")]
 use crate::RRConfig;
 use crate::prelude::*;
 #[cfg(feature = "runtime")]
@@ -223,6 +224,7 @@ impl Engine {
 
     /// Returns an immutable reference to the record/replay configuration settings
     /// used by the engine
+    #[cfg(feature = "rr")]
     #[inline]
     pub fn rr(&self) -> Option<&RRConfig> {
         self.config().rr.as_ref()

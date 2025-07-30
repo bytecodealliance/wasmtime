@@ -1,5 +1,6 @@
 use crate::prelude::*;
-use crate::rr::events::core_wasm::HostFuncReturnEvent;
+#[cfg(feature = "rr-core")]
+use crate::rr::core_events::HostFuncReturnEvent;
 use crate::runtime::Uninhabited;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
@@ -2321,11 +2322,6 @@ impl HostContext {
         // should be part of this closure, and the long-jmp-ing
         // happens after the closure in handling the result.
         let run = move |mut caller: Caller<'_, T>| {
-            enum ReturnMode<R: WasmRet> {
-                Standard(R::Fallible),
-                Replay,
-            }
-
             let mut args =
                 NonNull::slice_from_raw_parts(args.cast::<MaybeUninit<ValRaw>>(), args_len);
             let vmctx = VMArrayCallHostFuncContext::from_opaque(callee_vmctx).as_ref();
@@ -2337,106 +2333,102 @@ impl HostContext {
             let state = &*(state as *const _ as *const HostFuncState<F>);
             let func = &state.func;
 
-            let type_index = vmctx.func_ref().type_index;
-            let wasm_func_type_arc = caller.engine().signatures().borrow(type_index).unwrap();
+            #[cfg(feature = "rr-core")]
+            let wasm_func_type_arc = {
+                let type_index = vmctx.func_ref().type_index;
+                caller.engine().signatures().borrow(type_index).unwrap()
+            };
+            #[cfg(feature = "rr-core")]
             let wasm_func_type = wasm_func_type_arc.unwrap_func();
 
-            // Setup call parameters
-            let params = {
-                let mut store = if P::may_gc() {
-                    AutoAssertNoGc::new(caller.store.0)
-                } else {
-                    unsafe { AutoAssertNoGc::disabled(caller.store.0) }
-                };
-
+            #[cfg(all(feature = "rr-core", feature = "rr-type-validation"))]
+            {
                 // Record/replay interceptions of raw parameters args
-                // (only when validation is enabled).
-                // Function type unwraps should never panic since they are
-                // lazily evaluated
-                #[cfg(feature = "rr-type-validation")]
-                {
-                    use crate::config::ReplayMetadata;
-                    use crate::rr::events::core_wasm::HostFuncEntryEvent;
-                    store.record_event_if(
-                        |r| r.add_validation,
-                        |_| {
-                            let num_params = wasm_func_type.params().len();
-                            HostFuncEntryEvent::new(
-                                &args.as_ref()[..num_params],
-                                // Don't need to check validation here since it is
-                                // covered by the push predicate in this case
-                                #[cfg(feature = "rr-type-validation")]
-                                Some(wasm_func_type.clone()),
-                            )
-                        },
-                    )?;
-                    store.next_replay_event_if(
-                        |_, r| r.add_validation,
-                        |_event: HostFuncEntryEvent, _r: &ReplayMetadata| {
+                use crate::config::ReplaySettings;
+                use crate::rr::core_events::HostFuncEntryEvent;
+                caller.store.0.record_event_if(
+                    |r| r.add_validation,
+                    |_| {
+                        let num_params = wasm_func_type.params().len();
+                        HostFuncEntryEvent::new(
+                            &args.as_ref()[..num_params],
+                            // Don't need to check validation here since it is
+                            // covered by the push predicate in this case
                             #[cfg(feature = "rr-type-validation")]
-                            if _r.validate {
-                                _event.validate(wasm_func_type)?;
-                            }
-                            Ok(())
-                        },
-                    )?;
-                }
+                            Some(wasm_func_type.clone()),
+                        )
+                    },
+                )?;
+                // Don't need to auto-assert GC here since we aren't using P
+                caller.store.0.next_replay_event_if(
+                    |_, r| r.add_validation,
+                    |_event: HostFuncEntryEvent, _r: &ReplaySettings| {
+                        #[cfg(feature = "rr-type-validation")]
+                        if _r.validate {
+                            _event.validate(wasm_func_type)?;
+                        }
+                        Ok(())
+                    },
+                )?;
+            }
 
-                P::load(&mut store, args.as_mut())
-                // Drop on store is necessary here; scope closure makes this implicit
-            };
-
-            let returns = if caller.store.0.replay_enabled() {
-                ReturnMode::<R>::Replay
-            } else {
-                ReturnMode::Standard('ret: {
+            if !caller.store.0.replay_enabled() {
+                let ret = 'ret: {
                     if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
                         break 'ret R::fallible_from_error(trap);
                     }
+                    // Setup call parameters
+                    let params = {
+                        let mut store = if P::may_gc() {
+                            AutoAssertNoGc::new(caller.store.0)
+                        } else {
+                            unsafe { AutoAssertNoGc::disabled(caller.store.0) }
+                        };
+                        P::load(&mut store, args.as_mut())
+                        // Drop on store is necessary here; scope closure makes this implicit
+                    };
                     let r = func(caller.sub_caller(), params);
                     if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
                         break 'ret R::fallible_from_error(trap);
                     }
-                    let fallible = r.into_fallible();
-                    if !fallible.compatible_with_store(caller.store.0) {
-                        bail!("host function attempted to return cross-`Store` value to Wasm")
-                    }
-                    fallible
-                })
-            };
-
-            let mut store = if R::may_gc() {
-                AutoAssertNoGc::new(caller.store.0)
+                    r.into_fallible()
+                };
+                if !ret.compatible_with_store(caller.store.0) {
+                    bail!("host function attempted to return cross-`Store` value to Wasm")
+                } else {
+                    let mut store = if R::may_gc() {
+                        AutoAssertNoGc::new(caller.store.0)
+                    } else {
+                        unsafe { AutoAssertNoGc::disabled(caller.store.0) }
+                    };
+                    ret.store(&mut store, args.as_mut())?;
+                }
+                #[cfg(feature = "rr-core")]
+                // Record the return value of store
+                caller.store.0.record_event(|_rmeta| {
+                    let num_results = wasm_func_type.params().len();
+                    HostFuncReturnEvent::new(
+                        unsafe { &args.as_ref()[..num_results] },
+                        #[cfg(feature = "rr-type-validation")]
+                        _rmeta.add_validation.then_some(wasm_func_type.clone()),
+                    )
+                })?;
             } else {
-                unsafe { AutoAssertNoGc::disabled(caller.store.0) }
-            };
-
-            // Record/replay interceptions of raw return args
-            let ret = match returns {
-                ReturnMode::Replay => store
+                // Replay the return value of the store
+                #[cfg(feature = "rr-core")]
+                caller
+                    .store
+                    .0
                     .next_replay_event_and(|event: HostFuncReturnEvent, _rmeta| {
                         event.move_into_slice(
                             args.as_mut(),
                             #[cfg(feature = "rr-type-validation")]
                             _rmeta.validate.then_some(wasm_func_type),
                         )
-                    })
-                    .map_err(Into::into),
-                ReturnMode::Standard(fallible) => {
-                    let fallible: <R as WasmRet>::Fallible = fallible;
-                    fallible.store(&mut store, args.as_mut())
-                }
-            }?;
-            store.record_event(|_rmeta| {
-                let num_results = wasm_func_type.params().len();
-                HostFuncReturnEvent::new(
-                    unsafe { &args.as_ref()[..num_results] },
-                    #[cfg(feature = "rr-type-validation")]
-                    _rmeta.add_validation.then_some(wasm_func_type.clone()),
-                )
-            })?;
+                    })?;
+            }
 
-            Ok(ret)
+            Ok(())
         };
 
         // With nothing else on the stack move `run` into this

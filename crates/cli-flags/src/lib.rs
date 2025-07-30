@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use wasmtime::{Config, RecordConfig, RecordMetadata};
+use wasmtime::Config;
 
 pub mod opt;
 
@@ -1012,21 +1012,26 @@ impl CommonOptions {
         }
 
         let record = &self.record;
-        if let Some(path) = record.path.clone() {
-            let default_settings = RecordMetadata::default();
-            config.enable_record(RecordConfig {
-                writer_initializer: Arc::new(move || {
-                    Box::new(BufWriter::new(fs::File::create(&path).unwrap()))
-                }),
-                metadata: RecordMetadata {
-                    add_validation: record
-                        .validation_metadata
-                        .unwrap_or(default_settings.add_validation),
-                    event_window_size: record
-                        .event_window_size
-                        .unwrap_or(default_settings.event_window_size),
-                },
-            })?;
+        match_feature! {
+            ["rr" : record.path.clone()]
+            path => {
+                use wasmtime::{RecordConfig, RecordSettings};
+                let default_settings = RecordSettings::default();
+                config.enable_record(RecordConfig {
+                    writer_initializer: Arc::new(move || {
+                        Box::new(BufWriter::new(fs::File::create(&path).unwrap()))
+                    }),
+                    settings: RecordSettings {
+                        add_validation: record
+                            .validation_metadata
+                            .unwrap_or(default_settings.add_validation),
+                        event_window_size: record
+                            .event_window_size
+                            .unwrap_or(default_settings.event_window_size),
+                    },
+                })?
+            },
+            _ => err,
         }
 
         Ok(config)

@@ -3,6 +3,7 @@ use alloc::sync::Arc;
 use bitflags::Flags;
 use core::fmt;
 use core::str::FromStr;
+#[cfg(feature = "rr")]
 use serde::{Deserialize, Serialize};
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
@@ -25,14 +26,14 @@ use crate::stack::{StackCreator, StackCreatorProxy};
 #[cfg(feature = "async")]
 use wasmtime_fiber::RuntimeFiberStackCreator;
 
+#[cfg(feature = "rr")]
+use crate::rr::{RecordWriter, ReplayReader};
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
 #[cfg(feature = "cache")]
 pub use wasmtime_cache::{Cache, CacheConfig};
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
-
-use crate::rr::{RecordWriter, ReplayReader};
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
@@ -103,7 +104,7 @@ impl core::hash::Hash for ModuleVersionStrategy {
 }
 
 impl ModuleVersionStrategy {
-    /// Get the string-encoding version of the module
+    /// Get the string-encoding version of the module.
     pub fn as_str(&self) -> &str {
         match &self {
             Self::WasmtimeVersion => env!("CARGO_PKG_VERSION"),
@@ -177,6 +178,7 @@ pub struct Config {
     pub(crate) coredump_on_trap: bool,
     pub(crate) macos_use_mach_ports: bool,
     pub(crate) detect_host_feature: Option<fn(&str) -> Option<bool>>,
+    #[cfg(feature = "rr")]
     pub(crate) rr: Option<RRConfig>,
 }
 
@@ -234,16 +236,18 @@ impl Default for CompilerConfig {
     }
 }
 
-/// Metadata for specifying recording strategy
+/// Settings for execution recording.
+#[cfg(feature = "rr")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecordMetadata {
-    /// Flag to include additional signatures for replay validation
+pub struct RecordSettings {
+    /// Flag to include additional signatures for replay validation.
     pub add_validation: bool,
-    /// Maximum window size of internal event buffer
+    /// Maximum window size of internal event buffer.
     pub event_window_size: usize,
 }
 
-impl Default for RecordMetadata {
+#[cfg(feature = "rr")]
+impl Default for RecordSettings {
     fn default() -> Self {
         Self {
             add_validation: false,
@@ -252,71 +256,79 @@ impl Default for RecordMetadata {
     }
 }
 
-/// Configuration for recording execution
+/// Configuration for recording execution.
+#[cfg(feature = "rr")]
 #[derive(Clone)]
 pub struct RecordConfig {
-    /// Closure that generates a writer for recording execution traces
+    /// Closure that generates a writer for recording execution traces.
     pub writer_initializer: Arc<dyn Fn() -> Box<dyn RecordWriter> + Send + Sync>,
-    /// Associated metadata for configuring the recording strategy
-    pub metadata: RecordMetadata,
+    /// Associated metadata for configuring the recording strategy.
+    pub settings: RecordSettings,
 }
 
-/// Metadata for specifying replay strategy
+/// Settings for execution replay.
+#[cfg(feature = "rr")]
 #[derive(Debug, Clone)]
-pub struct ReplayMetadata {
-    /// Flag to include additional signatures for replay validation
+pub struct ReplaySettings {
+    /// Flag to include additional signatures for replay validation.
     pub validate: bool,
 }
 
-impl Default for ReplayMetadata {
+#[cfg(feature = "rr")]
+impl Default for ReplaySettings {
     fn default() -> Self {
         Self { validate: true }
     }
 }
 
-/// Configuration for replay execution
+/// Configuration for replay execution.
+#[cfg(feature = "rr")]
 #[derive(Clone)]
 pub struct ReplayConfig {
-    /// Closure that generates a reader for replaying execution traces
+    /// Closure that generates a reader for replaying execution traces.
     pub reader_initializer: Arc<dyn Fn() -> Box<dyn ReplayReader> + Send + Sync>,
-    /// Flag for dynamic validation checks when replaying events
-    pub metadata: ReplayMetadata,
+    /// Flag for dynamic validation checks when replaying events.
+    pub settings: ReplaySettings,
 }
 
-/// Configurations for record/replay (RR) executions
+/// Configurations for record/replay (RR) executions.
+#[cfg(feature = "rr")]
 #[derive(Clone)]
 pub enum RRConfig {
-    /// Record configuration
+    /// Record configuration.
     Record(RecordConfig),
-    /// Replay configuration
+    /// Replay configuration.
     Replay(ReplayConfig),
 }
 
+#[cfg(feature = "rr")]
 impl From<RecordConfig> for RRConfig {
     fn from(value: RecordConfig) -> Self {
         Self::Record(value)
     }
 }
 
+#[cfg(feature = "rr")]
 impl From<ReplayConfig> for RRConfig {
     fn from(value: ReplayConfig) -> Self {
         Self::Replay(value)
     }
 }
 
+#[cfg(feature = "rr")]
 impl RRConfig {
-    /// Obtain the record configuration
+    /// Obtain the record configuration.
     ///
-    /// Return [`None`] if it is not configured
+    /// Return [`None`] if it is not configured.
     pub fn record(&self) -> Option<&RecordConfig> {
         match self {
             Self::Record(r) => Some(r),
             _ => None,
         }
     }
-    /// Obtain the replay configuration
+    /// Obtain the replay configuration.
     ///
-    /// Return [`None`] if it is not configured
+    /// Return [`None`] if it is not configured.
     pub fn replay(&self) -> Option<&ReplayConfig> {
         match self {
             Self::Replay(r) => Some(r),
@@ -377,6 +389,7 @@ impl Config {
             detect_host_feature: Some(detect_host_feature),
             #[cfg(not(feature = "std"))]
             detect_host_feature: None,
+            #[cfg(feature = "rr")]
             rr: None,
         };
         #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -1108,6 +1121,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/relaxed-simd
     pub fn relaxed_simd_deterministic(&mut self, enable: bool) -> &mut Self {
+        #[cfg(feature = "rr")]
         assert!(
             !(self.is_determinism_enforced() && !enable),
             "Deterministic relaxed SIMD cannot be disabled when record/replay is enabled"
@@ -1414,6 +1428,7 @@ impl Config {
     /// The default value for this is `false`
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
+        #[cfg(feature = "rr")]
         assert!(
             !(self.is_determinism_enforced() && !enable),
             "NaN canonicalization cannot be disabled when record/replay is enabled"
@@ -2754,7 +2769,7 @@ impl Config {
     }
 
     /// Remove determinstic execution enforcements (if any) applied
-    /// by [`Config::enforce_determinism`]
+    /// by [`Config::enforce_determinism`].
     #[inline]
     pub fn remove_determinism_enforcement(&mut self) -> &mut Self {
         self.cranelift_nan_canonicalization(false)
@@ -2763,22 +2778,24 @@ impl Config {
     }
 
     /// Evaluates to true if current configuration must respect
-    /// deterministic execution in its configuration
+    /// deterministic execution in its configuration.
     ///
-    /// Required for faithful record/replay execution
+    /// Required for faithful record/replay execution.
+    #[cfg(feature = "rr")]
     #[inline]
     pub fn is_determinism_enforced(&mut self) -> bool {
         self.rr.is_some()
     }
 
-    /// Enable execution trace recording with the provided configuration
+    /// Enable execution trace recording with the provided configuration.
     ///
     /// This method implicitly enforces determinism (see [`Config::enforce_determinism`]
     /// for details).
     ///
     /// ## Errors
     ///
-    /// Errors if record/replay are simultaneously enabled
+    /// Errors if record/replay are simultaneously enabled.
+    #[cfg(feature = "rr")]
     pub fn enable_record(&mut self, record: RecordConfig) -> Result<&mut Self> {
         self.enforce_determinism();
         if let Some(cfg) = &self.rr {
@@ -2790,14 +2807,15 @@ impl Config {
         Ok(self)
     }
 
-    /// Enable replay execution based on the provided configuration
+    /// Enable replay execution based on the provided configuration.
     ///
     /// This method implicitly enforces determinism (see [`Config::enforce_determinism`]
     /// for details).
     ///
     /// ## Errors
     ///
-    /// Errors if record/replay are simultaneously enabled
+    /// Errors if record/replay are simultaneously enabled.
+    #[cfg(feature = "rr")]
     pub fn enable_replay(&mut self, replay: ReplayConfig) -> Result<&mut Self> {
         self.enforce_determinism();
         if let Some(cfg) = &self.rr {
@@ -2809,10 +2827,12 @@ impl Config {
         Ok(self)
     }
 
-    /// Disable the currently active record/replay configuration
+    /// Disable the currently active record/replay configuration, and remove
+    /// any determinism enforcement it introduced as side-effects.
     ///
     /// A common option is used for both record/replay here
-    /// since record and replay can never be set simultaneously
+    /// since record and replay can never be set simultaneously/
+    #[cfg(feature = "rr")]
     pub fn disable_record_replay(&mut self) -> &mut Self {
         self.remove_determinism_enforcement();
         self.rr = None;

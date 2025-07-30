@@ -100,6 +100,7 @@ enum Subcommand {
     ///
     /// Note: Minimal configs for deterministic Wasm semantics will be
     /// enforced during replay by default (NaN canonicalization, deterministic relaxed SIMD)
+    #[cfg(feature = "rr")]
     Replay(wasmtime_cli::commands::ReplayCommand),
 }
 
@@ -113,7 +114,10 @@ impl Wasmtime {
 
         match subcommand {
             #[cfg(feature = "run")]
-            Subcommand::Run(c) => c.execute(None),
+            Subcommand::Run(c) => c.execute(
+                #[cfg(feature = "rr")]
+                None,
+            ),
 
             #[cfg(feature = "cache")]
             Subcommand::Config(c) => c.execute(),
@@ -139,6 +143,7 @@ impl Wasmtime {
             #[cfg(feature = "objdump")]
             Subcommand::Objdump(c) => c.execute(),
 
+            #[cfg(feature = "rr")]
             Subcommand::Replay(c) => c.execute(),
         }
     }
