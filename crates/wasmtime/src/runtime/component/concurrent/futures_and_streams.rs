@@ -407,10 +407,10 @@ pub(super) struct FlatAbi {
 /// them) which require access to the store in order to be disposed of properly.
 trait DropWithStore: Sized {
     /// Dispose of `self` using the specified store.
-    fn drop(&mut self, store: impl AsContextMut) -> Result<()>;
+    fn drop(&mut self, store: impl AsContextMut);
 
     /// Dispose of `self` using the specified accessor.
-    fn drop_with(&mut self, accessor: impl AsAccessor) -> Result<()> {
+    fn drop_with(&mut self, accessor: impl AsAccessor) {
         accessor.as_accessor().with(|store| self.drop(store))
     }
 }
@@ -521,7 +521,7 @@ impl<T> FutureWriter<T> {
     }
 
     /// Close this `FutureWriter`, writing the default value.
-    pub fn close(mut self, store: impl AsContextMut) -> Result<()>
+    pub fn close(mut self, store: impl AsContextMut)
     where
         T: func::Lower + Send + Sync + 'static,
     {
@@ -529,7 +529,7 @@ impl<T> FutureWriter<T> {
     }
 
     /// Close this `FutureWriter`, writing the default value.
-    pub fn close_with(mut self, accessor: impl AsAccessor) -> Result<()>
+    pub fn close_with(mut self, accessor: impl AsAccessor)
     where
         T: func::Lower + Send + Sync + 'static,
     {
@@ -538,12 +538,13 @@ impl<T> FutureWriter<T> {
 }
 
 impl<T: func::Lower + Send + Sync + 'static> DropWithStore for FutureWriter<T> {
-    fn drop(&mut self, mut store: impl AsContextMut) -> Result<()> {
+    fn drop(&mut self, mut store: impl AsContextMut) {
         // `self` should never be used again, but leave an invalid handle there just in case.
         let id = mem::replace(&mut self.id, TableId::new(0));
         let default = self.default;
         self.instance
             .host_drop_writer(store.as_context_mut(), id, Some(&move || Ok(default())))
+            .unwrap()
     }
 }
 
@@ -714,25 +715,27 @@ impl<T> FutureReader<T> {
     }
 
     /// Close this `FutureReader`.
-    pub fn close(mut self, store: impl AsContextMut) -> Result<()> {
+    pub fn close(mut self, store: impl AsContextMut) {
         self.drop(store)
     }
 
     /// Close this `FutureReader`.
-    pub fn close_with(mut self, accessor: impl AsAccessor) -> Result<()> {
+    pub fn close_with(mut self, accessor: impl AsAccessor) {
         accessor.as_accessor().with(|access| self.drop(access))
     }
 }
 
 impl<T> DropWithStore for FutureReader<T> {
-    fn drop(&mut self, mut store: impl AsContextMut) -> Result<()> {
+    fn drop(&mut self, mut store: impl AsContextMut) {
         // `self` should never be used again, but leave an invalid handle there just in case.
         let id = mem::replace(&mut self.id, TableId::new(0));
-        self.instance.host_drop_reader(
-            store.as_context_mut().0.traitobj_mut(),
-            id,
-            TransmitKind::Future,
-        )
+        self.instance
+            .host_drop_reader(
+                store.as_context_mut().0.traitobj_mut(),
+                id,
+                TransmitKind::Future,
+            )
+            .unwrap()
     }
 }
 
@@ -980,22 +983,23 @@ impl<T> StreamWriter<T> {
     }
 
     /// Close this `StreamWriter`.
-    pub fn close(mut self, store: impl AsContextMut) -> Result<()> {
+    pub fn close(mut self, store: impl AsContextMut) {
         self.drop(store)
     }
 
     /// Close this `StreamWriter`.
-    pub fn close_with(mut self, accessor: impl AsAccessor) -> Result<()> {
+    pub fn close_with(mut self, accessor: impl AsAccessor) {
         accessor.as_accessor().with(|access| self.drop(access))
     }
 }
 
 impl<T> DropWithStore for StreamWriter<T> {
-    fn drop(&mut self, mut store: impl AsContextMut) -> Result<()> {
+    fn drop(&mut self, mut store: impl AsContextMut) {
         // `self` should never be used again, but leave an invalid handle there just in case.
         let id = mem::replace(&mut self.id, TableId::new(0));
         self.instance
             .host_drop_writer(store.as_context_mut(), id, None::<&dyn Fn() -> Result<()>>)
+            .unwrap()
     }
 }
 
@@ -1182,25 +1186,27 @@ impl<T> StreamReader<T> {
     }
 
     /// Close this `StreamReader`.
-    pub fn close(mut self, store: impl AsContextMut) -> Result<()> {
+    pub fn close(mut self, store: impl AsContextMut) {
         self.drop(store)
     }
 
     /// Close this `StreamReader`.
-    pub fn close_with(mut self, accessor: impl AsAccessor) -> Result<()> {
+    pub fn close_with(mut self, accessor: impl AsAccessor) {
         accessor.as_accessor().with(|access| self.drop(access))
     }
 }
 
 impl<T> DropWithStore for StreamReader<T> {
-    fn drop(&mut self, mut store: impl AsContextMut) -> Result<()> {
+    fn drop(&mut self, mut store: impl AsContextMut) {
         // `self` should never be used again, but leave an invalid handle there just in case.
         let id = mem::replace(&mut self.id, TableId::new(0));
-        self.instance.host_drop_reader(
-            store.as_context_mut().0.traitobj_mut(),
-            id,
-            TransmitKind::Stream,
-        )
+        self.instance
+            .host_drop_reader(
+                store.as_context_mut().0.traitobj_mut(),
+                id,
+                TransmitKind::Stream,
+            )
+            .unwrap()
     }
 }
 
