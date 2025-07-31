@@ -1865,6 +1865,7 @@ impl Instance {
         id: TableId<TransmitHandle>,
         mut buffer: B,
         kind: TransmitKind,
+        post_write: PostWrite,
     ) -> Result<Result<HostResult<B>, oneshot::Receiver<HostResult<B>>>> {
         let transmit_id = self.concurrent_state_mut(store.0).get(id)?.state;
         let transmit = self
@@ -1878,6 +1879,10 @@ impl Instance {
         } else {
             ReadState::Open
         };
+
+        if matches!(post_write, PostWrite::Drop) && !matches!(transmit.read, ReadState::Open) {
+            transmit.write = WriteState::Dropped;
+        }
 
         Ok(match mem::replace(&mut transmit.read, new_state) {
             ReadState::Open => {
@@ -1897,7 +1902,7 @@ impl Instance {
                         _ = tx.send(result);
                         Ok(code)
                     }),
-                    post_write: PostWrite::Continue,
+                    post_write,
                 };
                 self.concurrent_state_mut(store.0)
                     .get_mut(transmit_id)?
@@ -2006,10 +2011,15 @@ impl Instance {
         buffer: B,
         kind: TransmitKind,
     ) -> Result<HostResult<B>> {
-        match accessor
-            .as_accessor()
-            .with(move |mut access| self.host_write(access.as_context_mut(), id, buffer, kind))?
-        {
+        match accessor.as_accessor().with(move |mut access| {
+            self.host_write(
+                access.as_context_mut(),
+                id,
+                buffer,
+                kind,
+                PostWrite::Continue,
+            )
+        })? {
             Ok(result) => Ok(result),
             Err(rx) => Ok(rx.await?),
         }
@@ -2250,7 +2260,6 @@ impl Instance {
         default: Option<&dyn Fn() -> Result<T>>,
     ) -> Result<()> {
         let transmit_id = self.concurrent_state_mut(store.0).get(id)?.state;
-        let token = StoreToken::new(store.as_context_mut());
         let transmit = self
             .concurrent_state_mut(store.0)
             .get_mut(transmit_id)
@@ -2274,32 +2283,27 @@ impl Instance {
                 *post_write = PostWrite::Drop;
             }
             v @ WriteState::Open => {
-                *v = if let (Some(default), false) = (
+                if let (Some(default), false) = (
                     default,
                     transmit.done || matches!(transmit.read, ReadState::Dropped),
                 ) {
                     // This is a future, and we haven't written a value yet --
                     // write the default value.
-                    let default = default()?;
-                    WriteState::HostReady {
-                        accept: Box::new(move |store, instance, reader| {
-                            let (_, code) = accept_reader::<T, Option<T>, U>(
-                                token.as_context_mut(store),
-                                instance,
-                                reader,
-                                Some(default),
-                                TransmitKind::Future,
-                            )?;
-                            Ok(code)
-                        }),
-                        post_write: PostWrite::Drop,
-                    }
+                    _ = self.host_write(
+                        store.as_context_mut(),
+                        id,
+                        Some(default()?),
+                        TransmitKind::Future,
+                        PostWrite::Drop,
+                    )?;
                 } else {
-                    WriteState::Dropped
-                };
+                    *v = WriteState::Dropped;
+                }
             }
             WriteState::Dropped => unreachable!("write state is already dropped"),
         }
+
+        let transmit = self.concurrent_state_mut(store.0).get_mut(transmit_id)?;
 
         // If the existing read state is dropped, then there's nothing to read
         // and we can keep it that way.
