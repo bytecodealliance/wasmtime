@@ -492,6 +492,9 @@ gc-drc = ["gc", "wasmtime/gc-drc", "wasmtime-cli-flags/gc-drc"]
 gc-null = ["gc", "wasmtime/gc-null", "wasmtime-cli-flags/gc-null"]
 pulley = ["wasmtime-cli-flags/pulley"]
 stack-switching = ["wasmtime/stack-switching", "wasmtime-cli-flags/stack-switching"]
+# `rr` only configures the base infrastructure and is not practically useful by itself
+# Use `rr-component` or `rr-core` for generating record/replay events for components/core wasm
+# respectively
 rr = ["wasmtime-cli-flags/rr"]
 rr-component = ["wasmtime/rr-component", "rr"]
 rr-core = ["wasmtime/rr-core", "rr"]

@@ -397,9 +397,13 @@ component-model-async = [
   "dep:futures"
 ]
 
+
+# `rr` only configures the base infrastructure and is not practically useful by itself
+# Use `rr-component` or `rr-core` for generating record/replay events for components/core wasm
+# respectively
+rr = ["dep:embedded-io", "dep:postcard"]
 # RR for components
 rr-component = ["component-model", "rr"]
-
 # RR for core wasm
 rr-core = ["rr"]
 
@@ -407,5 +411,3 @@ rr-core = ["rr"]
 # This feature only makes sense if 'rr-component' or 'rr-core' is enabled
 rr-type-validation = ["rr"]
 
-# Base primtives for any rr capability
-rr = ["dep:embedded-io", "dep:postcard"]
