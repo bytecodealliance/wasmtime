@@ -33,15 +33,11 @@ impl WasiView for Ctx {
 
 // TODO: Remove once test components are not built for `wasm32-wasip1`
 impl wasmtime_wasi::p2::WasiView for Ctx {
-    fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
-        &mut self.p2
-    }
-}
-
-// TODO: Remove once test components are not built for `wasm32-wasip1`
-impl wasmtime_wasi::p2::IoView for Ctx {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
+    fn ctx(&mut self) -> wasmtime_wasi::p2::WasiCtxView {
+        wasmtime_wasi::p2::WasiCtxView {
+            ctx: &mut self.p2,
+            table: &mut self.table,
+        }
     }
 }
 

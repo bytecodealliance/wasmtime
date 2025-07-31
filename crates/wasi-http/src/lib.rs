@@ -71,7 +71,7 @@
 //! use tokio::net::TcpListener;
 //! use wasmtime::component::{Component, Linker, ResourceTable};
 //! use wasmtime::{Config, Engine, Result, Store};
-//! use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
+//! use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiCtxBuilder, WasiView};
 //! use wasmtime_wasi_http::bindings::ProxyPre;
 //! use wasmtime_wasi_http::bindings::http::types::Scheme;
 //! use wasmtime_wasi_http::body::HyperOutgoingBody;
@@ -197,20 +197,20 @@
 //!     http: WasiHttpCtx,
 //!     table: ResourceTable,
 //! }
-//! impl IoView for MyClientState {
-//!     fn table(&mut self) -> &mut ResourceTable {
-//!         &mut self.table
-//!     }
-//! }
+//!
 //! impl WasiView for MyClientState {
-//!     fn ctx(&mut self) -> &mut WasiCtx {
-//!         &mut self.wasi
+//!     fn ctx(&mut self) -> WasiCtxView<'_> {
+//!         WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
 //!     }
 //! }
 //!
 //! impl WasiHttpView for MyClientState {
 //!     fn ctx(&mut self) -> &mut WasiHttpCtx {
 //!         &mut self.http
+//!     }
+//!
+//!     fn table(&mut self) -> &mut ResourceTable {
+//!         &mut self.table
 //!     }
 //! }
 //! ```
@@ -238,7 +238,6 @@ pub use crate::types::{
     WasiHttpImpl, WasiHttpView,
 };
 use wasmtime::component::{HasData, Linker};
-use wasmtime_wasi::p2::IoImpl;
 
 /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
 ///
@@ -254,7 +253,7 @@ use wasmtime_wasi::p2::IoImpl;
 /// ```
 /// use wasmtime::{Engine, Result, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
+/// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 ///
 /// fn main() -> Result<()> {
@@ -275,14 +274,15 @@ use wasmtime_wasi::p2::IoImpl;
 ///     table: ResourceTable,
 /// }
 ///
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
 /// impl WasiHttpView for MyState {
 ///     fn ctx(&mut self) -> &mut WasiHttpCtx { &mut self.http_ctx }
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
+///
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///     }
 /// }
 /// ```
 pub fn add_to_linker_async<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
@@ -306,10 +306,10 @@ where
 {
     let options = crate::bindings::LinkOptions::default(); // FIXME: Thread through to the CLI options.
     crate::bindings::http::outgoing_handler::add_to_linker::<_, WasiHttp<T>>(l, |x| {
-        WasiHttpImpl(IoImpl(x))
+        WasiHttpImpl(x)
     })?;
     crate::bindings::http::types::add_to_linker::<_, WasiHttp<T>>(l, &options.into(), |x| {
-        WasiHttpImpl(IoImpl(x))
+        WasiHttpImpl(x)
     })?;
 
     Ok(())
@@ -332,7 +332,7 @@ impl<T: 'static> HasData for WasiHttp<T> {
 /// ```
 /// use wasmtime::{Engine, Result, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
+/// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 ///
 /// fn main() -> Result<()> {
@@ -351,14 +351,14 @@ impl<T: 'static> HasData for WasiHttp<T> {
 ///     http_ctx: WasiHttpCtx,
 ///     table: ResourceTable,
 /// }
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
 /// impl WasiHttpView for MyState {
 ///     fn ctx(&mut self) -> &mut WasiHttpCtx { &mut self.http_ctx }
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///     }
 /// }
 /// ```
 pub fn add_to_linker_sync<T>(l: &mut Linker<T>) -> anyhow::Result<()>
@@ -380,10 +380,10 @@ where
 {
     let options = crate::bindings::LinkOptions::default(); // FIXME: Thread through to the CLI options.
     crate::bindings::sync::http::outgoing_handler::add_to_linker::<_, WasiHttp<T>>(l, |x| {
-        WasiHttpImpl(IoImpl(x))
+        WasiHttpImpl(x)
     })?;
     crate::bindings::sync::http::types::add_to_linker::<_, WasiHttp<T>>(l, &options.into(), |x| {
-        WasiHttpImpl(IoImpl(x))
+        WasiHttpImpl(x)
     })?;
 
     Ok(())

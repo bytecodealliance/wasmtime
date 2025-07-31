@@ -2,9 +2,9 @@ use anyhow::Result;
 use tempfile::TempDir;
 use wasmtime::{
     Engine, Store,
-    component::{Component, Linker, ResourceTable},
+    component::{Component, Linker},
 };
-use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView, pipe::MemoryOutputPipe};
+use wasmtime_wasi::p2::{WasiCtxBuilder, WasiCtxView, WasiView, pipe::MemoryOutputPipe};
 use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::{DirPerms, FilePerms};
 
@@ -14,14 +14,9 @@ struct Ctx {
     wasi: WasiP1Ctx,
 }
 
-impl IoView for Ctx {
-    fn table(&mut self) -> &mut ResourceTable {
-        self.wasi.table()
-    }
-}
 impl WasiView for Ctx {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        self.wasi.ctx()
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiView::ctx(&mut self.wasi)
     }
 }
 

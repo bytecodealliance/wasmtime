@@ -1,10 +1,7 @@
 use crate::I32Exit;
-use crate::p2::{WasiImpl, WasiView, bindings::cli::exit};
+use crate::p2::{WasiCtxView, bindings::cli::exit};
 
-impl<T> exit::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl exit::Host for WasiCtxView<'_> {
     fn exit(&mut self, status: Result<(), ()>) -> anyhow::Result<()> {
         let status = match status {
             Ok(()) => 0,

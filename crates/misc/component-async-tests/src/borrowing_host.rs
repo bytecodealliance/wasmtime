@@ -1,6 +1,5 @@
 use anyhow::Result;
 use wasmtime::component::Resource;
-use wasmtime_wasi::p2::IoView;
 
 use super::Ctx;
 
@@ -20,16 +19,16 @@ pub struct MyX;
 
 impl bindings::local::local::borrowing_types::HostX for &mut Ctx {
     fn new(&mut self) -> Result<Resource<MyX>> {
-        Ok(IoView::table(self).push(MyX)?)
+        Ok(self.table.push(MyX)?)
     }
 
     fn foo(&mut self, x: Resource<MyX>) -> Result<()> {
-        _ = IoView::table(self).get(&x)?;
+        _ = self.table.get(&x)?;
         Ok(())
     }
 
     fn drop(&mut self, x: Resource<MyX>) -> Result<()> {
-        IoView::table(self).delete(x)?;
+        self.table.delete(x)?;
         Ok(())
     }
 }

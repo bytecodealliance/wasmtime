@@ -5,7 +5,7 @@ use std::path::Path;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::p2::bindings::sync::Command;
-use wasmtime_wasi::p2::{WasiCtx, WasiCtxBuilder};
+use wasmtime_wasi::p2::{WasiCtx, WasiCtxBuilder, WasiCtxView};
 use wasmtime_wasi::{DirPerms, FilePerms};
 use wasmtime_wasi_nn::wit::WasiNnView;
 use wasmtime_wasi_nn::{Backend, InMemoryRegistry, wit::WasiNnCtx};
@@ -63,13 +63,11 @@ impl Ctx {
     }
 }
 
-impl wasmtime_wasi::p2::IoView for Ctx {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-}
 impl wasmtime_wasi::p2::WasiView for Ctx {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
