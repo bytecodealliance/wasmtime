@@ -172,7 +172,7 @@ pub struct Opts {
     ///
     /// This can also be toggled via the `WASMTIME_DEBUG_BINDGEN` environment
     /// variable, but that will affect _all_ `bindgen!` macro invocations (and
-    /// can sometimes lead to one invocation ovewriting another in unpredictable
+    /// can sometimes lead to one invocation overwriting another in unpredictable
     /// ways), whereas this option lets you specify it on a case-by-case basis.
     pub debug: bool,
 
