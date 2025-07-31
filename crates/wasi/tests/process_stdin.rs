@@ -1,6 +1,7 @@
 use std::io::{BufRead, Write};
 use std::process::Command;
-use wasmtime_wasi::p2::{InputStream, Pollable};
+use wasmtime_wasi::cli::StdinStream;
+use wasmtime_wasi::p2::Pollable;
 
 const VAR_NAME: &str = "__CHILD_PROCESS";
 
@@ -31,7 +32,7 @@ fn main() {
                 .block_on(async {
                     'task: loop {
                         println!("child: creating stdin");
-                        let mut stdin = wasmtime_wasi::p2::stdin();
+                        let mut stdin = wasmtime_wasi::cli::stdin().p2_stream();
 
                         println!("child: checking that stdin is not ready");
                         assert!(

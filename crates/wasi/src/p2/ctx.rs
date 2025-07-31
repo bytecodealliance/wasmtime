@@ -1,8 +1,6 @@
-use crate::cli::WasiCliCtx;
+use crate::cli::{StdinStream, StdoutStream, WasiCliCtx};
 use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
 use crate::p2::filesystem::Dir;
-use crate::p2::pipe;
-use crate::p2::stdio::{self, StdinStream, StdoutStream};
 use crate::random::WasiRandomCtx;
 use crate::sockets::{AllowedNetworkUses, SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
 use crate::{DirPerms, FilePerms, OpenMode};
@@ -14,6 +12,7 @@ use std::mem;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::pin::Pin;
+use tokio::io::{stderr, stdin, stdout};
 
 /// Builder-style structure used to create a [`WasiCtx`].
 ///
@@ -36,7 +35,7 @@ use std::pin::Pin;
 ///
 /// [`Store`]: wasmtime::Store
 pub struct WasiCtxBuilder {
-    common: crate::WasiCtxBuilder<Box<dyn StdinStream>, Box<dyn StdoutStream>>,
+    common: crate::WasiCtxBuilder,
     preopens: Vec<(Dir, String)>,
     built: bool,
 }
@@ -61,11 +60,7 @@ impl WasiCtxBuilder {
     /// methods below.
     pub fn new() -> Self {
         Self {
-            common: crate::WasiCtxBuilder::new(
-                Box::new(pipe::ClosedInputStream),
-                Box::new(pipe::SinkOutputStream),
-                Box::new(pipe::SinkOutputStream),
-            ),
+            common: crate::WasiCtxBuilder::default(),
             preopens: Vec::new(),
             built: false,
         }
@@ -77,7 +72,8 @@ impl WasiCtxBuilder {
     /// stdin looks like:
     ///
     /// ```
-    /// use wasmtime_wasi::p2::{stdin, WasiCtxBuilder};
+    /// use wasmtime_wasi::p2::WasiCtxBuilder;
+    /// use wasmtime_wasi::cli::stdin;
     ///
     /// let mut wasi = WasiCtxBuilder::new();
     /// wasi.stdin(stdin());
@@ -109,7 +105,7 @@ impl WasiCtxBuilder {
     /// when using this it's typically best to have a single wasm instance in
     /// the process using this.
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        self.stdin(stdio::stdin())
+        self.stdin(stdin())
     }
 
     /// Configures this context's stdout stream to write to the host process's
@@ -118,7 +114,7 @@ impl WasiCtxBuilder {
     /// Note that unlike [`inherit_stdin`](WasiCtxBuilder::inherit_stdin)
     /// multiple instances printing to stdout works well.
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        self.stdout(stdio::stdout())
+        self.stdout(stdout())
     }
 
     /// Configures this context's stderr stream to write to the host process's
@@ -127,7 +123,7 @@ impl WasiCtxBuilder {
     /// Note that unlike [`inherit_stdin`](WasiCtxBuilder::inherit_stdin)
     /// multiple instances printing to stderr works well.
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        self.stderr(stdio::stderr())
+        self.stderr(stderr())
     }
 
     /// Configures all of stdin, stdout, and stderr to be inherited from the

@@ -1,6 +1,5 @@
-use crate::cli::WasiCliCtx;
+use crate::cli::{StdinStream, StdoutStream, WasiCliCtx};
 use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
-use crate::p3::cli::{InputStream, OutputStream};
 use crate::p3::filesystem::Dir;
 use crate::random::WasiRandomCtx;
 use crate::sockets::{SocketAddrUse, WasiSocketsCtx};
@@ -13,7 +12,7 @@ use std::mem;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::pin::Pin;
-use tokio::io::{empty, stderr, stdin, stdout};
+use tokio::io::{stderr, stdin, stdout};
 
 /// Builder-style structure used to create a [`WasiCtx`].
 ///
@@ -36,16 +35,10 @@ use tokio::io::{empty, stderr, stdin, stdout};
 ///
 /// [`Store`]: wasmtime::Store
 pub struct WasiCtxBuilder {
-    common: crate::WasiCtxBuilder<Box<dyn InputStream>, Box<dyn OutputStream>>,
+    common: crate::WasiCtxBuilder,
     // TODO: implement filesystem
     preopens: Vec<(Dir, String)>,
     built: bool,
-}
-
-impl Default for crate::WasiCtxBuilder<Box<dyn InputStream>, Box<dyn OutputStream>> {
-    fn default() -> Self {
-        crate::WasiCtxBuilder::new(Box::new(empty()), Box::new(empty()), Box::new(empty()))
-    }
 }
 
 impl WasiCtxBuilder {
@@ -80,19 +73,19 @@ impl WasiCtxBuilder {
     ///
     /// Note that inheriting the process's stdin can also be done through
     /// [`inherit_stdin`](WasiCtxBuilder::inherit_stdin).
-    pub fn stdin(&mut self, stdin: impl InputStream + 'static) -> &mut Self {
+    pub fn stdin(&mut self, stdin: impl StdinStream + 'static) -> &mut Self {
         self.common.stdin(Box::new(stdin));
         self
     }
 
     /// Same as [`stdin`](WasiCtxBuilder::stdin), but for stdout.
-    pub fn stdout(&mut self, stdout: impl OutputStream + 'static) -> &mut Self {
+    pub fn stdout(&mut self, stdout: impl StdoutStream + 'static) -> &mut Self {
         self.common.stdout(Box::new(stdout));
         self
     }
 
     /// Same as [`stdin`](WasiCtxBuilder::stdin), but for stderr.
-    pub fn stderr(&mut self, stderr: impl OutputStream + 'static) -> &mut Self {
+    pub fn stderr(&mut self, stderr: impl StdoutStream + 'static) -> &mut Self {
         self.common.stderr(Box::new(stderr));
         self
     }
@@ -498,7 +491,7 @@ impl WasiCtxBuilder {
 /// ```
 #[derive(Default)]
 pub struct WasiCtx {
-    pub cli: WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>>,
+    pub cli: WasiCliCtx,
     pub clocks: WasiClocksCtx,
     pub random: WasiRandomCtx,
     pub sockets: WasiSocketsCtx,

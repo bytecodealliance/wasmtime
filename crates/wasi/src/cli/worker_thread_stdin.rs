@@ -23,17 +23,50 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
-use crate::cli::IsTerminal;
-use crate::p2::stdio::StdinStream;
+use crate::cli::{IsTerminal, StdinStream};
 use bytes::{Bytes, BytesMut};
 use std::io::Read;
 use std::mem;
+use std::pin::Pin;
 use std::sync::{Condvar, Mutex, OnceLock};
+use std::task::{Context, Poll};
+use tokio::io::{self, AsyncRead, ReadBuf};
 use tokio::sync::Notify;
+use tokio::sync::futures::Notified;
 use wasmtime_wasi_io::{
     poll::Pollable,
     streams::{InputStream, StreamError},
 };
+
+// Implementation for tokio::io::Stdin
+impl IsTerminal for tokio::io::Stdin {
+    fn is_terminal(&self) -> bool {
+        std::io::stdin().is_terminal()
+    }
+}
+impl StdinStream for tokio::io::Stdin {
+    fn p2_stream(&self) -> Box<dyn InputStream> {
+        Box::new(WasiStdin)
+    }
+    fn async_stream(&self) -> Box<dyn AsyncRead + Send + Sync> {
+        Box::new(WasiStdinAsyncRead::Ready)
+    }
+}
+
+// Implementation for std::io::Stdin
+impl IsTerminal for std::io::Stdin {
+    fn is_terminal(&self) -> bool {
+        std::io::IsTerminal::is_terminal(self)
+    }
+}
+impl StdinStream for std::io::Stdin {
+    fn p2_stream(&self) -> Box<dyn InputStream> {
+        Box::new(WasiStdin)
+    }
+    fn async_stream(&self) -> Box<dyn AsyncRead + Send + Sync> {
+        Box::new(WasiStdinAsyncRead::Ready)
+    }
+}
 
 #[derive(Default)]
 struct GlobalStdin {
@@ -99,32 +132,10 @@ fn create() -> GlobalStdin {
     GlobalStdin::default()
 }
 
-/// Only public interface is the [`InputStream`] impl.
-#[derive(Clone)]
-pub struct Stdin;
-
-/// Returns a stream that represents the host's standard input.
-///
-/// Suitable for passing to
-/// [`WasiCtxBuilder::stdin`](crate::p2::WasiCtxBuilder::stdin).
-pub fn stdin() -> Stdin {
-    Stdin
-}
-
-impl StdinStream for Stdin {
-    fn stream(&self) -> Box<dyn InputStream> {
-        Box::new(Stdin)
-    }
-}
-
-impl IsTerminal for Stdin {
-    fn is_terminal(&self) -> bool {
-        std::io::stdin().is_terminal()
-    }
-}
+struct WasiStdin;
 
 #[async_trait::async_trait]
-impl InputStream for Stdin {
+impl InputStream for WasiStdin {
     fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         let g = GlobalStdin::get();
         let mut locked = g.state.lock().unwrap();
@@ -157,7 +168,7 @@ impl InputStream for Stdin {
 }
 
 #[async_trait::async_trait]
-impl Pollable for Stdin {
+impl Pollable for WasiStdin {
     async fn ready(&mut self) {
         let g = GlobalStdin::get();
 
@@ -178,5 +189,96 @@ impl Pollable for Stdin {
         };
 
         notified.await;
+    }
+}
+
+enum WasiStdinAsyncRead {
+    Ready,
+    Waiting(Notified<'static>),
+}
+
+impl AsyncRead for WasiStdinAsyncRead {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let g = GlobalStdin::get();
+
+        // Perform everything below in a `loop` to handle the case that a read
+        // was stolen by another thread, for example, or perhaps a spurious
+        // notification to `Notified`.
+        loop {
+            // If we were previously blocked on reading a "ready" notification,
+            // wait for that notification to complete.
+            if let Some(notified) = self.as_mut().notified_future() {
+                match notified.poll(cx) {
+                    Poll::Ready(()) => self.set(WasiStdinAsyncRead::Ready),
+                    Poll::Pending => break Poll::Pending,
+                }
+            }
+
+            assert!(matches!(*self, WasiStdinAsyncRead::Ready));
+
+            // Once we're in the "ready" state then take a look at the global
+            // state of stdin.
+            let mut locked = g.state.lock().unwrap();
+            match mem::replace(&mut *locked, StdinState::ReadRequested) {
+                // If data is available then drain what we can into `buf`.
+                StdinState::Data(mut data) => {
+                    let size = data.len().min(buf.remaining());
+                    let bytes = data.split_to(size);
+                    *locked = if data.is_empty() {
+                        StdinState::ReadNotRequested
+                    } else {
+                        StdinState::Data(data)
+                    };
+                    buf.put_slice(&bytes);
+                    break Poll::Ready(Ok(()));
+                }
+
+                // If stdin failed to be read then we fail with that error and
+                // transition to "closed"
+                StdinState::Error(e) => {
+                    *locked = StdinState::Closed;
+                    break Poll::Ready(Err(e));
+                }
+
+                // If stdin is closed, keep it closed.
+                StdinState::Closed => {
+                    *locked = StdinState::Closed;
+                    break Poll::Ready(Ok(()));
+                }
+
+                // For these states we indicate that a read is requested, if it
+                // wasn't previously requested, and then we transition to
+                // `Waiting` below by falling through outside this `match`.
+                StdinState::ReadNotRequested => {
+                    g.read_requested.notify_one();
+                }
+                StdinState::ReadRequested => {}
+            }
+
+            self.set(WasiStdinAsyncRead::Waiting(g.read_completed.notified()));
+
+            // Intentionally drop the lock after the `notified()` future
+            // creation just above as to work correctly this needs to happen
+            // within the lock.
+            drop(locked);
+        }
+    }
+}
+
+impl WasiStdinAsyncRead {
+    fn notified_future(self: Pin<&mut Self>) -> Option<Pin<&mut Notified<'static>>> {
+        // SAFETY: this is a pin-projection from `self` to the field `Notified`
+        // internally. Given that `self` is pinned it should be safe to acquire
+        // a pinned version of the internal field.
+        unsafe {
+            match self.get_unchecked_mut() {
+                WasiStdinAsyncRead::Ready => None,
+                WasiStdinAsyncRead::Waiting(notified) => Some(Pin::new_unchecked(notified)),
+            }
+        }
     }
 }
