@@ -126,6 +126,7 @@ interface resource-stream {
 interface closed {
   read-stream: async func(rx: stream<u8>, expected: list<u8>);
   read-future: async func(rx: future<u8>, expected: u8, rx-ignore: future<u8>);
+  read-future-post-return: async func(rx: future<u8>, expected: u8, rx-ignore: future<u8>);
 }
 
 interface sleep {

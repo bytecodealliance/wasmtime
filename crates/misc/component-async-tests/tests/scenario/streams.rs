@@ -7,13 +7,13 @@ use {
         stream::{FuturesUnordered, StreamExt, TryStreamExt},
     },
     std::{
-        future::Future,
+        future::{self, Future},
         pin::pin,
         sync::{Arc, Mutex},
         task::{Context, Waker},
     },
     wasmtime::{
-        Engine, Store,
+        Engine, Store, Trap,
         component::{
             Accessor, GuardedFutureReader, GuardedStreamReader, GuardedStreamWriter, Linker,
             ResourceTable, VecBuffer,
@@ -500,6 +500,39 @@ pub async fn test_closed_streams(watch: bool) -> Result<()> {
                 anyhow::Ok(())
             })
             .await??;
+    }
+
+    // Next, test futures host->guest again, but this time using the default value when closing the writers.
+    {
+        let (mut tx, rx) = instance.future(&mut store, || 42)?;
+        let (mut tx_ignored, rx_ignored) = instance.future(&mut store, || 42)?;
+
+        let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
+
+        let result = instance
+            .run_concurrent(&mut store, async move |accessor| {
+                closed_streams
+                    .local_local_closed()
+                    .call_read_future_post_return(accessor, rx, 42, rx_ignored)
+                    .await?;
+
+                tx.close_with(accessor);
+                tx_ignored.close_with(accessor);
+
+                future::pending::<()>().await;
+
+                anyhow::Ok(())
+            })
+            .await;
+
+        // As of this writing, passing a future which never resolves to
+        // `Instance::run_concurrent` and expecting a `Trap::AsyncDeadlock` is
+        // the only way to join all tasks for the `Instance`, so that's what we
+        // do:
+        assert!(matches!(
+            result.unwrap_err().downcast::<Trap>(),
+            Ok(Trap::AsyncDeadlock)
+        ));
     }
 
     Ok(())
