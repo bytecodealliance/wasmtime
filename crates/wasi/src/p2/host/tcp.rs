@@ -1,9 +1,9 @@
+use crate::p2::SocketResult;
 use crate::p2::bindings::{
     sockets::network::{IpAddressFamily, IpSocketAddress, Network},
     sockets::tcp::{self, ShutdownType},
 };
-use crate::p2::{SocketResult, WasiCtxView};
-use crate::sockets::{SocketAddrUse, SocketAddressFamily};
+use crate::sockets::{SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -12,16 +12,16 @@ use wasmtime_wasi_io::{
     streams::{DynInputStream, DynOutputStream},
 };
 
-impl tcp::Host for WasiCtxView<'_> {}
+impl tcp::Host for WasiSocketsCtxView<'_> {}
 
-impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiCtxView<'_> {
+impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
     async fn start_bind(
         &mut self,
         this: Resource<tcp::TcpSocket>,
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx.sockets.allowed_network_uses.check_allowed_tcp()?;
+        self.ctx.allowed_network_uses.check_allowed_tcp()?;
         let network = self.table.get(&network)?;
         let local_address: SocketAddr = local_address.into();
 
@@ -48,7 +48,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiCtxView<'_> {
         network: Resource<Network>,
         remote_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx.sockets.allowed_network_uses.check_allowed_tcp()?;
+        self.ctx.allowed_network_uses.check_allowed_tcp()?;
         let network = self.table.get(&network)?;
         let remote_address: SocketAddr = remote_address.into();
 
@@ -78,7 +78,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiCtxView<'_> {
     }
 
     fn start_listen(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {
-        self.ctx.sockets.allowed_network_uses.check_allowed_tcp()?;
+        self.ctx.allowed_network_uses.check_allowed_tcp()?;
         let socket = self.table.get_mut(&this)?;
 
         socket.start_listen()
@@ -97,7 +97,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiCtxView<'_> {
         Resource<DynInputStream>,
         Resource<DynOutputStream>,
     )> {
-        self.ctx.sockets.allowed_network_uses.check_allowed_tcp()?;
+        self.ctx.allowed_network_uses.check_allowed_tcp()?;
         let socket = self.table.get_mut(&this)?;
 
         let (tcp_socket, input, output) = socket.accept()?;
@@ -281,10 +281,8 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiCtxView<'_> {
 }
 
 pub mod sync {
-    use wasmtime::component::Resource;
-
     use crate::p2::{
-        SocketError, WasiCtxView,
+        SocketError,
         bindings::{
             sockets::{
                 network::Network,
@@ -297,10 +295,12 @@ pub mod sync {
         },
     };
     use crate::runtime::in_tokio;
+    use crate::sockets::WasiSocketsCtxView;
+    use wasmtime::component::Resource;
 
-    impl tcp::Host for WasiCtxView<'_> {}
+    impl tcp::Host for WasiSocketsCtxView<'_> {}
 
-    impl HostTcpSocket for WasiCtxView<'_> {
+    impl HostTcpSocket for WasiSocketsCtxView<'_> {
         fn start_bind(
             &mut self,
             self_: Resource<TcpSocket>,

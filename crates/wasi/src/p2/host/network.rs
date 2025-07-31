@@ -1,15 +1,16 @@
+use crate::p2::SocketError;
 use crate::p2::bindings::sockets::network::{
     self, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress,
     Ipv6SocketAddress,
 };
-use crate::p2::{SocketError, WasiCtxView};
+use crate::sockets::WasiSocketsCtxView;
 use crate::sockets::util::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
 use anyhow::Error;
 use rustix::io::Errno;
 use std::io;
 use wasmtime::component::Resource;
 
-impl network::Host for WasiCtxView<'_> {
+impl network::Host for WasiSocketsCtxView<'_> {
     fn convert_error_code(&mut self, error: SocketError) -> anyhow::Result<ErrorCode> {
         error.downcast()
     }
@@ -25,7 +26,7 @@ impl network::Host for WasiCtxView<'_> {
     }
 }
 
-impl crate::p2::bindings::sockets::network::HostNetwork for WasiCtxView<'_> {
+impl crate::p2::bindings::sockets::network::HostNetwork for WasiSocketsCtxView<'_> {
     fn drop(&mut self, this: Resource<network::Network>) -> Result<(), anyhow::Error> {
         self.table.delete(this)?;
 

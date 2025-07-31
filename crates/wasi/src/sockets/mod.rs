@@ -1,26 +1,30 @@
 use core::future::Future;
 use core::ops::Deref;
-
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+use wasmtime::component::{HasData, ResourceTable};
 
 pub(crate) mod util;
 
-use wasmtime::component::ResourceTable;
+pub(crate) struct WasiSockets;
+
+impl HasData for WasiSockets {
+    type Data<'a> = WasiSocketsCtxView<'a>;
+}
 
 /// Value taken from rust std library.
-pub const DEFAULT_TCP_BACKLOG: u32 = 128;
+pub(crate) const DEFAULT_TCP_BACKLOG: u32 = 128;
 
 /// Theoretical maximum byte size of a UDP datagram, the real limit is lower,
 /// but we do not account for e.g. the transport layer here for simplicity.
 /// In practice, datagrams are typically less than 1500 bytes.
-pub const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
+pub(crate) const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
 #[derive(Clone, Default)]
 pub struct WasiSocketsCtx {
-    pub socket_addr_check: SocketAddrCheck,
-    pub allowed_network_uses: AllowedNetworkUses,
+    pub(crate) socket_addr_check: SocketAddrCheck,
+    pub(crate) allowed_network_uses: AllowedNetworkUses,
 }
 
 pub struct WasiSocketsCtxView<'a> {
@@ -33,10 +37,10 @@ pub trait WasiSocketsView: Send {
 }
 
 #[derive(Copy, Clone)]
-pub struct AllowedNetworkUses {
-    pub ip_name_lookup: bool,
-    pub udp: bool,
-    pub tcp: bool,
+pub(crate) struct AllowedNetworkUses {
+    pub(crate) ip_name_lookup: bool,
+    pub(crate) udp: bool,
+    pub(crate) tcp: bool,
 }
 
 impl Default for AllowedNetworkUses {
@@ -75,8 +79,8 @@ impl AllowedNetworkUses {
 
 /// A check that will be called for each socket address that is used of whether the address is permitted.
 #[derive(Clone)]
-pub struct SocketAddrCheck(
-    pub(crate)  Arc<
+pub(crate) struct SocketAddrCheck(
+    Arc<
         dyn Fn(SocketAddr, SocketAddrUse) -> Pin<Box<dyn Future<Output = bool> + Send + Sync>>
             + Send
             + Sync,
@@ -88,7 +92,7 @@ impl SocketAddrCheck {
     ///
     /// Returning `true` will permit socket connections to the `SocketAddr`,
     /// while returning `false` will reject the connection.
-    pub fn new(
+    pub(crate) fn new(
         f: impl Fn(SocketAddr, SocketAddrUse) -> Pin<Box<dyn Future<Output = bool> + Send + Sync>>
         + Send
         + Sync
@@ -97,7 +101,11 @@ impl SocketAddrCheck {
         Self(Arc::new(f))
     }
 
-    pub async fn check(&self, addr: SocketAddr, reason: SocketAddrUse) -> std::io::Result<()> {
+    pub(crate) async fn check(
+        &self,
+        addr: SocketAddr,
+        reason: SocketAddrUse,
+    ) -> std::io::Result<()> {
         if (self.0)(addr, reason).await {
             Ok(())
         } else {
@@ -141,7 +149,7 @@ pub enum SocketAddrUse {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
-pub enum SocketAddressFamily {
+pub(crate) enum SocketAddressFamily {
     Ipv4,
     Ipv6,
 }

@@ -223,6 +223,7 @@
 
 use crate::cli::{WasiCli, WasiCliView};
 use crate::random::WasiRandom;
+use crate::sockets::{WasiSockets, WasiSocketsView};
 use crate::{WasiCtxView, WasiView};
 use wasmtime::component::{HasData, Linker, ResourceTable};
 
@@ -322,8 +323,8 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
 
     let l = linker;
     bindings::filesystem::types::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    bindings::sockets::tcp::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    bindings::sockets::udp::add_to_linker::<T, HasWasi>(l, T::ctx)?;
+    bindings::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    bindings::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 
@@ -355,11 +356,11 @@ where
     cli::terminal_stdin::add_to_linker::<T, WasiCli>(l, T::cli)?;
     cli::terminal_stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
     cli::terminal_stderr::add_to_linker::<T, WasiCli>(l, T::cli)?;
-    sockets::tcp_create_socket::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    sockets::udp_create_socket::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    sockets::instance_network::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    sockets::network::add_to_linker::<T, HasWasi>(l, &options.into(), T::ctx)?;
-    sockets::ip_name_lookup::add_to_linker::<T, HasWasi>(l, T::ctx)?;
+    sockets::tcp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    sockets::instance_network::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    sockets::network::add_to_linker::<T, WasiSockets>(l, &options.into(), T::sockets)?;
+    sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 
@@ -466,8 +467,8 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
 
     let l = linker;
     bindings::sync::filesystem::types::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    bindings::sync::sockets::tcp::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    bindings::sync::sockets::udp::add_to_linker::<T, HasWasi>(l, T::ctx)?;
+    bindings::sync::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    bindings::sync::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 

@@ -1,7 +1,8 @@
+use crate::p2::SocketError;
 use crate::p2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
-use crate::p2::{SocketError, WasiCtxView};
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
+use crate::sockets::WasiSocketsCtxView;
 use anyhow::Result;
 use std::mem;
 use std::net::ToSocketAddrs;
@@ -17,7 +18,7 @@ pub enum ResolveAddressStream {
     Done(Result<vec::IntoIter<IpAddress>, SocketError>),
 }
 
-impl Host for WasiCtxView<'_> {
+impl Host for WasiSocketsCtxView<'_> {
     fn resolve_addresses(
         &mut self,
         network: Resource<Network>,
@@ -37,7 +38,7 @@ impl Host for WasiCtxView<'_> {
     }
 }
 
-impl HostResolveAddressStream for WasiCtxView<'_> {
+impl HostResolveAddressStream for WasiSocketsCtxView<'_> {
     fn resolve_next_address(
         &mut self,
         resource: Resource<ResolveAddressStream>,

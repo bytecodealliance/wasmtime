@@ -51,7 +51,7 @@ pub struct UdpSocket {
 
 impl UdpSocket {
     /// Create a new socket in the given family.
-    pub fn new(family: AddressFamily) -> std::io::Result<Self> {
+    pub(crate) fn new(family: AddressFamily) -> std::io::Result<Self> {
         // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
         // - On Windows: call WSAStartup if not done before.
         // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
@@ -80,7 +80,7 @@ impl UdpSocket {
         })
     }
 
-    pub fn bind(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
+    pub(crate) fn bind(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
         if !matches!(self.udp_state, UdpState::Default) {
             return Err(ErrorCode::InvalidState);
         }
@@ -92,7 +92,7 @@ impl UdpSocket {
         Ok(())
     }
 
-    pub fn disconnect(&mut self) -> Result<(), ErrorCode> {
+    pub(crate) fn disconnect(&mut self) -> Result<(), ErrorCode> {
         if !matches!(self.udp_state, UdpState::Connected(..)) {
             return Err(ErrorCode::InvalidState);
         }
@@ -101,7 +101,7 @@ impl UdpSocket {
         Ok(())
     }
 
-    pub fn connect(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
+    pub(crate) fn connect(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
         if !is_valid_address_family(addr.ip(), self.family) || !is_valid_remote_address(addr) {
             return Err(ErrorCode::InvalidArgument);
         }
@@ -130,7 +130,7 @@ impl UdpSocket {
         Ok(())
     }
 
-    pub fn send(&self, buf: Vec<u8>) -> impl Future<Output = Result<(), ErrorCode>> + use<> {
+    pub(crate) fn send(&self, buf: Vec<u8>) -> impl Future<Output = Result<(), ErrorCode>> + use<> {
         let socket = if let UdpState::Connected(..) = self.udp_state {
             Ok(Arc::clone(&self.socket))
         } else {
@@ -142,7 +142,7 @@ impl UdpSocket {
         }
     }
 
-    pub fn send_to(
+    pub(crate) fn send_to(
         &self,
         buf: Vec<u8>,
         addr: SocketAddr,
@@ -166,7 +166,7 @@ impl UdpSocket {
         }
     }
 
-    pub fn receive(
+    pub(crate) fn receive(
         &self,
     ) -> impl Future<Output = Result<(Vec<u8>, IpSocketAddress), ErrorCode>> + use<> {
         enum Mode {
@@ -196,7 +196,7 @@ impl UdpSocket {
         }
     }
 
-    pub fn local_address(&self) -> Result<IpSocketAddress, ErrorCode> {
+    pub(crate) fn local_address(&self) -> Result<IpSocketAddress, ErrorCode> {
         if matches!(self.udp_state, UdpState::Default) {
             return Err(ErrorCode::InvalidState);
         }
@@ -207,7 +207,7 @@ impl UdpSocket {
         Ok(addr.into())
     }
 
-    pub fn remote_address(&self) -> Result<IpSocketAddress, ErrorCode> {
+    pub(crate) fn remote_address(&self) -> Result<IpSocketAddress, ErrorCode> {
         if !matches!(self.udp_state, UdpState::Connected(..)) {
             return Err(ErrorCode::InvalidState);
         }
@@ -218,39 +218,39 @@ impl UdpSocket {
         Ok(addr.into())
     }
 
-    pub fn address_family(&self) -> IpAddressFamily {
+    pub(crate) fn address_family(&self) -> IpAddressFamily {
         match self.family {
             SocketAddressFamily::Ipv4 => IpAddressFamily::Ipv4,
             SocketAddressFamily::Ipv6 => IpAddressFamily::Ipv6,
         }
     }
 
-    pub fn unicast_hop_limit(&self) -> Result<u8, ErrorCode> {
+    pub(crate) fn unicast_hop_limit(&self) -> Result<u8, ErrorCode> {
         let n = get_unicast_hop_limit(&self.socket, self.family)?;
         Ok(n)
     }
 
-    pub fn set_unicast_hop_limit(&self, value: u8) -> Result<(), ErrorCode> {
+    pub(crate) fn set_unicast_hop_limit(&self, value: u8) -> Result<(), ErrorCode> {
         set_unicast_hop_limit(&self.socket, self.family, value)?;
         Ok(())
     }
 
-    pub fn receive_buffer_size(&self) -> Result<u64, ErrorCode> {
+    pub(crate) fn receive_buffer_size(&self) -> Result<u64, ErrorCode> {
         let n = receive_buffer_size(&self.socket)?;
         Ok(n)
     }
 
-    pub fn set_receive_buffer_size(&self, value: u64) -> Result<(), ErrorCode> {
+    pub(crate) fn set_receive_buffer_size(&self, value: u64) -> Result<(), ErrorCode> {
         set_receive_buffer_size(&self.socket, value)?;
         Ok(())
     }
 
-    pub fn send_buffer_size(&self) -> Result<u64, ErrorCode> {
+    pub(crate) fn send_buffer_size(&self) -> Result<u64, ErrorCode> {
         let n = send_buffer_size(&self.socket)?;
         Ok(n)
     }
 
-    pub fn set_send_buffer_size(&self, value: u64) -> Result<(), ErrorCode> {
+    pub(crate) fn set_send_buffer_size(&self, value: u64) -> Result<(), ErrorCode> {
         set_send_buffer_size(&self.socket, value)?;
         Ok(())
     }

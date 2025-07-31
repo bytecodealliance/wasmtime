@@ -1,7 +1,7 @@
 use crate::TrappableError;
 use crate::p3::bindings::sockets;
-use crate::sockets::{WasiSocketsCtxView, WasiSocketsView};
-use wasmtime::component::{HasData, Linker};
+use crate::sockets::{WasiSockets, WasiSocketsView};
+use wasmtime::component::Linker;
 
 mod conv;
 mod host;
@@ -70,10 +70,4 @@ where
     sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>(linker, T::sockets)?;
     sockets::types::add_to_linker::<_, WasiSockets>(linker, T::sockets)?;
     Ok(())
-}
-
-struct WasiSockets;
-
-impl HasData for WasiSockets {
-    type Data<'a> = WasiSocketsCtxView<'a>;
 }
