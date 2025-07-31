@@ -7,7 +7,7 @@
 use crate::func_environ::FuncEnvironment;
 use crate::translate::TargetEnvironment;
 use crate::translate::code_translator::{bitcast_wasm_returns, translate_operator};
-use crate::translate::state::FuncTranslationState;
+use crate::translate::stack::FuncTranslationStacks;
 use crate::translate::translation_utils::get_vmctx_value_label;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
@@ -23,7 +23,7 @@ use wasmtime_environ::{TypeConvert, WasmResult};
 /// functions which will reduce heap allocation traffic.
 pub struct FuncTranslator {
     func_ctx: FunctionBuilderContext,
-    state: FuncTranslationState,
+    state: FuncTranslationStacks,
 }
 
 impl FuncTranslator {
@@ -31,7 +31,7 @@ impl FuncTranslator {
     pub fn new() -> Self {
         Self {
             func_ctx: FunctionBuilderContext::new(),
-            state: FuncTranslationState::new(),
+            state: FuncTranslationStacks::new(),
         }
     }
 
@@ -234,13 +234,13 @@ fn parse_function_body(
     validator: &mut FuncValidator<impl WasmModuleResources>,
     reader: BinaryReader,
     builder: &mut FunctionBuilder,
-    state: &mut FuncTranslationState,
+    stack: &mut FuncTranslationStacks,
     environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<()> {
     // The control stack is initialized with a single block representing the whole function.
-    debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
+    debug_assert_eq!(stack.control_stack.len(), 1, "State not initialized");
 
-    environ.before_translate_function(builder, state)?;
+    environ.before_translate_function(builder, stack)?;
 
     let mut reader = OperatorsReader::new(reader);
     let mut operand_types = vec![];
@@ -253,11 +253,11 @@ fn parse_function_body(
         let operand_types =
             validate_op_and_get_operand_types(validator, environ, &mut operand_types, &op, pos)?;
 
-        environ.before_translate_operator(&op, operand_types, builder, state)?;
-        translate_operator(validator, &op, operand_types, builder, state, environ)?;
-        environ.after_translate_operator(&op, operand_types, builder, state)?;
+        environ.before_translate_operator(&op, operand_types, builder, stack)?;
+        translate_operator(validator, &op, operand_types, builder, stack, environ)?;
+        environ.after_translate_operator(&op, operand_types, builder, stack)?;
     }
-    environ.after_translate_function(builder, state)?;
+    environ.after_translate_function(builder, stack)?;
     reader.finish()?;
 
     // The final `End` operator left us in the exit block where we need to manually add a return
@@ -265,17 +265,17 @@ fn parse_function_body(
     //
     // If the exit block is unreachable, it may not have the correct arguments, so we would
     // generate a return instruction that doesn't match the signature.
-    if state.reachable {
+    if stack.reachable {
         if !builder.is_unreachable() {
-            environ.handle_before_return(&state.stack, builder);
-            bitcast_wasm_returns(&mut state.stack, builder);
-            builder.ins().return_(&state.stack);
+            environ.handle_before_return(&stack.stack, builder);
+            bitcast_wasm_returns(&mut stack.stack, builder);
+            builder.ins().return_(&stack.stack);
         }
     }
 
     // Discard any remaining values on the stack. Either we just returned them,
     // or the end of the function is unreachable.
-    state.stack.clear();
+    stack.stack.clear();
 
     Ok(())
 }
