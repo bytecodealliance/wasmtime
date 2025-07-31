@@ -59,8 +59,12 @@ impl<T: WasiView> crate::sockets::WasiSocketsView for T {
 }
 
 impl<T: WasiView> crate::clocks::WasiClocksView for T {
-    fn clocks(&mut self) -> &mut crate::clocks::WasiClocksCtx {
-        &mut self.ctx().ctx.clocks
+    fn clocks(&mut self) -> crate::clocks::WasiClocksCtxView<'_> {
+        let WasiCtxView { ctx, table } = self.ctx();
+        crate::clocks::WasiClocksCtxView {
+            ctx: &mut ctx.clocks,
+            table,
+        }
     }
 }
 

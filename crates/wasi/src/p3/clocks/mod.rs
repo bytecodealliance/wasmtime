@@ -1,8 +1,8 @@
 mod host;
 
-use crate::clocks::{WasiClocksCtx, WasiClocksView};
+use crate::clocks::{WasiClocks, WasiClocksView};
 use crate::p3::bindings::clocks;
-use wasmtime::component::{HasData, Linker};
+use wasmtime::component::Linker;
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///
@@ -18,8 +18,8 @@ use wasmtime::component::{HasData, Linker};
 ///
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
-/// use wasmtime::component::Linker;
-/// use wasmtime_wasi::clocks::{WasiClocksView, WasiClocksCtx};
+/// use wasmtime::component::{Linker, ResourceTable};
+/// use wasmtime_wasi::clocks::{WasiClocksView, WasiClocksCtxView, WasiClocksCtx};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -33,9 +33,7 @@ use wasmtime::component::{HasData, Linker};
 ///
 ///     let mut store = Store::new(
 ///         &engine,
-///         MyState {
-///             clocks: WasiClocksCtx::default(),
-///         },
+///         MyState::default(),
 ///     );
 ///
 ///     // ... use `linker` to instantiate within `store` ...
@@ -43,12 +41,16 @@ use wasmtime::component::{HasData, Linker};
 ///     Ok(())
 /// }
 ///
+/// #[derive(Default)]
 /// struct MyState {
 ///     clocks: WasiClocksCtx,
+///     table: ResourceTable,
 /// }
 ///
 /// impl WasiClocksView for MyState {
-///     fn clocks(&mut self) -> &mut WasiClocksCtx { &mut self.clocks }
+///     fn clocks(&mut self) -> WasiClocksCtxView {
+///         WasiClocksCtxView { ctx: &mut self.clocks, table: &mut self.table }
+///     }
 /// }
 /// ```
 pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
@@ -58,10 +60,4 @@ where
     clocks::monotonic_clock::add_to_linker::<_, WasiClocks>(linker, T::clocks)?;
     clocks::wall_clock::add_to_linker::<_, WasiClocks>(linker, T::clocks)?;
     Ok(())
-}
-
-struct WasiClocks;
-
-impl HasData for WasiClocks {
-    type Data<'a> = &'a mut WasiClocksCtx;
 }
