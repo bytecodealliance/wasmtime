@@ -55,15 +55,8 @@ pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiClocksView + 'static,
 {
-    add_to_linker_impl(linker, T::clocks)
-}
-
-pub(crate) fn add_to_linker_impl<T: Send>(
-    linker: &mut Linker<T>,
-    host_getter: fn(&mut T) -> &mut WasiClocksCtx,
-) -> wasmtime::Result<()> {
-    clocks::monotonic_clock::add_to_linker::<_, WasiClocks>(linker, host_getter)?;
-    clocks::wall_clock::add_to_linker::<_, WasiClocks>(linker, host_getter)?;
+    clocks::monotonic_clock::add_to_linker::<_, WasiClocks>(linker, T::clocks)?;
+    clocks::wall_clock::add_to_linker::<_, WasiClocks>(linker, T::clocks)?;
     Ok(())
 }
 

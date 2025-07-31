@@ -32,18 +32,6 @@ pub trait WasiSocketsView: Send {
     fn sockets(&mut self) -> WasiSocketsCtxView<'_>;
 }
 
-impl<T: WasiSocketsView> WasiSocketsView for &mut T {
-    fn sockets(&mut self) -> WasiSocketsCtxView<'_> {
-        T::sockets(self)
-    }
-}
-
-impl<T: WasiSocketsView> WasiSocketsView for Box<T> {
-    fn sockets(&mut self) -> WasiSocketsCtxView<'_> {
-        T::sockets(self)
-    }
-}
-
 #[derive(Copy, Clone)]
 pub struct AllowedNetworkUses {
     pub ip_name_lookup: bool,

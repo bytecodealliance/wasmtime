@@ -13,18 +13,6 @@ pub struct WasiCliCtxView<'a> {
     pub table: &'a mut ResourceTable,
 }
 
-impl<T: WasiCliView> WasiCliView for &mut T {
-    fn cli(&mut self) -> WasiCliCtxView<'_> {
-        T::cli(self)
-    }
-}
-
-impl<T: WasiCliView> WasiCliView for Box<T> {
-    fn cli(&mut self) -> WasiCliCtxView<'_> {
-        T::cli(self)
-    }
-}
-
 pub trait WasiCliView: Send {
     fn cli(&mut self) -> WasiCliCtxView<'_>;
 }
@@ -100,7 +88,7 @@ where
     T: WasiCliView + 'static,
 {
     let exit_options = cli::exit::LinkOptions::default();
-    add_to_linker_impl(linker, &exit_options, T::cli)
+    add_to_linker_with_options(linker, &exit_options)
 }
 
 /// Similar to [`add_to_linker`], but with the ability to enable unstable features.
@@ -111,24 +99,16 @@ pub fn add_to_linker_with_options<T>(
 where
     T: WasiCliView + 'static,
 {
-    add_to_linker_impl(linker, exit_options, T::cli)
-}
-
-pub(crate) fn add_to_linker_impl<T: Send>(
-    linker: &mut Linker<T>,
-    exit_options: &cli::exit::LinkOptions,
-    host_getter: fn(&mut T) -> WasiCliCtxView<'_>,
-) -> wasmtime::Result<()> {
-    cli::exit::add_to_linker::<_, WasiCli>(linker, exit_options, host_getter)?;
-    cli::environment::add_to_linker::<_, WasiCli>(linker, host_getter)?;
-    cli::stdin::add_to_linker::<_, WasiCli>(linker, host_getter)?;
-    cli::stdout::add_to_linker::<_, WasiCli>(linker, host_getter)?;
-    cli::stderr::add_to_linker::<_, WasiCli>(linker, host_getter)?;
-    cli::terminal_input::add_to_linker::<_, WasiCli>(linker, host_getter)?;
-    cli::terminal_output::add_to_linker::<_, WasiCli>(linker, host_getter)?;
-    cli::terminal_stdin::add_to_linker::<_, WasiCli>(linker, host_getter)?;
-    cli::terminal_stdout::add_to_linker::<_, WasiCli>(linker, host_getter)?;
-    cli::terminal_stderr::add_to_linker::<_, WasiCli>(linker, host_getter)?;
+    cli::exit::add_to_linker::<_, WasiCli>(linker, exit_options, T::cli)?;
+    cli::environment::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    cli::stdin::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    cli::stdout::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    cli::stderr::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    cli::terminal_input::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    cli::terminal_output::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    cli::terminal_stdin::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    cli::terminal_stdout::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    cli::terminal_stderr::add_to_linker::<_, WasiCli>(linker, T::cli)?;
     Ok(())
 }
 

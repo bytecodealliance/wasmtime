@@ -20,18 +20,6 @@ pub trait WasiClocksView: Send {
     fn clocks(&mut self) -> &mut WasiClocksCtx;
 }
 
-impl<T: WasiClocksView> WasiClocksView for &mut T {
-    fn clocks(&mut self) -> &mut WasiClocksCtx {
-        T::clocks(self)
-    }
-}
-
-impl<T: WasiClocksView> WasiClocksView for Box<T> {
-    fn clocks(&mut self) -> &mut WasiClocksCtx {
-        T::clocks(self)
-    }
-}
-
 impl WasiClocksView for WasiClocksCtx {
     fn clocks(&mut self) -> &mut WasiClocksCtx {
         self

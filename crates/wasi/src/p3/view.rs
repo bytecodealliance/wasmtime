@@ -40,19 +40,39 @@ pub trait WasiView: Send {
     fn ctx(&mut self) -> WasiCtxView<'_>;
 }
 
-impl<T: ?Sized + WasiView> WasiView for &mut T {
-    fn ctx(&mut self) -> WasiCtxView<'_> {
-        T::ctx(self)
-    }
-}
-
-impl<T: ?Sized + WasiView> WasiView for Box<T> {
-    fn ctx(&mut self) -> WasiCtxView<'_> {
-        T::ctx(self)
-    }
-}
-
 pub struct WasiCtxView<'a> {
     pub ctx: &'a mut WasiCtx,
     pub table: &'a mut ResourceTable,
+}
+
+impl<T: WasiView> crate::sockets::WasiSocketsView for T {
+    fn sockets(&mut self) -> crate::sockets::WasiSocketsCtxView<'_> {
+        let WasiCtxView { ctx, table } = self.ctx();
+        crate::sockets::WasiSocketsCtxView {
+            ctx: &mut ctx.sockets,
+            table,
+        }
+    }
+}
+
+impl<T: WasiView> crate::clocks::WasiClocksView for T {
+    fn clocks(&mut self) -> &mut crate::clocks::WasiClocksCtx {
+        &mut self.ctx().ctx.clocks
+    }
+}
+
+impl<T: WasiView> crate::random::WasiRandomView for T {
+    fn random(&mut self) -> &mut crate::random::WasiRandomCtx {
+        &mut self.ctx().ctx.random
+    }
+}
+
+impl<T: WasiView> crate::p3::cli::WasiCliView for T {
+    fn cli(&mut self) -> crate::p3::cli::WasiCliCtxView<'_> {
+        let WasiCtxView { ctx, table } = self.ctx();
+        crate::p3::cli::WasiCliCtxView {
+            ctx: &mut ctx.cli,
+            table,
+        }
+    }
 }
