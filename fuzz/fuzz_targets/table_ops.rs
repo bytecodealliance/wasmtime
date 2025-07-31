@@ -18,8 +18,9 @@ fuzz_target!(|data: &[u8]| {
     rng.fill(&mut buf);
 
     let u = Unstructured::new(&buf);
-    let config = wasmtime_fuzzing::generators::Config::arbitrary_take_rest(u)
-        .expect("should be able to generate config from seed");
+    let Ok(config) = wasmtime_fuzzing::generators::Config::arbitrary_take_rest(u) else {
+        return;
+    };
 
     let _ = table_ops(config, ops);
 });
