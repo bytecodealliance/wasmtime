@@ -1340,7 +1340,7 @@
     (core instance $m (instantiate $m))
 
     ;; This adapter, when fused with itself on the second instantiation of this
-    ;; component, will dependend on the prior instance `$m` so it which means
+    ;; component, will depended on the prior instance `$m` so it which means
     ;; that the adapter module containing this must be placed in the right
     ;; location.
     (core func $execute
