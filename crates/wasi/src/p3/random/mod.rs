@@ -1,8 +1,8 @@
 mod host;
 
 use crate::p3::bindings::random;
-use crate::random::{WasiRandomCtx, WasiRandomView};
-use wasmtime::component::{HasData, Linker};
+use crate::random::{WasiRandom, WasiRandomView};
+use wasmtime::component::Linker;
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///
@@ -59,10 +59,4 @@ where
     random::insecure::add_to_linker::<_, WasiRandom>(linker, T::random)?;
     random::insecure_seed::add_to_linker::<_, WasiRandom>(linker, T::random)?;
     Ok(())
-}
-
-struct WasiRandom;
-
-impl HasData for WasiRandom {
-    type Data<'a> = &'a mut WasiRandomCtx;
 }

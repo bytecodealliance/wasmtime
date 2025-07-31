@@ -448,12 +448,7 @@ impl WasiCtxBuilder {
                             wall_clock,
                             monotonic_clock,
                         },
-                    random:
-                        WasiRandomCtx {
-                            random,
-                            insecure_random,
-                            insecure_random_seed,
-                        },
+                    random,
                     sockets:
                         WasiSocketsCtx {
                             socket_addr_check,
@@ -475,8 +470,6 @@ impl WasiCtxBuilder {
             preopens,
             socket_addr_check,
             random,
-            insecure_random,
-            insecure_random_seed,
             wall_clock,
             monotonic_clock,
             allowed_network_uses,
@@ -552,9 +545,7 @@ impl WasiCtxBuilder {
 /// }
 /// ```
 pub struct WasiCtx {
-    pub(crate) random: Box<dyn RngCore + Send>,
-    pub(crate) insecure_random: Box<dyn RngCore + Send>,
-    pub(crate) insecure_random_seed: u128,
+    pub(crate) random: WasiRandomCtx,
     pub(crate) wall_clock: Box<dyn HostWallClock + Send>,
     pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     pub(crate) env: Vec<(String, String)>,

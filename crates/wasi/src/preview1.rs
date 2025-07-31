@@ -2548,7 +2548,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         buf_len: types::Size,
     ) -> Result<(), types::Error> {
         let rand = self
-            .as_wasi_impl()
+            .wasi
+            .random
             .get_random_bytes(buf_len.into())
             .context("failed to call `get-random-bytes`")
             .map_err(types::Error::trap)?;
