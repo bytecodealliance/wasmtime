@@ -194,7 +194,12 @@ fn accept_reader<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>
             let types = instance.id().get(store.0).component().types().clone();
             let count = buffer.remaining().len().min(count);
 
-            let lower = &mut LowerContext::new(store.as_context_mut(), options, &types, instance);
+            let lower = &mut if T::IS_FLAT_TYPE {
+                LowerContext::new_without_realloc
+            } else {
+                LowerContext::new
+            }(store.as_context_mut(), options, &types, instance);
+
             if address % usize::try_from(T::ALIGN32)? != 0 {
                 bail!("read pointer not aligned");
             }
@@ -1946,9 +1951,7 @@ impl Instance {
                     anyhow::Ok(result)
                 };
 
-                if
-                // TODO: Check if payload is "flat"
-                false {
+                if T::IS_FLAT_TYPE {
                     // Optimize flat payloads (i.e. those which do not require
                     // calling the guest's realloc function) by lowering
                     // directly instead of using a oneshot::channel and

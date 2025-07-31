@@ -230,6 +230,9 @@ pub struct LowerContext<'a, T: 'static> {
 
     /// Index of the component instance that's being lowered into.
     instance: Instance,
+
+    /// Whether to allow `options.realloc` to be used when lowering.
+    allow_realloc: bool,
 }
 
 #[doc(hidden)]
@@ -252,6 +255,31 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             options,
             types,
             instance,
+            allow_realloc: true,
+        }
+    }
+
+    /// Like `new`, except disallows use of `options.realloc`.
+    ///
+    /// The returned object will panic if its `realloc` method is called.
+    ///
+    /// This is meant for use when lowering "flat" values (i.e. values which
+    /// require no allocations) into already-allocated memory or into stack
+    /// slots, in which case the lowering may safely be done outside of a fiber
+    /// since there is no need to make any guest calls.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn new_without_realloc(
+        store: StoreContextMut<'a, T>,
+        options: &'a Options,
+        types: &'a ComponentTypes,
+        instance: Instance,
+    ) -> LowerContext<'a, T> {
+        LowerContext {
+            store,
+            options,
+            types,
+            instance,
+            allow_realloc: false,
         }
     }
 
@@ -289,6 +317,8 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         old_align: u32,
         new_size: usize,
     ) -> Result<usize> {
+        assert!(self.allow_realloc);
+
         let realloc_func_ty = Arc::clone(self.instance().component().realloc_func_ty());
         self.options
             .realloc(

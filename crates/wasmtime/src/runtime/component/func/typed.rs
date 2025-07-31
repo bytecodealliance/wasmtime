@@ -687,6 +687,9 @@ pub unsafe trait ComponentType: Send + Sync {
     #[doc(hidden)]
     const IS_RUST_UNIT_TYPE: bool = false;
 
+    #[doc(hidden)]
+    const IS_FLAT_TYPE: bool = false;
+
     /// Returns the number of core wasm abi values will be used to represent
     /// this type in its lowered form.
     ///
@@ -1015,6 +1018,8 @@ macro_rules! integers {
             type Lower = ValRaw;
 
             const ABI: CanonicalAbiInfo = CanonicalAbiInfo::$abi;
+
+            const IS_FLAT_TYPE: bool = true;
 
             fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
                 match ty {
