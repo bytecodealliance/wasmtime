@@ -2,6 +2,7 @@ use crate::p2;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite, empty};
+use wasmtime::component::{HasData, ResourceTable};
 use wasmtime_wasi_io::streams::{InputStream, OutputStream};
 
 mod empty;
@@ -19,13 +20,30 @@ pub use self::locked_async::{AsyncStdinStream, AsyncStdoutStream};
 #[doc(no_inline)]
 pub use tokio::io::{Stderr, Stdin, Stdout, stderr, stdin, stdout};
 
+pub(crate) struct WasiCli;
+
+impl HasData for WasiCli {
+    type Data<'a> = WasiCliCtxView<'a>;
+}
+
+/// Provides a "view" of `wasi:cli`-related context used to implement host
+/// traits.
+pub trait WasiCliView: Send {
+    fn cli(&mut self) -> WasiCliCtxView<'_>;
+}
+
+pub struct WasiCliCtxView<'a> {
+    pub ctx: &'a mut WasiCliCtx,
+    pub table: &'a mut ResourceTable,
+}
+
 pub struct WasiCliCtx {
-    pub environment: Vec<(String, String)>,
-    pub arguments: Vec<String>,
-    pub initial_cwd: Option<String>,
-    pub stdin: Box<dyn StdinStream>,
-    pub stdout: Box<dyn StdoutStream>,
-    pub stderr: Box<dyn StdoutStream>,
+    pub(crate) environment: Vec<(String, String)>,
+    pub(crate) arguments: Vec<String>,
+    pub(crate) initial_cwd: Option<String>,
+    pub(crate) stdin: Box<dyn StdinStream>,
+    pub(crate) stdout: Box<dyn StdoutStream>,
+    pub(crate) stderr: Box<dyn StdoutStream>,
 }
 
 impl Default for WasiCliCtx {

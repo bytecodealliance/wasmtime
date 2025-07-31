@@ -70,11 +70,10 @@ impl<T: WasiView> crate::random::WasiRandomView for T {
     }
 }
 
-#[cfg(feature = "p3")]
-impl<T: WasiView> crate::p3::cli::WasiCliView for T {
-    fn cli(&mut self) -> crate::p3::cli::WasiCliCtxView<'_> {
+impl<T: WasiView> crate::cli::WasiCliView for T {
+    fn cli(&mut self) -> crate::cli::WasiCliCtxView<'_> {
         let WasiCtxView { ctx, table } = self.ctx();
-        crate::p3::cli::WasiCliCtxView {
+        crate::cli::WasiCliCtxView {
             ctx: &mut ctx.cli,
             table,
         }
