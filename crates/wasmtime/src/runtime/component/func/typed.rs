@@ -687,8 +687,15 @@ pub unsafe trait ComponentType: Send + Sync {
     #[doc(hidden)]
     const IS_RUST_UNIT_TYPE: bool = false;
 
+    /// Whether this type might require a call to the guest's realloc function
+    /// to allocate linear memory when lowering (e.g. a non-empty `string`).
+    ///
+    /// If this is `false`, Wasmtime may optimize lowering by using
+    /// `LowerContext::new_without_realloc` and lowering values outside of any
+    /// fiber.  That will panic if the lowering process ends up needing realloc
+    /// after all, so `true` is a conservative default.
     #[doc(hidden)]
-    const IS_FLAT_TYPE: bool = false;
+    const MAY_REQUIRE_REALLOC: bool = true;
 
     /// Returns the number of core wasm abi values will be used to represent
     /// this type in its lowered form.
@@ -1019,7 +1026,7 @@ macro_rules! integers {
 
             const ABI: CanonicalAbiInfo = CanonicalAbiInfo::$abi;
 
-            const IS_FLAT_TYPE: bool = true;
+            const MAY_REQUIRE_REALLOC: bool = false;
 
             fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
                 match ty {

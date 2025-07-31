@@ -194,10 +194,10 @@ fn accept_reader<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>
             let types = instance.id().get(store.0).component().types().clone();
             let count = buffer.remaining().len().min(count);
 
-            let lower = &mut if T::IS_FLAT_TYPE {
-                LowerContext::new_without_realloc
-            } else {
+            let lower = &mut if T::MAY_REQUIRE_REALLOC {
                 LowerContext::new
+            } else {
+                LowerContext::new_without_realloc
             }(store.as_context_mut(), options, &types, instance);
 
             if address % usize::try_from(T::ALIGN32)? != 0 {
@@ -1951,17 +1951,11 @@ impl Instance {
                     anyhow::Ok(result)
                 };
 
-                if T::IS_FLAT_TYPE {
-                    // Optimize flat payloads (i.e. those which do not require
-                    // calling the guest's realloc function) by lowering
-                    // directly instead of using a oneshot::channel and
-                    // background task.
-                    Ok(accept(store)?)
-                } else {
-                    // Otherwise, for payloads which may require a realloc call,
-                    // use a oneshot::channel and background task.  This is
-                    // necessary because calling the guest while there are host
-                    // embedder frames on the stack is unsound.
+                if T::MAY_REQUIRE_REALLOC {
+                    // For payloads which may require a realloc call, use a
+                    // oneshot::channel and background task.  This is necessary
+                    // because calling the guest while there are host embedder
+                    // frames on the stack is unsound.
                     let (tx, rx) = oneshot::channel();
                     let token = StoreToken::new(store.as_context_mut());
                     self.concurrent_state_mut(store.0).push_high_priority(
@@ -1971,6 +1965,12 @@ impl Instance {
                         }))),
                     );
                     Err(rx)
+                } else {
+                    // Optimize flat payloads (i.e. those which do not require
+                    // calling the guest's realloc function) by lowering
+                    // directly instead of using a oneshot::channel and
+                    // background task.
+                    Ok(accept(store)?)
                 }
             }
 
