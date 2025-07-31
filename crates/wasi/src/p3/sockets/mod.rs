@@ -63,15 +63,8 @@ pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiSocketsView + 'static,
 {
-    add_to_linker_impl(linker, T::sockets)
-}
-
-pub(crate) fn add_to_linker_impl<T: Send>(
-    linker: &mut Linker<T>,
-    host_getter: fn(&mut T) -> WasiSocketsCtxView<'_>,
-) -> wasmtime::Result<()> {
-    sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>(linker, host_getter)?;
-    sockets::types::add_to_linker::<_, WasiSockets>(linker, host_getter)?;
+    sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>(linker, T::sockets)?;
+    sockets::types::add_to_linker::<_, WasiSockets>(linker, T::sockets)?;
     Ok(())
 }
 

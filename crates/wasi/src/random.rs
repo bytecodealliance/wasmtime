@@ -31,18 +31,6 @@ pub trait WasiRandomView: Send {
     fn random(&mut self) -> &mut WasiRandomCtx;
 }
 
-impl<T: WasiRandomView> WasiRandomView for &mut T {
-    fn random(&mut self) -> &mut WasiRandomCtx {
-        T::random(self)
-    }
-}
-
-impl<T: WasiRandomView> WasiRandomView for Box<T> {
-    fn random(&mut self) -> &mut WasiRandomCtx {
-        T::random(self)
-    }
-}
-
 impl WasiRandomView for WasiRandomCtx {
     fn random(&mut self) -> &mut WasiRandomCtx {
         self
