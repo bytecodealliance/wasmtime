@@ -392,7 +392,7 @@ impl HostTcpSocketWithStore for WasiSockets {
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
         store.with(|mut view| {
             let instance = view.instance();
-            let (data_tx, data_rx) = instance
+            let (mut data_tx, data_rx) = instance
                 .stream(&mut view)
                 .context("failed to create stream")?;
             let TcpSocket { tcp_state, .. } = get_socket_mut(view.get().table, &socket)?;
@@ -411,7 +411,7 @@ impl HostTcpSocketWithStore for WasiSockets {
                 }
                 prev => {
                     *tcp_state = prev;
-                    let (result_tx, result_rx) = instance
+                    let (mut result_tx, result_rx) = instance
                         .future(&mut view, || Err(ErrorCode::InvalidState))
                         .context("failed to create future")?;
                     result_tx.close(&mut view);
