@@ -236,13 +236,11 @@ pub struct FuncTranslationState {
 
     // Map of indirect call signatures that have been created by
     // `FuncEnvironment::make_indirect_sig()`.
-    // Stores both the signature reference and the number of WebAssembly arguments
-    signatures: SecondaryMap<ModuleInternedTypeIndex, Option<(ir::SigRef, usize)>>,
+    signatures: SecondaryMap<ModuleInternedTypeIndex, PackedOption<ir::SigRef>>,
 
     // Imported and local functions that have been created by
     // `FuncEnvironment::make_direct_func()`.
-    // Stores both the function reference and the number of WebAssembly arguments
-    functions: SecondaryMap<FuncIndex, Option<(ir::FuncRef, usize)>>,
+    functions: SecondaryMap<FuncIndex, PackedOption<ir::FuncRef>>,
 }
 
 // Public methods that are exposed to non- API consumers.
@@ -512,15 +510,14 @@ impl FuncTranslationState {
         func: &mut ir::Function,
         index: TypeIndex,
         environ: &mut FuncEnvironment<'_>,
-    ) -> WasmResult<(ir::SigRef, usize)> {
+    ) -> WasmResult<ir::SigRef> {
         let interned_index = environ.module.types[index].unwrap_module_type_index();
-        match self.signatures[interned_index] {
-            Some((sig, num_params)) => Ok((sig, num_params)),
+        match self.signatures[interned_index].expand() {
+            Some(sig) => Ok(sig),
             None => {
                 let sig = environ.make_indirect_sig(func, interned_index)?;
-                let num_params = num_wasm_parameters(environ, &func.dfg.signatures[sig]);
-                self.signatures[interned_index] = Some((sig, num_params));
-                Ok((sig, num_params))
+                self.signatures[interned_index] = Some(sig).into();
+                Ok(sig)
             }
         }
     }
@@ -534,22 +531,14 @@ impl FuncTranslationState {
         func: &mut ir::Function,
         index: FuncIndex,
         environ: &mut FuncEnvironment<'_>,
-    ) -> WasmResult<(ir::FuncRef, usize)> {
-        match self.functions[index] {
-            Some((fref, num_args)) => Ok((fref, num_args)),
+    ) -> WasmResult<ir::FuncRef> {
+        match self.functions[index].expand() {
+            Some(fref) => Ok(fref),
             None => {
                 let fref = environ.make_direct_func(func, index)?;
-                let sig = func.dfg.ext_funcs[fref].signature;
-                let num_args = num_wasm_parameters(environ, &func.dfg.signatures[sig]);
-                self.functions[index] = Some((fref, num_args));
-                Ok((fref, num_args))
+                self.functions[index] = Some(fref).into();
+                Ok(fref)
             }
         }
     }
-}
-
-fn num_wasm_parameters(environ: &FuncEnvironment<'_>, signature: &ir::Signature) -> usize {
-    (0..signature.params.len())
-        .filter(|index| environ.is_wasm_parameter(signature, *index))
-        .count()
 }

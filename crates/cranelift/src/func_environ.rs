@@ -1230,6 +1230,22 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn needs_gc_heap(&self) -> bool {
         self.needs_gc_heap
     }
+
+    /// Get the number of Wasm parameters for the given function.
+    pub(crate) fn num_params_for_func(&self, function_index: FuncIndex) -> usize {
+        let ty = self.module.functions[function_index]
+            .signature
+            .unwrap_module_type_index();
+        self.types[ty].unwrap_func().params().len()
+    }
+
+    /// Get the number of Wasm parameters for the given function type.
+    ///
+    /// Panics on non-function types.
+    pub(crate) fn num_params_for_function_type(&self, type_index: TypeIndex) -> usize {
+        let ty = self.module.types[type_index].unwrap_module_type_index();
+        self.types[ty].unwrap_func().params().len()
+    }
 }
 
 struct Call<'a, 'func, 'module_env> {
