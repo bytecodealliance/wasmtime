@@ -250,6 +250,7 @@ pub use self::stdio::{
     Stdout, StdoutStream, stderr, stdin, stdout,
 };
 pub use self::view::{WasiImpl, WasiView};
+use crate::random::WasiRandom;
 // These contents of wasmtime-wasi-io are re-exported by this module for compatibility:
 // they were originally defined in this module before being factored out, and many
 // users of this module depend on them at these names.
@@ -355,9 +356,9 @@ where
     clocks::wall_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
     clocks::monotonic_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
     filesystem::preopens::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    random::random::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    random::insecure::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    random::insecure_seed::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().random)?;
+    random::insecure::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().random)?;
+    random::insecure_seed::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().random)?;
     cli::exit::add_to_linker::<T, HasWasi<T>>(l, &options.into(), f)?;
     cli::environment::add_to_linker::<T, HasWasi<T>>(l, f)?;
     cli::stdin::add_to_linker::<T, HasWasi<T>>(l, f)?;
@@ -404,7 +405,7 @@ fn add_proxy_interfaces_nonblocking<T: WasiView + 'static>(
     let f: fn(&mut T) -> WasiImpl<&mut T> = |t| WasiImpl(IoImpl(t));
     clocks::wall_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
     clocks::monotonic_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    random::random::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().random)?;
     cli::stdin::add_to_linker::<T, HasWasi<T>>(l, f)?;
     cli::stdout::add_to_linker::<T, HasWasi<T>>(l, f)?;
     cli::stderr::add_to_linker::<T, HasWasi<T>>(l, f)?;
