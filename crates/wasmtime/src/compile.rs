@@ -840,6 +840,10 @@ the use case.
                         None
                     }
                 }));
+                log::trace!(
+                    "call graph edges for {output_index:?} = {:?}: {calls:?}",
+                    output.key
+                );
                 Ok(())
             }
         })?;
@@ -865,6 +869,7 @@ the use case.
                 &mut layer_outputs,
                 |output: &mut CompileOutput<'_>| {
                     debug_assert_eq!(output.key.kind(), CompileKind::WasmFunction);
+                    log::trace!("processing inlining for {:?}", output.key);
 
                     let caller_translation = output.translation.unwrap();
                     let caller_module = output.key.module();
@@ -885,11 +890,15 @@ the use case.
                             {
                                 (caller_module, def_func, Some(caller_needs_gc_heap))
                             } else {
-                                let (def_module, def_func) =
-                                    caller_translation.known_imported_functions[callee].expect(
-                                        "a direct call to an imported function must have a \
-                                         statically-known import",
-                                    );
+                                let (def_module, def_func) = caller_translation
+                                    .known_imported_functions[callee]
+                                    .unwrap_or_else(|| {
+                                        panic!(
+                                            "a direct call to an imported function must have a \
+                                             statically-known definition, but direct call to imported \
+                                             function {callee:?} has no statically-known definition",
+                                        )
+                                    });
                                 (def_module, def_func, None)
                             };
 

@@ -1,0 +1,55 @@
+test inline precise-output
+target x86_64
+
+function %callee() -> i32 {
+    sig0 = () -> i32
+    fn0 = colocated u0:36 sig0
+    fn1 = colocated u0:42 sig0
+block0:
+    v0 = call fn0()
+    v1 = call fn1()
+    v2 = iadd v0, v1
+    return v2
+}
+
+; (no functions inlined into %callee)
+
+function %caller(i32) -> i32 {
+    sig0 = (i32) -> i32
+    sig1 = () -> i32
+    fn0 = colocated u0:1234 sig0
+    fn1 = colocated u0:36 sig0
+    fn2 = %callee sig1
+block0(v0: i32):
+    v1 = call fn0(v0)
+    v2 = call fn2()
+    v3 = call fn1(v1)
+    return v3
+}
+
+; function %caller(i32) -> i32 fast {
+;     sig0 = (i32) -> i32 fast
+;     sig1 = () -> i32 fast
+;     sig2 = () -> i32 fast
+;     fn0 = colocated u0:1234 sig0
+;     fn1 = colocated u0:36 sig0
+;     fn2 = %callee sig1
+;     fn3 = colocated u0:36 sig2
+;     fn4 = colocated u0:42 sig2
+;
+; block0(v0: i32):
+;     v1 = call fn0(v0)
+;     jump block1
+;
+; block1:
+;     v5 = call fn3()
+;     v6 = call fn4()
+;     v7 = iadd v5, v6
+;     jump block2(v7)
+;
+; block2(v4: i32):
+;     v2 -> v4
+;     v3 = call fn1(v1)
+;     return v3
+; }
+
