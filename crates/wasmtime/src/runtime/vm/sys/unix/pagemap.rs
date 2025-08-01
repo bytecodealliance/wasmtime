@@ -489,8 +489,27 @@ mod tests {
         }
     }
 
+    fn ioctl_supported() -> bool {
+        let mmap = MmapAnonymous::new(1);
+        let mut results = Vec::with_capacity(1);
+        let fd = File::open("/proc/self/pagemap").unwrap();
+        unsafe {
+            ioctl(
+                &fd,
+                PageMapScanBuilder::new(mmap.region())
+                    .category_mask(Categories::WRITTEN)
+                    .return_mask(Categories::all())
+                    .build(results.spare_capacity_mut()),
+            )
+            .is_ok()
+        }
+    }
+
     #[test]
     fn no_pages_returned() {
+        if !ioctl_supported() {
+            return;
+        }
         let mmap = MmapAnonymous::new(10);
         let mut results = Vec::with_capacity(10);
         let fd = File::open("/proc/self/pagemap").unwrap();
@@ -511,6 +530,9 @@ mod tests {
 
     #[test]
     fn empty_region() {
+        if !ioctl_supported() {
+            return;
+        }
         let mut results = Vec::with_capacity(10);
         let fd = File::open("/proc/self/pagemap").unwrap();
 
@@ -529,6 +551,9 @@ mod tests {
 
     #[test]
     fn basic_page_flags() {
+        if !ioctl_supported() {
+            return;
+        }
         let mmap = MmapAnonymous::new(10);
         let mut results = Vec::with_capacity(10);
         let fd = File::open("/proc/self/pagemap").unwrap();
@@ -580,6 +605,9 @@ mod tests {
 
     #[test]
     fn only_written_pages() {
+        if !ioctl_supported() {
+            return;
+        }
         let mmap = MmapAnonymous::new(10);
         let mut results = Vec::with_capacity(10);
         let fd = File::open("/proc/self/pagemap").unwrap();
@@ -615,6 +643,9 @@ mod tests {
 
     #[test]
     fn region_limit() {
+        if !ioctl_supported() {
+            return;
+        }
         let mmap = MmapAnonymous::new(10);
         let mut results = Vec::with_capacity(1);
         let fd = File::open("/proc/self/pagemap").unwrap();
@@ -664,6 +695,9 @@ mod tests {
 
     #[test]
     fn page_limit() {
+        if !ioctl_supported() {
+            return;
+        }
         let mmap = MmapAnonymous::new(10);
         let mut results = Vec::with_capacity(10);
         let fd = File::open("/proc/self/pagemap").unwrap();
@@ -697,6 +731,9 @@ mod tests {
 
     #[test]
     fn page_limit_with_hole() {
+        if !ioctl_supported() {
+            return;
+        }
         let mmap = MmapAnonymous::new(10);
         let mut results = Vec::with_capacity(10);
         let fd = File::open("/proc/self/pagemap").unwrap();
