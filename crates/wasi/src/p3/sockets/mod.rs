@@ -5,7 +5,6 @@ use wasmtime::component::Linker;
 
 mod conv;
 mod host;
-pub mod tcp;
 
 pub type SocketResult<T> = Result<T, SocketError>;
 pub type SocketError = TrappableError<sockets::types::ErrorCode>;

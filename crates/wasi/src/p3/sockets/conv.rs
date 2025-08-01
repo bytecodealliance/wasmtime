@@ -131,6 +131,15 @@ impl From<SocketAddressFamily> for types::IpAddressFamily {
     }
 }
 
+impl From<types::IpAddressFamily> for SocketAddressFamily {
+    fn from(family: types::IpAddressFamily) -> Self {
+        match family {
+            types::IpAddressFamily::Ipv4 => Self::Ipv4,
+            types::IpAddressFamily::Ipv6 => Self::Ipv6,
+        }
+    }
+}
+
 impl From<std::io::Error> for types::ErrorCode {
     fn from(value: std::io::Error) -> Self {
         (&value).into()
@@ -231,6 +240,7 @@ impl From<crate::sockets::util::ErrorCode> for types::ErrorCode {
             crate::sockets::util::ErrorCode::ConnectionAborted => Self::ConnectionAborted,
             crate::sockets::util::ErrorCode::DatagramTooLarge => Self::DatagramTooLarge,
             crate::sockets::util::ErrorCode::NotInProgress => Self::InvalidState,
+            crate::sockets::util::ErrorCode::ConcurrencyConflict => Self::InvalidState,
         }
     }
 }

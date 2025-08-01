@@ -243,6 +243,7 @@ mod write_stream;
 pub use self::filesystem::{FsError, FsResult};
 pub use self::network::{Network, SocketError, SocketResult};
 pub use self::stdio::IsATTY;
+pub(crate) use tcp::P2TcpStreamingState;
 // These contents of wasmtime-wasi-io are re-exported by this module for compatibility:
 // they were originally defined in this module before being factored out, and many
 // users of this module depend on them at these names.

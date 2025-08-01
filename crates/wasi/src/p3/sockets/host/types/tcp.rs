@@ -5,19 +5,13 @@ use crate::p3::bindings::sockets::types::{
     Duration, ErrorCode, HostTcpSocket, HostTcpSocketWithStore, IpAddressFamily, IpSocketAddress,
     TcpSocket,
 };
-use crate::p3::sockets::tcp::{NonInheritedOptions, TcpState};
 use crate::p3::sockets::{SocketResult, WasiSockets};
-use crate::sockets::util::{
-    is_valid_address_family, is_valid_remote_address, is_valid_unicast_address,
-};
-use crate::sockets::{SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
-use anyhow::{Context as _, anyhow};
+use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
+use anyhow::Context;
 use bytes::BytesMut;
 use io_lifetimes::AsSocketlike as _;
-use rustix::io::Errno;
 use std::future::poll_fn;
 use std::io::Cursor;
-use std::mem;
 use std::net::{Shutdown, SocketAddr};
 use std::pin::pin;
 use std::sync::Arc;
@@ -74,50 +68,12 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
             }) else {
                 return Ok(());
             };
-            let state = match res {
-                Ok((stream, _addr)) => {
-                    self.options.apply(self.family, &stream);
-                    TcpState::Connected(Arc::new(stream))
-                }
-                Err(err) => {
-                    match Errno::from_io_error(&err) {
-                        // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
-                        // > WSAEINPROGRESS: A blocking Windows Sockets 1.1 call is in progress,
-                        // > or the service provider is still processing a callback function.
-                        //
-                        // wasi-sockets doesn't have an equivalent to the EINPROGRESS error,
-                        // because in POSIX this error is only returned by a non-blocking
-                        // `connect` and wasi-sockets has a different solution for that.
-                        #[cfg(windows)]
-                        Some(Errno::INPROGRESS) => TcpState::Error(ErrorCode::Unknown),
-
-                        // Normalize Linux' non-standard behavior.
-                        //
-                        // From https://man7.org/linux/man-pages/man2/accept.2.html:
-                        // > Linux accept() passes already-pending network errors on the
-                        // > new socket as an error code from accept(). This behavior
-                        // > differs from other BSD socket implementations. (...)
-                        #[cfg(target_os = "linux")]
-                        Some(
-                            Errno::CONNRESET
-                            | Errno::NETRESET
-                            | Errno::HOSTUNREACH
-                            | Errno::HOSTDOWN
-                            | Errno::NETDOWN
-                            | Errno::NETUNREACH
-                            | Errno::PROTO
-                            | Errno::NOPROTOOPT
-                            | Errno::NONET
-                            | Errno::OPNOTSUPP,
-                        ) => TcpState::Error(ErrorCode::ConnectionAborted),
-                        _ => TcpState::Error(err.into()),
-                    }
-                }
-            };
+            let socket = TcpSocket::new_accept(res.map(|p| p.0), &self.options, self.family)
+                .unwrap_or_else(|err| TcpSocket::new_error(err, self.family));
             let socket = store.with(|mut view| {
                 view.get()
                     .table
-                    .push(TcpSocket::from_state(state, self.family))
+                    .push(socket)
                     .context("failed to push socket resource to table")
             })?;
             if let Some(socket) = tx.write(Some(socket)).await {
@@ -222,7 +178,8 @@ impl HostTcpSocketWithStore for WasiSockets {
         }
         store.with(|mut view| {
             let socket = get_socket_mut(view.get().table, &socket)?;
-            socket.bind(local_address)?;
+            socket.start_bind(local_address)?;
+            socket.finish_bind()?;
             Ok(())
         })
     }
@@ -238,42 +195,19 @@ impl HostTcpSocketWithStore for WasiSockets {
         {
             return Err(ErrorCode::AccessDenied.into());
         }
+        let addr = remote_address.into();
         let sock = store.with(|mut view| -> SocketResult<_> {
-            let ip = remote_address.ip();
             let socket = get_socket_mut(view.get().table, &socket)?;
-            if !is_valid_unicast_address(ip)
-                || !is_valid_remote_address(remote_address)
-                || !is_valid_address_family(ip, socket.family)
-            {
-                return Err(ErrorCode::InvalidArgument.into());
-            }
-            match mem::replace(&mut socket.tcp_state, TcpState::Connecting) {
-                TcpState::Default(sock) | TcpState::Bound(sock) => Ok(sock),
-                tcp_state => {
-                    socket.tcp_state = tcp_state;
-                    Err(ErrorCode::InvalidState.into())
-                }
-            }
+            Ok(socket.start_connect(&addr)?)
         })?;
 
         // FIXME: handle possible cancellation of the outer `connect`
         // https://github.com/bytecodealliance/wasmtime/pull/11291#discussion_r2223917986
-        let res = sock.connect(remote_address).await;
+        let res = sock.connect(addr).await;
         store.with(|mut view| -> SocketResult<_> {
             let socket = get_socket_mut(view.get().table, &socket)?;
-            if !matches!(socket.tcp_state, TcpState::Connecting) {
-                return Err(TrappableError::trap(anyhow!("corrupted socket state")));
-            }
-            match res {
-                Ok(stream) => {
-                    socket.tcp_state = TcpState::Connected(Arc::new(stream));
-                    Ok(())
-                }
-                Err(err) => {
-                    socket.tcp_state = TcpState::Closed;
-                    Err(ErrorCode::from(err).into())
-                }
-            }
+            socket.finish_connect(res)?;
+            Ok(())
         })
     }
 
@@ -285,43 +219,12 @@ impl HostTcpSocketWithStore for WasiSockets {
             if !view.get().ctx.allowed_network_uses.tcp {
                 return Err(ErrorCode::AccessDenied.into());
             }
-            let TcpSocket {
-                tcp_state,
-                listen_backlog_size,
-                family,
-                options,
-            } = get_socket_mut(view.get().table, &socket)?;
-            let sock = match mem::replace(tcp_state, TcpState::Closed) {
-                TcpState::Default(sock) | TcpState::Bound(sock) => sock,
-                prev => {
-                    *tcp_state = prev;
-                    return Err(ErrorCode::InvalidState.into());
-                }
-            };
-            let listener = match sock.listen(*listen_backlog_size) {
-                Ok(listener) => listener,
-                Err(err) => {
-                    match Errno::from_io_error(&err) {
-                        // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
-                        // According to the docs, `listen` can return EMFILE on Windows.
-                        // This is odd, because we're not trying to create a new socket
-                        // or file descriptor of any kind. So we rewrite it to less
-                        // surprising error code.
-                        //
-                        // At the time of writing, this behavior has never been experimentally
-                        // observed by any of the wasmtime authors, so we're relying fully
-                        // on Microsoft's documentation here.
-                        #[cfg(windows)]
-                        Some(Errno::MFILE) => return Err(ErrorCode::OutOfMemory.into()),
-
-                        _ => return Err(ErrorCode::from(err).into()),
-                    }
-                }
-            };
-            let listener = Arc::new(listener);
-            *tcp_state = TcpState::Listening(Arc::clone(&listener));
-            let family = *family;
-            let options = options.clone();
+            let socket = get_socket_mut(view.get().table, &socket)?;
+            socket.start_listen()?;
+            socket.finish_listen()?;
+            let listener = socket.tcp_listener_arc().unwrap().clone();
+            let family = socket.address_family();
+            let options = socket.non_inherited_options().clone();
             let (tx, rx) = view
                 .instance()
                 .stream(&mut view)
@@ -341,15 +244,12 @@ impl HostTcpSocketWithStore for WasiSockets {
     async fn send<T: 'static>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
-        data: StreamReader<u8>,
+        mut data: StreamReader<u8>,
     ) -> SocketResult<()> {
-        let (stream, mut data) = store.with(|mut view| -> SocketResult<_> {
+        let stream = store.with(|mut view| -> SocketResult<_> {
             let sock = get_socket(view.get().table, &socket)?;
-            if let TcpState::Connected(stream) | TcpState::Receiving(stream) = &sock.tcp_state {
-                Ok((Arc::clone(&stream), data))
-            } else {
-                Err(ErrorCode::InvalidState.into())
-            }
+            let stream = sock.tcp_stream_arc()?;
+            Ok(Arc::clone(stream))
         })?;
         let mut buf = Vec::with_capacity(8096);
         let mut result = Ok(());
@@ -388,10 +288,10 @@ impl HostTcpSocketWithStore for WasiSockets {
             let (mut data_tx, data_rx) = instance
                 .stream(&mut view)
                 .context("failed to create stream")?;
-            let TcpSocket { tcp_state, .. } = get_socket_mut(view.get().table, &socket)?;
-            match mem::replace(tcp_state, TcpState::Closed) {
-                TcpState::Connected(stream) => {
-                    *tcp_state = TcpState::Receiving(Arc::clone(&stream));
+            let socket = get_socket_mut(view.get().table, &socket)?;
+            match socket.start_receive() {
+                Some(stream) => {
+                    let stream = stream.clone();
                     let (result_tx, result_rx) = instance
                         .future(&mut view, || unreachable!())
                         .context("failed to create future")?;
@@ -402,8 +302,7 @@ impl HostTcpSocketWithStore for WasiSockets {
                     });
                     Ok((data_rx, result_rx))
                 }
-                prev => {
-                    *tcp_state = prev;
+                None => {
                     let (mut result_tx, result_rx) = instance
                         .future(&mut view, || Err(ErrorCode::InvalidState))
                         .context("failed to create future")?;
@@ -418,7 +317,9 @@ impl HostTcpSocketWithStore for WasiSockets {
 
 impl HostTcpSocket for WasiSocketsCtxView<'_> {
     fn new(&mut self, address_family: IpAddressFamily) -> wasmtime::Result<Resource<TcpSocket>> {
-        let socket = TcpSocket::new(address_family.into()).context("failed to create socket")?;
+        let family = address_family.into();
+        let socket =
+            TcpSocket::new(self.ctx, family).unwrap_or_else(|e| TcpSocket::new_error(e, family));
         self.table
             .push(socket)
             .context("failed to push socket resource to table")
@@ -426,12 +327,12 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
 
     fn local_address(&mut self, socket: Resource<TcpSocket>) -> SocketResult<IpSocketAddress> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.local_address()?)
+        Ok(sock.local_address()?.into())
     }
 
     fn remote_address(&mut self, socket: Resource<TcpSocket>) -> SocketResult<IpSocketAddress> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.remote_address()?)
+        Ok(sock.remote_address()?.into())
     }
 
     fn is_listening(&mut self, socket: Resource<TcpSocket>) -> wasmtime::Result<bool> {
@@ -441,7 +342,7 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
 
     fn address_family(&mut self, socket: Resource<TcpSocket>) -> wasmtime::Result<IpAddressFamily> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.address_family())
+        Ok(sock.address_family().into())
     }
 
     fn set_listen_backlog_size(

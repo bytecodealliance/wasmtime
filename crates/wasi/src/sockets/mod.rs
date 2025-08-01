@@ -5,9 +5,13 @@ use std::pin::Pin;
 use std::sync::Arc;
 use wasmtime::component::{HasData, ResourceTable};
 
+mod tcp;
 mod udp;
 pub(crate) mod util;
 
+#[cfg(feature = "p3")]
+pub(crate) use tcp::NonInheritedOptions;
+pub use tcp::TcpSocket;
 pub use udp::UdpSocket;
 
 pub(crate) struct WasiSockets;
