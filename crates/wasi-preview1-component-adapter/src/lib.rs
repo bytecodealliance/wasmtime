@@ -1611,7 +1611,7 @@ pub unsafe extern "C" fn fd_seek(
                         Some(pos) if pos >= 0 => pos,
                         _ => return Err(ERRNO_INVAL),
                     },
-                    WHENCE_END => match (file.fd.stat()?.size as i64).checked_add(offset) {
+                    WHENCE_END => match (file.fd.stat()?.size as i64).checked_sub(offset) {
                         Some(pos) if pos >= 0 => pos,
                         _ => return Err(ERRNO_INVAL),
                     },

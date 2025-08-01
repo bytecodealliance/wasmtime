@@ -1844,7 +1844,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 .ok_or(types::Errno::Inval)?,
             types::Whence::End => {
                 let filesystem::DescriptorStat { size, .. } = self.as_wasi_impl().stat(fd).await?;
-                size.checked_add_signed(offset).ok_or(types::Errno::Inval)?
+                size.checked_add_signed(-offset)
+                    .ok_or(types::Errno::Inval)?
             }
             _ => return Err(types::Errno::Inval.into()),
         };

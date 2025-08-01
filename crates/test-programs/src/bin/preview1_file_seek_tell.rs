@@ -63,6 +63,14 @@ unsafe fn test_file_seek_tell(dir_fd: wasip1::Fd) {
         wasip1::ERRNO_INVAL
     );
 
+    // Seek to an offset off the end of the file
+    newoffset = wasip1::fd_seek(file_fd, 1, wasip1::WHENCE_END)
+        .expect("seeking to the end of the file, minus 1");
+    assert_eq!(
+        newoffset, 99,
+        "offset after seeking to the end of the file minus 1 should be at 99"
+    );
+
     // Check that fd_read properly updates the file offset
     wasip1::fd_seek(file_fd, 0, wasip1::WHENCE_SET)
         .expect("seeking to the beginning of the file again");
