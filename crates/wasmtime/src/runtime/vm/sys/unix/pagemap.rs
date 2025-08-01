@@ -23,6 +23,9 @@ impl PageMap {
             .return_mask(Categories::empty())
             .category_mask(Categories::all())
             .build(&mut regions);
+
+        // SAFETY: we did our best in the `ioctl` code below to model this ioctl
+        // safely, and it's safe to issue the ioctl on `/proc/self/pagemap`.
         unsafe {
             ioctl(&file, pm_scan).ok()?;
         }
@@ -195,8 +198,8 @@ mod ioctl {
                 pm_scan_arg: pm_scan_arg {
                     size: size_of::<pm_scan_arg>() as u64,
                     flags: 0,
-                    start: unsafe { (*region).as_ptr() as u64 },
-                    end: unsafe { (*region).as_ptr().wrapping_add(region.len()) as u64 },
+                    start: region.cast::<u8>().addr() as u64,
+                    end: region.cast::<u8>().addr().wrapping_add(region.len()) as u64,
                     walk_end: 0,
                     vec: 0,
                     vec_len: 0,
@@ -297,7 +300,6 @@ mod ioctl {
     /// [`PageMapScanResult::walk_end`] and the description of regions found in
     /// [`PageMapScanResult::regions`].
     #[derive(Debug)]
-    #[allow(dead_code)]
     pub struct PageMapScanResult<'a> {
         walk_end: *const u8,
         regions: &'a mut [PageRegion],
@@ -366,6 +368,9 @@ mod ioctl {
         }
     }
 
+    // SAFETY: this implementation should uphold the various requirements that
+    // this trait has, such as `IS_MUTATING` is right, it's only used on the
+    // right platform with the right files, etc.
     unsafe impl<'a> Ioctl for PageMapScan<'a> {
         type Output = PageMapScanResult<'a>;
 
@@ -385,12 +390,20 @@ mod ioctl {
         ) -> rustix::io::Result<Self::Output> {
             let extract_output = extract_output.cast::<pm_scan_arg>();
             let len = usize::try_from(out).unwrap();
+            // SAFETY: it's a requirement of this method that
+            // `extract_output` is safe to read an indeed a `pm_scan_arg`.
+            // Additionally the slice returned here originated from a slice
+            // provided to `PageMapScanBuilder::build` threaded through the
+            // `vec` field and it should be safe to thread that back out through
+            // to the result.
             let regions = unsafe {
                 assert!((len as u64) <= (*extract_output).vec_len);
                 std::slice::from_raw_parts_mut((*extract_output).vec as *mut PageRegion, len)
             };
             Ok(PageMapScanResult {
                 regions,
+                // SAFETY: it's a requirement of this method that
+                // `extract_output` is safe to read an indeed a `pm_scan_arg`.
                 walk_end: unsafe { (*extract_output).walk_end as *const u8 },
             })
         }

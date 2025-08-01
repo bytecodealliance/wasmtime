@@ -1159,7 +1159,7 @@ mod test {
         let mut data = vec![0; 3 * page_size];
         for (i, chunk) in data.chunks_mut(page_size).enumerate() {
             for slot in chunk {
-                *slot = (i + 1) as u8;
+                *slot = u8::try_from(i + 1).unwrap();
             }
         }
         let image = Arc::new(create_memfd_with_data(3 * page_size, &data).unwrap());
@@ -1183,7 +1183,7 @@ mod test {
                 for (i, chunk) in slice.chunks(page_size).enumerate() {
                     let expected = match i {
                         0..3 => 0,
-                        3..6 => (i as u8) - 2,
+                        3..6 => u8::try_from(i).unwrap() - 2,
                         6..9 => 0,
                         _ => unreachable!(),
                     };
