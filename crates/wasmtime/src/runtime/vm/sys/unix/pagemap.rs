@@ -2,8 +2,10 @@
 //!
 //! For other platforms, a no-op implementation is provided.
 
-use self::ioctl::{Categories, PageMapScanBuilder};
+#[cfg(feature = "pooling-allocator")]
 use crate::prelude::*;
+
+use self::ioctl::{Categories, PageMapScanBuilder};
 use crate::runtime::vm::{HostAlignedByteCount, host_page_size};
 use rustix::ioctl::ioctl;
 use std::fs::File;
@@ -14,6 +16,7 @@ use std::ptr;
 pub struct PageMap(File);
 
 impl PageMap {
+    #[cfg(feature = "pooling-allocator")]
     pub fn new() -> Option<PageMap> {
         let file = File::open("/proc/self/pagemap").ok()?;
         // Check if the `pagemap_scan` ioctl is supported.

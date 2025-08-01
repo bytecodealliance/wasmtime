@@ -4,7 +4,7 @@
 #![warn(dead_code, unused_imports)]
 
 use crate::prelude::*;
-use crate::runtime::vm::MmapVec;
+use crate::vm::ModuleMemoryImageSource;
 use alloc::sync::Arc;
 use wasmtime_environ::{DefinedMemoryIndex, Module};
 
@@ -25,8 +25,7 @@ pub enum MemoryImage {}
 impl ModuleMemoryImages {
     pub fn new(
         _module: &Module,
-        _wasm_data: &[u8],
-        _mmap: Option<&MmapVec>,
+        _source: &Arc<impl ModuleMemoryImageSource>,
     ) -> Result<Option<ModuleMemoryImages>> {
         Ok(None)
     }

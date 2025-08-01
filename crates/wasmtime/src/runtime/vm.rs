@@ -60,6 +60,7 @@ mod imports;
 mod instance;
 mod memory;
 mod mmap_vec;
+#[cfg(has_virtual_memory)]
 mod pagemap_disabled;
 mod provenance;
 mod send_sync_ptr;
