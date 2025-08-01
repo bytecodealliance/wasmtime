@@ -1,36 +1,32 @@
-use core::future::poll_fn;
-use core::mem;
-use core::net::SocketAddr;
-use core::pin::pin;
-use core::task::Poll;
-
-use std::io::Cursor;
-use std::net::Shutdown;
-use std::sync::Arc;
-
-use anyhow::{Context as _, ensure};
-use bytes::BytesMut;
-use io_lifetimes::AsSocketlike as _;
-use rustix::io::Errno;
-use tokio::net::{TcpListener, TcpStream};
-use wasmtime::component::{
-    Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureWriter, GuardedStreamWriter,
-    Resource, ResourceTable, StreamReader, StreamWriter,
-};
-
+use super::is_addr_allowed;
+use crate::TrappableError;
 use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::sockets::types::{
     Duration, ErrorCode, HostTcpSocket, HostTcpSocketWithStore, IpAddressFamily, IpSocketAddress,
     TcpSocket,
 };
-use crate::p3::sockets::WasiSockets;
 use crate::p3::sockets::tcp::{NonInheritedOptions, TcpState};
+use crate::p3::sockets::{SocketResult, WasiSockets};
 use crate::sockets::util::{
     is_valid_address_family, is_valid_remote_address, is_valid_unicast_address,
 };
 use crate::sockets::{SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
-
-use super::is_addr_allowed;
+use anyhow::{Context as _, anyhow};
+use bytes::BytesMut;
+use io_lifetimes::AsSocketlike as _;
+use rustix::io::Errno;
+use std::future::poll_fn;
+use std::io::Cursor;
+use std::mem;
+use std::net::{Shutdown, SocketAddr};
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::Poll;
+use tokio::net::{TcpListener, TcpStream};
+use wasmtime::component::{
+    Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureWriter, GuardedStreamWriter,
+    Resource, ResourceTable, StreamReader, StreamWriter,
+};
 
 fn is_tcp_allowed<T>(store: &Accessor<T, WasiSockets>) -> bool {
     store.with(|mut view| view.get().ctx.allowed_network_uses.tcp)
@@ -39,19 +35,21 @@ fn is_tcp_allowed<T>(store: &Accessor<T, WasiSockets>) -> bool {
 fn get_socket<'a>(
     table: &'a ResourceTable,
     socket: &'a Resource<TcpSocket>,
-) -> wasmtime::Result<&'a TcpSocket> {
+) -> SocketResult<&'a TcpSocket> {
     table
         .get(socket)
         .context("failed to get socket resource from table")
+        .map_err(TrappableError::trap)
 }
 
 fn get_socket_mut<'a>(
     table: &'a mut ResourceTable,
     socket: &'a Resource<TcpSocket>,
-) -> wasmtime::Result<&'a mut TcpSocket> {
+) -> SocketResult<&'a mut TcpSocket> {
     table
         .get_mut(socket)
         .context("failed to get socket resource from table")
+        .map_err(TrappableError::trap)
 }
 
 struct ListenTask {
@@ -215,16 +213,17 @@ impl HostTcpSocketWithStore for WasiSockets {
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
         local_address: IpSocketAddress,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> SocketResult<()> {
         let local_address = SocketAddr::from(local_address);
         if !is_tcp_allowed(store)
             || !is_addr_allowed(store, local_address, SocketAddrUse::TcpBind).await
         {
-            return Ok(Err(ErrorCode::AccessDenied));
+            return Err(ErrorCode::AccessDenied.into());
         }
         store.with(|mut view| {
             let socket = get_socket_mut(view.get().table, &socket)?;
-            Ok(socket.bind(local_address))
+            socket.bind(local_address)?;
+            Ok(())
         })
     }
 
@@ -232,63 +231,59 @@ impl HostTcpSocketWithStore for WasiSockets {
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
         remote_address: IpSocketAddress,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> SocketResult<()> {
         let remote_address = SocketAddr::from(remote_address);
         if !is_tcp_allowed(store)
             || !is_addr_allowed(store, remote_address, SocketAddrUse::TcpConnect).await
         {
-            return Ok(Err(ErrorCode::AccessDenied));
+            return Err(ErrorCode::AccessDenied.into());
         }
-        match store.with(|mut view| {
+        let sock = store.with(|mut view| -> SocketResult<_> {
             let ip = remote_address.ip();
             let socket = get_socket_mut(view.get().table, &socket)?;
             if !is_valid_unicast_address(ip)
                 || !is_valid_remote_address(remote_address)
                 || !is_valid_address_family(ip, socket.family)
             {
-                return anyhow::Ok(Err(ErrorCode::InvalidArgument));
+                return Err(ErrorCode::InvalidArgument.into());
             }
             match mem::replace(&mut socket.tcp_state, TcpState::Connecting) {
-                TcpState::Default(sock) | TcpState::Bound(sock) => Ok(Ok(sock)),
+                TcpState::Default(sock) | TcpState::Bound(sock) => Ok(sock),
                 tcp_state => {
                     socket.tcp_state = tcp_state;
-                    Ok(Err(ErrorCode::InvalidState))
+                    Err(ErrorCode::InvalidState.into())
                 }
             }
-        })? {
-            Ok(sock) => {
-                // FIXME: handle possible cancellation of the outer `connect`
-                // https://github.com/bytecodealliance/wasmtime/pull/11291#discussion_r2223917986
-                let res = sock.connect(remote_address).await;
-                store.with(|mut view| {
-                    let socket = get_socket_mut(view.get().table, &socket)?;
-                    ensure!(
-                        matches!(socket.tcp_state, TcpState::Connecting),
-                        "corrupted socket state"
-                    );
-                    match res {
-                        Ok(stream) => {
-                            socket.tcp_state = TcpState::Connected(Arc::new(stream));
-                            Ok(Ok(()))
-                        }
-                        Err(err) => {
-                            socket.tcp_state = TcpState::Closed;
-                            Ok(Err(err.into()))
-                        }
-                    }
-                })
+        })?;
+
+        // FIXME: handle possible cancellation of the outer `connect`
+        // https://github.com/bytecodealliance/wasmtime/pull/11291#discussion_r2223917986
+        let res = sock.connect(remote_address).await;
+        store.with(|mut view| -> SocketResult<_> {
+            let socket = get_socket_mut(view.get().table, &socket)?;
+            if !matches!(socket.tcp_state, TcpState::Connecting) {
+                return Err(TrappableError::trap(anyhow!("corrupted socket state")));
             }
-            Err(err) => Ok(Err(err)),
-        }
+            match res {
+                Ok(stream) => {
+                    socket.tcp_state = TcpState::Connected(Arc::new(stream));
+                    Ok(())
+                }
+                Err(err) => {
+                    socket.tcp_state = TcpState::Closed;
+                    Err(ErrorCode::from(err).into())
+                }
+            }
+        })
     }
 
     async fn listen<T: 'static>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<StreamReader<Resource<TcpSocket>>, ErrorCode>> {
+    ) -> SocketResult<StreamReader<Resource<TcpSocket>>> {
         store.with(|mut view| {
             if !view.get().ctx.allowed_network_uses.tcp {
-                return anyhow::Ok(Err(ErrorCode::AccessDenied));
+                return Err(ErrorCode::AccessDenied.into());
             }
             let TcpSocket {
                 tcp_state,
@@ -300,7 +295,7 @@ impl HostTcpSocketWithStore for WasiSockets {
                 TcpState::Default(sock) | TcpState::Bound(sock) => sock,
                 prev => {
                     *tcp_state = prev;
-                    return Ok(Err(ErrorCode::InvalidState));
+                    return Err(ErrorCode::InvalidState.into());
                 }
             };
             let listener = match sock.listen(*listen_backlog_size) {
@@ -317,9 +312,9 @@ impl HostTcpSocketWithStore for WasiSockets {
                         // observed by any of the wasmtime authors, so we're relying fully
                         // on Microsoft's documentation here.
                         #[cfg(windows)]
-                        Some(Errno::MFILE) => return Ok(Err(ErrorCode::OutOfMemory)),
+                        Some(Errno::MFILE) => return Err(ErrorCode::OutOfMemory.into()),
 
-                        _ => return Ok(Err(err.into())),
+                        _ => return Err(ErrorCode::from(err).into()),
                     }
                 }
             };
@@ -330,7 +325,8 @@ impl HostTcpSocketWithStore for WasiSockets {
             let (tx, rx) = view
                 .instance()
                 .stream(&mut view)
-                .context("failed to create stream")?;
+                .context("failed to create stream")
+                .map_err(TrappableError::trap)?;
             let task = ListenTask {
                 listener,
                 family,
@@ -338,7 +334,7 @@ impl HostTcpSocketWithStore for WasiSockets {
                 options,
             };
             view.spawn(task);
-            Ok(Ok(rx))
+            Ok(rx)
         })
     }
 
@@ -346,18 +342,15 @@ impl HostTcpSocketWithStore for WasiSockets {
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
         data: StreamReader<u8>,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
-        let (stream, mut data) = match store.with(|mut view| -> wasmtime::Result<_> {
+    ) -> SocketResult<()> {
+        let (stream, mut data) = store.with(|mut view| -> SocketResult<_> {
             let sock = get_socket(view.get().table, &socket)?;
             if let TcpState::Connected(stream) | TcpState::Receiving(stream) = &sock.tcp_state {
-                Ok(Ok((Arc::clone(&stream), data)))
+                Ok((Arc::clone(&stream), data))
             } else {
-                Ok(Err(ErrorCode::InvalidState))
+                Err(ErrorCode::InvalidState.into())
             }
-        })? {
-            Ok((stream, data)) => (stream, data),
-            Err(err) => return Ok(Err(err)),
-        };
+        })?;
         let mut buf = Vec::with_capacity(8096);
         let mut result = Ok(());
         while !data.is_closed() {
@@ -368,12 +361,12 @@ impl HostTcpSocketWithStore for WasiSockets {
                     Ok(n) => slice = &slice[n..],
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                         if let Err(err) = stream.writable().await {
-                            result = Err(err.into());
+                            result = Err(ErrorCode::from(err).into());
                             break;
                         }
                     }
                     Err(err) => {
-                        result = Err(err.into());
+                        result = Err(ErrorCode::from(err).into());
                         break;
                     }
                 }
@@ -383,7 +376,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         _ = stream
             .as_socketlike_view::<std::net::TcpStream>()
             .shutdown(Shutdown::Write);
-        Ok(result)
+        result
     }
 
     async fn receive<T: 'static>(
@@ -431,20 +424,14 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
             .context("failed to push socket resource to table")
     }
 
-    fn local_address(
-        &mut self,
-        socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<IpSocketAddress, ErrorCode>> {
+    fn local_address(&mut self, socket: Resource<TcpSocket>) -> SocketResult<IpSocketAddress> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.local_address())
+        Ok(sock.local_address()?)
     }
 
-    fn remote_address(
-        &mut self,
-        socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<IpSocketAddress, ErrorCode>> {
+    fn remote_address(&mut self, socket: Resource<TcpSocket>) -> SocketResult<IpSocketAddress> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.remote_address())
+        Ok(sock.remote_address()?)
     }
 
     fn is_listening(&mut self, socket: Resource<TcpSocket>) -> wasmtime::Result<bool> {
@@ -461,128 +448,111 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
         &mut self,
         socket: Resource<TcpSocket>,
         value: u64,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> SocketResult<()> {
         let sock = get_socket_mut(self.table, &socket)?;
-        Ok(sock.set_listen_backlog_size(value))
+        sock.set_listen_backlog_size(value)?;
+        Ok(())
     }
 
-    fn keep_alive_enabled(
-        &mut self,
-        socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<bool, ErrorCode>> {
+    fn keep_alive_enabled(&mut self, socket: Resource<TcpSocket>) -> SocketResult<bool> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.keep_alive_enabled())
+        Ok(sock.keep_alive_enabled()?)
     }
 
     fn set_keep_alive_enabled(
         &mut self,
         socket: Resource<TcpSocket>,
         value: bool,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> SocketResult<()> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.set_keep_alive_enabled(value))
+        sock.set_keep_alive_enabled(value)?;
+        Ok(())
     }
 
-    fn keep_alive_idle_time(
-        &mut self,
-        socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<Duration, ErrorCode>> {
+    fn keep_alive_idle_time(&mut self, socket: Resource<TcpSocket>) -> SocketResult<Duration> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.keep_alive_idle_time())
+        Ok(sock.keep_alive_idle_time()?)
     }
 
     fn set_keep_alive_idle_time(
         &mut self,
         socket: Resource<TcpSocket>,
         value: Duration,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> SocketResult<()> {
         let sock = get_socket_mut(self.table, &socket)?;
-        Ok(sock.set_keep_alive_idle_time(value))
+        sock.set_keep_alive_idle_time(value)?;
+        Ok(())
     }
 
-    fn keep_alive_interval(
-        &mut self,
-        socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<Duration, ErrorCode>> {
+    fn keep_alive_interval(&mut self, socket: Resource<TcpSocket>) -> SocketResult<Duration> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.keep_alive_interval())
+        Ok(sock.keep_alive_interval()?)
     }
 
     fn set_keep_alive_interval(
         &mut self,
         socket: Resource<TcpSocket>,
         value: Duration,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> SocketResult<()> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.set_keep_alive_interval(value))
+        sock.set_keep_alive_interval(value)?;
+        Ok(())
     }
 
-    fn keep_alive_count(
-        &mut self,
-        socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<u32, ErrorCode>> {
+    fn keep_alive_count(&mut self, socket: Resource<TcpSocket>) -> SocketResult<u32> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.keep_alive_count())
+        Ok(sock.keep_alive_count()?)
     }
 
     fn set_keep_alive_count(
         &mut self,
         socket: Resource<TcpSocket>,
         value: u32,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> SocketResult<()> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.set_keep_alive_count(value))
+        sock.set_keep_alive_count(value)?;
+        Ok(())
     }
 
-    fn hop_limit(
-        &mut self,
-        socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<u8, ErrorCode>> {
+    fn hop_limit(&mut self, socket: Resource<TcpSocket>) -> SocketResult<u8> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.hop_limit())
+        Ok(sock.hop_limit()?)
     }
 
-    fn set_hop_limit(
-        &mut self,
-        socket: Resource<TcpSocket>,
-        value: u8,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    fn set_hop_limit(&mut self, socket: Resource<TcpSocket>, value: u8) -> SocketResult<()> {
         let sock = get_socket_mut(self.table, &socket)?;
-        Ok(sock.set_hop_limit(value))
+        sock.set_hop_limit(value)?;
+        Ok(())
     }
 
-    fn receive_buffer_size(
-        &mut self,
-        socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<u64, ErrorCode>> {
+    fn receive_buffer_size(&mut self, socket: Resource<TcpSocket>) -> SocketResult<u64> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.receive_buffer_size())
+        Ok(sock.receive_buffer_size()?)
     }
 
     fn set_receive_buffer_size(
         &mut self,
         socket: Resource<TcpSocket>,
         value: u64,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> SocketResult<()> {
         let sock = get_socket_mut(self.table, &socket)?;
-        Ok(sock.set_receive_buffer_size(value))
+        sock.set_receive_buffer_size(value)?;
+        Ok(())
     }
 
-    fn send_buffer_size(
-        &mut self,
-        socket: Resource<TcpSocket>,
-    ) -> wasmtime::Result<Result<u64, ErrorCode>> {
+    fn send_buffer_size(&mut self, socket: Resource<TcpSocket>) -> SocketResult<u64> {
         let sock = get_socket(self.table, &socket)?;
-        Ok(sock.send_buffer_size())
+        Ok(sock.send_buffer_size()?)
     }
 
     fn set_send_buffer_size(
         &mut self,
         socket: Resource<TcpSocket>,
         value: u64,
-    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+    ) -> SocketResult<()> {
         let sock = get_socket_mut(self.table, &socket)?;
-        Ok(sock.set_send_buffer_size(value))
+        sock.set_send_buffer_size(value)?;
+        Ok(())
     }
 
     fn drop(&mut self, sock: Resource<TcpSocket>) -> wasmtime::Result<()> {

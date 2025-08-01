@@ -2559,11 +2559,16 @@ impl<'a> InterfaceGenerator<'a> {
                 None => format!("Host"),
             };
             let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
+            let convert = if flags.contains(FunctionFlags::STORE) {
+                format!("accessor.with(|mut host| {convert}(&mut host.get(), e))?")
+            } else {
+                format!("{convert}(host, e)?")
+            };
             uwrite!(
                 self.src,
                 "Ok((match r {{
                     Ok(a) => Ok(a),
-                    Err(e) => Err({convert}(host, e)?),
+                    Err(e) => Err({convert}),
                 }},))"
             );
         } else if func.result.is_some() {
