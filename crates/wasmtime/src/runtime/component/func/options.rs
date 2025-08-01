@@ -3,7 +3,7 @@ use crate::component::resources::{HostResourceData, HostResourceIndex, HostResou
 use crate::component::{Instance, ResourceType};
 use crate::prelude::*;
 use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
+    CallContexts, ComponentInstance, HandleTable, InstanceFlags, ResourceTables,
 };
 use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
@@ -473,7 +473,7 @@ pub struct LiftContext<'a> {
     instance: Pin<&'a mut ComponentInstance>,
     instance_handle: Instance,
 
-    host_table: &'a mut ResourceTable,
+    host_table: &'a mut HandleTable,
     host_resource_data: &'a mut HostResourceData,
 
     calls: &'a mut CallContexts,
@@ -490,7 +490,7 @@ impl<'a> LiftContext<'a> {
     ) -> LiftContext<'a> {
         // From `&mut StoreOpaque` provided the goal here is to project out
         // three different disjoint fields owned by the store: memory,
-        // `CallContexts`, and `ResourceTable`. There's no native API for that
+        // `CallContexts`, and `HandleTable`. There's no native API for that
         // so it's hacked around a bit. This unsafe pointer cast could be fixed
         // with more methods in more places, but it doesn't seem worth doing it
         // at this time.

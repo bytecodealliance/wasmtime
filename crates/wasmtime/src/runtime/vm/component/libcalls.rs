@@ -702,7 +702,8 @@ fn waitable_set_new(
     caller_instance: u32,
 ) -> Result<u32> {
     instance
-        .concurrent_state_mut(store)
+        .id()
+        .get_mut(store)
         .waitable_set_new(RuntimeComponentInstanceIndex::from_u32(caller_instance))
 }
 
@@ -735,7 +736,7 @@ fn waitable_set_drop(
     caller_instance: u32,
     set: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).waitable_set_drop(
+    instance.id().get_mut(store).waitable_set_drop(
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         set,
     )
@@ -749,7 +750,7 @@ fn waitable_join(
     waitable: u32,
     set: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).waitable_join(
+    instance.id().get_mut(store).waitable_join(
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         waitable,
         set,
@@ -768,7 +769,7 @@ fn subtask_drop(
     caller_instance: u32,
     task_id: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).subtask_drop(
+    instance.id().get_mut(store).subtask_drop(
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         task_id,
     )
@@ -876,7 +877,7 @@ fn future_transfer(
     src_table: u32,
     dst_table: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).future_transfer(
+    instance.id().get_mut(store).future_transfer(
         src_idx,
         TypeFutureTableIndex::from_u32(src_table),
         TypeFutureTableIndex::from_u32(dst_table),
@@ -891,7 +892,7 @@ fn stream_transfer(
     src_table: u32,
     dst_table: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).stream_transfer(
+    instance.id().get_mut(store).stream_transfer(
         src_idx,
         TypeStreamTableIndex::from_u32(src_table),
         TypeStreamTableIndex::from_u32(dst_table),
@@ -909,7 +910,8 @@ fn error_context_transfer(
     let src_table = TypeComponentLocalErrorContextTableIndex::from_u32(src_table);
     let dst_table = TypeComponentLocalErrorContextTableIndex::from_u32(dst_table);
     instance
-        .concurrent_state_mut(store)
+        .id()
+        .get_mut(store)
         .error_context_transfer(src_idx, src_table, dst_table)
 }
 
@@ -927,7 +929,8 @@ unsafe impl HostResultHasUnwindSentinel for ResourcePair {
 #[cfg(feature = "component-model-async")]
 fn future_new(store: &mut dyn VMStore, instance: Instance, ty: u32) -> Result<ResourcePair> {
     instance
-        .concurrent_state_mut(store)
+        .id()
+        .get_mut(store)
         .future_new(TypeFutureTableIndex::from_u32(ty))
 }
 
@@ -975,7 +978,7 @@ fn future_cancel_write(
     async_: u8,
     writer: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).future_cancel_write(
+    instance.id().get_mut(store).future_cancel_write(
         TypeFutureTableIndex::from_u32(ty),
         async_ != 0,
         writer,
@@ -990,7 +993,7 @@ fn future_cancel_read(
     async_: u8,
     reader: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).future_cancel_read(
+    instance.id().get_mut(store).future_cancel_read(
         TypeFutureTableIndex::from_u32(ty),
         async_ != 0,
         reader,
@@ -1024,7 +1027,8 @@ fn future_drop_readable(
 #[cfg(feature = "component-model-async")]
 fn stream_new(store: &mut dyn VMStore, instance: Instance, ty: u32) -> Result<ResourcePair> {
     instance
-        .concurrent_state_mut(store)
+        .id()
+        .get_mut(store)
         .stream_new(TypeStreamTableIndex::from_u32(ty))
 }
 
@@ -1076,7 +1080,7 @@ fn stream_cancel_write(
     async_: u8,
     writer: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).stream_cancel_write(
+    instance.id().get_mut(store).stream_cancel_write(
         TypeStreamTableIndex::from_u32(ty),
         async_ != 0,
         writer,
@@ -1091,7 +1095,7 @@ fn stream_cancel_read(
     async_: u8,
     reader: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).stream_cancel_read(
+    instance.id().get_mut(store).stream_cancel_read(
         TypeStreamTableIndex::from_u32(ty),
         async_ != 0,
         reader,
@@ -1213,7 +1217,7 @@ fn error_context_drop(
     ty: u32,
     err_ctx_handle: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).error_context_drop(
+    instance.id().get_mut(store).error_context_drop(
         TypeComponentLocalErrorContextTableIndex::from_u32(ty),
         err_ctx_handle,
     )
