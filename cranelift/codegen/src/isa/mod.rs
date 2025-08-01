@@ -420,7 +420,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
 /// A wrapper around the ISA-dependent flags types which only implements `Hash`.
 #[derive(Hash)]
-pub struct IsaFlagsHashKey<'a>(&'a [u8]);
+pub struct IsaFlagsHashKey<'a>(pub &'a [u8]);
 
 /// Function alignment specifications as required by an ISA, returned by
 /// [`TargetIsa::function_alignment`].
