@@ -1,33 +1,16 @@
 mod host;
 
-use crate::cli::{IsTerminal, WasiCliCtx};
+use crate::cli::WasiCliCtx;
 use crate::p3::bindings::cli;
-use std::sync::Arc;
-use tokio::io::{
-    AsyncRead, AsyncWrite, Empty, Stderr, Stdin, Stdout, empty, stderr, stdin, stdout,
-};
 use wasmtime::component::{HasData, Linker, ResourceTable};
 
 pub struct WasiCliCtxView<'a> {
-    pub ctx: &'a mut WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>>,
+    pub ctx: &'a mut WasiCliCtx,
     pub table: &'a mut ResourceTable,
 }
 
 pub trait WasiCliView: Send {
     fn cli(&mut self) -> WasiCliCtxView<'_>;
-}
-
-impl Default for WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>> {
-    fn default() -> Self {
-        Self {
-            environment: Vec::default(),
-            arguments: Vec::default(),
-            initial_cwd: None,
-            stdin: Box::new(empty()),
-            stdout: Box::new(empty()),
-            stderr: Box::new(empty()),
-        }
-    }
 }
 
 /// Add all WASI interfaces from this module into the `linker` provided.
@@ -46,7 +29,7 @@ impl Default for WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>> {
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Linker, ResourceTable};
 /// use wasmtime_wasi::cli::WasiCliCtx;
-/// use wasmtime_wasi::p3::cli::{InputStream, OutputStream, WasiCliView, WasiCliCtxView};
+/// use wasmtime_wasi::p3::cli::{WasiCliView, WasiCliCtxView};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -70,7 +53,7 @@ impl Default for WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>> {
 ///
 /// #[derive(Default)]
 /// struct MyState {
-///     cli: WasiCliCtx<Box<dyn InputStream>, Box<dyn OutputStream>>,
+///     cli: WasiCliCtx,
 ///     table: ResourceTable,
 /// }
 ///
@@ -120,119 +103,3 @@ impl HasData for WasiCli {
 
 pub struct TerminalInput;
 pub struct TerminalOutput;
-
-pub trait InputStream: IsTerminal + Send {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync>;
-}
-
-impl<T: ?Sized + InputStream + Sync> InputStream for &T {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        T::reader(self)
-    }
-}
-
-impl<T: ?Sized + InputStream> InputStream for &mut T {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        T::reader(self)
-    }
-}
-
-impl<T: ?Sized + InputStream> InputStream for Box<T> {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        T::reader(self)
-    }
-}
-
-impl<T: ?Sized + InputStream + Sync> InputStream for Arc<T> {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        T::reader(self)
-    }
-}
-
-impl InputStream for Empty {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        Box::new(empty())
-    }
-}
-
-impl InputStream for std::io::Empty {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        Box::new(empty())
-    }
-}
-
-impl InputStream for Stdin {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        Box::new(stdin())
-    }
-}
-
-impl InputStream for std::io::Stdin {
-    fn reader(&self) -> Box<dyn AsyncRead + Send + Sync> {
-        Box::new(stdin())
-    }
-}
-
-pub trait OutputStream: IsTerminal + Send {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync>;
-}
-
-impl<T: ?Sized + OutputStream + Sync> OutputStream for &T {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        T::writer(self)
-    }
-}
-
-impl<T: ?Sized + OutputStream> OutputStream for &mut T {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        T::writer(self)
-    }
-}
-
-impl<T: ?Sized + OutputStream> OutputStream for Box<T> {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        T::writer(self)
-    }
-}
-
-impl<T: ?Sized + OutputStream + Sync> OutputStream for Arc<T> {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        T::writer(self)
-    }
-}
-
-impl OutputStream for Empty {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(empty())
-    }
-}
-
-impl OutputStream for std::io::Empty {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(empty())
-    }
-}
-
-impl OutputStream for Stdout {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(stdout())
-    }
-}
-
-impl OutputStream for std::io::Stdout {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(stdout())
-    }
-}
-
-impl OutputStream for Stderr {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(stderr())
-    }
-}
-
-impl OutputStream for std::io::Stderr {
-    fn writer(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(stderr())
-    }
-}

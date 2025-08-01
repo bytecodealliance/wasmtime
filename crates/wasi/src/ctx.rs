@@ -1,4 +1,4 @@
-use crate::cli::WasiCliCtx;
+use crate::cli::{StdinStream, StdoutStream, WasiCliCtx};
 use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
 use crate::random::WasiRandomCtx;
 use crate::sockets::{SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
@@ -18,67 +18,29 @@ use std::sync::Arc;
 ///
 /// [`Store`]: wasmtime::Store
 #[derive(Default)]
-pub(crate) struct WasiCtxBuilder<I, O> {
-    pub(crate) cli: WasiCliCtx<I, O>,
+pub(crate) struct WasiCtxBuilder {
+    pub(crate) cli: WasiCliCtx,
     pub(crate) clocks: WasiClocksCtx,
     pub(crate) random: WasiRandomCtx,
     pub(crate) sockets: WasiSocketsCtx,
     pub(crate) allow_blocking_current_thread: bool,
 }
 
-impl<I, O> WasiCtxBuilder<I, O> {
-    /// Creates a builder for a new context with default parameters set.
-    ///
-    /// The current defaults are:
-    ///
-    /// * stdin is closed
-    /// * stdout and stderr eat all input and it doesn't go anywhere
-    /// * no env vars
-    /// * no arguments
-    /// * no preopens
-    /// * clocks use the host implementation of wall/monotonic clocks
-    /// * RNGs are all initialized with random state and suitable generator
-    ///   quality to satisfy the requirements of WASI APIs.
-    /// * TCP/UDP are allowed but all addresses are denied by default.
-    /// * IP name lookup is denied by default.
-    ///
-    /// These defaults can all be updated via the various builder configuration
-    /// methods below.
-    pub(crate) fn new(stdin: I, stdout: O, stderr: O) -> Self {
-        let cli = WasiCliCtx {
-            environment: Vec::default(),
-            arguments: Vec::default(),
-            initial_cwd: None,
-            stdin,
-            stdout,
-            stderr,
-        };
-        let clocks = WasiClocksCtx::default();
-        let random = WasiRandomCtx::default();
-        let sockets = WasiSocketsCtx::default();
-        Self {
-            cli,
-            clocks,
-            random,
-            sockets,
-            allow_blocking_current_thread: false,
-        }
-    }
-
+impl WasiCtxBuilder {
     /// Provides a custom implementation of stdin to use.
-    pub fn stdin(&mut self, stdin: I) -> &mut Self {
+    pub fn stdin(&mut self, stdin: Box<dyn StdinStream>) -> &mut Self {
         self.cli.stdin = stdin;
         self
     }
 
     /// Same as [`stdin`](WasiCtxBuilder::stdin), but for stdout.
-    pub fn stdout(&mut self, stdout: O) -> &mut Self {
+    pub fn stdout(&mut self, stdout: Box<dyn StdoutStream>) -> &mut Self {
         self.cli.stdout = stdout;
         self
     }
 
     /// Same as [`stdin`](WasiCtxBuilder::stdin), but for stderr.
-    pub fn stderr(&mut self, stderr: O) -> &mut Self {
+    pub fn stderr(&mut self, stderr: Box<dyn StdoutStream>) -> &mut Self {
         self.cli.stderr = stderr;
         self
     }
