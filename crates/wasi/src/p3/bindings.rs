@@ -96,7 +96,10 @@ mod generated {
             "wasi:cli/terminal-output/terminal-output": crate::p3::cli::TerminalOutput,
             "wasi:sockets/types/tcp-socket": crate::p3::sockets::tcp::TcpSocket,
             "wasi:sockets/types/udp-socket": crate::p3::sockets::udp::UdpSocket,
-        }
+        },
+        trappable_error_type: {
+            "wasi:sockets/types/error-code" => crate::p3::sockets::SocketError,
+        },
     });
 }
 pub use self::generated::LinkOptions;

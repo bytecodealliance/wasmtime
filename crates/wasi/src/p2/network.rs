@@ -1,8 +1,7 @@
-use core::net::SocketAddr;
-
 use crate::p2::bindings::sockets::network::ErrorCode;
 use crate::sockets::SocketAddrCheck;
 use crate::{SocketAddrUse, TrappableError};
+use core::net::SocketAddr;
 
 pub type SocketResult<T> = Result<T, SocketError>;
 
