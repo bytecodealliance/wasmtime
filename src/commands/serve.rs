@@ -1,9 +1,11 @@
 use crate::common::{Profile, RunCommon, RunTarget};
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, bail};
 use clap::Parser;
 use http::{Response, StatusCode};
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Instant;
 use std::{
     path::PathBuf,
@@ -13,6 +15,7 @@ use std::{
     },
     time::Duration,
 };
+use tokio::io::{self, AsyncWrite};
 use tokio::sync::Notify;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
@@ -805,14 +808,13 @@ enum Output {
 }
 
 impl Output {
-    fn write_all(&self, buf: &[u8]) -> anyhow::Result<()> {
+    fn write_all(&self, buf: &[u8]) -> io::Result<()> {
         use std::io::Write;
 
         match self {
             Output::Stdout => std::io::stdout().write_all(buf),
             Output::Stderr => std::io::stderr().write_all(buf),
         }
-        .map_err(|e| anyhow!(e))
     }
 }
 
@@ -837,10 +839,44 @@ impl LogStream {
             }),
         }
     }
+
+    fn write_all(&mut self, mut bytes: &[u8]) -> io::Result<()> {
+        while !bytes.is_empty() {
+            if self
+                .state
+                .needs_prefix_on_next_write
+                .load(Ordering::Relaxed)
+            {
+                self.output.write_all(self.state.prefix.as_bytes())?;
+                self.state
+                    .needs_prefix_on_next_write
+                    .store(false, Ordering::Relaxed);
+            }
+            match bytes.iter().position(|b| *b == b'\n') {
+                Some(i) => {
+                    let (a, b) = bytes.split_at(i + 1);
+                    bytes = b;
+                    self.output.write_all(a)?;
+                    self.state
+                        .needs_prefix_on_next_write
+                        .store(true, Ordering::Relaxed);
+                }
+                None => {
+                    self.output.write_all(bytes)?;
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
-impl wasmtime_wasi::p2::StdoutStream for LogStream {
-    fn stream(&self) -> Box<dyn wasmtime_wasi::p2::OutputStream> {
+impl wasmtime_wasi::cli::StdoutStream for LogStream {
+    fn p2_stream(&self) -> Box<dyn wasmtime_wasi::p2::OutputStream> {
+        Box::new(self.clone())
+    }
+    fn async_stream(&self) -> Box<dyn AsyncWrite + Send + Sync> {
         Box::new(self.clone())
     }
 }
@@ -856,41 +892,8 @@ impl wasmtime_wasi::cli::IsTerminal for LogStream {
 
 impl wasmtime_wasi::p2::OutputStream for LogStream {
     fn write(&mut self, bytes: bytes::Bytes) -> StreamResult<()> {
-        let mut bytes = &bytes[..];
-
-        while !bytes.is_empty() {
-            if self
-                .state
-                .needs_prefix_on_next_write
-                .load(Ordering::Relaxed)
-            {
-                self.output
-                    .write_all(self.state.prefix.as_bytes())
-                    .map_err(StreamError::LastOperationFailed)?;
-                self.state
-                    .needs_prefix_on_next_write
-                    .store(false, Ordering::Relaxed);
-            }
-            match bytes.iter().position(|b| *b == b'\n') {
-                Some(i) => {
-                    let (a, b) = bytes.split_at(i + 1);
-                    bytes = b;
-                    self.output
-                        .write_all(a)
-                        .map_err(StreamError::LastOperationFailed)?;
-                    self.state
-                        .needs_prefix_on_next_write
-                        .store(true, Ordering::Relaxed);
-                }
-                None => {
-                    self.output
-                        .write_all(bytes)
-                        .map_err(StreamError::LastOperationFailed)?;
-                    break;
-                }
-            }
-        }
-
+        self.write_all(&bytes)
+            .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
         Ok(())
     }
 
@@ -906,6 +909,22 @@ impl wasmtime_wasi::p2::OutputStream for LogStream {
 #[async_trait::async_trait]
 impl wasmtime_wasi::p2::Pollable for LogStream {
     async fn ready(&mut self) {}
+}
+
+impl AsyncWrite for LogStream {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Poll::Ready(self.write_all(buf).map(|_| buf.len()))
+    }
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
 }
 
 /// The pooling allocator is tailor made for the `wasmtime serve` use case, so
