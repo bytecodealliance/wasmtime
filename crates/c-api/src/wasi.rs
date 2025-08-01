@@ -106,9 +106,7 @@ pub unsafe extern "C" fn wasi_config_set_stdin_file(
     };
 
     let file = tokio::fs::File::from_std(file);
-    let stdin_stream = wasmtime_wasi::p2::AsyncStdinStream::new(
-        wasmtime_wasi::p2::pipe::AsyncReadStream::new(file),
-    );
+    let stdin_stream = wasmtime_wasi::cli::AsyncStdinStream::new(file);
     config.builder.stdin(stdin_stream);
 
     true
@@ -141,7 +139,7 @@ pub unsafe extern "C" fn wasi_config_set_stdout_file(
 
     config
         .builder
-        .stdout(wasmtime_wasi::p2::OutputFile::new(file));
+        .stdout(wasmtime_wasi::cli::OutputFile::new(file));
 
     true
 }
@@ -163,7 +161,7 @@ pub unsafe extern "C" fn wasi_config_set_stderr_file(
 
     config
         .builder
-        .stderr(wasmtime_wasi::p2::OutputFile::new(file));
+        .stderr(wasmtime_wasi::cli::OutputFile::new(file));
 
     true
 }
