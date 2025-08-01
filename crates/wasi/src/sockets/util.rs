@@ -27,6 +27,7 @@ pub enum ErrorCode {
     ConnectionReset,
     ConnectionAborted,
     DatagramTooLarge,
+    NotInProgress,
 }
 
 impl fmt::Display for ErrorCode {

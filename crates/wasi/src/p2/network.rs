@@ -48,6 +48,7 @@ impl From<crate::sockets::util::ErrorCode> for ErrorCode {
             crate::sockets::util::ErrorCode::ConnectionReset => Self::ConnectionReset,
             crate::sockets::util::ErrorCode::ConnectionAborted => Self::ConnectionAborted,
             crate::sockets::util::ErrorCode::DatagramTooLarge => Self::DatagramTooLarge,
+            crate::sockets::util::ErrorCode::NotInProgress => Self::NotInProgress,
         }
     }
 }

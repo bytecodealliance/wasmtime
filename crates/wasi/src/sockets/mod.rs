@@ -5,7 +5,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use wasmtime::component::{HasData, ResourceTable};
 
+mod udp;
 pub(crate) mod util;
+
+pub use udp::UdpSocket;
 
 pub(crate) struct WasiSockets;
 
