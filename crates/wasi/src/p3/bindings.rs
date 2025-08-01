@@ -12,7 +12,7 @@
 //! done using the `with` option to [`bindgen!`]:
 //!
 //! ```rust
-//! use wasmtime_wasi::p3::{WasiCtx, WasiCtxView, WasiView};
+//! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 //! use wasmtime::{Result, Engine, Config};
 //! use wasmtime::component::{Linker, HasSelf, ResourceTable};
 //!
@@ -119,7 +119,7 @@ pub use self::generated::wasi::*;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Component, Linker, ResourceTable};
-/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxView, WasiCtxBuilder, WasiView};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi::p3::bindings::Command;
 ///
 /// // This example is an example shim of executing a component based on the
@@ -143,7 +143,7 @@ pub use self::generated::wasi::*;
 ///
 ///     // Configure a `WasiCtx` based on this program's environment. Then
 ///     // build a `Store` to instantiate into.
-///     let mut builder = WasiCtxBuilder::new();
+///     let mut builder = WasiCtx::builder();
 ///     builder.inherit_stdio().inherit_env().args(&args);
 ///     let mut store = Store::new(
 ///         &engine,
@@ -193,7 +193,7 @@ pub use self::generated::Command;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Linker, Component, ResourceTable};
-/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi::p3::bindings::CommandPre;
 ///
 /// // This example is an example shim of executing a component based on the
@@ -218,7 +218,7 @@ pub use self::generated::Command;
 ///
 ///     // Configure a `WasiCtx` based on this program's environment. Then
 ///     // build a `Store` to instantiate into.
-///     let mut builder = WasiCtxBuilder::new();
+///     let mut builder = WasiCtx::builder();
 ///     builder.inherit_stdio().inherit_env().args(&args);
 ///     let mut store = Store::new(
 ///         &engine,

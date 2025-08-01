@@ -15,7 +15,7 @@
 //! done using the `with` option to [`bindgen!`]:
 //!
 //! ```rust
-//! use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView};
+//! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 //! use wasmtime::{Result, Engine, Config};
 //! use wasmtime::component::{Linker, ResourceTable, HasSelf};
 //!
@@ -85,7 +85,7 @@
 /// done using the `with` option to `bindgen!`:
 ///
 /// ```rust
-/// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime::{Result, Engine};
 /// use wasmtime::component::{Linker, ResourceTable, HasSelf};
 ///
@@ -208,7 +208,7 @@ pub mod sync {
     /// ```no_run
     /// use wasmtime::{Engine, Result, Store, Config};
     /// use wasmtime::component::{ResourceTable, Linker, Component};
-    /// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView, WasiCtxBuilder};
+    /// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
     /// use wasmtime_wasi::p2::bindings::sync::Command;
     ///
     /// // This example is an example shim of executing a component based on the
@@ -228,7 +228,7 @@ pub mod sync {
     ///
     ///     // Configure a `WasiCtx` based on this program's environment. Then
     ///     // build a `Store` to instantiate into.
-    ///     let mut builder = WasiCtxBuilder::new();
+    ///     let mut builder = WasiCtx::builder();
     ///     builder.inherit_stdio().inherit_env().args(&args[2..]);
     ///     let mut store = Store::new(
     ///         &engine,
@@ -272,7 +272,7 @@ pub mod sync {
     /// ```no_run
     /// use wasmtime::{Engine, Result, Store, Config};
     /// use wasmtime::component::{ResourceTable, Linker, Component};
-    /// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView, WasiCtxBuilder};
+    /// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
     /// use wasmtime_wasi::p2::bindings::sync::CommandPre;
     ///
     /// // This example is an example shim of executing a component based on the
@@ -293,7 +293,7 @@ pub mod sync {
     ///
     ///     // Configure a `WasiCtx` based on this program's environment. Then
     ///     // build a `Store` to instantiate into.
-    ///     let mut builder = WasiCtxBuilder::new();
+    ///     let mut builder = WasiCtx::builder();
     ///     builder.inherit_stdio().inherit_env().args(&args);
     ///     let mut store = Store::new(
     ///         &engine,
@@ -428,7 +428,7 @@ pub use self::async_io::wasi::*;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker, Component};
-/// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi::p2::bindings::Command;
 ///
 /// // This example is an example shim of executing a component based on the
@@ -451,7 +451,7 @@ pub use self::async_io::wasi::*;
 ///
 ///     // Configure a `WasiCtx` based on this program's environment. Then
 ///     // build a `Store` to instantiate into.
-///     let mut builder = WasiCtxBuilder::new();
+///     let mut builder = WasiCtx::builder();
 ///     builder.inherit_stdio().inherit_env().args(&args);
 ///     let mut store = Store::new(
 ///         &engine,
@@ -495,7 +495,7 @@ pub use self::async_io::Command;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker, Component};
-/// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi::p2::bindings::CommandPre;
 ///
 /// // This example is an example shim of executing a component based on the
@@ -519,7 +519,7 @@ pub use self::async_io::Command;
 ///
 ///     // Configure a `WasiCtx` based on this program's environment. Then
 ///     // build a `Store` to instantiate into.
-///     let mut builder = WasiCtxBuilder::new();
+///     let mut builder = WasiCtx::builder();
 ///     builder.inherit_stdio().inherit_env().args(&args);
 ///     let mut store = Store::new(
 ///         &engine,

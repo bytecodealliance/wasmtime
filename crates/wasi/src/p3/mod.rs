@@ -11,17 +11,13 @@
 pub mod bindings;
 pub mod cli;
 pub mod clocks;
-mod ctx;
 pub mod filesystem;
 pub mod random;
 pub mod sockets;
-mod view;
 
+use crate::WasiView;
 use crate::p3::bindings::LinkOptions;
 use wasmtime::component::Linker;
-
-pub use self::ctx::{WasiCtx, WasiCtxBuilder};
-pub use self::view::{WasiCtxView, WasiView};
 
 // Default buffer capacity to use for reads of byte-sized values.
 const DEFAULT_BUFFER_CAPACITY: usize = 8192;
@@ -37,7 +33,7 @@ const DEFAULT_BUFFER_CAPACITY: usize = 8192;
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxView, WasiView};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();

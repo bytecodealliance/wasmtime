@@ -20,7 +20,7 @@
 //!     component::{Linker, ResourceTable},
 //!     Config, Engine, Result, Store,
 //! };
-//! use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiCtxBuilder, WasiView};
+//! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 //! use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 //!
 //! #[tokio::main]
@@ -31,7 +31,7 @@
 //!
 //!     let mut store = Store::new(&engine, Ctx {
 //!         table: ResourceTable::new(),
-//!         wasi_ctx: WasiCtxBuilder::new().build(),
+//!         wasi_ctx: WasiCtx::builder().build(),
 //!         wasi_keyvalue_ctx: WasiKeyValueCtxBuilder::new().build(),
 //!     });
 //!

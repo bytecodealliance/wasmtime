@@ -24,7 +24,7 @@ impl TryFrom<SystemTime> for Datetime {
 
 impl wall_clock::Host for WasiCtxView<'_> {
     fn now(&mut self) -> anyhow::Result<Datetime> {
-        let now = self.ctx.wall_clock.now();
+        let now = self.ctx.clocks.wall_clock.now();
         Ok(Datetime {
             seconds: now.as_secs(),
             nanoseconds: now.subsec_nanos(),
@@ -32,7 +32,7 @@ impl wall_clock::Host for WasiCtxView<'_> {
     }
 
     fn resolution(&mut self) -> anyhow::Result<Datetime> {
-        let res = self.ctx.wall_clock.resolution();
+        let res = self.ctx.clocks.wall_clock.resolution();
         Ok(Datetime {
             seconds: res.as_secs(),
             nanoseconds: res.subsec_nanos(),
@@ -61,15 +61,15 @@ fn subscribe_to_duration(
 
 impl monotonic_clock::Host for WasiCtxView<'_> {
     fn now(&mut self) -> anyhow::Result<Instant> {
-        Ok(self.ctx.monotonic_clock.now())
+        Ok(self.ctx.clocks.monotonic_clock.now())
     }
 
     fn resolution(&mut self) -> anyhow::Result<Instant> {
-        Ok(self.ctx.monotonic_clock.resolution())
+        Ok(self.ctx.clocks.monotonic_clock.resolution())
     }
 
     fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<DynPollable>> {
-        let clock_now = self.ctx.monotonic_clock.now();
+        let clock_now = self.ctx.clocks.monotonic_clock.now();
         let duration = if when > clock_now {
             Duration::from_nanos(when - clock_now)
         } else {

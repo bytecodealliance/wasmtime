@@ -36,7 +36,7 @@
 //! ```no_run
 //! use wasmtime::{Result, Engine, Linker, Module, Store};
 //! use wasmtime_wasi::preview1::{self, WasiP1Ctx};
-//! use wasmtime_wasi::p2::WasiCtxBuilder;
+//! use wasmtime_wasi::WasiCtxBuilder;
 //!
 //! // An example of executing a WASIp1 "command"
 //! fn main() -> Result<()> {
@@ -63,7 +63,6 @@
 //! }
 //! ```
 
-use crate::ResourceTable;
 use crate::p2::bindings::{
     cli::{
         stderr::Host as _, stdin::Host as _, stdout::Host as _, terminal_input, terminal_output,
@@ -72,7 +71,8 @@ use crate::p2::bindings::{
     clocks::{monotonic_clock, wall_clock},
     filesystem::{preopens::Host as _, types as filesystem},
 };
-use crate::p2::{FsError, IsATTY, WasiCtx, WasiCtxView, WasiView};
+use crate::p2::{FsError, IsATTY};
+use crate::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 use anyhow::{Context, bail};
 use std::collections::{BTreeMap, BTreeSet, HashSet, btree_map};
 use std::mem::{self, size_of, size_of_val};
@@ -112,7 +112,7 @@ use wasmtime_wasi_io::bindings::wasi::io::poll::Host as _;
 /// ```no_run
 /// use wasmtime::{Result, Linker};
 /// use wasmtime_wasi::preview1::{self, WasiP1Ctx};
-/// use wasmtime_wasi::p2::WasiCtxBuilder;
+/// use wasmtime_wasi::WasiCtxBuilder;
 ///
 /// struct MyState {
 ///     // ... custom state as necessary ...

@@ -12,7 +12,7 @@ use wasmtime::{
     Config, Engine, Store,
     component::{Component, Linker, ResourceTable},
 };
-use wasmtime_wasi::p2::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView, pipe::MemoryOutputPipe};
+use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe};
 use wasmtime_wasi_http::{
     HttpResult, WasiHttpCtx, WasiHttpView,
     bindings::http::types::{ErrorCode, Scheme},
@@ -84,7 +84,7 @@ fn store(engine: &Engine, server: &Server) -> Store<Ctx> {
     let stderr = MemoryOutputPipe::new(4096);
 
     // Create our wasi context.
-    let mut builder = WasiCtxBuilder::new();
+    let mut builder = WasiCtx::builder();
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
     builder.env("HTTP_SERVER", &server.addr());
@@ -136,7 +136,7 @@ async fn run_wasi_http(
     let component = Component::from_file(&engine, component_filename)?;
 
     // Create our wasi context.
-    let mut builder = WasiCtxBuilder::new();
+    let mut builder = WasiCtx::builder();
     builder.stdout(stdout.clone());
     builder.stderr(stderr.clone());
     let wasi = builder.build();

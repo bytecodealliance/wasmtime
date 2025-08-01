@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::task::Waker;
 
 use wasmtime::component::{HasData, ResourceTable};
-use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
 pub mod borrowing_host;
 pub mod closed_streams;

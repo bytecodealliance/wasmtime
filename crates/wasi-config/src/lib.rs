@@ -17,7 +17,7 @@
 //!     component::{Linker, ResourceTable},
 //!     Config, Engine, Result, Store,
 //! };
-//! use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiCtxBuilder, WasiView};
+//! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 //! use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 //!
 //! #[tokio::main]
@@ -28,7 +28,7 @@
 //!
 //!     let mut store = Store::new(&engine, Ctx {
 //!         table: ResourceTable::new(),
-//!         wasi_ctx: WasiCtxBuilder::new().build(),
+//!         wasi_ctx: WasiCtx::builder().build(),
 //!         wasi_config_vars: WasiConfigVariables::from_iter(vec![
 //!             ("config_key1", "value1"),
 //!             ("config_key2", "value2"),

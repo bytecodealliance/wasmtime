@@ -4,7 +4,7 @@ use wasmtime::{
     Store,
     component::{Component, Linker, ResourceTable},
 };
-use wasmtime_wasi::p2::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView, bindings::Command};
+use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::bindings::Command};
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
 struct Ctx {
@@ -58,7 +58,7 @@ async fn keyvalue_main() -> Result<()> {
         KEYVALUE_MAIN_COMPONENT,
         Ctx {
             table: ResourceTable::new(),
-            wasi_ctx: WasiCtxBuilder::new().inherit_stderr().build(),
+            wasi_ctx: WasiCtx::builder().inherit_stderr().build(),
             wasi_keyvalue_ctx: WasiKeyValueCtxBuilder::new()
                 .in_memory_data([("atomics_key", "5")])
                 .build(),

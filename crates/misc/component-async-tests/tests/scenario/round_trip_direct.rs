@@ -8,7 +8,7 @@ use component_async_tests::util::sleep;
 use futures::stream::{FuturesUnordered, TryStreamExt};
 use wasmtime::component::{Linker, ResourceTable, Val};
 use wasmtime::{Engine, Store};
-use wasmtime_wasi::p2::WasiCtxBuilder;
+use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::test]
 pub async fn async_round_trip_direct_stackless() -> Result<()> {
