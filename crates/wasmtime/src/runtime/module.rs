@@ -1173,20 +1173,20 @@ fn memory_images(inner: &Arc<ModuleInner>) -> Result<Option<ModuleMemoryImages>>
 
     // ... otherwise logic is delegated to the `ModuleMemoryImages::new`
     // constructor.
-    ModuleMemoryImages::new(inner.module.module(), inner)
+    ModuleMemoryImages::new(
+        &inner.engine,
+        inner.module.module(),
+        inner.code.code_memory(),
+    )
 }
 
-impl crate::vm::ModuleMemoryImageSource for ModuleInner {
+impl crate::vm::ModuleMemoryImageSource for CodeMemory {
     fn wasm_data(&self) -> &[u8] {
-        self.code.code_memory().wasm_data()
+        <Self>::wasm_data(self)
     }
 
     fn mmap(&self) -> Option<&MmapVec> {
-        if self.engine.config().force_memory_init_memfd {
-            None
-        } else {
-            Some(self.module.mmap())
-        }
+        Some(<Self>::mmap(self))
     }
 }
 

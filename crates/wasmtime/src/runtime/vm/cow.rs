@@ -2,6 +2,7 @@
 //! modules, and logic to support mapping these backing images into memory.
 
 use super::sys::DecommitBehavior;
+use crate::Engine;
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource, PageMap, reset_with_pagemap};
 use crate::runtime::vm::{
@@ -72,6 +73,7 @@ pub struct MemoryImage {
 
 impl MemoryImage {
     fn new(
+        engine: &Engine,
         page_size: u32,
         linear_memory_offset: HostAlignedByteCount,
         module_source: &Arc<impl ModuleMemoryImageSource>,
@@ -99,27 +101,29 @@ impl MemoryImage {
         // Some work will be needed to get this file compiling for macOS and
         // Windows.
         let data = &module_source.wasm_data()[data_range.clone()];
-        if let Some(mmap) = module_source.mmap() {
-            let start = mmap.as_ptr() as usize;
-            let end = start + mmap.len();
-            let data_start = data.as_ptr() as usize;
-            let data_end = data_start + data.len();
-            assert!(start <= data_start && data_end <= end);
-            assert_page_aligned(start);
-            assert_page_aligned(data_start);
-            assert_page_aligned(data_end);
+        if !engine.config().force_memory_init_memfd {
+            if let Some(mmap) = module_source.mmap() {
+                let start = mmap.as_ptr() as usize;
+                let end = start + mmap.len();
+                let data_start = data.as_ptr() as usize;
+                let data_end = data_start + data.len();
+                assert!(start <= data_start && data_end <= end);
+                assert_page_aligned(start);
+                assert_page_aligned(data_start);
+                assert_page_aligned(data_end);
 
-            #[cfg(feature = "std")]
-            if let Some(file) = mmap.original_file() {
-                if let Some(source) = MemoryImageSource::from_file(file) {
-                    return Ok(Some(MemoryImage {
-                        source,
-                        source_offset: u64::try_from(data_start - start).unwrap(),
-                        linear_memory_offset,
-                        len,
-                        module_source: module_source.clone(),
-                        module_source_offset: data_range.start,
-                    }));
+                #[cfg(feature = "std")]
+                if let Some(file) = mmap.original_file() {
+                    if let Some(source) = MemoryImageSource::from_file(file) {
+                        return Ok(Some(MemoryImage {
+                            source,
+                            source_offset: u64::try_from(data_start - start).unwrap(),
+                            linear_memory_offset,
+                            len,
+                            module_source: module_source.clone(),
+                            module_source_offset: data_range.start,
+                        }));
+                    }
                 }
             }
         }
@@ -167,6 +171,7 @@ impl ModuleMemoryImages {
     /// passed in as part of a `InstanceAllocationRequest` to speed up
     /// instantiation and execution by using copy-on-write-backed memories.
     pub fn new(
+        engine: &Engine,
         module: &Module,
         source: &Arc<impl ModuleMemoryImageSource>,
     ) -> Result<Option<ModuleMemoryImages>> {
@@ -223,7 +228,7 @@ impl ModuleMemoryImages {
 
             // If this creation files then we fail creating
             // `ModuleMemoryImages` since this memory couldn't be represented.
-            let image = match MemoryImage::new(page_size, offset, source, data_range)? {
+            let image = match MemoryImage::new(engine, page_size, offset, source, data_range)? {
                 Some(image) => image,
                 None => return Ok(None),
             };
