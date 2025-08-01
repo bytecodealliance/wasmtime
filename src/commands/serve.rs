@@ -57,7 +57,7 @@ struct Host {
 }
 
 impl WasiView for Host {
-    fn ctx(&mut self) -> WasiCtxView {
+    fn ctx(&mut self) -> WasiCtxView<'_> {
         WasiCtxView {
             ctx: &mut self.ctx,
             table: &mut self.table,
