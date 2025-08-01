@@ -3,6 +3,7 @@
 
 #![warn(dead_code, unused_imports)]
 
+use crate::Engine;
 use crate::prelude::*;
 use crate::vm::ModuleMemoryImageSource;
 use alloc::sync::Arc;
@@ -24,6 +25,7 @@ pub enum MemoryImage {}
 
 impl ModuleMemoryImages {
     pub fn new(
+        _engine: &Engine,
         _module: &Module,
         _source: &Arc<impl ModuleMemoryImageSource>,
     ) -> Result<Option<ModuleMemoryImages>> {
