@@ -9,7 +9,7 @@ use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
 #[cfg(feature = "rr-component")]
-use crate::rr::component_events::InstantiationEvent;
+use crate::rr::{Validate, component_events::InstantiationEvent};
 use crate::runtime::vm::VMFuncRef;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::store::StoreOpaque;

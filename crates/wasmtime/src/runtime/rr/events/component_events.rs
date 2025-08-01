@@ -4,7 +4,6 @@ use super::*;
 #[expect(unused_imports, reason = "used for doc-links")]
 use crate::component::{Component, ComponentType};
 use wasmtime_environ::component::InterfaceType;
-#[cfg(feature = "rr-type-validation")]
 use wasmtime_environ::component::TypeTuple;
 
 /// A [`Component`] instantiatation event
@@ -20,10 +19,11 @@ impl InstantiationEvent {
             checksum: *component.checksum(),
         }
     }
-
+}
+impl Validate<Component> for InstantiationEvent {
     /// Validate that checksums match
-    pub fn validate(self, component: &Component) -> Result<(), ReplayError> {
-        if self.checksum != *component.checksum() {
+    fn validate(&self, expect_component: &Component) -> Result<(), ReplayError> {
+        if self.checksum != *expect_component.checksum() {
             Err(ReplayError::FailedModuleValidation)
         } else {
             Ok(())
@@ -42,24 +42,19 @@ pub struct HostFuncEntryEvent {
     /// Note: This relies on the invariant that [InterfaceType] will always be
     /// deterministic. Currently, the type indices into various [ComponentTypes]
     /// maintain this, allowing for quick type-checking.
-    #[cfg(feature = "rr-type-validation")]
     types: Option<TypeTuple>,
 }
 impl HostFuncEntryEvent {
     // Record
-    pub fn new(
-        args: &[MaybeUninit<ValRaw>],
-        #[cfg(feature = "rr-type-validation")] types: Option<&TypeTuple>,
-    ) -> Self {
+    pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<&TypeTuple>) -> Self {
         Self {
             args: func_argvals_from_raw_slice(args),
-            #[cfg(feature = "rr-type-validation")]
             types: types.cloned(),
         }
     }
-    // Replay
-    #[cfg(feature = "rr-type-validation")]
-    pub fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
+}
+impl Validate<TypeTuple> for HostFuncEntryEvent {
+    fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
         replay_args_typecheck(self.types.as_ref(), expect_types)
     }
 }
@@ -76,31 +71,32 @@ pub struct HostFuncReturnEvent {
     /// Note: This relies on the invariant that [InterfaceType] will always be
     /// deterministic. Currently, the type indices into various [ComponentTypes]
     /// maintain this, allowing for quick type-checking.
-    #[cfg(feature = "rr-type-validation")]
     types: Option<TypeTuple>,
 }
 impl HostFuncReturnEvent {
-    // Record
-    pub fn new(
-        args: &[ValRaw],
-        #[cfg(feature = "rr-type-validation")] types: Option<&TypeTuple>,
-    ) -> Self {
+    pub fn new(args: &[ValRaw], types: Option<&TypeTuple>) -> Self {
         Self {
             args: func_argvals_from_raw_slice(args),
-            #[cfg(feature = "rr-type-validation")]
             types: types.cloned(),
         }
     }
-    // Replay
-    #[cfg(feature = "rr-type-validation")]
-    pub fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
-        replay_args_typecheck(self.types.as_ref(), expect_types)
-    }
 
-    /// Consume the caller event and encode it back into the slice with an optional
-    /// typechecking validation of the event.
-    pub fn move_into_slice(self, args: &mut [ValRaw]) {
+    /// Consume the caller event and encode it back into the slice
+    pub fn move_into_slice(
+        self,
+        args: &mut [ValRaw],
+        expect_types: Option<&TypeTuple>,
+    ) -> Result<(), ReplayError> {
+        if let Some(e) = expect_types {
+            self.validate(e)?;
+        }
         func_argvals_into_raw_slice(self.args, args);
+        Ok(())
+    }
+}
+impl Validate<TypeTuple> for HostFuncReturnEvent {
+    fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
+        replay_args_typecheck(self.types.as_ref(), expect_types)
     }
 }
 
@@ -124,9 +120,26 @@ macro_rules! generic_new_result_events {
                         ret: ret.as_ref().map(|t| *t).map_err(|e| $err_variant(e.to_string()))
                     }
                 }
-                #[inline]
                 pub fn ret(self) -> Result<$ok_ty, EventActionError> { self.ret }
             }
+
+            impl Validate<Result<$ok_ty>> for $event {
+                fn validate(&self, expect_ret: &Result<$ok_ty>) -> Result<(), ReplayError> {
+                    // Cannot just use eq since anyhow::Error and EventActionError cannot be compared
+                    match (self.ret.as_ref(), expect_ret.as_ref()) {
+                        (Ok(r), Ok(s)) => replay_args_valcheck(r, s),
+                        // Return the recorded error
+                        (Err(e), Err(f)) => Err(ReplayError::from($err_variant(format!(
+                            "Replayed Error: {} \nRecorded Error: {}",
+                            e, f
+                        )))),
+                        // Diverging errors.. Report as a failed validation
+                        (Ok(_), Err(_)) => Err(ReplayError::FailedFuncValidation),
+                        (Err(_), Ok(_)) => Err(ReplayError::FailedFuncValidation),
+                    }
+                }
+            }
+
         )*
     );
 }

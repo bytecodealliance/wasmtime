@@ -4,9 +4,7 @@ use crate::component::storage::{slice_to_storage_mut, storage_as_slice, storage_
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
 use crate::prelude::*;
 #[cfg(feature = "rr-component")]
-use crate::runtime::rr::component_events::{
-    HostFuncReturnEvent, LowerReturnEvent, LowerStoreReturnEvent,
-};
+use crate::rr::component_events::{HostFuncReturnEvent, LowerReturnEvent, LowerStoreReturnEvent};
 use crate::runtime::vm::component::{
     ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
@@ -28,23 +26,21 @@ macro_rules! rr_host_func_entry_event {
         #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
         {
             use crate::config::ReplaySettings;
-            use crate::runtime::rr::component_events::HostFuncEntryEvent;
+            use crate::rr::{Validate, component_events::HostFuncEntryEvent};
             $store.record_event_if(
                 |r| r.add_validation,
                 |_| {
                     HostFuncEntryEvent::new(
                         $args,
-                        #[cfg(feature = "rr-type-validation")]
                         Some($param_types),
                     )
                 },
             )?;
             $store.next_replay_event_if(
                 |_, r| r.add_validation,
-                |_event: HostFuncEntryEvent, _r: &ReplaySettings| {
-                    #[cfg(feature = "rr-type-validation")]
-                    if _r.validate {
-                        _event.validate($param_types)?;
+                |event: HostFuncEntryEvent, r: &ReplaySettings| {
+                    if r.validate {
+                        event.validate($param_types)?;
                     }
                     Ok(())
                 },
@@ -58,11 +54,10 @@ macro_rules! record_host_func_return_event {
     { $args:expr, $return_types:expr => $store:expr } => {
         #[cfg(feature = "rr-component")]
         {
-            $store.record_event(|_r| {
+            $store.record_event(|r| {
                 HostFuncReturnEvent::new(
                     $args,
-                    #[cfg(feature = "rr-type-validation")]
-                    _r.add_validation.then_some($return_types),
+                    r.add_validation.then_some($return_types),
                 )
             })?;
         }
@@ -402,21 +397,13 @@ where
                 |cx: &mut LowerContext<'_, T>,
                  dst: &mut MaybeUninit<<R as ComponentType>::Lower>| {
                     // This path also stores the final return values in resulting storage
-                    cx.replay_lowering(
-                        Some(storage_as_slice_mut(dst)),
-                        #[cfg(feature = "rr-type-validation")]
-                        expect_tys,
-                    )
+                    cx.replay_lowering(Some(storage_as_slice_mut(dst)), expect_tys)
                 };
             let indirect_results_lower = |cx: &mut LowerContext<'_, T>, _dst: &ValRaw| {
                 // `_dst` is a Wasm pointer to indirect results. This pointer itself will remain
                 // deterministic, and thus replay will not need to change this. However,
                 // replay will have to overwrite any nested stored lowerings (deep copy)
-                cx.replay_lowering(
-                    None,
-                    #[cfg(feature = "rr-type-validation")]
-                    expect_tys,
-                )
+                cx.replay_lowering(None, expect_tys)
             };
             match self {
                 Storage::Direct(storage) => {
@@ -597,20 +584,12 @@ where
                 let result_storage =
                     mem::transmute::<&mut [MaybeUninit<ValRaw>], &mut [ValRaw]>(storage);
                 // This path also stores the final return values in resulting storage
-                cx.replay_lowering(
-                    Some(result_storage),
-                    #[cfg(feature = "rr-type-validation")]
-                    result_tys,
-                )?;
+                cx.replay_lowering(Some(result_storage), result_tys)?;
             } else {
                 // The indirect `ret_ptr` itself will remain deterministic, and thus replay will not
                 // need to change the return storage. However, replay will have to overwrite any nested stored
                 // lowerings (deep copy)
-                cx.replay_lowering(
-                    None,
-                    #[cfg(feature = "rr-type-validation")]
-                    result_tys,
-                )?;
+                cx.replay_lowering(None, result_tys)?;
             }
             flags.set_may_leave(true);
         }

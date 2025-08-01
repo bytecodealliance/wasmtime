@@ -5,11 +5,9 @@ use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::prelude::*;
 #[cfg(feature = "rr-component")]
-use crate::runtime::rr::component_events::{
-    MemorySliceWriteEvent, ReallocEntryEvent, ReallocReturnEvent,
-};
+use crate::rr::component_events::{MemorySliceWriteEvent, ReallocEntryEvent, ReallocReturnEvent};
 #[cfg(feature = "rr-component")]
-use crate::runtime::rr::{RREvent, RecordBuffer, Recorder, Replayer};
+use crate::rr::{RREvent, RecordBuffer, Recorder, ReplayError, Replayer, Validate};
 use crate::runtime::vm::component::{
     CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
 };
@@ -589,47 +587,111 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     pub fn replay_lowering(
         &mut self,
         mut result_storage: Option<&mut [ValRaw]>,
-        #[cfg(feature = "rr-type-validation")] result_tys: &TypeTuple,
+        result_tys: &TypeTuple,
     ) -> Result<()> {
         if self.store.0.replay_buffer_mut().is_none() {
             return Ok(());
         }
         let mut complete = false;
+        let mut lowering_error: Option<ReplayError> = None;
+        // No nested expected; these depths should only be 1
+        let mut realloc_stack = Vec::<Result<usize>>::new();
+        let mut lower_stack = Vec::<Result<()>>::new();
+        let mut lower_store_stack = Vec::<Result<()>>::new();
         while !complete {
             let buf = self.store.0.replay_buffer_mut().unwrap();
             let event = buf.next_event()?;
-            let _replay_settings = buf.settings();
+            let replay_validate = buf.settings().validate;
+            let trace_has_validation_events = buf.trace_settings().add_validation;
             match event {
                 RREvent::ComponentHostFuncReturn(e) => {
-                    // End of lowering process
-                    #[cfg(feature = "rr-type-validation")]
-                    if _replay_settings.validate {
-                        e.validate(result_tys)?
+                    if let Some(e) = lowering_error {
+                        return Err(e.into());
                     }
+                    // End of the lowering process
                     if let Some(storage) = result_storage.as_deref_mut() {
-                        e.move_into_slice(storage);
+                        e.move_into_slice(storage, replay_validate.then_some(result_tys))?;
                     }
                     complete = true;
                 }
                 RREvent::ComponentReallocEntry(e) => {
-                    let _ = self.realloc_inner(e.old_addr, e.old_size, e.old_align, e.new_size);
+                    let _result =
+                        self.realloc_inner(e.old_addr, e.old_size, e.old_align, e.new_size);
+                    #[cfg(feature = "rr-type-validation")]
+                    if trace_has_validation_events && replay_validate {
+                        realloc_stack.push(_result);
+                    }
                 }
-                RREvent::ComponentLowerReturn(e) => e.ret()?,
-                RREvent::ComponentLowerStoreReturn(e) => e.ret()?,
+                // No return value to validate for lower/lower-store; store error and just check that entry happened before
+                RREvent::ComponentLowerReturn(e) => {
+                    #[cfg(feature = "rr-type-validation")]
+                    //// TODO: We don't have insertion points for these entry yet!
+                    //if trace_has_validation_events && replay_validate {
+                    //    lowering_error = e.validate(&lower_stack.pop().unwrap()).err();
+                    //} else {
+                    //    lowering_error = e.ret().map_err(Into::into).err();
+                    //}
+                    {
+                        lowering_error = e.ret().map_err(Into::into).err();
+                    }
+                    #[cfg(not(feature = "rr-type-validation"))]
+                    {
+                        lowering_error = e.ret().map_err(Into::into).err();
+                    }
+                }
+                RREvent::ComponentLowerStoreReturn(e) => {
+                    #[cfg(feature = "rr-type-validation")]
+                    //// TODO: We don't have insertion ponts for these entry yet!
+                    //if trace_has_validation_events && replay_validate {
+                    //    lowering_error = e.validate(&lower_store_stack.pop().unwrap()).err();
+                    //} else {
+                    //    lowering_error = e.ret().map_err(Into::into).err();
+                    //}
+                    {
+                        lowering_error = e.ret().map_err(Into::into).err();
+                    }
+                    #[cfg(not(feature = "rr-type-validation"))]
+                    {
+                        lowering_error = e.ret().map_err(Into::into).err();
+                    }
+                }
                 RREvent::ComponentMemorySliceWrite(e) => {
                     // The bounds check is performed here is required here (in the absence of
                     // trace validation) to protect against malicious out-of-bounds slice writes
                     self.as_slice_mut()[e.offset..e.offset + e.bytes.len()]
                         .copy_from_slice(e.bytes.as_slice());
                 }
+                // Optional events
+                //
                 // Realloc or any lowering methods cannot call back to the host. Hence, you cannot
                 // have host calls entries during this method
                 RREvent::ComponentHostFuncEntry(_) => {
                     bail!("Cannot call back into host during lowering")
                 }
-                _ => {
-                    bail!("Invalid event \'{:?}\' encountered during lowering", event);
+                // Unwrapping should never occur on valid executions since *Entry should be before *Return in trace
+                RREvent::ComponentReallocReturn(e) => {
+                    #[cfg(feature = "rr-type-validation")]
+                    if trace_has_validation_events && replay_validate {
+                        lowering_error = e.validate(&realloc_stack.pop().unwrap()).err()
+                    } else {
+                        // Error is subsumed by the LowerReturn or the LowerStoreReturn
+                        lowering_error = None
+                    }
                 }
+                RREvent::ComponentLowerEntry(_) => {
+                    #[cfg(feature = "rr-type-validation")]
+                    if trace_has_validation_events && replay_validate {
+                        lower_stack.push(Ok(()))
+                    }
+                }
+                RREvent::ComponentLowerStoreEntry(_) => {
+                    #[cfg(feature = "rr-type-validation")]
+                    if trace_has_validation_events && replay_validate {
+                        lower_store_stack.push(Ok(()))
+                    }
+                }
+
+                _ => bail!("Invalid event \'{:?}\' encountered during lowering", event),
             };
         }
         Ok(())

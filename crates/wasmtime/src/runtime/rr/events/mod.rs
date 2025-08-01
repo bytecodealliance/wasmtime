@@ -10,7 +10,11 @@ use serde::{Deserialize, Serialize};
 ///
 /// We need this since the [anyhow::Error] trait object cannot be used. This
 /// type just encapsulates the corresponding display messages during recording
-/// so that it can be validated and/or re-thrown during replay
+/// so that it can be re-thrown during replay
+///
+/// Unforunately since we cannot serialize [anyhow::Error], there's no good
+/// way to equate errors across record/replay boundary without creating a
+/// common error format. Perhaps this is future work
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EventActionError {
     ReallocError(String),
@@ -90,21 +94,57 @@ where
 /// Typechecking validation for replay, if `src_types` exist
 ///
 /// Returns [`ReplayError::FailedFuncValidation`] if typechecking fails
-#[cfg(feature = "rr-type-validation")]
+#[inline(always)]
 fn replay_args_typecheck<T>(src_types: Option<T>, expect_types: T) -> Result<(), ReplayError>
 where
     T: PartialEq,
 {
-    if let Some(types) = src_types {
-        if types == expect_types {
+    #[cfg(feature = "rr-type-validation")]
+    {
+        if let Some(types) = src_types {
+            if types == expect_types {
+                Ok(())
+            } else {
+                Err(ReplayError::FailedFuncValidation)
+            }
+        } else {
+            println!(
+                "Warning: Replay typechecking cannot be performed since recorded trace is missing validation data"
+            );
+            Ok(())
+        }
+    }
+    #[cfg(not(feature = "rr-type-validation"))]
+    Ok(())
+}
+
+/// Validation of values
+#[inline(always)]
+fn replay_args_valcheck<T>(src_val: T, expect_val: T) -> Result<(), ReplayError>
+where
+    T: PartialEq,
+{
+    #[cfg(feature = "rr-type-validation")]
+    {
+        if src_val == expect_val {
             Ok(())
         } else {
             Err(ReplayError::FailedFuncValidation)
         }
-    } else {
-        println!(
-            "Warning: Replay typechecking cannot be performed since recorded trace is missing validation data"
-        );
+    }
+    #[cfg(not(feature = "rr-type-validation"))]
+    Ok(())
+}
+
+/// Trait signifying types that can be validated on replay
+///
+/// Default nop behavior when `rr-validate` is disabled.
+/// Note howeverthat some [`Validate`] overriden implementations are present even
+/// when feature `rr-validate` is disabled, when validation is needed
+/// for a faithful replay.
+pub trait Validate<T: ?Sized> {
+    /// Perform a validation of the event to ensure replay consistency
+    fn validate(&self, _expect_t: &T) -> Result<(), ReplayError> {
         Ok(())
     }
 }

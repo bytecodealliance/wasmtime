@@ -80,7 +80,7 @@ use crate::RootSet;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 #[cfg(feature = "rr")]
-use crate::runtime::rr::{RREvent, RecordBuffer, Recorder, ReplayBuffer, ReplayError, Replayer};
+use crate::rr::{RREvent, RecordBuffer, Recorder, ReplayBuffer, ReplayError, Replayer};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
 #[cfg(feature = "stack-switching")]
@@ -1374,13 +1374,13 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "rr")]
-    #[inline]
+    #[inline(always)]
     pub fn record_buffer_mut(&mut self) -> Option<&mut RecordBuffer> {
         self.record_buffer.as_mut()
     }
 
     #[cfg(feature = "rr")]
-    #[inline]
+    #[inline(always)]
     pub fn replay_buffer_mut(&mut self) -> Option<&mut ReplayBuffer> {
         self.replay_buffer.as_mut()
     }
@@ -1389,7 +1389,7 @@ impl StoreOpaque {
     ///
     /// Convenience wrapper around [`Recorder::record_event`]
     #[cfg(feature = "rr")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn record_event<T, F>(&mut self, f: F) -> Result<()>
     where
         T: Into<RREvent>,
@@ -1406,7 +1406,7 @@ impl StoreOpaque {
     ///
     /// Convenience wrapper around [`Recorder::record_event_if`]
     #[cfg(feature = "rr")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn record_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<()>
     where
         T: Into<RREvent>,

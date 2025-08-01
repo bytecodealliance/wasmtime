@@ -10,18 +10,24 @@
 use crate::config::{ModuleVersionStrategy, RecordSettings, ReplaySettings};
 use crate::prelude::*;
 use core::fmt;
+use events::EventActionError;
 use serde::{Deserialize, Serialize};
+// Use component/core events internally even without feature flags enabled
+// so that [`RREvent`] has a well-defined serialization format, but export
+// it for other modules only when enabled
+pub use events::Validate;
+use events::component_events as __component_events;
+#[cfg(feature = "rr-component")]
+pub use events::component_events;
+use events::core_events as __core_events;
+#[cfg(feature = "rr-core")]
+pub use events::core_events;
+pub use io::{RecordWriter, ReplayReader};
 
 /// Encapsulation of event types comprising an [`RREvent`] sum type
 mod events;
-use events::EventActionError;
-
-pub use events::component_events;
-pub use events::core_events;
-
 /// I/O support for reading and writing traces
 mod io;
-pub use io::{RecordWriter, ReplayReader};
 
 /// Macro template for [`RREvent`] and its conversion to/from specific
 /// event types
@@ -81,35 +87,37 @@ macro_rules! rr_event {
 // Set of supported record/replay events
 rr_event! {
     /// Call into host function from Core Wasm
-    CoreHostFuncEntry(core_events::HostFuncEntryEvent),
+    CoreHostFuncEntry(__core_events::HostFuncEntryEvent),
     /// Return from host function to Core Wasm
-    CoreHostFuncReturn(core_events::HostFuncReturnEvent),
+    CoreHostFuncReturn(__core_events::HostFuncReturnEvent),
 
     // REQUIRED events for replay
     //
     /// Instantiation of a component
-    ComponentInstantiation(component_events::InstantiationEvent),
+    ComponentInstantiation(__component_events::InstantiationEvent),
     /// Return from host function to component
-    ComponentHostFuncReturn(component_events::HostFuncReturnEvent),
+    ComponentHostFuncReturn(__component_events::HostFuncReturnEvent),
     /// Component ABI realloc call in linear wasm memory
-    ComponentReallocEntry(component_events::ReallocEntryEvent),
+    ComponentReallocEntry(__component_events::ReallocEntryEvent),
     /// Return from a type lowering operation
-    ComponentLowerReturn(component_events::LowerReturnEvent),
+    ComponentLowerReturn(__component_events::LowerReturnEvent),
     /// Return from a store during a type lowering operation
-    ComponentLowerStoreReturn(component_events::LowerStoreReturnEvent),
+    ComponentLowerStoreReturn(__component_events::LowerStoreReturnEvent),
     /// An attempt to obtain a mutable slice into Wasm linear memory
-    ComponentMemorySliceWrite(component_events::MemorySliceWriteEvent),
+    ComponentMemorySliceWrite(__component_events::MemorySliceWriteEvent),
 
     // OPTIONAL events for replay validation
     //
-    /// Call into host function from component
-    ComponentHostFuncEntry(component_events::HostFuncEntryEvent),
-    /// Call into [Lower::lower] for type lowering
-    ComponentLowerEntry(component_events::LowerEntryEvent),
-    /// Call into [Lower::store] during type lowering
-    ComponentLowerStoreEntry(component_events::LowerStoreEntryEvent),
+    // ReallocReturn is optional because we can assume the realloc is deterministic
+    // and the error message is subsumed by the containing LowerReturn/LowerStoreReturn
     /// Return from Component ABI realloc call
-    ComponentReallocReturn(component_events::ReallocReturnEvent)
+    ComponentReallocReturn(__component_events::ReallocReturnEvent),
+    /// Call into host function from component
+    ComponentHostFuncEntry(__component_events::HostFuncEntryEvent),
+    /// Call into [Lower::lower] for type lowering
+    ComponentLowerEntry(__component_events::LowerEntryEvent),
+    /// Call into [Lower::store] during type lowering
+    ComponentLowerStoreEntry(__component_events::LowerStoreEntryEvent)
 }
 
 /// Error type signalling failures during a replay run
@@ -437,11 +445,7 @@ mod tests {
         // Record values
         let mut recorder =
             RecordBuffer::new_recorder(Box::new(File::create(tmppath)?), record_settings)?;
-        let event = component_wasm::HostFuncReturnEvent::new(
-            values.as_slice(),
-            #[cfg(feature = "rr-type-validation")]
-            None,
-        );
+        let event = component_wasm::HostFuncReturnEvent::new(values.as_slice(), None);
         recorder.record_event(|_| event.clone())?;
         recorder.flush()?;
 
