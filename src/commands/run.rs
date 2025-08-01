@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{Dir, TcpListener, WasiCtxBuilder, ambient_authority};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
-use wasmtime_wasi::p2::{IoView, WasiView};
+use wasmtime_wasi::p2::{WasiCtxView, WasiView};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnView;
@@ -845,7 +845,7 @@ impl RunCommand {
                                 .unwrap();
                             let nn_ctx = Arc::get_mut(h.wasi_nn_wit.as_mut().unwrap())
                                 .expect("wasi-nn is not implemented with multi-threading support");
-                            WasiNnView::new(preview2_ctx.table(), nn_ctx)
+                            WasiNnView::new(preview2_ctx.ctx().table, nn_ctx)
                         })?;
                         store.data_mut().wasi_nn_wit = Some(Arc::new(
                             wasmtime_wasi_nn::wit::WasiNnCtx::new(backends, registry),
@@ -919,7 +919,7 @@ impl RunCommand {
                                 Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
                             WasiKeyValue::new(
                                 Arc::get_mut(h.wasi_keyvalue.as_mut().unwrap()).unwrap(),
-                                preview2_ctx.table(),
+                                preview2_ctx.ctx().table,
                             )
                         })?;
                         store.data_mut().wasi_keyvalue = Some(Arc::new(ctx));
@@ -997,7 +997,7 @@ impl RunCommand {
                                 Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
                             WasiTls::new(
                                 Arc::get_mut(h.wasi_tls.as_mut().unwrap()).unwrap(),
-                                preview2_ctx.table(),
+                                preview2_ctx.ctx().table,
                             )
                         })?;
 
@@ -1130,14 +1130,9 @@ impl Host {
     }
 }
 
-impl IoView for Host {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        self.preview2_ctx().table()
-    }
-}
 impl WasiView for Host {
-    fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
-        self.preview2_ctx().ctx()
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiView::ctx(self.preview2_ctx())
     }
 }
 
@@ -1146,6 +1141,10 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         let ctx = self.wasi_http.as_mut().unwrap();
         Arc::get_mut(ctx).expect("wasmtime_wasi is not compatible with threads")
+    }
+
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+        WasiView::ctx(self).table
     }
 
     fn outgoing_body_buffer_chunks(&mut self) -> usize {

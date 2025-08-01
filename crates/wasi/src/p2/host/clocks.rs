@@ -2,7 +2,7 @@ use crate::p2::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::wall_clock::{self, Datetime},
 };
-use crate::p2::{DynPollable, IoView, WasiImpl, WasiView};
+use crate::p2::{DynPollable, WasiCtxView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -22,12 +22,9 @@ impl TryFrom<SystemTime> for Datetime {
     }
 }
 
-impl<T> wall_clock::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl wall_clock::Host for WasiCtxView<'_> {
     fn now(&mut self) -> anyhow::Result<Datetime> {
-        let now = self.ctx().wall_clock.now();
+        let now = self.ctx.wall_clock.now();
         Ok(Datetime {
             seconds: now.as_secs(),
             nanoseconds: now.subsec_nanos(),
@@ -35,7 +32,7 @@ where
     }
 
     fn resolution(&mut self) -> anyhow::Result<Datetime> {
-        let res = self.ctx().wall_clock.resolution();
+        let res = self.ctx.wall_clock.resolution();
         Ok(Datetime {
             seconds: res.as_secs(),
             nanoseconds: res.subsec_nanos(),
@@ -62,33 +59,30 @@ fn subscribe_to_duration(
     subscribe(table, sleep)
 }
 
-impl<T> monotonic_clock::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl monotonic_clock::Host for WasiCtxView<'_> {
     fn now(&mut self) -> anyhow::Result<Instant> {
-        Ok(self.ctx().monotonic_clock.now())
+        Ok(self.ctx.monotonic_clock.now())
     }
 
     fn resolution(&mut self) -> anyhow::Result<Instant> {
-        Ok(self.ctx().monotonic_clock.resolution())
+        Ok(self.ctx.monotonic_clock.resolution())
     }
 
     fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<DynPollable>> {
-        let clock_now = self.ctx().monotonic_clock.now();
+        let clock_now = self.ctx.monotonic_clock.now();
         let duration = if when > clock_now {
             Duration::from_nanos(when - clock_now)
         } else {
             Duration::from_nanos(0)
         };
-        subscribe_to_duration(&mut self.table(), duration)
+        subscribe_to_duration(self.table, duration)
     }
 
     fn subscribe_duration(
         &mut self,
         duration: WasiDuration,
     ) -> anyhow::Result<Resource<DynPollable>> {
-        subscribe_to_duration(&mut self.table(), Duration::from_nanos(duration))
+        subscribe_to_duration(self.table, Duration::from_nanos(duration))
     }
 }
 

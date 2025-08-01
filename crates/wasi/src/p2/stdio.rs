@@ -4,9 +4,7 @@ use crate::p2::bindings::cli::{
     terminal_stdout,
 };
 use crate::p2::pipe;
-use crate::p2::{
-    InputStream, IoView, OutputStream, Pollable, StreamError, StreamResult, WasiImpl, WasiView,
-};
+use crate::p2::{InputStream, OutputStream, Pollable, StreamError, StreamResult, WasiCtxView};
 use bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -480,92 +478,68 @@ pub enum IsATTY {
     No,
 }
 
-impl<T> stdin::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl stdin::Host for WasiCtxView<'_> {
     fn get_stdin(&mut self) -> Result<Resource<streams::DynInputStream>, anyhow::Error> {
-        let stream = self.ctx().stdin.stream();
-        Ok(self.table().push(stream)?)
+        let stream = self.ctx.stdin.stream();
+        Ok(self.table.push(stream)?)
     }
 }
 
-impl<T> stdout::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl stdout::Host for WasiCtxView<'_> {
     fn get_stdout(&mut self) -> Result<Resource<streams::DynOutputStream>, anyhow::Error> {
-        let stream = self.ctx().stdout.stream();
-        Ok(self.table().push(stream)?)
+        let stream = self.ctx.stdout.stream();
+        Ok(self.table.push(stream)?)
     }
 }
 
-impl<T> stderr::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl stderr::Host for WasiCtxView<'_> {
     fn get_stderr(&mut self) -> Result<Resource<streams::DynOutputStream>, anyhow::Error> {
-        let stream = self.ctx().stderr.stream();
-        Ok(self.table().push(stream)?)
+        let stream = self.ctx.stderr.stream();
+        Ok(self.table.push(stream)?)
     }
 }
 
 pub struct TerminalInput;
 pub struct TerminalOutput;
 
-impl<T> terminal_input::Host for WasiImpl<T> where T: WasiView {}
-impl<T> terminal_input::HostTerminalInput for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl terminal_input::Host for WasiCtxView<'_> {}
+impl terminal_input::HostTerminalInput for WasiCtxView<'_> {
     fn drop(&mut self, r: Resource<TerminalInput>) -> anyhow::Result<()> {
-        self.table().delete(r)?;
+        self.table.delete(r)?;
         Ok(())
     }
 }
-impl<T> terminal_output::Host for WasiImpl<T> where T: WasiView {}
-impl<T> terminal_output::HostTerminalOutput for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl terminal_output::Host for WasiCtxView<'_> {}
+impl terminal_output::HostTerminalOutput for WasiCtxView<'_> {
     fn drop(&mut self, r: Resource<TerminalOutput>) -> anyhow::Result<()> {
-        self.table().delete(r)?;
+        self.table.delete(r)?;
         Ok(())
     }
 }
-impl<T> terminal_stdin::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl terminal_stdin::Host for WasiCtxView<'_> {
     fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<Resource<TerminalInput>>> {
-        if self.ctx().stdin.is_terminal() {
-            let fd = self.table().push(TerminalInput)?;
+        if self.ctx.stdin.is_terminal() {
+            let fd = self.table.push(TerminalInput)?;
             Ok(Some(fd))
         } else {
             Ok(None)
         }
     }
 }
-impl<T> terminal_stdout::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl terminal_stdout::Host for WasiCtxView<'_> {
     fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
-        if self.ctx().stdout.is_terminal() {
-            let fd = self.table().push(TerminalOutput)?;
+        if self.ctx.stdout.is_terminal() {
+            let fd = self.table.push(TerminalOutput)?;
             Ok(Some(fd))
         } else {
             Ok(None)
         }
     }
 }
-impl<T> terminal_stderr::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl terminal_stderr::Host for WasiCtxView<'_> {
     fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
-        if self.ctx().stderr.is_terminal() {
-            let fd = self.table().push(TerminalOutput)?;
+        if self.ctx.stderr.is_terminal() {
+            let fd = self.table.push(TerminalOutput)?;
             Ok(Some(fd))
         } else {
             Ok(None)

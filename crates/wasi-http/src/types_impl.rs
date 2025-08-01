@@ -14,7 +14,7 @@ use anyhow::{Context, anyhow};
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
-use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable, IoView};
+use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
 
 impl<T> crate::bindings::http::types::Host for WasiHttpImpl<T>
 where

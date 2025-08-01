@@ -104,16 +104,12 @@ pub struct WasmtimeStoreData {
 }
 
 #[cfg(all(feature = "component-model", feature = "wasi"))]
-impl wasmtime_wasi::p2::IoView for WasmtimeStoreData {
-    fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
-        &mut self.resource_table
-    }
-}
-
-#[cfg(all(feature = "component-model", feature = "wasi"))]
 impl wasmtime_wasi::p2::WasiView for WasmtimeStoreData {
-    fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
-        self.wasip2.as_mut().unwrap()
+    fn ctx(&mut self) -> wasmtime_wasi::p2::WasiCtxView<'_> {
+        wasmtime_wasi::p2::WasiCtxView {
+            ctx: self.wasip2.as_mut().unwrap(),
+            table: &mut self.resource_table,
+        }
     }
 }
 

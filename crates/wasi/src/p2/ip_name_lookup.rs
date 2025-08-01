@@ -1,6 +1,6 @@
 use crate::p2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
-use crate::p2::{IoView, SocketError, WasiImpl, WasiView};
+use crate::p2::{SocketError, WasiCtxView};
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use anyhow::Result;
 use std::mem;
@@ -17,16 +17,13 @@ pub enum ResolveAddressStream {
     Done(Result<vec::IntoIter<IpAddress>, SocketError>),
 }
 
-impl<T> Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl Host for WasiCtxView<'_> {
     fn resolve_addresses(
         &mut self,
         network: Resource<Network>,
         name: String,
     ) -> Result<Resource<ResolveAddressStream>, SocketError> {
-        let network = self.table().get(&network)?;
+        let network = self.table.get(&network)?;
 
         let host = parse_host(&name)?;
 
@@ -35,20 +32,17 @@ where
         }
 
         let task = spawn_blocking(move || blocking_resolve(&host));
-        let resource = self.table().push(ResolveAddressStream::Waiting(task))?;
+        let resource = self.table.push(ResolveAddressStream::Waiting(task))?;
         Ok(resource)
     }
 }
 
-impl<T> HostResolveAddressStream for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl HostResolveAddressStream for WasiCtxView<'_> {
     fn resolve_next_address(
         &mut self,
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Option<IpAddress>, SocketError> {
-        let stream: &mut ResolveAddressStream = self.table().get_mut(&resource)?;
+        let stream: &mut ResolveAddressStream = self.table.get_mut(&resource)?;
         loop {
             match stream {
                 ResolveAddressStream::Waiting(future) => {
@@ -72,11 +66,11 @@ where
         &mut self,
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Resource<DynPollable>> {
-        subscribe(self.table(), resource)
+        subscribe(self.table, resource)
     }
 
     fn drop(&mut self, resource: Resource<ResolveAddressStream>) -> Result<()> {
-        self.table().delete(resource)?;
+        self.table.delete(resource)?;
         Ok(())
     }
 }

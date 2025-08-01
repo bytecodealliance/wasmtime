@@ -6,7 +6,7 @@ use wasmtime::Store;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p2::bindings::Command;
 use wasmtime_wasi::p2::{
-    IoView, WasiCtx, WasiCtxBuilder, WasiView, add_to_linker_async,
+    WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView, add_to_linker_async,
     bindings::{clocks::wall_clock, filesystem::types as filesystem},
 };
 use wasmtime_wasi::{DirPerms, FilePerms, HostMonotonicClock, HostWallClock};
@@ -16,14 +16,12 @@ struct CommandCtx {
     wasi: WasiCtx,
 }
 
-impl IoView for CommandCtx {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-}
 impl WasiView for CommandCtx {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 
@@ -172,7 +170,7 @@ async fn api_reactor() -> Result<()> {
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
     let writepipe = wasmtime_wasi::p2::pipe::MemoryOutputPipe::new(4096);
     let stream: wasmtime_wasi::p2::DynOutputStream = Box::new(writepipe.clone());
-    let table_ix = store.data_mut().table().push(stream)?;
+    let table_ix = store.data_mut().table.push(stream)?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 

@@ -6,7 +6,7 @@ use crate::p2::bindings::filesystem::types::{
 use crate::p2::filesystem::{
     Descriptor, Dir, File, FileInputStream, FileOutputStream, ReaddirIterator,
 };
-use crate::p2::{FsError, FsResult, IoView, WasiImpl, WasiView};
+use crate::p2::{FsError, FsResult, WasiCtxView};
 use crate::{DirPerms, FilePerms, OpenMode};
 use anyhow::Context;
 use wasmtime::component::Resource;
@@ -14,17 +14,14 @@ use wasmtime_wasi_io::streams::{DynInputStream, DynOutputStream};
 
 mod sync;
 
-impl<T> preopens::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl preopens::Host for WasiCtxView<'_> {
     fn get_directories(
         &mut self,
     ) -> Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error> {
         let mut results = Vec::new();
-        for (dir, name) in self.ctx().preopens.clone() {
+        for (dir, name) in self.ctx.preopens.clone() {
             let fd = self
-                .table()
+                .table
                 .push(Descriptor::Dir(dir))
                 .with_context(|| format!("failed to push preopen {name}"))?;
             results.push((fd, name));
@@ -33,10 +30,7 @@ where
     }
 }
 
-impl<T> types::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl types::Host for WasiCtxView<'_> {
     fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<ErrorCode> {
         err.downcast()
     }
@@ -45,7 +39,7 @@ where
         &mut self,
         err: Resource<anyhow::Error>,
     ) -> anyhow::Result<Option<ErrorCode>> {
-        let err = self.table().get(&err)?;
+        let err = self.table.get(&err)?;
 
         // Currently `err` always comes from the stream implementation which
         // uses standard reads/writes so only check for `std::io::Error` here.
@@ -57,10 +51,7 @@ where
     }
 }
 
-impl<T> HostDescriptor for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl HostDescriptor for WasiCtxView<'_> {
     async fn advise(
         &mut self,
         fd: Resource<types::Descriptor>,
@@ -80,14 +71,14 @@ where
             Advice::NoReuse => A::NoReuse,
         };
 
-        let f = self.table().get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
         f.run_blocking(move |f| f.advise(offset, len, advice))
             .await?;
         Ok(())
     }
 
     async fn sync_data(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
-        let descriptor = self.table().get(&fd)?;
+        let descriptor = self.table.get(&fd)?;
 
         match descriptor {
             Descriptor::File(f) => {
@@ -134,7 +125,7 @@ where
             out
         }
 
-        let descriptor = self.table().get(&fd)?;
+        let descriptor = self.table.get(&fd)?;
         match descriptor {
             Descriptor::File(f) => {
                 let flags = f.run_blocking(|f| f.get_fd_flags()).await?;
@@ -165,7 +156,7 @@ where
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::DescriptorType> {
-        let descriptor = self.table().get(&fd)?;
+        let descriptor = self.table.get(&fd)?;
 
         match descriptor {
             Descriptor::File(f) => {
@@ -181,7 +172,7 @@ where
         fd: Resource<types::Descriptor>,
         size: types::Filesize,
     ) -> FsResult<()> {
-        let f = self.table().get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
         if !f.perms.contains(FilePerms::WRITE) {
             Err(ErrorCode::NotPermitted)?;
         }
@@ -197,7 +188,7 @@ where
     ) -> FsResult<()> {
         use fs_set_times::SetTimes;
 
-        let descriptor = self.table().get(&fd)?;
+        let descriptor = self.table.get(&fd)?;
         match descriptor {
             Descriptor::File(f) => {
                 if !f.perms.contains(FilePerms::WRITE) {
@@ -229,9 +220,7 @@ where
         use std::io::IoSliceMut;
         use system_interface::fs::FileIoExt;
 
-        let table = self.table();
-
-        let f = table.get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
         if !f.perms.contains(FilePerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -263,8 +252,7 @@ where
         use std::io::IoSlice;
         use system_interface::fs::FileIoExt;
 
-        let table = self.table();
-        let f = table.get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
         if !f.perms.contains(FilePerms::WRITE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -280,8 +268,7 @@ where
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<Resource<types::DirectoryEntryStream>> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -338,11 +325,11 @@ where
             Err(ReaddirError::Io(e)) => Err(e.into()),
             Err(ReaddirError::IllegalSequence) => Err(ErrorCode::IllegalByteSequence.into()),
         });
-        Ok(table.push(ReaddirIterator::new(entries))?)
+        Ok(self.table.push(ReaddirIterator::new(entries))?)
     }
 
     async fn sync(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
-        let descriptor = self.table().get(&fd)?;
+        let descriptor = self.table.get(&fd)?;
 
         match descriptor {
             Descriptor::File(f) => {
@@ -373,8 +360,7 @@ where
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<()> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -383,7 +369,7 @@ where
     }
 
     async fn stat(&mut self, fd: Resource<types::Descriptor>) -> FsResult<types::DescriptorStat> {
-        let descriptor = self.table().get(&fd)?;
+        let descriptor = self.table.get(&fd)?;
         match descriptor {
             Descriptor::File(f) => {
                 // No permissions check on stat: if opened, allowed to stat it
@@ -404,8 +390,7 @@ where
         path_flags: types::PathFlags,
         path: String,
     ) -> FsResult<types::DescriptorStat> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -428,8 +413,7 @@ where
     ) -> FsResult<()> {
         use cap_fs_ext::DirExt;
 
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -466,12 +450,11 @@ where
         new_descriptor: Resource<types::Descriptor>,
         new_path: String,
     ) -> FsResult<()> {
-        let table = self.table();
-        let old_dir = table.get(&fd)?.dir()?;
+        let old_dir = self.table.get(&fd)?.dir()?;
         if !old_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        let new_dir = table.get(&new_descriptor)?.dir()?;
+        let new_dir = self.table.get(&new_descriptor)?.dir()?;
         if !new_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -497,9 +480,8 @@ where
         use system_interface::fs::{FdFlags, GetSetFdFlags};
         use types::{DescriptorFlags, OpenFlags};
 
-        let allow_blocking_current_thread = self.ctx().allow_blocking_current_thread;
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let allow_blocking_current_thread = self.ctx.allow_blocking_current_thread;
+        let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             Err(ErrorCode::NotPermitted)?;
         }
@@ -609,7 +591,7 @@ where
             .await?;
 
         match opened {
-            OpenResult::Dir(dir) => Ok(table.push(Descriptor::Dir(Dir::new(
+            OpenResult::Dir(dir) => Ok(self.table.push(Descriptor::Dir(Dir::new(
                 dir,
                 d.perms,
                 d.file_perms,
@@ -617,7 +599,7 @@ where
                 allow_blocking_current_thread,
             )))?),
 
-            OpenResult::File(file) => Ok(table.push(Descriptor::File(File::new(
+            OpenResult::File(file) => Ok(self.table.push(Descriptor::File(File::new(
                 file,
                 d.file_perms,
                 open_mode,
@@ -629,14 +611,12 @@ where
     }
 
     fn drop(&mut self, fd: Resource<types::Descriptor>) -> anyhow::Result<()> {
-        let table = self.table();
-
         // The Drop will close the file/dir, but if the close syscall
         // blocks the thread, I will face god and walk backwards into hell.
         // tokio::fs::File just uses std::fs::File's Drop impl to close, so
         // it doesn't appear anyone else has found this to be a problem.
         // (Not that they could solve it without async drop...)
-        table.delete(fd)?;
+        self.table.delete(fd)?;
 
         Ok(())
     }
@@ -646,8 +626,7 @@ where
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<String> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -663,8 +642,7 @@ where
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<()> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -678,12 +656,11 @@ where
         new_fd: Resource<types::Descriptor>,
         new_path: String,
     ) -> FsResult<()> {
-        let table = self.table();
-        let old_dir = table.get(&fd)?.dir()?;
+        let old_dir = self.table.get(&fd)?.dir()?;
         if !old_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        let new_dir = table.get(&new_fd)?.dir()?;
+        let new_dir = self.table.get(&new_fd)?.dir()?;
         if !new_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -703,8 +680,7 @@ where
         #[cfg(windows)]
         use cap_fs_ext::DirExt;
 
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -719,8 +695,7 @@ where
     ) -> FsResult<()> {
         use cap_fs_ext::DirExt;
 
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -734,7 +709,7 @@ where
         offset: types::Filesize,
     ) -> FsResult<Resource<DynInputStream>> {
         // Trap if fd lookup fails:
-        let f = self.table().get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::READ) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -744,7 +719,7 @@ where
         let reader: DynInputStream = Box::new(FileInputStream::new(f, offset));
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table().push(reader)?;
+        let index = self.table.push(reader)?;
 
         Ok(index)
     }
@@ -755,7 +730,7 @@ where
         offset: types::Filesize,
     ) -> FsResult<Resource<DynOutputStream>> {
         // Trap if fd lookup fails:
-        let f = self.table().get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::WRITE) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -766,7 +741,7 @@ where
         let writer: DynOutputStream = Box::new(writer);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table().push(writer)?;
+        let index = self.table.push(writer)?;
 
         Ok(index)
     }
@@ -776,7 +751,7 @@ where
         fd: Resource<types::Descriptor>,
     ) -> FsResult<Resource<DynOutputStream>> {
         // Trap if fd lookup fails:
-        let f = self.table().get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::WRITE) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -787,7 +762,7 @@ where
         let appender: DynOutputStream = Box::new(appender);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table().push(appender)?;
+        let index = self.table.push(appender)?;
 
         Ok(index)
     }
@@ -798,9 +773,9 @@ where
         b: Resource<types::Descriptor>,
     ) -> anyhow::Result<bool> {
         use cap_fs_ext::MetadataExt;
-        let descriptor_a = self.table().get(&a)?;
+        let descriptor_a = self.table.get(&a)?;
         let meta_a = get_descriptor_metadata(descriptor_a).await?;
-        let descriptor_b = self.table().get(&b)?;
+        let descriptor_b = self.table.get(&b)?;
         let meta_b = get_descriptor_metadata(descriptor_b).await?;
         if meta_a.dev() == meta_b.dev() && meta_a.ino() == meta_b.ino() {
             // MetadataHashValue does not derive eq, so use a pair of
@@ -823,7 +798,7 @@ where
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::MetadataHashValue> {
-        let descriptor_a = self.table().get(&fd)?;
+        let descriptor_a = self.table.get(&fd)?;
         let meta = get_descriptor_metadata(descriptor_a).await?;
         Ok(calculate_metadata_hash(&meta))
     }
@@ -833,8 +808,7 @@ where
         path_flags: types::PathFlags,
         path: String,
     ) -> FsResult<types::MetadataHashValue> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let d = self.table.get(&fd)?.dir()?;
         // No permissions check on metadata: if dir opened, allowed to stat it
         let meta = d
             .run_blocking(move |d| {
@@ -849,21 +823,17 @@ where
     }
 }
 
-impl<T> HostDirectoryEntryStream for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl HostDirectoryEntryStream for WasiCtxView<'_> {
     async fn read_directory_entry(
         &mut self,
         stream: Resource<types::DirectoryEntryStream>,
     ) -> FsResult<Option<types::DirectoryEntry>> {
-        let table = self.table();
-        let readdir = table.get(&stream)?;
+        let readdir = self.table.get(&stream)?;
         readdir.next()
     }
 
     fn drop(&mut self, stream: Resource<types::DirectoryEntryStream>) -> anyhow::Result<()> {
-        self.table().delete(stream)?;
+        self.table.delete(stream)?;
         Ok(())
     }
 }

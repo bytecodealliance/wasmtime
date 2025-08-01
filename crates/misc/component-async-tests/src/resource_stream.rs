@@ -2,7 +2,6 @@ use anyhow::Result;
 use wasmtime::component::{
     Accessor, AccessorTask, GuardedStreamWriter, Resource, StreamReader, StreamWriter,
 };
-use wasmtime_wasi::p2::IoView;
 
 use super::Ctx;
 
@@ -24,12 +23,12 @@ pub struct ResourceStreamX;
 
 impl bindings::local::local::resource_stream::HostX for Ctx {
     fn foo(&mut self, x: Resource<ResourceStreamX>) -> Result<()> {
-        self.table().get(&x)?;
+        self.table.get(&x)?;
         Ok(())
     }
 
     fn drop(&mut self, x: Resource<ResourceStreamX>) -> Result<()> {
-        IoView::table(self).delete(x)?;
+        self.table.delete(x)?;
         Ok(())
     }
 }
@@ -49,8 +48,7 @@ impl bindings::local::local::resource_stream::HostWithStore for Ctx {
             async fn run(self, accessor: &Accessor<T, Ctx>) -> Result<()> {
                 let mut tx = GuardedStreamWriter::new(accessor, self.tx);
                 for _ in 0..self.count {
-                    let item =
-                        accessor.with(|mut view| view.get().table().push(ResourceStreamX))?;
+                    let item = accessor.with(|mut view| view.get().table.push(ResourceStreamX))?;
                     tx.write_all(Some(item)).await;
                 }
                 Ok(())

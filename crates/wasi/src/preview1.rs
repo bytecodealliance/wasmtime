@@ -72,7 +72,7 @@ use crate::p2::bindings::{
     clocks::{monotonic_clock, wall_clock},
     filesystem::{preopens::Host as _, types as filesystem},
 };
-use crate::p2::{FsError, IsATTY, WasiCtx, WasiImpl, WasiView};
+use crate::p2::{FsError, IsATTY, WasiCtx, WasiCtxView, WasiView};
 use anyhow::{Context, bail};
 use std::collections::{BTreeMap, BTreeSet, HashSet, btree_map};
 use std::mem::{self, size_of, size_of_val};
@@ -82,7 +82,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use system_interface::fs::FileIoExt;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::{
-    IoImpl, IoView,
     bindings::wasi::io::streams,
     streams::{StreamError, StreamResult},
 };
@@ -154,22 +153,21 @@ impl WasiP1Ctx {
         }
     }
 
-    fn as_wasi_impl(&mut self) -> WasiImpl<&mut Self> {
-        WasiImpl(IoImpl(self))
+    fn as_wasi_impl(&mut self) -> WasiCtxView<'_> {
+        WasiView::ctx(self)
     }
-    fn as_io_impl(&mut self) -> IoImpl<&mut Self> {
-        IoImpl(self)
-    }
-}
 
-impl IoView for WasiP1Ctx {
-    fn table(&mut self) -> &mut ResourceTable {
+    fn as_io_impl(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
 }
+
 impl WasiView for WasiP1Ctx {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 
@@ -290,7 +288,7 @@ struct Descriptors {
 
 impl Descriptors {
     /// Initializes [Self] using `preopens`
-    fn new(mut host: WasiImpl<&mut WasiP1Ctx>) -> Result<Self, types::Error> {
+    fn new(mut host: WasiCtxView<'_>) -> Result<Self, types::Error> {
         let mut descriptors = Self::default();
         descriptors.push(Descriptor::Stdin {
             stream: host
@@ -578,7 +576,7 @@ impl WasiP1Ctx {
                 let pos = position.load(Ordering::Relaxed);
                 let append = *append;
                 drop(t);
-                let f = self.table().get(&fd)?.file()?;
+                let f = self.table.get(&fd)?.file()?;
                 let buf = first_non_empty_ciovec(memory, ciovs)?;
 
                 let do_write = move |f: &cap_std::fs::File, buf: &[u8]| match (append, write) {
@@ -1625,7 +1623,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 let position = position.clone();
                 drop(t);
                 let pos = position.load(Ordering::Relaxed);
-                let file = self.table().get(&fd)?.file()?;
+                let file = self.table.get(&fd)?.file()?;
                 let iov = first_non_empty_iovec(memory, iovs)?;
                 let bytes_read = match (file.as_blocking_file(), memory.as_slice_mut(iov)?) {
                     // Try to read directly into wasm memory where possible
@@ -1919,7 +1917,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
 
         let mut dir = Vec::new();
         for (entry, d_next) in self
-            .table()
+            .table
             // remove iterator from table and use it directly:
             .delete(stream)?
             .into_iter()
@@ -2142,7 +2140,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             .open_at(dirfd, dirflags.into(), path, oflags.into(), flags)
             .await?;
         let mut t = self.transact()?;
-        let desc = match t.view.table().get(&fd)? {
+        let desc = match t.view.table.get(&fd)? {
             crate::p2::filesystem::Descriptor::Dir(_) => Descriptor::Directory {
                 fd,
                 preopen_path: None,
@@ -2275,7 +2273,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 if !clocksub
                     .flags
                     .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
-                    && self.ctx().allow_blocking_current_thread
+                    && self.wasi.allow_blocking_current_thread
                 {
                     std::thread::sleep(std::time::Duration::from_nanos(clocksub.timeout));
                     memory.write(

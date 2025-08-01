@@ -14,9 +14,11 @@ use std::{
     time::Duration,
 };
 use tokio::sync::Notify;
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
-use wasmtime_wasi::p2::{IoView, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::p2::{
+    StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView,
+};
 use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::bindings::http::types::{ErrorCode, Scheme};
 use wasmtime_wasi_http::io::TokioIo;
@@ -54,20 +56,21 @@ struct Host {
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
 }
 
-impl IoView for Host {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        &mut self.table
-    }
-}
 impl WasiView for Host {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.ctx
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.ctx,
+            table: &mut self.table,
+        }
     }
 }
 
 impl WasiHttpView for Host {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
+    }
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.table
     }
 
     fn outgoing_body_buffer_chunks(&mut self) -> usize {
