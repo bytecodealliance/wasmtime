@@ -4,8 +4,7 @@ use anyhow::{Context as _, anyhow};
 use wasmtime::Store;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p3::bindings::Command;
-use wasmtime_wasi::p3::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi::{DirPerms, FilePerms};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxView, WasiView};
 
 use test_programs_artifacts::*;
 
@@ -18,24 +17,13 @@ macro_rules! assert_test_exists {
 
 struct Ctx {
     table: ResourceTable,
-    p2: wasmtime_wasi::p2::WasiCtx,
-    p3: WasiCtx,
+    wasi: WasiCtx,
 }
 
 impl WasiView for Ctx {
-    fn ctx(&mut self) -> WasiCtxView<'_> {
+    fn ctx(&mut self) -> WasiCtxView {
         WasiCtxView {
-            ctx: &mut self.p3,
-            table: &mut self.table,
-        }
-    }
-}
-
-// TODO: Remove once test components are not built for `wasm32-wasip1`
-impl wasmtime_wasi::p2::WasiView for Ctx {
-    fn ctx(&mut self) -> wasmtime_wasi::p2::WasiCtxView {
-        wasmtime_wasi::p2::WasiCtxView {
-            ctx: &mut self.p2,
+            ctx: &mut self.wasi,
             table: &mut self.table,
         }
     }
@@ -58,27 +46,22 @@ async fn run(path: &str) -> anyhow::Result<()> {
 
     let table = ResourceTable::default();
 
-    let p2 = wasmtime_wasi::p2::WasiCtx::builder()
-        .inherit_stdout()
-        .inherit_stderr()
-        .build();
-
-    let mut p3 = WasiCtxBuilder::new();
+    let mut ctx = WasiCtx::builder();
     let name = path.file_stem().unwrap().to_str().unwrap();
     let tempdir = tempfile::Builder::new()
         .prefix(&format!("wasi_components_{name}_",))
         .tempdir()?;
-    p3.args(&[name, "."])
+    ctx.args(&[name, "."])
         .inherit_network()
         .allow_ip_name_lookup(true);
     println!("preopen: {tempdir:?}");
-    p3.preopened_dir(tempdir.path(), ".", DirPerms::all(), FilePerms::all())?;
+    ctx.preopened_dir(tempdir.path(), ".", DirPerms::all(), FilePerms::all())?;
     for (var, val) in test_programs_artifacts::wasi_tests_environment() {
-        p3.env(var, val);
+        ctx.env(var, val);
     }
-    let p3 = p3.build();
+    let wasi = ctx.build();
 
-    let mut store = Store::new(&engine, Ctx { table, p2, p3 });
+    let mut store = Store::new(&engine, Ctx { table, wasi });
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let command =
         Command::new(&mut store, &instance).context("failed to instantiate `wasi:cli/command`")?;

@@ -16,7 +16,7 @@ use wasmtime::component::{
     GuardedStreamWriter, HasSelf, Instance, Linker, ResourceTable, StreamReader, Val,
 };
 use wasmtime::{AsContextMut, Engine, Store};
-use wasmtime_wasi::p2::WasiCtxBuilder;
+use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::test]
 pub async fn async_poll_synchronous() -> Result<()> {

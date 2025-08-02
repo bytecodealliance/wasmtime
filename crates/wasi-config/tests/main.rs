@@ -4,9 +4,8 @@ use wasmtime::{
     Store,
     component::{Component, Linker, ResourceTable},
 };
-use wasmtime_wasi::p2::{
-    WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView, add_to_linker_async, bindings::Command,
-};
+use wasmtime_wasi::p2::{add_to_linker_async, bindings::Command};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 
 struct Ctx {

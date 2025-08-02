@@ -7,7 +7,7 @@ use anyhow::Result;
 use futures::stream::{FuturesUnordered, TryStreamExt};
 use wasmtime::component::{Linker, ResourceTable};
 use wasmtime::{Engine, Store};
-use wasmtime_wasi::p2::WasiCtxBuilder;
+use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::test]
 pub async fn async_borrowing_caller() -> Result<()> {

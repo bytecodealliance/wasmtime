@@ -73,7 +73,7 @@
 //! implementations are provided looking like:
 //!
 //! ```
-//! # use wasmtime_wasi::p2::WasiCtxView;
+//! # use wasmtime_wasi::WasiCtxView;
 //! # trait WasiView {}
 //! # mod bindings { pub mod wasi { pub trait Host {} } }
 //! impl bindings::wasi::Host for WasiCtxView<'_> {
@@ -97,7 +97,7 @@
 //! trait to access those items in your `T`. For example:
 //! ```
 //! use wasmtime::component::ResourceTable;
-//! use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView};
+//! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 //!
 //! struct MyCtx {
 //!     table: ResourceTable,
@@ -222,10 +222,10 @@
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
 
 use crate::random::WasiRandom;
+use crate::{WasiCtxView, WasiView};
 use wasmtime::component::{HasData, Linker, ResourceTable};
 
 pub mod bindings;
-mod ctx;
 pub(crate) mod filesystem;
 mod host;
 mod ip_name_lookup;
@@ -235,14 +235,11 @@ mod poll;
 mod stdio;
 mod tcp;
 mod udp;
-mod view;
 mod write_stream;
 
-pub use self::ctx::{WasiCtx, WasiCtxBuilder};
 pub use self::filesystem::{FsError, FsResult};
 pub use self::network::{Network, SocketError, SocketResult};
 pub use self::stdio::IsATTY;
-pub use self::view::{WasiCtxView, WasiView};
 // These contents of wasmtime-wasi-io are re-exported by this module for compatibility:
 // they were originally defined in this module before being factored out, and many
 // users of this module depend on them at these names.
@@ -270,7 +267,7 @@ pub use wasmtime_wasi_io::streams::{
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -281,7 +278,7 @@ pub use wasmtime_wasi_io::streams::{
 ///     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 ///     // ... add any further functionality to `linker` if desired ...
 ///
-///     let mut builder = WasiCtxBuilder::new();
+///     let mut builder = WasiCtx::builder();
 ///
 ///     // ... configure `builder` more to add env vars, args, etc ...
 ///
@@ -415,7 +412,7 @@ fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> anyh
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 ///
 /// fn main() -> Result<()> {
 ///     let engine = Engine::default();
@@ -424,7 +421,7 @@ fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> anyh
 ///     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
 ///     // ... add any further functionality to `linker` if desired ...
 ///
-///     let mut builder = WasiCtxBuilder::new();
+///     let mut builder = WasiCtx::builder();
 ///
 ///     // ... configure `builder` more to add env vars, args, etc ...
 ///

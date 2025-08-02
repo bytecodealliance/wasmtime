@@ -4516,9 +4516,9 @@ dependencies = [
  "clap",
  "shuffling-allocator",
  "target-lexicon",
- "wasi-common",
  "wasmtime",
  "wasmtime-cli-flags",
+ "wasmtime-wasi",
  "wasmtime-wasi-nn",
  "wat",
 ]

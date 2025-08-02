@@ -13,7 +13,7 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::component::{HasSelf, Resource};
 use wasmtime::{Config, Engine, Result, Store};
 use wasmtime_wasi::p2::add_to_linker_async;
-use wasmtime_wasi::p2::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
 pub struct ComponentRunStates {
     // These two are required basically as a standard way to enable the impl of IoView and
@@ -36,10 +36,10 @@ impl WasiView for ComponentRunStates {
 impl ComponentRunStates {
     pub fn new() -> Self {
         // Create a WASI context and put it in a Store; all instances in the store
-        // share this context. `WasiCtxBuilder` provides a number of ways to
+        // share this context. `WasiCtx` provides a number of ways to
         // configure what the target program will have access to.
         ComponentRunStates {
-            wasi_ctx: WasiCtxBuilder::new().build(),
+            wasi_ctx: WasiCtx::builder().build(),
             resource_table: ResourceTable::new(),
         }
     }

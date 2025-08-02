@@ -6,7 +6,6 @@
 )]
 
 use crate::common::{Profile, RunCommon, RunTarget};
-
 use anyhow::{Context as _, Error, Result, anyhow, bail};
 use clap::Parser;
 use std::ffi::OsString;
@@ -15,13 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{Dir, TcpListener, WasiCtxBuilder, ambient_authority};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
-use wasmtime_wasi::p2::{WasiCtxView, WasiView};
-
-#[cfg(feature = "wasi-nn")]
-use wasmtime_wasi_nn::wit::WasiNnView;
-
-#[cfg(feature = "wasi-threads")]
-use wasmtime_wasi_threads::WasiThreadsCtx;
+use wasmtime_wasi::{WasiCtxView, WasiView};
 
 #[cfg(feature = "wasi-config")]
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
@@ -31,7 +24,10 @@ use wasmtime_wasi_http::{
 };
 #[cfg(feature = "wasi-keyvalue")]
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
-
+#[cfg(feature = "wasi-nn")]
+use wasmtime_wasi_nn::wit::WasiNnView;
+#[cfg(feature = "wasi-threads")]
+use wasmtime_wasi_threads::WasiThreadsCtx;
 #[cfg(feature = "wasi-tls")]
 use wasmtime_wasi_tls::{WasiTls, WasiTlsCtx};
 
@@ -1059,7 +1055,7 @@ impl RunCommand {
     }
 
     fn set_preview2_ctx(&self, store: &mut Store<Host>) -> Result<()> {
-        let mut builder = wasmtime_wasi::p2::WasiCtxBuilder::new();
+        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?);
         self.run.configure_wasip2(&mut builder)?;
         let ctx = builder.build_p1();

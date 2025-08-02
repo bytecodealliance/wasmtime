@@ -71,7 +71,7 @@
 //! use tokio::net::TcpListener;
 //! use wasmtime::component::{Component, Linker, ResourceTable};
 //! use wasmtime::{Config, Engine, Result, Store};
-//! use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiCtxBuilder, WasiView};
+//! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 //! use wasmtime_wasi_http::bindings::ProxyPre;
 //! use wasmtime_wasi_http::bindings::http::types::Scheme;
 //! use wasmtime_wasi_http::body::HyperOutgoingBody;
@@ -143,7 +143,7 @@
 //!             self.pre.engine(),
 //!             MyClientState {
 //!                 table: ResourceTable::new(),
-//!                 wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+//!                 wasi: WasiCtx::builder().inherit_stdio().build(),
 //!                 http: WasiHttpCtx::new(),
 //!             },
 //!         );
@@ -253,7 +253,7 @@ use wasmtime::component::{HasData, Linker};
 /// ```
 /// use wasmtime::{Engine, Result, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 ///
 /// fn main() -> Result<()> {
@@ -287,7 +287,7 @@ use wasmtime::component::{HasData, Linker};
 /// ```
 pub fn add_to_linker_async<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
 where
-    T: WasiHttpView + wasmtime_wasi::p2::WasiView + 'static,
+    T: WasiHttpView + wasmtime_wasi::WasiView + 'static,
 {
     wasmtime_wasi::p2::add_to_linker_proxy_interfaces_async(l)?;
     add_only_http_to_linker_async(l)
@@ -332,7 +332,7 @@ impl<T: 'static> HasData for WasiHttp<T> {
 /// ```
 /// use wasmtime::{Engine, Result, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::p2::{WasiCtx, WasiCtxView, WasiView};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 ///
 /// fn main() -> Result<()> {
@@ -363,7 +363,7 @@ impl<T: 'static> HasData for WasiHttp<T> {
 /// ```
 pub fn add_to_linker_sync<T>(l: &mut Linker<T>) -> anyhow::Result<()>
 where
-    T: WasiHttpView + wasmtime_wasi::p2::WasiView + 'static,
+    T: WasiHttpView + wasmtime_wasi::WasiView + 'static,
 {
     wasmtime_wasi::p2::add_to_linker_proxy_interfaces_sync(l)?;
     add_only_http_to_linker_sync(l)

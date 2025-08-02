@@ -5,8 +5,7 @@ use std::path::Path;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::p2::bindings::sync::Command;
-use wasmtime_wasi::p2::{WasiCtx, WasiCtxBuilder, WasiCtxView};
-use wasmtime_wasi::{DirPerms, FilePerms};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxView};
 use wasmtime_wasi_nn::wit::WasiNnView;
 use wasmtime_wasi_nn::{Backend, InMemoryRegistry, wit::WasiNnCtx};
 
@@ -37,7 +36,7 @@ struct Ctx {
 
 impl Ctx {
     fn new(preopen_dir: &Path, preload_model: bool, mut backend: Backend) -> Result<Self> {
-        let mut builder = WasiCtxBuilder::new();
+        let mut builder = WasiCtx::builder();
         builder.inherit_stdio().preopened_dir(
             preopen_dir,
             PREOPENED_DIR_NAME,
@@ -63,7 +62,7 @@ impl Ctx {
     }
 }
 
-impl wasmtime_wasi::p2::WasiView for Ctx {
+impl wasmtime_wasi::WasiView for Ctx {
     fn ctx(&mut self) -> WasiCtxView<'_> {
         WasiCtxView {
             ctx: &mut self.wasi,

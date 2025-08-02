@@ -19,9 +19,8 @@ use tokio::io::{self, AsyncWrite};
 use tokio::sync::Notify;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
-use wasmtime_wasi::p2::{
-    StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView,
-};
+use wasmtime_wasi::p2::{StreamError, StreamResult};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::bindings::http::types::{ErrorCode, Scheme};
 use wasmtime_wasi_http::io::TokioIo;

@@ -9,7 +9,7 @@ You can execute this example with:
 
 use anyhow::Result;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasmtime_wasi::p2::WasiCtxBuilder;
+use wasmtime_wasi::WasiCtx;
 use wasmtime_wasi::preview1::{self, WasiP1Ctx};
 
 #[tokio::main]
@@ -25,9 +25,9 @@ async fn main() -> Result<()> {
     preview1::add_to_linker_async(&mut linker, |t| t)?;
 
     // Add capabilities (e.g. filesystem access) to the WASI preview2 context
-    // here. Here only stdio is inherited, but see docs of `WasiCtxBuilder` for
+    // here. Here only stdio is inherited, but see docs of `WasiCtx` for
     // more.
-    let wasi_ctx = WasiCtxBuilder::new().inherit_stdio().build_p1();
+    let wasi_ctx = WasiCtx::builder().inherit_stdio().build_p1();
 
     let mut store = Store::new(&engine, wasi_ctx);
 

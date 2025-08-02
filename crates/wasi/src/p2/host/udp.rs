@@ -26,7 +26,7 @@ impl udp::HostUdpSocket for WasiCtxView<'_> {
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx.allowed_network_uses.check_allowed_udp()?;
+        self.ctx.sockets.allowed_network_uses.check_allowed_udp()?;
 
         match self.table.get(&this)?.udp_state {
             UdpState::Default => {}

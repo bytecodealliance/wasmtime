@@ -21,7 +21,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiCtxView<'_> {
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx.allowed_network_uses.check_allowed_tcp()?;
+        self.ctx.sockets.allowed_network_uses.check_allowed_tcp()?;
         let network = self.table.get(&network)?;
         let local_address: SocketAddr = local_address.into();
 
@@ -48,7 +48,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiCtxView<'_> {
         network: Resource<Network>,
         remote_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx.allowed_network_uses.check_allowed_tcp()?;
+        self.ctx.sockets.allowed_network_uses.check_allowed_tcp()?;
         let network = self.table.get(&network)?;
         let remote_address: SocketAddr = remote_address.into();
 
@@ -78,7 +78,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiCtxView<'_> {
     }
 
     fn start_listen(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {
-        self.ctx.allowed_network_uses.check_allowed_tcp()?;
+        self.ctx.sockets.allowed_network_uses.check_allowed_tcp()?;
         let socket = self.table.get_mut(&this)?;
 
         socket.start_listen()
@@ -97,7 +97,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiCtxView<'_> {
         Resource<DynInputStream>,
         Resource<DynOutputStream>,
     )> {
-        self.ctx.allowed_network_uses.check_allowed_tcp()?;
+        self.ctx.sockets.allowed_network_uses.check_allowed_tcp()?;
         let socket = self.table.get_mut(&this)?;
 
         let (tcp_socket, input, output) = socket.accept()?;

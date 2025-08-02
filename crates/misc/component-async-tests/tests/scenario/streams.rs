@@ -19,7 +19,7 @@ use {
             ResourceTable, VecBuffer,
         },
     },
-    wasmtime_wasi::p2::WasiCtxBuilder,
+    wasmtime_wasi::WasiCtxBuilder,
 };
 
 #[tokio::test]

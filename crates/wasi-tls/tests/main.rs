@@ -3,7 +3,7 @@ use wasmtime::{
     Store,
     component::{Component, Linker, ResourceTable},
 };
-use wasmtime_wasi::p2::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView, bindings::Command};
+use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::bindings::Command};
 use wasmtime_wasi_tls::{LinkOptions, WasiTls, WasiTlsCtx, WasiTlsCtxBuilder};
 
 struct Ctx {
@@ -24,7 +24,7 @@ impl WasiView for Ctx {
 async fn run_test(path: &str) -> Result<()> {
     let ctx = Ctx {
         table: ResourceTable::new(),
-        wasi_ctx: WasiCtxBuilder::new()
+        wasi_ctx: WasiCtx::builder()
             .inherit_stdout()
             .inherit_stderr()
             .inherit_network()
