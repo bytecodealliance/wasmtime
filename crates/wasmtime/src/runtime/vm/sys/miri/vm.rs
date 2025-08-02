@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io;
 use std::sync::Arc;
 
+pub use crate::runtime::vm::pagemap_disabled::{PageMap, reset_with_pagemap};
+
 pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
     unsafe {
         std::ptr::write_bytes(ptr, 0u8, len);

@@ -7,6 +7,8 @@ use core::ptr::{self, NonNull};
 #[cfg(feature = "std")]
 use std::{fs::File, sync::Arc};
 
+pub use crate::runtime::vm::pagemap_disabled::{PageMap, reset_with_pagemap};
+
 pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> Result<()> {
     unsafe {
         cvt(capi::wasmtime_mprotect(

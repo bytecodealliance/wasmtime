@@ -1,7 +1,7 @@
 use crate::prelude::*;
 #[cfg(feature = "std")]
 use crate::runtime::vm::open_file_for_mmap;
-use crate::runtime::vm::{CompiledModuleId, ModuleMemoryImages, VMWasmCallFunction};
+use crate::runtime::vm::{CompiledModuleId, MmapVec, ModuleMemoryImages, VMWasmCallFunction};
 use crate::sync::OnceLock;
 use crate::{
     Engine,
@@ -1114,7 +1114,7 @@ impl Module {
         let images = self
             .inner
             .memory_images
-            .get_or_try_init(|| memory_images(&self.inner.engine, &self.inner.module))?
+            .get_or_try_init(|| memory_images(&self.inner))?
             .as_ref();
         Ok(images)
     }
@@ -1164,21 +1164,30 @@ fn _assert_send_sync() {
 
 /// Helper method to construct a `ModuleMemoryImages` for an associated
 /// `CompiledModule`.
-fn memory_images(engine: &Engine, module: &CompiledModule) -> Result<Option<ModuleMemoryImages>> {
+fn memory_images(inner: &Arc<ModuleInner>) -> Result<Option<ModuleMemoryImages>> {
     // If initialization via copy-on-write is explicitly disabled in
     // configuration then this path is skipped entirely.
-    if !engine.tunables().memory_init_cow {
+    if !inner.engine.tunables().memory_init_cow {
         return Ok(None);
     }
 
     // ... otherwise logic is delegated to the `ModuleMemoryImages::new`
     // constructor.
-    let mmap = if engine.config().force_memory_init_memfd {
-        None
-    } else {
-        Some(module.mmap())
-    };
-    ModuleMemoryImages::new(module.module(), module.code_memory().wasm_data(), mmap)
+    ModuleMemoryImages::new(
+        &inner.engine,
+        inner.module.module(),
+        inner.code.code_memory(),
+    )
+}
+
+impl crate::vm::ModuleMemoryImageSource for CodeMemory {
+    fn wasm_data(&self) -> &[u8] {
+        <Self>::wasm_data(self)
+    }
+
+    fn mmap(&self) -> Option<&MmapVec> {
+        Some(<Self>::mmap(self))
+    }
 }
 
 #[cfg(test)]
