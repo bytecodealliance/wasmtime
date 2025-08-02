@@ -68,9 +68,11 @@ pub use crate::machinst::buffer::{
     OpenPatchRegion, PatchRegion,
 };
 pub use crate::machinst::{
-    CallInfo, CompiledCode, CompiledCodeStencil, Final, MachBuffer, MachBufferFinalized, MachInst,
-    MachInstEmit, MachInstEmitState, MachLabel, RealReg, Reg, RelocDistance, TextSectionBuilder,
-    VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, Writable,
+    ABIMachineSpec, ArgPair, ArgsAccumulator, ArgsOrRets, CallInfo, CompiledCode,
+    CompiledCodeStencil, Final, FrameLayout, MachBuffer, MachBufferFinalized, MachInst,
+    MachInstEmit, MachInstEmitState, MachInstLabelUse, MachLabel, MachTerminator, RealReg, Reg,
+    RegClass, RelocDistance, SmallInstVec, StackAMode, TextSectionBuilder, VCodeConstant,
+    VCodeConstantData, VCodeConstants, VCodeInst, Writable,
 };
 
 mod alias_analysis;
