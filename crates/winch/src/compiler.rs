@@ -25,7 +25,7 @@ struct CompilationContext {
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
-    trampolines: Box<dyn wasmtime_environ::Compiler>,
+    trampolines: NoInlineCompiler,
     contexts: Mutex<Vec<CompilationContext>>,
     tunables: Tunables,
 }
@@ -38,7 +38,7 @@ impl Compiler {
     ) -> Self {
         Self {
             isa,
-            trampolines,
+            trampolines: NoInlineCompiler(trampolines),
             contexts: Mutex::new(Vec::new()),
             tunables,
         }
@@ -89,6 +89,10 @@ impl Compiler {
 }
 
 impl wasmtime_environ::Compiler for Compiler {
+    fn inlining_compiler(&self) -> Option<&dyn wasmtime_environ::InliningCompiler> {
+        None
+    }
+
     fn compile_function(
         &self,
         translation: &ModuleTranslation<'_>,
@@ -163,7 +167,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn append_code(
         &self,
         obj: &mut Object<'static>,
-        funcs: &[(String, Box<dyn Any + Send>)],
+        funcs: &[(String, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, wasmtime_environ::RelocationTarget) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         self.trampolines.append_code(obj, funcs, resolve_reloc)
@@ -197,7 +201,7 @@ impl wasmtime_environ::Compiler for Compiler {
         _get_func: &'a dyn Fn(
             StaticModuleIndex,
             DefinedFuncIndex,
-        ) -> (SymbolId, &'a (dyn Any + Send)),
+        ) -> (SymbolId, &'a (dyn Any + Send + Sync)),
         _dwarf_package_bytes: Option<&'a [u8]>,
         _tunables: &'a Tunables,
     ) -> Result<()> {
@@ -221,5 +225,155 @@ impl wasmtime_environ::Compiler for Compiler {
         func: &'a dyn Any,
     ) -> Box<dyn Iterator<Item = RelocationTarget> + 'a> {
         self.trampolines.compiled_function_relocation_targets(func)
+    }
+}
+
+/// A wrapper around another `Compiler` implementation that may or may not be an
+/// inlining compiler and turns it into a non-inlining compiler.
+struct NoInlineCompiler(Box<dyn wasmtime_environ::Compiler>);
+
+impl wasmtime_environ::Compiler for NoInlineCompiler {
+    fn inlining_compiler(&self) -> Option<&dyn wasmtime_environ::InliningCompiler> {
+        None
+    }
+
+    fn compile_function(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        index: DefinedFuncIndex,
+        data: FunctionBodyData<'_>,
+        types: &ModuleTypesBuilder,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody, CompileError> {
+        let input = data.body.clone();
+        let mut body = self
+            .0
+            .compile_function(translation, index, data, types, symbol)?;
+        if let Some(c) = self.0.inlining_compiler() {
+            c.finish_compiling(&mut body, Some(input), symbol)
+                .map_err(|e| CompileError::Codegen(e.to_string()))?;
+        }
+        Ok(body)
+    }
+
+    fn compile_array_to_wasm_trampoline(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        types: &ModuleTypesBuilder,
+        index: DefinedFuncIndex,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody, CompileError> {
+        let mut body =
+            self.0
+                .compile_array_to_wasm_trampoline(translation, types, index, symbol)?;
+        if let Some(c) = self.0.inlining_compiler() {
+            c.finish_compiling(&mut body, None, symbol)
+                .map_err(|e| CompileError::Codegen(e.to_string()))?;
+        }
+        Ok(body)
+    }
+
+    fn compile_wasm_to_array_trampoline(
+        &self,
+        wasm_func_ty: &wasmtime_environ::WasmFuncType,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody, CompileError> {
+        let mut body = self
+            .0
+            .compile_wasm_to_array_trampoline(wasm_func_ty, symbol)?;
+        if let Some(c) = self.0.inlining_compiler() {
+            c.finish_compiling(&mut body, None, symbol)
+                .map_err(|e| CompileError::Codegen(e.to_string()))?;
+        }
+        Ok(body)
+    }
+
+    fn compile_wasm_to_builtin(
+        &self,
+        index: BuiltinFunctionIndex,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody, CompileError> {
+        let mut body = self.0.compile_wasm_to_builtin(index, symbol)?;
+        if let Some(c) = self.0.inlining_compiler() {
+            c.finish_compiling(&mut body, None, symbol)
+                .map_err(|e| CompileError::Codegen(e.to_string()))?;
+        }
+        Ok(body)
+    }
+
+    fn compiled_function_relocation_targets<'a>(
+        &'a self,
+        func: &'a dyn Any,
+    ) -> Box<dyn Iterator<Item = RelocationTarget> + 'a> {
+        self.0.compiled_function_relocation_targets(func)
+    }
+
+    fn append_code(
+        &self,
+        obj: &mut Object<'static>,
+        funcs: &[(String, Box<dyn Any + Send + Sync>)],
+        resolve_reloc: &dyn Fn(usize, RelocationTarget) -> usize,
+    ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
+        self.0.append_code(obj, funcs, resolve_reloc)
+    }
+
+    fn triple(&self) -> &target_lexicon::Triple {
+        self.0.triple()
+    }
+
+    fn flags(&self) -> Vec<(&'static str, wasmtime_environ::FlagValue<'static>)> {
+        self.0.flags()
+    }
+
+    fn isa_flags(&self) -> Vec<(&'static str, wasmtime_environ::FlagValue<'static>)> {
+        self.0.isa_flags()
+    }
+
+    fn is_branch_protection_enabled(&self) -> bool {
+        self.0.is_branch_protection_enabled()
+    }
+
+    #[cfg(feature = "component-model")]
+    fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
+        self
+    }
+
+    fn append_dwarf<'a>(
+        &self,
+        obj: &mut Object<'_>,
+        translations: &'a PrimaryMap<StaticModuleIndex, ModuleTranslation<'a>>,
+        get_func: &'a dyn Fn(
+            StaticModuleIndex,
+            DefinedFuncIndex,
+        ) -> (SymbolId, &'a (dyn Any + Send + Sync)),
+        dwarf_package_bytes: Option<&'a [u8]>,
+        tunables: &'a Tunables,
+    ) -> Result<()> {
+        self.0
+            .append_dwarf(obj, translations, get_func, dwarf_package_bytes, tunables)
+    }
+}
+
+#[cfg(feature = "component-model")]
+impl wasmtime_environ::component::ComponentCompiler for NoInlineCompiler {
+    fn compile_trampoline(
+        &self,
+        component: &wasmtime_environ::component::ComponentTranslation,
+        types: &wasmtime_environ::component::ComponentTypesBuilder,
+        trampoline: wasmtime_environ::component::TrampolineIndex,
+        tunables: &Tunables,
+        symbol: &str,
+    ) -> Result<wasmtime_environ::component::AllCallFunc<CompiledFunctionBody>> {
+        let mut body = self
+            .0
+            .component_compiler()
+            .compile_trampoline(component, types, trampoline, tunables, symbol)?;
+        if let Some(c) = self.0.inlining_compiler() {
+            c.finish_compiling(&mut body.array_call, None, symbol)
+                .map_err(|e| CompileError::Codegen(e.to_string()))?;
+            c.finish_compiling(&mut body.wasm_call, None, symbol)
+                .map_err(|e| CompileError::Codegen(e.to_string()))?;
+        }
+        Ok(body)
     }
 }

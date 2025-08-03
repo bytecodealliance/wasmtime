@@ -3,7 +3,7 @@ use wasmtime::{
     Store,
     component::{Component, Linker, ResourceTable},
 };
-use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView, bindings::Command};
+use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::bindings::Command};
 use wasmtime_wasi_tls::{LinkOptions, WasiTls, WasiTlsCtx, WasiTlsCtxBuilder};
 
 struct Ctx {
@@ -12,14 +12,12 @@ struct Ctx {
     wasi_tls_ctx: WasiTlsCtx,
 }
 
-impl IoView for Ctx {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-}
 impl WasiView for Ctx {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi_ctx
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi_ctx,
+            table: &mut self.table,
+        }
     }
 }
 
@@ -27,7 +25,7 @@ async fn run_test(path: &str) -> Result<()> {
     let provider = Box::new(wasmtime_wasi_tls_nativetls::NativeTlsProvider::default());
     let ctx = Ctx {
         table: ResourceTable::new(),
-        wasi_ctx: WasiCtxBuilder::new()
+        wasi_ctx: WasiCtx::builder()
             .inherit_stderr()
             .inherit_network()
             .allow_ip_name_lookup(true)

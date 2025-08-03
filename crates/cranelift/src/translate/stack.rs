@@ -1,15 +1,11 @@
-//! WebAssembly module and function translation state.
+//! State of the Wasm stack for translation into CLIF.
 //!
-//! The `FuncTranslationState` struct defined in this module is used to keep track of the WebAssembly
-//! value and control stacks during the translation of a single function.
+//! The `FuncTranslationStacks` struct defined in this module is used to keep
+//! track of the WebAssembly value and control stacks during the translation of
+//! a single function.
 
-use crate::func_environ::FuncEnvironment;
-use crate::translate::Heap;
-use crate::translate::environ::GlobalVariable;
 use cranelift_codegen::ir::{self, Block, Inst, Value};
-use std::collections::hash_map::{Entry::Occupied, Entry::Vacant, HashMap};
 use std::vec::Vec;
-use wasmtime_environ::{FuncIndex, GlobalIndex, MemoryIndex, TypeIndex, WasmResult};
 
 /// Information about the presence of an associated `else` for an `if`, or the
 /// lack thereof.
@@ -103,6 +99,7 @@ impl ControlStackFrame {
             } => num_return_values,
         }
     }
+
     pub fn num_param_values(&self) -> usize {
         match *self {
             Self::If {
@@ -116,6 +113,7 @@ impl ControlStackFrame {
             } => num_param_values,
         }
     }
+
     pub fn following_code(&self) -> Block {
         match *self {
             Self::If { destination, .. }
@@ -123,12 +121,14 @@ impl ControlStackFrame {
             | Self::Loop { destination, .. } => destination,
         }
     }
+
     pub fn br_destination(&self) -> Block {
         match *self {
             Self::If { destination, .. } | Self::Block { destination, .. } => destination,
             Self::Loop { header, .. } => header,
         }
     }
+
     /// Private helper. Use `truncate_value_stack_to_else_params()` or
     /// `truncate_value_stack_to_original_size()` to restore value-stack state.
     fn original_stack_size(&self) -> usize {
@@ -147,6 +147,7 @@ impl ControlStackFrame {
             } => original_stack_size,
         }
     }
+
     pub fn is_loop(&self) -> bool {
         match *self {
             Self::If { .. } | Self::Block { .. } => false,
@@ -193,7 +194,7 @@ impl ControlStackFrame {
     /// before this control-flow frame.
     pub fn truncate_value_stack_to_original_size(&self, stack: &mut Vec<Value>) {
         // The "If" frame pushes its parameters twice, so they're available to the else block
-        // (see also `FuncTranslationState::push_if`).
+        // (see also `FuncTranslationStacks::push_if`).
         // Yet, the original_stack_size member accounts for them only once, so that the else
         // block can see the same number of parameters as the consequent block. As a matter of
         // fact, we need to subtract an extra number of parameter values for if blocks.
@@ -210,12 +211,9 @@ impl ControlStackFrame {
     }
 }
 
-/// Contains information passed along during a function's translation and that records:
-///
-/// - The current value and control stacks.
-/// - The depth of the two unreachable control blocks stacks, that are manipulated when translating
-///   unreachable code;
-pub struct FuncTranslationState {
+/// Keeps track of Wasm's operand and control stacks, as well as reachability
+/// for each control frame.
+pub struct FuncTranslationStacks {
     /// A stack of values corresponding to the active values in the input wasm function at this
     /// point.
     pub(crate) stack: Vec<Value>,
@@ -224,26 +222,10 @@ pub struct FuncTranslationState {
     /// Is the current translation state still reachable? This is false when translating operators
     /// like End, Return, or Unreachable.
     pub(crate) reachable: bool,
-
-    // Map of global variables that have already been created by `FuncEnvironment::make_global`.
-    globals: HashMap<GlobalIndex, GlobalVariable>,
-
-    // Map of heaps that have been created by `FuncEnvironment::make_heap`.
-    memory_to_heap: HashMap<MemoryIndex, Heap>,
-
-    // Map of indirect call signatures that have been created by
-    // `FuncEnvironment::make_indirect_sig()`.
-    // Stores both the signature reference and the number of WebAssembly arguments
-    signatures: HashMap<TypeIndex, (ir::SigRef, usize)>,
-
-    // Imported and local functions that have been created by
-    // `FuncEnvironment::make_direct_func()`.
-    // Stores both the function reference and the number of WebAssembly arguments
-    functions: HashMap<FuncIndex, (ir::FuncRef, usize)>,
 }
 
 // Public methods that are exposed to non- API consumers.
-impl FuncTranslationState {
+impl FuncTranslationStacks {
     /// True if the current translation state expresses reachable code, false if it is unreachable.
     #[inline]
     pub fn reachable(&self) -> bool {
@@ -251,17 +233,13 @@ impl FuncTranslationState {
     }
 }
 
-impl FuncTranslationState {
-    /// Construct a new, empty, `FuncTranslationState`
+impl FuncTranslationStacks {
+    /// Construct a new, empty, `FuncTranslationStacks`
     pub(crate) fn new() -> Self {
         Self {
             stack: Vec::new(),
             control_stack: Vec::new(),
             reachable: true,
-            globals: HashMap::new(),
-            memory_to_heap: HashMap::new(),
-            signatures: HashMap::new(),
-            functions: HashMap::new(),
         }
     }
 
@@ -269,10 +247,6 @@ impl FuncTranslationState {
         debug_assert!(self.stack.is_empty());
         debug_assert!(self.control_stack.is_empty());
         self.reachable = true;
-        self.globals.clear();
-        self.memory_to_heap.clear();
-        self.signatures.clear();
-        self.functions.clear();
     }
 
     /// Initialize the state for compiling a function with the given signature.
@@ -459,88 +433,4 @@ impl FuncTranslationState {
             blocktype,
         });
     }
-}
-
-/// Methods for handling entity references.
-impl FuncTranslationState {
-    /// Get the `GlobalVariable` reference that should be used to access the global variable
-    /// `index`. Create the reference if necessary.
-    /// Also return the WebAssembly type of the global.
-    pub(crate) fn get_global(
-        &mut self,
-        func: &mut ir::Function,
-        index: u32,
-        environ: &mut FuncEnvironment<'_>,
-    ) -> WasmResult<GlobalVariable> {
-        let index = GlobalIndex::from_u32(index);
-        match self.globals.entry(index) {
-            Occupied(entry) => Ok(*entry.get()),
-            Vacant(entry) => Ok(*entry.insert(environ.make_global(func, index)?)),
-        }
-    }
-
-    /// Get the `Heap` reference that should be used to access linear memory `index`.
-    /// Create the reference if necessary.
-    pub(crate) fn get_heap(
-        &mut self,
-        func: &mut ir::Function,
-        index: u32,
-        environ: &mut FuncEnvironment<'_>,
-    ) -> WasmResult<Heap> {
-        let index = MemoryIndex::from_u32(index);
-        match self.memory_to_heap.entry(index) {
-            Occupied(entry) => Ok(*entry.get()),
-            Vacant(entry) => Ok(*entry.insert(environ.make_heap(func, index)?)),
-        }
-    }
-
-    /// Get the `SigRef` reference that should be used to make an indirect call with signature
-    /// `index`. Also return the number of WebAssembly arguments in the signature.
-    ///
-    /// Create the signature if necessary.
-    pub(crate) fn get_indirect_sig(
-        &mut self,
-        func: &mut ir::Function,
-        index: u32,
-        environ: &mut FuncEnvironment<'_>,
-    ) -> WasmResult<(ir::SigRef, usize)> {
-        let index = TypeIndex::from_u32(index);
-        match self.signatures.entry(index) {
-            Occupied(entry) => Ok(*entry.get()),
-            Vacant(entry) => {
-                let sig = environ.make_indirect_sig(func, index)?;
-                Ok(*entry.insert((sig, num_wasm_parameters(environ, &func.dfg.signatures[sig]))))
-            }
-        }
-    }
-
-    /// Get the `FuncRef` reference that should be used to make a direct call to function
-    /// `index`. Also return the number of WebAssembly arguments in the signature.
-    ///
-    /// Create the function reference if necessary.
-    pub(crate) fn get_direct_func(
-        &mut self,
-        func: &mut ir::Function,
-        index: u32,
-        environ: &mut FuncEnvironment<'_>,
-    ) -> WasmResult<(ir::FuncRef, usize)> {
-        let index = FuncIndex::from_u32(index);
-        match self.functions.entry(index) {
-            Occupied(entry) => Ok(*entry.get()),
-            Vacant(entry) => {
-                let fref = environ.make_direct_func(func, index)?;
-                let sig = func.dfg.ext_funcs[fref].signature;
-                Ok(*entry.insert((
-                    fref,
-                    num_wasm_parameters(environ, &func.dfg.signatures[sig]),
-                )))
-            }
-        }
-    }
-}
-
-fn num_wasm_parameters(environ: &FuncEnvironment<'_>, signature: &ir::Signature) -> usize {
-    (0..signature.params.len())
-        .filter(|index| environ.is_wasm_parameter(signature, *index))
-        .count()
 }

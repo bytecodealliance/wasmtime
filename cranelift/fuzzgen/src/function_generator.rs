@@ -1577,19 +1577,20 @@ where
     }
 
     fn generate_funcrefs(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        let usercalls: Vec<(ExternalName, Signature)> = self
+        let usercalls: Vec<_> = self
             .resources
             .usercalls
             .iter()
             .map(|(name, signature)| {
                 let user_func_ref = builder.func.declare_imported_user_function(name.clone());
                 let name = ExternalName::User(user_func_ref);
-                (name, signature.clone())
+                let never_colocated = false;
+                (name, signature.clone(), never_colocated)
             })
             .collect();
 
         let lib_callconv = self.system_callconv();
-        let libcalls: Vec<(ExternalName, Signature)> = self
+        let libcalls: Vec<_> = self
             .resources
             .libcalls
             .iter()
@@ -1600,16 +1601,24 @@ where
                 .unwrap();
                 let signature = libcall.signature(lib_callconv, pointer_type);
                 let name = ExternalName::LibCall(*libcall);
-                (name, signature)
+                // libcalls can't be colocated to generated code because we
+                // don't know where in the address space the function will go
+                // relative to where the libcall is.
+                let never_colocated = true;
+                (name, signature, never_colocated)
             })
             .collect();
 
-        for (name, signature) in usercalls.into_iter().chain(libcalls) {
+        for (name, signature, never_colocated) in usercalls.into_iter().chain(libcalls) {
             let sig_ref = builder.import_signature(signature.clone());
             let func_ref = builder.import_function(ExtFuncData {
                 name,
                 signature: sig_ref,
-                colocated: self.u.arbitrary()?,
+                colocated: if never_colocated {
+                    false
+                } else {
+                    self.u.arbitrary()?
+                },
             });
 
             self.resources

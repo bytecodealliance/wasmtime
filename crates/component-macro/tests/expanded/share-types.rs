@@ -52,6 +52,17 @@ impl<_T: 'static> HttpInterfacePre<_T> {
         self.indices.load(&mut store, &instance)
     }
 }
+impl<_T: Send + 'static> HttpInterfacePre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<HttpInterface> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
 /// Auto-generated bindings for index of the exports of
 /// `http-interface`.
 ///
@@ -144,12 +155,25 @@ const _: () = {
             let indices = HttpInterfaceIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
+        /// Convenience wrapper around [`HttpInterfacePre::new`] and
+        /// [`HttpInterfacePre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<HttpInterface>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            HttpInterfacePre::new(pre)?.instantiate_async(store).await
+        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::http_types::HostWithStore + http_fetch::HostWithStore,
             for<'a> D::Data<'a>: foo::foo::http_types::Host + http_fetch::Host,
             T: 'static,
         {
@@ -206,6 +230,11 @@ pub mod foo {
                     4 == < Response as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -213,7 +242,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -237,6 +266,11 @@ pub mod http_fetch {
         assert!(8 == < Response as wasmtime::component::ComponentType >::SIZE32);
         assert!(4 == < Response as wasmtime::component::ComponentType >::ALIGN32);
     };
+    pub trait HostWithStore: wasmtime::component::HasData {}
+    impl<_T: ?Sized> HostWithStore for _T
+    where
+        _T: wasmtime::component::HasData,
+    {}
     pub trait Host {
         fn fetch_request(&mut self, request: Request) -> Response;
     }
@@ -250,7 +284,7 @@ pub mod http_fetch {
         host_getter: fn(&mut T) -> D::Data<'_>,
     ) -> wasmtime::Result<()>
     where
-        D: wasmtime::component::HasData,
+        D: HostWithStore,
         for<'a> D::Data<'a>: Host,
         T: 'static,
     {
@@ -311,7 +345,7 @@ pub mod exports {
                         .ok_or_else(|| {
                             anyhow::anyhow!(
                                 "instance export `http-handler` does \
-            not have export `{name}`"
+              not have export `{name}`"
                             )
                         })
                 };

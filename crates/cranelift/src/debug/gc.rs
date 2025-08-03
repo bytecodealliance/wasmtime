@@ -1,10 +1,9 @@
+use crate::debug::Reader;
 use crate::debug::transform::AddressTransform;
-use crate::debug::{Compilation, Reader};
 use gimli::UnitSectionOffset;
 use gimli::constants;
 use gimli::read;
 use std::collections::{HashMap, HashSet};
-use wasmtime_environ::{PrimaryMap, StaticModuleIndex};
 
 #[derive(Debug)]
 pub struct Dependencies {
@@ -68,17 +67,13 @@ impl Dependencies {
 }
 
 pub fn build_dependencies(
-    compilation: &mut Compilation<'_>,
-    dwp: &Option<read::DwarfPackage<Reader<'_>>>,
-    at: &PrimaryMap<StaticModuleIndex, AddressTransform>,
+    dwarf: &read::Dwarf<Reader<'_>>,
+    at: &AddressTransform,
 ) -> read::Result<Dependencies> {
     let mut deps = Dependencies::new();
-    for (i, translation) in compilation.translations.iter() {
-        let dwarf = &translation.debuginfo.dwarf;
-        let mut units = dwarf.units();
-        while let Some(unit) = units.next()? {
-            build_unit_dependencies(unit, dwarf, dwp, &at[i], &mut deps)?;
-        }
+    let mut units = dwarf.units();
+    while let Some(unit) = units.next()? {
+        build_unit_dependencies(unit, dwarf, at, &mut deps)?;
     }
     Ok(deps)
 }
@@ -86,7 +81,6 @@ pub fn build_dependencies(
 fn build_unit_dependencies(
     header: read::UnitHeader<Reader<'_>>,
     dwarf: &read::Dwarf<Reader<'_>>,
-    dwp: &Option<read::DwarfPackage<Reader<'_>>>,
     at: &AddressTransform,
     deps: &mut Dependencies,
 ) -> read::Result<()> {
@@ -94,17 +88,6 @@ fn build_unit_dependencies(
     let mut tree = unit.entries_tree(None)?;
     let root = tree.root()?;
     build_die_dependencies(root, dwarf, &unit, at, deps)?;
-
-    if let Some(dwarf_package) = dwp {
-        if let Some(dwo_id) = unit.dwo_id {
-            if let Some(cu) = dwarf_package.find_cu(dwo_id, dwarf)? {
-                if let Some(unit_header) = cu.debug_info.units().next()? {
-                    build_unit_dependencies(unit_header, &cu, &None, at, deps)?;
-                }
-            }
-        }
-    }
-
     Ok(())
 }
 

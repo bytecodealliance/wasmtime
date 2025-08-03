@@ -73,7 +73,7 @@ pub trait Inline {
     /// Failure to uphold these invariants may result in panics during
     /// compilation or incorrect runtime behavior in the generated code.
     fn inline(
-        &self,
+        &mut self,
         caller: &ir::Function,
         call_inst: ir::Inst,
         call_opcode: ir::Opcode,
@@ -82,12 +82,12 @@ pub trait Inline {
     ) -> InlineCommand<'_>;
 }
 
-impl<'a, T> Inline for &'a T
+impl<'a, T> Inline for &'a mut T
 where
     T: Inline,
 {
     fn inline(
-        &self,
+        &mut self,
         caller: &ir::Function,
         inst: ir::Inst,
         opcode: ir::Opcode,
@@ -102,7 +102,12 @@ where
 /// instruction, and inline the callee when directed to do so.
 ///
 /// Returns whether any call was inlined.
-pub(crate) fn do_inlining(func: &mut ir::Function, inliner: impl Inline) -> CodegenResult<bool> {
+pub(crate) fn do_inlining(
+    func: &mut ir::Function,
+    mut inliner: impl Inline,
+) -> CodegenResult<bool> {
+    trace!("function {} before inlining: {}", func.name, func);
+
     let mut inlined_any = false;
     let mut allocs = InliningAllocs::default();
 
@@ -173,6 +178,12 @@ pub(crate) fn do_inlining(func: &mut ir::Function, inliner: impl Inline) -> Code
                 _ => continue,
             }
         }
+    }
+
+    if inlined_any {
+        trace!("function {} after inlining: {}", func.name, func);
+    } else {
+        trace!("function {} did not have any callees inlined", func.name);
     }
 
     Ok(inlined_any)

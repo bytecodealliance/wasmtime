@@ -176,12 +176,12 @@ pub trait RustGenerator<'a> {
             TypeDefKind::Future(ty) => {
                 let wt = self.wasmtime_path();
                 let t = self.optional_ty(ty.as_ref(), TypeMode::Owned);
-                format!("{wt}::component::HostFuture<{t}>")
+                format!("{wt}::component::FutureReader<{t}>")
             }
             TypeDefKind::Stream(ty) => {
                 let wt = self.wasmtime_path();
                 let t = self.optional_ty(ty.as_ref(), TypeMode::Owned);
-                format!("{wt}::component::HostStream<{t}>")
+                format!("{wt}::component::StreamReader<{t}>")
             }
             TypeDefKind::Handle(handle) => self.handle(handle),
             TypeDefKind::Resource => unreachable!(),

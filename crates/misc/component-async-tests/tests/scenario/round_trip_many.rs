@@ -15,7 +15,7 @@ use futures::{
 };
 use wasmtime::component::{Linker, ResourceTable, Val};
 use wasmtime::{Engine, Store};
-use wasmtime_wasi::p2::WasiCtxBuilder;
+use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::test]
 pub async fn async_round_trip_many_stackless() -> Result<()> {
@@ -325,16 +325,7 @@ async fn test_round_trip_many(
                     ),
                     round_trip_many
                         .local_local_many()
-                        .call_foo(
-                            &mut store,
-                            (*input).to_owned(),
-                            b,
-                            c.clone(),
-                            d,
-                            e.clone(),
-                            f.clone(),
-                            g.clone()
-                        )
+                        .call_foo(&mut store, input, b, &c, d, &e, f.as_ref(), Err(()))
                         .await?
                 );
             }

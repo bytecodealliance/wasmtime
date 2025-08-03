@@ -219,7 +219,7 @@ interface types {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
         /// - <https://man.freebsd.org/cgi/man.cgi?connect>
         @since(version = 0.3.0)
-        connect: func(remote-address: ip-socket-address) -> result<_, error-code>;
+        connect: async func(remote-address: ip-socket-address) -> result<_, error-code>;
 
         /// Start listening return a stream of new inbound connections.
         ///
@@ -309,7 +309,7 @@ interface types {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-send>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=send&sektion=2>
         @since(version = 0.3.0)
-        send: func(data: stream<u8>) -> result<_, error-code>;
+        send: async func(data: stream<u8>) -> result<_, error-code>;
 
         /// Read data from peer.
         ///
@@ -624,7 +624,7 @@ interface types {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsasendmsg>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=send&sektion=2>
         @since(version = 0.3.0)
-        send: func(data: list<u8>, remote-address: option<ip-socket-address>) -> result<_, error-code>;
+        send: async func(data: list<u8>, remote-address: option<ip-socket-address>) -> result<_, error-code>;
 
         /// Receive a message on the socket.
         ///
@@ -650,7 +650,7 @@ interface types {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/mswsock/nc-mswsock-lpfn_wsarecvmsg>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=recv&sektion=2>
         @since(version = 0.3.0)
-        receive: func() -> result<tuple<list<u8>, ip-socket-address>, error-code>;
+        receive: async func() -> result<tuple<list<u8>, ip-socket-address>, error-code>;
 
         /// Get the current bound address.
         ///

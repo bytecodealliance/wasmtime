@@ -42,6 +42,8 @@ Windows or otherwise interested users can download installers and
 binaries directly from the [GitHub
 Releases](https://github.com/bytecodealliance/wasmtime/releases) page.
 
+For additional installation options, refer to the [online book CLI installation page](https://docs.wasmtime.dev/cli-install.html).
+
 Documentation on Wasmtime's currently supported versions can be found [in the
 online book
 documentation](https://docs.wasmtime.dev/stability-release.html#current-versions).
@@ -65,7 +67,7 @@ rustup target add wasm32-wasip2
 rustc hello.rs --target wasm32-wasip2
 ```
 
-Once compiled, you can can run your component:
+Once compiled, you can run your component:
 
 ```console
 wasmtime hello.wasm

@@ -52,6 +52,17 @@ impl<_T: 'static> TheWorldPre<_T> {
         self.indices.load(&mut store, &instance)
     }
 }
+impl<_T: Send + 'static> TheWorldPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheWorld> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
 /// Auto-generated bindings for index of the exports of
 /// `the-world`.
 ///
@@ -144,12 +155,25 @@ const _: () = {
             let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
+        /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate_async(store).await
+        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::chars::HostWithStore,
             for<'a> D::Data<'a>: foo::foo::chars::Host,
             T: 'static,
         {
@@ -167,6 +191,11 @@ pub mod foo {
         pub mod chars {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {
                 /// A function that accepts a character
                 fn take_char(&mut self, x: char) -> ();
@@ -188,7 +217,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -258,7 +287,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/chars` does \
-                not have export `{name}`"
+                    not have export `{name}`"
                                     )
                                 })
                         };

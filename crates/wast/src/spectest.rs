@@ -105,16 +105,18 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
     i.instance("nested")?
         .func_wrap("return-four", |_, _: ()| Ok((4u32,)))?;
 
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-                (global (export "g") i32 i32.const 100)
-                (func (export "f") (result i32) i32.const 101)
-            )
-        "#,
-    )?;
-    i.module("simple-module", &module)?;
+    if !cfg!(miri) {
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (global (export "g") i32 i32.const 100)
+                    (func (export "f") (result i32) i32.const 101)
+                )
+            "#,
+        )?;
+        i.module("simple-module", &module)?;
+    }
 
     struct Resource1;
     struct Resource2;

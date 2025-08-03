@@ -73,7 +73,7 @@ make_vendor "wasi/src/p3" "
     clocks@13d1c82@wit-0.3.0-draft
     filesystem@e2a2ddc@wit-0.3.0-draft
     random@4e94663@wit-0.3.0-draft
-    sockets@bb247e2@wit-0.3.0-draft
+    sockets@e863ee2@wit-0.3.0-draft
 "
 
 rm -rf $cache_dir

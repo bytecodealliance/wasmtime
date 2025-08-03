@@ -13,7 +13,7 @@ use hyper::header::HeaderName;
 use std::any::Any;
 use std::time::Duration;
 use wasmtime::component::{Resource, ResourceTable};
-use wasmtime_wasi::p2::{IoImpl, IoView, Pollable};
+use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
 
 #[cfg(feature = "default-send-request")]
@@ -43,7 +43,7 @@ impl WasiHttpCtx {
 ///
 /// ```
 /// use wasmtime::component::ResourceTable;
-/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 ///
 /// struct MyState {
@@ -52,20 +52,20 @@ impl WasiHttpCtx {
 ///     table: ResourceTable,
 /// }
 ///
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
 /// impl WasiHttpView for MyState {
 ///     fn ctx(&mut self) -> &mut WasiHttpCtx { &mut self.http_ctx }
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 ///
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///     }
 /// }
 ///
 /// impl MyState {
 ///     fn new() -> MyState {
-///         let mut wasi = WasiCtxBuilder::new();
+///         let mut wasi = WasiCtx::builder();
 ///         wasi.arg("./foo.wasm");
 ///         wasi.arg("--help");
 ///         wasi.env("FOO", "bar");
@@ -78,9 +78,12 @@ impl WasiHttpCtx {
 ///     }
 /// }
 /// ```
-pub trait WasiHttpView: IoView {
+pub trait WasiHttpView {
     /// Returns a mutable reference to the WASI HTTP context.
     fn ctx(&mut self) -> &mut WasiHttpCtx;
+
+    /// Returns the table used to manage resources.
+    fn table(&mut self) -> &mut ResourceTable;
 
     /// Create a new incoming request resource.
     fn new_incoming_request<B>(
@@ -161,6 +164,10 @@ impl<T: ?Sized + WasiHttpView> WasiHttpView for &mut T {
         T::ctx(self)
     }
 
+    fn table(&mut self) -> &mut ResourceTable {
+        T::table(self)
+    }
+
     fn new_response_outparam(
         &mut self,
         result: tokio::sync::oneshot::Sender<
@@ -194,6 +201,10 @@ impl<T: ?Sized + WasiHttpView> WasiHttpView for &mut T {
 impl<T: ?Sized + WasiHttpView> WasiHttpView for Box<T> {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         T::ctx(self)
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        T::table(self)
     }
 
     fn new_response_outparam(
@@ -239,16 +250,15 @@ impl<T: ?Sized + WasiHttpView> WasiHttpView for Box<T> {
 /// [`add_to_linker_sync`](crate::add_to_linker_sync)
 /// and doesn't need to be manually configured.
 #[repr(transparent)]
-pub struct WasiHttpImpl<T>(pub IoImpl<T>);
+pub struct WasiHttpImpl<T>(pub T);
 
-impl<T: IoView> IoView for WasiHttpImpl<T> {
-    fn table(&mut self) -> &mut ResourceTable {
-        T::table(&mut self.0.0)
-    }
-}
 impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
-        self.0.0.ctx()
+        self.0.ctx()
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        self.0.table()
     }
 
     fn new_response_outparam(
@@ -257,7 +267,7 @@ impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
             Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>,
         >,
     ) -> wasmtime::Result<Resource<HostResponseOutparam>> {
-        self.0.0.new_response_outparam(result)
+        self.0.new_response_outparam(result)
     }
 
     fn send_request(
@@ -265,19 +275,19 @@ impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
         request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
     ) -> crate::HttpResult<HostFutureIncomingResponse> {
-        self.0.0.send_request(request, config)
+        self.0.send_request(request, config)
     }
 
     fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
-        self.0.0.is_forbidden_header(name)
+        self.0.is_forbidden_header(name)
     }
 
     fn outgoing_body_buffer_chunks(&mut self) -> usize {
-        self.0.0.outgoing_body_buffer_chunks()
+        self.0.outgoing_body_buffer_chunks()
     }
 
     fn outgoing_body_chunk_size(&mut self) -> usize {
-        self.0.0.outgoing_body_chunk_size()
+        self.0.outgoing_body_chunk_size()
     }
 }
 

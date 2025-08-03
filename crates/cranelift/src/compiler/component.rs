@@ -1,6 +1,9 @@
 //! Compilation support for the component model.
 
-use crate::{TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT, compiler::Compiler};
+use crate::{
+    TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT,
+    compiler::{Abi, Compiler},
+};
 use anyhow::Result;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
@@ -24,15 +27,6 @@ struct TrampolineCompiler<'a> {
     block0: ir::Block,
     signature: ModuleInternedTypeIndex,
     tunables: &'a Tunables,
-}
-
-/// ABI signature of functions that are generated here.
-#[derive(Debug, Copy, Clone)]
-enum Abi {
-    /// The "wasm" ABI, or suitable to be a `wasm_call` field of a `VMFuncRef`.
-    Wasm,
-    /// The "array" ABI, or suitable to be an `array_call` field.
-    Array,
 }
 
 /// What host functions can be called, used in `translate_hostcall` below.
@@ -1289,7 +1283,7 @@ impl ComponentCompiler for Compiler {
         types: &ComponentTypesBuilder,
         index: TrampolineIndex,
         tunables: &Tunables,
-        symbol: &str,
+        _symbol: &str,
     ) -> Result<AllCallFunc<CompiledFunctionBody>> {
         let compile = |abi: Abi| -> Result<_> {
             let mut compiler = self.function_compiler();
@@ -1333,15 +1327,14 @@ impl ComponentCompiler for Compiler {
 
             c.translate(&component.trampolines[index]);
             c.builder.finalize();
-            let symbol = match abi {
-                Abi::Wasm => format!("{symbol}_wasm_call"),
-                Abi::Array => format!("{symbol}_array_call"),
-            };
+            compiler.cx.abi = Some(abi);
+
             Ok(CompiledFunctionBody {
-                code: Box::new(compiler.finish(&symbol)?),
+                code: Box::new(Some(compiler.cx)),
                 needs_gc_heap: false,
             })
         };
+
         Ok(AllCallFunc {
             wasm_call: compile(Abi::Wasm)?,
             array_call: compile(Abi::Array)?,

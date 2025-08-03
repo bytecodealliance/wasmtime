@@ -1,6 +1,6 @@
 use crate::{IndexType, Limits, Memory, TripleExt};
-use anyhow::{Result, anyhow, bail};
-use core::fmt;
+use anyhow::{Error, Result, anyhow, bail};
+use core::{fmt, str::FromStr};
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
 
@@ -121,6 +121,21 @@ define_tunables! {
 
         /// Whether CoW images might be used to initialize linear memories.
         pub memory_init_cow: bool,
+
+        /// Whether to enable inlining in Wasmtime's compilation orchestration
+        /// or not.
+        pub inlining: bool,
+
+        /// Whether to inline calls within the same core Wasm module or not.
+        pub inlining_intra_module: IntraModuleInlining,
+
+        /// The size of "small callees" that can be inlined regardless of the
+        /// caller's size.
+        pub inlining_small_callee_size: u32,
+
+        /// The general size threshold for the sum of the caller's and callee's
+        /// sizes, past which we will generally not inline calls anymore.
+        pub inlining_sum_size_threshold: u32,
     }
 
     pub struct ConfigTunables {
@@ -191,6 +206,10 @@ impl Tunables {
             winch_callable: false,
             signals_based_traps: false,
             memory_init_cow: true,
+            inlining: false,
+            inlining_intra_module: IntraModuleInlining::WhenUsingGc,
+            inlining_small_callee_size: 50,
+            inlining_sum_size_threshold: 2000,
         }
     }
 
@@ -264,6 +283,31 @@ impl fmt::Display for Collector {
         match self {
             Collector::DeferredReferenceCounting => write!(f, "deferred reference-counting"),
             Collector::Null => write!(f, "null"),
+        }
+    }
+}
+
+/// Whether to inline function calls within the same module.
+#[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[expect(missing_docs, reason = "self-describing variants")]
+pub enum IntraModuleInlining {
+    Yes,
+    No,
+    WhenUsingGc,
+}
+
+impl FromStr for IntraModuleInlining {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "y" | "yes" | "true" => Ok(Self::Yes),
+            "n" | "no" | "false" => Ok(Self::No),
+            "gc" => Ok(Self::WhenUsingGc),
+            _ => bail!(
+                "invalid intra-module inlining option string: `{s}`, \
+                 only yes,no,gc accepted"
+            ),
         }
     }
 }

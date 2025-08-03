@@ -43,13 +43,21 @@ impl<_T: 'static> TheWorldPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheWorld> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> TheWorldPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<TheWorld>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<TheWorld> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -73,13 +81,13 @@ pub struct TheWorldIndices {
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`TheWorld::instantiate_async`] which only needs a
+///   [`TheWorld::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`TheWorldPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`TheWorldPre::instantiate_async`] to
+///   method then uses [`TheWorldPre::instantiate`] to
 ///   create a [`TheWorld`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -143,6 +151,25 @@ const _: () = {
     }
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`TheWorldIndices::new`] and
+        /// [`TheWorldIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<TheWorld> {
+            let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -154,15 +181,6 @@ const _: () = {
         {
             let pre = linker.instantiate_pre(component)?;
             TheWorldPre::new(pre)?.instantiate_async(store).await
-        }
-        /// Convenience wrapper around [`TheWorldIndices::new`] and
-        /// [`TheWorldIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<TheWorld> {
-            let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
         }
         pub async fn call_y<_T, _D>(
             &self,

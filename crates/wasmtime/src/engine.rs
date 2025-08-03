@@ -195,6 +195,40 @@ impl Engine {
             .collect::<Result<Vec<B>, E>>()
     }
 
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub(crate) fn run_maybe_parallel_mut<
+        T: Send,
+        E: Send,
+        F: Fn(&mut T) -> Result<(), E> + Send + Sync,
+    >(
+        &self,
+        input: &mut [T],
+        f: F,
+    ) -> Result<(), E> {
+        if self.config().parallel_compilation {
+            #[cfg(feature = "parallel-compilation")]
+            {
+                use rayon::prelude::*;
+                // If we collect into `Result<(), E>` directly, the returned
+                // error is not deterministic, because any error could be
+                // returned early. So we first materialize all results in order
+                // and then return the first error deterministically, or
+                // `Ok(_)`.
+                return input
+                    .into_par_iter()
+                    .map(|a| f(a))
+                    .collect::<Vec<Result<(), E>>>()
+                    .into_iter()
+                    .collect::<Result<(), E>>();
+            }
+        }
+
+        // In case the parallel-compilation feature is disabled or the
+        // parallel_compilation config was turned off dynamically fallback to
+        // the non-parallel version.
+        input.into_iter().map(|a| f(a)).collect::<Result<(), E>>()
+    }
+
     /// Take a weak reference to this engine.
     pub fn weak(&self) -> EngineWeak {
         EngineWeak {

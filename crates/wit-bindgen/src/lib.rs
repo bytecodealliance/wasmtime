@@ -29,9 +29,12 @@ macro_rules! uwriteln {
     };
 }
 
+mod config;
 mod rust;
 mod source;
 mod types;
+
+pub use config::{FunctionConfig, FunctionFilter, FunctionFlags};
 use source::Source;
 
 #[derive(Clone)]
@@ -65,11 +68,7 @@ struct Wasmtime {
     src: Source,
     opts: Opts,
     /// A list of all interfaces which were imported by this world.
-    ///
-    /// The first two values identify the interface; the third is the contents of the
-    /// module that this interface generated. The fourth value is the name of the
-    /// interface as also present in `self.interface_names`.
-    import_interfaces: Vec<(WorldKey, InterfaceId, String, InterfaceName)>,
+    import_interfaces: Vec<ImportInterface>,
     import_functions: Vec<Function>,
     exports: Exports,
     types: Types,
@@ -80,10 +79,15 @@ struct Wasmtime {
     // Track the with options that were used. Remapped interfaces provided via `with`
     // are required to be used.
     used_with_opts: HashSet<String>,
-    // Track the imports that matched the `trappable_imports` spec.
-    used_trappable_imports_opts: HashSet<String>,
     world_link_options: LinkOptionsBuilder,
     interface_link_options: HashMap<InterfaceId, LinkOptionsBuilder>,
+}
+
+struct ImportInterface {
+    id: InterfaceId,
+    contents: String,
+    name: InterfaceName,
+    all_func_flags: FunctionFlags,
 }
 
 #[derive(Default)]
@@ -124,31 +128,6 @@ pub struct Opts {
     /// Whether or not `rustfmt` is executed to format generated code.
     pub rustfmt: bool,
 
-    /// Whether or not to emit `tracing` macro calls on function entry/exit.
-    pub tracing: bool,
-
-    /// Whether or not `tracing` macro calls should included argument and
-    /// return values which contain dynamically-sized `list` values.
-    pub verbose_tracing: bool,
-
-    /// Whether or not to use async rust functions and traits.
-    pub async_: AsyncConfig,
-
-    /// Whether or not to use `func_wrap_concurrent` when generating code for
-    /// async imports.
-    ///
-    /// Unlike `func_wrap_async`, `func_wrap_concurrent` allows host functions
-    /// to suspend without monopolizing the `Store`, meaning other guest tasks
-    /// can make progress concurrently.
-    pub concurrent_imports: bool,
-
-    /// Whether or not to use `call_concurrent` when generating code for
-    /// async exports.
-    ///
-    /// Unlike `call_async`, `call_concurrent` allows the caller to make
-    /// multiple concurrent calls on the same component instance.
-    pub concurrent_exports: bool,
-
     /// A list of "trappable errors" which are used to replace the `E` in
     /// `result<T, E>` found in WIT.
     pub trappable_error_type: Vec<TrappableError>,
@@ -158,9 +137,6 @@ pub struct Opts {
 
     /// Whether or not to generate code for only the interfaces of this wit file or not.
     pub only_interfaces: bool,
-
-    /// Configuration of which imports are allowed to generate a trap.
-    pub trappable_imports: TrappableImports,
 
     /// Remapping of interface names to rust module names.
     /// TODO: is there a better type to use for the value of this map?
@@ -196,9 +172,14 @@ pub struct Opts {
     ///
     /// This can also be toggled via the `WASMTIME_DEBUG_BINDGEN` environment
     /// variable, but that will affect _all_ `bindgen!` macro invocations (and
-    /// can sometimes lead to one invocation ovewriting another in unpredictable
+    /// can sometimes lead to one invocation overwriting another in unpredictable
     /// ways), whereas this option lets you specify it on a case-by-case basis.
     pub debug: bool,
+
+    /// TODO
+    pub imports: FunctionConfig,
+    /// TODO
+    pub exports: FunctionConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -208,61 +189,6 @@ pub struct TrappableError {
 
     /// The name, in Rust, of the error type to generate.
     pub rust_type_name: String,
-}
-
-/// Which imports should be generated as async functions.
-///
-/// The imports should be declared in the following format:
-/// - Regular functions: `"{function-name}"`
-/// - Resource methods: `"[method]{resource-name}.{method-name}"`
-/// - Resource destructors: `"[drop]{resource-name}"`
-///
-/// Examples:
-/// - Regular function: `"get-environment"`
-/// - Resource method: `"[method]input-stream.read"`
-/// - Resource destructor: `"[drop]input-stream"`
-#[derive(Default, Debug, Clone)]
-pub enum AsyncConfig {
-    /// No functions are `async`.
-    #[default]
-    None,
-    /// All generated functions should be `async`.
-    All,
-    /// These imported functions should not be async, but everything else is.
-    AllExceptImports(HashSet<String>),
-    /// These functions are the only imports that are async, all other imports
-    /// are sync.
-    ///
-    /// Note that all exports are still async in this situation.
-    OnlyImports(HashSet<String>),
-}
-
-#[derive(PartialEq, Debug, Copy, Clone)]
-pub enum CallStyle {
-    Sync,
-    Async,
-    Concurrent,
-}
-
-#[derive(Default, Debug, Clone)]
-pub enum TrappableImports {
-    /// No imports are allowed to trap.
-    #[default]
-    None,
-    /// All imports may trap.
-    All,
-    /// Only the specified set of functions may trap.
-    Only(HashSet<String>),
-}
-
-impl TrappableImports {
-    fn can_trap(&self, f: &Function) -> bool {
-        match self {
-            TrappableImports::None => false,
-            TrappableImports::All => true,
-            TrappableImports::Only(set) => set.contains(&f.name),
-        }
-    }
 }
 
 impl Opts {
@@ -286,44 +212,6 @@ impl Opts {
         r.opts = self.clone();
         r.populate_world_and_interface_options(resolve, world);
         r.generate(resolve, world)
-    }
-
-    fn is_store_data_send(&self) -> bool {
-        matches!(self.call_style(), CallStyle::Async | CallStyle::Concurrent)
-            || self.require_store_data_send
-    }
-
-    pub fn import_call_style(&self, qualifier: Option<&str>, f: &str) -> CallStyle {
-        let matched = |names: &HashSet<String>| {
-            names.contains(f)
-                || qualifier
-                    .map(|v| names.contains(&format!("{v}#{f}")))
-                    .unwrap_or(false)
-        };
-
-        match &self.async_ {
-            AsyncConfig::AllExceptImports(names) if matched(names) => CallStyle::Sync,
-            AsyncConfig::OnlyImports(names) if !matched(names) => CallStyle::Sync,
-            _ => self.call_style(),
-        }
-    }
-
-    pub fn drop_call_style(&self, qualifier: Option<&str>, r: &str) -> CallStyle {
-        self.import_call_style(qualifier, &format!("[drop]{r}"))
-    }
-
-    pub fn call_style(&self) -> CallStyle {
-        match &self.async_ {
-            AsyncConfig::None => CallStyle::Sync,
-
-            AsyncConfig::All | AsyncConfig::AllExceptImports(_) | AsyncConfig::OnlyImports(_) => {
-                if self.concurrent_imports {
-                    CallStyle::Concurrent
-                } else {
-                    CallStyle::Async
-                }
-            }
-        }
     }
 }
 
@@ -569,12 +457,13 @@ impl Wasmtime {
                         "
                     )
                 };
-                self.import_interfaces.push((
-                    name.clone(),
-                    *id,
-                    module,
-                    self.interface_names[id].clone(),
-                ));
+                let all_func_flags = generator.all_func_flags;
+                self.import_interfaces.push(ImportInterface {
+                    id: *id,
+                    contents: module,
+                    name: self.interface_names[id].clone(),
+                    all_func_flags,
+                });
 
                 let interface_path = self.import_interface_path(id);
                 self.interface_link_options[id]
@@ -844,12 +733,6 @@ pub fn new<_T>(
         let wt = self.wasmtime_path();
         let world_name = &resolve.worlds[world].name;
         let camel = to_rust_upper_camel_case(&world_name);
-        let (async_, async__, where_clause, await_) = match self.opts.call_style() {
-            CallStyle::Async | CallStyle::Concurrent => {
-                ("async", "_async", "where _T: Send", ".await")
-            }
-            CallStyle::Sync => ("", "", "", ""),
-        };
         uwriteln!(
             self.src,
             "
@@ -901,19 +784,36 @@ impl<_T: 'static> {camel}Pre<_T> {{
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
-    pub {async_} fn instantiate{async__}(
+    pub fn instantiate(
         &self,
         mut store: impl {wt}::AsContextMut<Data = _T>,
-    ) -> {wt}::Result<{camel}>
-        {where_clause}
-    {{
+    ) -> {wt}::Result<{camel}> {{
         let mut store = store.as_context_mut();
-        let instance = self.instance_pre.instantiate{async__}(&mut store){await_}?;
+        let instance = self.instance_pre.instantiate(&mut store)?;
         self.indices.load(&mut store, &instance)
     }}
 }}
 "
         );
+
+        if cfg!(feature = "async") {
+            uwriteln!(
+                self.src,
+                "
+impl<_T: Send + 'static> {camel}Pre<_T> {{
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl {wt}::AsContextMut<Data = _T>,
+    ) -> {wt}::Result<{camel}> {{
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }}
+}}
+"
+            );
+        }
 
         uwriteln!(
             self.src,
@@ -943,13 +843,13 @@ impl<_T: 'static> {camel}Pre<_T> {{
                 /// depending on your requirements and what you have on hand:
                 ///
                 /// * The most convenient way is to use
-                ///   [`{camel}::instantiate{async__}`] which only needs a
+                ///   [`{camel}::instantiate`] which only needs a
                 ///   [`Store`], [`Component`], and [`Linker`].
                 ///
                 /// * Alternatively you can create a [`{camel}Pre`] ahead of
                 ///   time with a [`Component`] to front-load string lookups
                 ///   of exports once instead of per-instantiation. This
-                ///   method then uses [`{camel}Pre::instantiate{async__}`] to
+                ///   method then uses [`{camel}Pre::instantiate`] to
                 ///   create a [`{camel}`].
                 ///
                 /// * If you've instantiated the instance yourself already
@@ -1034,16 +934,14 @@ impl<_T: 'static> {camel}Pre<_T> {{
             self.src,
             "impl {camel} {{
                 /// Convenience wrapper around [`{camel}Pre::new`] and
-                /// [`{camel}Pre::instantiate{async__}`].
-                pub {async_} fn instantiate{async__}<_T>(
+                /// [`{camel}Pre::instantiate`].
+                pub fn instantiate<_T>(
                     store: impl {wt}::AsContextMut<Data = _T>,
                     component: &{wt}::component::Component,
                     linker: &{wt}::component::Linker<_T>,
-                ) -> {wt}::Result<{camel}>
-                    {where_clause}
-                {{
+                ) -> {wt}::Result<{camel}> {{
                     let pre = linker.instantiate_pre(component)?;
-                    {camel}Pre::new(pre)?.instantiate{async__}(store){await_}
+                    {camel}Pre::new(pre)?.instantiate(store)
                 }}
 
                 /// Convenience wrapper around [`{camel}Indices::new`] and
@@ -1057,6 +955,26 @@ impl<_T: 'static> {camel}Pre<_T> {{
                 }}
             ",
         );
+
+        if cfg!(feature = "async") {
+            uwriteln!(
+                self.src,
+                "
+                    /// Convenience wrapper around [`{camel}Pre::new`] and
+                    /// [`{camel}Pre::instantiate_async`].
+                    pub async fn instantiate_async<_T>(
+                        store: impl {wt}::AsContextMut<Data = _T>,
+                        component: &{wt}::component::Component,
+                        linker: &{wt}::component::Linker<_T>,
+                    ) -> {wt}::Result<{camel}>
+                        where _T: Send,
+                    {{
+                        let pre = linker.instantiate_pre(component)?;
+                        {camel}Pre::new(pre)?.instantiate_async(store).await
+                    }}
+                ",
+            );
+        }
         self.world_add_to_linker(resolve, world, world_trait.as_ref());
 
         for func in self.exports.funcs.iter() {
@@ -1088,25 +1006,14 @@ impl<_T: 'static> {camel}Pre<_T> {{
             self.build_world_struct(resolve, world)
         }
 
-        if let TrappableImports::Only(only) = &self.opts.trappable_imports {
-            let mut unused_imports = Vec::from_iter(
-                only.difference(&self.used_trappable_imports_opts)
-                    .map(|s| s.as_str()),
-            );
-
-            if !unused_imports.is_empty() {
-                unused_imports.sort();
-                anyhow::bail!(
-                    "names specified in the `trappable_imports` config option but are not referenced in the target world: {unused_imports:?}"
-                );
-            }
-        }
+        self.opts.imports.assert_all_rules_used("imports")?;
+        self.opts.exports.assert_all_rules_used("exports")?;
 
         let imports = mem::take(&mut self.import_interfaces);
         self.emit_modules(
             imports
                 .into_iter()
-                .map(|(_, id, module, path)| (id, module, path))
+                .map(|i| (i.id, i.contents, i.name))
                 .collect(),
         );
 
@@ -1394,12 +1301,12 @@ impl Wasmtime {
     fn import_interface_paths(&self) -> Vec<(InterfaceId, String)> {
         self.import_interfaces
             .iter()
-            .map(|(_, id, _, name)| {
-                let path = match name {
+            .map(|i| {
+                let path = match &i.name {
                     InterfaceName::Path(path) => path.join("::"),
                     InterfaceName::Remapped { name_at_root, .. } => name_at_root.clone(),
                 };
-                (*id, path)
+                (i.id, path)
             })
             .collect()
     }
@@ -1411,44 +1318,56 @@ impl Wasmtime {
         }
     }
 
-    fn import_interface_any_concurrent(&self, resolve: &Resolve, id: InterfaceId) -> bool {
-        for (key, id2, ..) in self.import_interfaces.iter() {
-            if id != *id2 {
+    fn import_interface_all_func_flags(&self, id: InterfaceId) -> FunctionFlags {
+        for i in self.import_interfaces.iter() {
+            if id != i.id {
                 continue;
             }
 
-            let key = resolve.name_world_key(key);
-            return resolve.interfaces[id].functions.iter().any(|(name, _)| {
-                self.opts.import_call_style(Some(&key), name) == CallStyle::Concurrent
-            });
+            return i.all_func_flags;
         }
         unreachable!()
     }
 
     fn world_host_traits(
         &self,
-        resolve: &Resolve,
         world_trait: Option<&GeneratedTrait>,
     ) -> (Vec<String>, Vec<String>) {
-        let mut sync = Vec::new();
-        let mut concurrent = Vec::new();
+        let mut without_store = Vec::new();
+        let mut without_store_async = false;
+        let mut with_store = Vec::new();
+        let mut with_store_async = false;
         for (id, path) in self.import_interface_paths() {
-            sync.push(format!("{path}::Host"));
-            if self.import_interface_any_concurrent(resolve, id) {
-                concurrent.push(format!("{path}::HostConcurrent"));
-            }
+            without_store.push(format!("{path}::Host"));
+            let flags = self.import_interface_all_func_flags(id);
+            without_store_async = without_store_async || flags.contains(FunctionFlags::ASYNC);
+
+            // Note that the requirement of `HostWithStore` is technically
+            // dependent on `FunctionFlags::STORE`, but when `with` is in use we
+            // don't necessarily know whether the other bindings generation
+            // specified this flag or not. To handle that always assume that a
+            // `HostWithStore` bound is needed.
+            with_store.push(format!("{path}::HostWithStore"));
+            with_store_async = with_store_async || flags.contains(FunctionFlags::ASYNC);
         }
         if let Some(world_trait) = world_trait {
-            sync.push(world_trait.name.clone());
-            concurrent.extend(world_trait.concurrent_name.clone());
-        }
-        if let CallStyle::Async | CallStyle::Concurrent = self.opts.call_style() {
-            sync.push("Send".to_string());
-            if !concurrent.is_empty() {
-                concurrent.push("Send".to_string());
+            without_store.push(world_trait.name.clone());
+            without_store_async =
+                without_store_async || world_trait.all_func_flags.contains(FunctionFlags::ASYNC);
+
+            if world_trait.with_store_name.is_some() {
+                with_store.extend(world_trait.with_store_name.clone());
+                with_store_async =
+                    with_store_async || world_trait.all_func_flags.contains(FunctionFlags::ASYNC);
             }
         }
-        (sync, concurrent)
+        if without_store_async {
+            without_store.push("Send".to_string());
+        }
+        if with_store_async {
+            with_store.push("Send".to_string());
+        }
+        (without_store, with_store)
     }
 
     fn world_add_to_linker(
@@ -1468,15 +1387,24 @@ impl Wasmtime {
             ("", "")
         };
 
-        let opt_t_send_bound = if self.opts.is_store_data_send() {
-            "+ Send"
-        } else {
-            ""
-        };
+        let mut all_func_flags = FunctionFlags::empty();
+        if let Some(world_trait) = world_trait {
+            all_func_flags |= world_trait.all_func_flags;
+        }
+        for i in self.import_interfaces.iter() {
+            all_func_flags |= i.all_func_flags;
+        }
+
+        let opt_t_send_bound =
+            if all_func_flags.contains(FunctionFlags::ASYNC) || self.opts.require_store_data_send {
+                "+ Send"
+            } else {
+                ""
+            };
 
         let wt = self.wasmtime_path();
         if let Some(world_trait) = world_trait {
-            let d_bound = match &world_trait.concurrent_name {
+            let d_bound = match &world_trait.with_store_name {
                 Some(name) => name.clone(),
                 None => format!("{wt}::component::HasData"),
             };
@@ -1498,16 +1426,8 @@ impl Wasmtime {
                 name = world_trait.name,
             );
             let gate = FeatureGate::open(&mut self.src, &resolve.worlds[world].stability);
-            for (ty, name) in get_world_resources(resolve, world) {
-                Self::generate_add_resource_to_linker(
-                    None,
-                    &mut self.src,
-                    &self.opts,
-                    &wt,
-                    "linker",
-                    name,
-                    &resolve.types[ty].stability,
-                );
+            for (ty, _name) in get_world_resources(resolve, world) {
+                self.generate_add_resource_to_linker(None, None, "linker", resolve, ty);
             }
             for f in self.import_functions.clone() {
                 let mut generator = InterfaceGenerator::new(self, resolve);
@@ -1520,7 +1440,7 @@ impl Wasmtime {
             uwriteln!(self.src, "Ok(())\n}}");
         }
 
-        let (sync_bounds, concurrent_bounds) = self.world_host_traits(resolve, world_trait);
+        let (sync_bounds, concurrent_bounds) = self.world_host_traits(world_trait);
         let sync_bounds = sync_bounds.join(" + ");
         let concurrent_bounds = concurrent_bounds.join(" + ");
         let d_bounds = if !concurrent_bounds.is_empty() {
@@ -1582,18 +1502,39 @@ impl Wasmtime {
     }
 
     fn generate_add_resource_to_linker(
-        qualifier: Option<&str>,
-        src: &mut Source,
-        opts: &Opts,
-        wt: &str,
+        &mut self,
+        key: Option<&WorldKey>,
+        src: Option<&mut Source>,
         inst: &str,
-        name: &str,
-        stability: &Stability,
+        resolve: &Resolve,
+        ty: TypeId,
     ) {
+        let ty = &resolve.types[ty];
+        let name = ty.name.as_ref().unwrap();
+        let stability = &ty.stability;
+        let wt = self.wasmtime_path();
+        let src = src.unwrap_or(&mut self.src);
         let gate = FeatureGate::open(src, stability);
         let camel = name.to_upper_camel_case();
-        if let CallStyle::Async | CallStyle::Concurrent = opts.drop_call_style(qualifier, name) {
-            uwriteln!(
+
+        let flags = self.opts.imports.resource_drop_flags(resolve, key, name);
+        if flags.contains(FunctionFlags::ASYNC) {
+            if flags.contains(FunctionFlags::STORE) {
+                uwriteln!(
+                    src,
+                    "{inst}.resource_concurrent(
+                        \"{name}\",
+                        {wt}::component::ResourceType::host::<{camel}>(),
+                        move |caller: &{wt}::component::Accessor::<T>, rep| {{
+                            {wt}::component::__internal::Box::pin(async move {{
+                                let accessor = &caller.with_data(host_getter);
+                                Host{camel}WithStore::drop(accessor, {wt}::component::Resource::new_own(rep)).await
+                            }})
+                        }},
+                    )?;"
+                )
+            } else {
+                uwriteln!(
                 src,
                 "{inst}.resource_async(
                     \"{name}\",
@@ -1605,6 +1546,7 @@ impl Wasmtime {
                     }},
                 )?;"
             )
+            }
         } else {
             uwriteln!(
                 src,
@@ -1626,6 +1568,7 @@ struct InterfaceGenerator<'a> {
     generator: &'a mut Wasmtime,
     resolve: &'a Resolve,
     current_interface: Option<(InterfaceId, &'a WorldKey, bool)>,
+    all_func_flags: FunctionFlags,
 }
 
 impl<'a> InterfaceGenerator<'a> {
@@ -1635,6 +1578,7 @@ impl<'a> InterfaceGenerator<'a> {
             generator,
             resolve,
             current_interface: None,
+            all_func_flags: FunctionFlags::empty(),
         }
     }
 
@@ -1714,12 +1658,13 @@ impl<'a> InterfaceGenerator<'a> {
             // Generate resource trait
 
             let functions = get_resource_functions(self.resolve, id);
-            self.generate_trait(
+            let trait_ = self.generate_trait(
                 &format!("Host{camel}"),
                 &functions,
                 &[ExtraTraitMethod::ResourceDrop { name }],
                 &[],
             );
+            self.all_func_flags |= trait_.all_func_flags;
         } else {
             self.rustdoc(docs);
             uwriteln!(
@@ -2267,10 +2212,6 @@ impl<'a> InterfaceGenerator<'a> {
         &mut self,
         func: &Function,
     ) -> Option<(&'a Result_, TypeId, String)> {
-        self.generator
-            .used_trappable_imports_opts
-            .insert(func.name.clone());
-
         let result = func.result?;
 
         // We fill in a special trappable error type in the case when a function has just one
@@ -2362,9 +2303,13 @@ impl<'a> InterfaceGenerator<'a> {
             &get_resources(self.resolve, id).collect::<Vec<_>>(),
         );
 
-        let opt_t_send_bound = match self.generator.opts.call_style() {
-            CallStyle::Async | CallStyle::Concurrent => "+ Send",
-            CallStyle::Sync => "",
+        let opt_t_send_bound = if generated_trait
+            .all_func_flags
+            .contains(FunctionFlags::ASYNC)
+        {
+            "+ Send"
+        } else {
+            ""
         };
 
         let mut sync_bounds = "Host".to_string();
@@ -2379,11 +2324,6 @@ impl<'a> InterfaceGenerator<'a> {
             ""
         };
 
-        let d_bound = if generated_trait.any_concurrent {
-            "HostConcurrent".to_string()
-        } else {
-            format!("{wt}::component::HasData")
-        };
         uwriteln!(
             self.src,
             "
@@ -2393,7 +2333,7 @@ impl<'a> InterfaceGenerator<'a> {
                     host_getter: fn(&mut T) -> D::Data<'_>,
                 ) -> {wt}::Result<()>
                     where
-                        D: {d_bound},
+                        D: HostWithStore,
                         for<'a> D::Data<'a>: {sync_bounds},
                         T: 'static {opt_t_send_bound},
                 {{
@@ -2403,15 +2343,13 @@ impl<'a> InterfaceGenerator<'a> {
         let gate = FeatureGate::open(&mut self.src, &iface.stability);
         uwriteln!(self.src, "let mut inst = linker.instance(\"{name}\")?;");
 
-        for (ty, name) in get_resources(self.resolve, id) {
-            Wasmtime::generate_add_resource_to_linker(
-                self.qualifier().as_deref(),
-                &mut self.src,
-                &self.generator.opts,
-                &wt,
+        for (ty, _name) in get_resources(self.resolve, id) {
+            self.generator.generate_add_resource_to_linker(
+                self.current_interface.map(|p| p.1),
+                Some(&mut self.src),
                 "inst",
-                name,
-                &self.resolve.types[ty].stability,
+                self.resolve,
+                ty,
             );
         }
 
@@ -2423,36 +2361,50 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, "}}");
     }
 
-    fn qualifier(&self) -> Option<String> {
-        self.current_interface
-            .map(|(_, key, _)| self.resolve.name_world_key(key))
+    fn import_resource_drop_flags(&mut self, name: &str) -> FunctionFlags {
+        self.generator.opts.imports.resource_drop_flags(
+            self.resolve,
+            self.current_interface.map(|p| p.1),
+            name,
+        )
     }
 
     fn generate_add_function_to_linker(&mut self, owner: TypeOwner, func: &Function, linker: &str) {
+        let flags = self.generator.opts.imports.flags(
+            self.resolve,
+            self.current_interface.map(|p| p.1),
+            func,
+        );
+        self.all_func_flags |= flags;
         let gate = FeatureGate::open(&mut self.src, &func.stability);
         uwrite!(
             self.src,
             "{linker}.{}(\"{}\", ",
-            match self.import_call_style(func) {
-                CallStyle::Sync => "func_wrap",
-                CallStyle::Async => "func_wrap_async",
-                CallStyle::Concurrent => "func_wrap_concurrent",
+            if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
+                "func_wrap_concurrent"
+            } else if flags.contains(FunctionFlags::ASYNC) {
+                "func_wrap_async"
+            } else {
+                "func_wrap"
             },
             func.name
         );
-        self.generate_guest_import_closure(owner, func);
+        self.generate_guest_import_closure(owner, func, flags);
         uwriteln!(self.src, ")?;");
         gate.close(&mut self.src);
     }
 
-    fn generate_guest_import_closure(&mut self, owner: TypeOwner, func: &Function) {
+    fn generate_guest_import_closure(
+        &mut self,
+        owner: TypeOwner,
+        func: &Function,
+        flags: FunctionFlags,
+    ) {
         // Generate the closure that's passed to a `Linker`, the final piece of
         // codegen here.
 
-        let style = self.import_call_style(func);
-
         let wt = self.generator.wasmtime_path();
-        if let CallStyle::Concurrent = style {
+        if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
             uwrite!(self.src, "move |caller: &{wt}::component::Accessor::<T>, (");
         } else {
             uwrite!(
@@ -2473,8 +2425,8 @@ impl<'a> InterfaceGenerator<'a> {
         }
         self.src.push_str(")| {\n");
 
-        if self.generator.opts.tracing {
-            if let CallStyle::Async | CallStyle::Concurrent = style {
+        if flags.contains(FunctionFlags::TRACING) {
+            if flags.contains(FunctionFlags::ASYNC) {
                 self.src.push_str("use tracing::Instrument;\n");
             }
 
@@ -2500,39 +2452,33 @@ impl<'a> InterfaceGenerator<'a> {
             );
         }
 
-        match &style {
-            CallStyle::Async => {
-                uwriteln!(
-                    self.src,
-                    "{wt}::component::__internal::Box::new(async move {{"
-                );
-            }
-            CallStyle::Concurrent => {
-                uwriteln!(
-                    self.src,
-                    "{wt}::component::__internal::Box::pin(async move {{
-                        let accessor = &mut unsafe {{ caller.with_data(host_getter) }};
-                    "
-                );
-            }
-            CallStyle::Sync => {
-                // Only directly enter the span if the function is sync. Otherwise
-                // we use tracing::Instrument to ensure that the span is not entered
-                // across an await point.
-                if self.generator.opts.tracing {
-                    self.push_str("let _enter = span.enter();\n");
-                }
+        if flags.contains(FunctionFlags::ASYNC) {
+            let ctor = if flags.contains(FunctionFlags::STORE) {
+                "pin"
+            } else {
+                "new"
+            };
+            uwriteln!(
+                self.src,
+                "{wt}::component::__internal::Box::{ctor}(async move {{"
+            );
+        } else {
+            // Only directly enter the span if the function is sync. Otherwise
+            // we use tracing::Instrument to ensure that the span is not entered
+            // across an await point.
+            if flags.contains(FunctionFlags::TRACING) {
+                self.push_str("let _enter = span.enter();\n");
             }
         }
 
-        if self.generator.opts.tracing {
+        if flags.contains(FunctionFlags::TRACING) {
             let mut event_fields = func
                 .params
                 .iter()
                 .enumerate()
                 .map(|(i, (name, ty))| {
                     let name = to_rust_ident(&name);
-                    formatting_for_arg(&name, i, *ty, &self.generator.opts, &self.resolve)
+                    formatting_for_arg(&name, i, *ty, &self.resolve, flags)
                 })
                 .collect::<Vec<String>>();
             event_fields.push(format!("\"call\""));
@@ -2543,7 +2489,9 @@ impl<'a> InterfaceGenerator<'a> {
             );
         }
 
-        if !matches!(style, CallStyle::Concurrent) {
+        if flags.contains(FunctionFlags::STORE) {
+            uwriteln!(self.src, "let accessor = &caller.with_data(host_getter);");
+        } else {
             self.src
                 .push_str("let host = &mut host_getter(caller.data_mut());\n");
         }
@@ -2566,10 +2514,10 @@ impl<'a> InterfaceGenerator<'a> {
             }
         };
 
-        if let CallStyle::Concurrent = &style {
+        if flags.contains(FunctionFlags::STORE) {
             uwrite!(
                 self.src,
-                "let r = <D as {host_trait}Concurrent>::{func_name}(accessor, "
+                "let r = <D as {host_trait}WithStore>::{func_name}(accessor, "
             );
         } else {
             uwrite!(self.src, "let r = {host_trait}::{func_name}(host, ");
@@ -2579,20 +2527,21 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "arg{},", i);
         }
 
-        self.src.push_str(match &style {
-            CallStyle::Sync => ");\n",
-            CallStyle::Async | CallStyle::Concurrent => ").await;\n",
+        self.src.push_str(if flags.contains(FunctionFlags::ASYNC) {
+            ").await;\n"
+        } else {
+            ");\n"
         });
 
-        if self.generator.opts.tracing {
+        if flags.contains(FunctionFlags::TRACING) {
             uwrite!(
                 self.src,
                 "tracing::event!(tracing::Level::TRACE, {}, \"return\");",
-                formatting_for_results(func.result, &self.generator.opts, &self.resolve)
+                formatting_for_results(func.result, &self.resolve, flags)
             );
         }
 
-        if !self.generator.opts.trappable_imports.can_trap(&func) {
+        if !flags.contains(FunctionFlags::TRAPPABLE) {
             if func.result.is_some() {
                 uwrite!(self.src, "Ok((r,))\n");
             } else {
@@ -2610,11 +2559,16 @@ impl<'a> InterfaceGenerator<'a> {
                 None => format!("Host"),
             };
             let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
+            let convert = if flags.contains(FunctionFlags::STORE) {
+                format!("accessor.with(|mut host| {convert}(&mut host.get(), e))?")
+            } else {
+                format!("{convert}(host, e)?")
+            };
             uwrite!(
                 self.src,
                 "Ok((match r {{
                     Ok(a) => Ok(a),
-                    Err(e) => Err({convert}(host, e)?),
+                    Err(e) => Err({convert}),
                 }},))"
             );
         } else if func.result.is_some() {
@@ -2623,49 +2577,43 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "r\n");
         }
 
-        match &style {
-            CallStyle::Sync => (),
-            CallStyle::Async | CallStyle::Concurrent => {
-                if self.generator.opts.tracing {
-                    self.src.push_str("}.instrument(span))\n");
-                } else {
-                    self.src.push_str("})\n");
-                }
+        if flags.contains(FunctionFlags::ASYNC) {
+            if flags.contains(FunctionFlags::TRACING) {
+                self.src.push_str("}.instrument(span))\n");
+            } else {
+                self.src.push_str("})\n");
             }
         }
 
         self.src.push_str("}\n");
     }
 
-    fn generate_function_trait_sig(&mut self, func: &Function, async_sugar: bool) {
+    fn generate_function_trait_sig(&mut self, func: &Function, flags: FunctionFlags) {
         let wt = self.generator.wasmtime_path();
         self.rustdoc(&func.docs);
 
-        let style = self.import_call_style(func);
-        if let (CallStyle::Async, _) | (CallStyle::Concurrent, true) = (&style, async_sugar) {
-            self.push_str("async ");
-        }
         self.push_str("fn ");
         self.push_str(&rust_function_name(func));
-        self.push_str(&if let CallStyle::Concurrent = &style {
-            format!("<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, ")
-        } else {
-            "(&mut self, ".to_string()
-        });
+        self.push_str(
+            &if flags.contains(FunctionFlags::STORE | FunctionFlags::ASYNC) {
+                format!("<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, ")
+            } else {
+                "(&mut self, ".to_string()
+            },
+        );
         self.generate_function_params(func);
         self.push_str(")");
         self.push_str(" -> ");
 
-        if let (CallStyle::Concurrent, false) = (&style, async_sugar) {
+        if flags.contains(FunctionFlags::ASYNC) {
             uwrite!(self.src, "impl ::core::future::Future<Output = ");
         }
 
-        self.generate_function_result(func);
+        self.all_func_flags |= flags;
+        self.generate_function_result(func, flags);
 
-        if let CallStyle::Concurrent = style {
-            if !async_sugar {
-                self.push_str("> + Send where Self: Sized,");
-            }
+        if flags.contains(FunctionFlags::ASYNC) {
+            self.push_str("> + Send");
         }
     }
 
@@ -2679,8 +2627,8 @@ impl<'a> InterfaceGenerator<'a> {
         }
     }
 
-    fn generate_function_result(&mut self, func: &Function) {
-        if !self.generator.opts.trappable_imports.can_trap(func) {
+    fn generate_function_result(&mut self, func: &Function, flags: FunctionFlags) {
+        if !flags.contains(FunctionFlags::TRAPPABLE) {
             self.print_result_ty(func.result, TypeMode::Owned);
         } else if let Some((r, _id, error_typename)) = self.special_case_trappable_error(func) {
             // Functions which have a single result `result<ok,err>` get special
@@ -2719,17 +2667,11 @@ impl<'a> InterfaceGenerator<'a> {
         ns: Option<&WorldKey>,
         func: &Function,
     ) {
-        // Exports must be async if anything could be async, it's just imports
-        // that get to be optionally async/sync.
-        let style = self.generator.opts.call_style();
-        let (async_, async__, await_, concurrent) = match &style {
-            CallStyle::Async | CallStyle::Concurrent => (
-                "async",
-                "_async",
-                ".await",
-                self.generator.opts.concurrent_exports,
-            ),
-            CallStyle::Sync => ("", "", "", false),
+        let flags = self.generator.opts.exports.flags(resolve, ns, func);
+        let (async_, async__, await_) = if flags.contains(FunctionFlags::ASYNC) {
+            ("async", "_async", ".await")
+        } else {
+            ("", "", "")
         };
 
         self.rustdoc(&func.docs);
@@ -2740,7 +2682,7 @@ impl<'a> InterfaceGenerator<'a> {
             "pub {async_} fn call_{}",
             func.item_name().to_snake_case(),
         );
-        if concurrent {
+        if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
             uwrite!(
                 self.src,
                 "<_T, _D>(&self, accessor: &{wt}::component::Accessor<_T, _D>, ",
@@ -2749,7 +2691,7 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "<S: {wt}::AsContextMut>(&self, mut store: S, ",);
         }
 
-        let param_mode = if let CallStyle::Concurrent = &style {
+        let param_mode = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
             TypeMode::Owned
         } else {
             TypeMode::AllBorrowed("'_")
@@ -2765,20 +2707,15 @@ impl<'a> InterfaceGenerator<'a> {
         self.print_result_ty(func.result, TypeMode::Owned);
         uwrite!(self.src, ">");
 
-        if concurrent {
+        if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
             uwrite!(self.src, " where _T: Send, _D: {wt}::component::HasData");
-        } else {
-            match style {
-                CallStyle::Concurrent | CallStyle::Async => {
-                    uwrite!(self.src, " where <S as {wt}::AsContext>::Data: Send");
-                }
-                CallStyle::Sync => {}
-            }
+        } else if flags.contains(FunctionFlags::ASYNC) {
+            uwrite!(self.src, " where <S as {wt}::AsContext>::Data: Send");
         }
         uwrite!(self.src, "{{\n");
 
-        if self.generator.opts.tracing {
-            if let CallStyle::Async | CallStyle::Concurrent = &style {
+        if flags.contains(FunctionFlags::TRACING) {
+            if flags.contains(FunctionFlags::ASYNC) {
                 self.src.push_str("use tracing::Instrument;\n");
             }
 
@@ -2798,7 +2735,7 @@ impl<'a> InterfaceGenerator<'a> {
                 func.name,
             ));
 
-            if !matches!(&style, CallStyle::Async | CallStyle::Concurrent) {
+            if !flags.contains(FunctionFlags::ASYNC) {
                 self.src.push_str(
                     "
                    let _enter = span.enter();
@@ -2829,7 +2766,7 @@ impl<'a> InterfaceGenerator<'a> {
         if func.result.is_some() {
             uwrite!(self.src, "ret0,");
         }
-        if concurrent {
+        if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
             uwrite!(self.src, ") = callee.call_concurrent(accessor, (");
         } else {
             uwrite!(
@@ -2841,24 +2778,20 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "arg{}, ", i);
         }
 
-        let instrument = if matches!(&style, CallStyle::Async | CallStyle::Concurrent)
-            && self.generator.opts.tracing
-        {
+        let instrument = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::TRACING) {
             ".instrument(span.clone())"
         } else {
             ""
         };
         uwriteln!(self.src, ")){instrument}{await_}?;");
 
-        let instrument = if matches!(&style, CallStyle::Async | CallStyle::Concurrent)
-            && self.generator.opts.tracing
-        {
+        let instrument = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::TRACING) {
             ".instrument(span)"
         } else {
             ""
         };
 
-        if !concurrent {
+        if !flags.contains(FunctionFlags::STORE) {
             uwriteln!(
                 self.src,
                 "callee.post_return{async__}(store.as_context_mut()){instrument}{await_}?;"
@@ -2907,24 +2840,22 @@ impl<'a> InterfaceGenerator<'a> {
         path_to_root
     }
 
-    fn import_call_style(&self, func: &Function) -> CallStyle {
-        self.generator
-            .opts
-            .import_call_style(self.qualifier().as_deref(), &func.name)
-    }
-
     fn partition_concurrent_funcs<'b>(
-        &self,
+        &mut self,
         funcs: impl IntoIterator<Item = &'b Function>,
     ) -> FunctionPartitioning<'b> {
-        let (concurrent, sync) =
-            funcs
-                .into_iter()
-                .partition(|func| match self.import_call_style(func) {
-                    CallStyle::Concurrent => true,
-                    CallStyle::Async | CallStyle::Sync => false,
-                });
-        FunctionPartitioning { concurrent, sync }
+        let key = self.current_interface.map(|p| p.1);
+        let (with_store, without_store) = funcs
+            .into_iter()
+            .map(|func| {
+                let flags = self.generator.opts.imports.flags(self.resolve, key, func);
+                (func, flags)
+            })
+            .partition(|(_, flags)| flags.contains(FunctionFlags::STORE));
+        FunctionPartitioning {
+            with_store,
+            without_store,
+        }
     }
 
     fn generate_trait(
@@ -2936,79 +2867,109 @@ impl<'a> InterfaceGenerator<'a> {
     ) -> GeneratedTrait {
         let mut ret = GeneratedTrait::default();
         let wt = self.generator.wasmtime_path();
-        let is_maybe_async = matches!(
-            self.generator.opts.call_style(),
-            CallStyle::Async | CallStyle::Concurrent
-        );
         let partition = self.partition_concurrent_funcs(functions.iter().copied());
-        ret.any_concurrent = !partition.concurrent.is_empty();
 
-        let mut concurrent_supertraits = vec![format!("{wt}::component::HasData")];
-        let mut sync_supertraits = vec![];
-        if is_maybe_async {
-            concurrent_supertraits.push("Send".to_string());
-            sync_supertraits.push("Send".to_string());
+        for (_, flags) in partition.with_store.iter().chain(&partition.without_store) {
+            ret.all_func_flags |= *flags;
         }
+
+        let mut with_store_supertraits = vec![format!("{wt}::component::HasData")];
+        let mut without_store_supertraits = vec![];
         for (id, name) in resources {
             let camel = name.to_upper_camel_case();
-            sync_supertraits.push(format!("Host{camel}"));
+            without_store_supertraits.push(format!("Host{camel}"));
             let funcs = self.partition_concurrent_funcs(get_resource_functions(self.resolve, *id));
-            if !funcs.concurrent.is_empty() {
-                ret.any_concurrent = true;
-                concurrent_supertraits.push(format!("Host{camel}Concurrent"));
+            for (_, flags) in funcs.with_store.iter().chain(&funcs.without_store) {
+                ret.all_func_flags |= *flags;
+            }
+            ret.all_func_flags |= self.import_resource_drop_flags(name);
+            with_store_supertraits.push(format!("Host{camel}WithStore"));
+        }
+        if ret.all_func_flags.contains(FunctionFlags::ASYNC) {
+            with_store_supertraits.push("Send".to_string());
+            without_store_supertraits.push("Send".to_string());
+        }
+
+        uwriteln!(
+            self.src,
+            "pub trait {trait_name}WithStore: {} {{",
+            with_store_supertraits.join(" + "),
+        );
+        ret.with_store_name = Some(format!("{trait_name}WithStore"));
+
+        let mut extra_with_store_function = false;
+        for extra in extra_functions {
+            match extra {
+                ExtraTraitMethod::ResourceDrop { name } => {
+                    let flags = self.import_resource_drop_flags(name);
+                    if !flags.contains(FunctionFlags::STORE) {
+                        continue;
+                    }
+                    let camel = name.to_upper_camel_case();
+
+                    assert!(flags.contains(FunctionFlags::ASYNC));
+
+                    uwrite!(
+                        self.src,
+                        "fn drop<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>) -> impl ::core::future::Future<Output = {wt}::Result<()>> + Send where Self: Sized;"
+                    );
+                    extra_with_store_function = true;
+                }
+                ExtraTraitMethod::ErrorConvert { .. } => {}
             }
         }
 
-        if ret.any_concurrent {
+        for (func, flags) in partition.with_store.iter() {
+            self.generate_function_trait_sig(func, *flags);
+            self.push_str(";\n");
+        }
+        uwriteln!(self.src, "}}");
+
+        // If `*WithStore` is empty, generate a blanket impl for the trait since
+        // it's otherwise not necessary to implement it manually.
+        if partition.with_store.is_empty() && !extra_with_store_function {
+            uwriteln!(self.src, "impl<_T: ?Sized> {trait_name}WithStore for _T");
             uwriteln!(
                 self.src,
-                "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]",
+                " where _T: {}",
+                with_store_supertraits.join(" + ")
             );
-            uwriteln!(
-                self.src,
-                "pub trait {trait_name}Concurrent: {} {{",
-                concurrent_supertraits.join(" + "),
-            );
-            ret.concurrent_name = Some(format!("{trait_name}Concurrent"));
-            for func in partition.concurrent.iter() {
-                self.generate_function_trait_sig(func, false);
-                self.push_str(";\n");
-            }
-            uwriteln!(self.src, "}}");
+
+            uwriteln!(self.src, "{{}}");
         }
 
-        if is_maybe_async {
-            uwriteln!(
-                self.src,
-                "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]",
-            );
-        }
         uwriteln!(
             self.src,
             "pub trait {trait_name}: {} {{",
-            sync_supertraits.join(" + ")
+            without_store_supertraits.join(" + ")
         );
         ret.name = trait_name.to_string();
-        for func in partition.sync.iter() {
-            self.generate_function_trait_sig(func, false);
+        for (func, flags) in partition.without_store.iter() {
+            self.generate_function_trait_sig(func, *flags);
             self.push_str(";\n");
         }
 
         for extra in extra_functions {
             match extra {
                 ExtraTraitMethod::ResourceDrop { name } => {
-                    let camel = name.to_upper_camel_case();
-                    if let CallStyle::Async | CallStyle::Concurrent = self
-                        .generator
-                        .opts
-                        .drop_call_style(self.qualifier().as_deref(), name)
-                    {
-                        uwrite!(self.src, "async ");
+                    let flags = self.import_resource_drop_flags(name);
+                    ret.all_func_flags |= flags;
+                    if flags.contains(FunctionFlags::STORE) {
+                        continue;
                     }
+                    let camel = name.to_upper_camel_case();
                     uwrite!(
                         self.src,
-                        "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()>;"
+                        "fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> "
                     );
+                    if flags.contains(FunctionFlags::ASYNC) {
+                        uwrite!(self.src, "impl ::core::future::Future<Output =");
+                    }
+                    uwrite!(self.src, "{wt}::Result<()>");
+                    if flags.contains(FunctionFlags::ASYNC) {
+                        uwrite!(self.src, "> + Send");
+                    }
+                    uwrite!(self.src, ";");
                 }
                 ExtraTraitMethod::ErrorConvert { name, id } => {
                     let root = self.path_to_root();
@@ -3032,38 +2993,45 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) -> {wt}::Result<{camel}>
         }
 
         // Generate impl HostResource for &mut HostResource
-        let maybe_send = if is_maybe_async { "+ Send" } else { "" };
+        let maybe_send = if ret.all_func_flags.contains(FunctionFlags::ASYNC) {
+            "+ Send"
+        } else {
+            ""
+        };
         uwriteln!(
             self.src,
             "impl <_T: {trait_name} + ?Sized {maybe_send}> {trait_name} for &mut _T {{"
         );
-        for func in partition.sync.iter() {
-            let call_style = self.import_call_style(func);
-            self.generate_function_trait_sig(func, true);
+        for (func, flags) in partition.without_store.iter() {
+            self.generate_function_trait_sig(func, *flags);
+            uwriteln!(self.src, "{{");
+            if flags.contains(FunctionFlags::ASYNC) {
+                uwriteln!(self.src, "async move {{");
+            }
             uwrite!(
                 self.src,
-                "{{ {trait_name}::{}(*self,",
+                "{trait_name}::{}(*self,",
                 rust_function_name(func)
             );
             for (name, _) in func.params.iter() {
                 uwrite!(self.src, "{},", to_rust_ident(name));
             }
             uwrite!(self.src, ")");
-            if let CallStyle::Async = &call_style {
-                uwrite!(self.src, ".await");
+            if flags.contains(FunctionFlags::ASYNC) {
+                uwrite!(self.src, ".await\n}}");
             }
             uwriteln!(self.src, "}}");
         }
         for extra in extra_functions {
             match extra {
                 ExtraTraitMethod::ResourceDrop { name } => {
+                    let flags = self.import_resource_drop_flags(name);
+                    if flags.contains(FunctionFlags::STORE) {
+                        continue;
+                    }
                     let camel = name.to_upper_camel_case();
                     let mut await_ = "";
-                    if let CallStyle::Async | CallStyle::Concurrent = self
-                        .generator
-                        .opts
-                        .drop_call_style(self.qualifier().as_deref(), name)
-                    {
+                    if flags.contains(FunctionFlags::ASYNC) {
                         self.src.push_str("async ");
                         await_ = ".await";
                     }
@@ -3104,15 +3072,15 @@ enum ExtraTraitMethod<'a> {
 }
 
 struct FunctionPartitioning<'a> {
-    sync: Vec<&'a Function>,
-    concurrent: Vec<&'a Function>,
+    without_store: Vec<(&'a Function, FunctionFlags)>,
+    with_store: Vec<(&'a Function, FunctionFlags)>,
 }
 
 #[derive(Default)]
 struct GeneratedTrait {
     name: String,
-    concurrent_name: Option<String>,
-    any_concurrent: bool,
+    with_store_name: Option<String>,
+    all_func_flags: FunctionFlags,
 }
 
 impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
@@ -3321,10 +3289,10 @@ fn formatting_for_arg(
     name: &str,
     index: usize,
     ty: Type,
-    opts: &Opts,
     resolve: &Resolve,
+    flags: FunctionFlags,
 ) -> String {
-    if !opts.verbose_tracing && type_contains_lists(ty, resolve) {
+    if !flags.contains(FunctionFlags::VERBOSE_TRACING) && type_contains_lists(ty, resolve) {
         return format!("{name} = tracing::field::debug(\"...\")");
     }
 
@@ -3333,13 +3301,13 @@ fn formatting_for_arg(
 }
 
 /// Produce a string for tracing function results.
-fn formatting_for_results(result: Option<Type>, opts: &Opts, resolve: &Resolve) -> String {
+fn formatting_for_results(result: Option<Type>, resolve: &Resolve, flags: FunctionFlags) -> String {
     let contains_lists = match result {
         Some(ty) => type_contains_lists(ty, resolve),
         None => false,
     };
 
-    if !opts.verbose_tracing && contains_lists {
+    if !flags.contains(FunctionFlags::VERBOSE_TRACING) && contains_lists {
         return format!("result = tracing::field::debug(\"...\")");
     }
 

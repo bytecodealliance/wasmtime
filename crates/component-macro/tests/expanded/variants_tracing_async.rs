@@ -43,13 +43,21 @@ impl<_T: 'static> MyWorldPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<MyWorld> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> MyWorldPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<MyWorld>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<MyWorld> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -73,13 +81,13 @@ pub struct MyWorldIndices {
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`MyWorld::instantiate_async`] which only needs a
+///   [`MyWorld::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`MyWorldPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`MyWorldPre::instantiate_async`] to
+///   method then uses [`MyWorldPre::instantiate`] to
 ///   create a [`MyWorld`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -131,6 +139,25 @@ const _: () = {
     }
     impl MyWorld {
         /// Convenience wrapper around [`MyWorldPre::new`] and
+        /// [`MyWorldPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<MyWorld> {
+            let pre = linker.instantiate_pre(component)?;
+            MyWorldPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`MyWorldIndices::new`] and
+        /// [`MyWorldIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<MyWorld> {
+            let indices = MyWorldIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`MyWorldPre::new`] and
         /// [`MyWorldPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -143,21 +170,12 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             MyWorldPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`MyWorldIndices::new`] and
-        /// [`MyWorldIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<MyWorld> {
-            let indices = MyWorldIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
-        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::variants::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::variants::Host + Send,
             T: 'static + Send,
         {
@@ -447,15 +465,34 @@ pub mod foo {
                 assert!(12 == < IsClone as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < IsClone as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait HostWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
             pub trait Host: Send {
-                async fn e1_arg(&mut self, x: E1) -> ();
-                async fn e1_result(&mut self) -> E1;
-                async fn v1_arg(&mut self, x: V1) -> ();
-                async fn v1_result(&mut self) -> V1;
-                async fn bool_arg(&mut self, x: bool) -> ();
-                async fn bool_result(&mut self) -> bool;
-                async fn option_arg(
+                fn e1_arg(
+                    &mut self,
+                    x: E1,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn e1_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = E1> + Send;
+                fn v1_arg(
+                    &mut self,
+                    x: V1,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn v1_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = V1> + Send;
+                fn bool_arg(
+                    &mut self,
+                    x: bool,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn bool_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = bool> + Send;
+                fn option_arg(
                     &mut self,
                     a: Option<bool>,
                     b: Option<()>,
@@ -463,18 +500,20 @@ pub mod foo {
                     d: Option<E1>,
                     e: Option<f32>,
                     g: Option<Option<bool>>,
-                ) -> ();
-                async fn option_result(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn option_result(
                     &mut self,
-                ) -> (
-                    Option<bool>,
-                    Option<()>,
-                    Option<u32>,
-                    Option<E1>,
-                    Option<f32>,
-                    Option<Option<bool>>,
-                );
-                async fn casts(
+                ) -> impl ::core::future::Future<
+                    Output = (
+                        Option<bool>,
+                        Option<()>,
+                        Option<u32>,
+                        Option<E1>,
+                        Option<f32>,
+                        Option<Option<bool>>,
+                    ),
+                > + Send;
+                fn casts(
                     &mut self,
                     a: Casts1,
                     b: Casts2,
@@ -482,8 +521,10 @@ pub mod foo {
                     d: Casts4,
                     e: Casts5,
                     f: Casts6,
-                ) -> (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6);
-                async fn result_arg(
+                ) -> impl ::core::future::Future<
+                    Output = (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),
+                > + Send;
+                fn result_arg(
                     &mut self,
                     a: Result<(), ()>,
                     b: Result<(), E1>,
@@ -494,50 +535,90 @@ pub mod foo {
                         wasmtime::component::__internal::String,
                         wasmtime::component::__internal::Vec<u8>,
                     >,
-                ) -> ();
-                async fn result_result(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn result_result(
                     &mut self,
-                ) -> (
-                    Result<(), ()>,
-                    Result<(), E1>,
-                    Result<E1, ()>,
-                    Result<(), ()>,
-                    Result<u32, V1>,
-                    Result<
-                        wasmtime::component::__internal::String,
-                        wasmtime::component::__internal::Vec<u8>,
-                    >,
-                );
-                async fn return_result_sugar(&mut self) -> Result<i32, MyErrno>;
-                async fn return_result_sugar2(&mut self) -> Result<(), MyErrno>;
-                async fn return_result_sugar3(&mut self) -> Result<MyErrno, MyErrno>;
-                async fn return_result_sugar4(&mut self) -> Result<(i32, u32), MyErrno>;
-                async fn return_option_sugar(&mut self) -> Option<i32>;
-                async fn return_option_sugar2(&mut self) -> Option<MyErrno>;
-                async fn result_simple(&mut self) -> Result<u32, i32>;
-                async fn is_clone_arg(&mut self, a: IsClone) -> ();
-                async fn is_clone_return(&mut self) -> IsClone;
+                ) -> impl ::core::future::Future<
+                    Output = (
+                        Result<(), ()>,
+                        Result<(), E1>,
+                        Result<E1, ()>,
+                        Result<(), ()>,
+                        Result<u32, V1>,
+                        Result<
+                            wasmtime::component::__internal::String,
+                            wasmtime::component::__internal::Vec<u8>,
+                        >,
+                    ),
+                > + Send;
+                fn return_result_sugar(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = Result<i32, MyErrno>> + Send;
+                fn return_result_sugar2(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = Result<(), MyErrno>> + Send;
+                fn return_result_sugar3(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = Result<MyErrno, MyErrno>,
+                > + Send;
+                fn return_result_sugar4(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = Result<(i32, u32), MyErrno>,
+                > + Send;
+                fn return_option_sugar(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = Option<i32>> + Send;
+                fn return_option_sugar2(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = Option<MyErrno>> + Send;
+                fn result_simple(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = Result<u32, i32>> + Send;
+                fn is_clone_arg(
+                    &mut self,
+                    a: IsClone,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn is_clone_return(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = IsClone> + Send;
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn e1_arg(&mut self, x: E1) -> () {
-                    Host::e1_arg(*self, x).await
+                fn e1_arg(
+                    &mut self,
+                    x: E1,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::e1_arg(*self, x).await }
                 }
-                async fn e1_result(&mut self) -> E1 {
-                    Host::e1_result(*self).await
+                fn e1_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = E1> + Send {
+                    async move { Host::e1_result(*self).await }
                 }
-                async fn v1_arg(&mut self, x: V1) -> () {
-                    Host::v1_arg(*self, x).await
+                fn v1_arg(
+                    &mut self,
+                    x: V1,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::v1_arg(*self, x).await }
                 }
-                async fn v1_result(&mut self) -> V1 {
-                    Host::v1_result(*self).await
+                fn v1_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = V1> + Send {
+                    async move { Host::v1_result(*self).await }
                 }
-                async fn bool_arg(&mut self, x: bool) -> () {
-                    Host::bool_arg(*self, x).await
+                fn bool_arg(
+                    &mut self,
+                    x: bool,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::bool_arg(*self, x).await }
                 }
-                async fn bool_result(&mut self) -> bool {
-                    Host::bool_result(*self).await
+                fn bool_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = bool> + Send {
+                    async move { Host::bool_result(*self).await }
                 }
-                async fn option_arg(
+                fn option_arg(
                     &mut self,
                     a: Option<bool>,
                     b: Option<()>,
@@ -545,22 +626,24 @@ pub mod foo {
                     d: Option<E1>,
                     e: Option<f32>,
                     g: Option<Option<bool>>,
-                ) -> () {
-                    Host::option_arg(*self, a, b, c, d, e, g).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::option_arg(*self, a, b, c, d, e, g).await }
                 }
-                async fn option_result(
+                fn option_result(
                     &mut self,
-                ) -> (
-                    Option<bool>,
-                    Option<()>,
-                    Option<u32>,
-                    Option<E1>,
-                    Option<f32>,
-                    Option<Option<bool>>,
-                ) {
-                    Host::option_result(*self).await
+                ) -> impl ::core::future::Future<
+                    Output = (
+                        Option<bool>,
+                        Option<()>,
+                        Option<u32>,
+                        Option<E1>,
+                        Option<f32>,
+                        Option<Option<bool>>,
+                    ),
+                > + Send {
+                    async move { Host::option_result(*self).await }
                 }
-                async fn casts(
+                fn casts(
                     &mut self,
                     a: Casts1,
                     b: Casts2,
@@ -568,10 +651,12 @@ pub mod foo {
                     d: Casts4,
                     e: Casts5,
                     f: Casts6,
-                ) -> (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6) {
-                    Host::casts(*self, a, b, c, d, e, f).await
+                ) -> impl ::core::future::Future<
+                    Output = (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),
+                > + Send {
+                    async move { Host::casts(*self, a, b, c, d, e, f).await }
                 }
-                async fn result_arg(
+                fn result_arg(
                     &mut self,
                     a: Result<(), ()>,
                     b: Result<(), E1>,
@@ -582,50 +667,75 @@ pub mod foo {
                         wasmtime::component::__internal::String,
                         wasmtime::component::__internal::Vec<u8>,
                     >,
-                ) -> () {
-                    Host::result_arg(*self, a, b, c, d, e, f).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::result_arg(*self, a, b, c, d, e, f).await }
                 }
-                async fn result_result(
+                fn result_result(
                     &mut self,
-                ) -> (
-                    Result<(), ()>,
-                    Result<(), E1>,
-                    Result<E1, ()>,
-                    Result<(), ()>,
-                    Result<u32, V1>,
-                    Result<
-                        wasmtime::component::__internal::String,
-                        wasmtime::component::__internal::Vec<u8>,
-                    >,
-                ) {
-                    Host::result_result(*self).await
+                ) -> impl ::core::future::Future<
+                    Output = (
+                        Result<(), ()>,
+                        Result<(), E1>,
+                        Result<E1, ()>,
+                        Result<(), ()>,
+                        Result<u32, V1>,
+                        Result<
+                            wasmtime::component::__internal::String,
+                            wasmtime::component::__internal::Vec<u8>,
+                        >,
+                    ),
+                > + Send {
+                    async move { Host::result_result(*self).await }
                 }
-                async fn return_result_sugar(&mut self) -> Result<i32, MyErrno> {
-                    Host::return_result_sugar(*self).await
+                fn return_result_sugar(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = Result<i32, MyErrno>> + Send {
+                    async move { Host::return_result_sugar(*self).await }
                 }
-                async fn return_result_sugar2(&mut self) -> Result<(), MyErrno> {
-                    Host::return_result_sugar2(*self).await
+                fn return_result_sugar2(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = Result<(), MyErrno>> + Send {
+                    async move { Host::return_result_sugar2(*self).await }
                 }
-                async fn return_result_sugar3(&mut self) -> Result<MyErrno, MyErrno> {
-                    Host::return_result_sugar3(*self).await
+                fn return_result_sugar3(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = Result<MyErrno, MyErrno>,
+                > + Send {
+                    async move { Host::return_result_sugar3(*self).await }
                 }
-                async fn return_result_sugar4(&mut self) -> Result<(i32, u32), MyErrno> {
-                    Host::return_result_sugar4(*self).await
+                fn return_result_sugar4(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = Result<(i32, u32), MyErrno>,
+                > + Send {
+                    async move { Host::return_result_sugar4(*self).await }
                 }
-                async fn return_option_sugar(&mut self) -> Option<i32> {
-                    Host::return_option_sugar(*self).await
+                fn return_option_sugar(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = Option<i32>> + Send {
+                    async move { Host::return_option_sugar(*self).await }
                 }
-                async fn return_option_sugar2(&mut self) -> Option<MyErrno> {
-                    Host::return_option_sugar2(*self).await
+                fn return_option_sugar2(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = Option<MyErrno>> + Send {
+                    async move { Host::return_option_sugar2(*self).await }
                 }
-                async fn result_simple(&mut self) -> Result<u32, i32> {
-                    Host::result_simple(*self).await
+                fn result_simple(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = Result<u32, i32>> + Send {
+                    async move { Host::result_simple(*self).await }
                 }
-                async fn is_clone_arg(&mut self, a: IsClone) -> () {
-                    Host::is_clone_arg(*self, a).await
+                fn is_clone_arg(
+                    &mut self,
+                    a: IsClone,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::is_clone_arg(*self, a).await }
                 }
-                async fn is_clone_return(&mut self) -> IsClone {
-                    Host::is_clone_return(*self).await
+                fn is_clone_return(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = IsClone> + Send {
+                    async move { Host::is_clone_return(*self).await }
                 }
             }
             pub fn add_to_linker<T, D>(
@@ -633,7 +743,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1634,7 +1744,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/variants` does \
-                    not have export `{name}`"
+                                                            not have export `{name}`"
                                     )
                                 })
                         };

@@ -625,7 +625,7 @@ dependencies = [
  "test-programs-artifacts",
  "tokio",
  "wasm-compose",
- "wasmparser 0.235.0",
+ "wasmparser 0.236.0",
  "wasmtime",
  "wasmtime-wasi",
 ]
@@ -2172,6 +2172,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "json-from-wast"
+version = "0.236.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be48c53af281152b0d01019f15b87b9f37f92c3a3c11b003a5ee3ccf2901bb35"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_derive",
+ "wast 236.0.0",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3636,7 +3648,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-test-util",
  "wat",
- "wit-component",
+ "wit-component 0.236.0",
 ]
 
 [[package]]
@@ -3899,17 +3911,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "trait-variant"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70977707304198400eb4835a78f6a9f928bf41bba420deb8fdb175cd965d77a7"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.100",
-]
-
-[[package]]
 name = "try-lock"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4068,7 +4069,7 @@ name = "verify-component-adapter"
 version = "36.0.0"
 dependencies = [
  "anyhow",
- "wasmparser 0.235.0",
+ "wasmparser 0.236.0",
  "wat",
 ]
 
@@ -4178,7 +4179,7 @@ dependencies = [
  "byte-array-literals",
  "object 0.37.1",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "wasm-encoder",
+ "wasm-encoder 0.236.0",
  "wit-bindgen-rust-macro",
 ]
 
@@ -4239,9 +4240,9 @@ checksum = "6ee99da9c5ba11bd675621338ef6fa52296b76b83305e9b6e5c77d4c286d6d49"
 
 [[package]]
 name = "wasm-compose"
-version = "0.235.0"
+version = "0.236.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa7ed9b34419145180cd3069525ee0945f93d97c0fc192d7a85d15c82527373b"
+checksum = "98b5290a0aca685aab16c936f682b85e8e4e3a0bfe1843afd43372eb82e34f47"
 dependencies = [
  "anyhow",
  "heck 0.4.1",
@@ -4253,8 +4254,8 @@ dependencies = [
  "serde_derive",
  "serde_yaml",
  "smallvec",
- "wasm-encoder",
- "wasmparser 0.235.0",
+ "wasm-encoder 0.236.0",
+ "wasmparser 0.236.0",
  "wat",
 ]
 
@@ -4269,6 +4270,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-encoder"
+version = "0.236.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3108979166ab0d3c7262d2e16a2190ffe784b2a5beb963edef154b5e8e07680b"
+dependencies = [
+ "leb128fmt",
+ "wasmparser 0.236.0",
+]
+
+[[package]]
 name = "wasm-metadata"
 version = "0.235.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4276,36 +4287,48 @@ checksum = "b055604ba04189d54b8c0ab2c2fc98848f208e103882d5c0b984f045d5ea4d20"
 dependencies = [
  "anyhow",
  "indexmap 2.7.0",
- "wasm-encoder",
+ "wasm-encoder 0.235.0",
  "wasmparser 0.235.0",
+]
+
+[[package]]
+name = "wasm-metadata"
+version = "0.236.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12ac1c212d9a151aefa45403315d8eb5c81d64dd06103e2d5e0f351034f20169"
+dependencies = [
+ "anyhow",
+ "indexmap 2.7.0",
+ "wasm-encoder 0.236.0",
+ "wasmparser 0.236.0",
 ]
 
 [[package]]
 name = "wasm-mutate"
-version = "0.235.0"
+version = "0.236.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8917477e93c5c48b6d0dc9f94ea5d6fe9a0ccc3576cbb618f049011cc7e9261"
+checksum = "52e91c171e64b6ea23b1e799f8d3cb8cd240b1922fb16e8f6af4b9969697a024"
 dependencies = [
  "egg",
  "log",
- "rand 0.8.5",
- "thiserror 1.0.65",
- "wasm-encoder",
- "wasmparser 0.235.0",
+ "rand 0.9.2",
+ "thiserror 2.0.12",
+ "wasm-encoder 0.236.0",
+ "wasmparser 0.236.0",
 ]
 
 [[package]]
 name = "wasm-smith"
-version = "0.235.0"
+version = "0.236.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3be2ca016817c0732fdb615d41183ecd6fee1a0052c838b3cdffaa66e141883"
+checksum = "36cbd9a143df8edb4dc307571399965e951f4998e4fbe7418f308c46fe41dd56"
 dependencies = [
  "anyhow",
  "arbitrary",
  "flagset",
  "serde",
  "serde_derive",
- "wasm-encoder",
+ "wasm-encoder 0.236.0",
  "wat",
 ]
 
@@ -4319,14 +4342,14 @@ dependencies = [
 
 [[package]]
 name = "wasm-wave"
-version = "0.235.0"
+version = "0.236.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "034bc908dc5c1257ffc63b42c7ac7039092bd369e858c5e78e3242b662a8b7d1"
+checksum = "9270d950e101bfa3a3af3ef1de16c5f27ec304b129bc3e61b81f04b84fbd70e6"
 dependencies = [
  "indexmap 2.7.0",
  "logos",
- "thiserror 1.0.65",
- "wit-parser",
+ "thiserror 2.0.12",
+ "wit-parser 0.236.0",
 ]
 
 [[package]]
@@ -4393,18 +4416,30 @@ dependencies = [
  "hashbrown 0.15.2",
  "indexmap 2.7.0",
  "semver",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.236.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16d1eee846a705f6f3cb9d7b9f79b54583810f1fb57a1e3aea76d1742db2e3d2"
+dependencies = [
+ "bitflags 2.6.0",
+ "hashbrown 0.15.2",
+ "indexmap 2.7.0",
+ "semver",
  "serde",
 ]
 
 [[package]]
 name = "wasmprinter"
-version = "0.235.0"
+version = "0.236.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75aa8e9076de6b9544e6dab4badada518cca0bf4966d35b131bbd057aed8fa0a"
+checksum = "a64dc32256b566259d30be300eb142f366343b98f42077216c7dd5e0cf4dc086"
 dependencies = [
  "anyhow",
  "termcolor",
- "wasmparser 0.235.0",
+ "wasmparser 0.236.0",
 ]
 
 [[package]]
@@ -4448,11 +4483,10 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "tempfile",
- "trait-variant",
  "wasi-common",
- "wasm-encoder",
+ "wasm-encoder 0.236.0",
  "wasm-wave",
- "wasmparser 0.235.0",
+ "wasmparser 0.236.0",
  "wasmtime-environ",
  "wasmtime-internal-asm-macros",
  "wasmtime-internal-cache",
@@ -4482,9 +4516,9 @@ dependencies = [
  "clap",
  "shuffling-allocator",
  "target-lexicon",
- "wasi-common",
  "wasmtime",
  "wasmtime-cli-flags",
+ "wasmtime-wasi",
  "wasmtime-wasi-nn",
  "wat",
 ]
@@ -4559,11 +4593,10 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "trait-variant",
  "walkdir",
  "wasi-common",
- "wasm-encoder",
- "wasmparser 0.235.0",
+ "wasm-encoder 0.236.0",
+ "wasmparser 0.236.0",
  "wasmtime",
  "wasmtime-cli-flags",
  "wasmtime-environ",
@@ -4581,10 +4614,10 @@ dependencies = [
  "wasmtime-wasi-threads",
  "wasmtime-wasi-tls",
  "wasmtime-wast",
- "wast 235.0.0",
+ "wast 236.0.0",
  "wat",
  "windows-sys 0.60.2",
- "wit-component",
+ "wit-component 0.236.0",
 ]
 
 [[package]]
@@ -4623,8 +4656,8 @@ dependencies = [
  "serde_derive",
  "smallvec",
  "target-lexicon",
- "wasm-encoder",
- "wasmparser 0.235.0",
+ "wasm-encoder 0.236.0",
+ "wasmparser 0.236.0",
  "wasmprinter",
  "wasmtime-internal-component-util",
  "wat",
@@ -4637,7 +4670,7 @@ dependencies = [
  "arbitrary",
  "env_logger 0.11.5",
  "libfuzzer-sys",
- "wasmparser 0.235.0",
+ "wasmparser 0.236.0",
  "wasmprinter",
  "wasmtime-environ",
  "wasmtime-test-util",
@@ -4661,13 +4694,16 @@ dependencies = [
  "env_logger 0.11.5",
  "libfuzzer-sys",
  "log",
+ "mutatis",
+ "postcard",
  "proc-macro2",
  "pulley-interpreter-fuzz",
  "quote",
  "rand 0.8.5",
+ "rand 0.9.2",
  "smallvec",
  "target-lexicon",
- "wasmparser 0.235.0",
+ "wasmparser 0.236.0",
  "wasmtime",
  "wasmtime-fuzzing",
  "wasmtime-test-util",
@@ -4685,17 +4721,18 @@ dependencies = [
  "mutatis",
  "rand 0.8.5",
  "rayon",
+ "serde",
  "serde_json",
  "smallvec",
  "target-lexicon",
  "tempfile",
  "v8",
- "wasm-encoder",
+ "wasm-encoder 0.236.0",
  "wasm-mutate",
  "wasm-smith",
  "wasm-spec-interpreter",
  "wasmi",
- "wasmparser 0.235.0",
+ "wasmparser 0.236.0",
  "wasmprinter",
  "wasmtime",
  "wasmtime-cli-flags",
@@ -4757,7 +4794,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-internal-component-util",
  "wasmtime-internal-wit-bindgen",
- "wit-parser",
+ "wit-parser 0.236.0",
 ]
 
 [[package]]
@@ -4783,7 +4820,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "thiserror 2.0.12",
- "wasmparser 0.235.0",
+ "wasmparser 0.236.0",
  "wasmtime-environ",
  "wasmtime-internal-math",
  "wasmtime-internal-versioned-export-macros",
@@ -4879,7 +4916,7 @@ dependencies = [
  "gimli 0.32.0",
  "object 0.37.1",
  "target-lexicon",
- "wasmparser 0.235.0",
+ "wasmparser 0.236.0",
  "wasmtime-environ",
  "wasmtime-internal-cranelift",
  "winch-codegen",
@@ -4890,9 +4927,10 @@ name = "wasmtime-internal-wit-bindgen"
 version = "36.0.0"
 dependencies = [
  "anyhow",
+ "bitflags 2.6.0",
  "heck 0.5.0",
  "indexmap 2.7.0",
- "wit-parser",
+ "wit-parser 0.236.0",
 ]
 
 [[package]]
@@ -4941,6 +4979,7 @@ dependencies = [
  "cap-rand",
  "cap-std",
  "cap-time-ext",
+ "env_logger 0.11.5",
  "fs-set-times",
  "futures",
  "io-extras",
@@ -5091,10 +5130,14 @@ name = "wasmtime-wast"
 version = "36.0.0"
 dependencies = [
  "anyhow",
+ "json-from-wast",
  "log",
+ "object 0.37.1",
+ "serde_json",
  "tokio",
+ "wasmparser 0.236.0",
  "wasmtime",
- "wast 235.0.0",
+ "wast 236.0.0",
 ]
 
 [[package]]
@@ -5108,25 +5151,25 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "235.0.0"
+version = "236.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1eda4293f626c99021bb3a6fbe4fbbe90c0e31a5ace89b5f620af8925de72e13"
+checksum = "11d6b6faeab519ba6fbf9b26add41617ca6f5553f99ebc33d876e591d2f4f3c6"
 dependencies = [
  "bumpalo",
  "gimli 0.31.1",
  "leb128fmt",
  "memchr",
  "unicode-width 0.2.0",
- "wasm-encoder",
+ "wasm-encoder 0.236.0",
 ]
 
 [[package]]
 name = "wat"
-version = "1.235.0"
+version = "1.236.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e777e0327115793cb96ab220b98f85327ec3d11f34ec9e8d723264522ef206aa"
+checksum = "cc31704322400f461f7f31a5f9190d5488aaeafb63ae69ad2b5888d2704dcb08"
 dependencies = [
- "wast 235.0.0",
+ "wast 236.0.0",
 ]
 
 [[package]]
@@ -5256,7 +5299,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "thiserror 2.0.12",
- "wasmparser 0.235.0",
+ "wasmparser 0.236.0",
  "wasmtime-environ",
  "wasmtime-internal-cranelift",
  "wasmtime-internal-math",
@@ -5503,7 +5546,7 @@ checksum = "2c53468e077362201de11999c85c07c36e12048a990a3e0d69da2bd61da355d0"
 dependencies = [
  "anyhow",
  "heck 0.5.0",
- "wit-parser",
+ "wit-parser 0.235.0",
 ]
 
 [[package]]
@@ -5546,9 +5589,9 @@ dependencies = [
  "indexmap 2.7.0",
  "prettyplease",
  "syn 2.0.100",
- "wasm-metadata",
+ "wasm-metadata 0.235.0",
  "wit-bindgen-core",
- "wit-component",
+ "wit-component 0.235.0",
 ]
 
 [[package]]
@@ -5579,10 +5622,29 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "wasm-encoder",
- "wasm-metadata",
+ "wasm-encoder 0.235.0",
+ "wasm-metadata 0.235.0",
  "wasmparser 0.235.0",
- "wit-parser",
+ "wit-parser 0.235.0",
+]
+
+[[package]]
+name = "wit-component"
+version = "0.236.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f1404fddf6cdadb06a0812faa433c03208f444b867543814aa36a6322f33684"
+dependencies = [
+ "anyhow",
+ "bitflags 2.6.0",
+ "indexmap 2.7.0",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "wasm-encoder 0.236.0",
+ "wasm-metadata 0.236.0",
+ "wasmparser 0.236.0",
+ "wit-parser 0.236.0",
 ]
 
 [[package]]
@@ -5601,6 +5663,24 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser 0.235.0",
+]
+
+[[package]]
+name = "wit-parser"
+version = "0.236.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c643fd8e1a5c25a6d50299f8047e9a61e31cb486f8e230e944408da9b63a859"
+dependencies = [
+ "anyhow",
+ "id-arena",
+ "indexmap 2.7.0",
+ "log",
+ "semver",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "unicode-xid",
+ "wasmparser 0.236.0",
 ]
 
 [[package]]

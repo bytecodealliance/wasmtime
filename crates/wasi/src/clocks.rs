@@ -2,28 +2,6 @@ use cap_std::time::{Duration, Instant, SystemClock};
 use cap_std::{AmbientAuthority, ambient_authority};
 use cap_time_ext::{MonotonicClockExt as _, SystemClockExt as _};
 
-impl<T: WasiClocksView> WasiClocksView for &mut T {
-    fn clocks(&mut self) -> &mut WasiClocksCtx {
-        T::clocks(self)
-    }
-}
-
-impl<T: WasiClocksView> WasiClocksView for Box<T> {
-    fn clocks(&mut self) -> &mut WasiClocksCtx {
-        T::clocks(self)
-    }
-}
-
-impl WasiClocksView for WasiClocksCtx {
-    fn clocks(&mut self) -> &mut WasiClocksCtx {
-        self
-    }
-}
-
-pub trait WasiClocksView: Send {
-    fn clocks(&mut self) -> &mut WasiClocksCtx;
-}
-
 pub struct WasiClocksCtx {
     pub wall_clock: Box<dyn HostWallClock + Send>,
     pub monotonic_clock: Box<dyn HostMonotonicClock + Send>,
@@ -35,6 +13,16 @@ impl Default for WasiClocksCtx {
             wall_clock: wall_clock(),
             monotonic_clock: monotonic_clock(),
         }
+    }
+}
+
+pub trait WasiClocksView: Send {
+    fn clocks(&mut self) -> &mut WasiClocksCtx;
+}
+
+impl WasiClocksView for WasiClocksCtx {
+    fn clocks(&mut self) -> &mut WasiClocksCtx {
+        self
     }
 }
 

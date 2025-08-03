@@ -16,8 +16,7 @@ pub mod cli;
 pub mod clocks;
 mod ctx;
 mod error;
-mod fs;
-mod net;
+mod filesystem;
 pub mod p2;
 #[cfg(feature = "p3")]
 pub mod p3;
@@ -27,13 +26,16 @@ pub mod preview0;
 pub mod preview1;
 pub mod random;
 pub mod runtime;
+pub mod sockets;
+mod view;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
-pub(crate) use self::ctx::WasiCtxBuilder;
+pub use self::ctx::{WasiCtx, WasiCtxBuilder};
 pub use self::error::{I32Exit, TrappableError};
-pub use self::fs::{DirPerms, FilePerms, OpenMode};
-pub use self::net::{Network, SocketAddrUse};
+pub use self::filesystem::{DirPerms, FilePerms, OpenMode};
 pub use self::random::{Deterministic, thread_rng};
+pub use self::sockets::{AllowedNetworkUses, SocketAddrUse};
+pub use self::view::{WasiCtxView, WasiView};
 #[doc(no_inline)]
 pub use async_trait::async_trait;
 #[doc(no_inline)]

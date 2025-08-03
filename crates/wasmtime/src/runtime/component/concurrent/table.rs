@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::vec::{self, Vec};
+use std::vec::Vec;
 
 pub struct TableId<T> {
     rep: u32,
@@ -356,32 +356,12 @@ impl Table {
         }
         Ok(e)
     }
-}
 
-pub struct TableIterator(vec::IntoIter<Entry>);
-
-impl Iterator for TableIterator {
-    type Item = Box<dyn Any + Send + Sync>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(entry) = self.0.next() {
-                if let Entry::Occupied { entry } = entry {
-                    break Some(entry.entry);
-                }
-            } else {
-                break None;
-            }
-        }
-    }
-}
-
-impl IntoIterator for Table {
-    type Item = Box<dyn Any + Send + Sync>;
-    type IntoIter = TableIterator;
-
-    fn into_iter(self) -> TableIterator {
-        TableIterator(self.entries.into_iter())
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (dyn Any + Send + Sync)> {
+        self.entries.iter_mut().filter_map(|entry| match entry {
+            Entry::Occupied { entry } => Some(&mut *entry.entry),
+            Entry::Free { .. } => None,
+        })
     }
 }
 

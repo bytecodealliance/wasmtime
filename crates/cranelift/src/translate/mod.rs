@@ -14,13 +14,13 @@ mod code_translator;
 mod environ;
 mod func_translator;
 mod heap;
-mod state;
+mod stack;
 mod table;
 mod translation_utils;
 
 pub use self::environ::{GlobalVariable, StructFieldsVec, TargetEnvironment};
 pub use self::func_translator::FuncTranslator;
 pub use self::heap::{Heap, HeapData};
-pub use self::state::FuncTranslationState;
+pub use self::stack::FuncTranslationStacks;
 pub use self::table::{TableData, TableSize};
 pub use self::translation_utils::*;

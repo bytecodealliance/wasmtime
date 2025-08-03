@@ -1,23 +1,41 @@
 pub enum WorldResource {}
-#[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+pub trait HostWorldResourceWithStore: wasmtime::component::HasData + Send {}
+impl<_T: ?Sized> HostWorldResourceWithStore for _T
+where
+    _T: wasmtime::component::HasData + Send,
+{}
 pub trait HostWorldResource: Send {
-    async fn new(&mut self) -> wasmtime::component::Resource<WorldResource>;
-    async fn foo(&mut self, self_: wasmtime::component::Resource<WorldResource>) -> ();
-    async fn static_foo(&mut self) -> ();
-    async fn drop(
+    fn new(
+        &mut self,
+    ) -> impl ::core::future::Future<
+        Output = wasmtime::component::Resource<WorldResource>,
+    > + Send;
+    fn foo(
+        &mut self,
+        self_: wasmtime::component::Resource<WorldResource>,
+    ) -> impl ::core::future::Future<Output = ()> + Send;
+    fn static_foo(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
+    fn drop(
         &mut self,
         rep: wasmtime::component::Resource<WorldResource>,
-    ) -> wasmtime::Result<()>;
+    ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send;
 }
 impl<_T: HostWorldResource + ?Sized + Send> HostWorldResource for &mut _T {
-    async fn new(&mut self) -> wasmtime::component::Resource<WorldResource> {
-        HostWorldResource::new(*self).await
+    fn new(
+        &mut self,
+    ) -> impl ::core::future::Future<
+        Output = wasmtime::component::Resource<WorldResource>,
+    > + Send {
+        async move { HostWorldResource::new(*self).await }
     }
-    async fn foo(&mut self, self_: wasmtime::component::Resource<WorldResource>) -> () {
-        HostWorldResource::foo(*self, self_).await
+    fn foo(
+        &mut self,
+        self_: wasmtime::component::Resource<WorldResource>,
+    ) -> impl ::core::future::Future<Output = ()> + Send {
+        async move { HostWorldResource::foo(*self, self_).await }
     }
-    async fn static_foo(&mut self) -> () {
-        HostWorldResource::static_foo(*self).await
+    fn static_foo(&mut self) -> impl ::core::future::Future<Output = ()> + Send {
+        async move { HostWorldResource::static_foo(*self).await }
     }
     async fn drop(
         &mut self,
@@ -71,13 +89,21 @@ impl<_T: 'static> TheWorldPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheWorld> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> TheWorldPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<TheWorld>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<TheWorld> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -102,13 +128,13 @@ pub struct TheWorldIndices {
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`TheWorld::instantiate_async`] which only needs a
+///   [`TheWorld::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`TheWorldPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`TheWorldPre::instantiate_async`] to
+///   method then uses [`TheWorldPre::instantiate`] to
 ///   create a [`TheWorld`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -124,13 +150,25 @@ pub struct TheWorld {
     interface1: exports::foo::foo::uses_resource_transitively::Guest,
     some_world_func2: wasmtime::component::Func,
 }
-#[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-pub trait TheWorldImports: Send + HostWorldResource {
-    async fn some_world_func(&mut self) -> wasmtime::component::Resource<WorldResource>;
+pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostWorldResourceWithStore + Send {}
+impl<_T: ?Sized> TheWorldImportsWithStore for _T
+where
+    _T: wasmtime::component::HasData + HostWorldResourceWithStore + Send,
+{}
+pub trait TheWorldImports: HostWorldResource + Send {
+    fn some_world_func(
+        &mut self,
+    ) -> impl ::core::future::Future<
+        Output = wasmtime::component::Resource<WorldResource>,
+    > + Send;
 }
 impl<_T: TheWorldImports + ?Sized + Send> TheWorldImports for &mut _T {
-    async fn some_world_func(&mut self) -> wasmtime::component::Resource<WorldResource> {
-        TheWorldImports::some_world_func(*self).await
+    fn some_world_func(
+        &mut self,
+    ) -> impl ::core::future::Future<
+        Output = wasmtime::component::Resource<WorldResource>,
+    > + Send {
+        async move { TheWorldImports::some_world_func(*self).await }
     }
 }
 const _: () = {
@@ -209,6 +247,25 @@ const _: () = {
     }
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`TheWorldIndices::new`] and
+        /// [`TheWorldIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<TheWorld> {
+            let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -221,21 +278,12 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             TheWorldPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`TheWorldIndices::new`] and
-        /// [`TheWorldIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<TheWorld> {
-            let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
-        }
         pub fn add_to_linker_imports<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: TheWorldImportsWithStore,
             for<'a> D::Data<'a>: TheWorldImports,
             T: 'static + Send,
         {
@@ -308,7 +356,13 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::resources::HostWithStore
+                + foo::foo::long_use_chain1::HostWithStore
+                + foo::foo::long_use_chain2::HostWithStore
+                + foo::foo::long_use_chain3::HostWithStore
+                + foo::foo::long_use_chain4::HostWithStore
+                + foo::foo::transitive_interface_with_resource::HostWithStore
+                + TheWorldImportsWithStore + Send,
             for<'a> D::Data<
                 'a,
             >: foo::foo::resources::Host + foo::foo::long_use_chain1::Host
@@ -361,31 +415,47 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Bar {}
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait HostBarWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostBarWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
             pub trait HostBar: Send {
-                async fn new(&mut self) -> wasmtime::component::Resource<Bar>;
-                async fn static_a(&mut self) -> u32;
-                async fn method_a(
+                fn new(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = wasmtime::component::Resource<Bar>,
+                > + Send;
+                fn static_a(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = u32> + Send;
+                fn method_a(
                     &mut self,
                     self_: wasmtime::component::Resource<Bar>,
-                ) -> u32;
-                async fn drop(
+                ) -> impl ::core::future::Future<Output = u32> + Send;
+                fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Bar>,
-                ) -> wasmtime::Result<()>;
+                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send;
             }
             impl<_T: HostBar + ?Sized + Send> HostBar for &mut _T {
-                async fn new(&mut self) -> wasmtime::component::Resource<Bar> {
-                    HostBar::new(*self).await
+                fn new(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = wasmtime::component::Resource<Bar>,
+                > + Send {
+                    async move { HostBar::new(*self).await }
                 }
-                async fn static_a(&mut self) -> u32 {
-                    HostBar::static_a(*self).await
+                fn static_a(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = u32> + Send {
+                    async move { HostBar::static_a(*self).await }
                 }
-                async fn method_a(
+                fn method_a(
                     &mut self,
                     self_: wasmtime::component::Resource<Bar>,
-                ) -> u32 {
-                    HostBar::method_a(*self, self_).await
+                ) -> impl ::core::future::Future<Output = u32> + Send {
+                    async move { HostBar::method_a(*self, self_).await }
                 }
                 async fn drop(
                     &mut self,
@@ -449,173 +519,223 @@ pub mod foo {
                     4 == < SomeHandle as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait Host: Send + HostBar {
-                async fn bar_own_arg(
+            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostBarWithStore + Send,
+            {}
+            pub trait Host: HostBar + Send {
+                fn bar_own_arg(
                     &mut self,
                     x: wasmtime::component::Resource<Bar>,
-                ) -> ();
-                async fn bar_borrow_arg(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn bar_borrow_arg(
                     &mut self,
                     x: wasmtime::component::Resource<Bar>,
-                ) -> ();
-                async fn bar_result(&mut self) -> wasmtime::component::Resource<Bar>;
-                async fn tuple_own_arg(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn bar_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = wasmtime::component::Resource<Bar>,
+                > + Send;
+                fn tuple_own_arg(
                     &mut self,
                     x: (wasmtime::component::Resource<Bar>, u32),
-                ) -> ();
-                async fn tuple_borrow_arg(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn tuple_borrow_arg(
                     &mut self,
                     x: (wasmtime::component::Resource<Bar>, u32),
-                ) -> ();
-                async fn tuple_result(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn tuple_result(
                     &mut self,
-                ) -> (wasmtime::component::Resource<Bar>, u32);
-                async fn option_own_arg(
-                    &mut self,
-                    x: Option<wasmtime::component::Resource<Bar>>,
-                ) -> ();
-                async fn option_borrow_arg(
+                ) -> impl ::core::future::Future<
+                    Output = (wasmtime::component::Resource<Bar>, u32),
+                > + Send;
+                fn option_own_arg(
                     &mut self,
                     x: Option<wasmtime::component::Resource<Bar>>,
-                ) -> ();
-                async fn option_result(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn option_borrow_arg(
                     &mut self,
-                ) -> Option<wasmtime::component::Resource<Bar>>;
-                async fn result_own_arg(
+                    x: Option<wasmtime::component::Resource<Bar>>,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn option_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = Option<wasmtime::component::Resource<Bar>>,
+                > + Send;
+                fn result_own_arg(
                     &mut self,
                     x: Result<wasmtime::component::Resource<Bar>, ()>,
-                ) -> ();
-                async fn result_borrow_arg(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn result_borrow_arg(
                     &mut self,
                     x: Result<wasmtime::component::Resource<Bar>, ()>,
-                ) -> ();
-                async fn result_result(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn result_result(
                     &mut self,
-                ) -> Result<wasmtime::component::Resource<Bar>, ()>;
-                async fn list_own_arg(
+                ) -> impl ::core::future::Future<
+                    Output = Result<wasmtime::component::Resource<Bar>, ()>,
+                > + Send;
+                fn list_own_arg(
                     &mut self,
                     x: wasmtime::component::__internal::Vec<
                         wasmtime::component::Resource<Bar>,
                     >,
-                ) -> ();
-                async fn list_borrow_arg(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn list_borrow_arg(
                     &mut self,
                     x: wasmtime::component::__internal::Vec<
                         wasmtime::component::Resource<Bar>,
                     >,
-                ) -> ();
-                async fn list_result(
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn list_result(
                     &mut self,
-                ) -> wasmtime::component::__internal::Vec<
-                    wasmtime::component::Resource<Bar>,
-                >;
-                async fn record_own_arg(&mut self, x: NestedOwn) -> ();
-                async fn record_borrow_arg(&mut self, x: NestedBorrow) -> ();
-                async fn record_result(&mut self) -> NestedOwn;
-                async fn func_with_handle_typedef(&mut self, x: SomeHandle) -> ();
+                ) -> impl ::core::future::Future<
+                    Output = wasmtime::component::__internal::Vec<
+                        wasmtime::component::Resource<Bar>,
+                    >,
+                > + Send;
+                fn record_own_arg(
+                    &mut self,
+                    x: NestedOwn,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn record_borrow_arg(
+                    &mut self,
+                    x: NestedBorrow,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn record_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = NestedOwn> + Send;
+                fn func_with_handle_typedef(
+                    &mut self,
+                    x: SomeHandle,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn bar_own_arg(
+                fn bar_own_arg(
                     &mut self,
                     x: wasmtime::component::Resource<Bar>,
-                ) -> () {
-                    Host::bar_own_arg(*self, x).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::bar_own_arg(*self, x).await }
                 }
-                async fn bar_borrow_arg(
+                fn bar_borrow_arg(
                     &mut self,
                     x: wasmtime::component::Resource<Bar>,
-                ) -> () {
-                    Host::bar_borrow_arg(*self, x).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::bar_borrow_arg(*self, x).await }
                 }
-                async fn bar_result(&mut self) -> wasmtime::component::Resource<Bar> {
-                    Host::bar_result(*self).await
+                fn bar_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = wasmtime::component::Resource<Bar>,
+                > + Send {
+                    async move { Host::bar_result(*self).await }
                 }
-                async fn tuple_own_arg(
+                fn tuple_own_arg(
                     &mut self,
                     x: (wasmtime::component::Resource<Bar>, u32),
-                ) -> () {
-                    Host::tuple_own_arg(*self, x).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::tuple_own_arg(*self, x).await }
                 }
-                async fn tuple_borrow_arg(
+                fn tuple_borrow_arg(
                     &mut self,
                     x: (wasmtime::component::Resource<Bar>, u32),
-                ) -> () {
-                    Host::tuple_borrow_arg(*self, x).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::tuple_borrow_arg(*self, x).await }
                 }
-                async fn tuple_result(
+                fn tuple_result(
                     &mut self,
-                ) -> (wasmtime::component::Resource<Bar>, u32) {
-                    Host::tuple_result(*self).await
+                ) -> impl ::core::future::Future<
+                    Output = (wasmtime::component::Resource<Bar>, u32),
+                > + Send {
+                    async move { Host::tuple_result(*self).await }
                 }
-                async fn option_own_arg(
-                    &mut self,
-                    x: Option<wasmtime::component::Resource<Bar>>,
-                ) -> () {
-                    Host::option_own_arg(*self, x).await
-                }
-                async fn option_borrow_arg(
+                fn option_own_arg(
                     &mut self,
                     x: Option<wasmtime::component::Resource<Bar>>,
-                ) -> () {
-                    Host::option_borrow_arg(*self, x).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::option_own_arg(*self, x).await }
                 }
-                async fn option_result(
+                fn option_borrow_arg(
                     &mut self,
-                ) -> Option<wasmtime::component::Resource<Bar>> {
-                    Host::option_result(*self).await
+                    x: Option<wasmtime::component::Resource<Bar>>,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::option_borrow_arg(*self, x).await }
                 }
-                async fn result_own_arg(
+                fn option_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = Option<wasmtime::component::Resource<Bar>>,
+                > + Send {
+                    async move { Host::option_result(*self).await }
+                }
+                fn result_own_arg(
                     &mut self,
                     x: Result<wasmtime::component::Resource<Bar>, ()>,
-                ) -> () {
-                    Host::result_own_arg(*self, x).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::result_own_arg(*self, x).await }
                 }
-                async fn result_borrow_arg(
+                fn result_borrow_arg(
                     &mut self,
                     x: Result<wasmtime::component::Resource<Bar>, ()>,
-                ) -> () {
-                    Host::result_borrow_arg(*self, x).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::result_borrow_arg(*self, x).await }
                 }
-                async fn result_result(
+                fn result_result(
                     &mut self,
-                ) -> Result<wasmtime::component::Resource<Bar>, ()> {
-                    Host::result_result(*self).await
+                ) -> impl ::core::future::Future<
+                    Output = Result<wasmtime::component::Resource<Bar>, ()>,
+                > + Send {
+                    async move { Host::result_result(*self).await }
                 }
-                async fn list_own_arg(
+                fn list_own_arg(
                     &mut self,
                     x: wasmtime::component::__internal::Vec<
                         wasmtime::component::Resource<Bar>,
                     >,
-                ) -> () {
-                    Host::list_own_arg(*self, x).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::list_own_arg(*self, x).await }
                 }
-                async fn list_borrow_arg(
+                fn list_borrow_arg(
                     &mut self,
                     x: wasmtime::component::__internal::Vec<
                         wasmtime::component::Resource<Bar>,
                     >,
-                ) -> () {
-                    Host::list_borrow_arg(*self, x).await
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::list_borrow_arg(*self, x).await }
                 }
-                async fn list_result(
+                fn list_result(
                     &mut self,
-                ) -> wasmtime::component::__internal::Vec<
-                    wasmtime::component::Resource<Bar>,
-                > {
-                    Host::list_result(*self).await
+                ) -> impl ::core::future::Future<
+                    Output = wasmtime::component::__internal::Vec<
+                        wasmtime::component::Resource<Bar>,
+                    >,
+                > + Send {
+                    async move { Host::list_result(*self).await }
                 }
-                async fn record_own_arg(&mut self, x: NestedOwn) -> () {
-                    Host::record_own_arg(*self, x).await
+                fn record_own_arg(
+                    &mut self,
+                    x: NestedOwn,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::record_own_arg(*self, x).await }
                 }
-                async fn record_borrow_arg(&mut self, x: NestedBorrow) -> () {
-                    Host::record_borrow_arg(*self, x).await
+                fn record_borrow_arg(
+                    &mut self,
+                    x: NestedBorrow,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::record_borrow_arg(*self, x).await }
                 }
-                async fn record_result(&mut self) -> NestedOwn {
-                    Host::record_result(*self).await
+                fn record_result(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = NestedOwn> + Send {
+                    async move { Host::record_result(*self).await }
                 }
-                async fn func_with_handle_typedef(&mut self, x: SomeHandle) -> () {
-                    Host::func_with_handle_typedef(*self, x).await
+                fn func_with_handle_typedef(
+                    &mut self,
+                    x: SomeHandle,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::func_with_handle_typedef(*self, x).await }
                 }
             }
             pub fn add_to_linker<T, D>(
@@ -623,7 +743,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -923,12 +1043,16 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum A {}
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait HostA: Send {
-                async fn drop(
+            pub trait HostAWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostAWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
+            pub trait HostA {
+                fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<A>,
-                ) -> wasmtime::Result<()>;
+                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send;
             }
             impl<_T: HostA + ?Sized + Send> HostA for &mut _T {
                 async fn drop(
@@ -938,15 +1062,19 @@ pub mod foo {
                     HostA::drop(*self, rep).await
                 }
             }
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait Host: Send + HostA {}
+            pub trait HostWithStore: wasmtime::component::HasData + HostAWithStore + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostAWithStore + Send,
+            {}
+            pub trait Host: HostA + Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -972,17 +1100,21 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait Host: Send {}
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
+            pub trait Host {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain2")?;
                 Ok(())
@@ -993,17 +1125,21 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait Host: Send {}
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
+            pub trait Host {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain3")?;
                 Ok(())
@@ -1014,13 +1150,25 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain3::A;
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait HostWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
             pub trait Host: Send {
-                async fn foo(&mut self) -> wasmtime::component::Resource<A>;
+                fn foo(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = wasmtime::component::Resource<A>,
+                > + Send;
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn foo(&mut self) -> wasmtime::component::Resource<A> {
-                    Host::foo(*self).await
+                fn foo(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = wasmtime::component::Resource<A>,
+                > + Send {
+                    async move { Host::foo(*self).await }
                 }
             }
             pub fn add_to_linker<T, D>(
@@ -1028,7 +1176,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1051,12 +1199,16 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Foo {}
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait HostFoo: Send {
-                async fn drop(
+            pub trait HostFooWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostFooWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
+            pub trait HostFoo {
+                fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Foo>,
-                ) -> wasmtime::Result<()>;
+                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send;
             }
             impl<_T: HostFoo + ?Sized + Send> HostFoo for &mut _T {
                 async fn drop(
@@ -1066,15 +1218,19 @@ pub mod foo {
                     HostFoo::drop(*self, rep).await
                 }
             }
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait Host: Send + HostFoo {}
+            pub trait HostWithStore: wasmtime::component::HasData + HostFooWithStore + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostFooWithStore + Send,
+            {}
+            pub trait Host: HostFoo + Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1138,7 +1294,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
-                      not have export `{name}`"
+                                                                            not have export `{name}`"
                                     )
                                 })
                         };

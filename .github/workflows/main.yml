@@ -514,7 +514,7 @@ jobs:
           os: ubuntu-latest
           test: >
             cargo check -p wasmtime --no-default-features --features runtime,component-model &&
-            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,async &&
+            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,async,debug-builtins &&
             cargo check -p cranelift-control --no-default-features &&
             cargo check -p pulley-interpreter --features encode,decode,disas,interp &&
             cargo check -p wasmtime-wasi-io --no-default-features
@@ -1026,6 +1026,7 @@ jobs:
           - crate: "wasmtime-environ --all-features"
           - crate: "pulley-interpreter --all-features"
           - script: ./ci/miri-provenance-test.sh
+          - script: ./ci/miri-wast.sh ./tests/spec_testsuite/table.wast
     needs: determine
     if: needs.determine.outputs.test-miri && github.repository == 'bytecodealliance/wasmtime'
     name: Miri

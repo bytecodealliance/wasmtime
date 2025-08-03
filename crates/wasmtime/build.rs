@@ -27,10 +27,10 @@ fn main() {
     custom_cfg("has_virtual_memory", has_virtual_memory);
     custom_cfg("has_host_compiler_backend", has_host_compiler_backend);
 
-    // If this OS isn't supported or if Cranelift doesn't support the host then
-    // there's no need to build these helpers.
+    // If this OS isn't supported and no debug-builtins or if Cranelift doesn't support
+    // the host or there's no need to build these helpers.
     #[cfg(feature = "runtime")]
-    if supported_os && has_host_compiler_backend {
+    if has_host_compiler_backend && (supported_os || cfg!(feature = "debug-builtins")) {
         build_c_helpers();
     }
 

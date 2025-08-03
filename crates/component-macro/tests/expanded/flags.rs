@@ -52,6 +52,17 @@ impl<_T: 'static> TheFlagsPre<_T> {
         self.indices.load(&mut store, &instance)
     }
 }
+impl<_T: Send + 'static> TheFlagsPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheFlags> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
 /// Auto-generated bindings for index of the exports of
 /// `the-flags`.
 ///
@@ -144,12 +155,25 @@ const _: () = {
             let indices = TheFlagsIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
+        /// Convenience wrapper around [`TheFlagsPre::new`] and
+        /// [`TheFlagsPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheFlags>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            TheFlagsPre::new(pre)?.instantiate_async(store).await
+        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::flegs::HostWithStore,
             for<'a> D::Data<'a>: foo::foo::flegs::Host,
             T: 'static,
         {
@@ -281,6 +305,11 @@ pub mod foo {
                 assert!(8 == < Flag64 as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32);
             };
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {
                 fn roundtrip_flag1(&mut self, x: Flag1) -> Flag1;
                 fn roundtrip_flag2(&mut self, x: Flag2) -> Flag2;
@@ -318,7 +347,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -605,7 +634,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/flegs` does \
-                not have export `{name}`"
+                              not have export `{name}`"
                                     )
                                 })
                         };

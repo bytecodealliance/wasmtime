@@ -1,3 +1,5 @@
+pub mod sockets;
+
 wit_bindgen::generate!({
     inline: "
         package wasmtime:test;

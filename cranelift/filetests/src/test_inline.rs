@@ -121,7 +121,7 @@ struct Inliner<'a>(Ref<'a, HashMap<ir::UserFuncName, ir::Function>>);
 
 impl<'a> Inline for Inliner<'a> {
     fn inline(
-        &self,
+        &mut self,
         caller: &ir::Function,
         _inst: ir::Inst,
         _opcode: ir::Opcode,

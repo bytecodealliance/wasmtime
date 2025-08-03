@@ -1,6 +1,7 @@
 ;;! target = "x86_64"
-;;! test = 'optimize'
+;;! test = "optimize"
 ;;! filter = "function"
+;;! flags = "-C inlining=n"
 
 ;; The following component links two sub-components together and each are only
 ;; instantiated the once, so we statically know what their core modules'

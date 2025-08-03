@@ -1,7 +1,9 @@
 use crate::p2::{OutputStream, Pollable, StreamError};
 use anyhow::anyhow;
 use bytes::Bytes;
+use std::pin::pin;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Waker};
 
 #[derive(Debug)]
 struct WorkerState {
@@ -10,6 +12,7 @@ struct WorkerState {
     write_budget: usize,
     flush_pending: bool,
     error: Option<anyhow::Error>,
+    write_ready_changed: Option<Waker>,
 }
 
 impl WorkerState {
@@ -27,7 +30,6 @@ impl WorkerState {
 struct Worker {
     state: Mutex<WorkerState>,
     new_work: tokio::sync::Notify,
-    write_ready_changed: tokio::sync::Notify,
 }
 
 enum Job {
@@ -44,23 +46,9 @@ impl Worker {
                 write_budget,
                 flush_pending: false,
                 error: None,
+                write_ready_changed: None,
             }),
             new_work: tokio::sync::Notify::new(),
-            write_ready_changed: tokio::sync::Notify::new(),
-        }
-    }
-    async fn ready(&self) {
-        loop {
-            {
-                let state = self.state();
-                if state.error.is_some()
-                    || !state.alive
-                    || (!state.flush_pending && state.write_budget > 0)
-                {
-                    return;
-                }
-            }
-            self.write_ready_changed.notified().await;
         }
     }
     fn check_write(&self) -> Result<usize, StreamError> {
@@ -91,16 +79,20 @@ impl Worker {
         None
     }
     fn report_error(&self, e: std::io::Error) {
-        {
+        let waker = {
             let mut state = self.state();
             state.alive = false;
             state.error = Some(e.into());
             state.flush_pending = false;
+            state.write_ready_changed.take()
+        };
+        if let Some(waker) = waker {
+            waker.wake();
         }
-        self.write_ready_changed.notify_one();
     }
-    async fn work<T: tokio::io::AsyncWrite + Send + Unpin + 'static>(&self, mut writer: T) {
+    async fn work<T: tokio::io::AsyncWrite + Send + 'static>(&self, writer: T) {
         use tokio::io::AsyncWriteExt;
+        let mut writer = pin!(writer);
         loop {
             while let Some(job) = self.pop() {
                 match job {
@@ -129,7 +121,10 @@ impl Worker {
                     }
                 }
 
-                self.write_ready_changed.notify_one();
+                let waker = self.state().write_ready_changed.take();
+                if let Some(waker) = waker {
+                    waker.wake();
+                }
             }
             self.new_work.notified().await;
         }
@@ -145,10 +140,7 @@ pub struct AsyncWriteStream {
 impl AsyncWriteStream {
     /// Create a [`AsyncWriteStream`]. In order to use the [`OutputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncWrite`].
-    pub fn new<T: tokio::io::AsyncWrite + Send + Unpin + 'static>(
-        write_budget: usize,
-        writer: T,
-    ) -> Self {
+    pub fn new<T: tokio::io::AsyncWrite + Send + 'static>(write_budget: usize, writer: T) -> Self {
         let worker = Arc::new(Worker::new(write_budget));
 
         let w = Arc::clone(&worker);
@@ -158,6 +150,16 @@ impl AsyncWriteStream {
             worker,
             join_handle: Some(join_handle),
         }
+    }
+
+    pub(crate) fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        let mut state = self.worker.state();
+        if state.error.is_some() || !state.alive || (!state.flush_pending && state.write_budget > 0)
+        {
+            return Poll::Ready(());
+        }
+        state.write_ready_changed = Some(cx.waker().clone());
+        Poll::Pending
     }
 }
 
@@ -206,6 +208,6 @@ impl OutputStream for AsyncWriteStream {
 #[async_trait::async_trait]
 impl Pollable for AsyncWriteStream {
     async fn ready(&mut self) {
-        self.worker.ready().await;
+        std::future::poll_fn(|cx| self.poll_ready(cx)).await
     }
 }

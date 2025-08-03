@@ -58,7 +58,10 @@ pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcC
     }
 }
 
-#[cfg_attr(not(feature = "gc-drc"), allow(dead_code))]
+#[cfg_attr(
+    not(feature = "gc-drc"),
+    expect(dead_code, reason = "easier to define")
+)]
 fn unbarriered_load_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
@@ -73,7 +76,10 @@ fn unbarriered_load_gc_ref(
     Ok(gc_ref)
 }
 
-#[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+#[cfg_attr(
+    not(any(feature = "gc-drc", feature = "gc-null")),
+    expect(dead_code, reason = "easier to define")
+)]
 fn unbarriered_store_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
@@ -461,7 +467,10 @@ pub fn translate_array_new_fixed(
 
 impl ArrayInit<'_> {
     /// Get the length (as an `i32`-typed `ir::Value`) of these array elements.
-    #[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+    #[cfg_attr(
+        not(any(feature = "gc-drc", feature = "gc-null")),
+        expect(dead_code, reason = "easier to define")
+    )]
     fn len(self, pos: &mut FuncCursor) -> ir::Value {
         match self {
             ArrayInit::Fill { len, .. } => len,
@@ -473,7 +482,10 @@ impl ArrayInit<'_> {
     }
 
     /// Initialize a newly-allocated array's elements.
-    #[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+    #[cfg_attr(
+        not(any(feature = "gc-drc", feature = "gc-null")),
+        expect(dead_code, reason = "easier to define")
+    )]
     fn initialize(
         self,
         func_env: &mut FuncEnvironment<'_>,
@@ -1140,7 +1152,10 @@ fn uextend_i32_to_pointer_type(
 /// in its initialization.
 ///
 /// Traps if the size overflows.
-#[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+#[cfg_attr(
+    not(any(feature = "gc-drc", feature = "gc-null")),
+    expect(dead_code, reason = "easier to define")
+)]
 fn emit_array_size(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
@@ -1185,7 +1200,10 @@ fn emit_array_size(
 
 /// Common helper for struct-field initialization that can be reused across
 /// collectors.
-#[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+#[cfg_attr(
+    not(any(feature = "gc-drc", feature = "gc-null")),
+    expect(dead_code, reason = "easier to define")
+)]
 fn initialize_struct_fields(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
@@ -1386,7 +1404,10 @@ impl FuncEnvironment<'_> {
     /// reference is null or is an `i31ref`; otherwise, it will be zero.
     ///
     /// This method is collector-agnostic.
-    #[cfg_attr(not(feature = "gc-drc"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "gc-drc"),
+        expect(dead_code, reason = "easier to define")
+    )]
     fn gc_ref_is_null_or_i31(
         &mut self,
         builder: &mut FunctionBuilder,

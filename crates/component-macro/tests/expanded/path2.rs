@@ -52,6 +52,17 @@ impl<_T: 'static> Path2Pre<_T> {
         self.indices.load(&mut store, &instance)
     }
 }
+impl<_T: Send + 'static> Path2Pre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<Path2> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
 /// Auto-generated bindings for index of the exports of
 /// `path2`.
 ///
@@ -138,12 +149,25 @@ const _: () = {
             let indices = Path2Indices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
+        /// Convenience wrapper around [`Path2Pre::new`] and
+        /// [`Path2Pre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<Path2>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            Path2Pre::new(pre)?.instantiate_async(store).await
+        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: paths::path2::test::HostWithStore,
             for<'a> D::Data<'a>: paths::path2::test::Host,
             T: 'static,
         {
@@ -158,6 +182,11 @@ pub mod paths {
         pub mod test {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -165,7 +194,7 @@ pub mod paths {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {

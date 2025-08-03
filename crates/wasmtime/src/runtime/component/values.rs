@@ -1,6 +1,6 @@
 use crate::ValRaw;
 use crate::component::ResourceAny;
-use crate::component::concurrent::{self, ErrorContext, HostFuture, HostStream};
+use crate::component::concurrent::{self, ErrorContext, FutureReader, StreamReader};
 use crate::component::func::{Lift, LiftContext, Lower, LowerContext, desc};
 use crate::prelude::*;
 use core::mem::MaybeUninit;
@@ -207,10 +207,10 @@ impl Val {
                 Val::Flags(flags)
             }
             InterfaceType::Future(_) => {
-                HostFuture::<()>::linear_lift_from_flat(cx, ty, next(src))?.into_val()
+                FutureReader::<()>::linear_lift_from_flat(cx, ty, next(src))?.into_val()
             }
             InterfaceType::Stream(_) => {
-                HostStream::<()>::linear_lift_from_flat(cx, ty, next(src))?.into_val()
+                StreamReader::<()>::linear_lift_from_flat(cx, ty, next(src))?.into_val()
             }
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_flat(cx, ty, next(src))?.into_val()
@@ -337,10 +337,10 @@ impl Val {
                 Val::Flags(flags)
             }
             InterfaceType::Future(_) => {
-                HostFuture::<()>::linear_lift_from_memory(cx, ty, bytes)?.into_val()
+                FutureReader::<()>::linear_lift_from_memory(cx, ty, bytes)?.into_val()
             }
             InterfaceType::Stream(_) => {
-                HostStream::<()>::linear_lift_from_memory(cx, ty, bytes)?.into_val()
+                StreamReader::<()>::linear_lift_from_memory(cx, ty, bytes)?.into_val()
             }
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_memory(cx, ty, bytes)?.into_val()
