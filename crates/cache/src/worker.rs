@@ -393,6 +393,12 @@ impl WorkerThread {
         trace!("Task finished: recompress file: {}", path.display());
     }
 
+    fn directory(&self) -> &PathBuf {
+        self.cache_config
+            .directory()
+            .expect("CacheConfig should be validated before being passed to a WorkerThread")
+    }
+
     fn handle_on_cache_update(&self, path: PathBuf) {
         trace!("handle_on_cache_update() for path: {}", path.display());
 
@@ -416,7 +422,7 @@ impl WorkerThread {
         // acquire lock for cleanup task
         // Lock is a proof of recent cleanup task, so we don't want to delete them.
         // Expired locks will be deleted by the cleanup task.
-        let cleanup_file = self.cache_config.directory().join(".cleanup"); // some non existing marker file
+        let cleanup_file = self.directory().join(".cleanup"); // some non existing marker file
         if acquire_task_fs_lock(
             &cleanup_file,
             self.cache_config.cleanup_interval(),
@@ -722,12 +728,7 @@ impl WorkerThread {
         }
 
         let mut vec = Vec::new();
-        enter_dir(
-            &mut vec,
-            self.cache_config.directory(),
-            0,
-            &self.cache_config,
-        );
+        enter_dir(&mut vec, self.directory(), 0, &self.cache_config);
         vec
     }
 }
