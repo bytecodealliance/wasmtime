@@ -9,7 +9,6 @@ impl environment::Host for WasiCliCtxView<'_> {
         Ok(self.ctx.arguments.clone())
     }
     fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
-        // FIXME: expose cwd in builder and save in ctx
-        Ok(None)
+        Ok(self.ctx.initial_cwd.clone())
     }
 }
