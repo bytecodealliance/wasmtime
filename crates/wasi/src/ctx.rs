@@ -456,10 +456,10 @@ impl WasiCtxBuilder {
     ///
     /// This method is the same as [`build`](WasiCtxBuilder::build) but it
     /// creates a [`WasiP1Ctx`] instead. This is intended for use with the
-    /// [`preview1`] module of this crate
+    /// [`p1`] module of this crate
     ///
-    /// [`WasiP1Ctx`]: crate::preview1::WasiP1Ctx
-    /// [`preview1`]: crate::preview1
+    /// [`WasiP1Ctx`]: crate::p1::WasiP1Ctx
+    /// [`p1`]: crate::p1
     ///
     /// # Panics
     ///
@@ -467,10 +467,10 @@ impl WasiCtxBuilder {
     /// used to create only a single [`WasiCtx`] or [`WasiP1Ctx`]. Repeated
     /// usage of this method is not allowed and should use a second builder
     /// instead.
-    #[cfg(feature = "preview1")]
-    pub fn build_p1(&mut self) -> crate::preview1::WasiP1Ctx {
+    #[cfg(feature = "p1")]
+    pub fn build_p1(&mut self) -> crate::p1::WasiP1Ctx {
         let wasi = self.build();
-        crate::preview1::WasiP1Ctx::new(wasi)
+        crate::p1::WasiP1Ctx::new(wasi)
     }
 }
 

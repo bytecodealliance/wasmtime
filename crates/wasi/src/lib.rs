@@ -17,13 +17,16 @@ pub mod clocks;
 mod ctx;
 mod error;
 mod filesystem;
+#[cfg(feature = "p1")]
+pub mod p0;
+#[cfg(feature = "p1")]
+pub mod p1;
+// FIXME: should gate this module on the `p2` feature but that will require more
+// internal refactoring to get that aligned right.
+// #[cfg(feature = "p2")]
 pub mod p2;
 #[cfg(feature = "p3")]
 pub mod p3;
-#[cfg(feature = "preview1")]
-pub mod preview0;
-#[cfg(feature = "preview1")]
-pub mod preview1;
 pub mod random;
 pub mod runtime;
 pub mod sockets;

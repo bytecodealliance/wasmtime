@@ -1,67 +1,29 @@
-use std::path::Path;
-
+use crate::store::{Ctx, MyWasiCtx};
 use anyhow::{Context as _, anyhow};
-use wasmtime::Store;
-use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime_wasi::p3::bindings::Command;
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxView, WasiView};
-
+use std::path::Path;
 use test_programs_artifacts::*;
+use wasmtime::Result;
+use wasmtime::component::{Component, Linker};
+use wasmtime_wasi::p3::bindings::Command;
 
-macro_rules! assert_test_exists {
-    ($name:ident) => {
-        #[expect(unused_imports, reason = "just here to assert it exists")]
-        use self::$name as _;
-    };
-}
-
-struct Ctx {
-    table: ResourceTable,
-    wasi: WasiCtx,
-}
-
-impl WasiView for Ctx {
-    fn ctx(&mut self) -> WasiCtxView {
-        WasiCtxView {
-            ctx: &mut self.wasi,
-            table: &mut self.table,
-        }
-    }
-}
-
-async fn run(path: &str) -> anyhow::Result<()> {
-    let _ = env_logger::try_init();
+async fn run(path: &str) -> Result<()> {
     let path = Path::new(path);
+    let name = path.file_stem().unwrap().to_str().unwrap();
     let engine = test_programs_artifacts::engine(|config| {
         config.async_support(true);
         config.wasm_component_model_async(true);
     });
-    let component = Component::from_file(&engine, path).context("failed to compile component")?;
-
     let mut linker = Linker::new(&engine);
     // TODO: Remove once test components are not built for `wasm32-wasip1`
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .context("failed to link `wasi:cli@0.2.x`")?;
     wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
 
-    let table = ResourceTable::default();
-
-    let mut ctx = WasiCtx::builder();
-    let name = path.file_stem().unwrap().to_str().unwrap();
-    let tempdir = tempfile::Builder::new()
-        .prefix(&format!("wasi_components_{name}_",))
-        .tempdir()?;
-    ctx.args(&[name, "."])
-        .inherit_network()
-        .allow_ip_name_lookup(true);
-    println!("preopen: {tempdir:?}");
-    ctx.preopened_dir(tempdir.path(), ".", DirPerms::all(), FilePerms::all())?;
-    for (var, val) in test_programs_artifacts::wasi_tests_environment() {
-        ctx.env(var, val);
-    }
-    let wasi = ctx.build();
-
-    let mut store = Store::new(&engine, Ctx { table, wasi });
+    let (mut store, _td) = Ctx::new(&engine, name, |builder| MyWasiCtx {
+        wasi: builder.build(),
+        table: Default::default(),
+    })?;
+    let component = Component::from_file(&engine, path)?;
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let command =
         Command::new(&mut store, &instance).context("failed to instantiate `wasi:cli/command`")?;

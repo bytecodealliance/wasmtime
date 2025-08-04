@@ -1,12 +1,12 @@
 //! Bindings for WASIp0 aka Preview 0 aka `wasi_unstable`.
 //!
 //! This module is purely here for backwards compatibility in the Wasmtime CLI.
-//! You probably want to use [`preview1`](crate::preview1) instead.
+//! You probably want to use [`p1`](crate::p1) instead.
 
-use crate::preview0::types::Error;
-use crate::preview1::WasiP1Ctx;
-use crate::preview1::types as snapshot1_types;
-use crate::preview1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
+use crate::p0::types::Error;
+use crate::p1::WasiP1Ctx;
+use crate::p1::types as snapshot1_types;
+use crate::p1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
 use wiggle::{GuestError, GuestMemory, GuestPtr};
 
 pub fn add_to_linker_async<T: Send + 'static>(
@@ -24,7 +24,7 @@ pub fn add_to_linker_sync<T: Send + 'static>(
 }
 
 wiggle::from_witx!({
-    witx: ["witx/preview0/wasi_unstable.witx"],
+    witx: ["witx/p0/wasi_unstable.witx"],
     async: {
         wasi_unstable::{
             fd_advise, fd_close, fd_datasync, fd_fdstat_get, fd_filestat_get, fd_filestat_set_size,
@@ -42,7 +42,7 @@ mod sync {
     use std::future::Future;
 
     wiggle::wasmtime_integration!({
-        witx: ["witx/preview0/wasi_unstable.witx"],
+        witx: ["witx/p0/wasi_unstable.witx"],
         target: super,
         block_on[in_tokio]: {
             wasi_unstable::{
@@ -500,11 +500,11 @@ impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
         Ok(())
     }
 
-    // The representation of `SubscriptionClock` is different in preview0 and
-    // preview1 so a bit of a hack is employed here. The change was to remove a
+    // The representation of `SubscriptionClock` is different in p0 and
+    // p1 so a bit of a hack is employed here. The change was to remove a
     // field from `SubscriptionClock` so to implement this without copying too
-    // much the `subs` field is overwritten with preview1-compatible structures
-    // and then the preview1 implementation is used. Before returning though
+    // much the `subs` field is overwritten with p1-compatible structures
+    // and then the p1 implementation is used. Before returning though
     // the old values are restored to pretend like we didn't overwrite them.
     //
     // Surely no one would pass overlapping pointers to this API right?
@@ -611,7 +611,7 @@ impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
 
 fn assert_iovec_array_same() {
     // NB: this isn't enough to assert the types are the same, but it's
-    // something. Additionally preview1 and preview0 aren't changing any more
+    // something. Additionally p1 and p0 aren't changing any more
     // and it's been manually verified that these two types are the same, so
     // it's ok to cast between them.
     assert_eq!(
