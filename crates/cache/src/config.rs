@@ -305,14 +305,9 @@ generate_deserializer!(deserialize_percent(num: u8, unit: &str) -> u8 {
     }
 });
 
-static CACHE_IMPROPER_CONFIG_ERROR_MSG: &str =
-    "Cache system should be enabled and all settings must be validated or defaulted";
-
 macro_rules! generate_setting_getter {
     ($setting:ident: $setting_type:ty) => {
         #[doc = concat!("Returns ", "`", stringify!($setting), "`.")]
-        ///
-        /// Panics if the cache is disabled.
         pub fn $setting(&self) -> $setting_type {
             self.$setting
         }
@@ -320,7 +315,7 @@ macro_rules! generate_setting_getter {
 }
 
 impl CacheConfig {
-    /// Creates a new set of configuration which represents a disabled cache
+    /// Creates a cache configuration with default settings.
     pub fn new() -> Self {
         Self::default()
     }
@@ -385,13 +380,9 @@ impl CacheConfig {
     generate_setting_getter!(file_count_limit_percent_if_deleting: u8);
     generate_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
 
-    /// Returns path to the cache directory.
-    ///
-    /// Panics if the cache is disabled.
-    pub fn directory(&self) -> &PathBuf {
-        self.directory
-            .as_ref()
-            .expect(CACHE_IMPROPER_CONFIG_ERROR_MSG)
+    /// Returns path to the cache directory if one is set.
+    pub fn directory(&self) -> Option<&PathBuf> {
+        self.directory.as_ref()
     }
 
     /// Specify where the cache directory is. Must be an absolute path.

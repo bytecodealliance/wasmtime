@@ -37,8 +37,6 @@ pub struct Cache {
 macro_rules! generate_config_setting_getter {
     ($setting:ident: $setting_type:ty) => {
         #[doc = concat!("Returns ", "`", stringify!($setting), "`.")]
-        ///
-        /// Panics if the cache is disabled.
         pub fn $setting(&self) -> $setting_type {
             self.config.$setting()
         }
@@ -97,10 +95,11 @@ impl Cache {
     generate_config_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
 
     /// Returns path to the cache directory.
-    ///
-    /// Panics if the cache directory is not set.
     pub fn directory(&self) -> &PathBuf {
-        &self.config.directory()
+        &self
+            .config
+            .directory()
+            .expect("directory should be validated in Config::new")
     }
 
     #[cfg(test)]

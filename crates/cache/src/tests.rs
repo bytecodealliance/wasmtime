@@ -24,8 +24,8 @@ fn test_cache_init() {
 
     // assumption: config init creates cache directory and returns canonicalized path
     assert_eq!(
-        *cache_config.directory(),
-        fs::canonicalize(cache_dir).unwrap()
+        cache_config.directory(),
+        Some(&fs::canonicalize(cache_dir).unwrap())
     );
     assert_eq!(
         cache_config.baseline_compression_level(),
@@ -53,8 +53,8 @@ fn test_write_read_cache() {
 
     // assumption: config load creates cache directory and returns canonicalized path
     assert_eq!(
-        *cache_config.directory(),
-        fs::canonicalize(cache_dir).unwrap()
+        cache_config.directory(),
+        Some(&fs::canonicalize(cache_dir).unwrap())
     );
 
     let compiler1 = "test-1";

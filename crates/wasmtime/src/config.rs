@@ -1398,8 +1398,8 @@ impl Config {
 
     /// Set a custom [`Cache`].
     ///
-    /// To load a cache from a file, use [`Cache::from_file`]. Otherwise, you can create a new
-    /// cache config using [`CacheConfig::new`] and passing that to [`Cache::new`].
+    /// To load a cache configuration from a file, use [`Cache::from_file`]. Otherwise, you can
+    /// create a new cache config using [`CacheConfig::new`] and passing that to [`Cache::new`].
     ///
     /// If you want to disable the cache, you can call this method with `None`.
     ///
