@@ -217,7 +217,7 @@ impl ResourceTables<'_> {
     /// Note that this is the same as `resource_lower_own`.
     pub fn resource_new(&mut self, resource: TypedResource) -> Result<u32> {
         self.table_for_resource(&resource)
-            .insert_own_resource(resource)
+            .resource_own_insert(resource)
     }
 
     /// Implementation of the `resource.rep` canonical intrinsic.
@@ -261,7 +261,7 @@ impl ResourceTables<'_> {
     /// This is an implementation of the canonical ABI `lower_own` function.
     pub fn resource_lower_own(&mut self, resource: TypedResource) -> Result<u32> {
         self.table_for_resource(&resource)
-            .insert_own_resource(resource)
+            .resource_own_insert(resource)
     }
 
     /// Attempts to remove an "own" handle from the specified table and its
@@ -314,7 +314,7 @@ impl ResourceTables<'_> {
         let borrow_count = &mut self.calls.scopes.last_mut().unwrap().borrow_count;
         *borrow_count = borrow_count.checked_add(1).unwrap();
         self.table_for_resource(&resource)
-            .insert_borrow_resource(resource, scope)
+            .resource_borrow_insert(resource, scope)
     }
 
     /// Enters a new calling context, starting a fresh count of borrows and

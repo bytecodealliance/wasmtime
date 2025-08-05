@@ -52,7 +52,7 @@ use crate::component::{Component, ComponentInstanceId, HasData, HasSelf, Instanc
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::store::{StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{
-    CallContext, ComponentInstance, HandleKind, InstanceFlags, ResourceTables, TransmitLocalState,
+    CallContext, ComponentInstance, InstanceFlags, ResourceTables, TransmitLocalState,
 };
 use crate::vm::{SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
@@ -869,18 +869,8 @@ impl ComponentInstance {
                     "deliver event {event:?} to {guest_task:?} for {waitable:?}; set {set:?}"
                 );
 
-                let entry =
-                    self.as_mut().guest_tables().0[instance].get_mut_handle_by_rep(waitable.rep());
-                let Some((
-                    handle,
-                    HandleKind::HostTask
-                    | HandleKind::GuestTask
-                    | HandleKind::Stream(..)
-                    | HandleKind::Future(..),
-                )) = entry
-                else {
-                    bail!("handle not found for waitable rep {waitable:?} instance {instance:?}");
-                };
+                let handle =
+                    self.as_mut().guest_tables().0[instance].waitable_by_rep(waitable.rep())?;
 
                 waitable.on_delivery(self, event);
 
@@ -900,8 +890,7 @@ impl ComponentInstance {
             .as_mut()
             .concurrent_state_mut()
             .push(WaitableSet::default())?;
-        let handle =
-            self.guest_tables().0[caller_instance].insert_handle(set.rep(), HandleKind::Set)?;
+        let handle = self.guest_tables().0[caller_instance].waitable_set_insert(set.rep())?;
         log::trace!("new waitable set {set:?} (handle {handle})");
         Ok(handle)
     }
@@ -912,11 +901,7 @@ impl ComponentInstance {
         caller_instance: RuntimeComponentInstanceIndex,
         set: u32,
     ) -> Result<()> {
-        let (rep, HandleKind::Set) =
-            self.as_mut().guest_tables().0[caller_instance].remove_handle_by_index(set)?
-        else {
-            bail!("invalid waitable-set handle");
-        };
+        let rep = self.as_mut().guest_tables().0[caller_instance].waitable_set_remove(set)?;
 
         log::trace!("drop waitable set {rep} (handle {set})");
 
@@ -964,33 +949,29 @@ impl ComponentInstance {
     ) -> Result<()> {
         self.as_mut().waitable_join(caller_instance, task_id, 0)?;
 
-        let (rep, state) =
-            self.as_mut().guest_tables().0[caller_instance].remove_handle_by_index(task_id)?;
+        let (rep, is_host) =
+            self.as_mut().guest_tables().0[caller_instance].subtask_remove(task_id)?;
 
         let concurrent_state = self.concurrent_state_mut();
 
-        let (waitable, expected_caller_instance, delete) = match state {
-            HandleKind::HostTask => {
-                let id = TableId::<HostTask>::new(rep);
-                let task = concurrent_state.get(id)?;
-                if task.abort_handle.is_some() {
-                    bail!("cannot drop a subtask which has not yet resolved");
-                }
-                (Waitable::Host(id), task.caller_instance, true)
+        let (waitable, expected_caller_instance, delete) = if is_host {
+            let id = TableId::<HostTask>::new(rep);
+            let task = concurrent_state.get(id)?;
+            if task.abort_handle.is_some() {
+                bail!("cannot drop a subtask which has not yet resolved");
             }
-            HandleKind::GuestTask => {
-                let id = TableId::<GuestTask>::new(rep);
-                let task = concurrent_state.get(id)?;
-                if task.lift_result.is_some() {
-                    bail!("cannot drop a subtask which has not yet resolved");
-                }
-                if let Caller::Guest { instance, .. } = &task.caller {
-                    (Waitable::Guest(id), *instance, task.exited)
-                } else {
-                    unreachable!()
-                }
+            (Waitable::Host(id), task.caller_instance, true)
+        } else {
+            let id = TableId::<GuestTask>::new(rep);
+            let task = concurrent_state.get(id)?;
+            if task.lift_result.is_some() {
+                bail!("cannot drop a subtask which has not yet resolved");
             }
-            _ => bail!("invalid task handle: {task_id}"),
+            if let Caller::Guest { instance, .. } = &task.caller {
+                (Waitable::Guest(id), *instance, task.exited)
+            } else {
+                unreachable!()
+            }
         };
 
         if waitable.take_event(concurrent_state)?.is_some() {
@@ -2295,7 +2276,7 @@ impl Instance {
                     status,
                     Some(
                         self.id().get_mut(store.0).guest_tables().0[caller_instance]
-                            .insert_handle(guest_task.rep(), HandleKind::GuestTask)?,
+                            .subtask_insert_guest(guest_task.rep())?,
                     ),
                 );
             } else {
@@ -2478,7 +2459,7 @@ impl Instance {
                 // loop and allocate a waitable handle to return to the guest.
                 self.concurrent_state_mut(store.0).push_future(future);
                 let handle = self.id().get_mut(store.0).guest_tables().0[caller_instance]
-                    .insert_handle(task.rep(), HandleKind::HostTask)?;
+                    .subtask_insert_host(task.rep())?;
                 log::trace!(
                     "assign {task:?} handle {handle} for {caller:?} instance {caller_instance:?}"
                 );

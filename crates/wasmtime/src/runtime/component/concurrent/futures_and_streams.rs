@@ -7,7 +7,7 @@ use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
 use crate::component::{AsAccessor, Instance, Lower, Val, WasmList, WasmStr};
 use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::VMStore;
-use crate::vm::component::{ComponentInstance, HandleKind, HandleTable, TransmitLocalState};
+use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{Context, Result, anyhow, bail};
 use buffers::Extender;
@@ -143,14 +143,6 @@ fn get_mut_by_index_from(
     match ty {
         TransmitIndex::Stream(ty) => handle_table.stream_rep(ty, index),
         TransmitIndex::Future(ty) => handle_table.future_rep(ty, index),
-    }
-}
-
-/// Construct a `HandleKind` using the specified type and state.
-fn handle_kind(ty: TransmitIndex, state: TransmitLocalState) -> HandleKind {
-    match ty {
-        TransmitIndex::Stream(ty) => HandleKind::Stream(ty, state),
-        TransmitIndex::Future(ty) => HandleKind::Future(ty, state),
     }
 }
 
@@ -657,19 +649,10 @@ impl<T> FutureReader<T> {
                 let handle_table = cx
                     .instance_mut()
                     .table_for_transmit(TransmitIndex::Future(src));
-                let (rep, state) =
-                    get_mut_by_index_from(handle_table, TransmitIndex::Future(src), index)?;
-
-                match state {
-                    TransmitLocalState::Read { .. } => {
-                        handle_table.remove_handle_by_index(index)?;
-                    }
-                    TransmitLocalState::Write { .. } => {
-                        bail!("cannot transfer write end of future")
-                    }
-                    TransmitLocalState::Busy => bail!("cannot transfer busy future"),
+                let (rep, is_done) = handle_table.future_remove_readable(src, index)?;
+                if is_done {
+                    bail!("cannot lift future after being notified that the writable end dropped");
                 }
-
                 let id = TableId::<TransmitHandle>::new(rep);
                 let concurrent_state = cx.instance_mut().concurrent_state_mut();
                 let state = concurrent_state.get(id)?.state;
@@ -746,10 +729,7 @@ pub(crate) fn lower_future_to_index<U>(
 
             cx.instance_mut()
                 .table_for_transmit(TransmitIndex::Future(dst))
-                .insert_handle(
-                    rep,
-                    HandleKind::Future(dst, TransmitLocalState::Read { done: false }),
-                )
+                .future_insert_read(dst, rep)
         }
         _ => func::bad_type_info(),
     }
@@ -1235,24 +1215,11 @@ impl<T> StreamReader<T> {
                 let handle_table = cx
                     .instance_mut()
                     .table_for_transmit(TransmitIndex::Stream(src));
-                let (rep, state) =
-                    get_mut_by_index_from(handle_table, TransmitIndex::Stream(src), index)?;
-
-                match state {
-                    TransmitLocalState::Read { done: true } => bail!(
-                        "cannot lift stream after being notified that the writable end dropped"
-                    ),
-                    TransmitLocalState::Read { done: false } => {
-                        handle_table.remove_handle_by_index(index)?;
-                    }
-                    TransmitLocalState::Write { .. } => {
-                        bail!("cannot transfer write end of stream")
-                    }
-                    TransmitLocalState::Busy => bail!("cannot transfer busy stream"),
+                let (rep, is_done) = handle_table.stream_remove_readable(src, index)?;
+                if is_done {
+                    bail!("cannot lift stream after being notified that the writable end dropped");
                 }
-
                 let id = TableId::<TransmitHandle>::new(rep);
-
                 Ok(Self::new(id, cx.instance_handle()))
             }
             _ => func::bad_type_info(),
@@ -1321,10 +1288,7 @@ pub(crate) fn lower_stream_to_index<U>(
 
             cx.instance_mut()
                 .table_for_transmit(TransmitIndex::Stream(dst))
-                .insert_handle(
-                    rep,
-                    HandleKind::Stream(dst, TransmitLocalState::Read { done: false }),
-                )
+                .stream_insert_read(dst, rep)
         }
         _ => func::bad_type_info(),
     }
@@ -1524,15 +1488,7 @@ pub(crate) fn lower_error_context_to_index<U>(
     match ty {
         InterfaceType::ErrorContext(dst) => {
             let tbl = cx.instance_mut().table_for_error_context(dst);
-
-            if let Some((dst_idx, HandleKind::ErrorContext { local_ref_count })) =
-                tbl.get_mut_handle_by_rep(rep)
-            {
-                *local_ref_count += 1;
-                Ok(dst_idx)
-            } else {
-                tbl.insert_handle(rep, HandleKind::ErrorContext { local_ref_count: 1 })
-            }
+            tbl.error_context_insert(rep)
         }
         _ => func::bad_type_info(),
     }
@@ -2333,34 +2289,19 @@ impl Instance {
         ty: TransmitIndex,
         writer: u32,
     ) -> Result<()> {
-        let (transmit_rep, kind) = self
-            .id()
-            .get_mut(store.0)
-            .table_for_transmit(ty)
-            .remove_handle_by_index(writer)
-            .context("failed to find writer")?;
-        let (state, kind) = match kind {
-            HandleKind::Stream(_, state) => (state, TransmitKind::Stream),
-            HandleKind::Future(_, state) => (state, TransmitKind::Future),
-            _ => {
-                bail!("invalid stream or future handle");
-            }
+        let table = self.id().get_mut(store.0).table_for_transmit(ty);
+        let transmit_rep = match ty {
+            TransmitIndex::Future(ty) => table.future_remove_writable(ty, writer)?,
+            TransmitIndex::Stream(ty) => table.stream_remove_writable(ty, writer)?,
         };
-        match state {
-            TransmitLocalState::Write { .. } => {}
-            TransmitLocalState::Read { .. } => {
-                bail!("passed read end to `{{stream|future}}.drop-writable`")
-            }
-            TransmitLocalState::Busy => bail!("cannot drop busy stream or future"),
-        }
 
         let id = TableId::<TransmitHandle>::new(transmit_rep);
         log::trace!("guest_drop_writable: drop writer {id:?}");
-        match kind {
-            TransmitKind::Stream => {
+        match ty {
+            TransmitIndex::Stream(_) => {
                 self.host_drop_writer(store, id, None::<&dyn Fn() -> Result<()>>)
             }
-            TransmitKind::Future => self.host_drop_writer(
+            TransmitIndex::Future(_) => self.host_drop_writer(
                 store,
                 id,
                 Some(&|| {
@@ -2946,25 +2887,15 @@ impl Instance {
         ty: TransmitIndex,
         reader: u32,
     ) -> Result<()> {
-        let (rep, kind) = self
-            .id()
-            .get_mut(store)
-            .table_for_transmit(ty)
-            .remove_handle_by_index(reader)?;
-        let (state, kind) = match kind {
-            HandleKind::Stream(_, state) => (state, TransmitKind::Stream),
-            HandleKind::Future(_, state) => (state, TransmitKind::Future),
-            _ => {
-                bail!("invalid stream or future handle");
-            }
+        let table = self.id().get_mut(store).table_for_transmit(ty);
+        let (rep, _is_done) = match ty {
+            TransmitIndex::Stream(ty) => table.stream_remove_readable(ty, reader)?,
+            TransmitIndex::Future(ty) => table.future_remove_readable(ty, reader)?,
         };
-        match state {
-            TransmitLocalState::Read { .. } => {}
-            TransmitLocalState::Write { .. } => {
-                bail!("passed write end to `{{stream|future}}.drop-readable`")
-            }
-            TransmitLocalState::Busy => bail!("cannot drop busy stream or future"),
-        }
+        let kind = match ty {
+            TransmitIndex::Stream(_) => TransmitKind::Stream,
+            TransmitIndex::Future(_) => TransmitKind::Future,
+        };
         let id = TableId::<TransmitHandle>::new(rep);
         log::trace!("guest_drop_readable: drop reader {id:?}");
         self.host_drop_reader(store, id, kind)
@@ -3017,10 +2948,7 @@ impl Instance {
             .id()
             .get_mut(store)
             .table_for_error_context(ty)
-            .insert_handle(
-                table_id.rep(),
-                HandleKind::ErrorContext { local_ref_count: 1 },
-            )?;
+            .error_context_insert(table_id.rep())?;
 
         Ok(local_idx)
     }
@@ -3118,14 +3046,18 @@ impl ComponentInstance {
     /// `TransmitIndex` belongs.
     fn guest_new(mut self: Pin<&mut Self>, ty: TransmitIndex) -> Result<ResourcePair> {
         let (write, read) = self.as_mut().concurrent_state_mut().new_transmit()?;
-        let read = self.as_mut().table_for_transmit(ty).insert_handle(
-            read.rep(),
-            handle_kind(ty, TransmitLocalState::Read { done: false }),
-        )?;
-        let write = self.table_for_transmit(ty).insert_handle(
-            write.rep(),
-            handle_kind(ty, TransmitLocalState::Write { done: false }),
-        )?;
+
+        let table = self.as_mut().table_for_transmit(ty);
+        let (read, write) = match ty {
+            TransmitIndex::Future(ty) => (
+                table.future_insert_read(ty, read.rep())?,
+                table.future_insert_write(ty, write.rep())?,
+            ),
+            TransmitIndex::Stream(ty) => (
+                table.stream_insert_read(ty, read.rep())?,
+                table.stream_insert_write(ty, write.rep())?,
+            ),
+        };
         Ok(ResourcePair { write, read })
     }
 
@@ -3227,15 +3159,17 @@ impl ComponentInstance {
         dst: TransmitIndex,
     ) -> Result<u32> {
         let src_table = self.as_mut().table_for_transmit(src);
-        let rep = match src {
-            TransmitIndex::Future(idx) => src_table.future_remove(idx, src_idx)?,
-            TransmitIndex::Stream(idx) => src_table.stream_remove(idx, src_idx)?,
+        let (rep, is_done) = match src {
+            TransmitIndex::Future(idx) => src_table.future_remove_readable(idx, src_idx)?,
+            TransmitIndex::Stream(idx) => src_table.stream_remove_readable(idx, src_idx)?,
         };
-
+        if is_done {
+            bail!("cannot lift after being notified that the writable end dropped");
+        }
         let dst_table = self.as_mut().table_for_transmit(dst);
         match dst {
-            TransmitIndex::Future(idx) => dst_table.future_insert(idx, rep),
-            TransmitIndex::Stream(idx) => dst_table.stream_insert(idx, rep),
+            TransmitIndex::Future(idx) => dst_table.future_insert_read(idx, rep),
+            TransmitIndex::Stream(idx) => dst_table.stream_insert_read(idx, rep),
         }
     }
 
@@ -3340,17 +3274,10 @@ impl ComponentInstance {
             .as_mut()
             .table_for_error_context(src)
             .error_context_rep(src_idx)?;
-        let dst = self.as_mut().table_for_error_context(dst);
-
-        // Update the component local for the destination
-        let updated_count = if let Some((dst_idx, HandleKind::ErrorContext { local_ref_count })) =
-            dst.get_mut_handle_by_rep(rep)
-        {
-            *local_ref_count += 1;
-            dst_idx
-        } else {
-            dst.insert_handle(rep, HandleKind::ErrorContext { local_ref_count: 1 })?
-        };
+        let dst_idx = self
+            .as_mut()
+            .table_for_error_context(dst)
+            .error_context_insert(rep)?;
 
         // Update the global (cross-subcomponent) count for error contexts
         // as the new component has essentially created a new reference that will
@@ -3362,7 +3289,7 @@ impl ComponentInstance {
             .context("global ref count present for existing (sub)component error context")?;
         global_ref_count.0 += 1;
 
-        Ok(updated_count)
+        Ok(dst_idx)
     }
 }
 
