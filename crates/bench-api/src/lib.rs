@@ -144,7 +144,7 @@ use std::{env, path::PathBuf};
 use wasmtime::{Engine, Instance, Linker, Module, Store};
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wasi::cli::{InputFile, OutputFile};
-use wasmtime_wasi::{DirPerms, FilePerms, I32Exit, WasiCtx, preview1::WasiP1Ctx};
+use wasmtime_wasi::{DirPerms, FilePerms, I32Exit, WasiCtx, p1::WasiP1Ctx};
 
 pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
@@ -445,7 +445,7 @@ impl BenchState {
         let fuel = options.wasm.fuel;
 
         if options.wasi.common != Some(false) {
-            wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |cx| &mut cx.wasi)?;
+            wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |cx| &mut cx.wasi)?;
         }
 
         #[cfg(feature = "wasi-nn")]
