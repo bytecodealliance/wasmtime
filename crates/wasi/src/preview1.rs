@@ -63,6 +63,7 @@
 //! }
 //! ```
 
+use crate::cli::WasiCliView;
 use crate::p2::bindings::{
     cli::{
         stderr::Host as _, stdin::Host as _, stdout::Host as _, terminal_input, terminal_output,
@@ -288,19 +289,21 @@ struct Descriptors {
 
 impl Descriptors {
     /// Initializes [Self] using `preopens`
-    fn new(mut host: WasiCtxView<'_>) -> Result<Self, types::Error> {
+    fn new(host: &mut WasiP1Ctx) -> Result<Self, types::Error> {
         let mut descriptors = Self::default();
         descriptors.push(Descriptor::Stdin {
             stream: host
+                .cli()
                 .get_stdin()
                 .context("failed to call `get-stdin`")
                 .map_err(types::Error::trap)?,
             isatty: if let Some(term_in) = host
+                .cli()
                 .get_terminal_stdin()
                 .context("failed to call `get-terminal-stdin`")
                 .map_err(types::Error::trap)?
             {
-                terminal_input::HostTerminalInput::drop(&mut host, term_in)
+                terminal_input::HostTerminalInput::drop(&mut host.cli(), term_in)
                     .context("failed to call `drop-terminal-input`")
                     .map_err(types::Error::trap)?;
                 IsATTY::Yes
@@ -310,15 +313,17 @@ impl Descriptors {
         })?;
         descriptors.push(Descriptor::Stdout {
             stream: host
+                .cli()
                 .get_stdout()
                 .context("failed to call `get-stdout`")
                 .map_err(types::Error::trap)?,
             isatty: if let Some(term_out) = host
+                .cli()
                 .get_terminal_stdout()
                 .context("failed to call `get-terminal-stdout`")
                 .map_err(types::Error::trap)?
             {
-                terminal_output::HostTerminalOutput::drop(&mut host, term_out)
+                terminal_output::HostTerminalOutput::drop(&mut host.cli(), term_out)
                     .context("failed to call `drop-terminal-output`")
                     .map_err(types::Error::trap)?;
                 IsATTY::Yes
@@ -328,15 +333,17 @@ impl Descriptors {
         })?;
         descriptors.push(Descriptor::Stderr {
             stream: host
+                .cli()
                 .get_stderr()
                 .context("failed to call `get-stderr`")
                 .map_err(types::Error::trap)?,
             isatty: if let Some(term_out) = host
+                .cli()
                 .get_terminal_stderr()
                 .context("failed to call `get-terminal-stderr`")
                 .map_err(types::Error::trap)?
             {
-                terminal_output::HostTerminalOutput::drop(&mut host, term_out)
+                terminal_output::HostTerminalOutput::drop(&mut host.cli(), term_out)
                     .context("failed to call `drop-terminal-output`")
                     .map_err(types::Error::trap)?;
                 IsATTY::Yes
@@ -346,6 +353,7 @@ impl Descriptors {
         })?;
 
         for dir in host
+            .ctx()
             .get_directories()
             .context("failed to call `get-directories`")
             .map_err(types::Error::trap)?
@@ -507,7 +515,7 @@ impl WasiP1Ctx {
         let descriptors = if let Some(descriptors) = self.adapter.descriptors.take() {
             descriptors
         } else {
-            Descriptors::new(self.as_wasi_impl())?
+            Descriptors::new(self)?
         };
         Ok(Transaction {
             view: self,
@@ -1132,7 +1140,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         argv: GuestPtr<GuestPtr<u8>>,
         argv_buf: GuestPtr<u8>,
     ) -> Result<(), types::Error> {
-        self.as_wasi_impl()
+        self.cli()
             .get_arguments()
             .context("failed to call `get-arguments`")
             .map_err(types::Error::trap)?
@@ -1155,7 +1163,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         _memory: &mut GuestMemory<'_>,
     ) -> Result<(types::Size, types::Size), types::Error> {
         let args = self
-            .as_wasi_impl()
+            .cli()
             .get_arguments()
             .context("failed to call `get-arguments`")
             .map_err(types::Error::trap)?;
@@ -1176,7 +1184,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         environ: GuestPtr<GuestPtr<u8>>,
         environ_buf: GuestPtr<u8>,
     ) -> Result<(), types::Error> {
-        self.as_wasi_impl()
+        self.cli()
             .get_environment()
             .context("failed to call `get-environment`")
             .map_err(types::Error::trap)?
@@ -1204,7 +1212,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         _memory: &mut GuestMemory<'_>,
     ) -> Result<(types::Size, types::Size), types::Error> {
         let environ = self
-            .as_wasi_impl()
+            .cli()
             .get_environment()
             .context("failed to call `get-environment`")
             .map_err(types::Error::trap)?;

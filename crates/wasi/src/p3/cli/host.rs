@@ -1,11 +1,11 @@
 use crate::I32Exit;
-use crate::cli::IsTerminal;
+use crate::cli::{IsTerminal, WasiCli, WasiCliCtxView};
 use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::cli::{
     environment, exit, stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr,
     terminal_stdin, terminal_stdout,
 };
-use crate::p3::cli::{TerminalInput, TerminalOutput, WasiCli, WasiCliCtxView};
+use crate::p3::cli::{TerminalInput, TerminalOutput};
 use anyhow::{Context as _, anyhow};
 use bytes::BytesMut;
 use std::io::Cursor;

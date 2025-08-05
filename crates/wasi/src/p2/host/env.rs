@@ -1,15 +1,14 @@
-use crate::p2::WasiCtxView;
+use crate::cli::WasiCliCtxView;
 use crate::p2::bindings::cli::environment;
 
-impl environment::Host for WasiCtxView<'_> {
+impl environment::Host for WasiCliCtxView<'_> {
     fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {
-        Ok(self.ctx.cli.environment.clone())
+        Ok(self.ctx.environment.clone())
     }
     fn get_arguments(&mut self) -> anyhow::Result<Vec<String>> {
-        Ok(self.ctx.cli.arguments.clone())
+        Ok(self.ctx.arguments.clone())
     }
     fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
-        // FIXME: expose cwd in builder and save in ctx
-        Ok(None)
+        Ok(self.ctx.initial_cwd.clone())
     }
 }

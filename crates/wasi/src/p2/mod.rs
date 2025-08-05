@@ -221,6 +221,7 @@
 //! [async]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
 
+use crate::cli::{WasiCli, WasiCliView};
 use crate::random::WasiRandom;
 use crate::{WasiCtxView, WasiView};
 use wasmtime::component::{HasData, Linker, ResourceTable};
@@ -344,16 +345,16 @@ where
     random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
     random::insecure::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
     random::insecure_seed::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
-    cli::exit::add_to_linker::<T, HasWasi>(l, &options.into(), T::ctx)?;
-    cli::environment::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    cli::stdin::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    cli::stdout::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    cli::stderr::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    cli::terminal_input::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    cli::terminal_output::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    cli::terminal_stdin::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    cli::terminal_stdout::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    cli::terminal_stderr::add_to_linker::<T, HasWasi>(l, T::ctx)?;
+    cli::exit::add_to_linker::<T, WasiCli>(l, &options.into(), T::cli)?;
+    cli::environment::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::stdin::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::stderr::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::terminal_input::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::terminal_output::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::terminal_stdin::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::terminal_stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::terminal_stderr::add_to_linker::<T, WasiCli>(l, T::cli)?;
     sockets::tcp_create_socket::add_to_linker::<T, HasWasi>(l, T::ctx)?;
     sockets::udp_create_socket::add_to_linker::<T, HasWasi>(l, T::ctx)?;
     sockets::instance_network::add_to_linker::<T, HasWasi>(l, T::ctx)?;
@@ -388,9 +389,9 @@ fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> anyh
     clocks::wall_clock::add_to_linker::<T, HasWasi>(l, T::ctx)?;
     clocks::monotonic_clock::add_to_linker::<T, HasWasi>(l, T::ctx)?;
     random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
-    cli::stdin::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    cli::stdout::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    cli::stderr::add_to_linker::<T, HasWasi>(l, T::ctx)?;
+    cli::stdin::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::stderr::add_to_linker::<T, WasiCli>(l, T::cli)?;
     Ok(())
 }
 

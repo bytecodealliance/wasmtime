@@ -1,17 +1,8 @@
 mod host;
 
-use crate::cli::WasiCliCtx;
+use crate::cli::{WasiCli, WasiCliView};
 use crate::p3::bindings::cli;
-use wasmtime::component::{HasData, Linker, ResourceTable};
-
-pub struct WasiCliCtxView<'a> {
-    pub ctx: &'a mut WasiCliCtx,
-    pub table: &'a mut ResourceTable,
-}
-
-pub trait WasiCliView: Send {
-    fn cli(&mut self) -> WasiCliCtxView<'_>;
-}
+use wasmtime::component::Linker;
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///
@@ -28,8 +19,7 @@ pub trait WasiCliView: Send {
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime_wasi::cli::WasiCliCtx;
-/// use wasmtime_wasi::p3::cli::{WasiCliView, WasiCliCtxView};
+/// use wasmtime_wasi::cli::{WasiCliCtx, WasiCliView, WasiCliCtxView};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -93,12 +83,6 @@ where
     cli::terminal_stdout::add_to_linker::<_, WasiCli>(linker, T::cli)?;
     cli::terminal_stderr::add_to_linker::<_, WasiCli>(linker, T::cli)?;
     Ok(())
-}
-
-struct WasiCli;
-
-impl HasData for WasiCli {
-    type Data<'a> = WasiCliCtxView<'a>;
 }
 
 pub struct TerminalInput;
