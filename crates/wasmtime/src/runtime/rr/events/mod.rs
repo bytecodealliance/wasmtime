@@ -91,51 +91,6 @@ where
     }
 }
 
-/// Typechecking validation for replay, if `src_types` exist
-///
-/// Returns [`ReplayError::FailedValidation`] if typechecking fails
-#[inline(always)]
-fn replay_args_typecheck<T>(src_types: Option<T>, expect_types: T) -> Result<(), ReplayError>
-where
-    T: PartialEq,
-{
-    #[cfg(feature = "rr-type-validation")]
-    {
-        if let Some(types) = src_types {
-            if types == expect_types {
-                Ok(())
-            } else {
-                Err(ReplayError::FailedValidation)
-            }
-        } else {
-            println!(
-                "Warning: Replay typechecking cannot be performed since recorded trace is missing validation data"
-            );
-            Ok(())
-        }
-    }
-    #[cfg(not(feature = "rr-type-validation"))]
-    Ok(())
-}
-
-/// Validation of values
-#[inline(always)]
-fn replay_args_valcheck<T>(src_val: T, expect_val: T) -> Result<(), ReplayError>
-where
-    T: PartialEq,
-{
-    #[cfg(feature = "rr-type-validation")]
-    {
-        if src_val == expect_val {
-            Ok(())
-        } else {
-            Err(ReplayError::FailedValidation)
-        }
-    }
-    #[cfg(not(feature = "rr-type-validation"))]
-    Ok(())
-}
-
 /// Trait signifying types that can be validated on replay
 ///
 /// All `PartialEq` and `Eq` types are directly validatable with themselves.

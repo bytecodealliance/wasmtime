@@ -13,7 +13,7 @@ use alloc::sync::Arc;
 use core::any::Any;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
-use wasmtime_environ::component::TypeTuple;
+use wasmtime_environ::component::TypeFunc;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
     StringEncoding, TypeFuncIndex,
@@ -31,29 +31,25 @@ mod rr_hooks {
     #[inline]
     pub fn record_replay_host_func_entry(
         args: &mut [MaybeUninit<ValRaw>],
-        param_types: &TypeTuple,
+        func_type: &TypeFunc,
         store: &mut StoreOpaque,
     ) -> Result<()> {
         #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
         {
             use crate::rr::component_events::HostFuncEntryEvent;
-            store.record_event_validation(|| HostFuncEntryEvent::new(args, Some(param_types)))?;
-            store.next_replay_event_validation::<HostFuncEntryEvent, _>(param_types)?;
+            store.record_event_validation(|| HostFuncEntryEvent::new(args, func_type.clone()))?;
+            store.next_replay_event_validation::<HostFuncEntryEvent, _>(func_type)?;
         }
-        let _ = (args, param_types, store);
+        let _ = (args, func_type, store);
         Ok(())
     }
 
     /// Record hook operation for host function return events
     #[inline]
-    pub fn record_host_func_return(
-        args: &[ValRaw],
-        result_types: &TypeTuple,
-        store: &mut StoreOpaque,
-    ) -> Result<()> {
+    pub fn record_host_func_return(args: &[ValRaw], store: &mut StoreOpaque) -> Result<()> {
         #[cfg(feature = "rr-component")]
         store.record_event(|| HostFuncReturnEvent::new(args))?;
-        let _ = (args, result_types, store);
+        let _ = (args, store);
         Ok(())
     }
 
@@ -289,7 +285,7 @@ where
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
 
-    rr_hooks::record_replay_host_func_entry(storage, &types[ty.params], cx.0)?;
+    rr_hooks::record_replay_host_func_entry(storage, &ty, cx.0)?;
 
     // There's a 2x2 matrix of whether parameters and results are stored on the
     // stack or on the heap. Each of the 4 branches here have a different
@@ -323,7 +319,7 @@ where
 
         flags.set_may_leave(false);
         let mut lower = LowerContext::new(cx, &options, types, instance);
-        storage.lower_results(&mut lower, result_tys, &types[ty.results], ret)?;
+        storage.lower_results(&mut lower, result_tys, ret)?;
         flags.set_may_leave(true);
 
         lower.exit_call()?;
@@ -370,14 +366,13 @@ where
             &mut self,
             cx: &mut LowerContext<'_, T>,
             ty: InterfaceType,
-            record_tys: &TypeTuple,
             ret: R,
         ) -> Result<()> {
             let direct_results_lower = |cx: &mut LowerContext<'_, T>,
                                         dst: &mut MaybeUninit<<R as ComponentType>::Lower>,
                                         ret: R| {
                 let res = rr_hooks::record_lower(|cx, ty| ret.lower(cx, ty, dst), cx, ty);
-                rr_hooks::record_host_func_return(storage_as_slice(dst), record_tys, cx.store.0)?;
+                rr_hooks::record_host_func_return(storage_as_slice(dst), cx.store.0)?;
                 res
             };
             let indirect_results_lower = |cx: &mut LowerContext<'_, T>, dst: &ValRaw, ret: R| {
@@ -385,7 +380,7 @@ where
                 let res =
                     rr_hooks::record_lower_store(|cx, ty, ptr| ret.store(cx, ty, ptr), cx, ty, ptr);
                 // Recording here is just for marking the return event
-                rr_hooks::record_host_func_return(&[], record_tys, cx.store.0)?;
+                rr_hooks::record_host_func_return(&[], cx.store.0)?;
                 res
             };
             match self {
@@ -512,7 +507,7 @@ where
     let param_tys = &types[func_ty.params];
     let result_tys = &types[func_ty.results];
 
-    rr_hooks::record_replay_host_func_entry(storage, &types[func_ty.params], store.0)?;
+    rr_hooks::record_replay_host_func_entry(storage, &types[ty], store.0)?;
 
     if !store.0.replay_enabled() {
         let args;
@@ -567,7 +562,6 @@ where
             assert!(dst.next().is_none());
             rr_hooks::record_host_func_return(
                 mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(storage),
-                result_tys,
                 cx.store.0,
             )?;
         } else {
@@ -583,7 +577,7 @@ where
                 )?;
             }
             // Recording here is just for marking the return event
-            rr_hooks::record_host_func_return(&[], result_tys, cx.store.0)?;
+            rr_hooks::record_host_func_return(&[], cx.store.0)?;
         }
         flags.set_may_leave(true);
 

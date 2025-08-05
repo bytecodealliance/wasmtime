@@ -4,7 +4,7 @@ use super::*;
 #[expect(unused_imports, reason = "used for doc-links")]
 use crate::component::{Component, ComponentType};
 use wasmtime_environ::component::InterfaceType;
-use wasmtime_environ::component::TypeTuple;
+use wasmtime_environ::component::TypeFunc;
 
 /// A [`Component`] instantiatation event
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,26 +27,30 @@ pub struct HostFuncEntryEvent {
     /// Raw values passed across the call entry boundary
     args: RRFuncArgVals,
 
-    /// Optional param/return types (required to support replay validation).
+    /// Param/return types (required to support replay validation).
     ///
     /// Note: This relies on the invariant that [InterfaceType] will always be
     /// deterministic. Currently, the type indices into various [ComponentTypes]
     /// maintain this, allowing for quick type-checking.
-    types: Option<TypeTuple>,
+    types: TypeFunc,
 }
 impl HostFuncEntryEvent {
     // Record
-    pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<&TypeTuple>) -> Self {
+    pub fn new(args: &[MaybeUninit<ValRaw>], types: TypeFunc) -> Self {
         Self {
             args: func_argvals_from_raw_slice(args),
-            types: types.cloned(),
+            types: types,
         }
     }
 }
-impl Validate<TypeTuple> for HostFuncEntryEvent {
-    fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
+impl Validate<TypeFunc> for HostFuncEntryEvent {
+    fn validate(&self, expect_types: &TypeFunc) -> Result<(), ReplayError> {
         self.log();
-        replay_args_typecheck(self.types.as_ref(), expect_types)
+        if &self.types == expect_types {
+            Ok(())
+        } else {
+            Err(ReplayError::FailedValidation)
+        }
     }
 }
 
@@ -145,7 +149,13 @@ impl Validate<Result<usize>> for ReallocReturnEvent {
         self.log();
         // Cannot just use eq since anyhow::Error and EventActionError cannot be compared
         match (self.ret.as_ref(), expect_ret.as_ref()) {
-            (Ok(r), Ok(s)) => replay_args_valcheck(r, s),
+            (Ok(r), Ok(s)) => {
+                if r == s {
+                    Ok(())
+                } else {
+                    Err(ReplayError::FailedValidation)
+                }
+            }
             // Return the recorded error
             (Err(e), Err(f)) => Err(ReplayError::from(EventActionError::ReallocError(format!(
                 "Replayed Realloc Error: {} \nRecorded Realloc Error: {}",

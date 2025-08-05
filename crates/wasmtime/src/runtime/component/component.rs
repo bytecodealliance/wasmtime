@@ -833,6 +833,7 @@ impl Component {
         &self.inner.realloc_func_type
     }
 
+    #[allow(unused)]
     pub(crate) fn checksum(&self) -> &[u8; 32] {
         &self.inner.checksum
     }

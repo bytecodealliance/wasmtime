@@ -652,13 +652,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
                     bail!("Cannot call back into host during lowering")
                 }
                 // Unwrapping should never occur on valid executions since *Entry should be before *Return in trace
-                RREvent::ComponentReallocReturn(e) => {
+                RREvent::ComponentReallocReturn(e) =>
+                {
                     #[cfg(feature = "rr-type-validation")]
                     if run_validate {
                         lowering_error = e.validate(&realloc_stack.pop().unwrap()).err()
-                    } else {
-                        // Error is subsumed by the LowerReturn or the LowerStoreReturn
-                        lowering_error = None
                     }
                 }
                 RREvent::ComponentLowerEntry(_) => {
