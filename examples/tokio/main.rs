@@ -2,7 +2,7 @@ use anyhow::Error;
 use std::sync::Arc;
 use tokio::time::Duration;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasmtime_wasi::{WasiCtx, preview1::WasiP1Ctx};
+use wasmtime_wasi::{WasiCtx, p1::WasiP1Ctx};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -58,7 +58,7 @@ impl Environment {
         // adds WASI functions to the linker, notably the async versions built
         // on tokio.
         let mut linker = Linker::new(&engine);
-        wasmtime_wasi::preview1::add_to_linker_async(&mut linker, |cx| cx)?;
+        wasmtime_wasi::p1::add_to_linker_async(&mut linker, |cx| cx)?;
 
         Ok(Self {
             engine,
