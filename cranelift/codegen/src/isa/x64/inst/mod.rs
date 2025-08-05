@@ -1473,71 +1473,71 @@ impl asm::AvailableFeatures for &EmitInfo {
     }
 
     fn sse3(&self) -> bool {
-        self.isa_flags.use_sse3()
+        self.isa_flags.has_sse3()
     }
 
     fn ssse3(&self) -> bool {
-        self.isa_flags.use_ssse3()
+        self.isa_flags.has_ssse3()
     }
 
     fn sse41(&self) -> bool {
-        self.isa_flags.use_sse41()
+        self.isa_flags.has_sse41()
     }
 
     fn sse42(&self) -> bool {
-        self.isa_flags.use_sse42()
+        self.isa_flags.has_sse42()
     }
 
     fn bmi1(&self) -> bool {
-        self.isa_flags.use_bmi1()
+        self.isa_flags.has_bmi1()
     }
 
     fn bmi2(&self) -> bool {
-        self.isa_flags.use_bmi2()
+        self.isa_flags.has_bmi2()
     }
 
     fn lzcnt(&self) -> bool {
-        self.isa_flags.use_lzcnt()
+        self.isa_flags.has_lzcnt()
     }
 
     fn popcnt(&self) -> bool {
-        self.isa_flags.use_popcnt()
+        self.isa_flags.has_popcnt()
     }
 
     fn avx(&self) -> bool {
-        self.isa_flags.use_avx()
+        self.isa_flags.has_avx()
     }
 
     fn avx2(&self) -> bool {
-        self.isa_flags.use_avx2()
+        self.isa_flags.has_avx2()
     }
 
     fn avx512f(&self) -> bool {
-        self.isa_flags.use_avx512f()
+        self.isa_flags.has_avx512f()
     }
 
     fn avx512vl(&self) -> bool {
-        self.isa_flags.use_avx512vl()
+        self.isa_flags.has_avx512vl()
     }
 
     fn cmpxchg16b(&self) -> bool {
-        self.isa_flags.use_cmpxchg16b()
+        self.isa_flags.has_cmpxchg16b()
     }
 
     fn fma(&self) -> bool {
-        self.isa_flags.use_fma()
+        self.isa_flags.has_fma()
     }
 
     fn avx512dq(&self) -> bool {
-        self.isa_flags.use_avx512dq()
+        self.isa_flags.has_avx512dq()
     }
 
     fn avx512bitalg(&self) -> bool {
-        self.isa_flags.use_avx512bitalg()
+        self.isa_flags.has_avx512bitalg()
     }
 
     fn avx512vbmi(&self) -> bool {
-        self.isa_flags.use_avx512vbmi()
+        self.isa_flags.has_avx512vbmi()
     }
 }
 
