@@ -10,7 +10,7 @@ use wasmtime_wasi_nn::wit::WasiNnView;
 use wasmtime_wasi_nn::{Backend, InMemoryRegistry, wit::WasiNnCtx};
 
 /// Run a wasi-nn test program. This is modeled after
-/// `crates/wasi/tests/all/main.rs` but still uses the older preview1 API for
+/// `crates/wasi/tests/all/main.rs` but still uses the older p1 API for
 /// file reads.
 pub fn run(path: &str, backend: Backend, preload_model: bool) -> Result<()> {
     let path = Path::new(path);

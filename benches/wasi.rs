@@ -3,7 +3,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::{fs::File, path::Path, time::Instant};
 use wasmtime::{Engine, Linker, Module, Store, TypedFunc};
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, preview1::WasiP1Ctx};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, p1::WasiP1Ctx};
 
 criterion_group!(benches, bench_wasi);
 criterion_main!(benches);
@@ -53,7 +53,7 @@ fn instantiate(wat: &[u8]) -> (Store<WasiP1Ctx>, TypedFunc<u64, u64>) {
     let mut store = Store::new(&engine, wasi);
     let module = Module::new(&engine, wat).unwrap();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |cx| cx).unwrap();
+    wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |cx| cx).unwrap();
     let instance = linker.instantiate(&mut store, &module).unwrap();
     let run = instance.get_typed_func(&mut store, "run").unwrap();
     (store, run)
