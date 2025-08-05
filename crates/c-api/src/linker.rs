@@ -112,7 +112,7 @@ pub extern "C" fn wasmtime_linker_define_wasi(
     linker: &mut wasmtime_linker_t,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        wasmtime_wasi::preview1::add_to_linker_sync(&mut linker.linker, |ctx| {
+        wasmtime_wasi::p1::add_to_linker_sync(&mut linker.linker, |ctx| {
             ctx.wasi.as_mut().expect("wasi context must be populated")
         }),
         |_linker| (),
