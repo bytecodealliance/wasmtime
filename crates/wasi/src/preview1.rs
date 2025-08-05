@@ -64,6 +64,7 @@
 //! ```
 
 use crate::cli::WasiCliView;
+use crate::clocks::WasiClocksView;
 use crate::p2::bindings::{
     cli::{
         stderr::Host as _, stdin::Host as _, stdout::Host as _, terminal_input, terminal_output,
@@ -1232,15 +1233,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         id: types::Clockid,
     ) -> Result<types::Timestamp, types::Error> {
         let res = match id {
-            types::Clockid::Realtime => wall_clock::Host::resolution(&mut self.as_wasi_impl())
+            types::Clockid::Realtime => wall_clock::Host::resolution(&mut self.clocks())
                 .context("failed to call `wall_clock::resolution`")
                 .map_err(types::Error::trap)?
                 .try_into()?,
-            types::Clockid::Monotonic => {
-                monotonic_clock::Host::resolution(&mut self.as_wasi_impl())
-                    .context("failed to call `monotonic_clock::resolution`")
-                    .map_err(types::Error::trap)?
-            }
+            types::Clockid::Monotonic => monotonic_clock::Host::resolution(&mut self.clocks())
+                .context("failed to call `monotonic_clock::resolution`")
+                .map_err(types::Error::trap)?,
             types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
                 return Err(types::Errno::Badf.into());
             }
@@ -1256,11 +1255,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         _precision: types::Timestamp,
     ) -> Result<types::Timestamp, types::Error> {
         let now = match id {
-            types::Clockid::Realtime => wall_clock::Host::now(&mut self.as_wasi_impl())
+            types::Clockid::Realtime => wall_clock::Host::now(&mut self.clocks())
                 .context("failed to call `wall_clock::now`")
                 .map_err(types::Error::trap)?
                 .try_into()?,
-            types::Clockid::Monotonic => monotonic_clock::Host::now(&mut self.as_wasi_impl())
+            types::Clockid::Monotonic => monotonic_clock::Host::now(&mut self.clocks())
                 .context("failed to call `monotonic_clock::now`")
                 .map_err(types::Error::trap)?,
             types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
@@ -2320,7 +2319,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                         types::Clockid::Monotonic => (timeout, absolute),
                         types::Clockid::Realtime if !absolute => (timeout, false),
                         types::Clockid::Realtime => {
-                            let now = wall_clock::Host::now(&mut self.as_wasi_impl())
+                            let now = wall_clock::Host::now(&mut self.clocks())
                                 .context("failed to call `wall_clock::now`")
                                 .map_err(types::Error::trap)?;
 
@@ -2343,11 +2342,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                         _ => return Err(types::Errno::Inval.into()),
                     };
                     if absolute {
-                        monotonic_clock::Host::subscribe_instant(&mut self.as_wasi_impl(), timeout)
+                        monotonic_clock::Host::subscribe_instant(&mut self.clocks(), timeout)
                             .context("failed to call `monotonic_clock::subscribe_instant`")
                             .map_err(types::Error::trap)?
                     } else {
-                        monotonic_clock::Host::subscribe_duration(&mut self.as_wasi_impl(), timeout)
+                        monotonic_clock::Host::subscribe_duration(&mut self.clocks(), timeout)
                             .context("failed to call `monotonic_clock::subscribe_duration`")
                             .map_err(types::Error::trap)?
                     }

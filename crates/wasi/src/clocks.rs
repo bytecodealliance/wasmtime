@@ -1,6 +1,13 @@
 use cap_std::time::{Duration, Instant, SystemClock};
 use cap_std::{AmbientAuthority, ambient_authority};
 use cap_time_ext::{MonotonicClockExt as _, SystemClockExt as _};
+use wasmtime::component::{HasData, ResourceTable};
+
+pub(crate) struct WasiClocks;
+
+impl HasData for WasiClocks {
+    type Data<'a> = WasiClocksCtxView<'a>;
+}
 
 pub struct WasiClocksCtx {
     pub wall_clock: Box<dyn HostWallClock + Send>,
@@ -17,13 +24,12 @@ impl Default for WasiClocksCtx {
 }
 
 pub trait WasiClocksView: Send {
-    fn clocks(&mut self) -> &mut WasiClocksCtx;
+    fn clocks(&mut self) -> WasiClocksCtxView<'_>;
 }
 
-impl WasiClocksView for WasiClocksCtx {
-    fn clocks(&mut self) -> &mut WasiClocksCtx {
-        self
-    }
+pub struct WasiClocksCtxView<'a> {
+    pub ctx: &'a mut WasiClocksCtx,
+    pub table: &'a mut ResourceTable,
 }
 
 pub trait HostWallClock: Send {

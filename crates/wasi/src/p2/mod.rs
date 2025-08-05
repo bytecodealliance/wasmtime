@@ -222,6 +222,7 @@
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
 
 use crate::cli::{WasiCli, WasiCliView};
+use crate::clocks::{WasiClocks, WasiClocksView};
 use crate::random::WasiRandom;
 use crate::{WasiCtxView, WasiView};
 use wasmtime::component::{HasData, Linker, ResourceTable};
@@ -339,8 +340,8 @@ where
     use crate::p2::bindings::{cli, clocks, filesystem, random, sockets};
 
     let l = linker;
-    clocks::wall_clock::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    clocks::monotonic_clock::add_to_linker::<T, HasWasi>(l, T::ctx)?;
+    clocks::wall_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
+    clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
     filesystem::preopens::add_to_linker::<T, HasWasi>(l, T::ctx)?;
     random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
     random::insecure::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
@@ -386,8 +387,8 @@ fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> anyh
     use crate::p2::bindings::{cli, clocks, random};
 
     let l = linker;
-    clocks::wall_clock::add_to_linker::<T, HasWasi>(l, T::ctx)?;
-    clocks::monotonic_clock::add_to_linker::<T, HasWasi>(l, T::ctx)?;
+    clocks::wall_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
+    clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
     random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
     cli::stdin::add_to_linker::<T, WasiCli>(l, T::cli)?;
     cli::stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
