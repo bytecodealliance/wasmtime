@@ -11,7 +11,7 @@ fn main() -> Result<()> {
     // First set up our linker which is going to be linking modules together. We
     // want our linker to have wasi available, so we set that up here as well.
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |s| s)?;
+    wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s| s)?;
 
     // Load and compile our two modules
     let linking1 = Module::from_file(&engine, "examples/linking1.wat")?;

@@ -33,7 +33,7 @@ wat = { workspace = true, optional = true }
 # Optional dependencies for the `wasi` feature
 cap-std = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["fs"] }
-wasmtime-wasi = { workspace = true, optional = true, features = ["preview1"] }
+wasmtime-wasi = { workspace = true, optional = true, features = ["p1"] }
 
 # Optional dependencies for the `async` feature
 futures = { workspace = true, optional = true }

@@ -398,6 +398,14 @@ jobs:
           - name: wasmtime-wasi-http
             checks: |
               -p wasmtime-wasi-http --no-default-features
+
+          - name: wasmtime-wasi
+            checks: |
+              -p wasmtime-wasi --no-default-features
+              -p wasmtime-wasi --no-default-features --features p0
+              -p wasmtime-wasi --no-default-features --features p1
+              -p wasmtime-wasi --no-default-features --features p2
+              -p wasmtime-wasi --no-default-features --features p3
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

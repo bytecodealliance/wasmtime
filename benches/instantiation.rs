@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::thread;
 use wasmtime::*;
-use wasmtime_wasi::{WasiCtx, preview1::WasiP1Ctx};
+use wasmtime_wasi::{WasiCtx, p1::WasiP1Ctx};
 
 fn store(engine: &Engine) -> Store<WasiP1Ctx> {
     let wasi = WasiCtx::builder().build_p1();
@@ -49,7 +49,7 @@ fn bench_sequential(c: &mut Criterion, path: &Path) {
             // benchmark programs.
             linker.func_wrap("bench", "start", || {}).unwrap();
             linker.func_wrap("bench", "end", || {}).unwrap();
-            wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |cx| cx).unwrap();
+            wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |cx| cx).unwrap();
             let pre = linker
                 .instantiate_pre(&module)
                 .expect("failed to pre-instantiate");
@@ -83,7 +83,7 @@ fn bench_parallel(c: &mut Criterion, path: &Path) {
             // benchmark programs.
             linker.func_wrap("bench", "start", || {}).unwrap();
             linker.func_wrap("bench", "end", || {}).unwrap();
-            wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |cx| cx).unwrap();
+            wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |cx| cx).unwrap();
             let pre = Arc::new(
                 linker
                     .instantiate_pre(&module)

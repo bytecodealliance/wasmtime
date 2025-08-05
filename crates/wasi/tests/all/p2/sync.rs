@@ -1,6 +1,8 @@
-use super::*;
+use crate::store::{Ctx, MyWasiCtx};
 use std::path::Path;
 use test_programs_artifacts::*;
+use wasmtime::Result;
+use wasmtime::component::{Component, Linker};
 use wasmtime_wasi::p2::add_to_linker_sync;
 use wasmtime_wasi::p2::bindings::sync::Command;
 
@@ -14,11 +16,15 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let component = Component::from_file(&engine, path)?;
 
     for blocking in [false, true] {
-        let (mut store, _td) = store(&engine, name, |builder| {
+        let (mut store, _td) = Ctx::new(&engine, name, |builder| {
             if inherit_stdio {
                 builder.inherit_stdio();
             }
             builder.allow_blocking_current_thread(blocking);
+            MyWasiCtx {
+                wasi: builder.build(),
+                table: Default::default(),
+            }
         })?;
         let command = Command::instantiate(&mut store, &component, &linker)?;
         command

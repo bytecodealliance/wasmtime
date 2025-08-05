@@ -1,8 +1,9 @@
-use super::*;
+use crate::store::Ctx;
+use anyhow::Result;
 use std::path::Path;
 use test_programs_artifacts::*;
 use wasmtime::{Linker, Module};
-use wasmtime_wasi::preview1::add_to_linker_async;
+use wasmtime_wasi::p1::{WasiP1Ctx, add_to_linker_async};
 
 async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
@@ -10,14 +11,15 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let engine = test_programs_artifacts::engine(|config| {
         config.async_support(true);
     });
-    let mut linker = Linker::<Ctx>::new(&engine);
+    let mut linker = Linker::<Ctx<WasiP1Ctx>>::new(&engine);
     add_to_linker_async(&mut linker, |t| &mut t.wasi)?;
 
     let module = Module::from_file(&engine, path)?;
-    let (mut store, _td) = store(&engine, name, |builder| {
+    let (mut store, _td) = Ctx::new(&engine, name, |builder| {
         if inherit_stdio {
             builder.inherit_stdio();
         }
+        builder.build_p1()
     })?;
     let instance = linker.instantiate_async(&mut store, &module).await?;
     let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
