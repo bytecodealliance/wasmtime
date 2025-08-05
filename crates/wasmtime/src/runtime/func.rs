@@ -1520,7 +1520,7 @@ mod rr_hooks {
         wasm_func_type: &WasmFuncType,
         store: &mut StoreOpaque,
     ) -> Result<()> {
-        #[cfg(all(feature = "rr-core", feature = "rr-type-validation"))]
+        #[cfg(all(feature = "rr-core", feature = "rr-validate"))]
         {
             // Record/replay the raw parameter args
             use crate::rr::core_events::HostFuncEntryEvent;

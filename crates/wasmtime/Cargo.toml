@@ -409,5 +409,5 @@ rr-core = ["rr"]
 
 # Support for validation signatures/checks during record/replay respectively.
 # This feature only makes sense if 'rr-component' or 'rr-core' is enabled
-rr-type-validation = ["rr"]
+rr-validate = ["rr"]
 

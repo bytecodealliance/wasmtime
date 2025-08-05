@@ -38,6 +38,10 @@ pub struct ReplayCommand {
 impl ReplayCommand {
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
+        #[cfg(not(feature = "rr-validate"))]
+        if self.replay_opts.validate {
+            anyhow::bail!("Cannot use `validate` when `rr-validate` feature is disabled");
+        }
         let replay_cfg = ReplayConfig {
             reader_initializer: Arc::new(move || {
                 Box::new(BufReader::new(

@@ -272,6 +272,7 @@ pub trait Replayer: Iterator<Item = RREvent> {
     /// In addition to errors in [`next_event_typed`](Replayer::next_event_typed),
     /// validation errors can be thrown
     #[inline]
+    #[cfg(feature = "rr-validate")]
     fn next_event_validation<T, Y>(&mut self, expect: &Y) -> Result<(), ReplayError>
     where
         T: TryFrom<RREvent> + Validate<Y>,
@@ -416,7 +417,7 @@ impl Replayer for ReplayBuffer {
         );
 
         // Read the recording settings
-        let trace_settings: RecordSettings = io::from_replay_reader(&mut reader, &mut [0; 0])?;
+        let trace_settings: RecordSettings = io::from_replay_reader(&mut reader, &mut scratch)?;
 
         if settings.validate && !trace_settings.add_validation {
             log::warn!(

@@ -24,8 +24,7 @@ mod rr_hooks {
     use super::*;
     #[cfg(feature = "rr-component")]
     use crate::rr::component_events::{
-        HostFuncReturnEvent, LowerEntryEvent, LowerReturnEvent, LowerStoreEntryEvent,
-        LowerStoreReturnEvent,
+        HostFuncReturnEvent, LowerReturnEvent, LowerStoreReturnEvent,
     };
     /// Record/replay hook operation for host function entry events
     #[inline]
@@ -34,7 +33,7 @@ mod rr_hooks {
         func_type: &TypeFunc,
         store: &mut StoreOpaque,
     ) -> Result<()> {
-        #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
+        #[cfg(all(feature = "rr-component", feature = "rr-validate"))]
         {
             use crate::rr::component_events::HostFuncEntryEvent;
             store.record_event_validation(|| HostFuncEntryEvent::new(args, func_type.clone()))?;
@@ -64,10 +63,13 @@ mod rr_hooks {
     where
         F: FnOnce(&mut LowerContext<'_, T>, InterfaceType, usize) -> Result<()>,
     {
-        #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
-        cx.store
-            .0
-            .record_event_validation(|| LowerStoreEntryEvent::new(ty, offset))?;
+        #[cfg(all(feature = "rr-component", feature = "rr-validate"))]
+        {
+            use crate::rr::component_events::LowerStoreEntryEvent;
+            cx.store
+                .0
+                .record_event_validation(|| LowerStoreEntryEvent::new(ty, offset))?;
+        }
         let store_result = lower_store(cx, ty, offset);
         #[cfg(feature = "rr-component")]
         cx.store
@@ -86,10 +88,13 @@ mod rr_hooks {
     where
         F: FnOnce(&mut LowerContext<'_, T>, InterfaceType) -> Result<()>,
     {
-        #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
-        cx.store
-            .0
-            .record_event_validation(|| LowerEntryEvent::new(ty))?;
+        #[cfg(all(feature = "rr-component", feature = "rr-validate"))]
+        {
+            use crate::rr::component_events::LowerEntryEvent;
+            cx.store
+                .0
+                .record_event_validation(|| LowerEntryEvent::new(ty))?;
+        }
         let lower_result = lower(cx, ty);
         #[cfg(feature = "rr-component")]
         cx.store

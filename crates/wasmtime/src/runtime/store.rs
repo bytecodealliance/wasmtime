@@ -79,8 +79,10 @@
 use crate::RootSet;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
+#[cfg(feature = "rr-validate")]
+use crate::rr::Validate;
 #[cfg(feature = "rr")]
-use crate::rr::{RREvent, RecordBuffer, Recorder, ReplayBuffer, ReplayError, Replayer, Validate};
+use crate::rr::{RREvent, RecordBuffer, Recorder, ReplayBuffer, ReplayError, Replayer};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
 #[cfg(feature = "stack-switching")]
@@ -1440,7 +1442,7 @@ impl StoreOpaque {
     /// and if validation is enabled on replay, and run the validation check
     ///
     /// Convenience wrapper around [`Replayer::next_event_validation`]
-    #[cfg(feature = "rr")]
+    #[cfg(all(feature = "rr", feature = "rr-validate"))]
     #[inline]
     pub(crate) fn next_replay_event_validation<T, Y>(
         &mut self,

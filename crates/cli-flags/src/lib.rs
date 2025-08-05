@@ -3,11 +3,9 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use serde::Deserialize;
-use std::io::BufWriter;
 use std::{
     fmt, fs,
     path::{Path, PathBuf},
-    sync::Arc,
     time::Duration,
 };
 use wasmtime::Config;
@@ -1015,8 +1013,14 @@ impl CommonOptions {
         match_feature! {
             ["rr" : record.path.clone()]
             path => {
+                use std::{io::BufWriter, sync::Arc};
                 use wasmtime::{RecordConfig, RecordSettings};
                 let default_settings = RecordSettings::default();
+                match_feature! {
+                    ["rr-validate": record.validation_metadata]
+                    _v => (),
+                    _ => err,
+                }
                 config.enable_record(RecordConfig {
                     writer_initializer: Arc::new(move || {
                         Box::new(BufWriter::new(fs::File::create(&path).unwrap()))
