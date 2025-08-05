@@ -54,26 +54,6 @@ pub enum HandleKind {
     },
 }
 
-enum ResourceKind {
-    /// Represents an owned resource handle with the listed representation.
-    ///
-    /// The `lend_count` tracks how many times this has been lent out as a
-    /// `borrow` and if nonzero this can't be removed.
-    Own {
-        resource: TypedResource,
-        lend_count: u32,
-    },
-    /// Represents a borrowed resource handle connected to the `scope`
-    /// provided.
-    ///
-    /// The `rep` is listed and dropping this borrow will decrement the borrow
-    /// count of the `scope`.
-    Borrow {
-        resource: TypedResource,
-        scope: usize,
-    },
-}
-
 /// Return value from [`HandleTable::remove_resource`].
 pub enum RemovedResource {
     /// An `own` resource was removed with the specified `rep`
@@ -83,9 +63,32 @@ pub enum RemovedResource {
 }
 
 enum Slot {
-    Free { next: u32 },
-    Handle { rep: u32, kind: HandleKind },
-    Resource { kind: ResourceKind },
+    Free {
+        next: u32,
+    },
+    Handle {
+        rep: u32,
+        kind: HandleKind,
+    },
+
+    /// Represents an owned resource handle with the listed representation.
+    ///
+    /// The `lend_count` tracks how many times this has been lent out as a
+    /// `borrow` and if nonzero this can't be removed.
+    ResourceOwn {
+        resource: TypedResource,
+        lend_count: u32,
+    },
+
+    /// Represents a borrowed resource handle connected to the `scope`
+    /// provided.
+    ///
+    /// The `rep` is listed and dropping this borrow will decrement the borrow
+    /// count of the `scope`.
+    ResourceBorrow {
+        resource: TypedResource,
+        scope: usize,
+    },
 }
 
 pub struct HandleTable {
@@ -160,11 +163,9 @@ impl HandleTable {
     /// Inserts a new `own` resource into this table whose type/rep are
     /// specified by `resource`.
     pub fn insert_own_resource(&mut self, resource: TypedResource) -> Result<u32> {
-        self.insert(Slot::Resource {
-            kind: ResourceKind::Own {
-                resource,
-                lend_count: 0,
-            },
+        self.insert(Slot::ResourceOwn {
+            resource,
+            lend_count: 0,
         })
     }
 
@@ -172,9 +173,7 @@ impl HandleTable {
     /// specified by `resource`. The `scope` specified is used by
     /// `CallContexts` to manage lending information.
     pub fn insert_borrow_resource(&mut self, resource: TypedResource, scope: usize) -> Result<u32> {
-        self.insert(Slot::Resource {
-            kind: ResourceKind::Borrow { resource, scope },
-        })
+        self.insert(Slot::ResourceBorrow { resource, scope })
     }
 
     /// Returns the internal "rep" of the resource specified by `idx`.
@@ -190,9 +189,9 @@ impl HandleTable {
             Some(Slot::Handle { .. }) => {
                 bail!("index {} is a handle, not a resource", idx.raw_index())
             }
-            Some(Slot::Resource {
-                kind: ResourceKind::Own { resource, .. } | ResourceKind::Borrow { resource, .. },
-            }) => resource.rep(&idx),
+            Some(Slot::ResourceOwn { resource, .. } | Slot::ResourceBorrow { resource, .. }) => {
+                resource.rep(&idx)
+            }
         }
     }
 
@@ -206,20 +205,15 @@ impl HandleTable {
     /// `own` handle.
     pub fn resource_lend(&mut self, idx: TypedResourceIndex) -> Result<(u32, bool)> {
         match self.get_mut(idx.raw_index())? {
-            Slot::Resource {
-                kind:
-                    ResourceKind::Own {
-                        resource,
-                        lend_count,
-                    },
+            Slot::ResourceOwn {
+                resource,
+                lend_count,
             } => {
                 let rep = resource.rep(&idx)?;
                 *lend_count = lend_count.checked_add(1).unwrap();
                 Ok((rep, true))
             }
-            Slot::Resource {
-                kind: ResourceKind::Borrow { resource, .. },
-            } => Ok((resource.rep(&idx)?, false)),
+            Slot::ResourceBorrow { resource, .. } => Ok((resource.rep(&idx)?, false)),
             _ => bail!("index {} is not a resource", idx.raw_index()),
         }
     }
@@ -228,9 +222,7 @@ impl HandleTable {
     /// lending operation.
     pub fn resource_undo_lend(&mut self, idx: TypedResourceIndex) -> Result<()> {
         match self.get_mut(idx.raw_index())? {
-            Slot::Resource {
-                kind: ResourceKind::Own { lend_count, .. },
-            } => {
+            Slot::ResourceOwn { lend_count, .. } => {
                 *lend_count -= 1;
                 Ok(())
             }
@@ -246,12 +238,9 @@ impl HandleTable {
         let to_fill = Slot::Free { next: self.next };
         let slot = self.get_mut(idx.raw_index())?;
         let ret = match slot {
-            Slot::Resource {
-                kind:
-                    ResourceKind::Own {
-                        resource,
-                        lend_count,
-                    },
+            Slot::ResourceOwn {
+                resource,
+                lend_count,
             } => {
                 if *lend_count != 0 {
                     bail!("cannot remove owned resource while borrowed")
@@ -260,9 +249,7 @@ impl HandleTable {
                     rep: resource.rep(&idx)?,
                 }
             }
-            Slot::Resource {
-                kind: ResourceKind::Borrow { resource, scope },
-            } => {
+            Slot::ResourceBorrow { resource, scope } => {
                 // Ensure the drop is done with the right type
                 resource.rep(&idx)?;
                 RemovedResource::Borrow { scope: *scope }
@@ -299,7 +286,9 @@ impl HandleTable {
             .and_then(|i| self.slots.get_mut(i));
         match slot {
             None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
-            Some(Slot::Resource { .. }) => bail!("index {idx} is a resource, not a handle"),
+            Some(Slot::ResourceOwn { .. } | Slot::ResourceBorrow { .. }) => {
+                bail!("index {idx} is a resource, not a handle")
+            }
             Some(Slot::Handle { rep, kind }) => Ok((*rep, kind)),
         }
     }
