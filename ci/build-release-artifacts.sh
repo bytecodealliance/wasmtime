@@ -71,6 +71,12 @@ fi
 
 cargo build --release $flags --target $target -p wasmtime-cli $bin_flags --features run
 
+# For the C API force unwind tables to be emitted to make the generated objects
+# more flexible. Embedders can always build without this but this enables
+# libunwind to produce better backtraces by default when Wasmtime is linked into
+# a different project that wants to unwind.
+export RUSTFLAGS="$RUSTFLAGS -C force-unwind-tables"
+
 mkdir -p target/c-api-build
 cd target/c-api-build
 cmake \
