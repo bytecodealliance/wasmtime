@@ -75,7 +75,6 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
 
         // Step #2: (Re)connect
         if let Some(connect_addr) = remote_address {
-            let connect_addr = SocketAddr::from(connect_addr);
             let Some(check) = socket.socket_addr_check() else {
                 return Err(ErrorCode::InvalidState.into());
             };

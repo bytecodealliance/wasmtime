@@ -136,7 +136,7 @@ impl UdpSocket {
 
         match self.udp_state {
             UdpState::Bound | UdpState::Connected(_) => {}
-            _ => return Err(ErrorCode::InvalidState.into()),
+            _ => return Err(ErrorCode::InvalidState),
         }
 
         // We disconnect & (re)connect in two distinct steps for two reasons:
@@ -241,7 +241,7 @@ impl UdpSocket {
             .socket
             .as_socketlike_view::<std::net::UdpSocket>()
             .local_addr()?;
-        Ok(addr.into())
+        Ok(addr)
     }
 
     pub(crate) fn remote_address(&self) -> Result<SocketAddr, ErrorCode> {
@@ -252,7 +252,7 @@ impl UdpSocket {
             .socket
             .as_socketlike_view::<std::net::UdpSocket>()
             .peer_addr()?;
-        Ok(addr.into())
+        Ok(addr)
     }
 
     pub(crate) fn address_family(&self) -> SocketAddressFamily {
