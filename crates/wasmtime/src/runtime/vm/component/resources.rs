@@ -20,7 +20,7 @@
 //! about ABI details can be found in lifting/lowering throughout Wasmtime,
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
-use super::{HandleTable, ResourceKind};
+use super::{HandleTable, RemovedResource};
 use crate::prelude::*;
 use core::error::Error;
 use core::fmt;
@@ -217,10 +217,7 @@ impl ResourceTables<'_> {
     /// Note that this is the same as `resource_lower_own`.
     pub fn resource_new(&mut self, resource: TypedResource) -> Result<u32> {
         self.table_for_resource(&resource)
-            .insert_resource(ResourceKind::Own {
-                resource,
-                lend_count: 0,
-            })
+            .insert_own_resource(resource)
     }
 
     /// Implementation of the `resource.rep` canonical intrinsic.
@@ -245,17 +242,8 @@ impl ResourceTables<'_> {
     /// removed and no destructor is necessary.
     pub fn resource_drop(&mut self, index: TypedResourceIndex) -> Result<Option<u32>> {
         match self.table_for_index(&index).remove_resource(index)? {
-            ResourceKind::Own {
-                resource,
-                lend_count: 0,
-            } => resource.rep(&index).map(Some),
-            ResourceKind::Own { .. } => bail!("cannot remove owned resource while borrowed"),
-            ResourceKind::Borrow {
-                scope, resource, ..
-            } => {
-                // Validate that this borrow has the correct type to ensure a
-                // trap is returned if this is a mis-typed `resource.drop`.
-                resource.rep(&index)?;
+            RemovedResource::Own { rep } => Ok(Some(rep)),
+            RemovedResource::Borrow { scope } => {
                 self.calls.scopes[scope].borrow_count -= 1;
                 Ok(None)
             }
@@ -273,10 +261,7 @@ impl ResourceTables<'_> {
     /// This is an implementation of the canonical ABI `lower_own` function.
     pub fn resource_lower_own(&mut self, resource: TypedResource) -> Result<u32> {
         self.table_for_resource(&resource)
-            .insert_resource(ResourceKind::Own {
-                resource,
-                lend_count: 0,
-            })
+            .insert_own_resource(resource)
     }
 
     /// Attempts to remove an "own" handle from the specified table and its
@@ -289,12 +274,8 @@ impl ResourceTables<'_> {
     /// This is an implementation of the canonical ABI `lift_own` function.
     pub fn resource_lift_own(&mut self, index: TypedResourceIndex) -> Result<u32> {
         match self.table_for_index(&index).remove_resource(index)? {
-            ResourceKind::Own {
-                resource,
-                lend_count: 0,
-            } => resource.rep(&index),
-            ResourceKind::Own { .. } => bail!("cannot remove owned resource while borrowed"),
-            ResourceKind::Borrow { .. } => bail!("cannot lift own resource from a borrow"),
+            RemovedResource::Own { rep } => Ok(rep),
+            RemovedResource::Borrow { .. } => bail!("cannot lift own resource from a borrow"),
         }
     }
 
@@ -308,20 +289,12 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        match self.table_for_index(&index).get_mut_resource(index)? {
-            ResourceKind::Own {
-                resource,
-                lend_count,
-            } => {
-                let rep = resource.rep(&index)?;
-                // The decrement to this count happens in `exit_call`.
-                *lend_count = lend_count.checked_add(1).unwrap();
-                let scope = self.calls.scopes.last_mut().unwrap();
-                scope.lenders.push(index);
-                Ok(rep)
-            }
-            ResourceKind::Borrow { resource, .. } => resource.rep(&index),
+        let (rep, is_own) = self.table_for_index(&index).resource_lend(index)?;
+        if is_own {
+            let scope = self.calls.scopes.last_mut().unwrap();
+            scope.lenders.push(index);
         }
+        Ok(rep)
     }
 
     /// Records a new `borrow` resource with the given representation within the
@@ -341,7 +314,7 @@ impl ResourceTables<'_> {
         let borrow_count = &mut self.calls.scopes.last_mut().unwrap().borrow_count;
         *borrow_count = borrow_count.checked_add(1).unwrap();
         self.table_for_resource(&resource)
-            .insert_resource(ResourceKind::Borrow { resource, scope })
+            .insert_borrow_resource(resource, scope)
     }
 
     /// Enters a new calling context, starting a fresh count of borrows and
@@ -366,16 +339,9 @@ impl ResourceTables<'_> {
             // Note the panics here which should never get triggered in theory
             // due to the dynamic tracking of borrows and such employed for
             // resources.
-            match self
-                .table_for_index(lender)
-                .get_mut_resource(*lender)
-                .unwrap()
-            {
-                ResourceKind::Own { lend_count, .. } => {
-                    *lend_count -= 1;
-                }
-                _ => unreachable!(),
-            }
+            self.table_for_index(lender)
+                .resource_undo_lend(*lender)
+                .unwrap();
         }
         Ok(())
     }

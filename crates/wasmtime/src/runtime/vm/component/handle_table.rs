@@ -54,7 +54,7 @@ pub enum HandleKind {
     },
 }
 
-pub enum ResourceKind {
+enum ResourceKind {
     /// Represents an owned resource handle with the listed representation.
     ///
     /// The `lend_count` tracks how many times this has been lent out as a
@@ -72,6 +72,14 @@ pub enum ResourceKind {
         resource: TypedResource,
         scope: usize,
     },
+}
+
+/// Return value from [`HandleTable::remove_resource`].
+pub enum RemovedResource {
+    /// An `own` resource was removed with the specified `rep`
+    Own { rep: u32 },
+    /// A `borrow` resource was removed originally created within `scope`.
+    Borrow { scope: usize },
 }
 
 enum Slot {
@@ -132,8 +140,137 @@ impl HandleTable {
         Ok(ret)
     }
 
-    pub fn insert_resource(&mut self, kind: ResourceKind) -> Result<u32> {
-        self.insert(Slot::Resource { kind })
+    fn handle_index_to_table_index(&self, idx: u32) -> Option<usize> {
+        // NB: `idx` is decremented by one to account for the `+1` above during
+        // allocation.
+        let idx = idx.checked_sub(1)?;
+        usize::try_from(idx).ok()
+    }
+
+    fn get_mut(&mut self, idx: u32) -> Result<&mut Slot> {
+        let slot = self
+            .handle_index_to_table_index(idx)
+            .and_then(|i| self.slots.get_mut(i));
+        match slot {
+            None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
+            Some(slot) => Ok(slot),
+        }
+    }
+
+    /// Inserts a new `own` resource into this table whose type/rep are
+    /// specified by `resource`.
+    pub fn insert_own_resource(&mut self, resource: TypedResource) -> Result<u32> {
+        self.insert(Slot::Resource {
+            kind: ResourceKind::Own {
+                resource,
+                lend_count: 0,
+            },
+        })
+    }
+
+    /// Inserts a new `borrow` resource into this table whose type/rep are
+    /// specified by `resource`. The `scope` specified is used by
+    /// `CallContexts` to manage lending information.
+    pub fn insert_borrow_resource(&mut self, resource: TypedResource, scope: usize) -> Result<u32> {
+        self.insert(Slot::Resource {
+            kind: ResourceKind::Borrow { resource, scope },
+        })
+    }
+
+    /// Returns the internal "rep" of the resource specified by `idx`.
+    ///
+    /// Returns an error if `idx` is out-of-bounds or doesn't point to a
+    /// resource of the appropriate type.
+    pub fn resource_rep(&self, idx: TypedResourceIndex) -> Result<u32> {
+        let slot = self
+            .handle_index_to_table_index(idx.raw_index())
+            .and_then(|i| self.slots.get(i));
+        match slot {
+            None | Some(Slot::Free { .. }) => bail!("unknown handle index {}", idx.raw_index()),
+            Some(Slot::Handle { .. }) => {
+                bail!("index {} is a handle, not a resource", idx.raw_index())
+            }
+            Some(Slot::Resource {
+                kind: ResourceKind::Own { resource, .. } | ResourceKind::Borrow { resource, .. },
+            }) => resource.rep(&idx),
+        }
+    }
+
+    /// Accesses the "rep" of the resource pointed to by `idx` as part of a
+    /// lending operation.
+    ///
+    /// This will increase `lend_count` for owned resources and must be paired
+    /// with a `resource_undo_lend` below later on (managed by `CallContexts`).
+    ///
+    /// Upon success returns the "rep" plus whether the borrow came from an
+    /// `own` handle.
+    pub fn resource_lend(&mut self, idx: TypedResourceIndex) -> Result<(u32, bool)> {
+        match self.get_mut(idx.raw_index())? {
+            Slot::Resource {
+                kind:
+                    ResourceKind::Own {
+                        resource,
+                        lend_count,
+                    },
+            } => {
+                let rep = resource.rep(&idx)?;
+                *lend_count = lend_count.checked_add(1).unwrap();
+                Ok((rep, true))
+            }
+            Slot::Resource {
+                kind: ResourceKind::Borrow { resource, .. },
+            } => Ok((resource.rep(&idx)?, false)),
+            _ => bail!("index {} is not a resource", idx.raw_index()),
+        }
+    }
+
+    /// For `own` resources that were borrowed in `resource_lend`, undoes the
+    /// lending operation.
+    pub fn resource_undo_lend(&mut self, idx: TypedResourceIndex) -> Result<()> {
+        match self.get_mut(idx.raw_index())? {
+            Slot::Resource {
+                kind: ResourceKind::Own { lend_count, .. },
+            } => {
+                *lend_count -= 1;
+                Ok(())
+            }
+            _ => bail!("index {} is not an own resource", idx.raw_index()),
+        }
+    }
+
+    /// Removes the resource specified by `idx` from the table.
+    ///
+    /// This can fail if `idx` doesn't point to a resource, points to a
+    /// borrowed resource, or points to a resource of the wrong type.
+    pub fn remove_resource(&mut self, idx: TypedResourceIndex) -> Result<RemovedResource> {
+        let to_fill = Slot::Free { next: self.next };
+        let slot = self.get_mut(idx.raw_index())?;
+        let ret = match slot {
+            Slot::Resource {
+                kind:
+                    ResourceKind::Own {
+                        resource,
+                        lend_count,
+                    },
+            } => {
+                if *lend_count != 0 {
+                    bail!("cannot remove owned resource while borrowed")
+                }
+                RemovedResource::Own {
+                    rep: resource.rep(&idx)?,
+                }
+            }
+            Slot::Resource {
+                kind: ResourceKind::Borrow { resource, scope },
+            } => {
+                // Ensure the drop is done with the right type
+                resource.rep(&idx)?;
+                RemovedResource::Borrow { scope: *scope }
+            }
+            _ => bail!("index {} is not a resource", idx.raw_index()),
+        };
+        *slot = to_fill;
+        Ok(ret)
     }
 
     pub fn insert_handle(&mut self, rep: u32, kind: HandleKind) -> Result<u32> {
@@ -156,54 +293,6 @@ impl HandleTable {
         Ok(ret)
     }
 
-    fn handle_index_to_table_index(&self, idx: u32) -> Option<usize> {
-        // NB: `idx` is decremented by one to account for the `+1` above during
-        // allocation.
-        let idx = idx.checked_sub(1)?;
-        usize::try_from(idx).ok()
-    }
-
-    pub(super) fn resource_rep(&self, idx: TypedResourceIndex) -> Result<u32> {
-        let slot = self
-            .handle_index_to_table_index(idx.raw_index())
-            .and_then(|i| self.slots.get(i));
-        match slot {
-            None | Some(Slot::Free { .. }) => bail!("unknown handle index {}", idx.raw_index()),
-            Some(Slot::Handle { .. }) => {
-                bail!("index {} is a handle, not a resource", idx.raw_index())
-            }
-            Some(Slot::Resource {
-                kind: ResourceKind::Own { resource, .. } | ResourceKind::Borrow { resource, .. },
-            }) => resource.rep(&idx),
-        }
-    }
-
-    fn get_mut(&mut self, idx: u32) -> Result<&mut Slot> {
-        let slot = self
-            .handle_index_to_table_index(idx)
-            .and_then(|i| self.slots.get_mut(i));
-        match slot {
-            None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
-            Some(slot) => Ok(slot),
-        }
-    }
-
-    pub(super) fn get_mut_resource(
-        &mut self,
-        idx: TypedResourceIndex,
-    ) -> Result<&mut ResourceKind> {
-        let slot = self
-            .handle_index_to_table_index(idx.raw_index())
-            .and_then(|i| self.slots.get_mut(i));
-        match slot {
-            None | Some(Slot::Free { .. }) => bail!("unknown handle index {}", idx.raw_index()),
-            Some(Slot::Handle { .. }) => {
-                bail!("index {} is a handle, not a resource", idx.raw_index())
-            }
-            Some(Slot::Resource { kind }) => Ok(kind),
-        }
-    }
-
     pub fn get_mut_handle_by_index(&mut self, idx: u32) -> Result<(u32, &mut HandleKind)> {
         let slot = self
             .handle_index_to_table_index(idx)
@@ -223,17 +312,6 @@ impl HandleTable {
         } else {
             None
         }
-    }
-
-    pub(super) fn remove_resource(&mut self, idx: TypedResourceIndex) -> Result<ResourceKind> {
-        _ = self.resource_rep(idx)?;
-
-        let to_fill = Slot::Free { next: self.next };
-        let Slot::Resource { kind } = mem::replace(self.get_mut(idx.raw_index())?, to_fill) else {
-            unreachable!()
-        };
-        self.next = idx.raw_index() - 1;
-        Ok(kind)
     }
 
     pub fn remove_handle_by_index(&mut self, idx: u32) -> Result<(u32, HandleKind)> {
