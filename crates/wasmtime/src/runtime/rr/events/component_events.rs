@@ -23,6 +23,7 @@ impl InstantiationEvent {
 impl Validate<Component> for InstantiationEvent {
     /// Validate that checksums match
     fn validate(&self, expect_component: &Component) -> Result<(), ReplayError> {
+        self.log();
         if self.checksum != *expect_component.checksum() {
             Err(ReplayError::FailedModuleValidation)
         } else {
@@ -55,6 +56,7 @@ impl HostFuncEntryEvent {
 }
 impl Validate<TypeTuple> for HostFuncEntryEvent {
     fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
+        self.log();
         replay_args_typecheck(self.types.as_ref(), expect_types)
     }
 }
@@ -96,6 +98,7 @@ impl HostFuncReturnEvent {
 }
 impl Validate<TypeTuple> for HostFuncReturnEvent {
     fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
+        self.log();
         replay_args_typecheck(self.types.as_ref(), expect_types)
     }
 }
@@ -121,23 +124,6 @@ macro_rules! generic_new_result_events {
                     }
                 }
                 pub fn ret(self) -> Result<$ok_ty, EventActionError> { self.ret }
-            }
-
-            impl Validate<Result<$ok_ty>> for $event {
-                fn validate(&self, expect_ret: &Result<$ok_ty>) -> Result<(), ReplayError> {
-                    // Cannot just use eq since anyhow::Error and EventActionError cannot be compared
-                    match (self.ret.as_ref(), expect_ret.as_ref()) {
-                        (Ok(r), Ok(s)) => replay_args_valcheck(r, s),
-                        // Return the recorded error
-                        (Err(e), Err(f)) => Err(ReplayError::from($err_variant(format!(
-                            "Replayed Error: {} \nRecorded Error: {}",
-                            e, f
-                        )))),
-                        // Diverging errors.. Report as a failed validation
-                        (Ok(_), Err(_)) => Err(ReplayError::FailedFuncValidation),
-                        (Err(_), Ok(_)) => Err(ReplayError::FailedFuncValidation),
-                    }
-                }
             }
 
         )*
@@ -185,6 +171,25 @@ generic_new_result_events! {
     LowerStoreReturnEvent => ((), EventActionError::LowerStoreError)
 }
 
+impl Validate<Result<usize>> for ReallocReturnEvent {
+    /// We can check that realloc is deterministic (as expected by the engine)
+    fn validate(&self, expect_ret: &Result<usize>) -> Result<(), ReplayError> {
+        self.log();
+        // Cannot just use eq since anyhow::Error and EventActionError cannot be compared
+        match (self.ret.as_ref(), expect_ret.as_ref()) {
+            (Ok(r), Ok(s)) => replay_args_valcheck(r, s),
+            // Return the recorded error
+            (Err(e), Err(f)) => Err(ReplayError::from(EventActionError::ReallocError(format!(
+                "Replayed Realloc Error: {} \nRecorded Realloc Error: {}",
+                e, f
+            )))),
+            // Diverging errors.. Report as a failed validation
+            (Ok(_), Err(_)) => Err(ReplayError::FailedFuncValidation),
+            (Err(_), Ok(_)) => Err(ReplayError::FailedFuncValidation),
+        }
+    }
+}
+
 generic_new_events! {
     /// A reallocation call event in the Component Model canonical ABI
     ///
@@ -196,10 +201,12 @@ generic_new_events! {
         new_size: usize
     },
 
+    /// Entry to a type lowering invocation
     LowerEntryEvent {
         ty: InterfaceType
     },
 
+    /// Entry to store invocations during type lowering
     LowerStoreEntryEvent {
         ty: InterfaceType,
         offset: usize

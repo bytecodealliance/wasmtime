@@ -1,10 +1,8 @@
 use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
-use crate::component::storage::{slice_to_storage_mut, storage_as_slice, storage_as_slice_mut};
+use crate::component::storage::{slice_to_storage_mut, storage_as_slice};
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
 use crate::prelude::*;
-#[cfg(feature = "rr-component")]
-use crate::rr::component_events::{HostFuncReturnEvent, LowerReturnEvent, LowerStoreReturnEvent};
 use crate::runtime::vm::component::{
     ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
@@ -21,78 +19,102 @@ use wasmtime_environ::component::{
     StringEncoding, TypeFuncIndex,
 };
 
-/// Record/replay hook operation for host function entry events
-#[inline]
-fn record_replay_hook_host_func_entry(
-    args: &mut [MaybeUninit<ValRaw>],
-    param_types: &TypeTuple,
-    store: &mut StoreOpaque,
-) -> Result<()> {
-    #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
-    {
-        use crate::config::ReplaySettings;
-        use crate::rr::{Validate, component_events::HostFuncEntryEvent};
-        store.record_event_if(
-            |r| r.add_validation,
-            |_| HostFuncEntryEvent::new(args, Some(param_types)),
-        )?;
-        store.next_replay_event_if(
-            |_, r| r.add_validation,
-            |event: HostFuncEntryEvent, r: &ReplaySettings| {
-                if r.validate {
-                    event.validate(param_types)?;
-                }
-                Ok(())
-            },
-        )?;
+/// Convenience methods to inject record + replay logic
+mod rr_hooks {
+    use super::*;
+    #[cfg(feature = "rr-component")]
+    use crate::rr::component_events::{
+        HostFuncReturnEvent, LowerEntryEvent, LowerReturnEvent, LowerStoreEntryEvent,
+        LowerStoreReturnEvent,
+    };
+    /// Record/replay hook operation for host function entry events
+    #[inline]
+    pub fn record_replay_host_func_entry(
+        args: &mut [MaybeUninit<ValRaw>],
+        param_types: &TypeTuple,
+        store: &mut StoreOpaque,
+    ) -> Result<()> {
+        #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
+        {
+            use crate::config::ReplaySettings;
+            use crate::rr::{Validate, component_events::HostFuncEntryEvent};
+            store.record_event_if(
+                |r| r.add_validation,
+                |_| HostFuncEntryEvent::new(args, Some(param_types)),
+            )?;
+            store.next_replay_event_if(
+                |_, r| r.add_validation,
+                |event: HostFuncEntryEvent, r: &ReplaySettings| {
+                    if r.validate {
+                        event.validate(param_types)?;
+                    }
+                    Ok(())
+                },
+            )?;
+        }
+        let _ = (args, param_types, store);
+        Ok(())
     }
-    let _ = (args, param_types, store);
-    Ok(())
-}
 
-/// Record hook operation for host function return events
-#[inline]
-fn record_hook_host_func_return(
-    args: &[ValRaw],
-    result_types: &TypeTuple,
-    store: &mut StoreOpaque,
-) -> Result<()> {
-    #[cfg(feature = "rr-component")]
-    {
-        store.record_event(|r| {
-            HostFuncReturnEvent::new(args, r.add_validation.then_some(result_types))
-        })?;
+    /// Record hook operation for host function return events
+    #[inline]
+    pub fn record_host_func_return(
+        args: &[ValRaw],
+        result_types: &TypeTuple,
+        store: &mut StoreOpaque,
+    ) -> Result<()> {
+        #[cfg(feature = "rr-component")]
+        {
+            store.record_event(|r| {
+                HostFuncReturnEvent::new(args, r.add_validation.then_some(result_types))
+            })?;
+        }
+        let _ = (args, result_types, store);
+        Ok(())
     }
-    let _ = (args, result_types, store);
-    Ok(())
-}
 
-/// Record hook wrapping a lowering `store` call of component types
-#[inline]
-fn record_hook_wrapper_lower_store<F, T>(lower_store: F, cx: &mut LowerContext<'_, T>) -> Result<()>
-where
-    F: FnOnce(&mut LowerContext<'_, T>) -> Result<()>,
-{
-    let store_result = lower_store(cx);
-    #[cfg(feature = "rr-component")]
-    cx.store
-        .0
-        .record_event(|_| LowerStoreReturnEvent::new(&store_result))?;
-    store_result
-}
+    /// Record hook wrapping a lowering `store` call of component types
+    #[inline]
+    pub fn record_lower_store<F, T>(
+        lower_store: F,
+        cx: &mut LowerContext<'_, T>,
+        ty: InterfaceType,
+        offset: usize,
+    ) -> Result<()>
+    where
+        F: FnOnce(&mut LowerContext<'_, T>, InterfaceType, usize) -> Result<()>,
+    {
+        #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
+        cx.store
+            .0
+            .record_event(|_| LowerStoreEntryEvent::new(ty, offset))?;
+        let store_result = lower_store(cx, ty, offset);
+        #[cfg(feature = "rr-component")]
+        cx.store
+            .0
+            .record_event(|_| LowerStoreReturnEvent::new(&store_result))?;
+        store_result
+    }
 
-/// Record hook wrapping a lowering `lower` call of component types
-#[inline]
-fn record_hook_wrapper_lower<F, T>(lower: F, cx: &mut LowerContext<'_, T>) -> Result<()>
-where
-    F: FnOnce(&mut LowerContext<'_, T>) -> Result<()>,
-{
-    let lower_result = lower(cx);
-    #[cfg(feature = "rr-component")]
-    cx.store
-        .0
-        .record_event(|_| LowerReturnEvent::new(&lower_result))?;
-    lower_result
+    /// Record hook wrapping a lowering `lower` call of component types
+    #[inline]
+    pub fn record_lower<F, T>(
+        lower: F,
+        cx: &mut LowerContext<'_, T>,
+        ty: InterfaceType,
+    ) -> Result<()>
+    where
+        F: FnOnce(&mut LowerContext<'_, T>, InterfaceType) -> Result<()>,
+    {
+        #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
+        cx.store.0.record_event(|_| LowerEntryEvent::new(ty))?;
+        let lower_result = lower(cx, ty);
+        #[cfg(feature = "rr-component")]
+        cx.store
+            .0
+            .record_event(|_| LowerReturnEvent::new(&lower_result))?;
+        lower_result
+    }
 }
 
 pub struct HostFunc {
@@ -281,7 +303,7 @@ where
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
 
-    record_replay_hook_host_func_entry(storage, &types[ty.params], cx.0)?;
+    rr_hooks::record_replay_host_func_entry(storage, &types[ty.params], cx.0)?;
 
     // There's a 2x2 matrix of whether parameters and results are stored on the
     // stack or on the heap. Each of the 4 branches here have a different
@@ -368,15 +390,16 @@ where
             let direct_results_lower = |cx: &mut LowerContext<'_, T>,
                                         dst: &mut MaybeUninit<<R as ComponentType>::Lower>,
                                         ret: R| {
-                let res = record_hook_wrapper_lower(|cx| ret.lower(cx, ty, dst), cx);
-                record_hook_host_func_return(storage_as_slice(dst), record_tys, cx.store.0)?;
+                let res = rr_hooks::record_lower(|cx, ty| ret.lower(cx, ty, dst), cx, ty);
+                rr_hooks::record_host_func_return(storage_as_slice(dst), record_tys, cx.store.0)?;
                 res
             };
             let indirect_results_lower = |cx: &mut LowerContext<'_, T>, dst: &ValRaw, ret: R| {
                 let ptr = validate_inbounds::<R>(cx.as_slice(), dst)?;
-                let res = record_hook_wrapper_lower_store(|cx| ret.store(cx, ty, ptr), cx);
+                let res =
+                    rr_hooks::record_lower_store(|cx, ty, ptr| ret.store(cx, ty, ptr), cx, ty, ptr);
                 // Recording here is just for marking the return event
-                record_hook_host_func_return(&[], record_tys, cx.store.0)?;
+                rr_hooks::record_host_func_return(&[], record_tys, cx.store.0)?;
                 res
             };
             match self {
@@ -399,6 +422,8 @@ where
             cx: &mut LowerContext<'_, T>,
             expect_tys: &TypeTuple,
         ) -> Result<()> {
+            use crate::component::storage::storage_as_slice_mut;
+
             let direct_results_lower =
                 |cx: &mut LowerContext<'_, T>,
                  dst: &mut MaybeUninit<<R as ComponentType>::Lower>| {
@@ -505,7 +530,7 @@ where
     let param_tys = &types[func_ty.params];
     let result_tys = &types[func_ty.results];
 
-    record_replay_hook_host_func_entry(storage, &types[func_ty.params], store.0)?;
+    rr_hooks::record_replay_host_func_entry(storage, &types[func_ty.params], store.0)?;
 
     if !store.0.replay_enabled() {
         let args;
@@ -555,10 +580,10 @@ where
         if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
             let mut dst = storage[..cnt].iter_mut();
             for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-                record_hook_wrapper_lower(|cx| val.lower(cx, *ty, &mut dst), &mut cx)?;
+                rr_hooks::record_lower(|cx, ty| val.lower(cx, ty, &mut dst), &mut cx, *ty)?;
             }
             assert!(dst.next().is_none());
-            record_hook_host_func_return(
+            rr_hooks::record_host_func_return(
                 mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(storage),
                 result_tys,
                 cx.store.0,
@@ -568,10 +593,15 @@ where
             let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice(), ret_ptr)?;
             for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
                 let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
-                record_hook_wrapper_lower_store(|cx| val.store(cx, *ty, offset), &mut cx)?;
+                rr_hooks::record_lower_store(
+                    |cx, ty, offset| val.store(cx, ty, offset),
+                    &mut cx,
+                    *ty,
+                    offset,
+                )?;
             }
             // Recording here is just for marking the return event
-            record_hook_host_func_return(&[], result_tys, cx.store.0)?;
+            rr_hooks::record_host_func_return(&[], result_tys, cx.store.0)?;
         }
         flags.set_may_leave(true);
 

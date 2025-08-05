@@ -25,6 +25,7 @@ impl HostFuncEntryEvent {
 }
 impl Validate<CoreFuncArgTypes> for HostFuncEntryEvent {
     fn validate(&self, expect_types: &CoreFuncArgTypes) -> Result<(), ReplayError> {
+        self.log();
         replay_args_typecheck(self.types.as_ref(), expect_types)
     }
 }
@@ -64,6 +65,7 @@ impl HostFuncReturnEvent {
 }
 impl Validate<CoreFuncArgTypes> for HostFuncReturnEvent {
     fn validate(&self, expect_types: &CoreFuncArgTypes) -> Result<(), ReplayError> {
+        self.log();
         replay_args_typecheck(self.types.as_ref(), expect_types)
     }
 }

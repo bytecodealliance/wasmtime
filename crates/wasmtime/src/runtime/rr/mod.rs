@@ -127,6 +127,7 @@ pub enum ReplayError {
     FailedFuncValidation,
     FailedModuleValidation,
     IncorrectEventVariant,
+    InvalidOrdering,
     EventActionError(EventActionError),
 }
 
@@ -147,6 +148,9 @@ impl fmt::Display for ReplayError {
             }
             Self::EventActionError(e) => {
                 write!(f, "{:?}", e)
+            }
+            Self::InvalidOrdering => {
+                write!(f, "event occured at an invalid position in the trace")
             }
         }
     }

@@ -1,6 +1,4 @@
 use crate::prelude::*;
-#[cfg(feature = "rr-core")]
-use crate::rr::core_events::HostFuncReturnEvent;
 use crate::runtime::Uninhabited;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
@@ -1508,6 +1506,92 @@ impl Func {
     }
 }
 
+/// Convenience methods to inject record + replay logic
+mod rr_hooks {
+    use super::*;
+    #[cfg(feature = "rr-core")]
+    use crate::rr::core_events::HostFuncReturnEvent;
+    use wasmtime_environ::WasmFuncType;
+
+    #[inline]
+    /// Record and replay hook operation for host function entry events
+    pub fn record_replay_host_func_entry(
+        args: &[MaybeUninit<ValRaw>],
+        wasm_func_type: &WasmFuncType,
+        store: &mut StoreOpaque,
+    ) -> Result<()> {
+        #[cfg(all(feature = "rr-core", feature = "rr-type-validation"))]
+        {
+            // Record/replay the raw parameter args
+            use crate::config::ReplaySettings;
+            use crate::rr::{Validate, core_events::HostFuncEntryEvent};
+            store.record_event_if(
+                |r| r.add_validation,
+                |_| {
+                    let num_params = wasm_func_type.params().len();
+                    HostFuncEntryEvent::new(
+                        &args[..num_params],
+                        // Don't need to check validation here since it is
+                        // covered by the push predicate in this case
+                        Some(wasm_func_type.clone()),
+                    )
+                },
+            )?;
+            store.next_replay_event_if(
+                |_, r| r.add_validation,
+                |event: HostFuncEntryEvent, r: &ReplaySettings| {
+                    if r.validate {
+                        event.validate(wasm_func_type)?;
+                    }
+                    Ok(())
+                },
+            )?;
+        }
+        let _ = (args, wasm_func_type, store);
+        Ok(())
+    }
+
+    #[inline]
+    /// Record hook operation for host function return events
+    pub fn record_host_func_return(
+        args: &[MaybeUninit<ValRaw>],
+        wasm_func_type: &WasmFuncType,
+        store: &mut StoreOpaque,
+    ) -> Result<()> {
+        // Record the return values
+        #[cfg(feature = "rr-core")]
+        {
+            store.record_event(|rmeta| {
+                let func_type = wasm_func_type;
+                let num_results = func_type.params().len();
+                HostFuncReturnEvent::new(
+                    &args[..num_results],
+                    rmeta.add_validation.then_some(func_type.clone()),
+                )
+            })?;
+        }
+        let _ = (args, wasm_func_type, store);
+        Ok(())
+    }
+
+    #[inline]
+    /// Replay hook operation for host function return events
+    pub fn replay_host_func_return(
+        args: &mut [MaybeUninit<ValRaw>],
+        wasm_func_type: &WasmFuncType,
+        store: &mut StoreOpaque,
+    ) -> Result<()> {
+        #[cfg(feature = "rr-core")]
+        {
+            store.next_replay_event_and(|event: HostFuncReturnEvent, rmeta| {
+                event.move_into_slice(args, rmeta.validate.then_some(wasm_func_type))
+            })?;
+        }
+        let _ = (args, wasm_func_type, store);
+        Ok(())
+    }
+}
+
 /// Prepares for entrance into WebAssembly.
 ///
 /// This function will set up context such that `closure` is allowed to call a
@@ -2333,41 +2417,15 @@ impl HostContext {
             let state = &*(state as *const _ as *const HostFuncState<F>);
             let func = &state.func;
 
-            #[cfg(feature = "rr-core")]
-            let wasm_func_type = {
+            let wasm_func_subtype = {
                 let type_index = vmctx.func_ref().type_index;
                 caller.engine().signatures().borrow(type_index).unwrap()
             };
+            let wasm_func_type = wasm_func_subtype.unwrap_func();
 
-            #[cfg(all(feature = "rr-core", feature = "rr-type-validation"))]
-            {
-                // Record/replay interceptions of raw parameters args
-                use crate::config::ReplaySettings;
-                use crate::rr::{Validate, core_events::HostFuncEntryEvent};
-                caller.store.0.record_event_if(
-                    |r| r.add_validation,
-                    |_| {
-                        let func_type = wasm_func_type.unwrap_func();
-                        let num_params = func_type.params().len();
-                        HostFuncEntryEvent::new(
-                            &args.as_ref()[..num_params],
-                            // Don't need to check validation here since it is
-                            // covered by the push predicate in this case
-                            Some(func_type.clone()),
-                        )
-                    },
-                )?;
-                // Don't need to auto-assert GC here since we aren't using P
-                caller.store.0.next_replay_event_if(
-                    |_, r| r.add_validation,
-                    |event: HostFuncEntryEvent, r: &ReplaySettings| {
-                        if r.validate {
-                            event.validate(wasm_func_type.unwrap_func())?;
-                        }
-                        Ok(())
-                    },
-                )?;
-            }
+            // Record/replay(validation) of the raw parameter arguments
+            // Don't need auto-assert GC store here since we aren't using P, just raw args
+            rr_hooks::record_replay_host_func_entry(args.as_ref(), wasm_func_type, caller.store.0)?;
 
             if !caller.store.0.replay_enabled() {
                 let ret = 'ret: {
@@ -2400,28 +2458,11 @@ impl HostContext {
                     };
                     ret.store(&mut store, args.as_mut())?;
                 }
-                #[cfg(feature = "rr-core")]
-                // Record the return value of store
-                caller.store.0.record_event(|rmeta| {
-                    let func_type = wasm_func_type.unwrap_func();
-                    let num_results = func_type.params().len();
-                    HostFuncReturnEvent::new(
-                        unsafe { &args.as_ref()[..num_results] },
-                        rmeta.add_validation.then_some(func_type.clone()),
-                    )
-                })?;
+                // Record the return values
+                rr_hooks::record_host_func_return(args.as_ref(), wasm_func_type, caller.store.0)?;
             } else {
-                // Replay the return value of the store
-                #[cfg(feature = "rr-core")]
-                caller
-                    .store
-                    .0
-                    .next_replay_event_and(|event: HostFuncReturnEvent, rmeta| {
-                        event.move_into_slice(
-                            args.as_mut(),
-                            rmeta.validate.then_some(wasm_func_type.unwrap_func()),
-                        )
-                    })?;
+                // Replay the return values
+                rr_hooks::replay_host_func_return(args.as_mut(), wasm_func_type, caller.store.0)?;
             }
 
             Ok(())

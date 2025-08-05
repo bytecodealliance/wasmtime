@@ -139,13 +139,20 @@ where
 /// Trait signifying types that can be validated on replay
 ///
 /// Default nop behavior when `rr-validate` is disabled.
-/// Note howeverthat some [`Validate`] overriden implementations are present even
+/// Note however that some [`Validate`] overriden implementations are present even
 /// when feature `rr-validate` is disabled, when validation is needed
 /// for a faithful replay.
 pub trait Validate<T: ?Sized> {
     /// Perform a validation of the event to ensure replay consistency
     fn validate(&self, _expect_t: &T) -> Result<(), ReplayError> {
         Ok(())
+    }
+    /// Write a log message
+    fn log(&self)
+    where
+        Self: fmt::Debug,
+    {
+        log::debug!("Validating => {:?}", self);
     }
 }
 
