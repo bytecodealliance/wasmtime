@@ -1,7 +1,7 @@
+use crate::TrappableError;
 use crate::p2::bindings::sockets::network::ErrorCode;
-use crate::sockets::SocketAddrCheck;
-use crate::{SocketAddrUse, TrappableError};
-use core::net::SocketAddr;
+use crate::sockets::{SocketAddrCheck, SocketAddrUse};
+use std::net::SocketAddr;
 
 pub type SocketResult<T> = Result<T, SocketError>;
 
@@ -53,12 +53,12 @@ impl From<crate::sockets::util::ErrorCode> for ErrorCode {
 }
 
 pub struct Network {
-    pub socket_addr_check: SocketAddrCheck,
-    pub allow_ip_name_lookup: bool,
+    pub(crate) socket_addr_check: SocketAddrCheck,
+    pub(crate) allow_ip_name_lookup: bool,
 }
 
 impl Network {
-    pub async fn check_socket_addr(
+    pub(crate) async fn check_socket_addr(
         &self,
         addr: SocketAddr,
         reason: SocketAddrUse,

@@ -1,13 +1,15 @@
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network};
 use crate::p2::bindings::sockets::udp;
 use crate::p2::udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState};
-use crate::p2::{Pollable, SocketError, SocketResult, WasiCtxView};
+use crate::p2::{Pollable, SocketError, SocketResult};
 use crate::sockets::util::{
     get_ip_ttl, get_ipv6_unicast_hops, is_valid_address_family, is_valid_remote_address,
     receive_buffer_size, send_buffer_size, set_receive_buffer_size, set_send_buffer_size,
     set_unicast_hop_limit, udp_bind, udp_disconnect,
 };
-use crate::sockets::{MAX_UDP_DATAGRAM_SIZE, SocketAddrUse, SocketAddressFamily};
+use crate::sockets::{
+    MAX_UDP_DATAGRAM_SIZE, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView,
+};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;
@@ -17,16 +19,16 @@ use tokio::io::Interest;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::poll::DynPollable;
 
-impl udp::Host for WasiCtxView<'_> {}
+impl udp::Host for WasiSocketsCtxView<'_> {}
 
-impl udp::HostUdpSocket for WasiCtxView<'_> {
+impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     async fn start_bind(
         &mut self,
         this: Resource<udp::UdpSocket>,
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx.sockets.allowed_network_uses.check_allowed_udp()?;
+        self.ctx.allowed_network_uses.check_allowed_udp()?;
 
         match self.table.get(&this)?.udp_state {
             UdpState::Default => {}
@@ -274,7 +276,7 @@ impl udp::HostUdpSocket for WasiCtxView<'_> {
     }
 }
 
-impl udp::HostIncomingDatagramStream for WasiCtxView<'_> {
+impl udp::HostIncomingDatagramStream for WasiSocketsCtxView<'_> {
     fn receive(
         &mut self,
         this: Resource<udp::IncomingDatagramStream>,
@@ -362,7 +364,7 @@ impl Pollable for IncomingDatagramStream {
     }
 }
 
-impl udp::HostOutgoingDatagramStream for WasiCtxView<'_> {
+impl udp::HostOutgoingDatagramStream for WasiSocketsCtxView<'_> {
     fn check_send(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> SocketResult<u64> {
         let stream = self.table.get_mut(&this)?;
 
@@ -506,7 +508,7 @@ pub mod sync {
     use wasmtime::component::Resource;
 
     use crate::p2::{
-        SocketError, WasiCtxView,
+        SocketError,
         bindings::{
             sockets::{
                 network::Network,
@@ -526,10 +528,11 @@ pub mod sync {
         },
     };
     use crate::runtime::in_tokio;
+    use crate::sockets::WasiSocketsCtxView;
 
-    impl udp::Host for WasiCtxView<'_> {}
+    impl udp::Host for WasiSocketsCtxView<'_> {}
 
-    impl HostUdpSocket for WasiCtxView<'_> {
+    impl HostUdpSocket for WasiSocketsCtxView<'_> {
         fn start_bind(
             &mut self,
             self_: Resource<UdpSocket>,
@@ -628,7 +631,7 @@ pub mod sync {
         }
     }
 
-    impl HostIncomingDatagramStream for WasiCtxView<'_> {
+    impl HostIncomingDatagramStream for WasiSocketsCtxView<'_> {
         fn receive(
             &mut self,
             self_: Resource<IncomingDatagramStream>,
@@ -667,7 +670,7 @@ pub mod sync {
         }
     }
 
-    impl HostOutgoingDatagramStream for WasiCtxView<'_> {
+    impl HostOutgoingDatagramStream for WasiSocketsCtxView<'_> {
         fn check_send(
             &mut self,
             self_: Resource<OutgoingDatagramStream>,

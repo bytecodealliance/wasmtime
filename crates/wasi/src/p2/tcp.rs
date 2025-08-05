@@ -112,7 +112,7 @@ pub struct TcpSocket {
 
 impl TcpSocket {
     /// Create a new socket in the given family.
-    pub fn new(family: AddressFamily) -> io::Result<Self> {
+    pub(crate) fn new(family: AddressFamily) -> io::Result<Self> {
         with_ambient_tokio_runtime(|| {
             let (socket, family) = match family {
                 AddressFamily::Ipv4 => {
@@ -171,7 +171,7 @@ impl TcpSocket {
 }
 
 impl TcpSocket {
-    pub fn start_bind(&mut self, local_address: SocketAddr) -> Result<(), ErrorCode> {
+    pub(crate) fn start_bind(&mut self, local_address: SocketAddr) -> Result<(), ErrorCode> {
         let tokio_socket = match &self.tcp_state {
             TcpState::Default(socket) => socket,
             TcpState::BindStarted(..) => return Err(Errno::ALREADY.into()),
@@ -196,7 +196,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn finish_bind(&mut self) -> SocketResult<()> {
+    pub(crate) fn finish_bind(&mut self) -> SocketResult<()> {
         match std::mem::replace(&mut self.tcp_state, TcpState::Closed) {
             TcpState::BindStarted(socket) => {
                 self.tcp_state = TcpState::Bound(socket);
@@ -210,7 +210,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn start_connect(&mut self, remote_address: SocketAddr) -> SocketResult<()> {
+    pub(crate) fn start_connect(&mut self, remote_address: SocketAddr) -> SocketResult<()> {
         match self.tcp_state {
             TcpState::Default(..) | TcpState::Bound(..) => {}
 
@@ -240,7 +240,7 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn finish_connect(&mut self) -> SocketResult<(DynInputStream, DynOutputStream)> {
+    pub(crate) fn finish_connect(&mut self) -> SocketResult<(DynInputStream, DynOutputStream)> {
         let previous_state = std::mem::replace(&mut self.tcp_state, TcpState::Closed);
         let result = match previous_state {
             TcpState::ConnectReady(result) => result,
@@ -281,7 +281,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn start_listen(&mut self) -> SocketResult<()> {
+    pub(crate) fn start_listen(&mut self) -> SocketResult<()> {
         match std::mem::replace(&mut self.tcp_state, TcpState::Closed) {
             TcpState::Bound(tokio_socket) => {
                 self.tcp_state = TcpState::ListenStarted(tokio_socket);
@@ -298,7 +298,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn finish_listen(&mut self) -> SocketResult<()> {
+    pub(crate) fn finish_listen(&mut self) -> SocketResult<()> {
         let tokio_socket = match std::mem::replace(&mut self.tcp_state, TcpState::Closed) {
             TcpState::ListenStarted(tokio_socket) => tokio_socket,
             previous_state => {
@@ -337,7 +337,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn accept(&mut self) -> SocketResult<(Self, DynInputStream, DynOutputStream)> {
+    pub(crate) fn accept(&mut self) -> SocketResult<(Self, DynInputStream, DynOutputStream)> {
         let TcpState::Listening {
             listener,
             pending_accept,
@@ -436,7 +436,7 @@ impl TcpSocket {
         Ok((tcp_socket, input, output))
     }
 
-    pub fn local_address(&self) -> SocketResult<SocketAddr> {
+    pub(crate) fn local_address(&self) -> SocketResult<SocketAddr> {
         let view = match self.tcp_state {
             TcpState::Default(..) => return Err(ErrorCode::InvalidState.into()),
             TcpState::BindStarted(..) => return Err(ErrorCode::ConcurrencyConflict.into()),
@@ -446,7 +446,7 @@ impl TcpSocket {
         Ok(view.local_addr()?)
     }
 
-    pub fn remote_address(&self) -> SocketResult<SocketAddr> {
+    pub(crate) fn remote_address(&self) -> SocketResult<SocketAddr> {
         let view = match self.tcp_state {
             TcpState::Connected { .. } => self.as_std_view()?,
             TcpState::Connecting(..) | TcpState::ConnectReady(..) => {
@@ -458,15 +458,15 @@ impl TcpSocket {
         Ok(view.peer_addr()?)
     }
 
-    pub fn is_listening(&self) -> bool {
+    pub(crate) fn is_listening(&self) -> bool {
         matches!(self.tcp_state, TcpState::Listening { .. })
     }
 
-    pub fn address_family(&self) -> SocketAddressFamily {
+    pub(crate) fn address_family(&self) -> SocketAddressFamily {
         self.family
     }
 
-    pub fn set_listen_backlog_size(&mut self, value: u32) -> SocketResult<()> {
+    pub(crate) fn set_listen_backlog_size(&mut self, value: u32) -> SocketResult<()> {
         const MIN_BACKLOG: u32 = 1;
         const MAX_BACKLOG: u32 = i32::MAX as u32; // OS'es will most likely limit it down even further.
 
@@ -495,22 +495,22 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn keep_alive_enabled(&self) -> SocketResult<bool> {
+    pub(crate) fn keep_alive_enabled(&self) -> SocketResult<bool> {
         let view = &*self.as_std_view()?;
         Ok(sockopt::socket_keepalive(view)?)
     }
 
-    pub fn set_keep_alive_enabled(&self, value: bool) -> SocketResult<()> {
+    pub(crate) fn set_keep_alive_enabled(&self, value: bool) -> SocketResult<()> {
         let view = &*self.as_std_view()?;
         Ok(sockopt::set_socket_keepalive(view, value)?)
     }
 
-    pub fn keep_alive_idle_time(&self) -> SocketResult<std::time::Duration> {
+    pub(crate) fn keep_alive_idle_time(&self) -> SocketResult<std::time::Duration> {
         let view = &*self.as_std_view()?;
         Ok(sockopt::tcp_keepidle(view)?)
     }
 
-    pub fn set_keep_alive_idle_time(&mut self, value: u64) -> SocketResult<()> {
+    pub(crate) fn set_keep_alive_idle_time(&mut self, value: u64) -> SocketResult<()> {
         {
             let view = &*self.as_std_view()?;
             set_keep_alive_idle_time(view, value)?;
@@ -524,34 +524,37 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn keep_alive_interval(&self) -> SocketResult<std::time::Duration> {
+    pub(crate) fn keep_alive_interval(&self) -> SocketResult<std::time::Duration> {
         let view = &*self.as_std_view()?;
         Ok(sockopt::tcp_keepintvl(view)?)
     }
 
-    pub fn set_keep_alive_interval(&self, duration: std::time::Duration) -> SocketResult<()> {
+    pub(crate) fn set_keep_alive_interval(
+        &self,
+        duration: std::time::Duration,
+    ) -> SocketResult<()> {
         let view = &*self.as_std_view()?;
         Ok(set_keep_alive_interval(view, duration)?)
     }
 
-    pub fn keep_alive_count(&self) -> SocketResult<u32> {
+    pub(crate) fn keep_alive_count(&self) -> SocketResult<u32> {
         let view = &*self.as_std_view()?;
         Ok(sockopt::tcp_keepcnt(view)?)
     }
 
-    pub fn set_keep_alive_count(&self, value: u32) -> SocketResult<()> {
+    pub(crate) fn set_keep_alive_count(&self, value: u32) -> SocketResult<()> {
         let view = &*self.as_std_view()?;
         Ok(set_keep_alive_count(view, value)?)
     }
 
-    pub fn hop_limit(&self) -> SocketResult<u8> {
+    pub(crate) fn hop_limit(&self) -> SocketResult<u8> {
         let view = &*self.as_std_view()?;
 
         let ttl = get_unicast_hop_limit(view, self.family)?;
         Ok(ttl)
     }
 
-    pub fn set_hop_limit(&mut self, value: u8) -> SocketResult<()> {
+    pub(crate) fn set_hop_limit(&mut self, value: u8) -> SocketResult<()> {
         {
             let view = &*self.as_std_view()?;
 
@@ -566,13 +569,13 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn receive_buffer_size(&self) -> SocketResult<u64> {
+    pub(crate) fn receive_buffer_size(&self) -> SocketResult<u64> {
         let view = &*self.as_std_view()?;
 
         Ok(receive_buffer_size(view)?)
     }
 
-    pub fn set_receive_buffer_size(&mut self, value: u64) -> SocketResult<()> {
+    pub(crate) fn set_receive_buffer_size(&mut self, value: u64) -> SocketResult<()> {
         {
             let view = &*self.as_std_view()?;
 
@@ -587,13 +590,13 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn send_buffer_size(&self) -> SocketResult<u64> {
+    pub(crate) fn send_buffer_size(&self) -> SocketResult<u64> {
         let view = &*self.as_std_view()?;
 
         Ok(send_buffer_size(view)?)
     }
 
-    pub fn set_send_buffer_size(&mut self, value: u64) -> SocketResult<()> {
+    pub(crate) fn set_send_buffer_size(&mut self, value: u64) -> SocketResult<()> {
         {
             let view = &*self.as_std_view()?;
 
@@ -608,7 +611,7 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn shutdown(&self, how: Shutdown) -> SocketResult<()> {
+    pub(crate) fn shutdown(&self, how: Shutdown) -> SocketResult<()> {
         let TcpState::Connected { reader, writer, .. } = &self.tcp_state else {
             return Err(ErrorCode::InvalidState.into());
         };

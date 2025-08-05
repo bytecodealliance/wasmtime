@@ -12,7 +12,6 @@ use std::mem;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::pin::Pin;
-use std::sync::Arc;
 use tokio::io::{stderr, stdin, stdout};
 
 /// Builder-style structure used to create a [`WasiCtx`].
@@ -390,7 +389,7 @@ impl WasiCtxBuilder {
             + Sync
             + 'static,
     {
-        self.sockets.socket_addr_check = SocketAddrCheck(Arc::new(check));
+        self.sockets.socket_addr_check = SocketAddrCheck::new(check);
         self
     }
 

@@ -22,7 +22,7 @@ use crate::sockets::{DEFAULT_TCP_BACKLOG, SocketAddressFamily};
 ///
 /// This represents the various states a socket can be in during the
 /// activities of binding, listening, accepting, and connecting.
-pub enum TcpState {
+pub(crate) enum TcpState {
     /// The initial state for a newly-created socket.
     Default(tokio::net::TcpSocket),
 
@@ -64,19 +64,19 @@ impl Debug for TcpState {
 /// A host TCP socket, plus associated bookkeeping.
 pub struct TcpSocket {
     /// The current state in the bind/listen/accept/connect progression.
-    pub tcp_state: TcpState,
+    pub(crate) tcp_state: TcpState,
 
     /// The desired listen queue size.
-    pub listen_backlog_size: u32,
+    pub(crate) listen_backlog_size: u32,
 
-    pub family: SocketAddressFamily,
+    pub(crate) family: SocketAddressFamily,
 
-    pub options: NonInheritedOptions,
+    pub(crate) options: NonInheritedOptions,
 }
 
 impl TcpSocket {
     /// Create a new socket in the given family.
-    pub fn new(family: AddressFamily) -> std::io::Result<Self> {
+    pub(crate) fn new(family: AddressFamily) -> std::io::Result<Self> {
         with_ambient_tokio_runtime(|| {
             let (socket, family) = match family {
                 AddressFamily::Ipv4 => {
@@ -95,7 +95,7 @@ impl TcpSocket {
     }
 
     /// Create a `TcpSocket` from an existing socket.
-    pub fn from_state(state: TcpState, family: SocketAddressFamily) -> Self {
+    pub(crate) fn from_state(state: TcpState, family: SocketAddressFamily) -> Self {
         Self {
             tcp_state: state,
             listen_backlog_size: DEFAULT_TCP_BACKLOG,
@@ -104,7 +104,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn as_std_view(&self) -> Result<SocketlikeView<'_, std::net::TcpStream>, ErrorCode> {
+    pub(crate) fn as_std_view(&self) -> Result<SocketlikeView<'_, std::net::TcpStream>, ErrorCode> {
         match &self.tcp_state {
             TcpState::Default(socket) | TcpState::Bound(socket) => Ok(socket.as_socketlike_view()),
             TcpState::Connected(stream) | TcpState::Receiving(stream) => {
@@ -116,7 +116,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn bind(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
+    pub(crate) fn bind(&mut self, addr: SocketAddr) -> Result<(), ErrorCode> {
         let ip = addr.ip();
         if !is_valid_unicast_address(ip) || !is_valid_address_family(ip, self.family) {
             return Err(ErrorCode::InvalidArgument);
@@ -138,7 +138,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn local_address(&self) -> Result<IpSocketAddress, ErrorCode> {
+    pub(crate) fn local_address(&self) -> Result<IpSocketAddress, ErrorCode> {
         match &self.tcp_state {
             TcpState::Bound(socket) => {
                 let addr = socket.local_addr()?;
@@ -157,7 +157,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn remote_address(&self) -> Result<IpSocketAddress, ErrorCode> {
+    pub(crate) fn remote_address(&self) -> Result<IpSocketAddress, ErrorCode> {
         match &self.tcp_state {
             TcpState::Connected(stream) | TcpState::Receiving(stream) => {
                 let addr = stream.peer_addr()?;
@@ -168,18 +168,18 @@ impl TcpSocket {
         }
     }
 
-    pub fn is_listening(&self) -> bool {
+    pub(crate) fn is_listening(&self) -> bool {
         matches!(self.tcp_state, TcpState::Listening { .. })
     }
 
-    pub fn address_family(&self) -> IpAddressFamily {
+    pub(crate) fn address_family(&self) -> IpAddressFamily {
         match self.family {
             SocketAddressFamily::Ipv4 => IpAddressFamily::Ipv4,
             SocketAddressFamily::Ipv6 => IpAddressFamily::Ipv6,
         }
     }
 
-    pub fn set_listen_backlog_size(&mut self, value: u64) -> Result<(), ErrorCode> {
+    pub(crate) fn set_listen_backlog_size(&mut self, value: u64) -> Result<(), ErrorCode> {
         const MIN_BACKLOG: u32 = 1;
         const MAX_BACKLOG: u32 = i32::MAX as u32; // OS'es will most likely limit it down even further.
 
@@ -211,25 +211,25 @@ impl TcpSocket {
         }
     }
 
-    pub fn keep_alive_enabled(&self) -> Result<bool, ErrorCode> {
+    pub(crate) fn keep_alive_enabled(&self) -> Result<bool, ErrorCode> {
         let fd = &*self.as_std_view()?;
         let v = sockopt::socket_keepalive(fd)?;
         Ok(v)
     }
 
-    pub fn set_keep_alive_enabled(&self, value: bool) -> Result<(), ErrorCode> {
+    pub(crate) fn set_keep_alive_enabled(&self, value: bool) -> Result<(), ErrorCode> {
         let fd = &*self.as_std_view()?;
         sockopt::set_socket_keepalive(fd, value)?;
         Ok(())
     }
 
-    pub fn keep_alive_idle_time(&self) -> Result<Duration, ErrorCode> {
+    pub(crate) fn keep_alive_idle_time(&self) -> Result<Duration, ErrorCode> {
         let fd = &*self.as_std_view()?;
         let v = sockopt::tcp_keepidle(fd)?;
         Ok(v.as_nanos().try_into().unwrap_or(u64::MAX))
     }
 
-    pub fn set_keep_alive_idle_time(&mut self, value: Duration) -> Result<(), ErrorCode> {
+    pub(crate) fn set_keep_alive_idle_time(&mut self, value: Duration) -> Result<(), ErrorCode> {
         let value = {
             let fd = self.as_std_view()?;
             set_keep_alive_idle_time(&*fd, value)?
@@ -238,37 +238,37 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn keep_alive_interval(&self) -> Result<Duration, ErrorCode> {
+    pub(crate) fn keep_alive_interval(&self) -> Result<Duration, ErrorCode> {
         let fd = &*self.as_std_view()?;
         let v = sockopt::tcp_keepintvl(fd)?;
         Ok(v.as_nanos().try_into().unwrap_or(u64::MAX))
     }
 
-    pub fn set_keep_alive_interval(&self, value: Duration) -> Result<(), ErrorCode> {
+    pub(crate) fn set_keep_alive_interval(&self, value: Duration) -> Result<(), ErrorCode> {
         let fd = &*self.as_std_view()?;
         set_keep_alive_interval(fd, core::time::Duration::from_nanos(value))?;
         Ok(())
     }
 
-    pub fn keep_alive_count(&self) -> Result<u32, ErrorCode> {
+    pub(crate) fn keep_alive_count(&self) -> Result<u32, ErrorCode> {
         let fd = &*self.as_std_view()?;
         let v = sockopt::tcp_keepcnt(fd)?;
         Ok(v)
     }
 
-    pub fn set_keep_alive_count(&self, value: u32) -> Result<(), ErrorCode> {
+    pub(crate) fn set_keep_alive_count(&self, value: u32) -> Result<(), ErrorCode> {
         let fd = &*self.as_std_view()?;
         set_keep_alive_count(fd, value)?;
         Ok(())
     }
 
-    pub fn hop_limit(&self) -> Result<u8, ErrorCode> {
+    pub(crate) fn hop_limit(&self) -> Result<u8, ErrorCode> {
         let fd = &*self.as_std_view()?;
         let n = get_unicast_hop_limit(fd, self.family)?;
         Ok(n)
     }
 
-    pub fn set_hop_limit(&mut self, value: u8) -> Result<(), ErrorCode> {
+    pub(crate) fn set_hop_limit(&mut self, value: u8) -> Result<(), ErrorCode> {
         {
             let fd = &*self.as_std_view()?;
             set_unicast_hop_limit(fd, self.family, value)?;
@@ -277,13 +277,13 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn receive_buffer_size(&self) -> Result<u64, ErrorCode> {
+    pub(crate) fn receive_buffer_size(&self) -> Result<u64, ErrorCode> {
         let fd = &*self.as_std_view()?;
         let n = receive_buffer_size(fd)?;
         Ok(n)
     }
 
-    pub fn set_receive_buffer_size(&mut self, value: u64) -> Result<(), ErrorCode> {
+    pub(crate) fn set_receive_buffer_size(&mut self, value: u64) -> Result<(), ErrorCode> {
         let res = {
             let fd = &*self.as_std_view()?;
             set_receive_buffer_size(fd, value)?
@@ -292,13 +292,13 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn send_buffer_size(&self) -> Result<u64, ErrorCode> {
+    pub(crate) fn send_buffer_size(&self) -> Result<u64, ErrorCode> {
         let fd = &*self.as_std_view()?;
         let n = send_buffer_size(fd)?;
         Ok(n)
     }
 
-    pub fn set_send_buffer_size(&mut self, value: u64) -> Result<(), ErrorCode> {
+    pub(crate) fn set_send_buffer_size(&mut self, value: u64) -> Result<(), ErrorCode> {
         let res = {
             let fd = &*self.as_std_view()?;
             set_send_buffer_size(fd, value)?
@@ -327,7 +327,7 @@ mod inherits_option {
 
         pub fn set_send_buffer_size(&mut self, _value: usize) {}
 
-        pub fn apply(&self, _family: SocketAddressFamily, _stream: &TcpStream) {}
+        pub(crate) fn apply(&self, _family: SocketAddressFamily, _stream: &TcpStream) {}
     }
 }
 
@@ -373,7 +373,7 @@ mod does_not_inherit_options {
             self.0.send_buffer_size.store(value, Relaxed);
         }
 
-        pub fn apply(&self, family: SocketAddressFamily, stream: &TcpStream) {
+        pub(crate) fn apply(&self, family: SocketAddressFamily, stream: &TcpStream) {
             // Manually inherit socket options from listener. We only have to
             // do this on platforms that don't already do this automatically
             // and only if a specific value was explicitly set on the listener.
