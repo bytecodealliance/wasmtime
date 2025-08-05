@@ -4,9 +4,8 @@ use crate::sockets::util::{
     receive_buffer_size, send_buffer_size, set_receive_buffer_size, set_send_buffer_size,
     set_unicast_hop_limit, udp_bind, udp_disconnect, udp_socket,
 };
-use crate::sockets::{MAX_UDP_DATAGRAM_SIZE, SocketAddrCheck, SocketAddressFamily, WasiSocketsCtx};
+use crate::sockets::{SocketAddrCheck, SocketAddressFamily, WasiSocketsCtx};
 use cap_net_ext::AddressFamily;
-use core::future::Future;
 use io_lifetimes::AsSocketlike as _;
 use io_lifetimes::raw::{FromRawSocketlike as _, IntoRawSocketlike as _};
 use rustix::io::Errno;
@@ -32,6 +31,10 @@ enum UdpState {
     Bound,
 
     /// The socket is "connected" to a peer address.
+    #[cfg_attr(
+        not(feature = "p3"),
+        expect(dead_code, reason = "p2 has its own way of managing sending/receiving")
+    )]
     Connected(SocketAddr),
 }
 
@@ -160,6 +163,7 @@ impl UdpSocket {
         Ok(())
     }
 
+    #[cfg(feature = "p3")]
     pub(crate) fn send(&self, buf: Vec<u8>) -> impl Future<Output = Result<(), ErrorCode>> + use<> {
         let socket = if let UdpState::Connected(..) = self.udp_state {
             Ok(Arc::clone(&self.socket))
@@ -172,6 +176,7 @@ impl UdpSocket {
         }
     }
 
+    #[cfg(feature = "p3")]
     pub(crate) fn send_to(
         &self,
         buf: Vec<u8>,
@@ -197,6 +202,7 @@ impl UdpSocket {
         }
     }
 
+    #[cfg(feature = "p3")]
     pub(crate) fn receive(
         &self,
     ) -> impl Future<Output = Result<(Vec<u8>, SocketAddr), ErrorCode>> + use<> {
@@ -211,7 +217,7 @@ impl UdpSocket {
         };
         async move {
             let socket = socket?;
-            let mut buf = vec![0; MAX_UDP_DATAGRAM_SIZE];
+            let mut buf = vec![0; super::MAX_UDP_DATAGRAM_SIZE];
             let (n, addr) = match socket {
                 Mode::Recv(socket, addr) => {
                     let n = socket.recv(&mut buf).await?;
@@ -296,6 +302,7 @@ impl UdpSocket {
     }
 }
 
+#[cfg(feature = "p3")]
 async fn send(socket: &tokio::net::UdpSocket, buf: &[u8]) -> Result<(), ErrorCode> {
     let n = socket.send(buf).await?;
     // From Rust stdlib docs:
@@ -310,6 +317,7 @@ async fn send(socket: &tokio::net::UdpSocket, buf: &[u8]) -> Result<(), ErrorCod
     }
 }
 
+#[cfg(feature = "p3")]
 async fn send_to(
     socket: &tokio::net::UdpSocket,
     buf: &[u8],
