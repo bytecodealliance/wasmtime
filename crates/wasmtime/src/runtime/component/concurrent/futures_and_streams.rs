@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Poll, Waker};
 use std::vec::Vec;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex, RuntimeComponentInstanceIndex,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
     TypeFutureTableIndex, TypeStreamTableIndex,
 };
@@ -140,30 +140,10 @@ fn get_mut_by_index_from(
     ty: TransmitIndex,
     index: u32,
 ) -> Result<(u32, &mut TransmitLocalState)> {
-    Ok(match ty {
-        TransmitIndex::Stream(ty) => {
-            let (rep, HandleKind::Stream(actual_ty, state)) =
-                handle_table.get_mut_handle_by_index(index)?
-            else {
-                bail!("invalid stream handle");
-            };
-            if *actual_ty != ty {
-                bail!("invalid stream handle");
-            }
-            (rep, state)
-        }
-        TransmitIndex::Future(ty) => {
-            let (rep, HandleKind::Future(actual_ty, state)) =
-                handle_table.get_mut_handle_by_index(index)?
-            else {
-                bail!("invalid future handle");
-            };
-            if *actual_ty != ty {
-                bail!("invalid future handle");
-            }
-            (rep, state)
-        }
-    })
+    match ty {
+        TransmitIndex::Stream(ty) => handle_table.stream_rep(ty, index),
+        TransmitIndex::Future(ty) => handle_table.future_rep(ty, index),
+    }
 }
 
 /// Construct a `HandleKind` using the specified type and state.
@@ -1524,10 +1504,10 @@ impl ErrorContext {
     fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
         match ty {
             InterfaceType::ErrorContext(src) => {
-                let (rep, _) = cx
+                let rep = cx
                     .instance_mut()
                     .table_for_error_context(src)
-                    .get_mut_handle_by_index(index)?;
+                    .error_context_rep(index)?;
 
                 Ok(Self { rep })
             }
@@ -3055,11 +3035,11 @@ impl Instance {
         debug_msg_address: u32,
     ) -> Result<()> {
         // Retrieve the error context and internal debug message
-        let (handle_table_id_rep, _) = self
+        let handle_table_id_rep = self
             .id()
             .get_mut(store.0)
             .table_for_error_context(ty)
-            .get_mut_handle_by_index(err_ctx_handle)?;
+            .error_context_rep(err_ctx_handle)?;
 
         let state = self.concurrent_state_mut(store.0);
         // Get the state associated with the error context
@@ -3156,13 +3136,7 @@ impl ComponentInstance {
         writer: u32,
         _async_: bool,
     ) -> Result<ReturnCode> {
-        let (rep, HandleKind::Stream(_, state) | HandleKind::Future(_, state)) = self
-            .as_mut()
-            .table_for_transmit(ty)
-            .get_mut_handle_by_index(writer)?
-        else {
-            bail!("invalid stream or future handle");
-        };
+        let (rep, state) = get_mut_by_index_from(self.as_mut().table_for_transmit(ty), ty, writer)?;
         let id = TableId::<TransmitHandle>::new(rep);
         log::trace!("guest cancel write {id:?} (handle {writer})");
         match state {
@@ -3188,13 +3162,7 @@ impl ComponentInstance {
         reader: u32,
         _async_: bool,
     ) -> Result<ReturnCode> {
-        let (rep, HandleKind::Stream(_, state) | HandleKind::Future(_, state)) = self
-            .as_mut()
-            .table_for_transmit(ty)
-            .get_mut_handle_by_index(reader)?
-        else {
-            bail!("invalid stream or future handle");
-        };
+        let (rep, state) = get_mut_by_index_from(self.as_mut().table_for_transmit(ty), ty, reader)?;
         let id = TableId::<TransmitHandle>::new(rep);
         log::trace!("guest cancel read {id:?} (handle {reader})");
         match state {
@@ -3222,23 +3190,7 @@ impl ComponentInstance {
         let local_handle_table = self.as_mut().table_for_error_context(ty);
 
         // Reduce the local (sub)component ref count, removing tracking if necessary
-        let (rep, local_ref_removed) = {
-            let (rep, HandleKind::ErrorContext { local_ref_count }) =
-                local_handle_table.get_mut_handle_by_index(error_context)?
-            else {
-                bail!("invalid error-context handle")
-            };
-            assert!(*local_ref_count > 0);
-            *local_ref_count -= 1;
-            let mut local_ref_removed = false;
-            if *local_ref_count == 0 {
-                local_ref_removed = true;
-                local_handle_table
-                    .remove_handle_by_index(error_context)
-                    .context("removing error context from component-local tracking")?;
-            }
-            (rep, local_ref_removed)
-        };
+        let (rep, local_ref_removed) = local_handle_table.error_context_drop(error_context)?;
 
         let global_ref_count_idx = TypeComponentGlobalErrorContextTableIndex::from_u32(rep);
 
@@ -3268,45 +3220,22 @@ impl ComponentInstance {
 
     /// Transfer ownership of the specified stream or future read end from one
     /// guest to another.
-    fn guest_transfer<U: PartialEq + Eq + std::fmt::Debug>(
-        self: Pin<&mut Self>,
+    fn guest_transfer(
+        mut self: Pin<&mut Self>,
         src_idx: u32,
-        src: U,
-        src_instance: RuntimeComponentInstanceIndex,
-        dst: U,
-        dst_instance: RuntimeComponentInstanceIndex,
-        match_kind: impl Fn(&mut HandleKind) -> Result<(U, &mut TransmitLocalState)>,
-        make_kind: impl Fn(U, TransmitLocalState) -> HandleKind,
+        src: TransmitIndex,
+        dst: TransmitIndex,
     ) -> Result<u32> {
-        let (tables, _) = self.guest_tables();
-        let src_table = &mut tables[src_instance];
-        let (_rep, src_kind) = src_table.get_mut_handle_by_index(src_idx)?;
-        let (src_ty, _) = match_kind(src_kind)?;
-        if src_ty != src {
-            bail!("invalid future handle");
-        }
+        let src_table = self.as_mut().table_for_transmit(src);
+        let rep = match src {
+            TransmitIndex::Future(idx) => src_table.future_remove(idx, src_idx)?,
+            TransmitIndex::Stream(idx) => src_table.stream_remove(idx, src_idx)?,
+        };
 
-        let src_table = &mut tables[src_instance];
-        let (rep, src_kind) = src_table.get_mut_handle_by_index(src_idx)?;
-        let (_, src_state) = match_kind(src_kind)?;
-
-        match src_state {
-            TransmitLocalState::Read { done: true } => {
-                bail!("cannot lift stream after being notified that the writable end dropped")
-            }
-            TransmitLocalState::Read { done: false } => {
-                src_table.remove_handle_by_index(src_idx)?;
-
-                let dst_table = &mut tables[dst_instance];
-                dst_table.insert_handle(
-                    rep,
-                    make_kind(dst, TransmitLocalState::Read { done: false }),
-                )
-            }
-            TransmitLocalState::Write { .. } => {
-                bail!("cannot transfer write end of stream or future")
-            }
-            TransmitLocalState::Busy => bail!("cannot transfer busy stream or future"),
+        let dst_table = self.as_mut().table_for_transmit(dst);
+        match dst {
+            TransmitIndex::Future(idx) => dst_table.future_insert(idx, rep),
+            TransmitIndex::Stream(idx) => dst_table.stream_insert(idx, rep),
         }
     }
 
@@ -3378,22 +3307,10 @@ impl ComponentInstance {
         src: TypeFutureTableIndex,
         dst: TypeFutureTableIndex,
     ) -> Result<u32> {
-        let src_instance = self.component().types()[src].instance;
-        let dst_instance = self.component().types()[dst].instance;
         self.guest_transfer(
             src_idx,
-            src,
-            src_instance,
-            dst,
-            dst_instance,
-            |kind| {
-                if let HandleKind::Future(ty, state) = kind {
-                    Ok((*ty, state))
-                } else {
-                    Err(anyhow!("invalid future handle"))
-                }
-            },
-            HandleKind::Future,
+            TransmitIndex::Future(src),
+            TransmitIndex::Future(dst),
         )
     }
 
@@ -3405,22 +3322,10 @@ impl ComponentInstance {
         src: TypeStreamTableIndex,
         dst: TypeStreamTableIndex,
     ) -> Result<u32> {
-        let src_instance = self.component().types()[src].instance;
-        let dst_instance = self.component().types()[dst].instance;
         self.guest_transfer(
             src_idx,
-            src,
-            src_instance,
-            dst,
-            dst_instance,
-            |kind| {
-                if let HandleKind::Stream(ty, state) = kind {
-                    Ok((*ty, state))
-                } else {
-                    Err(anyhow!("invalid stream handle"))
-                }
-            },
-            HandleKind::Stream,
+            TransmitIndex::Stream(src),
+            TransmitIndex::Stream(dst),
         )
     }
 
@@ -3431,10 +3336,10 @@ impl ComponentInstance {
         src: TypeComponentLocalErrorContextTableIndex,
         dst: TypeComponentLocalErrorContextTableIndex,
     ) -> Result<u32> {
-        let (rep, _) = self
+        let rep = self
             .as_mut()
             .table_for_error_context(src)
-            .get_mut_handle_by_index(src_idx)?;
+            .error_context_rep(src_idx)?;
         let dst = self.as_mut().table_for_error_context(dst);
 
         // Update the component local for the destination

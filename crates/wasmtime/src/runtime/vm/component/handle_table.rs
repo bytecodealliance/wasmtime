@@ -31,6 +31,21 @@ pub enum TransmitLocalState {
     Busy,
 }
 
+impl TransmitLocalState {
+    fn check_removable(&self, desc: &str) -> Result<()> {
+        match self {
+            TransmitLocalState::Read { done: true } => {
+                bail!("cannot lift {desc} after being notified that the writable end dropped")
+            }
+            TransmitLocalState::Read { done: false } => Ok(()),
+            TransmitLocalState::Write { .. } => {
+                bail!("cannot transfer write end of {desc}")
+            }
+            TransmitLocalState::Busy => bail!("cannot transfer busy {desc}"),
+        }
+    }
+}
+
 /// Represents the kind of handle stored for a given slot.
 #[derive(Debug)]
 pub enum HandleKind {
@@ -60,6 +75,13 @@ pub enum RemovedResource {
     Own { rep: u32 },
     /// A `borrow` resource was removed originally created within `scope`.
     Borrow { scope: usize },
+}
+
+/// Different kinds of waitables returned by [`HandleTable::waitable_rep`].
+pub enum Waitable {
+    Subtask { is_host: bool },
+    Future,
+    Stream,
 }
 
 enum Slot {
@@ -141,6 +163,12 @@ impl HandleTable {
         }
 
         Ok(ret)
+    }
+
+    fn remove(&mut self, idx: u32) -> Result<()> {
+        let to_fill = Slot::Free { next: self.next };
+        *self.get_mut(idx)? = to_fill;
+        Ok(())
     }
 
     fn handle_index_to_table_index(&self, idx: u32) -> Option<usize> {
@@ -235,9 +263,7 @@ impl HandleTable {
     /// This can fail if `idx` doesn't point to a resource, points to a
     /// borrowed resource, or points to a resource of the wrong type.
     pub fn remove_resource(&mut self, idx: TypedResourceIndex) -> Result<RemovedResource> {
-        let to_fill = Slot::Free { next: self.next };
-        let slot = self.get_mut(idx.raw_index())?;
-        let ret = match slot {
+        let ret = match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn {
                 resource,
                 lend_count,
@@ -256,7 +282,7 @@ impl HandleTable {
             }
             _ => bail!("index {} is not a resource", idx.raw_index()),
         };
-        *slot = to_fill;
+        self.remove(idx.raw_index())?;
         Ok(ret)
     }
 
@@ -280,7 +306,7 @@ impl HandleTable {
         Ok(ret)
     }
 
-    pub fn get_mut_handle_by_index(&mut self, idx: u32) -> Result<(u32, &mut HandleKind)> {
+    fn get_mut_handle_by_index(&mut self, idx: u32) -> Result<(u32, &mut HandleKind)> {
         let slot = self
             .handle_index_to_table_index(idx)
             .and_then(|i| self.slots.get_mut(i));
@@ -317,5 +343,157 @@ impl HandleTable {
             self.reps_to_indexes[rep] = 0;
         }
         Ok((rep, kind))
+    }
+
+    /// Inserts a readable-end stream of type `ty` and with the specified `rep`
+    /// into this table.
+    ///
+    /// Returns the table-local index of the stream.
+    pub fn stream_insert(&mut self, ty: TypeStreamTableIndex, rep: u32) -> Result<u32> {
+        self.insert(Slot::Handle {
+            rep,
+            kind: HandleKind::Stream(ty, TransmitLocalState::Read { done: false }),
+        })
+    }
+
+    /// Returns the `rep` and `state` associated with the stream pointed to by
+    /// `idx`.
+    ///
+    /// Returns an error if `idx` is out-of-bounds or doesn't point to a stream
+    /// of type `ty`.
+    pub fn stream_rep(
+        &mut self,
+        ty: TypeStreamTableIndex,
+        idx: u32,
+    ) -> Result<(u32, &mut TransmitLocalState)> {
+        let (rep, HandleKind::Stream(actual_ty, state)) = self.get_mut_handle_by_index(idx)? else {
+            bail!("handle is not a stream");
+        };
+        if *actual_ty != ty {
+            bail!("handle is a stream of a different type");
+        }
+        Ok((rep, state))
+    }
+
+    /// Removes the stream handle from `idx`, returning its `rep`.
+    ///
+    /// The stream must have the type `ty` and additionally be in a state
+    /// suitable for removal.
+    pub fn stream_remove(&mut self, ty: TypeStreamTableIndex, idx: u32) -> Result<u32> {
+        let (rep, HandleKind::Stream(actual_ty, state)) = self.get_mut_handle_by_index(idx)? else {
+            bail!("handle is not a stream");
+        };
+        if *actual_ty != ty {
+            bail!("handle is a stream of a different type");
+        }
+        state.check_removable("stream")?;
+        self.remove(idx)?;
+        Ok(rep)
+    }
+
+    /// Inserts a readable-end future of type `ty` and with the specified `rep`
+    /// into this table.
+    ///
+    /// Returns the table-local index of the future.
+    pub fn future_insert(&mut self, ty: TypeFutureTableIndex, rep: u32) -> Result<u32> {
+        self.insert(Slot::Handle {
+            rep,
+            kind: HandleKind::Future(ty, TransmitLocalState::Read { done: false }),
+        })
+    }
+
+    /// Returns the `rep` and `state` associated with the future pointed to by
+    /// `idx`.
+    ///
+    /// Returns an error if `idx` is out-of-bounds or doesn't point to a future
+    /// of type `ty`.
+    pub fn future_rep(
+        &mut self,
+        ty: TypeFutureTableIndex,
+        idx: u32,
+    ) -> Result<(u32, &mut TransmitLocalState)> {
+        let (rep, HandleKind::Future(actual_ty, state)) = self.get_mut_handle_by_index(idx)? else {
+            bail!("handle is not a future");
+        };
+        if *actual_ty != ty {
+            bail!("handle is a future of a different type");
+        }
+        Ok((rep, state))
+    }
+
+    /// Removes the future handle from `idx`, returning its `rep`.
+    ///
+    /// The future must have the type `ty` and additionally be in a state
+    /// suitable for removal.
+    pub fn future_remove(&mut self, ty: TypeFutureTableIndex, idx: u32) -> Result<u32> {
+        let (rep, HandleKind::Future(actual_ty, state)) = self.get_mut_handle_by_index(idx)? else {
+            bail!("handle is not a future");
+        };
+        if *actual_ty != ty {
+            bail!("handle is a future of a different type");
+        }
+        state.check_removable("future")?;
+        self.remove(idx)?;
+        Ok(rep)
+    }
+
+    /// Returns the `rep` of an error-context pointed to by `idx`.
+    pub fn error_context_rep(&mut self, idx: u32) -> Result<u32> {
+        let (rep, HandleKind::ErrorContext { .. }) = self.get_mut_handle_by_index(idx)? else {
+            bail!("handle is not an error-context");
+        };
+        Ok(rep)
+    }
+
+    /// Drops the error-context pointed to by `idx`.
+    ///
+    /// Returns the internal `rep` and whether the reference count has reached
+    /// 0 meaning it was fully removed.
+    pub fn error_context_drop(&mut self, idx: u32) -> Result<(u32, bool)> {
+        let (rep, HandleKind::ErrorContext { local_ref_count }) =
+            self.get_mut_handle_by_index(idx)?
+        else {
+            bail!("handle is not an error-context");
+        };
+        assert!(*local_ref_count > 0);
+        *local_ref_count -= 1;
+        let mut local_ref_removed = false;
+        if *local_ref_count == 0 {
+            local_ref_removed = true;
+            self.remove(idx)?;
+        }
+        Ok((rep, local_ref_removed))
+    }
+
+    /// Returns the `rep` of an waitable-set pointed to by `idx`.
+    pub fn waitable_set_rep(&mut self, idx: u32) -> Result<u32> {
+        let (rep, HandleKind::Set) = self.get_mut_handle_by_index(idx)? else {
+            bail!("handle is not a waitable-set");
+        };
+        Ok(rep)
+    }
+
+    /// Returns the `rep` of the subtask at `idx` as well as if it's a host
+    /// task or not.
+    pub fn subtask_rep(&mut self, idx: u32) -> Result<(u32, bool)> {
+        let (rep, kind) = self.get_mut_handle_by_index(idx)?;
+        match kind {
+            HandleKind::GuestTask => Ok((rep, false)),
+            HandleKind::HostTask => Ok((rep, false)),
+            _ => bail!("handle is not a subtask"),
+        }
+    }
+
+    /// Returns the `rep` for the waitable specified by `idx` along with what
+    /// kind of waitable it is.
+    pub fn waitable_rep(&mut self, idx: u32) -> Result<(u32, Waitable)> {
+        let (rep, kind) = self.get_mut_handle_by_index(idx)?;
+        match kind {
+            HandleKind::GuestTask => Ok((rep, Waitable::Subtask { is_host: false })),
+            HandleKind::HostTask => Ok((rep, Waitable::Subtask { is_host: true })),
+            HandleKind::Stream(..) => Ok((rep, Waitable::Stream)),
+            HandleKind::Future(..) => Ok((rep, Waitable::Future)),
+            _ => bail!("handle is not a waitable"),
+        }
     }
 }

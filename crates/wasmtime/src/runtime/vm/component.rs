@@ -36,7 +36,7 @@ mod libcalls;
 mod resources;
 
 #[cfg(feature = "component-model-async")]
-pub use self::handle_table::{HandleKind, TransmitLocalState};
+pub use self::handle_table::{HandleKind, TransmitLocalState, Waitable};
 pub use self::handle_table::{HandleTable, RemovedResource};
 #[cfg(feature = "component-model-async")]
 pub use self::resources::CallContext;

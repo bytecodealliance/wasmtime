@@ -749,11 +749,7 @@ impl ComponentInstance {
                 bail!("invalid waitable-set handle");
             }
 
-            let (set, HandleKind::Set) =
-                instance.guest_tables().0[runtime_instance].get_mut_handle_by_index(handle)?
-            else {
-                bail!("invalid waitable-set handle");
-            };
+            let set = instance.guest_tables().0[runtime_instance].waitable_set_rep(handle)?;
 
             Ok(TableId::<WaitableSet>::new(set))
         };
@@ -947,11 +943,8 @@ impl ComponentInstance {
         let set = if set_handle == 0 {
             None
         } else {
-            let (set, HandleKind::Set) = self.as_mut().guest_tables().0[caller_instance]
-                .get_mut_handle_by_index(set_handle)?
-            else {
-                bail!("invalid waitable-set handle");
-            };
+            let set =
+                self.as_mut().guest_tables().0[caller_instance].waitable_set_rep(set_handle)?;
 
             Some(TableId::<WaitableSet>::new(set))
         };
@@ -2750,11 +2743,8 @@ impl Instance {
         let opts = self.concurrent_state_mut(store).options(options);
         let async_ = opts.async_;
         let caller_instance = opts.instance;
-        let (rep, HandleKind::Set) = self.id().get_mut(store).guest_tables().0[caller_instance]
-            .get_mut_handle_by_index(set)?
-        else {
-            bail!("invalid waitable-set handle");
-        };
+        let rep =
+            self.id().get_mut(store).guest_tables().0[caller_instance].waitable_set_rep(set)?;
 
         self.waitable_check(
             store,
@@ -2779,11 +2769,8 @@ impl Instance {
         let opts = self.concurrent_state_mut(store).options(options);
         let async_ = opts.async_;
         let caller_instance = opts.instance;
-        let (rep, HandleKind::Set) = self.id().get_mut(store).guest_tables().0[caller_instance]
-            .get_mut_handle_by_index(set)?
-        else {
-            bail!("invalid waitable-set handle");
-        };
+        let rep =
+            self.id().get_mut(store).guest_tables().0[caller_instance].waitable_set_rep(set)?;
 
         self.waitable_check(
             store,
@@ -2918,27 +2905,23 @@ impl Instance {
         async_: bool,
         task_id: u32,
     ) -> Result<u32> {
-        let (rep, state) = self.id().get_mut(store).guest_tables().0[caller_instance]
-            .get_mut_handle_by_index(task_id)?;
-        let (waitable, expected_caller_instance) = match state {
-            HandleKind::HostTask => {
-                let id = TableId::<HostTask>::new(rep);
-                (
-                    Waitable::Host(id),
-                    self.concurrent_state_mut(store).get(id)?.caller_instance,
-                )
+        let (rep, is_host) =
+            self.id().get_mut(store).guest_tables().0[caller_instance].subtask_rep(task_id)?;
+        let (waitable, expected_caller_instance) = if is_host {
+            let id = TableId::<HostTask>::new(rep);
+            (
+                Waitable::Host(id),
+                self.concurrent_state_mut(store).get(id)?.caller_instance,
+            )
+        } else {
+            let id = TableId::<GuestTask>::new(rep);
+            if let Caller::Guest { instance, .. } =
+                &self.concurrent_state_mut(store).get(id)?.caller
+            {
+                (Waitable::Guest(id), *instance)
+            } else {
+                unreachable!()
             }
-            HandleKind::GuestTask => {
-                let id = TableId::<GuestTask>::new(rep);
-                if let Caller::Guest { instance, .. } =
-                    &self.concurrent_state_mut(store).get(id)?.caller
-                {
-                    (Waitable::Guest(id), *instance)
-                } else {
-                    unreachable!()
-                }
-            }
-            _ => bail!("invalid task handle: {task_id}"),
         };
         // Since waitables can neither be passed between instances nor forged,
         // this should never fail unless there's a bug in Wasmtime, but we check
@@ -3768,16 +3751,14 @@ impl Waitable {
         caller_instance: RuntimeComponentInstanceIndex,
         waitable: u32,
     ) -> Result<Self> {
-        let (waitable, state) =
-            state.guest_tables().0[caller_instance].get_mut_handle_by_index(waitable)?;
+        use crate::runtime::vm::component::Waitable;
 
-        Ok(match state {
-            HandleKind::HostTask => Waitable::Host(TableId::new(waitable)),
-            HandleKind::GuestTask => Waitable::Guest(TableId::new(waitable)),
-            HandleKind::Stream(..) | HandleKind::Future(..) => {
-                Waitable::Transmit(TableId::new(waitable))
-            }
-            _ => bail!("invalid waitable handle"),
+        let (waitable, kind) = state.guest_tables().0[caller_instance].waitable_rep(waitable)?;
+
+        Ok(match kind {
+            Waitable::Subtask { is_host: true } => Self::Host(TableId::new(waitable)),
+            Waitable::Subtask { is_host: false } => Self::Guest(TableId::new(waitable)),
+            Waitable::Stream | Waitable::Future => Self::Transmit(TableId::new(waitable)),
         })
     }
 
@@ -3890,14 +3871,9 @@ impl Waitable {
                 ..
             } => {
                 let runtime_instance = instance.component().types()[ty].instance;
-                let (rep, HandleKind::Future(actual_ty, state)) = instance.guest_tables().0
-                    [runtime_instance]
-                    .get_mut_handle_by_index(handle)
-                    .unwrap()
-                else {
-                    unreachable!()
-                };
-                assert_eq!(*actual_ty, ty);
+                let (rep, state) = instance.guest_tables().0[runtime_instance]
+                    .future_rep(ty, handle)
+                    .unwrap();
                 assert_eq!(rep, self.rep());
                 assert_eq!(*state, TransmitLocalState::Busy);
                 *state = match event {
@@ -3915,14 +3891,9 @@ impl Waitable {
                 code,
             } => {
                 let runtime_instance = instance.component().types()[ty].instance;
-                let (rep, HandleKind::Stream(actual_ty, state)) = instance.guest_tables().0
-                    [runtime_instance]
-                    .get_mut_handle_by_index(handle)
-                    .unwrap()
-                else {
-                    unreachable!()
-                };
-                assert_eq!(*actual_ty, ty);
+                let (rep, state) = instance.guest_tables().0[runtime_instance]
+                    .stream_rep(ty, handle)
+                    .unwrap();
                 assert_eq!(rep, self.rep());
                 assert_eq!(*state, TransmitLocalState::Busy);
                 let done = matches!(code, ReturnCode::Dropped(_));
