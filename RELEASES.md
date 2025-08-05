@@ -1,4 +1,4 @@
-## 36.0.0
+## 37.0.0
 
 Unreleased.
 
@@ -6,22 +6,13 @@ Unreleased.
 
 ### Changed
 
-Users who implemented `WasiHttpView::is_forbidden_header` from `wasmtime-wasi-http` now need to include `DEFAULT_FORBIDDEN_HEADERS`, e.g. `DEFAULT_FORBIDDEN_HEADERS.contains(name) || name.as_str() == "custom-forbidden-header"` #11292
-
-### Fixed
-
-* Fix a panic in the host caused by preview1 guests using `fd_renumber`.
-  [CVE-2025-53901](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-fm79-3f68-h2fc).
-
-* Fix a panic in the preview1 adapter caused by guests using `fd_renumber`.
-  [#11277](https://github.com/bytecodealliance/wasmtime/pull/11277)
-
 --------------------------------------------------------------------------------
 
 Release notes for previous releases of Wasmtime can be found on the respective
 release branches of the Wasmtime repository.
 
 <!-- ARCHIVE_START -->
+* [36.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-36.0.0/RELEASES.md)
 * [35.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-35.0.0/RELEASES.md)
 * [34.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-34.0.0/RELEASES.md)
 * [33.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-33.0.0/RELEASES.md)
