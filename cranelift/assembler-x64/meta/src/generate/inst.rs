@@ -65,6 +65,8 @@ impl dsl::Inst {
             f.empty_line();
             self.generate_visit_function(f);
             f.empty_line();
+            self.generate_is_available_function(f);
+            f.empty_line();
             self.generate_features_function(f);
         });
     }
@@ -223,7 +225,7 @@ impl dsl::Inst {
     }
 
     /// `fn is_available(&self, ...) -> bool { ... }`
-    fn generate_features_function(&self, f: &mut Formatter) {
+    fn generate_is_available_function(&self, f: &mut Formatter) {
         fmtln!(f, "#[must_use]");
         f.add_block(
             "pub fn is_available(&self, features: &impl AvailableFeatures) -> bool",
@@ -232,6 +234,14 @@ impl dsl::Inst {
                 fmtln!(f, "{expr}");
             },
         );
+    }
+
+    /// `fn features(&self) -> Features { ... }`
+    fn generate_features_function(&self, f: &mut Formatter) {
+        fmtln!(f, "#[must_use]");
+        f.add_block("pub fn features(&self) -> &'static Features", |f| {
+            self.features.generate_constructor_expr(f);
+        });
     }
 
     /// `impl Display for <inst> { ... }`

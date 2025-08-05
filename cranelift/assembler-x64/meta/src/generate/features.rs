@@ -4,19 +4,6 @@ use super::{Formatter, fmtln};
 use crate::dsl;
 
 impl dsl::Feature {
-    /// `pub trait Features { ... }`
-    ///
-    /// This function generates a `Features` trait that users can implement to
-    /// query if instructions are available on a target CPU.
-    pub(crate) fn generate_trait(f: &mut Formatter) {
-        fmtln!(f, "#[doc(hidden)]");
-        f.add_block("pub trait AvailableFeatures", |f| {
-            for feature in dsl::ALL_FEATURES {
-                fmtln!(f, "fn {feature}(&self) -> bool;");
-            }
-        });
-    }
-
     /// `macro_rules! for_each_feature { ... }`
     ///
     /// This function generates a macro to allow generating code for each CPU
@@ -75,5 +62,40 @@ impl dsl::Features {
             }
             Feature(feature) => format!("{name}.{feature}()"),
         }
+    }
+
+    /// E.g., `Features::Or(Features::Feature(compat), Features::Feature(64b))`
+    ///
+    /// Generate a Rust constructor expression that contains the feature
+    /// boolean term.
+    pub(crate) fn generate_constructor_expr(&self, f: &mut Formatter) {
+        let mut index = 0;
+        let name = self.generate_inner_constructor_expr(f, &mut index);
+        fmtln!(f, "{name}");
+    }
+
+    fn generate_inner_constructor_expr(&self, f: &mut Formatter, index: &mut u32) -> String {
+        use dsl::Features::*;
+
+        let name = format!("F{index}");
+        *index += 1;
+
+        let const_expr = format!("const {name}: &'static Features");
+        match self {
+            And(lhs, rhs) => {
+                let lhs = lhs.generate_inner_constructor_expr(f, index);
+                let rhs = rhs.generate_inner_constructor_expr(f, index);
+                fmtln!(f, "{const_expr} = &Features::And({lhs}, {rhs});");
+            }
+            Or(lhs, rhs) => {
+                let lhs = lhs.generate_inner_constructor_expr(f, index);
+                let rhs = rhs.generate_inner_constructor_expr(f, index);
+                fmtln!(f, "{const_expr} = &Features::Or({lhs}, {rhs});");
+            }
+            Feature(feature) => {
+                fmtln!(f, "{const_expr} = &Features::Feature(Feature::{feature});");
+            }
+        }
+        name
     }
 }

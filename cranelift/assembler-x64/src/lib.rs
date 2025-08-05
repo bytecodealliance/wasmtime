@@ -45,6 +45,7 @@
 mod api;
 mod custom;
 mod evex;
+mod features;
 mod fixed;
 pub mod gpr;
 mod imm;
@@ -66,18 +67,10 @@ pub mod fuzz;
 // the library top-level.
 pub use inst::Inst;
 
-/// A trait for querying CPU features.
-///
-/// This is generated from the `dsl::Feature` enumeration defined in the `meta`
-/// crate. It allows querying the CPUID features required by an instruction; see
-/// [`Inst::is_available`] and [`for_each_feature`].
-#[doc(inline)]
-// Like `Inst` above, a convenient re-export.
-pub use inst::AvailableFeatures;
-
 pub use api::{
     AsReg, CodeSink, Constant, KnownOffset, Label, RegisterVisitor, Registers, TrapCode,
 };
+pub use features::{AvailableFeatures, Feature, Features};
 pub use fixed::Fixed;
 pub use gpr::{Gpr, NonRspGpr, Size};
 pub use imm::{Extension, Imm8, Imm16, Imm32, Imm64, Simm8, Simm16, Simm32};

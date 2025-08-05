@@ -166,7 +166,14 @@ pub(crate) fn emit(
     state: &mut EmitState,
 ) {
     if !inst.is_available(&info) {
-        panic!("Cannot emit inst '{inst:?}' for target; failed to match ISA requirements")
+        let features = if let Inst::External { inst } = inst {
+            inst.features().to_string()
+        } else {
+            "see `is_available` source for feature term".to_string()
+        };
+        panic!(
+            "Cannot emit inst '{inst:?}' for target; failed to match ISA requirements: {features}"
+        );
     }
 
     match inst {
