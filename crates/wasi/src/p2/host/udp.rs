@@ -28,7 +28,7 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
 
         let socket = self.table.get_mut(&this)?;
         socket.bind(local_address)?;
-        socket.set_socket_addr_check(Some(check.clone()));
+        socket.set_socket_addr_check(Some(check));
 
         Ok(())
     }
