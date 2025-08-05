@@ -20,20 +20,9 @@ impl InstantiationEvent {
         }
     }
 }
-impl Validate<Component> for InstantiationEvent {
-    /// Validate that checksums match
-    fn validate(&self, expect_component: &Component) -> Result<(), ReplayError> {
-        self.log();
-        if self.checksum != *expect_component.checksum() {
-            Err(ReplayError::FailedModuleValidation)
-        } else {
-            Ok(())
-        }
-    }
-}
 
 /// A call event from a Wasm component into the host
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostFuncEntryEvent {
     /// Raw values passed across the call entry boundary
     args: RRFuncArgVals,
@@ -64,42 +53,21 @@ impl Validate<TypeTuple> for HostFuncEntryEvent {
 /// A return event after a host call for a Wasm component
 ///
 /// Matches 1:1 with [`HostFuncEntryEvent`]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostFuncReturnEvent {
     /// Lowered values passed across the call return boundary
     args: RRFuncArgVals,
-    /// Optional param/return types (required to support replay validation).
-    ///
-    /// Note: This relies on the invariant that [InterfaceType] will always be
-    /// deterministic. Currently, the type indices into various [ComponentTypes]
-    /// maintain this, allowing for quick type-checking.
-    types: Option<TypeTuple>,
 }
 impl HostFuncReturnEvent {
-    pub fn new(args: &[ValRaw], types: Option<&TypeTuple>) -> Self {
+    pub fn new(args: &[ValRaw]) -> Self {
         Self {
             args: func_argvals_from_raw_slice(args),
-            types: types.cloned(),
         }
     }
 
     /// Consume the caller event and encode it back into the slice
-    pub fn move_into_slice(
-        self,
-        args: &mut [ValRaw],
-        expect_types: Option<&TypeTuple>,
-    ) -> Result<(), ReplayError> {
-        if let Some(e) = expect_types {
-            self.validate(e)?;
-        }
+    pub fn move_into_slice(self, args: &mut [ValRaw]) {
         func_argvals_into_raw_slice(self.args, args);
-        Ok(())
-    }
-}
-impl Validate<TypeTuple> for HostFuncReturnEvent {
-    fn validate(&self, expect_types: &TypeTuple) -> Result<(), ReplayError> {
-        self.log();
-        replay_args_typecheck(self.types.as_ref(), expect_types)
     }
 }
 
@@ -112,7 +80,7 @@ macro_rules! generic_new_result_events {
     ) => (
         $(
             $(#[doc = $doc])*
-            #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+            #[derive(Debug, Clone, Serialize, Deserialize)]
             pub struct $event {
                 ret: Result<$ok_ty, EventActionError>,
             }
@@ -142,7 +110,7 @@ macro_rules! generic_new_events {
         ),*
     ) => (
         $(
-            #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+            #[derive(Debug, Clone, Serialize, Deserialize)]
             $(#[doc = $doc])*
             pub struct $struct {
                 $(
@@ -184,8 +152,8 @@ impl Validate<Result<usize>> for ReallocReturnEvent {
                 e, f
             )))),
             // Diverging errors.. Report as a failed validation
-            (Ok(_), Err(_)) => Err(ReplayError::FailedFuncValidation),
-            (Err(_), Ok(_)) => Err(ReplayError::FailedFuncValidation),
+            (Ok(_), Err(_)) => Err(ReplayError::FailedValidation),
+            (Err(_), Ok(_)) => Err(ReplayError::FailedValidation),
         }
     }
 }

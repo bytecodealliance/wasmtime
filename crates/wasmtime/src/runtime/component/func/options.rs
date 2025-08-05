@@ -17,8 +17,6 @@ use crate::{FuncType, StoreContextMut};
 use alloc::sync::Arc;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
-#[cfg(feature = "rr-type-validation")]
-use wasmtime_environ::component::TypeTuple;
 use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
 
 /// Same as [`ConstMemorySliceCell`] except allows for dynamically sized slices.
@@ -51,7 +49,7 @@ impl Drop for MemorySliceCell<'_> {
     fn drop(&mut self) {
         #[cfg(feature = "rr-component")]
         if let Some(buf) = &mut self.recorder {
-            buf.record_event(|_| MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()))
+            buf.record_event(|| MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()))
                 .unwrap();
         }
     }
@@ -108,11 +106,8 @@ impl<'a, const N: usize> Drop for ConstMemorySliceCell<'a, N> {
     fn drop(&mut self) {
         #[cfg(feature = "rr-component")]
         if let Some(buf) = &mut self.recorder {
-            buf.record_event_if(
-                |_| true,
-                |_| MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()),
-            )
-            .unwrap();
+            buf.record_event(|| MemorySliceWriteEvent::new(self.offset, self.bytes.to_vec()))
+                .unwrap();
         }
     }
 }
@@ -418,12 +413,12 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         #[cfg(feature = "rr-component")]
         self.store
             .0
-            .record_event(|_| ReallocEntryEvent::new(old, old_size, old_align, new_size))?;
+            .record_event(|| ReallocEntryEvent::new(old, old_size, old_align, new_size))?;
         let result = self.realloc_inner(old, old_size, old_align, new_size);
         #[cfg(feature = "rr-component")]
         self.store
             .0
-            .record_event_if(|r| r.add_validation, |_| ReallocReturnEvent::new(&result))?;
+            .record_event_validation(|| ReallocReturnEvent::new(&result))?;
         result
     }
 
@@ -589,11 +584,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     /// * It is assumed that this is only invoked at the root lower/store calls
     ///
     #[cfg(feature = "rr-component")]
-    pub fn replay_lowering(
-        &mut self,
-        mut result_storage: Option<&mut [ValRaw]>,
-        result_tys: &TypeTuple,
-    ) -> Result<()> {
+    pub fn replay_lowering(&mut self, mut result_storage: Option<&mut [ValRaw]>) -> Result<()> {
         // There is a lot of `rr-validate` feature gating here for optimal replay performance
         // and memory overhead in a non-validating scenario. If this proves to not produce a huge
         // overhead in practice, gating can be removed in the future in favor of readability
@@ -610,14 +601,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         while !complete {
             let buf = self.store.0.replay_buffer_mut().unwrap();
             let event = buf.next_event()?;
-            let replay_validate = buf.settings().validate;
-            let trace_has_validation_events = buf.trace_settings().add_validation;
-            if replay_validate && !trace_has_validation_events {
-                log::warn!(
-                    "Validation on replay has been enabled, but the recorded trace has no validation metadata... omitting validation"
-                );
-            }
-            let run_validate = replay_validate && trace_has_validation_events;
+            let run_validate = buf.settings().validate && buf.trace_settings().add_validation;
             match event {
                 RREvent::ComponentHostFuncReturn(e) => {
                     // End of the lowering process
@@ -625,7 +609,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
                         return Err(e.into());
                     }
                     if let Some(storage) = result_storage.as_deref_mut() {
-                        e.move_into_slice(storage, replay_validate.then_some(result_tys))?;
+                        e.move_into_slice(storage);
                     }
                     complete = true;
                 }
@@ -678,14 +662,14 @@ impl<'a, T: 'static> LowerContext<'a, T> {
                     }
                 }
                 RREvent::ComponentLowerEntry(_) => {
-                    // Validation here is just ensuring Entry occurs before Return
+                    // All we want here is ensuring Entry occurs before Return
                     #[cfg(feature = "rr-type-validation")]
                     if run_validate {
                         lower_stack.push(())
                     }
                 }
                 RREvent::ComponentLowerStoreEntry(_) => {
-                    // Validation here is just ensuring Entry occurs before Return
+                    // All we want here is ensuring Entry occurs before Return
                     #[cfg(feature = "rr-type-validation")]
                     if run_validate {
                         lower_store_stack.push(())

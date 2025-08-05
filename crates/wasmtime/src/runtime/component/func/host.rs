@@ -36,21 +36,9 @@ mod rr_hooks {
     ) -> Result<()> {
         #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
         {
-            use crate::config::ReplaySettings;
-            use crate::rr::{Validate, component_events::HostFuncEntryEvent};
-            store.record_event_if(
-                |r| r.add_validation,
-                |_| HostFuncEntryEvent::new(args, Some(param_types)),
-            )?;
-            store.next_replay_event_if(
-                |_, r| r.add_validation,
-                |event: HostFuncEntryEvent, r: &ReplaySettings| {
-                    if r.validate {
-                        event.validate(param_types)?;
-                    }
-                    Ok(())
-                },
-            )?;
+            use crate::rr::component_events::HostFuncEntryEvent;
+            store.record_event_validation(|| HostFuncEntryEvent::new(args, Some(param_types)))?;
+            store.next_replay_event_validation::<HostFuncEntryEvent, _>(param_types)?;
         }
         let _ = (args, param_types, store);
         Ok(())
@@ -64,11 +52,7 @@ mod rr_hooks {
         store: &mut StoreOpaque,
     ) -> Result<()> {
         #[cfg(feature = "rr-component")]
-        {
-            store.record_event(|r| {
-                HostFuncReturnEvent::new(args, r.add_validation.then_some(result_types))
-            })?;
-        }
+        store.record_event(|| HostFuncReturnEvent::new(args))?;
         let _ = (args, result_types, store);
         Ok(())
     }
@@ -87,12 +71,12 @@ mod rr_hooks {
         #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
         cx.store
             .0
-            .record_event(|_| LowerStoreEntryEvent::new(ty, offset))?;
+            .record_event_validation(|| LowerStoreEntryEvent::new(ty, offset))?;
         let store_result = lower_store(cx, ty, offset);
         #[cfg(feature = "rr-component")]
         cx.store
             .0
-            .record_event(|_| LowerStoreReturnEvent::new(&store_result))?;
+            .record_event(|| LowerStoreReturnEvent::new(&store_result))?;
         store_result
     }
 
@@ -107,12 +91,14 @@ mod rr_hooks {
         F: FnOnce(&mut LowerContext<'_, T>, InterfaceType) -> Result<()>,
     {
         #[cfg(all(feature = "rr-component", feature = "rr-type-validation"))]
-        cx.store.0.record_event(|_| LowerEntryEvent::new(ty))?;
+        cx.store
+            .0
+            .record_event_validation(|| LowerEntryEvent::new(ty))?;
         let lower_result = lower(cx, ty);
         #[cfg(feature = "rr-component")]
         cx.store
             .0
-            .record_event(|_| LowerReturnEvent::new(&lower_result))?;
+            .record_event(|| LowerReturnEvent::new(&lower_result))?;
         lower_result
     }
 }
@@ -346,7 +332,7 @@ where
         {
             flags.set_may_leave(false);
             let mut lower = LowerContext::new(cx, &options, types, instance);
-            storage.replay_lower_results(&mut lower, &types[ty.results])?;
+            storage.replay_lower_results(&mut lower)?;
             flags.set_may_leave(true);
         }
     }
@@ -417,24 +403,20 @@ where
         }
 
         #[cfg(feature = "rr-component")]
-        unsafe fn replay_lower_results<T>(
-            &mut self,
-            cx: &mut LowerContext<'_, T>,
-            expect_tys: &TypeTuple,
-        ) -> Result<()> {
+        unsafe fn replay_lower_results<T>(&mut self, cx: &mut LowerContext<'_, T>) -> Result<()> {
             use crate::component::storage::storage_as_slice_mut;
 
             let direct_results_lower =
                 |cx: &mut LowerContext<'_, T>,
                  dst: &mut MaybeUninit<<R as ComponentType>::Lower>| {
                     // This path also stores the final return values in resulting storage
-                    cx.replay_lowering(Some(storage_as_slice_mut(dst)), expect_tys)
+                    cx.replay_lowering(Some(storage_as_slice_mut(dst)))
                 };
             let indirect_results_lower = |cx: &mut LowerContext<'_, T>, _dst: &ValRaw| {
                 // `_dst` is a Wasm pointer to indirect results. This pointer itself will remain
                 // deterministic, and thus replay will not need to change this. However,
                 // replay will have to overwrite any nested stored lowerings (deep copy)
-                cx.replay_lowering(None, expect_tys)
+                cx.replay_lowering(None)
             };
             match self {
                 Storage::Direct(storage) => {
@@ -616,12 +598,12 @@ where
                 let result_storage =
                     mem::transmute::<&mut [MaybeUninit<ValRaw>], &mut [ValRaw]>(storage);
                 // This path also stores the final return values in resulting storage
-                cx.replay_lowering(Some(result_storage), result_tys)?;
+                cx.replay_lowering(Some(result_storage))?;
             } else {
                 // The indirect `ret_ptr` itself will remain deterministic, and thus replay will not
                 // need to change the return storage. However, replay will have to overwrite any nested stored
                 // lowerings (deep copy)
-                cx.replay_lowering(None, result_tys)?;
+                cx.replay_lowering(None)?;
             }
             flags.set_may_leave(true);
         }

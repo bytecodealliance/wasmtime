@@ -43,7 +43,7 @@ macro_rules! rr_event {
         /// This type is the narrow waist for serialization/deserialization.
         /// Higher-level events (e.g. import calls consisting of lifts and lowers
         /// of parameter/return types) may drop down to one or more [`RREvent`]s
-        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+        #[derive(Debug, Clone, Serialize, Deserialize)]
         pub enum RREvent {
             /// Event signalling the end of a trace
             Eof,
@@ -124,8 +124,7 @@ rr_event! {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ReplayError {
     EmptyBuffer,
-    FailedFuncValidation,
-    FailedModuleValidation,
+    FailedValidation,
     IncorrectEventVariant,
     InvalidOrdering,
     EventActionError(EventActionError),
@@ -137,11 +136,8 @@ impl fmt::Display for ReplayError {
             Self::EmptyBuffer => {
                 write!(f, "replay buffer is empty!")
             }
-            Self::FailedFuncValidation => {
-                write!(f, "func replay event validation failed")
-            }
-            Self::FailedModuleValidation => {
-                write!(f, "module load replay event validation failed")
+            Self::FailedValidation => {
+                write!(f, "replay event validation failed")
             }
             Self::IncorrectEventVariant => {
                 write!(f, "event method invoked on incorrect variant")
@@ -179,7 +175,7 @@ pub trait Recorder {
     fn record_event<T, F>(&mut self, f: F) -> Result<()>
     where
         T: Into<RREvent>,
-        F: FnOnce(&RecordSettings) -> T;
+        F: FnOnce() -> T;
 
     /// Trigger an explicit flush of any buffered data to the writer
     ///
@@ -191,14 +187,15 @@ pub trait Recorder {
 
     // Provided methods
 
-    /// Conditionally [`record_event`](Recorder::record_event) when `pred` is true
-    fn record_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<()>
+    /// Record a event only when validation is requested
+    #[inline]
+    fn record_event_validation<T, F>(&mut self, f: F) -> Result<()>
     where
         T: Into<RREvent>,
-        P: FnOnce(&RecordSettings) -> bool,
-        F: FnOnce(&RecordSettings) -> T,
+        F: FnOnce() -> T,
     {
-        if pred(self.settings()) {
+        let settings = self.settings();
+        if settings.add_validation {
             self.record_event(f)?;
         }
         Ok(())
@@ -261,23 +258,32 @@ pub trait Replayer: Iterator<Item = RREvent> {
     where
         T: TryFrom<RREvent>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
-        F: FnOnce(T, &ReplaySettings) -> Result<(), ReplayError>,
+        F: FnOnce(T) -> Result<(), ReplayError>,
     {
         let call_event = self.next_event_typed()?;
-        Ok(f(call_event, self.settings())?)
+        Ok(f(call_event)?)
     }
 
-    /// Conditionally execute [`next_event_and`](Replayer::next_event_and) when `pred` is true
+    /// Conditionally process the next validation recorded event and if
+    /// replay validation is enabled, run the validation check
+    ///
+    /// ## Errors
+    ///
+    /// In addition to errors in [`next_event_typed`](Replayer::next_event_typed),
+    /// validation errors can be thrown
     #[inline]
-    fn next_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<(), ReplayError>
+    fn next_event_validation<T, Y>(&mut self, expect: &Y) -> Result<(), ReplayError>
     where
-        T: TryFrom<RREvent>,
+        T: TryFrom<RREvent> + Validate<Y>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
-        P: FnOnce(&ReplaySettings, &RecordSettings) -> bool,
-        F: FnOnce(T, &ReplaySettings) -> Result<(), ReplayError>,
     {
-        if pred(self.settings(), self.trace_settings()) {
-            self.next_event_and(f)
+        if self.trace_settings().add_validation {
+            let event = self.next_event_typed::<T>()?;
+            if self.settings().validate {
+                event.validate(expect)
+            } else {
+                Ok(())
+            }
         } else {
             Ok(())
         }
@@ -331,9 +337,9 @@ impl Recorder for RecordBuffer {
     fn record_event<T, F>(&mut self, f: F) -> Result<()>
     where
         T: Into<RREvent>,
-        F: FnOnce(&RecordSettings) -> T,
+        F: FnOnce() -> T,
     {
-        let event = f(self.settings()).into();
+        let event = f().into();
         log::debug!("Recording event => {}", &event);
         self.push_event(event)
     }
@@ -410,7 +416,13 @@ impl Replayer for ReplayBuffer {
         );
 
         // Read the recording settings
-        let trace_settings = io::from_replay_reader(&mut reader, &mut [0; 0])?;
+        let trace_settings: RecordSettings = io::from_replay_reader(&mut reader, &mut [0; 0])?;
+
+        if settings.validate && !trace_settings.add_validation {
+            log::warn!(
+                "Replay validation will be omitted since the recorded trace has no validation metadata..."
+            );
+        }
 
         Ok(ReplayBuffer {
             reader,
@@ -450,7 +462,7 @@ mod tests {
         let mut recorder =
             RecordBuffer::new_recorder(Box::new(File::create(tmppath)?), record_settings)?;
         let event = component_wasm::HostFuncReturnEvent::new(values.as_slice(), None);
-        recorder.record_event(|_| event.clone())?;
+        recorder.record_event(event.clone())?;
         recorder.flush()?;
 
         let tmp = tmp.into_temp_path();

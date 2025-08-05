@@ -851,12 +851,12 @@ impl<T: 'static> InstancePre<T> {
         {
             store
                 .0
-                .record_event(|_| InstantiationEvent::from_component(&self.component))?;
-            store
-                .0
-                .next_replay_event_and(|event: InstantiationEvent, _| {
-                    event.validate(&self.component)
-                })?;
+                .record_event(|| InstantiationEvent::from_component(&self.component))?;
+            // This is a required validation check for functional correctness, so don't use
+            // [`StoreOpaque::next_replay_event_validation`]
+            store.0.next_replay_event_and(|event: InstantiationEvent| {
+                event.validate(&InstantiationEvent::from_component(&self.component))
+            })?;
         }
         store
             .engine()

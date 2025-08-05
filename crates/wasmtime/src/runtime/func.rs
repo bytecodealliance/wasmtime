@@ -1523,29 +1523,12 @@ mod rr_hooks {
         #[cfg(all(feature = "rr-core", feature = "rr-type-validation"))]
         {
             // Record/replay the raw parameter args
-            use crate::config::ReplaySettings;
-            use crate::rr::{Validate, core_events::HostFuncEntryEvent};
-            store.record_event_if(
-                |r| r.add_validation,
-                |_| {
-                    let num_params = wasm_func_type.params().len();
-                    HostFuncEntryEvent::new(
-                        &args[..num_params],
-                        // Don't need to check validation here since it is
-                        // covered by the push predicate in this case
-                        Some(wasm_func_type.clone()),
-                    )
-                },
-            )?;
-            store.next_replay_event_if(
-                |_, r| r.add_validation,
-                |event: HostFuncEntryEvent, r: &ReplaySettings| {
-                    if r.validate {
-                        event.validate(wasm_func_type)?;
-                    }
-                    Ok(())
-                },
-            )?;
+            use crate::rr::core_events::HostFuncEntryEvent;
+            store.record_event_validation(|| {
+                let num_params = wasm_func_type.params().len();
+                HostFuncEntryEvent::new(&args[..num_params], wasm_func_type.clone())
+            })?;
+            store.next_replay_event_validation::<HostFuncEntryEvent, _>(wasm_func_type)?;
         }
         let _ = (args, wasm_func_type, store);
         Ok(())
@@ -1560,16 +1543,11 @@ mod rr_hooks {
     ) -> Result<()> {
         // Record the return values
         #[cfg(feature = "rr-core")]
-        {
-            store.record_event(|rmeta| {
-                let func_type = wasm_func_type;
-                let num_results = func_type.params().len();
-                HostFuncReturnEvent::new(
-                    &args[..num_results],
-                    rmeta.add_validation.then_some(func_type.clone()),
-                )
-            })?;
-        }
+        store.record_event(|| {
+            let func_type = wasm_func_type;
+            let num_results = func_type.params().len();
+            HostFuncReturnEvent::new(&args[..num_results])
+        })?;
         let _ = (args, wasm_func_type, store);
         Ok(())
     }
@@ -1582,11 +1560,10 @@ mod rr_hooks {
         store: &mut StoreOpaque,
     ) -> Result<()> {
         #[cfg(feature = "rr-core")]
-        {
-            store.next_replay_event_and(|event: HostFuncReturnEvent, rmeta| {
-                event.move_into_slice(args, rmeta.validate.then_some(wasm_func_type))
-            })?;
-        }
+        store.next_replay_event_and(|event: HostFuncReturnEvent| {
+            event.move_into_slice(args);
+            Ok(())
+        })?;
         let _ = (args, wasm_func_type, store);
         Ok(())
     }

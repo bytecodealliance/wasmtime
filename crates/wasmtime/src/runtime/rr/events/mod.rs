@@ -93,7 +93,7 @@ where
 
 /// Typechecking validation for replay, if `src_types` exist
 ///
-/// Returns [`ReplayError::FailedFuncValidation`] if typechecking fails
+/// Returns [`ReplayError::FailedValidation`] if typechecking fails
 #[inline(always)]
 fn replay_args_typecheck<T>(src_types: Option<T>, expect_types: T) -> Result<(), ReplayError>
 where
@@ -105,7 +105,7 @@ where
             if types == expect_types {
                 Ok(())
             } else {
-                Err(ReplayError::FailedFuncValidation)
+                Err(ReplayError::FailedValidation)
             }
         } else {
             println!(
@@ -129,7 +129,7 @@ where
         if src_val == expect_val {
             Ok(())
         } else {
-            Err(ReplayError::FailedFuncValidation)
+            Err(ReplayError::FailedValidation)
         }
     }
     #[cfg(not(feature = "rr-type-validation"))]
@@ -138,21 +138,35 @@ where
 
 /// Trait signifying types that can be validated on replay
 ///
-/// Default nop behavior when `rr-validate` is disabled.
-/// Note however that some [`Validate`] overriden implementations are present even
+/// All `PartialEq` and `Eq` types are directly validatable with themselves.
+/// Note however that some [`Validate`] implementations are present even
 /// when feature `rr-validate` is disabled, when validation is needed
-/// for a faithful replay.
+/// for a faithful replay (e.g. [`component_events::InstantiationEvent`]).
 pub trait Validate<T: ?Sized> {
     /// Perform a validation of the event to ensure replay consistency
-    fn validate(&self, _expect_t: &T) -> Result<(), ReplayError> {
-        Ok(())
-    }
+    fn validate(&self, expect: &T) -> Result<(), ReplayError>;
+
     /// Write a log message
     fn log(&self)
     where
         Self: fmt::Debug,
     {
         log::debug!("Validating => {:?}", self);
+    }
+}
+
+impl<T> Validate<T> for T
+where
+    T: PartialEq + fmt::Debug,
+{
+    /// All types that are [`PartialEq`] are directly validatable with themselves
+    fn validate(&self, expect: &T) -> Result<(), ReplayError> {
+        self.log();
+        if self == expect {
+            Ok(())
+        } else {
+            Err(ReplayError::FailedValidation)
+        }
     }
 }
 

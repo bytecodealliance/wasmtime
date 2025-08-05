@@ -80,7 +80,7 @@ use crate::RootSet;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 #[cfg(feature = "rr")]
-use crate::rr::{RREvent, RecordBuffer, Recorder, ReplayBuffer, ReplayError, Replayer};
+use crate::rr::{RREvent, RecordBuffer, Recorder, ReplayBuffer, ReplayError, Replayer, Validate};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
 #[cfg(feature = "stack-switching")]
@@ -94,8 +94,6 @@ use crate::runtime::vm::{
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Memory, Table, Uninhabited};
-#[cfg(feature = "rr")]
-use crate::{RecordSettings, ReplaySettings};
 use alloc::sync::Arc;
 use core::fmt;
 use core::marker;
@@ -1393,7 +1391,7 @@ impl StoreOpaque {
     pub(crate) fn record_event<T, F>(&mut self, f: F) -> Result<()>
     where
         T: Into<RREvent>,
-        F: FnOnce(&RecordSettings) -> T,
+        F: FnOnce() -> T,
     {
         if let Some(buf) = self.record_buffer_mut() {
             buf.record_event(f)
@@ -1403,18 +1401,18 @@ impl StoreOpaque {
     }
 
     /// Conditionally record the given event into the store's record buffer
+    /// if validation is enabled for recording
     ///
-    /// Convenience wrapper around [`Recorder::record_event_if`]
+    /// Convenience wrapper around [`Recorder::record_event_validation`]
     #[cfg(feature = "rr")]
     #[inline(always)]
-    pub(crate) fn record_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<()>
+    pub(crate) fn record_event_validation<T, F>(&mut self, f: F) -> Result<()>
     where
         T: Into<RREvent>,
-        P: FnOnce(&RecordSettings) -> bool,
-        F: FnOnce(&RecordSettings) -> T,
+        F: FnOnce() -> T,
     {
         if let Some(buf) = self.record_buffer_mut() {
-            buf.record_event_if(pred, f)
+            buf.record_event_validation(f)
         } else {
             Ok(())
         }
@@ -1429,7 +1427,7 @@ impl StoreOpaque {
     where
         T: TryFrom<RREvent>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
-        F: FnOnce(T, &ReplaySettings) -> Result<(), ReplayError>,
+        F: FnOnce(T) -> Result<(), ReplayError>,
     {
         if let Some(buf) = self.replay_buffer_mut() {
             buf.next_event_and(f)
@@ -1438,20 +1436,22 @@ impl StoreOpaque {
         }
     }
 
-    /// Conditionally process the next replay event from the store's replay buffer
+    /// Process the next replay event as a validation event from the store's replay buffer
+    /// and if validation is enabled on replay, and run the validation check
     ///
-    /// Convenience wrapper around [`Replayer::next_event_if`]
+    /// Convenience wrapper around [`Replayer::next_event_validation`]
     #[cfg(feature = "rr")]
     #[inline]
-    pub(crate) fn next_replay_event_if<T, P, F>(&mut self, pred: P, f: F) -> Result<(), ReplayError>
+    pub(crate) fn next_replay_event_validation<T, Y>(
+        &mut self,
+        expect: &Y,
+    ) -> Result<(), ReplayError>
     where
-        T: TryFrom<RREvent>,
+        T: TryFrom<RREvent> + Validate<Y>,
         ReplayError: From<<T as TryFrom<RREvent>>::Error>,
-        P: FnOnce(&ReplaySettings, &RecordSettings) -> bool,
-        F: FnOnce(T, &ReplaySettings) -> Result<(), ReplayError>,
     {
         if let Some(buf) = self.replay_buffer_mut() {
-            buf.next_event_if(pred, f)
+            buf.next_event_validation::<T, Y>(expect)
         } else {
             Ok(())
         }
