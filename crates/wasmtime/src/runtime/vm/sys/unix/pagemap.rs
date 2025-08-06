@@ -169,7 +169,7 @@ pub unsafe fn reset_with_pagemap(
         // Keeping less than one page of memory resident when the original
         // mapping itself is also less than a page? Also fall back to the
         // default behavior as this'll just be a simple memcpy.
-        if keep_resident.byte_count() <= host_page_size && len <= host_page_size {
+        if keep_resident.byte_count() <= host_page_size && len.byte_count() <= host_page_size {
             pagemap = None;
         }
     }
