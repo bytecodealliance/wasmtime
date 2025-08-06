@@ -272,7 +272,7 @@ pub struct RecordConfig {
 pub struct ReplaySettings {
     /// Flag to include additional signatures for replay validation.
     pub validate: bool,
-    /// Static buffer size for deserialization of variable-length types (like [String])
+    /// Static buffer size for deserialization of variable-length types (like [String]).
     pub deser_buffer_size: usize,
 }
 
