@@ -346,25 +346,38 @@ mod ioctl {
         /// categories before testing for `category_mask`. That means that if a
         /// bit needs to be zero then it additionally must be specified in one
         /// of `category_mask` or `category_anyof_mask`.
+        ///
+        /// For more detail see the `pagemap_scan_is_interesting_page` function
+        /// in the Linux kernel source.
         pub fn category_inverted(&mut self, flags: Categories) -> &mut PageMapScanBuilder {
             self.pm_scan_arg.category_inverted = flags;
             self
         }
 
-        /// Skip pages for which any category doesn't match.
+        /// Only consider pages for which all `flags` match.
         ///
         /// This mask is applied after `category_inverted` is used to flip bits
         /// in a page's categories. Only pages which match all bits in `flags`
         /// will be considered.
+        ///
+        /// For more detail see the `pagemap_scan_is_interesting_page` function
+        /// in the Linux kernel source.
         pub fn category_mask(&mut self, flags: Categories) -> &mut PageMapScanBuilder {
             self.pm_scan_arg.category_mask = flags;
             self
         }
 
-        /// Skip pages for which no category matches.
+        /// Only consider pages for which any bit of `flags` matches.
         ///
-        /// Like `category_mask` this is applied after pages have had their category
-        /// bits inverted by `category_inverted`.
+        /// After `category_inverted` and `category_mask` have been applied, if
+        /// this option is specified to a non-empty value, then at least one of
+        /// `flags` must be in a page's flags to be considered. That means that
+        /// flags specified in `category_inverted` will already be inverted for
+        /// consideration here. The page categories are and'd with `flags` and
+        /// some bit must be set for the page to be considered.
+        ///
+        /// For more detail see the `pagemap_scan_is_interesting_page` function
+        /// in the Linux kernel source.
         #[expect(dead_code, reason = "bindings for the future if we need them")]
         pub fn category_anyof_mask(&mut self, flags: Categories) -> &mut PageMapScanBuilder {
             self.pm_scan_arg.category_anyof_mask = flags;
