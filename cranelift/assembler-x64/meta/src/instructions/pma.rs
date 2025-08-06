@@ -15,14 +15,14 @@ pub fn list() -> Vec<Inst> {
         // together and stored in the low doubleword of the destination register
         // (31-0). The same operation is performed on the other pairs of
         // adjacent words."
-        inst("pmaddwd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF5]), _64b | compat | sse2).alt(avx, "vpmaddwd_b"),
-        inst("vpmaddwd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xF5), _64b | compat | avx),
+        inst("pmaddwd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF5]), (_64b | compat) & sse2).alt(avx, "vpmaddwd_b"),
+        inst("vpmaddwd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xF5), (_64b | compat) & avx),
         // Like `pmaddwd`, but this "multiplies vertically each unsigned byte of
         // the destination operand (first operand) with the corresponding signed
         // byte of the source operand (second operand), producing intermediate
         // signed 16-bit integers. Each adjacent pair of signed words is added
         // and the saturated result is packed to the destination operand."
-        inst("pmaddubsw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x04]), _64b | compat | ssse3).alt(avx, "vpmaddubsw_b"),
-        inst("vpmaddubsw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x04), _64b | compat | avx),
+        inst("pmaddubsw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x04]), (_64b | compat) & ssse3).alt(avx, "vpmaddubsw_b"),
+        inst("vpmaddubsw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x04), (_64b | compat) & avx),
      ]
 }

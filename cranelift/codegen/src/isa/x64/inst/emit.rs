@@ -165,38 +165,17 @@ pub(crate) fn emit(
     info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    let matches_isa_flags = |iset_requirement: &InstructionSet| -> bool {
-        match iset_requirement {
-            // Cranelift assumes SSE2 at least.
-            InstructionSet::SSE | InstructionSet::SSE2 => true,
-            InstructionSet::CMPXCHG16b => info.isa_flags.use_cmpxchg16b(),
-            InstructionSet::SSE3 => info.isa_flags.use_sse3(),
-            InstructionSet::SSSE3 => info.isa_flags.use_ssse3(),
-            InstructionSet::SSE41 => info.isa_flags.use_sse41(),
-            InstructionSet::SSE42 => info.isa_flags.use_sse42(),
-            InstructionSet::Popcnt => info.isa_flags.use_popcnt(),
-            InstructionSet::Lzcnt => info.isa_flags.use_lzcnt(),
-            InstructionSet::BMI1 => info.isa_flags.use_bmi1(),
-            InstructionSet::BMI2 => info.isa_flags.has_bmi2(),
-            InstructionSet::FMA => info.isa_flags.has_fma(),
-            InstructionSet::AVX => info.isa_flags.has_avx(),
-            InstructionSet::AVX2 => info.isa_flags.has_avx2(),
-            InstructionSet::AVX512BITALG => info.isa_flags.has_avx512bitalg(),
-            InstructionSet::AVX512DQ => info.isa_flags.has_avx512dq(),
-            InstructionSet::AVX512F => info.isa_flags.has_avx512f(),
-            InstructionSet::AVX512VBMI => info.isa_flags.has_avx512vbmi(),
-            InstructionSet::AVX512VL => info.isa_flags.has_avx512vl(),
-        }
-    };
-
-    // Certain instructions may be present in more than one ISA feature set; we must at least match
-    // one of them in the target CPU.
-    let isa_requirements = inst.available_in_any_isa();
-    if !isa_requirements.is_empty() && !isa_requirements.iter().all(matches_isa_flags) {
+    if !inst.is_available(&info) {
+        let features = if let Inst::External { inst } = inst {
+            inst.features().to_string()
+        } else {
+            "see `is_available` source for feature term".to_string()
+        };
         panic!(
-            "Cannot emit inst '{inst:?}' for target; failed to match ISA requirements: {isa_requirements:?}"
-        )
+            "Cannot emit inst '{inst:?}' for target; failed to match ISA requirements: {features}"
+        );
     }
+
     match inst {
         Inst::CheckedSRemSeq { divisor, .. } | Inst::CheckedSRemSeq8 { divisor, .. } => {
             // Validate that the register constraints of the dividend and the

@@ -127,9 +127,7 @@ impl core::fmt::Display for Inst {
             custom,
         } = self;
         write!(f, "{name}: {format} => {encoding}")?;
-        if !features.is_empty() {
-            write!(f, " [{features}]")?;
-        }
+        write!(f, " [{features}]")?;
         if let Some(alternate) = alternate {
             write!(f, " (alternate: {alternate})")?;
         }

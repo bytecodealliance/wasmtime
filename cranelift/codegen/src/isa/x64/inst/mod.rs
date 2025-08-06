@@ -63,14 +63,16 @@ fn inst_size_test() {
 }
 
 impl Inst {
-    /// Retrieve a list of ISA feature sets in which the instruction is available. An empty list
-    /// indicates that the instruction is available in the baseline feature set (i.e. SSE2 and
-    /// below); more than one `InstructionSet` in the list indicates that the instruction is present
-    /// *any* of the included ISA feature sets.
-    fn available_in_any_isa(&self) -> SmallVec<[InstructionSet; 2]> {
+    /// Check if the instruction (or pseudo-instruction) can be emitted given
+    /// the current target architecture given by `emit_info`. For non-assembler
+    /// instructions, this assumes a baseline feature set (i.e., 64-bit AND SSE2
+    /// and below).
+    fn is_available(&self, emit_info: &EmitInfo) -> bool {
+        use asm::AvailableFeatures;
+
         match self {
-            // These instructions are part of SSE2, which is a basic requirement in Cranelift, and
-            // don't have to be checked.
+            // These instructions are part of SSE2, which is a basic requirement
+            // in Cranelift, and don't have to be checked.
             Inst::AtomicRmwSeq { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
@@ -104,41 +106,11 @@ impl Inst {
             | Inst::MachOTlsGetAddr { .. }
             | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
-            | Inst::DummyUse { .. } => smallvec![],
+            | Inst::DummyUse { .. } => true,
 
-            Inst::Atomic128RmwSeq { .. } | Inst::Atomic128XchgSeq { .. } => {
-                smallvec![InstructionSet::CMPXCHG16b]
-            }
+            Inst::Atomic128RmwSeq { .. } | Inst::Atomic128XchgSeq { .. } => emit_info.cmpxchg16b(),
 
-            Inst::External { inst } => {
-                use cranelift_assembler_x64::Feature::*;
-                let mut features = smallvec![];
-                for f in inst.features() {
-                    match f {
-                        _64b | compat => {}
-                        sse => features.push(InstructionSet::SSE),
-                        sse2 => features.push(InstructionSet::SSE2),
-                        sse3 => features.push(InstructionSet::SSE3),
-                        ssse3 => features.push(InstructionSet::SSSE3),
-                        sse41 => features.push(InstructionSet::SSE41),
-                        sse42 => features.push(InstructionSet::SSE42),
-                        bmi1 => features.push(InstructionSet::BMI1),
-                        bmi2 => features.push(InstructionSet::BMI2),
-                        lzcnt => features.push(InstructionSet::Lzcnt),
-                        popcnt => features.push(InstructionSet::Popcnt),
-                        avx => features.push(InstructionSet::AVX),
-                        avx2 => features.push(InstructionSet::AVX2),
-                        avx512f => features.push(InstructionSet::AVX512F),
-                        avx512vl => features.push(InstructionSet::AVX512VL),
-                        avx512dq => features.push(InstructionSet::AVX512DQ),
-                        avx512bitalg => features.push(InstructionSet::AVX512BITALG),
-                        avx512vbmi => features.push(InstructionSet::AVX512VBMI),
-                        cmpxchg16b => features.push(InstructionSet::CMPXCHG16b),
-                        fma => features.push(InstructionSet::FMA),
-                    }
-                }
-                features
-            }
+            Inst::External { inst } => inst.is_available(&emit_info),
         }
     }
 }
@@ -1475,6 +1447,97 @@ impl EmitInfo {
     /// Create a constant state for emission of instructions.
     pub fn new(flags: settings::Flags, isa_flags: x64_settings::Flags) -> Self {
         Self { flags, isa_flags }
+    }
+}
+
+impl asm::AvailableFeatures for &EmitInfo {
+    fn _64b(&self) -> bool {
+        // Currently, this x64 backend always assumes 64-bit mode.
+        true
+    }
+
+    fn compat(&self) -> bool {
+        // For 32-bit compatibility mode, see
+        // https://github.com/bytecodealliance/wasmtime/issues/1980 (TODO).
+        false
+    }
+
+    fn sse(&self) -> bool {
+        // Currently, this x64 backend always assumes SSE.
+        true
+    }
+
+    fn sse2(&self) -> bool {
+        // Currently, this x64 backend always assumes SSE2.
+        true
+    }
+
+    fn sse3(&self) -> bool {
+        self.isa_flags.has_sse3()
+    }
+
+    fn ssse3(&self) -> bool {
+        self.isa_flags.has_ssse3()
+    }
+
+    fn sse41(&self) -> bool {
+        self.isa_flags.has_sse41()
+    }
+
+    fn sse42(&self) -> bool {
+        self.isa_flags.has_sse42()
+    }
+
+    fn bmi1(&self) -> bool {
+        self.isa_flags.has_bmi1()
+    }
+
+    fn bmi2(&self) -> bool {
+        self.isa_flags.has_bmi2()
+    }
+
+    fn lzcnt(&self) -> bool {
+        self.isa_flags.has_lzcnt()
+    }
+
+    fn popcnt(&self) -> bool {
+        self.isa_flags.has_popcnt()
+    }
+
+    fn avx(&self) -> bool {
+        self.isa_flags.has_avx()
+    }
+
+    fn avx2(&self) -> bool {
+        self.isa_flags.has_avx2()
+    }
+
+    fn avx512f(&self) -> bool {
+        self.isa_flags.has_avx512f()
+    }
+
+    fn avx512vl(&self) -> bool {
+        self.isa_flags.has_avx512vl()
+    }
+
+    fn cmpxchg16b(&self) -> bool {
+        self.isa_flags.has_cmpxchg16b()
+    }
+
+    fn fma(&self) -> bool {
+        self.isa_flags.has_fma()
+    }
+
+    fn avx512dq(&self) -> bool {
+        self.isa_flags.has_avx512dq()
+    }
+
+    fn avx512bitalg(&self) -> bool {
+        self.isa_flags.has_avx512bitalg()
+    }
+
+    fn avx512vbmi(&self) -> bool {
+        self.isa_flags.has_avx512vbmi()
     }
 }
 
