@@ -508,9 +508,7 @@ unsafe fn rr_hook(instance: &mut ComponentInstance, libcall: &str) -> Result<()>
     {
         let store = instance.store();
         if (*store).replay_enabled() {
-            return Err(anyhow!(
-                "Replay support for libcall {libcall:?} not yet supported!"
-            ));
+            bail!("Replay support for libcall {libcall:?} not yet supported!");
         } else {
             use crate::rr::marker_events::CustomMessageEvent;
             (*store).record_event(|| CustomMessageEvent::from(libcall))?;
