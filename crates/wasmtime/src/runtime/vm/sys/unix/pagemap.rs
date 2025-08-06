@@ -150,7 +150,7 @@ impl PageMap {
 ///
 /// [ioctl]: https://www.man7.org/linux/man-pages/man2/PAGEMAP_SCAN.2const.html
 pub unsafe fn reset_with_pagemap(
-    pagemap: Option<&PageMap>,
+    mut pagemap: Option<&PageMap>,
     ptr: *mut u8,
     len: HostAlignedByteCount,
     mut keep_resident: HostAlignedByteCount,
@@ -160,20 +160,25 @@ pub unsafe fn reset_with_pagemap(
     keep_resident = keep_resident.min(len);
     let host_page_size = host_page_size();
 
-    let pagemap = match pagemap {
-        // The `pagemap_scan` ioctl interprets max_pages == 0 as "no limit",
-        // whereas we want to interpret it as "don't scan any pages", so only
-        // continue further on if we're keeping some bytes resident.
-        //
-        // Additionally fall back to the default behavior if the `keep_resident`
-        // value is just one page of host memory.
-        //
-        Some(pagemap)
-            if keep_resident.byte_count() > 0 && keep_resident.byte_count() > host_page_size =>
-        {
-            pagemap
+    if pagemap.is_some() {
+        // Nothing to keep resident? fall back to the default behavior.
+        if keep_resident.byte_count() == 0 {
+            pagemap = None;
         }
 
+        // Keeping less than one page of memory resident when the original
+        // mapping itself is also less than a page? Also fall back to the
+        // default behavior as this'll just be a simple memcpy.
+        if keep_resident.byte_count() <= host_page_size && len <= host_page_size {
+            pagemap = None;
+        }
+    }
+
+    let pagemap = match pagemap {
+        Some(pagemap) => pagemap,
+
+        // Fall back to the default behavior.
+        //
         // SAFETY: the safety requirement of
         // `pagemap_disabled::reset_with_pagemap` is the same as this function.
         _ => unsafe {
@@ -219,6 +224,9 @@ pub unsafe fn reset_with_pagemap(
     let result = match unsafe { ioctl(&pagemap.0, scan_arg) } {
         Ok(result) => result,
 
+        // If the ioctl fails for whatever reason, we at least tried, so fall
+        // back to the default behavior.
+        //
         // SAFETY: the safety requirement of
         // `pagemap_disabled::reset_with_pagemap` is the same as this function.
         Err(err) => unsafe {
@@ -243,6 +251,11 @@ pub unsafe fn reset_with_pagemap(
             reset_manually(&mut *region.region().cast_mut());
         }
     }
+
+    // Report everything after `walk_end` to the end of memory as memory that
+    // must be decommitted as the scan didn't reach it. Note that if `walk_end`
+    // is already at the end of memory then the byte size of the decommitted
+    // memory here will be 0 meaning that this is a noop.
     let scan_size = result.walk_end().addr() - ptr.addr();
     decommit(result.walk_end().cast_mut(), len.byte_count() - scan_size);
 }
@@ -274,6 +287,9 @@ mod ioctl {
             const PFNZERO = 1 << 5;
             /// The page is THP or Hugetlb backed.
             const HUGE = 1 << 6;
+            // NB: I don't know what this is and I can't find documentation for
+            // it, it's just included here for complete-ness with the API that
+            // `PAGEMAP_SCAN` provides.
             const SOFT_DIRTY = 1 << 7;
         }
     }
