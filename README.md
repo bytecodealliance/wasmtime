@@ -36,6 +36,8 @@ curl https://wasmtime.dev/install.sh -sSf | bash
 ```
 This script installs into `$WASMTIME_HOME` (defaults to `$HOME/.wasmtime`), and executable is placed in `$WASMTIME_HOME/bin`.
 
+After running the install script above, follow the on-screen instructions.
+
 Windows or otherwise interested users can download installers and
 binaries directly from the [GitHub
 Releases](https://github.com/bytecodealliance/wasmtime/releases) page.
