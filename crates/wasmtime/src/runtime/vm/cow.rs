@@ -226,7 +226,7 @@ impl ModuleMemoryImages {
             let offset = HostAlignedByteCount::new(offset_usize)
                 .expect("memory init offset is a multiple of the host page size");
 
-            // If this creation files then we fail creating
+            // If this creation fails then we fail creating
             // `ModuleMemoryImages` since this memory couldn't be represented.
             let image = match MemoryImage::new(engine, page_size, offset, source, data_range)? {
                 Some(image) => image,

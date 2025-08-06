@@ -103,9 +103,6 @@ pub unsafe fn reset_with_pagemap(
         // since the reported set of categories is always empty and we otherwise
         // aren't looking for anything in particular.
         .return_mask(Categories::empty())
-        // Not used, but keep the helper below "used" in case it's needed in the
-        // future.
-        .category_anyof_mask(Categories::empty())
         .build(&mut storage);
 
     // SAFETY: this should be a safe ioctl as we control the fd we're operating
@@ -132,10 +129,6 @@ pub unsafe fn reset_with_pagemap(
     // For all regions that were written in the scan reset them manually, then
     // afterwards decommit everything else.
     for region in result.regions() {
-        // not used at this time, but keep it alive as a helper from the `ioctl`
-        // module in case it's needed in the future.
-        let _ = region.categories();
-
         // SAFETY: we're relying on Linux to pass in valid region ranges within
         // the `ptr/len` we specified to the original syscall.
         unsafe {
@@ -248,6 +241,7 @@ mod ioctl {
         ///
         /// Like `category_mask` this is applied after pages have had their category
         /// bits inverted by `category_inverted`.
+        #[expect(dead_code, reason = "bindings for the future if we need them")]
         pub fn category_anyof_mask(&mut self, flags: Categories) -> &mut PageMapScanBuilder {
             self.pm_scan_arg.category_anyof_mask = flags;
             self
@@ -355,7 +349,14 @@ mod ioctl {
         }
 
         /// Returns the category flags associated with this region.
+        ///
+        /// Note that this will only contain categories specified in
+        /// [`PageMapScanBuilder::return_mask`].
         #[inline]
+        #[cfg_attr(
+            not(test),
+            expect(dead_code, reason = "bindings for the future if we need them")
+        )]
         pub fn categories(&self) -> Categories {
             self.0.categories
         }
@@ -394,7 +395,7 @@ mod ioctl {
             let extract_output = extract_output.cast::<pm_scan_arg>();
             let len = usize::try_from(out).unwrap();
             // SAFETY: it's a requirement of this method that
-            // `extract_output` is safe to read an indeed a `pm_scan_arg`.
+            // `extract_output` is safe to read and indeed a `pm_scan_arg`.
             // Additionally the slice returned here originated from a slice
             // provided to `PageMapScanBuilder::build` threaded through the
             // `vec` field and it should be safe to thread that back out through
@@ -406,12 +407,13 @@ mod ioctl {
             Ok(PageMapScanResult {
                 regions,
                 // SAFETY: it's a requirement of this method that
-                // `extract_output` is safe to read an indeed a `pm_scan_arg`.
+                // `extract_output` is safe to read and indeed a `pm_scan_arg`.
                 walk_end: unsafe { (*extract_output).walk_end as *const u8 },
             })
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::ioctl::*;
