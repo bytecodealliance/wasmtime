@@ -38,9 +38,117 @@ impl PageMap {
 
 /// Resets `ptr` for `len` bytes.
 ///
+/// This function is a dual implementation of this function in the
+/// `pagemap_disabled` module except it uses the `PAGEMAP_SCAN` [ioctl] on
+/// Linux to be more clever about calling the `reset_manually` closure.
+/// Semantically though this still has the same meaning where all of `ptr` for
+/// `len` bytes will be reset, either through `reset_manually` or `decommit`.
+/// The optimization here is that `reset_manually` will only be called on
+/// regions as-necessary and `decommit` can be skipped entirely in some
+/// situations.
+///
+/// The `PAGEMAP_SCAN` [ioctl] scans a region of memory and reports back
+/// "regions of interest" as configured by the scan. It also does things with
+/// uffd and write-protected pages, but that's not leveraged here. Specifically
+/// this function will perform a scan of `ptr` for `len` bytes which will search
+/// for pages that:
+///
+/// * Are present.
+/// * Have been written.
+/// * Are NOT backed by the "zero" page.
+/// * Are NOT backed by a "file" page.
+///
+/// By default WebAssembly memories/tables are all accessible virtual memory,
+/// but paging optimizations on Linux means they don't actually have a backing
+/// page. For example when an instance starts for the first time its entire
+/// linear memory will be mapped as anonymous memory where page-table-entries
+/// don't even exist for the new memory. Most modules will then have an initial
+/// image mapped in, but that still won't have any page table entries. When
+/// memory is accessed for the first time a page fault will be generated and
+/// handled by the kernel.
+///
+/// If memory is read then the page fault will force a PTE to be allocated to
+/// either zero-backed pages (e.g. ZFOD behavior) or a file-backed page if the
+/// memory is in the initial image mapping. For ZFOD the kernel uses a single
+/// page for the entire system of zeros and for files it uses the page map cache
+/// in the kernel to share the same page across many mappings (as it's all
+/// read-only anyway). Note that in this situation the PTE allocated will have
+/// the write permission disabled meaning that a write will later generate a
+/// page fault.
+///
+/// If memory is written then that will allocate a fresh page from the kernel.
+/// If the PTE was not previously present then the fresh page is initialized
+/// either with zeros or a copy of the contents of the file-backed mapping. If
+/// the PTE was previously present then its previous contents are copied into
+/// the new page. In all of these cases the final PTE allocate will be a private
+/// page to just this process which will be reflected nowhere else on the
+/// system.
+///
+/// Putting this all together this helps explain the search criteria for
+/// `PAGEMAP_SCAN`, notably:
+///
+/// * `Categories::PRESENT` - we're only interested in present pages, anything
+///   unmapped wasn't touched by the guest so no need for the host to touch it
+///   either.
+///
+/// * `Categories::WRITTEN` - if a page was only read by the guest no need to
+///   take a look at it as the contents aren't changed from the initial image.
+///
+/// * `!Categories::PFNZERO` - if a page is mapped to the zero page then it's
+///   guaranteed to be readonly and it means that wasm read the memory but
+///   didn't write to it, additionally meaning it doesn't need to be reset.
+///
+/// * `!Categories::FILE` - similar to `!PFNZERO` if a page is mapped to a file
+///   then for us that means it's readonly meaning wasm only read the memory,
+///   didn't write to it, so the page can be skipped.
+///
+/// The `PAGEMAP_SCAN` will report back a set of contiguous regions of memory
+/// which match our scan flags that we're looking for. Each of these regions is
+/// then passed to `reset_manually` as-is. The ioctl will additionally then
+/// report a "walk_end" address which is the last address it considered before
+/// the scan was halted. A scan can stop for 3 reasons:
+///
+/// * The end of the region of memory being scanned was reached. In this case
+///   the entire region was scanned meaning that all dirty memory was reported
+///   through `reset_manually`. This means that `decommit` can be skipped
+///   entirely (or invoked with a 0 length here which will also end up with it
+///   being skipped).
+///
+/// * The scan's `max_pages` setting was reached. The `keep_resident` argument
+///   indicates the maximal amount of memory to pass to `reset_manually` and
+///   this translates to the `max_pages` configuration option to the ioctl. The
+///   sum total of the size of all regions reported from the ioctl is guaranteed
+///   to be less than `max_pages`. This means that if a scan reaches the
+///   `keep_resident` limit before reaching the end then the ioctl will bail out
+///   early. That means that the wasm module's working set of memory was larger
+///   than `keep_resident` and then the rest of it will be `decommit`'d away.
+///
+/// * The scan's returned set of regions exceeds the capacity passed into the
+///   ioctl. The `pm_scan_arg` of the ioctl takes a `vec` and `vec_len` which is
+///   a region of memory to store a list of `page_region` structures. Below this
+///   is always `MAX_REGIONS`. If there are more than this number of disjoint
+///   regions of memory that need to be reported then the ioctl will also return
+///   early without reaching the end of memory. Note that this means that all
+///   further memory will be `decommit`'d with reported regions still going to
+///   `reset_manually`. This is arguably something we should detect and improve
+///   in Wasmtime, but for now `MAX_REGIONS` is hardcoded.
+///
+/// In the end this ends up being a "more clever" version of this function than
+/// the one in the `pagemap_disabled` module. By using `PAGEMAP_SCAN` we can
+/// search for the first `keep_resident` bytes of dirty memory written to by a
+/// wasm guest instead of assuming the first `keep_resident` bytes of the region
+/// were modified by the guest. This crucially enables the `decommit` operation
+/// to a noop if the wasm guest's set of working memory is less than
+/// `keep_resident` which means that `memcpy` is sufficient to reset a linear
+/// memory or table. This directly translates to higher throughput as it avoids
+/// IPIs and synchronization updating page tables and additionally avoids page
+/// faults on future executions of the same module.
+///
 /// # Safety
 ///
 /// Requires that `ptr` is valid to read and write for `len` bytes.
+///
+/// [ioctl]: https://www.man7.org/linux/man-pages/man2/PAGEMAP_SCAN.2const.html
 pub unsafe fn reset_with_pagemap(
     pagemap: Option<&PageMap>,
     ptr: *mut u8,
