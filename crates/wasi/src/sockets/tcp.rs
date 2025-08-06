@@ -259,7 +259,7 @@ impl TcpSocket {
             TcpState::Default(sock) => {
                 if let Err(err) = tcp_bind(&sock, addr) {
                     self.tcp_state = TcpState::Default(sock);
-                    Err(err.into())
+                    Err(err)
                 } else {
                     self.tcp_state = TcpState::BindStarted(sock);
                     Ok(())
@@ -281,7 +281,7 @@ impl TcpSocket {
             current_state => {
                 // Reset the state so that the outside world doesn't see this socket as closed
                 self.tcp_state = current_state;
-                Err(ErrorCode::NotInProgress.into())
+                Err(ErrorCode::NotInProgress)
             }
         }
     }
@@ -293,16 +293,16 @@ impl TcpSocket {
         match self.tcp_state {
             TcpState::Default(..) | TcpState::Bound(..) => {}
             TcpState::Connecting(..) => {
-                return Err(ErrorCode::ConcurrencyConflict.into());
+                return Err(ErrorCode::ConcurrencyConflict);
             }
-            _ => return Err(ErrorCode::InvalidState.into()),
+            _ => return Err(ErrorCode::InvalidState),
         };
 
         if !is_valid_unicast_address(addr.ip())
             || !is_valid_remote_address(*addr)
             || !is_valid_address_family(addr.ip(), self.family)
         {
-            return Err(ErrorCode::InvalidArgument.into());
+            return Err(ErrorCode::InvalidArgument);
         };
 
         let (TcpState::Default(tokio_socket) | TcpState::Bound(tokio_socket)) =
@@ -325,7 +325,7 @@ impl TcpSocket {
                 *slot = Some(Box::pin(future));
                 Ok(())
             }
-            _ => Err(ErrorCode::InvalidState.into()),
+            _ => Err(ErrorCode::InvalidState),
         }
     }
 
@@ -354,7 +354,7 @@ impl TcpSocket {
             }
             current_state => {
                 self.tcp_state = current_state;
-                Err(ErrorCode::NotInProgress.into())
+                Err(ErrorCode::NotInProgress)
             }
         }
     }
@@ -386,7 +386,7 @@ impl TcpSocket {
             }
             previous_state => {
                 self.tcp_state = previous_state;
-                Err(ErrorCode::InvalidState.into())
+                Err(ErrorCode::InvalidState)
             }
         }
     }
@@ -396,7 +396,7 @@ impl TcpSocket {
             TcpState::ListenStarted(tokio_socket) => tokio_socket,
             previous_state => {
                 self.tcp_state = previous_state;
-                return Err(ErrorCode::NotInProgress.into());
+                return Err(ErrorCode::NotInProgress);
             }
         };
 
@@ -436,7 +436,7 @@ impl TcpSocket {
             pending_accept,
         } = &mut self.tcp_state
         else {
-            return Err(ErrorCode::InvalidState.into());
+            return Err(ErrorCode::InvalidState);
         };
 
         let result = match pending_accept.take() {
