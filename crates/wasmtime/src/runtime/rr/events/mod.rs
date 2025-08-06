@@ -125,5 +125,27 @@ where
     }
 }
 
+/// Events used as markers for debugging/testing in traces
+///
+/// Marker events should be injectable at any point in a record
+/// trace without impacting functional correctness of replay
+pub mod marker_events {
+    use crate::prelude::*;
+    use serde::{Deserialize, Serialize};
+
+    /// A Nop event
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct NopEvent;
+
+    /// An event for custom String messages
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct CustomMessageEvent(pub String);
+    impl From<&str> for CustomMessageEvent {
+        fn from(v: &str) -> Self {
+            Self(v.into())
+        }
+    }
+}
+
 pub mod component_events;
 pub mod core_events;

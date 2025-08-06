@@ -499,13 +499,37 @@ fn inflate_latin1_bytes(dst: &mut [u16], latin1_bytes_so_far: usize) -> &mut [u1
     return rest;
 }
 
+/// Hook for record/replay of libcalls. Currently stubbed for record and panics on replay
+///
+/// TODO: Implement libcall hooks
+#[inline]
+unsafe fn rr_hook(instance: &mut ComponentInstance, libcall: &str) -> Result<()> {
+    #[cfg(feature = "rr-component")]
+    {
+        let store = instance.store();
+        if (*store).replay_enabled() {
+            return Err(anyhow!(
+                "Replay support for libcall {libcall:?} not yet supported!"
+            ));
+        } else {
+            use crate::rr::marker_events::CustomMessageEvent;
+            (*store).record_event(|| CustomMessageEvent::from(libcall))?;
+        }
+    }
+    let _ = (instance, libcall);
+    Ok(())
+}
+
 unsafe fn resource_new32(
     vmctx: NonNull<VMComponentContext>,
     resource: u32,
     rep: u32,
 ) -> Result<u32> {
     let resource = TypeResourceTableIndex::from_u32(resource);
-    ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_new32(resource, rep))
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        rr_hook(instance, "resource_new32")?;
+        instance.resource_new32(resource, rep)
+    })
 }
 
 unsafe fn resource_rep32(
@@ -514,7 +538,10 @@ unsafe fn resource_rep32(
     idx: u32,
 ) -> Result<u32> {
     let resource = TypeResourceTableIndex::from_u32(resource);
-    ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_rep32(resource, idx))
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        rr_hook(instance, "resource_rep32")?;
+        instance.resource_rep32(resource, idx)
+    })
 }
 
 unsafe fn resource_drop(
@@ -524,6 +551,7 @@ unsafe fn resource_drop(
 ) -> Result<ResourceDropRet> {
     let resource = TypeResourceTableIndex::from_u32(resource);
     ComponentInstance::from_vmctx(vmctx, |instance| {
+        rr_hook(instance, "resource_drop")?;
         Ok(ResourceDropRet(instance.resource_drop(resource, idx)?))
     })
 }
@@ -550,6 +578,7 @@ unsafe fn resource_transfer_own(
     let src_table = TypeResourceTableIndex::from_u32(src_table);
     let dst_table = TypeResourceTableIndex::from_u32(dst_table);
     ComponentInstance::from_vmctx(vmctx, |instance| {
+        rr_hook(instance, "resource_transfer_own")?;
         instance.resource_transfer_own(src_idx, src_table, dst_table)
     })
 }
@@ -563,16 +592,23 @@ unsafe fn resource_transfer_borrow(
     let src_table = TypeResourceTableIndex::from_u32(src_table);
     let dst_table = TypeResourceTableIndex::from_u32(dst_table);
     ComponentInstance::from_vmctx(vmctx, |instance| {
+        rr_hook(instance, "resource_transfer_borrow")?;
         instance.resource_transfer_borrow(src_idx, src_table, dst_table)
     })
 }
 
 unsafe fn resource_enter_call(vmctx: NonNull<VMComponentContext>) {
-    ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_enter_call())
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        rr_hook(instance, "resource_enter_call").unwrap();
+        instance.resource_enter_call()
+    })
 }
 
 unsafe fn resource_exit_call(vmctx: NonNull<VMComponentContext>) -> Result<()> {
-    ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_exit_call())
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        rr_hook(instance, "resource_exit_call")?;
+        instance.resource_exit_call()
+    })
 }
 
 unsafe fn trap(_vmctx: NonNull<VMComponentContext>, code: u8) -> Result<Infallible> {

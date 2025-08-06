@@ -7,6 +7,9 @@
 //!
 //! This module does NOT support RR for component builtins yet.
 
+#[cfg(feature = "component-model-async")]
+compile_error!("Support for `rr` not available with `component-model-async`");
+
 use crate::config::{ModuleVersionStrategy, RecordSettings, ReplaySettings};
 use crate::prelude::*;
 use core::fmt;
@@ -15,13 +18,13 @@ use serde::{Deserialize, Serialize};
 // Use component/core events internally even without feature flags enabled
 // so that [`RREvent`] has a well-defined serialization format, but export
 // it for other modules only when enabled
-pub use events::Validate;
 use events::component_events as __component_events;
 #[cfg(feature = "rr-component")]
 pub use events::component_events;
 use events::core_events as __core_events;
 #[cfg(feature = "rr-core")]
 pub use events::core_events;
+pub use events::{Validate, marker_events};
 pub use io::{RecordWriter, ReplayReader};
 
 /// Encapsulation of event types comprising an [`RREvent`] sum type
@@ -86,6 +89,12 @@ macro_rules! rr_event {
 
 // Set of supported record/replay events
 rr_event! {
+    // Marker events
+    /// Nop Event
+    Nop(marker_events::NopEvent),
+    /// A custom message
+    CustomMessage(marker_events::CustomMessageEvent),
+
     /// Call into host function from Core Wasm
     CoreHostFuncEntry(__core_events::HostFuncEntryEvent),
     /// Return from host function to Core Wasm
@@ -118,6 +127,17 @@ rr_event! {
     ComponentLowerEntry(__component_events::LowerEntryEvent),
     /// Call into [Lower::store] during type lowering
     ComponentLowerStoreEntry(__component_events::LowerStoreEntryEvent)
+}
+
+impl RREvent {
+    /// Indicates whether current event is a marker event
+    #[inline]
+    fn is_marker(&self) -> bool {
+        match self {
+            Self::Nop(_) | Self::CustomMessage(_) => true,
+            _ => false,
+        }
+    }
 }
 
 /// Error type signalling failures during a replay run
@@ -221,7 +241,7 @@ pub trait Replayer: Iterator<Item = RREvent> {
 
     // Provided Methods
 
-    /// Pop the next replay event
+    /// Get the next functional replay event (skips past all non-marker events)
     ///
     /// ## Errors
     ///
@@ -378,21 +398,25 @@ impl Iterator for ReplayBuffer {
     type Item = RREvent;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Check for EoF
-        let result = io::from_replay_reader(&mut self.reader, &mut self.deser_buffer);
-        match result {
-            Err(e) => {
-                log::error!("Erroneous replay read: {}", e);
-                None
-            }
-            Ok(event) => {
-                if let RREvent::Eof = event {
-                    None
-                } else {
-                    Some(event)
+        let ret = 'event_loop: loop {
+            let result = io::from_replay_reader(&mut self.reader, &mut self.deser_buffer);
+            match result {
+                Err(e) => {
+                    log::error!("Erroneous replay read: {}", e);
+                    break 'event_loop None;
+                }
+                Ok(event) => {
+                    if let RREvent::Eof = &event {
+                        break 'event_loop None;
+                    } else if event.is_marker() {
+                        continue 'event_loop;
+                    } else {
+                        break 'event_loop Some(event);
+                    }
                 }
             }
-        }
+        };
+        ret
     }
 }
 
