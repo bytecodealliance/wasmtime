@@ -173,7 +173,7 @@ pub mod sync {
                 "wasi:sockets/tcp/tcp-socket": super::super::sockets::tcp::TcpSocket,
                 "wasi:sockets/udp/incoming-datagram-stream": super::super::sockets::udp::IncomingDatagramStream,
                 "wasi:sockets/udp/outgoing-datagram-stream": super::super::sockets::udp::OutgoingDatagramStream,
-                "wasi:sockets/udp/udp-socket": super::super::sockets::udp::UdpSocket,
+                "wasi:sockets/udp/udp-socket": crate::sockets::UdpSocket,
 
                 // Error host trait from wasmtime-wasi-io is synchronous, so we can alias it
                 "wasi:io/error": wasmtime_wasi_io::bindings::wasi::io::error,
@@ -394,7 +394,7 @@ mod async_io {
             // this crate
             "wasi:sockets/network/network": crate::p2::network::Network,
             "wasi:sockets/tcp/tcp-socket": crate::p2::tcp::TcpSocket,
-            "wasi:sockets/udp/udp-socket": crate::p2::udp::UdpSocket,
+            "wasi:sockets/udp/udp-socket": crate::sockets::UdpSocket,
             "wasi:sockets/udp/incoming-datagram-stream": crate::p2::udp::IncomingDatagramStream,
             "wasi:sockets/udp/outgoing-datagram-stream": crate::p2::udp::OutgoingDatagramStream,
             "wasi:sockets/ip-name-lookup/resolve-address-stream": crate::p2::ip_name_lookup::ResolveAddressStream,

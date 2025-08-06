@@ -1,19 +1,13 @@
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network};
 use crate::p2::bindings::sockets::udp;
-use crate::p2::udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState};
+use crate::p2::udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState};
 use crate::p2::{Pollable, SocketError, SocketResult};
-use crate::sockets::util::{
-    get_ip_ttl, get_ipv6_unicast_hops, is_valid_address_family, is_valid_remote_address,
-    receive_buffer_size, send_buffer_size, set_receive_buffer_size, set_send_buffer_size,
-    set_unicast_hop_limit, udp_bind, udp_disconnect,
-};
+use crate::sockets::util::{is_valid_address_family, is_valid_remote_address};
 use crate::sockets::{
-    MAX_UDP_DATAGRAM_SIZE, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView,
+    MAX_UDP_DATAGRAM_SIZE, SocketAddrUse, SocketAddressFamily, UdpSocket, WasiSocketsCtxView,
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
-use io_lifetimes::AsSocketlike;
-use rustix::io::Errno;
 use std::net::SocketAddr;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
@@ -28,51 +22,20 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx.allowed_network_uses.check_allowed_udp()?;
-
-        match self.table.get(&this)?.udp_state {
-            UdpState::Default => {}
-            UdpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
-            UdpState::Bound | UdpState::Connected => return Err(ErrorCode::InvalidState.into()),
-        }
-
-        // Set the socket addr check on the socket so later functions have access to it through the socket handle
+        let local_address = SocketAddr::from(local_address);
         let check = self.table.get(&network)?.socket_addr_check.clone();
-        self.table
-            .get_mut(&this)?
-            .socket_addr_check
-            .replace(check.clone());
-
-        let socket = self.table.get(&this)?;
-        let local_address: SocketAddr = local_address.into();
-
-        if !is_valid_address_family(local_address.ip(), socket.family) {
-            return Err(ErrorCode::InvalidArgument.into());
-        }
-
-        {
-            check.check(local_address, SocketAddrUse::UdpBind).await?;
-
-            // Perform the OS bind call.
-            udp_bind(socket.udp_socket(), local_address)?;
-        }
+        check.check(local_address, SocketAddrUse::UdpBind).await?;
 
         let socket = self.table.get_mut(&this)?;
-        socket.udp_state = UdpState::BindStarted;
+        socket.bind(local_address)?;
+        socket.set_socket_addr_check(Some(check));
 
         Ok(())
     }
 
     fn finish_bind(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<()> {
-        let socket = self.table.get_mut(&this)?;
-
-        match socket.udp_state {
-            UdpState::BindStarted => {
-                socket.udp_state = UdpState::Bound;
-                Ok(())
-            }
-            _ => Err(ErrorCode::NotInProgress.into()),
-        }
+        self.table.get_mut(&this)?.finish_bind()?;
+        Ok(())
     }
 
     async fn stream(
@@ -95,9 +58,8 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         let socket = self.table.get_mut(&this)?;
         let remote_address = remote_address.map(SocketAddr::from);
 
-        match socket.udp_state {
-            UdpState::Bound | UdpState::Connected => {}
-            _ => return Err(ErrorCode::InvalidState.into()),
+        if !socket.is_bound() {
+            return Err(ErrorCode::InvalidState.into());
         }
 
         // We disconnect & (re)connect in two distinct steps for two reasons:
@@ -107,48 +69,29 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         //   if there isn't a disconnect in between.
 
         // Step #1: Disconnect
-        if let UdpState::Connected = socket.udp_state {
-            udp_disconnect(socket.udp_socket())?;
-            socket.udp_state = UdpState::Bound;
+        if socket.is_connected() {
+            socket.disconnect()?;
         }
 
         // Step #2: (Re)connect
         if let Some(connect_addr) = remote_address {
-            let Some(check) = socket.socket_addr_check.as_ref() else {
+            let Some(check) = socket.socket_addr_check() else {
                 return Err(ErrorCode::InvalidState.into());
             };
-            if !is_valid_remote_address(connect_addr)
-                || !is_valid_address_family(connect_addr.ip(), socket.family)
-            {
-                return Err(ErrorCode::InvalidArgument.into());
-            }
             check.check(connect_addr, SocketAddrUse::UdpConnect).await?;
-
-            rustix::net::connect(socket.udp_socket(), &connect_addr).map_err(
-                |error| match error {
-                    Errno::AFNOSUPPORT => ErrorCode::InvalidArgument, // See `bind` implementation.
-                    Errno::INPROGRESS => {
-                        tracing::debug!(
-                            "UDP connect returned EINPROGRESS, which should never happen"
-                        );
-                        ErrorCode::Unknown
-                    }
-                    _ => ErrorCode::from(error),
-                },
-            )?;
-            socket.udp_state = UdpState::Connected;
+            socket.connect(connect_addr)?;
         }
 
         let incoming_stream = IncomingDatagramStream {
-            inner: socket.inner.clone(),
+            inner: socket.socket().clone(),
             remote_address,
         };
         let outgoing_stream = OutgoingDatagramStream {
-            inner: socket.inner.clone(),
+            inner: socket.socket().clone(),
             remote_address,
-            family: socket.family,
+            family: socket.address_family(),
             send_state: SendState::Idle,
-            socket_addr_check: socket.socket_addr_check.clone(),
+            socket_addr_check: socket.socket_addr_check().cloned(),
         };
 
         Ok((
@@ -159,33 +102,12 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
 
     fn local_address(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<IpSocketAddress> {
         let socket = self.table.get(&this)?;
-
-        match socket.udp_state {
-            UdpState::Default => return Err(ErrorCode::InvalidState.into()),
-            UdpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
-            _ => {}
-        }
-
-        let addr = socket
-            .udp_socket()
-            .as_socketlike_view::<std::net::UdpSocket>()
-            .local_addr()?;
-        Ok(addr.into())
+        Ok(socket.local_address()?.into())
     }
 
     fn remote_address(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<IpSocketAddress> {
         let socket = self.table.get(&this)?;
-
-        match socket.udp_state {
-            UdpState::Connected => {}
-            _ => return Err(ErrorCode::InvalidState.into()),
-        }
-
-        let addr = socket
-            .udp_socket()
-            .as_socketlike_view::<std::net::UdpSocket>()
-            .peer_addr()?;
-        Ok(addr.into())
+        Ok(socket.remote_address()?.into())
     }
 
     fn address_family(
@@ -193,22 +115,12 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         this: Resource<udp::UdpSocket>,
     ) -> Result<IpAddressFamily, anyhow::Error> {
         let socket = self.table.get(&this)?;
-
-        match socket.family {
-            SocketAddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
-            SocketAddressFamily::Ipv6 => Ok(IpAddressFamily::Ipv6),
-        }
+        Ok(socket.address_family().into())
     }
 
     fn unicast_hop_limit(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u8> {
         let socket = self.table.get(&this)?;
-
-        let ttl = match socket.family {
-            SocketAddressFamily::Ipv4 => get_ip_ttl(socket.udp_socket())?,
-            SocketAddressFamily::Ipv6 => get_ipv6_unicast_hops(socket.udp_socket())?,
-        };
-
-        Ok(ttl)
+        Ok(socket.unicast_hop_limit()?)
     }
 
     fn set_unicast_hop_limit(
@@ -217,17 +129,13 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         value: u8,
     ) -> SocketResult<()> {
         let socket = self.table.get(&this)?;
-
-        set_unicast_hop_limit(socket.udp_socket(), socket.family, value)?;
-
+        socket.set_unicast_hop_limit(value)?;
         Ok(())
     }
 
     fn receive_buffer_size(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u64> {
         let socket = self.table.get(&this)?;
-
-        let value = receive_buffer_size(socket.udp_socket())?;
-        Ok(value)
+        Ok(socket.receive_buffer_size()?)
     }
 
     fn set_receive_buffer_size(
@@ -236,33 +144,22 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         value: u64,
     ) -> SocketResult<()> {
         let socket = self.table.get(&this)?;
-
-        set_receive_buffer_size(socket.udp_socket(), value)?;
+        socket.set_receive_buffer_size(value)?;
         Ok(())
     }
 
     fn send_buffer_size(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u64> {
         let socket = self.table.get(&this)?;
-
-        let value = send_buffer_size(socket.udp_socket())?;
-        Ok(value)
+        Ok(socket.send_buffer_size()?)
     }
 
-    fn set_send_buffer_size(
-        &mut self,
-        this: Resource<udp::UdpSocket>,
-        value: u64,
-    ) -> SocketResult<()> {
+    fn set_send_buffer_size(&mut self, this: Resource<UdpSocket>, value: u64) -> SocketResult<()> {
         let socket = self.table.get(&this)?;
-
-        set_send_buffer_size(socket.udp_socket(), value)?;
+        socket.set_send_buffer_size(value)?;
         Ok(())
     }
 
-    fn subscribe(
-        &mut self,
-        this: Resource<udp::UdpSocket>,
-    ) -> anyhow::Result<Resource<DynPollable>> {
+    fn subscribe(&mut self, this: Resource<UdpSocket>) -> anyhow::Result<Resource<DynPollable>> {
         wasmtime_wasi_io::poll::subscribe(self.table, this)
     }
 
@@ -273,6 +170,13 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         drop(dropped);
 
         Ok(())
+    }
+}
+
+#[async_trait]
+impl Pollable for UdpSocket {
+    async fn ready(&mut self) {
+        // None of the socket-level operations block natively
     }
 }
 
@@ -500,6 +404,15 @@ impl Pollable for OutgoingDatagramStream {
                     .expect("failed to await UDP socket readiness");
                 self.send_state = SendState::Idle;
             }
+        }
+    }
+}
+
+impl From<SocketAddressFamily> for IpAddressFamily {
+    fn from(family: SocketAddressFamily) -> IpAddressFamily {
+        match family {
+            SocketAddressFamily::Ipv4 => IpAddressFamily::Ipv4,
+            SocketAddressFamily::Ipv6 => IpAddressFamily::Ipv6,
         }
     }
 }

@@ -1,12 +1,11 @@
-use core::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
-
-use std::net::ToSocketAddrs;
-
-use rustix::io::Errno;
-use tracing::debug;
-
 use crate::p3::bindings::sockets::types;
+use crate::p3::sockets::SocketError;
+use crate::sockets::SocketAddressFamily;
 use crate::sockets::util::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
+use core::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use rustix::io::Errno;
+use std::net::ToSocketAddrs;
+use tracing::debug;
 
 impl From<IpAddr> for types::IpAddress {
     fn from(addr: IpAddr) -> Self {
@@ -123,6 +122,15 @@ impl From<cap_net_ext::AddressFamily> for types::IpAddressFamily {
     }
 }
 
+impl From<SocketAddressFamily> for types::IpAddressFamily {
+    fn from(family: SocketAddressFamily) -> Self {
+        match family {
+            SocketAddressFamily::Ipv4 => Self::Ipv4,
+            SocketAddressFamily::Ipv6 => Self::Ipv6,
+        }
+    }
+}
+
 impl From<std::io::Error> for types::ErrorCode {
     fn from(value: std::io::Error) -> Self {
         (&value).into()
@@ -222,6 +230,13 @@ impl From<crate::sockets::util::ErrorCode> for types::ErrorCode {
             crate::sockets::util::ErrorCode::ConnectionReset => Self::ConnectionReset,
             crate::sockets::util::ErrorCode::ConnectionAborted => Self::ConnectionAborted,
             crate::sockets::util::ErrorCode::DatagramTooLarge => Self::DatagramTooLarge,
+            crate::sockets::util::ErrorCode::NotInProgress => Self::InvalidState,
         }
+    }
+}
+
+impl From<crate::sockets::util::ErrorCode> for SocketError {
+    fn from(code: crate::sockets::util::ErrorCode) -> Self {
+        SocketError::from(types::ErrorCode::from(code))
     }
 }

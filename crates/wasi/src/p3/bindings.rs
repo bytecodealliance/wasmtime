@@ -95,7 +95,7 @@ mod generated {
             "wasi:cli/terminal-input/terminal-input": crate::p3::cli::TerminalInput,
             "wasi:cli/terminal-output/terminal-output": crate::p3::cli::TerminalOutput,
             "wasi:sockets/types/tcp-socket": crate::p3::sockets::tcp::TcpSocket,
-            "wasi:sockets/types/udp-socket": crate::p3::sockets::udp::UdpSocket,
+            "wasi:sockets/types/udp-socket": crate::sockets::UdpSocket,
         },
         trappable_error_type: {
             "wasi:sockets/types/error-code" => crate::p3::sockets::SocketError,
