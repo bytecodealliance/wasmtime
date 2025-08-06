@@ -134,7 +134,10 @@ impl fmt::Display for ReplayError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyBuffer => {
-                write!(f, "replay buffer is empty!")
+                write!(
+                    f,
+                    "replay buffer is empty (or unexpected read-failure encountered). Ensure sufficient `deserialization-buffer-size` in replay settings if you included `validation-metadata` during recording"
+                )
             }
             Self::FailedValidation => {
                 write!(f, "replay event validation failed")
@@ -367,6 +370,8 @@ pub struct ReplayBuffer {
     settings: ReplaySettings,
     /// Settings for record configuration (encoded in the trace)
     trace_settings: RecordSettings,
+    /// Intermediate static buffer for deserialization
+    deser_buffer: Vec<u8>,
 }
 
 impl Iterator for ReplayBuffer {
@@ -374,7 +379,7 @@ impl Iterator for ReplayBuffer {
 
     fn next(&mut self) -> Option<Self::Item> {
         // Check for EoF
-        let result = io::from_replay_reader(&mut self.reader, &mut [0; 0]);
+        let result = io::from_replay_reader(&mut self.reader, &mut self.deser_buffer);
         match result {
             Err(e) => {
                 log::error!("Erroneous replay read: {}", e);
@@ -407,8 +412,8 @@ impl Drop for ReplayBuffer {
 
 impl Replayer for ReplayBuffer {
     fn new_replayer(mut reader: Box<dyn ReplayReader>, settings: ReplaySettings) -> Result<Self> {
-        // Ensure module versions match
         let mut scratch = [0u8; 12];
+        // Ensure module versions match
         let version = io::from_replay_reader::<&str, _>(&mut reader, &mut scratch)?;
         assert_eq!(
             version,
@@ -425,10 +430,13 @@ impl Replayer for ReplayBuffer {
             );
         }
 
+        let deser_buffer = vec![0; settings.deser_buffer_size];
+
         Ok(ReplayBuffer {
             reader,
             settings,
             trace_settings,
+            deser_buffer,
         })
     }
 
@@ -470,7 +478,7 @@ mod tests {
         let tmppath = <TempPath as AsRef<Path>>::as_ref(&tmp)
             .to_str()
             .expect("Filename should be UTF-8");
-        let replay_settings = ReplaySettings { validate: true };
+        let replay_settings = ReplaySettings::default();
 
         // Assert that replayed values are identical
         let mut replayer =

@@ -23,6 +23,12 @@ pub struct ReplayOptions {
     /// Requires record traces to be generated with `validation_metadata` enabled.
     #[arg(short, long, default_value_t = false)]
     validate: bool,
+
+    /// Size of static buffer needed to deserialized variable-length types like String. This is not
+    /// not relevant for basic functional recording/replaying, but may be required to replay traces where
+    /// `validation-metadata` was enabled for recording
+    #[arg(short, long, default_value_t = 64)]
+    deser_buffer_size: usize,
 }
 
 /// Execute a deterministic, embedding-agnostic replay of a Wasm modules given its associated recorded trace
@@ -50,6 +56,8 @@ impl ReplayCommand {
             }),
             settings: ReplaySettings {
                 validate: self.replay_opts.validate,
+                deser_buffer_size: self.replay_opts.deser_buffer_size,
+                ..Default::default()
             },
         };
         // Replay uses the `run` command harness

@@ -272,12 +272,17 @@ pub struct RecordConfig {
 pub struct ReplaySettings {
     /// Flag to include additional signatures for replay validation.
     pub validate: bool,
+    /// Static buffer size for deserialization of variable-length types (like [String])
+    pub deser_buffer_size: usize,
 }
 
 #[cfg(feature = "rr")]
 impl Default for ReplaySettings {
     fn default() -> Self {
-        Self { validate: true }
+        Self {
+            validate: false,
+            deser_buffer_size: 64,
+        }
     }
 }
 
