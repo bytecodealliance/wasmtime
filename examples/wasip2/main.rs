@@ -21,7 +21,7 @@ pub struct ComponentRunStates {
 }
 
 impl WasiView for ComponentRunStates {
-    fn ctx(&mut self) -> WasiCtxView {
+    fn ctx(&mut self) -> WasiCtxView<'_> {
         WasiCtxView {
             ctx: &mut self.wasi_ctx,
             table: &mut self.resource_table,

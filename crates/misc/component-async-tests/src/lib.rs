@@ -26,7 +26,7 @@ pub struct Ctx {
 }
 
 impl WasiView for Ctx {
-    fn ctx(&mut self) -> WasiCtxView {
+    fn ctx(&mut self) -> WasiCtxView<'_> {
         WasiCtxView {
             ctx: &mut self.wasi,
             table: &mut self.table,
