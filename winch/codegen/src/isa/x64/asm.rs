@@ -2022,7 +2022,7 @@ impl Assembler {
         self.emit(Inst::External { inst });
     }
 
-    /// Substract unsigned integers with unsigned saturation.
+    /// Subtract unsigned integers with unsigned saturation.
     pub fn xmm_vpsubus_rrr(&mut self, dst: WritableReg, src1: Reg, src2: Reg, size: OperandSize) {
         let dst: WritableXmm = dst.map(|r| r.into());
         let inst = match size {
