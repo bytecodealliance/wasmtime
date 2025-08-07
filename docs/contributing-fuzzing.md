@@ -78,20 +78,20 @@ exact same module is allowed to behave differently under the same inputs
 across multiple runtimes. These specifics don't often arise in "real world"
 modules but can quickly arise during fuzzing. Some example behaviors are:
 
-* NaN patterns - floating-point operations which produce NaN as a result are
-  allowed to produce any one of a set of patterns of NaN. This means that the
-  exact bit-representation of the result of a floating-point operation may
-  diverge across engines. When fuzzing you can update your source-generation
-  to automatically canonicalize NaN values after all floating point operations.
+* **NaN bit patterns** - floating-point operations which produce NaN as a result
+  are allowed to produce any one of a set of patterns of NaN. This means that
+  the exact bit-representation of the result of a floating-point operation may
+  diverge across engines. When fuzzing you can update your source-generation to
+  automatically canonicalize NaN values after all floating point operations.
   Wasmtime has built-in options to curb this [non-determinism] as well.
 
-* Relaxed SIMD - the `relaxed-simd` proposal to WebAssembly explicitly has
+* **Relaxed SIMD** - the `relaxed-simd` proposal to WebAssembly explicitly has
   multiple allowed results for instructions given particular inputs. These
   instructions are inherently non-deterministic across implementations. When
   fuzzing you can avoid these instructions entirely, canonicalize the results,
   or use Wasmtime's built-in options to curb the [non-determinism].
 
-* Call stack exhaustion - the WebAssembly specification requires that all
+* **Call stack exhaustion** - the WebAssembly specification requires that all
   function calls consume a nonzero-amount of some resource which can eventually
   be exhausted. This means that infinite recursion is not allowed in any
   WebAssembly engine. Bounded, but very large, recursion is allowed in
@@ -102,14 +102,14 @@ modules but can quickly arise during fuzzing. Some example behaviors are:
   a bug in either engine. Short of banning recursion there's no known great way
   to handle this apart from throwing out fuzz test cases that stack overflow.
 
-* Memory exhaustion - the `memory.grow` and `table.grow` instructions in
+* **Memory exhaustion** - the `memory.grow` and `table.grow` instructions in
   WebAssembly are not always guaranteed to either fail or succeed. This means
   that growth may succeed in one engine but fail in another depending on various
   settings. To handle this in fuzzing it's recommended to generate memories with
   a maximum size and ensure that each engine being fuzzed can grow memory all
   the way to the maximum size.
 
-* WASIp1 API behavior - the initial specification of WASI, WASIp1 or
+* **WASIp1 API behavior** - the initial specification of WASI, WASIp1 or
   `wasi_snapshot_preview1`, effectively is not suitable for differential fuzzing
   across engines. The APIs are not thoroughly specified enough nor is there a
   rigorous enough test suite to codify what exactly should happen in all
