@@ -32,7 +32,6 @@ use crate::fact::{
 };
 use crate::prelude::*;
 use crate::{FuncIndex, GlobalIndex};
-use cranelift_entity::Signed;
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
@@ -568,9 +567,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
             ));
         } else {
             if result_types.len() > 0 {
-                self.instruction(I32Const(PREPARE_ASYNC_WITH_RESULT.signed()));
+                self.instruction(I32Const(PREPARE_ASYNC_WITH_RESULT.cast_signed()));
             } else {
-                self.instruction(I32Const(PREPARE_ASYNC_NO_RESULT.signed()));
+                self.instruction(I32Const(PREPARE_ASYNC_NO_RESULT.cast_signed()));
             }
         }
 

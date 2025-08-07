@@ -93,8 +93,8 @@ use std::collections::{HashMap, hash_map};
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, Signed, TableIndex, TypeConvert,
-    TypeIndex, Unsigned, WasmRefType, WasmResult, WasmValType, wasm_unsupported,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeConvert, TypeIndex,
+    WasmRefType, WasmResult, WasmValType, wasm_unsupported,
 };
 
 /// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
@@ -911,7 +911,7 @@ pub fn translate_operator(
         }
         /****************************** Nullary Operators ************************************/
         Operator::I32Const { value } => {
-            stack.push1(builder.ins().iconst(I32, i64::from(value.unsigned())));
+            stack.push1(builder.ins().iconst(I32, i64::from(value.cast_unsigned())));
         }
         Operator::I64Const { value } => stack.push1(builder.ins().iconst(I64, *value)),
         Operator::F32Const { value } => {
@@ -3301,7 +3301,7 @@ fn prepare_addr(
         Err(_) => {
             let offset = builder
                 .ins()
-                .iconst(heap.index_type(), memarg.offset.signed());
+                .iconst(heap.index_type(), memarg.offset.cast_signed());
             let adjusted_index = environ.uadd_overflow_trap(
                 builder,
                 index,
@@ -3370,7 +3370,7 @@ fn align_atomic_addr(
         let effective_addr = if memarg.offset == 0 {
             addr
         } else {
-            builder.ins().iadd_imm(addr, memarg.offset.signed())
+            builder.ins().iadd_imm(addr, memarg.offset.cast_signed())
         };
         debug_assert!(loaded_bytes.is_power_of_two());
         let misalignment = builder

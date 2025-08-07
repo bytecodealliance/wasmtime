@@ -30,7 +30,6 @@ use cranelift_codegen::{
 
 use crate::reg::WritableReg;
 use cranelift_assembler_x64 as asm;
-use wasmtime_environ::Unsigned;
 
 use super::address::Address;
 use smallvec::SmallVec;
@@ -419,13 +418,13 @@ impl Assembler {
         let inst = match size {
             OperandSize::S8 => {
                 let src = i8::try_from(src).unwrap();
-                asm::inst::movb_mi::new(dst, src.unsigned()).into()
+                asm::inst::movb_mi::new(dst, src.cast_unsigned()).into()
             }
             OperandSize::S16 => {
                 let src = i16::try_from(src).unwrap();
-                asm::inst::movw_mi::new(dst, src.unsigned()).into()
+                asm::inst::movw_mi::new(dst, src.cast_unsigned()).into()
             }
-            OperandSize::S32 => asm::inst::movl_mi::new(dst, src.unsigned()).into(),
+            OperandSize::S32 => asm::inst::movl_mi::new(dst, src.cast_unsigned()).into(),
             OperandSize::S64 => asm::inst::movq_mi_sxl::new(dst, src).into(),
             _ => unreachable!(),
         };
@@ -1298,17 +1297,18 @@ impl Assembler {
         let inst = match size {
             OperandSize::S8 => {
                 let imm = i8::try_from(imm).unwrap();
-                asm::inst::cmpb_mi::new(src1, imm.unsigned()).into()
+                asm::inst::cmpb_mi::new(src1, imm.cast_unsigned()).into()
             }
             OperandSize::S16 => match i8::try_from(imm) {
                 Ok(imm8) => asm::inst::cmpw_mi_sxb::new(src1, imm8).into(),
                 Err(_) => {
-                    asm::inst::cmpw_mi::new(src1, i16::try_from(imm).unwrap().unsigned()).into()
+                    asm::inst::cmpw_mi::new(src1, i16::try_from(imm).unwrap().cast_unsigned())
+                        .into()
                 }
             },
             OperandSize::S32 => match i8::try_from(imm) {
                 Ok(imm8) => asm::inst::cmpl_mi_sxb::new(src1, imm8).into(),
-                Err(_) => asm::inst::cmpl_mi::new(src1, imm.unsigned()).into(),
+                Err(_) => asm::inst::cmpl_mi::new(src1, imm.cast_unsigned()).into(),
             },
             OperandSize::S64 => match i8::try_from(imm) {
                 Ok(imm8) => asm::inst::cmpq_mi_sxb::new(src1, imm8).into(),

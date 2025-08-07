@@ -6,8 +6,8 @@ use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     EntityIndex, EntityType, FuncIndex, GlobalIndex, IndexType, InitMemory, MemoryIndex,
     ModuleInternedTypeIndex, ModuleTypesBuilder, PrimaryMap, SizeOverflow, StaticMemoryInitializer,
-    TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert, TypeIndex, Unsigned,
-    WasmError, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
+    TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert, TypeIndex, WasmError,
+    WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
 use crate::{StaticModuleIndex, prelude::*};
 use anyhow::{Result, bail};
@@ -961,9 +961,9 @@ impl ModuleTranslation<'_> {
             fn eval_offset(&mut self, memory_index: MemoryIndex, expr: &ConstExpr) -> Option<u64> {
                 match (expr.ops(), self.module.memories[memory_index].idx_type) {
                     (&[ConstOp::I32Const(offset)], IndexType::I32) => {
-                        Some(offset.unsigned().into())
+                        Some(offset.cast_unsigned().into())
                     }
-                    (&[ConstOp::I64Const(offset)], IndexType::I64) => Some(offset.unsigned()),
+                    (&[ConstOp::I64Const(offset)], IndexType::I64) => Some(offset.cast_unsigned()),
                     _ => None,
                 }
             }
@@ -1200,8 +1200,8 @@ impl ModuleTranslation<'_> {
             // include it in the statically-built array of initial
             // contents.
             let offset = match segment.offset.ops() {
-                &[ConstOp::I32Const(offset)] => u64::from(offset.unsigned()),
-                &[ConstOp::I64Const(offset)] => offset.unsigned(),
+                &[ConstOp::I32Const(offset)] => u64::from(offset.cast_unsigned()),
+                &[ConstOp::I64Const(offset)] => offset.cast_unsigned(),
                 _ => break,
             };
 

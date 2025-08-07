@@ -10,7 +10,6 @@ use core::fmt::{self, Display, Formatter};
 use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Sub};
 use core::str::FromStr;
 use core::{i32, u32};
-use cranelift_entity::{Signed, Unsigned};
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
@@ -124,8 +123,8 @@ impl Imm64 {
 
         let bit_width = u64::from(bit_width);
         let delta = 64 - bit_width;
-        let zero_extended = (self.0.unsigned() << delta) >> delta;
-        Imm64(zero_extended.signed())
+        let zero_extended = (self.0.cast_unsigned() << delta) >> delta;
+        Imm64(zero_extended.cast_signed())
     }
 }
 

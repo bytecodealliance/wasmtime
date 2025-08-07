@@ -17,7 +17,6 @@ use object::elf;
 use std::process;
 use std::sync::Mutex;
 use target_lexicon::Architecture;
-use wasmtime_environ::Unsigned;
 use wasmtime_jit_debug::perf_jitdump::*;
 
 /// Interface for driving the creation of jitdump files
@@ -55,7 +54,10 @@ impl ProfilingAgent for JitDumpAgent {
         let mut jitdump_file = JITDUMP_FILE.lock().unwrap();
         let jitdump_file = jitdump_file.as_mut().unwrap();
         let timestamp = jitdump_file.get_time_stamp();
-        let tid = rustix::thread::gettid().as_raw_nonzero().get().unsigned();
+        let tid = rustix::thread::gettid()
+            .as_raw_nonzero()
+            .get()
+            .cast_unsigned();
         if let Err(err) = jitdump_file.dump_code_load_record(&name, code, timestamp, self.pid, tid)
         {
             println!("Jitdump: write_code_load_failed_record failed: {err:?}\n");
