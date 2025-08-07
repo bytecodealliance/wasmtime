@@ -32,7 +32,7 @@ for more details.
 
 The relaxed SIMD proposal gives Wasm programs access to SIMD operations that
 cannot be made to execute both identically and performantly across different
-architectures. The proposal gave up determinism across different achitectures in
+architectures. The proposal gave up determinism across different architectures in
 order to maintain portable performance.
 
 At the cost of worse runtime performance, Wasmtime can deterministically execute
