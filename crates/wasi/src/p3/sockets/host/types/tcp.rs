@@ -251,7 +251,7 @@ impl HostTcpSocketWithStore for WasiSockets {
             let stream = sock.tcp_stream_arc()?;
             Ok(Arc::clone(stream))
         })?;
-        let mut buf = Vec::with_capacity(8096);
+        let mut buf = Vec::with_capacity(DEFAULT_BUFFER_CAPACITY);
         let mut result = Ok(());
         while !data.is_closed() {
             buf = data.read(store, buf).await;
