@@ -541,7 +541,6 @@ mod tests {
             let wasm = res.to_wasm_binary();
             let mut validator = Validator::new();
             let wat = wasmprinter::print_bytes(&wasm).expect("[-] Failed .print_bytes(&wasm).");
-            println!("{wat}");
             let result = validator.validate_all(&wasm);
             log::debug!("{wat}");
             assert!(
