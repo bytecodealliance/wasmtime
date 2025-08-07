@@ -796,6 +796,7 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// # fn main() -> anyhow::Result<()> {
 /// let mut config = Config::new();
 /// config.wasm_threads(true);
+/// # if Engine::new(&config).is_err() { return Ok(()); }
 /// let engine = Engine::new(&config)?;
 /// let mut store = Store::new(&engine, ());
 ///

@@ -1,5 +1,5 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
-use anyhow::{Result, anyhow};
+use anyhow::{Context as _, Result, anyhow};
 use core::mem;
 use cranelift::prelude::Imm64;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
@@ -64,7 +64,9 @@ struct DefinedFunction {
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
-/// let mut compiler = TestFileCompiler::with_default_host_isa().unwrap();
+/// let Ok(mut compiler) = TestFileCompiler::with_default_host_isa() else {
+///     return;
+/// };
 /// compiler.declare_function(&func).unwrap();
 /// compiler.define_function(func.clone(), ctrl_plane).unwrap();
 /// compiler.create_trampoline_for_function(&func, ctrl_plane).unwrap();
@@ -135,8 +137,9 @@ impl TestFileCompiler {
 
     /// Build a [TestFileCompiler] using the host machine's ISA and the passed flags.
     pub fn with_host_isa(flags: settings::Flags) -> Result<Self> {
-        let builder =
-            builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
+        let builder = builder_with_options(true)
+            .map_err(anyhow::Error::msg)
+            .context("Unable to build a TargetIsa for the current host")?;
         let isa = builder.finish(flags)?;
         Ok(Self::new(isa))
     }
