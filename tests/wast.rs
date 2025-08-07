@@ -48,6 +48,12 @@ fn main() {
     ];
     compilers.retain(|c| c.supports_host());
 
+    // Only test one compiler in ASAN since we're mostly interested in testing
+    // runtime code, not compiler-generated code.
+    if cfg!(asan) {
+        compilers.truncate(1);
+    }
+
     // Run each wast test in a few interesting configuration combinations, but
     // leave the full combinatorial matrix and such to fuzz testing which
     // configures many more settings than those configured here.
@@ -68,6 +74,12 @@ fn main() {
                     collector,
                 },
             );
+        }
+
+        // Don't do extra tests in ASAN as it takes awhile and is unlikely to
+        // reap much benefit.
+        if cfg!(asan) {
+            continue;
         }
 
         let compiler = compilers[0];
