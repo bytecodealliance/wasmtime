@@ -71,7 +71,7 @@ make_vendor "wasi-keyvalue" "keyvalue@219ea36"
 make_vendor "wasi/src/p3" "
     cli@939bd6d@wit-0.3.0-draft
     clocks@13d1c82@wit-0.3.0-draft
-    filesystem@e2a2ddc@wit-0.3.0-draft
+    filesystem@2007d36@wit-0.3.0-draft
     random@4e94663@wit-0.3.0-draft
     sockets@e863ee2@wit-0.3.0-draft
 "
