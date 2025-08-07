@@ -1,8 +1,12 @@
 mod host;
 
+use crate::TrappableError;
 use crate::filesystem::{WasiFilesystem, WasiFilesystemView};
 use crate::p3::bindings::filesystem;
 use wasmtime::component::Linker;
+
+pub type FilesystemResult<T> = Result<T, FilesystemError>;
+pub type FilesystemError = TrappableError<filesystem::types::ErrorCode>;
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///

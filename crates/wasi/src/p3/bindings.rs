@@ -98,6 +98,7 @@ mod generated {
             "wasi:sockets/types/udp-socket": crate::sockets::UdpSocket,
         },
         trappable_error_type: {
+            "wasi:filesystem/types/error-code" => crate::p3::filesystem::FilesystemError,
             "wasi:sockets/types/error-code" => crate::p3::sockets::SocketError,
         },
     });
