@@ -72,7 +72,7 @@ use crate::p2::bindings::{
         terminal_stderr::Host as _, terminal_stdin::Host as _, terminal_stdout::Host as _,
     },
     clocks::{monotonic_clock, wall_clock},
-    filesystem::{preopens::Host as _, types as filesystem},
+    filesystem::types as filesystem,
 };
 use crate::p2::{FsError, IsATTY};
 use crate::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
@@ -1022,8 +1022,42 @@ impl From<filesystem::ErrorCode> for types::Errno {
 impl From<crate::filesystem::ErrorCode> for types::Errno {
     fn from(code: crate::filesystem::ErrorCode) -> Self {
         match code {
+            crate::filesystem::ErrorCode::Access => types::Errno::Acces,
+            crate::filesystem::ErrorCode::Already => types::Errno::Already,
             crate::filesystem::ErrorCode::BadDescriptor => types::Errno::Badf,
+            crate::filesystem::ErrorCode::Busy => types::Errno::Busy,
+            crate::filesystem::ErrorCode::Deadlock => types::Errno::Deadlk,
+            crate::filesystem::ErrorCode::Quota => types::Errno::Dquot,
+            crate::filesystem::ErrorCode::Exist => types::Errno::Exist,
+            crate::filesystem::ErrorCode::FileTooLarge => types::Errno::Fbig,
+            crate::filesystem::ErrorCode::IllegalByteSequence => types::Errno::Ilseq,
+            crate::filesystem::ErrorCode::InProgress => types::Errno::Inprogress,
+            crate::filesystem::ErrorCode::Interrupted => types::Errno::Intr,
+            crate::filesystem::ErrorCode::Invalid => types::Errno::Inval,
+            crate::filesystem::ErrorCode::Io => types::Errno::Io,
+            crate::filesystem::ErrorCode::IsDirectory => types::Errno::Isdir,
+            crate::filesystem::ErrorCode::Loop => types::Errno::Loop,
+            crate::filesystem::ErrorCode::TooManyLinks => types::Errno::Mlink,
+            crate::filesystem::ErrorCode::MessageSize => types::Errno::Msgsize,
+            crate::filesystem::ErrorCode::NameTooLong => types::Errno::Nametoolong,
+            crate::filesystem::ErrorCode::NoDevice => types::Errno::Nodev,
+            crate::filesystem::ErrorCode::NoEntry => types::Errno::Noent,
+            crate::filesystem::ErrorCode::NoLock => types::Errno::Nolck,
+            crate::filesystem::ErrorCode::InsufficientMemory => types::Errno::Nomem,
+            crate::filesystem::ErrorCode::InsufficientSpace => types::Errno::Nospc,
+            crate::filesystem::ErrorCode::Unsupported => types::Errno::Notsup,
             crate::filesystem::ErrorCode::NotDirectory => types::Errno::Notdir,
+            crate::filesystem::ErrorCode::NotEmpty => types::Errno::Notempty,
+            crate::filesystem::ErrorCode::NotRecoverable => types::Errno::Notrecoverable,
+            crate::filesystem::ErrorCode::NoTty => types::Errno::Notty,
+            crate::filesystem::ErrorCode::NoSuchDevice => types::Errno::Nxio,
+            crate::filesystem::ErrorCode::Overflow => types::Errno::Overflow,
+            crate::filesystem::ErrorCode::NotPermitted => types::Errno::Perm,
+            crate::filesystem::ErrorCode::Pipe => types::Errno::Pipe,
+            crate::filesystem::ErrorCode::ReadOnly => types::Errno::Rofs,
+            crate::filesystem::ErrorCode::InvalidSeek => types::Errno::Spipe,
+            crate::filesystem::ErrorCode::TextFileBusy => types::Errno::Txtbsy,
+            crate::filesystem::ErrorCode::CrossDevice => types::Errno::Xdev,
         }
     }
 }
