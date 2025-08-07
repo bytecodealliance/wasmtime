@@ -10,7 +10,6 @@ use crate::{
     stack::TypedReg,
 };
 use anyhow::Result;
-use wasmtime_environ::Signed;
 
 /// A newtype to represent an immediate offset argument for a heap access.
 #[derive(Debug, Copy, Clone)]
@@ -94,7 +93,7 @@ where
     let dst = context.any_gpr(masm)?;
     match heap.memory.static_heap_size() {
         // Constant size, no need to perform a load.
-        Some(size) => masm.mov(writable!(dst), RegImm::i64(size.signed()), ptr_size)?,
+        Some(size) => masm.mov(writable!(dst), RegImm::i64(size.cast_signed()), ptr_size)?,
 
         None => {
             masm.with_scratch::<IntScratch, _>(|masm, scratch| {

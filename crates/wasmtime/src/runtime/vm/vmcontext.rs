@@ -18,7 +18,7 @@ use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    DefinedTagIndex, Unsigned, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
+    DefinedTagIndex, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -1458,7 +1458,7 @@ impl ValRaw {
         // `wasmtime` crate. Otherwise though all `ValRaw` constructors are
         // otherwise constrained to guarantee that the initial 64-bits are
         // always initialized.
-        ValRaw::u64(i.unsigned().into())
+        ValRaw::u64(i.cast_unsigned().into())
     }
 
     /// Creates a WebAssembly `i64` value
@@ -1549,13 +1549,13 @@ impl ValRaw {
     /// Gets the WebAssembly `i32` value
     #[inline]
     pub fn get_u32(&self) -> u32 {
-        self.get_i32().unsigned()
+        self.get_i32().cast_unsigned()
     }
 
     /// Gets the WebAssembly `i64` value
     #[inline]
     pub fn get_u64(&self) -> u64 {
-        self.get_i64().unsigned()
+        self.get_i64().cast_unsigned()
     }
 
     /// Gets the WebAssembly `f32` value

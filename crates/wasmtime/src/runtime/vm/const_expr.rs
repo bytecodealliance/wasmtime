@@ -10,9 +10,7 @@ use crate::{
 use smallvec::SmallVec;
 use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex};
 #[cfg(feature = "gc")]
-use wasmtime_environ::{
-    Unsigned, VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType,
-};
+use wasmtime_environ::{VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType};
 
 /// An interpreter for const expressions.
 ///
@@ -283,7 +281,7 @@ impl ConstExprEvaluator {
                         .unwrap_engine_type_index();
                     let ty = ArrayType::from_shared_type_index(store.engine(), ty);
 
-                    let len = self.pop()?.get_i32().unsigned();
+                    let len = self.pop()?.get_i32().cast_unsigned();
 
                     let elem = unsafe {
                         Val::_from_raw(&mut store, self.pop()?, ty.element_type().unpack())
@@ -302,7 +300,7 @@ impl ConstExprEvaluator {
                         .unwrap_engine_type_index();
                     let ty = ArrayType::from_shared_type_index(store.engine(), ty);
 
-                    let len = self.pop()?.get_i32().unsigned();
+                    let len = self.pop()?.get_i32().cast_unsigned();
 
                     let elem = Val::default_for_ty(ty.element_type().unpack())
                         .expect("type should have a default value");

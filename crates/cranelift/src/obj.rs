@@ -24,7 +24,7 @@ use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, Symbol
 use object::{Architecture, SectionFlags, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::ops::Range;
 use wasmtime_environ::obj;
-use wasmtime_environ::{Compiler, TripleExt, Unsigned};
+use wasmtime_environ::{Compiler, TripleExt};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -546,7 +546,7 @@ impl<'a> UnwindInfoBuilder<'a> {
             // unwinders just use this constant for a relative addition with the
             // address of the FDE, which means that the sign doesn't actually
             // matter.
-            let fde = unwind_info.to_fde(Address::Constant(actual_offset.unsigned()));
+            let fde = unwind_info.to_fde(Address::Constant(actual_offset.cast_unsigned()));
             table.add_fde(cie_id, fde);
         }
         let endian = match compiler.triple().endianness().unwrap() {

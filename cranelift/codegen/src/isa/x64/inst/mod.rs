@@ -13,7 +13,6 @@ use crate::{machinst::*, trace};
 use alloc::boxed::Box;
 use core::slice;
 use cranelift_assembler_x64 as asm;
-use cranelift_entity::{Signed, Unsigned};
 use smallvec::{SmallVec, smallvec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -166,7 +165,7 @@ impl Inst {
                 // If `simm64` is zero-extended use `movl` which zeros the
                 // upper bits.
                 Ok(imm32) => asm::inst::movl_oi::new(dst, imm32).into(),
-                _ => match i32::try_from(simm64.signed()) {
+                _ => match i32::try_from(simm64.cast_signed()) {
                     // If `simm64` is sign-extended use `movq` which sign the
                     // upper bits.
                     Ok(simm32) => asm::inst::movq_mi_sxl::new(dst, simm32).into(),
@@ -235,7 +234,7 @@ impl Inst {
     /// Compares `src1` against `src2`
     pub(crate) fn cmp_mi_sxb(size: OperandSize, src1: Gpr, src2: i8) -> Inst {
         let inst = match size {
-            OperandSize::Size8 => asm::inst::cmpb_mi::new(src1, src2.unsigned()).into(),
+            OperandSize::Size8 => asm::inst::cmpb_mi::new(src1, src2.cast_unsigned()).into(),
             OperandSize::Size16 => asm::inst::cmpw_mi_sxb::new(src1, src2).into(),
             OperandSize::Size32 => asm::inst::cmpl_mi_sxb::new(src1, src2).into(),
             OperandSize::Size64 => asm::inst::cmpq_mi_sxb::new(src1, src2).into(),

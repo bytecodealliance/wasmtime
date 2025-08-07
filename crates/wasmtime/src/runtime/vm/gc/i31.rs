@@ -2,7 +2,6 @@
 
 use super::VMGcRef;
 use core::fmt;
-use wasmtime_environ::Unsigned;
 
 /// A 31-bit integer for use with `i31ref`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -70,7 +69,7 @@ impl I31 {
     /// the wrapped value does.
     #[inline]
     pub fn wrapping_i32(value: i32) -> Self {
-        Self::wrapping_u32(value.unsigned())
+        Self::wrapping_u32(value.cast_unsigned())
     }
 
     /// Get this `I31`'s value as an unsigned integer.

@@ -2075,7 +2075,7 @@ fn emit_maybe_shrink(inst: &AsmInst, sink: &mut impl asm::CodeSink) {
             m32,
             sink,
             |dst, amode, s| leal_rm::<R>::new(dst, amode).encode(s),
-            |dst, simm32, s| addl_mi::<R>::new(dst, simm32.unsigned()).encode(s),
+            |dst, simm32, s| addl_mi::<R>::new(dst, simm32.cast_unsigned()).encode(s),
             |dst, reg, s| addl_rm::<R>::new(dst, reg).encode(s),
         ),
         Inst::leaq_rm(leaq_rm { r64, m64 }) => emit_lea(
