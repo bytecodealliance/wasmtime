@@ -22,10 +22,6 @@ use wasmtime::component::{
     Resource, ResourceTable, StreamReader, StreamWriter,
 };
 
-fn is_tcp_allowed<T>(store: &Accessor<T, WasiSockets>) -> bool {
-    store.with(|mut view| view.get().ctx.allowed_network_uses.tcp)
-}
-
 fn get_socket<'a>(
     table: &'a ResourceTable,
     socket: &'a Resource<TcpSocket>,
@@ -171,9 +167,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
         let local_address = SocketAddr::from(local_address);
-        if !is_tcp_allowed(store)
-            || !is_addr_allowed(store, local_address, SocketAddrUse::TcpBind).await
-        {
+        if !is_addr_allowed(store, local_address, SocketAddrUse::TcpBind).await {
             return Err(ErrorCode::AccessDenied.into());
         }
         store.with(|mut view| {
@@ -190,9 +184,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         remote_address: IpSocketAddress,
     ) -> SocketResult<()> {
         let remote_address = SocketAddr::from(remote_address);
-        if !is_tcp_allowed(store)
-            || !is_addr_allowed(store, remote_address, SocketAddrUse::TcpConnect).await
-        {
+        if !is_addr_allowed(store, remote_address, SocketAddrUse::TcpConnect).await {
             return Err(ErrorCode::AccessDenied.into());
         }
         let addr = remote_address.into();
@@ -216,9 +208,6 @@ impl HostTcpSocketWithStore for WasiSockets {
         socket: Resource<TcpSocket>,
     ) -> SocketResult<StreamReader<Resource<TcpSocket>>> {
         store.with(|mut view| {
-            if !view.get().ctx.allowed_network_uses.tcp {
-                return Err(ErrorCode::AccessDenied.into());
-            }
             let socket = get_socket_mut(view.get().table, &socket)?;
             socket.start_listen()?;
             socket.finish_listen()?;
