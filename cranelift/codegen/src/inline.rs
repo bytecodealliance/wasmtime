@@ -132,8 +132,15 @@ pub(crate) fn do_inlining(
                     func_ref,
                 } => {
                     let args = cursor.func.dfg.inst_args(inst);
+                    trace!(
+                        "considering call site for inlining: {inst}: {}",
+                        cursor.func.dfg.display_inst(inst),
+                    );
                     match inliner.inline(&cursor.func, inst, opcode, func_ref, args) {
-                        InlineCommand::KeepCall => continue,
+                        InlineCommand::KeepCall => {
+                            trace!("  --> keeping call");
+                            continue;
+                        }
                         InlineCommand::Inline(callee) => {
                             inline_one(
                                 &mut allocs,
@@ -157,8 +164,15 @@ pub(crate) fn do_inlining(
                     exception,
                 } => {
                     let args = cursor.func.dfg.inst_args(inst);
+                    trace!(
+                        "considering call site for inlining: {inst}: {}",
+                        cursor.func.dfg.display_inst(inst),
+                    );
                     match inliner.inline(&cursor.func, inst, opcode, func_ref, args) {
-                        InlineCommand::KeepCall => continue,
+                        InlineCommand::KeepCall => {
+                            trace!("  --> keeping call");
+                            continue;
+                        }
                         InlineCommand::Inline(callee) => {
                             inline_one(
                                 &mut allocs,
@@ -195,7 +209,17 @@ struct InliningAllocs {
     values: SecondaryMap<ir::Value, PackedOption<ir::Value>>,
 
     /// Map from callee constant to inlined caller constant.
+    ///
+    /// Not in `EntityMap` because these are hash-consed inside the
+    /// `ir::Function`.
     constants: SecondaryMap<ir::Constant, PackedOption<ir::Constant>>,
+
+    /// Map from callee to inlined caller external name refs.
+    ///
+    /// Not in `EntityMap` because these are hash-consed inside the
+    /// `ir::Function`.
+    user_external_name_refs:
+        SecondaryMap<ir::UserExternalNameRef, PackedOption<ir::UserExternalNameRef>>,
 
     /// The set of _caller_ inlined call instructions that need exception table
     /// fixups at the end of inlining.
@@ -220,6 +244,7 @@ impl InliningAllocs {
         let InliningAllocs {
             values,
             constants,
+            user_external_name_refs,
             calls_needing_exception_table_fixup,
         } = self;
 
@@ -228,6 +253,9 @@ impl InliningAllocs {
 
         constants.clear();
         constants.resize(callee.dfg.constants.len());
+
+        user_external_name_refs.clear();
+        user_external_name_refs.resize(callee.params.user_named_funcs().len());
 
         // Note: We do not reserve capacity for
         // `calls_needing_exception_table_fixup` because it is a sparse set and
@@ -1205,7 +1233,8 @@ fn create_entities(
     entity_map.block_offset = Some(create_blocks(allocs, func, callee));
     entity_map.global_value_offset = Some(create_global_values(func, callee));
     entity_map.sig_ref_offset = Some(create_sig_refs(func, callee));
-    entity_map.func_ref_offset = Some(create_func_refs(func, callee, &entity_map));
+    create_user_external_name_refs(allocs, func, callee);
+    entity_map.func_ref_offset = Some(create_func_refs(allocs, func, callee, &entity_map));
     entity_map.stack_slot_offset = Some(create_stack_slots(func, callee));
     entity_map.dynamic_type_offset = Some(create_dynamic_types(func, callee, &entity_map));
     entity_map.dynamic_stack_slot_offset =
@@ -1309,8 +1338,24 @@ fn create_sig_refs(func: &mut ir::Function, callee: &ir::Function) -> u32 {
     offset
 }
 
+fn create_user_external_name_refs(
+    allocs: &mut InliningAllocs,
+    func: &mut ir::Function,
+    callee: &ir::Function,
+) {
+    for (callee_named_func_ref, name) in callee.params.user_named_funcs().iter() {
+        let caller_named_func_ref = func.declare_imported_user_function(name.clone());
+        allocs.user_external_name_refs[callee_named_func_ref] = Some(caller_named_func_ref).into();
+    }
+}
+
 /// Translate `ir::FuncRef`s from the callee into the caller.
-fn create_func_refs(func: &mut ir::Function, callee: &ir::Function, entity_map: &EntityMap) -> u32 {
+fn create_func_refs(
+    allocs: &InliningAllocs,
+    func: &mut ir::Function,
+    callee: &ir::Function,
+    entity_map: &EntityMap,
+) -> u32 {
     let offset = func.dfg.ext_funcs.len();
     let offset = u32::try_from(offset).unwrap();
 
@@ -1322,7 +1367,17 @@ fn create_func_refs(func: &mut ir::Function, callee: &ir::Function, entity_map: 
     } in callee.dfg.ext_funcs.values()
     {
         func.dfg.ext_funcs.push(ir::ExtFuncData {
-            name: name.clone(),
+            name: match name {
+                ir::ExternalName::User(name_ref) => {
+                    ir::ExternalName::User(allocs.user_external_name_refs[*name_ref].expect(
+                        "should have translated all `ir::UserExternalNameRef`s before translating \
+                         `ir::FuncRef`s",
+                    ))
+                }
+                ir::ExternalName::TestCase(_)
+                | ir::ExternalName::LibCall(_)
+                | ir::ExternalName::KnownSymbol(_) => name.clone(),
+            },
             signature: entity_map.inlined_sig_ref(*signature),
             colocated: *colocated,
         });
