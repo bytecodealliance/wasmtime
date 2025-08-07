@@ -1,12 +1,11 @@
 use crate::filesystem::WasiFilesystemCtxView;
+use crate::filesystem::{Descriptor, Dir, File};
 use crate::p2::bindings::clocks::wall_clock;
 use crate::p2::bindings::filesystem::preopens;
 use crate::p2::bindings::filesystem::types::{
     self, ErrorCode, HostDescriptor, HostDirectoryEntryStream,
 };
-use crate::p2::filesystem::{
-    Descriptor, Dir, File, FileInputStream, FileOutputStream, ReaddirIterator,
-};
+use crate::p2::filesystem::{FileInputStream, FileOutputStream, ReaddirIterator};
 use crate::p2::{FsError, FsResult};
 use crate::{DirPerms, FilePerms, OpenMode};
 use anyhow::Context;

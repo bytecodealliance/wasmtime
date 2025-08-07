@@ -168,7 +168,7 @@ impl WasiView for WasiP1Ctx {
 
 #[derive(Debug)]
 struct File {
-    /// The handle to the preview2 descriptor of type [`crate::p2::filesystem::Descriptor::File`].
+    /// The handle to the preview2 descriptor of type [`crate::filesystem::Descriptor::File`].
     fd: Resource<filesystem::Descriptor>,
 
     /// The current-position pointer.
@@ -259,14 +259,14 @@ enum Descriptor {
         stream: Resource<streams::OutputStream>,
         isatty: IsATTY,
     },
-    /// A fd of type [`crate::p2::filesystem::Descriptor::Dir`]
+    /// A fd of type [`crate::filesystem::Descriptor::Dir`]
     Directory {
         fd: Resource<filesystem::Descriptor>,
         /// The path this directory was preopened as.
         /// `None` means this directory was opened using `open-at`.
         preopen_path: Option<String>,
     },
-    /// A fd of type [`crate::p2::filesystem::Descriptor::File`]
+    /// A fd of type [`crate::filesystem::Descriptor::File`]
     File(File),
 }
 
@@ -1019,6 +1019,15 @@ impl From<filesystem::ErrorCode> for types::Errno {
     }
 }
 
+impl From<crate::filesystem::ErrorCode> for types::Errno {
+    fn from(code: crate::filesystem::ErrorCode) -> Self {
+        match code {
+            crate::filesystem::ErrorCode::BadDescriptor => types::Errno::Badf,
+            crate::filesystem::ErrorCode::NotDirectory => types::Errno::Notdir,
+        }
+    }
+}
+
 impl From<std::num::TryFromIntError> for types::Error {
     fn from(_: std::num::TryFromIntError) -> Self {
         types::Errno::Overflow.into()
@@ -1054,6 +1063,12 @@ impl From<GuestError> for types::Error {
 
 impl From<filesystem::ErrorCode> for types::Error {
     fn from(code: filesystem::ErrorCode) -> Self {
+        types::Errno::from(code).into()
+    }
+}
+
+impl From<crate::filesystem::ErrorCode> for types::Error {
+    fn from(code: crate::filesystem::ErrorCode) -> Self {
         types::Errno::from(code).into()
     }
 }
@@ -2137,11 +2152,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             .await?;
         let mut t = self.transact()?;
         let desc = match t.view.table.get(&fd)? {
-            crate::p2::filesystem::Descriptor::Dir(_) => Descriptor::Directory {
+            crate::filesystem::Descriptor::Dir(_) => Descriptor::Directory {
                 fd,
                 preopen_path: None,
             },
-            crate::p2::filesystem::Descriptor::File(_) => Descriptor::File(File {
+            crate::filesystem::Descriptor::File(_) => Descriptor::File(File {
                 fd,
                 position: Default::default(),
                 append: fdflags.contains(types::Fdflags::APPEND),
