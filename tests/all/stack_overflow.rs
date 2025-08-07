@@ -122,6 +122,11 @@ fn host_always_has_some_stack() -> Result<()> {
 
 #[wasmtime_test]
 fn big_stack_works_ok(config: &mut Config) -> Result<()> {
+    // This test takes 1m+ in ASAN and isn't too useful, so prune it.
+    if cfg!(asan) {
+        return Ok(());
+    }
+
     const N: usize = 10000;
 
     // Build a module with a function that uses a very large amount of stack space,
