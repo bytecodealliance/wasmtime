@@ -1,11 +1,10 @@
-use crate::p2::SocketResult;
 use crate::p2::bindings::{
-    sockets::network::{IpAddressFamily, IpSocketAddress, Network},
+    sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
     sockets::tcp::{self, ShutdownType},
 };
-use crate::sockets::{SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
+use crate::p2::{Pollable, SocketResult};
+use crate::sockets::{SocketAddrUse, TcpSocket, WasiSocketsCtxView};
 use std::net::SocketAddr;
-use std::time::Duration;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::{
     poll::DynPollable,
@@ -17,11 +16,10 @@ impl tcp::Host for WasiSocketsCtxView<'_> {}
 impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
     async fn start_bind(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx.allowed_network_uses.check_allowed_tcp()?;
         let network = self.table.get(&network)?;
         let local_address: SocketAddr = local_address.into();
 
@@ -36,19 +34,18 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         Ok(())
     }
 
-    fn finish_bind(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {
+    fn finish_bind(&mut self, this: Resource<TcpSocket>) -> SocketResult<()> {
         let socket = self.table.get_mut(&this)?;
-
-        socket.finish_bind()
+        socket.finish_bind()?;
+        Ok(())
     }
 
     async fn start_connect(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
         network: Resource<Network>,
         remote_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        self.ctx.allowed_network_uses.check_allowed_tcp()?;
         let network = self.table.get(&network)?;
         let remote_address: SocketAddr = remote_address.into();
 
@@ -58,49 +55,56 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
             .await?;
 
         // Start connection
-        self.table.get_mut(&this)?.start_connect(remote_address)?;
+        let socket = self.table.get_mut(&this)?;
+        let future = socket
+            .start_connect(&remote_address)?
+            .connect(remote_address);
+        socket.set_pending_connect(future)?;
 
         Ok(())
     }
 
     fn finish_connect(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
     ) -> SocketResult<(Resource<DynInputStream>, Resource<DynOutputStream>)> {
         let socket = self.table.get_mut(&this)?;
 
-        let (input, output) = socket.finish_connect()?;
-
-        let input_stream = self.table.push_child(input, &this)?;
-        let output_stream = self.table.push_child(output, &this)?;
-
-        Ok((input_stream, output_stream))
+        let result = socket
+            .take_pending_connect()?
+            .ok_or(ErrorCode::WouldBlock)?;
+        socket.finish_connect(result)?;
+        let (input, output) = socket.p2_streams()?;
+        let input = self.table.push_child(input, &this)?;
+        let output = self.table.push_child(output, &this)?;
+        Ok((input, output))
     }
 
-    fn start_listen(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {
-        self.ctx.allowed_network_uses.check_allowed_tcp()?;
+    fn start_listen(&mut self, this: Resource<TcpSocket>) -> SocketResult<()> {
         let socket = self.table.get_mut(&this)?;
 
-        socket.start_listen()
+        socket.start_listen()?;
+        Ok(())
     }
 
-    fn finish_listen(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {
+    fn finish_listen(&mut self, this: Resource<TcpSocket>) -> SocketResult<()> {
         let socket = self.table.get_mut(&this)?;
-        socket.finish_listen()
+        socket.finish_listen()?;
+        Ok(())
     }
 
     fn accept(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
     ) -> SocketResult<(
-        Resource<tcp::TcpSocket>,
+        Resource<TcpSocket>,
         Resource<DynInputStream>,
         Resource<DynOutputStream>,
     )> {
-        self.ctx.allowed_network_uses.check_allowed_tcp()?;
         let socket = self.table.get_mut(&this)?;
 
-        let (tcp_socket, input, output) = socket.accept()?;
+        let mut tcp_socket = socket.accept()?.ok_or(ErrorCode::WouldBlock)?;
+        let (input, output) = tcp_socket.p2_streams()?;
 
         let tcp_socket = self.table.push(tcp_socket)?;
         let input_stream = self.table.push_child(input, &tcp_socket)?;
@@ -109,19 +113,17 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         Ok((tcp_socket, input_stream, output_stream))
     }
 
-    fn local_address(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<IpSocketAddress> {
+    fn local_address(&mut self, this: Resource<TcpSocket>) -> SocketResult<IpSocketAddress> {
         let socket = self.table.get(&this)?;
-
-        socket.local_address().map(Into::into)
+        Ok(socket.local_address()?.into())
     }
 
-    fn remote_address(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<IpSocketAddress> {
+    fn remote_address(&mut self, this: Resource<TcpSocket>) -> SocketResult<IpSocketAddress> {
         let socket = self.table.get(&this)?;
-
-        socket.remote_address().map(Into::into)
+        Ok(socket.remote_address()?.into())
     }
 
-    fn is_listening(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, anyhow::Error> {
+    fn is_listening(&mut self, this: Resource<TcpSocket>) -> Result<bool, anyhow::Error> {
         let socket = self.table.get(&this)?;
 
         Ok(socket.is_listening())
@@ -129,135 +131,122 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
 
     fn address_family(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
     ) -> Result<IpAddressFamily, anyhow::Error> {
         let socket = self.table.get(&this)?;
-
-        match socket.address_family() {
-            SocketAddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
-            SocketAddressFamily::Ipv6 => Ok(IpAddressFamily::Ipv6),
-        }
+        Ok(socket.address_family().into())
     }
 
     fn set_listen_backlog_size(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
         value: u64,
     ) -> SocketResult<()> {
         let socket = self.table.get_mut(&this)?;
-
-        // Silently clamp backlog size. This is OK for us to do, because operating systems do this too.
-        let value = value.try_into().unwrap_or(u32::MAX);
-
-        socket.set_listen_backlog_size(value)
+        socket.set_listen_backlog_size(value)?;
+        Ok(())
     }
 
-    fn keep_alive_enabled(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<bool> {
+    fn keep_alive_enabled(&mut self, this: Resource<TcpSocket>) -> SocketResult<bool> {
         let socket = self.table.get(&this)?;
-        socket.keep_alive_enabled()
+        Ok(socket.keep_alive_enabled()?)
     }
 
     fn set_keep_alive_enabled(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
         value: bool,
     ) -> SocketResult<()> {
         let socket = self.table.get(&this)?;
-        socket.set_keep_alive_enabled(value)
+        socket.set_keep_alive_enabled(value)?;
+        Ok(())
     }
 
-    fn keep_alive_idle_time(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
+    fn keep_alive_idle_time(&mut self, this: Resource<TcpSocket>) -> SocketResult<u64> {
         let socket = self.table.get(&this)?;
-        Ok(socket.keep_alive_idle_time()?.as_nanos() as u64)
+        Ok(socket.keep_alive_idle_time()?)
     }
 
     fn set_keep_alive_idle_time(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
         value: u64,
     ) -> SocketResult<()> {
         let socket = self.table.get_mut(&this)?;
-        socket.set_keep_alive_idle_time(value)
+        socket.set_keep_alive_idle_time(value)?;
+        Ok(())
     }
 
-    fn keep_alive_interval(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
+    fn keep_alive_interval(&mut self, this: Resource<TcpSocket>) -> SocketResult<u64> {
         let socket = self.table.get(&this)?;
-        Ok(socket.keep_alive_interval()?.as_nanos() as u64)
+        Ok(socket.keep_alive_interval()?)
     }
 
     fn set_keep_alive_interval(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
         value: u64,
     ) -> SocketResult<()> {
         let socket = self.table.get(&this)?;
-        socket.set_keep_alive_interval(Duration::from_nanos(value))
+        socket.set_keep_alive_interval(value)?;
+        Ok(())
     }
 
-    fn keep_alive_count(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u32> {
+    fn keep_alive_count(&mut self, this: Resource<TcpSocket>) -> SocketResult<u32> {
         let socket = self.table.get(&this)?;
-        socket.keep_alive_count()
+        Ok(socket.keep_alive_count()?)
     }
 
-    fn set_keep_alive_count(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-        value: u32,
-    ) -> SocketResult<()> {
+    fn set_keep_alive_count(&mut self, this: Resource<TcpSocket>, value: u32) -> SocketResult<()> {
         let socket = self.table.get(&this)?;
-        socket.set_keep_alive_count(value)
+        socket.set_keep_alive_count(value)?;
+        Ok(())
     }
 
-    fn hop_limit(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u8> {
+    fn hop_limit(&mut self, this: Resource<TcpSocket>) -> SocketResult<u8> {
         let socket = self.table.get(&this)?;
-        socket.hop_limit()
+        Ok(socket.hop_limit()?)
     }
 
-    fn set_hop_limit(&mut self, this: Resource<tcp::TcpSocket>, value: u8) -> SocketResult<()> {
+    fn set_hop_limit(&mut self, this: Resource<TcpSocket>, value: u8) -> SocketResult<()> {
         let socket = self.table.get_mut(&this)?;
-        socket.set_hop_limit(value)
+        socket.set_hop_limit(value)?;
+        Ok(())
     }
 
-    fn receive_buffer_size(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
+    fn receive_buffer_size(&mut self, this: Resource<TcpSocket>) -> SocketResult<u64> {
         let socket = self.table.get(&this)?;
-
         Ok(socket.receive_buffer_size()?)
     }
 
     fn set_receive_buffer_size(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
         value: u64,
     ) -> SocketResult<()> {
         let socket = self.table.get_mut(&this)?;
-        socket.set_receive_buffer_size(value)
+        socket.set_receive_buffer_size(value)?;
+        Ok(())
     }
 
-    fn send_buffer_size(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
+    fn send_buffer_size(&mut self, this: Resource<TcpSocket>) -> SocketResult<u64> {
         let socket = self.table.get(&this)?;
-
         Ok(socket.send_buffer_size()?)
     }
 
-    fn set_send_buffer_size(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-        value: u64,
-    ) -> SocketResult<()> {
+    fn set_send_buffer_size(&mut self, this: Resource<TcpSocket>, value: u64) -> SocketResult<()> {
         let socket = self.table.get_mut(&this)?;
-        socket.set_send_buffer_size(value)
+        socket.set_send_buffer_size(value)?;
+        Ok(())
     }
 
-    fn subscribe(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-    ) -> anyhow::Result<Resource<DynPollable>> {
+    fn subscribe(&mut self, this: Resource<TcpSocket>) -> anyhow::Result<Resource<DynPollable>> {
         wasmtime_wasi_io::poll::subscribe(self.table, this)
     }
 
     fn shutdown(
         &mut self,
-        this: Resource<tcp::TcpSocket>,
+        this: Resource<TcpSocket>,
         shutdown_type: ShutdownType,
     ) -> SocketResult<()> {
         let socket = self.table.get(&this)?;
@@ -267,16 +256,26 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
             ShutdownType::Send => std::net::Shutdown::Write,
             ShutdownType::Both => std::net::Shutdown::Both,
         };
-        socket.shutdown(how)
+
+        let state = socket.p2_streaming_state()?;
+        state.shutdown(how)?;
+        Ok(())
     }
 
-    fn drop(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), anyhow::Error> {
+    fn drop(&mut self, this: Resource<TcpSocket>) -> Result<(), anyhow::Error> {
         // As in the filesystem implementation, we assume closing a socket
         // doesn't block.
         let dropped = self.table.delete(this)?;
         drop(dropped);
 
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl Pollable for TcpSocket {
+    async fn ready(&mut self) {
+        <TcpSocket>::ready(self).await;
     }
 }
 
