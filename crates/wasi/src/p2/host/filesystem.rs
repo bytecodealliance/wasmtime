@@ -1,3 +1,4 @@
+use crate::filesystem::WasiFilesystemCtxView;
 use crate::p2::bindings::clocks::wall_clock;
 use crate::p2::bindings::filesystem::preopens;
 use crate::p2::bindings::filesystem::types::{
@@ -6,7 +7,7 @@ use crate::p2::bindings::filesystem::types::{
 use crate::p2::filesystem::{
     Descriptor, Dir, File, FileInputStream, FileOutputStream, ReaddirIterator,
 };
-use crate::p2::{FsError, FsResult, WasiCtxView};
+use crate::p2::{FsError, FsResult};
 use crate::{DirPerms, FilePerms, OpenMode};
 use anyhow::Context;
 use wasmtime::component::Resource;
@@ -14,7 +15,7 @@ use wasmtime_wasi_io::streams::{DynInputStream, DynOutputStream};
 
 mod sync;
 
-impl preopens::Host for WasiCtxView<'_> {
+impl preopens::Host for WasiFilesystemCtxView<'_> {
     fn get_directories(
         &mut self,
     ) -> Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error> {
@@ -30,7 +31,7 @@ impl preopens::Host for WasiCtxView<'_> {
     }
 }
 
-impl types::Host for WasiCtxView<'_> {
+impl types::Host for WasiFilesystemCtxView<'_> {
     fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<ErrorCode> {
         err.downcast()
     }
@@ -51,7 +52,7 @@ impl types::Host for WasiCtxView<'_> {
     }
 }
 
-impl HostDescriptor for WasiCtxView<'_> {
+impl HostDescriptor for WasiFilesystemCtxView<'_> {
     async fn advise(
         &mut self,
         fd: Resource<types::Descriptor>,
@@ -823,7 +824,7 @@ impl HostDescriptor for WasiCtxView<'_> {
     }
 }
 
-impl HostDirectoryEntryStream for WasiCtxView<'_> {
+impl HostDirectoryEntryStream for WasiFilesystemCtxView<'_> {
     async fn read_directory_entry(
         &mut self,
         stream: Resource<types::DirectoryEntryStream>,

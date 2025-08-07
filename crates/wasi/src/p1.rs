@@ -63,8 +63,9 @@
 //! }
 //! ```
 
-use crate::cli::WasiCliView;
-use crate::clocks::WasiClocksView;
+use crate::cli::WasiCliView as _;
+use crate::clocks::WasiClocksView as _;
+use crate::filesystem::WasiFilesystemView as _;
 use crate::p2::bindings::{
     cli::{
         stderr::Host as _, stdin::Host as _, stdout::Host as _, terminal_input, terminal_output,
@@ -153,14 +154,6 @@ impl WasiP1Ctx {
             wasi,
             adapter: WasiP1Adapter::new(),
         }
-    }
-
-    fn as_wasi_impl(&mut self) -> WasiCtxView<'_> {
-        WasiView::ctx(self)
-    }
-
-    fn as_io_impl(&mut self) -> &mut ResourceTable {
-        &mut self.table
     }
 }
 
@@ -354,7 +347,7 @@ impl Descriptors {
         })?;
 
         for dir in host
-            .ctx()
+            .filesystem()
             .get_directories()
             .context("failed to call `get-directories`")
             .map_err(types::Error::trap)?
@@ -617,7 +610,7 @@ impl WasiP1Ctx {
                 // position is left unmodified.
                 if let FdWrite::AtCur = write {
                     if append {
-                        let len = self.as_wasi_impl().stat(fd).await?;
+                        let len = self.filesystem().stat(fd).await?;
                         position.store(len.size, Ordering::Relaxed);
                     } else {
                         let pos = pos
@@ -639,7 +632,7 @@ impl WasiP1Ctx {
                 drop(t);
                 let buf = first_non_empty_ciovec(memory, ciovs)?;
                 let n = BlockingMode::Blocking
-                    .write(memory, &mut self.as_io_impl(), stream, buf)
+                    .write(memory, &mut self.table, stream, buf)
                     .await?
                     .try_into()?;
                 Ok(n)
@@ -1279,7 +1272,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         advice: types::Advice,
     ) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.as_wasi_impl()
+        self.filesystem()
             .advise(fd, offset, len, advice.into())
             .await?;
         Ok(())
@@ -1316,17 +1309,17 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         };
         match desc {
             Descriptor::Stdin { stream, .. } => {
-                streams::HostInputStream::drop(&mut self.as_io_impl(), stream)
+                streams::HostInputStream::drop(&mut self.table, stream)
                     .await
                     .context("failed to call `drop` on `input-stream`")
             }
             Descriptor::Stdout { stream, .. } | Descriptor::Stderr { stream, .. } => {
-                streams::HostOutputStream::drop(&mut self.as_io_impl(), stream)
+                streams::HostOutputStream::drop(&mut self.table, stream)
                     .await
                     .context("failed to call `drop` on `output-stream`")
             }
             Descriptor::File(File { fd, .. }) | Descriptor::Directory { fd, .. } => {
-                filesystem::HostDescriptor::drop(&mut self.as_wasi_impl(), fd)
+                filesystem::HostDescriptor::drop(&mut self.filesystem(), fd)
                     .context("failed to call `drop`")
             }
         }
@@ -1342,7 +1335,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         fd: types::Fd,
     ) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.as_wasi_impl().sync_data(fd).await?;
+        self.filesystem().sync_data(fd).await?;
         Ok(())
     }
 
@@ -1425,9 +1418,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 ..
             }) => (fd.borrowed(), *blocking_mode, *append),
         };
-        let flags = self.as_wasi_impl().get_flags(fd.borrowed()).await?;
+        let flags = self.filesystem().get_flags(fd.borrowed()).await?;
         let fs_filetype = self
-            .as_wasi_impl()
+            .filesystem()
             .get_type(fd.borrowed())
             .await?
             .try_into()
@@ -1541,8 +1534,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                     data_access_timestamp,
                     data_modification_timestamp,
                     status_change_timestamp,
-                } = self.as_wasi_impl().stat(fd.borrowed()).await?;
-                let metadata_hash = self.as_wasi_impl().metadata_hash(fd).await?;
+                } = self.filesystem().stat(fd.borrowed()).await?;
+                let metadata_hash = self.filesystem().metadata_hash(fd).await?;
                 let filetype = type_.try_into().map_err(types::Error::trap)?;
                 let zero = wall_clock::Datetime {
                     seconds: 0,
@@ -1575,7 +1568,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         size: types::Filesize,
     ) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.as_wasi_impl().set_size(fd, size).await?;
+        self.filesystem().set_size(fd, size).await?;
         Ok(())
     }
 
@@ -1602,7 +1595,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         )?;
 
         let fd = self.get_fd(fd)?;
-        self.as_wasi_impl().set_times(fd, atim, mtim).await?;
+        self.filesystem().set_times(fd, atim, mtim).await?;
         Ok(())
     }
 
@@ -1672,7 +1665,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 drop(t);
                 let buf = first_non_empty_iovec(memory, iovs)?;
                 let read = BlockingMode::Blocking
-                    .read(&mut self.as_io_impl(), stream, buf.len().try_into()?)
+                    .read(&mut self.table, stream, buf.len().try_into()?)
                     .await?;
                 if read.len() > buf.len().try_into()? {
                     return Err(types::Errno::Range.into());
@@ -1707,15 +1700,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 drop(t);
                 let buf = first_non_empty_iovec(memory, iovs)?;
 
-                let stream = self.as_wasi_impl().read_via_stream(fd, offset)?;
+                let stream = self.filesystem().read_via_stream(fd, offset)?;
                 let read = blocking_mode
-                    .read(
-                        &mut self.as_io_impl(),
-                        stream.borrowed(),
-                        buf.len().try_into()?,
-                    )
+                    .read(&mut self.table, stream.borrowed(), buf.len().try_into()?)
                     .await;
-                streams::HostInputStream::drop(&mut self.as_io_impl(), stream)
+                streams::HostInputStream::drop(&mut self.table, stream)
                     .await
                     .map_err(|e| types::Error::trap(e))?;
                 (buf, read?)
@@ -1850,7 +1839,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 .checked_add_signed(offset)
                 .ok_or(types::Errno::Inval)?,
             types::Whence::End => {
-                let filesystem::DescriptorStat { size, .. } = self.as_wasi_impl().stat(fd).await?;
+                let filesystem::DescriptorStat { size, .. } = self.filesystem().stat(fd).await?;
                 size.checked_add_signed(offset).ok_or(types::Errno::Inval)?
             }
             _ => return Err(types::Errno::Inval.into()),
@@ -1868,7 +1857,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         fd: types::Fd,
     ) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.as_wasi_impl().sync(fd).await?;
+        self.filesystem().sync(fd).await?;
         Ok(())
     }
 
@@ -1897,8 +1886,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         cookie: types::Dircookie,
     ) -> Result<types::Size, types::Error> {
         let fd = self.get_dir_fd(fd)?;
-        let stream = self.as_wasi_impl().read_directory(fd.borrowed()).await?;
-        let dir_metadata_hash = self.as_wasi_impl().metadata_hash(fd.borrowed()).await?;
+        let stream = self.filesystem().read_directory(fd.borrowed()).await?;
+        let dir_metadata_hash = self.filesystem().metadata_hash(fd.borrowed()).await?;
         let cookie = cookie.try_into().map_err(|_| types::Errno::Overflow)?;
 
         let head = [
@@ -1932,7 +1921,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         {
             let filesystem::DirectoryEntry { type_, name } = entry?;
             let metadata_hash = self
-                .as_wasi_impl()
+                .filesystem()
                 .metadata_hash_at(fd.borrowed(), filesystem::PathFlags::empty(), name.clone())
                 .await?;
             let d_type = type_.try_into().map_err(types::Error::trap)?;
@@ -1995,7 +1984,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(memory, path)?;
-        self.as_wasi_impl()
+        self.filesystem()
             .create_directory_at(dirfd.borrowed(), path)
             .await?;
         Ok(())
@@ -2021,11 +2010,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             data_modification_timestamp,
             status_change_timestamp,
         } = self
-            .as_wasi_impl()
+            .filesystem()
             .stat_at(dirfd.borrowed(), flags.into(), path.clone())
             .await?;
         let metadata_hash = self
-            .as_wasi_impl()
+            .filesystem()
             .metadata_hash_at(dirfd, flags.into(), path)
             .await?;
         let filetype = type_.try_into().map_err(types::Error::trap)?;
@@ -2074,7 +2063,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
 
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(memory, path)?;
-        self.as_wasi_impl()
+        self.filesystem()
             .set_times_at(dirfd, flags.into(), path, atim, mtim)
             .await?;
         Ok(())
@@ -2096,7 +2085,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let target_fd = self.get_dir_fd(target_fd)?;
         let src_path = read_string(memory, src_path)?;
         let target_path = read_string(memory, target_path)?;
-        self.as_wasi_impl()
+        self.filesystem()
             .link_at(src_fd, src_flags.into(), src_path, target_fd, target_path)
             .await?;
         Ok(())
@@ -2143,7 +2132,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         };
         drop(t);
         let fd = self
-            .as_wasi_impl()
+            .filesystem()
             .open_at(dirfd, dirflags.into(), path, oflags.into(), flags)
             .await?;
         let mut t = self.transact()?;
@@ -2177,7 +2166,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(memory, path)?;
         let mut path = self
-            .as_wasi_impl()
+            .filesystem()
             .readlink_at(dirfd, path)
             .await?
             .into_bytes();
@@ -2199,7 +2188,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(memory, path)?;
-        self.as_wasi_impl().remove_directory_at(dirfd, path).await?;
+        self.filesystem().remove_directory_at(dirfd, path).await?;
         Ok(())
     }
 
@@ -2218,7 +2207,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let dest_fd = self.get_dir_fd(dest_fd)?;
         let src_path = read_string(memory, src_path)?;
         let dest_path = read_string(memory, dest_path)?;
-        self.as_wasi_impl()
+        self.filesystem()
             .rename_at(src_fd, src_path, dest_fd, dest_path)
             .await?;
         Ok(())
@@ -2235,7 +2224,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let dirfd = self.get_dir_fd(dirfd)?;
         let src_path = read_string(memory, src_path)?;
         let dest_path = read_string(memory, dest_path)?;
-        self.as_wasi_impl()
+        self.filesystem()
             .symlink_at(dirfd.borrowed(), src_path, dest_path)
             .await?;
         Ok(())
@@ -2250,7 +2239,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = memory.as_cow_str(path)?.into_owned();
-        self.as_wasi_impl()
+        self.filesystem()
             .unlink_file_at(dirfd.borrowed(), path)
             .await?;
         Ok(())
@@ -2280,7 +2269,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 if !clocksub
                     .flags
                     .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
-                    && self.wasi.allow_blocking_current_thread
+                    && self.wasi.filesystem.allow_blocking_current_thread
                 {
                     std::thread::sleep(std::time::Duration::from_nanos(clocksub.timeout));
                     memory.write(
@@ -2363,13 +2352,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                                 let pos = position.load(Ordering::Relaxed);
                                 let fd = fd.borrowed();
                                 drop(t);
-                                self.as_wasi_impl().read_via_stream(fd, pos)?
+                                self.filesystem().read_via_stream(fd, pos)?
                             }
                             // TODO: Support sockets
                             _ => return Err(types::Errno::Badf.into()),
                         }
                     };
-                    streams::HostInputStream::subscribe(&mut self.as_io_impl(), stream)
+                    streams::HostInputStream::subscribe(&mut self.table, stream)
                         .context("failed to call `subscribe` on `input-stream`")
                         .map_err(types::Error::trap)?
                 }
@@ -2393,17 +2382,17 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                                 let append = *append;
                                 drop(t);
                                 if append {
-                                    self.as_wasi_impl().append_via_stream(fd)?
+                                    self.filesystem().append_via_stream(fd)?
                                 } else {
                                     let pos = position.load(Ordering::Relaxed);
-                                    self.as_wasi_impl().write_via_stream(fd, pos)?
+                                    self.filesystem().write_via_stream(fd, pos)?
                                 }
                             }
                             // TODO: Support sockets
                             _ => return Err(types::Errno::Badf.into()),
                         }
                     };
-                    streams::HostOutputStream::subscribe(&mut self.as_io_impl(), stream)
+                    streams::HostOutputStream::subscribe(&mut self.table, stream)
                         .context("failed to call `subscribe` on `output-stream`")
                         .map_err(types::Error::trap)?
                 }
@@ -2411,7 +2400,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             pollables.push(p);
         }
         let ready: HashSet<_> = self
-            .as_io_impl()
+            .table
             .poll(pollables)
             .await
             .context("failed to call `poll-oneoff`")
@@ -2456,7 +2445,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                             let fd = fd.borrowed();
                             let position = position.clone();
                             drop(t);
-                            match self.as_wasi_impl().stat(fd).await? {
+                            match self.filesystem().stat(fd).await? {
                                 filesystem::DescriptorStat { size, .. } => {
                                     let pos = position.load(Ordering::Relaxed);
                                     let nbytes = size.saturating_sub(pos);

@@ -221,11 +221,12 @@
 //! [async]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
 
-use crate::cli::{WasiCli, WasiCliView};
-use crate::clocks::{WasiClocks, WasiClocksView};
+use crate::WasiView;
+use crate::cli::{WasiCli, WasiCliView as _};
+use crate::clocks::{WasiClocks, WasiClocksView as _};
+use crate::filesystem::{WasiFilesystem, WasiFilesystemView as _};
 use crate::random::WasiRandom;
-use crate::sockets::{WasiSockets, WasiSocketsView};
-use crate::{WasiCtxView, WasiView};
+use crate::sockets::{WasiSockets, WasiSocketsView as _};
 use wasmtime::component::{HasData, Linker, ResourceTable};
 
 pub mod bindings;
@@ -324,7 +325,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
     add_nonblocking_to_linker(linker, options)?;
 
     let l = linker;
-    bindings::filesystem::types::add_to_linker::<T, HasWasi>(l, T::ctx)?;
+    bindings::filesystem::types::add_to_linker::<T, WasiFilesystem>(l, T::filesystem)?;
     bindings::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
@@ -344,7 +345,7 @@ where
     let l = linker;
     clocks::wall_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
     clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
-    filesystem::preopens::add_to_linker::<T, HasWasi>(l, T::ctx)?;
+    filesystem::preopens::add_to_linker::<T, WasiFilesystem>(l, T::filesystem)?;
     random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
     random::insecure::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
     random::insecure_seed::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
@@ -468,7 +469,7 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
     add_sync_wasi_io(linker)?;
 
     let l = linker;
-    bindings::sync::filesystem::types::add_to_linker::<T, HasWasi>(l, T::ctx)?;
+    bindings::sync::filesystem::types::add_to_linker::<T, WasiFilesystem>(l, T::filesystem)?;
     bindings::sync::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sync::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
@@ -490,12 +491,6 @@ struct HasIo;
 
 impl HasData for HasIo {
     type Data<'a> = &'a mut ResourceTable;
-}
-
-struct HasWasi;
-
-impl HasData for HasWasi {
-    type Data<'a> = WasiCtxView<'a>;
 }
 
 // FIXME: it's a bit unfortunate that this can't use

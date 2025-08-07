@@ -1,5 +1,6 @@
 use crate::cli::{StdinStream, StdoutStream, WasiCliCtx};
 use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
+use crate::filesystem::WasiFilesystemCtx;
 use crate::p2::filesystem::Dir;
 use crate::random::WasiRandomCtx;
 use crate::sockets::{SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
@@ -38,10 +39,9 @@ use tokio::io::{stderr, stdin, stdout};
 pub struct WasiCtxBuilder {
     cli: WasiCliCtx,
     clocks: WasiClocksCtx,
+    filesystem: WasiFilesystemCtx,
     random: WasiRandomCtx,
     sockets: WasiSocketsCtx,
-    allow_blocking_current_thread: bool,
-    preopens: Vec<(Dir, String)>,
     built: bool,
 }
 
@@ -164,7 +164,7 @@ impl WasiCtxBuilder {
     ///
     /// [`Config::async_support`]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
     pub fn allow_blocking_current_thread(&mut self, enable: bool) -> &mut Self {
-        self.allow_blocking_current_thread = enable;
+        self.filesystem.allow_blocking_current_thread = enable;
         self
     }
 
@@ -305,13 +305,13 @@ impl WasiCtxBuilder {
         if dir_perms.contains(DirPerms::MUTATE) {
             open_mode |= OpenMode::WRITE;
         }
-        self.preopens.push((
+        self.filesystem.preopens.push((
             Dir::new(
                 dir,
                 dir_perms,
                 file_perms,
                 open_mode,
-                self.allow_blocking_current_thread,
+                self.filesystem.allow_blocking_current_thread,
             ),
             guest_path.as_ref().to_owned(),
         ));
@@ -435,10 +435,9 @@ impl WasiCtxBuilder {
         let Self {
             cli,
             clocks,
+            filesystem,
             random,
             sockets,
-            allow_blocking_current_thread,
-            preopens,
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
@@ -446,10 +445,9 @@ impl WasiCtxBuilder {
         WasiCtx {
             cli,
             clocks,
-            sockets,
+            filesystem,
             random,
-            allow_blocking_current_thread,
-            preopens,
+            sockets,
         }
     }
     /// Builds a WASIp1 context instead of a [`WasiCtx`].
@@ -519,12 +517,11 @@ impl WasiCtxBuilder {
 /// ```
 #[derive(Default)]
 pub struct WasiCtx {
-    pub(crate) random: WasiRandomCtx,
-    pub(crate) clocks: WasiClocksCtx,
     pub(crate) cli: WasiCliCtx,
+    pub(crate) clocks: WasiClocksCtx,
+    pub(crate) filesystem: WasiFilesystemCtx,
+    pub(crate) random: WasiRandomCtx,
     pub(crate) sockets: WasiSocketsCtx,
-    pub(crate) allow_blocking_current_thread: bool,
-    pub(crate) preopens: Vec<(Dir, String)>,
 }
 
 impl WasiCtx {

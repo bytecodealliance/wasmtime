@@ -48,11 +48,11 @@ pub struct WasiCtxView<'a> {
     pub table: &'a mut ResourceTable,
 }
 
-impl<T: WasiView> crate::sockets::WasiSocketsView for T {
-    fn sockets(&mut self) -> crate::sockets::WasiSocketsCtxView<'_> {
+impl<T: WasiView> crate::cli::WasiCliView for T {
+    fn cli(&mut self) -> crate::cli::WasiCliCtxView<'_> {
         let WasiCtxView { ctx, table } = self.ctx();
-        crate::sockets::WasiSocketsCtxView {
-            ctx: &mut ctx.sockets,
+        crate::cli::WasiCliCtxView {
+            ctx: &mut ctx.cli,
             table,
         }
     }
@@ -68,17 +68,27 @@ impl<T: WasiView> crate::clocks::WasiClocksView for T {
     }
 }
 
+impl<T: WasiView> crate::filesystem::WasiFilesystemView for T {
+    fn filesystem(&mut self) -> crate::filesystem::WasiFilesystemCtxView<'_> {
+        let WasiCtxView { ctx, table } = self.ctx();
+        crate::filesystem::WasiFilesystemCtxView {
+            ctx: &mut ctx.filesystem,
+            table,
+        }
+    }
+}
+
 impl<T: WasiView> crate::random::WasiRandomView for T {
     fn random(&mut self) -> &mut crate::random::WasiRandomCtx {
         &mut self.ctx().ctx.random
     }
 }
 
-impl<T: WasiView> crate::cli::WasiCliView for T {
-    fn cli(&mut self) -> crate::cli::WasiCliCtxView<'_> {
+impl<T: WasiView> crate::sockets::WasiSocketsView for T {
+    fn sockets(&mut self) -> crate::sockets::WasiSocketsCtxView<'_> {
         let WasiCtxView { ctx, table } = self.ctx();
-        crate::cli::WasiCliCtxView {
-            ctx: &mut ctx.cli,
+        crate::sockets::WasiSocketsCtxView {
+            ctx: &mut ctx.sockets,
             table,
         }
     }
