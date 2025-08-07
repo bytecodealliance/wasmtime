@@ -54,11 +54,10 @@ The Wasmtime maintainers appreciate bug reports with the following:
   well as your rationale for *why* that behavior is expected. For example, just
   because another Wasm engine or an alternative Wasmtime execution strategy
   produces a different result from default Wasmtime, that is not necessarily a
-  bug. Wasm has a variety of sources of
-  [non-determinism](./examples-deterministic-wasm-execution.md) (e.g. `NaN` bit
-  patterns, maximum call stack depth, and whether growing memory succeeds) and
-  the two different results could both be valid and spec-conforming. Make sure
-  to account for this in your rationale and analysis of the bug.
+  bug. See the [documentation
+  below](#divergent-webassembly-behavior-across-runtimes) for examples of known divergent
+  behavior of one module in two runtimes. If applicable, make sure to account
+  for this in your rationale and analysis of the bug.
 
 * **Actual behavior:** A description of the actual, buggy behavior. This should
   include things various things like incorrect computation results, assertion
@@ -71,6 +70,57 @@ The Wasmtime maintainers appreciate bug reports with the following:
 Including the above information is extra important for bugs discovered
 mechanically, whether by fuzzing or other means, since the associated test cases
 will often be pseudo-random or otherwise unintuitive to debug.
+
+### Divergent WebAssembly behavior across runtimes
+
+WebAssembly has a variety of sources of [non-determinism] which means that the
+exact same module is allowed to behave differently under the same inputs
+across multiple runtimes. These specifics don't often arise in "real world"
+modules but can quickly arise during fuzzing. Some example behaviors are:
+
+* NaN patterns - floating-point operations which produce NaN as a result are
+  allowed to produce any one of a set of patterns of NaN. This means that the
+  exact bit-representation of the result of a floating-point operation may
+  diverge across engines. When fuzzing you can update your source-generation
+  to automatically canonicalize NaN values after all floating point operations.
+  Wasmtime has built-in options to curb this [non-determinism] as well.
+
+* Relaxed SIMD - the `relaxed-simd` proposal to WebAssembly explicitly has
+  multiple allowed results for instructions given particular inputs. These
+  instructions are inherently non-deterministic across implementations. When
+  fuzzing you can avoid these instructions entirely, canonicalize the results,
+  or use Wasmtime's built-in options to curb the [non-determinism].
+
+* Call stack exhaustion - the WebAssembly specification requires that all
+  function calls consume a nonzero-amount of some resource which can eventually
+  be exhausted. This means that infinite recursion is not allowed in any
+  WebAssembly engine. Bounded, but very large, recursion is allowed in
+  WebAssembly but is not guaranteed to work across WebAssembly engines. One
+  engine may have different stack settings than another engine and/or runtime
+  parameters may tune how much stack space is taken (e.g. optimizations on/off).
+  If one engine stack overflows and another doesn't then that's not necessarily
+  a bug in either engine. Short of banning recursion there's no known great way
+  to handle this apart from throwing out fuzz test cases that stack overflow.
+
+* Memory exhaustion - the `memory.grow` and `table.grow` instructions in
+  WebAssembly are not always guaranteed to either fail or succeed. This means
+  that growth may succeed in one engine but fail in another depending on various
+  settings. To handle this in fuzzing it's recommended to generate memories with
+  a maximum size and ensure that each engine being fuzzed can grow memory all
+  the way to the maximum size.
+
+* WASIp1 API behavior - the initial specification of WASI, WASIp1 or
+  `wasi_snapshot_preview1`, effectively is not suitable for differential fuzzing
+  across engines. The APIs are not thoroughly specified enough nor is there a
+  rigorous enough test suite to codify what exactly should happen in all
+  situations on all platforms. This means that exactly what kind of error arises
+  or various other edge cases may behave differently across engines. The lack of
+  specificity of WASIp1 means that there is no great oracle as to whether an
+  engine is right or wrong. Development of WASIp1 has ceased and the Component
+  Model is being worked on instead (e.g. WASIp2 and beyond) which is more
+  suitable for differential fuzzing.
+
+[non-determinism]: ./examples-deterministic-wasm-execution.md
 
 ### Do Not Report the Same Bug Multiple Times
 
