@@ -10,13 +10,19 @@ use wasm_encoder::{
     TypeSection, ValType,
 };
 
+/// Limits controlling the structure of a generated Wasm module.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct TableOpsLimits {
+    pub(crate) num_params: u32,
+    pub(crate) num_globals: u32,
+    pub(crate) table_size: i32,
+}
+
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TableOps {
-    pub(crate) num_params: u32,
-    pub(crate) num_globals: u32,
-    pub(crate) table_size: i32,
+    pub(crate) limits: TableOpsLimits,
     pub(crate) ops: Vec<TableOp>,
 }
 
@@ -37,7 +43,21 @@ impl TableOps {
     /// The "run" function does not terminate; you should run it with limited
     /// fuel. It also is not guaranteed to avoid traps: it may access
     /// out-of-bounds of the table.
-    pub fn to_wasm_binary(&self) -> Vec<u8> {
+    pub fn to_wasm_binary(&mut self) -> Vec<u8> {
+        // Clamp limits to generate opcodes within bounds
+        self.limits.table_size = self
+            .limits
+            .table_size
+            .clamp(*TABLE_SIZE_RANGE.start(), *TABLE_SIZE_RANGE.end());
+        self.limits.num_params = self
+            .limits
+            .num_params
+            .clamp(*NUM_PARAMS_RANGE.start(), *NUM_PARAMS_RANGE.end());
+        self.limits.num_globals = self
+            .limits
+            .num_globals
+            .clamp(*NUM_GLOBALS_RANGE.start(), *NUM_GLOBALS_RANGE.end());
+
         let mut module = Module::new();
 
         // Encode the types for all functions that we are using.
@@ -56,8 +76,8 @@ impl TableOps {
         );
 
         // 1: "run"
-        let mut params: Vec<ValType> = Vec::with_capacity(self.num_params as usize);
-        for _i in 0..self.num_params {
+        let mut params: Vec<ValType> = Vec::with_capacity(self.limits.num_params as usize);
+        for _i in 0..self.limits.num_params {
             params.push(ValType::EXTERNREF);
         }
         let results = vec![];
@@ -85,7 +105,7 @@ impl TableOps {
         let mut tables = TableSection::new();
         tables.table(TableType {
             element_type: RefType::EXTERNREF,
-            minimum: self.table_size as u64,
+            minimum: self.limits.table_size as u64,
             maximum: None,
             table64: false,
             shared: false,
@@ -93,7 +113,7 @@ impl TableOps {
 
         // Define our globals.
         let mut globals = GlobalSection::new();
-        for _ in 0..self.num_globals {
+        for _ in 0..self.limits.num_globals {
             globals.global(
                 wasm_encoder::GlobalType {
                     val_type: wasm_encoder::ValType::EXTERNREF,
@@ -117,7 +137,7 @@ impl TableOps {
 
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
         for op in &self.ops {
-            op.insert(&mut func, self.num_params);
+            op.insert(&mut func, self.limits.num_params);
         }
         func.instruction(&Instruction::Br(0));
         func.instruction(&Instruction::End);
@@ -154,14 +174,14 @@ impl TableOps {
     /// Fixes the stack after mutating the `idx`th op.
     ///
     /// The abstract stack depth starting at the `idx`th opcode must be `stack`.
-    fn fixup(&mut self, idx: usize, mut stack: usize) {
+    ///
+    fn fixup(&mut self) {
         let mut new_ops = Vec::with_capacity(self.ops.len());
-        new_ops.extend_from_slice(&self.ops[..idx]);
+        let mut stack = 0;
 
-        // Iterate through all ops including and after `idx`, inserting a null
-        // ref for any missing operands when they want to pop more operands than
-        // exist on the stack.
-        new_ops.extend(self.ops[idx..].iter().copied().flat_map(|op| {
+        for mut op in self.ops.iter().copied() {
+            op.fixup(&self.limits);
+
             let mut temp = SmallVec::<[_; 4]>::new();
 
             while stack < op.operands_len() {
@@ -172,11 +192,10 @@ impl TableOps {
             temp.push(op);
             stack = stack - op.operands_len() + op.results_len();
 
-            temp
-        }));
+            new_ops.extend(temp);
+        }
 
-        // Now make sure that the stack is empty at the end of the ops by
-        // inserting drops as necessary.
+        // Insert drops to balance the final stack state
         for _ in 0..stack {
             new_ops.push(TableOp::Drop());
         }
@@ -205,7 +224,7 @@ impl Mutate<TableOps> for TableOpsMutator {
                     let stack = ops.abstract_stack_depth(idx);
                     let (op, _new_stack_size) = TableOp::generate(ctx, &ops, stack)?;
                     ops.ops.insert(idx, op);
-                    ops.fixup(idx, stack);
+                    ops.fixup();
                 }
                 Ok(())
             })?;
@@ -218,9 +237,8 @@ impl Mutate<TableOps> for TableOpsMutator {
                     .rng()
                     .gen_index(ops.ops.len())
                     .expect("ops is not empty");
-                let stack = ops.abstract_stack_depth(idx);
                 ops.ops.remove(idx);
-                ops.fixup(idx, stack);
+                ops.fixup();
                 Ok(())
             })?;
         }
@@ -255,9 +273,11 @@ impl Generate<TableOps> for TableOpsMutator {
         let table_size = m::range(TABLE_SIZE_RANGE).generate(ctx)?;
 
         let mut ops = TableOps {
-            num_params,
-            num_globals,
-            table_size,
+            limits: TableOpsLimits {
+                num_params,
+                num_globals,
+                table_size,
+            },
             ops: vec![
                 TableOp::Null(),
                 TableOp::Drop(),
@@ -288,7 +308,7 @@ impl Generate<TableOps> for TableOpsMutator {
 macro_rules! define_table_ops {
     (
         $(
-            $op:ident $( ( $($limit:expr => $ty:ty),* ) )? : $params:expr => $results:expr ,
+            $op:ident $( ( $($limit_var:ident : $limit:expr => $ty:ty),* ) )? : $params:expr => $results:expr ,
         )*
     ) => {
         #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -335,7 +355,7 @@ macro_rules! define_table_ops {
             #[allow(non_snake_case, reason = "macro-generated code")]
             fn $op(
                 _ctx: &mut mutatis::Context,
-                _ops: &TableOps,
+                _limits: &TableOpsLimits,
                 stack: usize,
             ) -> mutatis::Result<(TableOp, usize)> {
                 #[allow(unused_comparisons, reason = "macro-generated code")]
@@ -345,8 +365,8 @@ macro_rules! define_table_ops {
 
                 let op = TableOp::$op(
                     $($({
-                        let limit_fn = $limit as fn(&TableOps) -> $ty;
-                        let limit = (limit_fn)(_ops);
+                        let limit_fn = $limit as fn(&TableOpsLimits) -> $ty;
+                        let limit = (limit_fn)(_limits);
                         debug_assert!(limit > 0);
                         m::range(0..=limit - 1).generate(_ctx)?
                     })*)?
@@ -357,21 +377,35 @@ macro_rules! define_table_ops {
         )*
 
         impl TableOp {
+            fn fixup(&mut self, limits: &TableOpsLimits) {
+                match self {
+                    $(
+                        Self::$op( $( $( $limit_var ),* )? ) => {
+                            $( $(
+                                let limit_fn = $limit as fn(&TableOpsLimits) -> $ty;
+                                let limit = (limit_fn)(limits);
+                                debug_assert!(limit > 0);
+                                *$limit_var = *$limit_var % limit;
+                            )* )?
+                        }
+                    )*
+                }
+            }
+
             fn generate(
                 ctx: &mut mutatis::Context,
                 ops: &TableOps,
                 stack: usize,
             ) -> mutatis::Result<(TableOp, usize)> {
                 let mut valid_choices: Vec<
-                    fn (&mut mutatis::Context, &TableOps, usize) -> mutatis::Result<(TableOp, usize)>
+                    fn(&mut Context, &TableOpsLimits, usize) -> mutatis::Result<(TableOp, usize)>
                 > = vec![];
-
                 $(
                     #[allow(unused_comparisons, reason = "macro-generated code")]
                     if stack >= $params $($(
                         && {
-                            let limit_fn: fn(&TableOps) -> $ty = $limit;
-                            let limit = (limit_fn)(ops);
+                            let limit_fn = $limit as fn(&TableOpsLimits) -> $ty;
+                            let limit = (limit_fn)(&ops.limits);
                             limit > 0
                         }
                     )*)? {
@@ -383,7 +417,7 @@ macro_rules! define_table_ops {
                     .choose(&valid_choices)
                     .expect("should always have a valid op choice");
 
-                (f)(ctx, ops, stack)
+                (f)(ctx, &ops.limits, stack)
             }
         }
     };
@@ -396,14 +430,14 @@ define_table_ops! {
     TakeRefs : 3 => 0,
 
     // Add one to make sure that out of bounds table accesses are possible, but still rare.
-    TableGet(|ops| ops.table_size + 1 => i32) : 0 => 1,
-    TableSet(|ops| ops.table_size + 1 => i32) : 1 => 0,
+    TableGet(elem_index: |ops| ops.table_size + 1 => i32) : 0 => 1,
+    TableSet(elem_index: |ops| ops.table_size + 1 => i32) : 1 => 0,
 
-    GlobalGet(|ops| ops.num_globals => u32) : 0 => 1,
-    GlobalSet(|ops| ops.num_globals => u32) : 1 => 0,
+    GlobalGet(global_index: |ops| ops.num_globals => u32) : 0 => 1,
+    GlobalSet(global_index: |ops| ops.num_globals => u32) : 1 => 0,
 
-    LocalGet(|ops| ops.num_params => u32) : 0 => 1,
-    LocalSet(|ops| ops.num_params => u32) : 1 => 0,
+    LocalGet(local_index: |ops| ops.num_params => u32) : 0 => 1,
+    LocalSet(local_index: |ops| ops.num_params => u32) : 1 => 0,
 
     Drop : 1 => 0,
 
@@ -465,9 +499,11 @@ mod tests {
     /// Creates empty TableOps
     fn empty_test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
         TableOps {
-            num_params,
-            num_globals,
-            table_size,
+            limits: TableOpsLimits {
+                num_params,
+                num_globals,
+                table_size,
+            },
             ops: vec![],
         }
     }
@@ -475,9 +511,11 @@ mod tests {
     /// Creates TableOps with all default opcodes
     fn test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
         TableOps {
-            num_params,
-            num_globals,
-            table_size,
+            limits: TableOpsLimits {
+                num_params,
+                num_globals,
+                table_size,
+            },
             ops: vec![
                 TableOp::Null(),
                 TableOp::Drop(),
@@ -503,6 +541,7 @@ mod tests {
             let wasm = res.to_wasm_binary();
             let mut validator = Validator::new();
             let wat = wasmprinter::print_bytes(&wasm).expect("[-] Failed .print_bytes(&wasm).");
+            println!("{wat}");
             let result = validator.validate_all(&wasm);
             log::debug!("{wat}");
             assert!(
