@@ -7,18 +7,100 @@ use crate::prelude::*;
 
 use self::ioctl::{Categories, PageMapScanBuilder};
 use crate::runtime::vm::{HostAlignedByteCount, host_page_size};
+use rustix::fd::AsRawFd;
 use rustix::ioctl::ioctl;
 use std::fs::File;
 use std::mem::MaybeUninit;
 use std::ptr;
+use std::sync::LazyLock;
+
+/// A static file-per-process which represents this process's page map file.
+///
+/// Note that this is required to be updated on a fork because otherwise this'll
+/// refer to the parent process's page map instead of the child process's page
+/// map. Thus when first initializing this file the `pthread_atfork` function is
+/// used to hook the child process to update this.
+///
+/// Also note that updating this is not done via mutation but rather it's done
+/// with `dup2` to replace the file descriptor that `File` points to in-place.
+/// The local copy of of `File` is then closed in the atfork handler.
+static PROCESS_PAGEMAP: LazyLock<Option<File>> = LazyLock::new(|| {
+    let pagemap = File::open("/proc/self/pagemap").ok()?;
+
+    // SAFETY: all libc functions are unsafe by default, and we're basically
+    // going to do our damndest to make sure this invocation of `pthread_atfork`
+    // is safe, namely the handler registered here is intentionally quite
+    // minimal and only accesses the `PROCESS_PAGEMAP`.
+    let rc = unsafe { libc::pthread_atfork(None, None, Some(after_fork_in_child)) };
+    if rc != 0 {
+        return None;
+    }
+
+    return Some(pagemap);
+
+    /// Hook executed as part of `pthread_atfork` in the child process after a
+    /// fork.
+    ///
+    /// # Safety
+    ///
+    /// This function is not safe to call in general and additionally has its
+    /// own stringent safety requirements. This is after a fork but before exec
+    /// so all the safety requirements of `Command::pre_exec` in the standard
+    /// library apply here. Effectively the standard library primitives are
+    /// avoided here as they aren't necessarily safe to execute in this context.
+    unsafe extern "C" fn after_fork_in_child() {
+        let Some(parent_pagemap) = PROCESS_PAGEMAP.as_ref() else {
+            // This should not be reachable, but to avoid panic infrastructure
+            // here this is just skipped instead.
+            return;
+        };
+
+        // SAFETY: see function documentation.
+        //
+        // Here `/proc/self/pagemap` is opened in the child. If that fails for
+        // whatever reason then the pagemap is replaced with `/dev/null` which
+        // means that all future ioctls for `PAGEMAP_SCAN` will fail. If that
+        // fails then that's left to abort the process for now. If that's
+        // problematic we may want to consider opening a local pipe and then
+        // installing that here? Unsure.
+        //
+        // Once a fd is opened the `dup2` syscall is used to replace the
+        // previous file descriptor stored in `parent_pagemap`. That'll update
+        // the pagemap in-place in this child for all future use in case this is
+        // further used in the child.
+        //
+        // And finally once that's all done the `child_pagemap` is itself
+        // closed since we have no more need for it.
+        unsafe {
+            let flags = libc::O_CLOEXEC | libc::O_RDONLY;
+            let mut child_pagemap = libc::open(c"/proc/self/pagemap".as_ptr(), flags);
+            if child_pagemap == -1 {
+                child_pagemap = libc::open(c"/dev/null".as_ptr(), flags);
+            }
+            if child_pagemap == -1 {
+                libc::abort();
+            }
+
+            let rc = libc::dup2(child_pagemap, parent_pagemap.as_raw_fd());
+            if rc == -1 {
+                libc::abort();
+            }
+            let rc = libc::close(child_pagemap);
+            if rc == -1 {
+                libc::abort();
+            }
+        }
+    }
+});
 
 #[derive(Debug)]
-pub struct PageMap(File);
+pub struct PageMap(&'static File);
 
 impl PageMap {
     #[cfg(feature = "pooling-allocator")]
     pub fn new() -> Option<PageMap> {
-        let file = File::open("/proc/self/pagemap").ok()?;
+        let file = PROCESS_PAGEMAP.as_ref()?;
+
         // Check if the `pagemap_scan` ioctl is supported.
         let mut regions = vec![MaybeUninit::uninit(); 1];
         let pm_scan = PageMapScanBuilder::new(ptr::slice_from_raw_parts(ptr::null_mut(), 0))

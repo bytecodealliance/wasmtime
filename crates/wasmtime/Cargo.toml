@@ -113,6 +113,10 @@ wasmtime-versioned-export-macros = { workspace = true, optional = true }
 name = "host_segfault"
 harness = false
 
+[[test]]
+name = "engine_across_forks"
+harness = false
+
 # =============================================================================
 #
 # Features for the Wasmtime crate.
