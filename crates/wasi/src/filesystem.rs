@@ -1,3 +1,27 @@
+use crate::p2::filesystem::Dir;
+use wasmtime::component::{HasData, ResourceTable};
+
+pub(crate) struct WasiFilesystem;
+
+impl HasData for WasiFilesystem {
+    type Data<'a> = WasiFilesystemCtxView<'a>;
+}
+
+#[derive(Clone, Default)]
+pub struct WasiFilesystemCtx {
+    pub allow_blocking_current_thread: bool,
+    pub preopens: Vec<(Dir, String)>,
+}
+
+pub struct WasiFilesystemCtxView<'a> {
+    pub ctx: &'a mut WasiFilesystemCtx,
+    pub table: &'a mut ResourceTable,
+}
+
+pub trait WasiFilesystemView: Send {
+    fn filesystem(&mut self) -> WasiFilesystemCtxView<'_>;
+}
+
 bitflags::bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct FilePerms: usize {
