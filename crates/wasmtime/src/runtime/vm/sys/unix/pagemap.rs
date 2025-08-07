@@ -7,12 +7,10 @@ use crate::prelude::*;
 
 use self::ioctl::{Categories, PageMapScanBuilder};
 use crate::runtime::vm::{HostAlignedByteCount, host_page_size};
-use rustix::fd::AsRawFd;
 use rustix::ioctl::ioctl;
 use std::fs::File;
 use std::mem::MaybeUninit;
 use std::ptr;
-use std::sync::LazyLock;
 
 /// A static file-per-process which represents this process's page map file.
 ///
@@ -24,7 +22,10 @@ use std::sync::LazyLock;
 /// Also note that updating this is not done via mutation but rather it's done
 /// with `dup2` to replace the file descriptor that `File` points to in-place.
 /// The local copy of of `File` is then closed in the atfork handler.
-static PROCESS_PAGEMAP: LazyLock<Option<File>> = LazyLock::new(|| {
+#[cfg(feature = "pooling-allocator")]
+static PROCESS_PAGEMAP: std::sync::LazyLock<Option<File>> = std::sync::LazyLock::new(|| {
+    use rustix::fd::AsRawFd;
+
     let pagemap = File::open("/proc/self/pagemap").ok()?;
 
     // SAFETY: all libc functions are unsafe by default, and we're basically
