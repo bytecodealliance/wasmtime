@@ -76,6 +76,7 @@ impl Default for OnDemandInstanceAllocator {
     }
 }
 
+#[async_trait::async_trait]
 unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
     #[cfg(feature = "component-model")]
     fn validate_component_impl<'a>(
@@ -110,9 +111,9 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
 
     fn decrement_core_instance_count(&self) {}
 
-    fn allocate_memory(
+    async fn allocate_memory(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_>,
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
         memory_index: Option<DefinedMemoryIndex>,
@@ -140,7 +141,8 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
                     .expect("if module has memory plans, store is not empty")
             },
             image,
-        )?;
+        )
+        .await?;
         Ok((allocation_index, memory))
     }
 
@@ -154,9 +156,9 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         // Normal destructors do all the necessary clean up.
     }
 
-    fn allocate_table(
+    async fn allocate_table(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_>,
         ty: &wasmtime_environ::Table,
         tunables: &Tunables,
         _table_index: DefinedTableIndex,
@@ -167,7 +169,8 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
                 .store
                 .get()
                 .expect("if module has table plans, store is not empty")
-        })?;
+        })
+        .await?;
         Ok((allocation_index, table))
     }
 

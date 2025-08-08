@@ -89,11 +89,8 @@ impl<T: Send> Store<T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
-    where
-        T: Send,
-    {
-        self.inner.gc_async(why).await
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
+        self.inner.gc(None, why.map(|e| e.bytes_needed())).await;
     }
 
     /// Configures epoch-deadline expiration to yield to the async
@@ -132,11 +129,8 @@ impl<'a, T: Send> StoreContextMut<'a, T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
-    where
-        T: Send + 'static,
-    {
-        self.0.gc_async(why).await
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
+        self.0.gc(None, why.map(|e| e.bytes_needed())).await;
     }
 
     /// Configures epoch-deadline expiration to yield to the async
@@ -174,64 +168,6 @@ impl StoreOpaque {
         func: impl FnOnce(&mut Self) -> R + Send + Sync,
     ) -> Result<R> {
         fiber::on_fiber(self, func).await
-    }
-
-    #[cfg(feature = "gc")]
-    pub(super) async fn do_gc_async(&mut self) {
-        assert!(
-            self.async_support(),
-            "cannot use `gc_async` without enabling async support in the config",
-        );
-
-        // If the GC heap hasn't been initialized, there is nothing to collect.
-        if self.gc_store.is_none() {
-            return;
-        }
-
-        log::trace!("============ Begin Async GC ===========");
-
-        // Take the GC roots out of `self` so we can borrow it mutably but still
-        // call mutable methods on `self`.
-        let mut roots = core::mem::take(&mut self.gc_roots_list);
-
-        self.trace_roots_async(&mut roots).await;
-        self.unwrap_gc_store_mut()
-            .gc_async(unsafe { roots.iter() })
-            .await;
-
-        // Restore the GC roots for the next GC.
-        roots.clear();
-        self.gc_roots_list = roots;
-
-        log::trace!("============ End Async GC ===========");
-    }
-
-    #[inline]
-    #[cfg(not(feature = "gc"))]
-    pub async fn gc_async(&mut self) {
-        // Nothing to collect.
-        //
-        // Note that this is *not* a public method, this is just defined for the
-        // crate-internal `StoreOpaque` type. This is a convenience so that we
-        // don't have to `cfg` every call site.
-    }
-
-    #[cfg(feature = "gc")]
-    async fn trace_roots_async(&mut self, gc_roots_list: &mut crate::runtime::vm::GcRootsList) {
-        use crate::runtime::vm::Yield;
-
-        log::trace!("Begin trace GC roots");
-
-        // We shouldn't have any leftover, stale GC roots.
-        assert!(gc_roots_list.is_empty());
-
-        self.trace_wasm_stack_roots(gc_roots_list);
-        Yield::new().await;
-        self.trace_vmctx_roots(gc_roots_list);
-        Yield::new().await;
-        self.trace_user_roots(gc_roots_list);
-
-        log::trace!("End trace GC roots")
     }
 
     /// Yields execution to the caller on out-of-gas or epoch interruption.

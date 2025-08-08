@@ -122,6 +122,12 @@ impl AsStoreOpaque for StoreOpaque {
     }
 }
 
+impl AsStoreOpaque for dyn VMStore {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        self
+    }
+}
+
 impl<T: Send + 'static> AsStoreOpaque for StoreInner<T> {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque {
         self
@@ -191,7 +197,7 @@ impl<'a, 'b> BlockingContext<'a, 'b> {
     /// escaping.
     fn with<S, R>(store: &mut S, f: impl FnOnce(&mut S, &mut BlockingContext<'_, '_>) -> R) -> R
     where
-        S: AsStoreOpaque,
+        S: AsStoreOpaque + ?Sized,
     {
         let opaque = store.as_store_opaque();
 
@@ -220,12 +226,12 @@ impl<'a, 'b> BlockingContext<'a, 'b> {
         };
         return f(&mut reset.store, &mut reset.cx);
 
-        struct ResetBlockingContext<'a, 'b, S: AsStoreOpaque> {
+        struct ResetBlockingContext<'a, 'b, S: AsStoreOpaque + ?Sized> {
             store: &'a mut S,
             cx: BlockingContext<'a, 'b>,
         }
 
-        impl<S: AsStoreOpaque> Drop for ResetBlockingContext<'_, '_, S> {
+        impl<S: AsStoreOpaque + ?Sized> Drop for ResetBlockingContext<'_, '_, S> {
             fn drop(&mut self) {
                 let store = self.store.as_store_opaque();
                 let state = store.fiber_async_state_mut();
@@ -371,6 +377,21 @@ impl<T: Send> crate::store::StoreInner<T> {
         BlockingContext::with(self, |store, cx| {
             cx.block_on(f(StoreContextMut(store)).as_mut())
         })
+    }
+}
+
+impl dyn VMStore {
+    /// Creates a `BlockingContext` suitable for blocking on futures or
+    /// suspending the current fiber.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is invoked outside the context of a fiber.
+    pub(crate) fn with_blocking<R>(
+        &mut self,
+        f: impl FnOnce(&mut Self, &mut BlockingContext<'_, '_>) -> R,
+    ) -> R {
+        BlockingContext::with(self, |store, cx| f(store, cx))
     }
 }
 

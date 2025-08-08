@@ -2,7 +2,7 @@
 
 use crate::runtime::vm::VMGcRef;
 use crate::store::StoreId;
-use crate::vm::{VMGcHeader, VMStructRef};
+use crate::vm::{self, VMGcHeader, VMStructRef};
 use crate::{AnyRef, FieldType};
 use crate::{
     AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
@@ -231,22 +231,22 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        Self::_new(store.as_context_mut().0, allocator, fields)
+        let store = store.as_context_mut().0;
+        assert!(!store.async_support());
+        vm::assert_ready(Self::_new(store, allocator, fields))
     }
 
-    pub(crate) fn _new(
+    pub(crate) async fn _new(
         store: &mut StoreOpaque,
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        assert!(
-            !store.async_support(),
-            "use `StructRef::new_async` with asynchronous stores"
-        );
         Self::type_check_fields(store, allocator, fields)?;
-        store.retry_after_gc((), |store, ()| {
-            Self::new_unchecked(store, allocator, fields)
-        })
+        store
+            .retry_after_gc((), |store, ()| {
+                Self::new_unchecked(store, allocator, fields)
+            })
+            .await
     }
 
     /// Asynchronously allocate a new `struct` and get a reference to it.
@@ -281,40 +281,7 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        Self::_new_async(store.as_context_mut().0, allocator, fields).await
-    }
-
-    #[cfg(feature = "async")]
-    pub(crate) async fn _new_async(
-        store: &mut StoreOpaque,
-        allocator: &StructRefPre,
-        fields: &[Val],
-    ) -> Result<Rooted<StructRef>> {
-        assert!(
-            store.async_support(),
-            "use `StructRef::new` with synchronous stores"
-        );
-        Self::type_check_fields(store, allocator, fields)?;
-        store
-            .retry_after_gc_async((), |store, ()| {
-                Self::new_unchecked(store, allocator, fields)
-            })
-            .await
-    }
-
-    /// Like `Self::new` but caller's must ensure that if the store is
-    /// configured for async, this is only ever called from on a fiber stack.
-    pub(crate) unsafe fn new_maybe_async(
-        store: &mut StoreOpaque,
-        allocator: &StructRefPre,
-        fields: &[Val],
-    ) -> Result<Rooted<StructRef>> {
-        Self::type_check_fields(store, allocator, fields)?;
-        unsafe {
-            store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::new_unchecked(store, allocator, fields)
-            })
-        }
+        Self::_new(store.as_context_mut().0, allocator, fields).await
     }
 
     /// Type check the field values before allocating a new struct.

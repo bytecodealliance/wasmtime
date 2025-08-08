@@ -42,8 +42,10 @@ use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Deref;
 use core::ops::DerefMut;
+use core::pin::pin;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
+use core::task::{Context, Poll, Waker};
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex,
 };
@@ -143,9 +145,7 @@ mod cow_disabled;
 #[cfg(has_virtual_memory)]
 mod mmap;
 
-#[cfg(feature = "async")]
 mod async_yield;
-#[cfg(feature = "async")]
 pub use crate::runtime::vm::async_yield::*;
 
 #[cfg(feature = "gc-null")]
@@ -194,7 +194,8 @@ pub trait ModuleMemoryImageSource: Send + Sync + 'static {
 /// APIs using `Store<T>` are correctly inferring send/sync on the returned
 /// values (e.g. futures) and that internally in the runtime we aren't doing
 /// anything "weird" with threads for example.
-pub unsafe trait VMStore: 'static {
+#[async_trait::async_trait]
+pub unsafe trait VMStore: Send + 'static {
     /// Get a shared borrow of this store's `StoreOpaque`.
     fn store_opaque(&self) -> &StoreOpaque;
 
@@ -203,7 +204,7 @@ pub unsafe trait VMStore: 'static {
 
     /// Callback invoked to allow the store's resource limiter to reject a
     /// memory grow operation.
-    fn memory_growing(
+    async fn memory_growing(
         &mut self,
         current: usize,
         desired: usize,
@@ -218,7 +219,7 @@ pub unsafe trait VMStore: 'static {
 
     /// Callback invoked to allow the store's resource limiter to reject a
     /// table grow operation.
-    fn table_growing(
+    async fn table_growing(
         &mut self,
         current: usize,
         desired: usize,
@@ -507,5 +508,40 @@ impl fmt::Display for WasmFault {
             "memory fault at wasm address 0x{:x} in linear memory of size 0x{:x}",
             self.wasm_address, self.memory_size,
         )
+    }
+}
+
+/// Asserts that the future `f` is ready and returns its output.
+///
+/// This function is intended to be used when `async_support` is verified as
+/// disabled. Internals of Wasmtime are generally `async` when they optionally
+/// can be, meaning that synchronous entrypoints will invoke this function
+/// after invoking the asynchronous internals. Due to `async_support` being
+/// disabled there should be no way to introduce a yield point meaning that all
+/// futures built from internal functions should always be ready.
+///
+/// # Panics
+///
+/// Panics if `f` is not yet ready.
+pub fn assert_ready<F: Future>(f: F) -> F::Output {
+    one_poll(f).unwrap()
+}
+
+/// Attempts one poll of `f` to see if its output is available.
+///
+/// This function is intended for a few minor entrypoints into the Wasmtime API
+/// where a synchronous function is documented to work even when `async_support`
+/// is enabled. For example growing a `Memory` can be done with a synchronous
+/// function, but it's documented to panic with an async resource limiter.
+///
+/// This function provides the opportunity to poll `f` once to see if its output
+/// is available. If it isn't then `None` is returned and an appropriate panic
+/// message should be generated recommending to use an async function (e.g.
+/// `grow_async` instead of `grow`).
+pub fn one_poll<F: Future>(f: F) -> Option<F::Output> {
+    let mut context = Context::from_waker(&Waker::noop());
+    match pin!(f).poll(&mut context) {
+        Poll::Ready(output) => Some(output),
+        Poll::Pending => None,
     }
 }

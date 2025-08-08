@@ -2,7 +2,7 @@
 
 use super::{AnyRef, RootedGcRefImpl};
 use crate::prelude::*;
-use crate::runtime::vm::VMGcRef;
+use crate::runtime::vm::{self, VMGcRef};
 use crate::{
     AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
     Result, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
@@ -215,10 +215,11 @@ impl ExternRef {
         T: 'static + Any + Send + Sync,
     {
         let ctx = context.as_context_mut().0;
-        Self::_new(ctx, value)
+        assert!(!ctx.async_support());
+        vm::assert_ready(Self::_new(ctx, value))
     }
 
-    pub(crate) fn _new<T>(store: &mut StoreOpaque, value: T) -> Result<Rooted<ExternRef>>
+    pub(crate) async fn _new<T>(store: &mut StoreOpaque, value: T) -> Result<Rooted<ExternRef>>
     where
         T: 'static + Any + Send + Sync,
     {
@@ -234,6 +235,7 @@ impl ExternRef {
                     .context("unrecoverable error when allocating new `externref`")?
                     .map_err(|(x, n)| GcHeapOutOfMemory::new(x, n).into())
             })
+            .await
             // Translate the `GcHeapOutOfMemory`'s inner value from the boxed
             // trait object into `T`.
             .map_err(
@@ -316,53 +318,13 @@ impl ExternRef {
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `context` is not configured for async; use
-    /// [`ExternRef::new`][crate::ExternRef::new] to perform synchronous
-    /// allocation instead.
     #[cfg(feature = "async")]
     pub async fn new_async<T>(mut context: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
     where
         T: 'static + Any + Send + Sync,
     {
         let ctx = context.as_context_mut().0;
-        Self::_new_async(ctx, value).await
-    }
-
-    #[cfg(feature = "async")]
-    pub(crate) async fn _new_async<T>(
-        store: &mut StoreOpaque,
-        value: T,
-    ) -> Result<Rooted<ExternRef>>
-    where
-        T: 'static + Any + Send + Sync,
-    {
-        // Allocate the box once, regardless how many gc-and-retry attempts we
-        // make.
-        let value: Box<dyn Any + Send + Sync> = Box::new(value);
-
-        let gc_ref = store
-            .retry_after_gc_async(value, |store, value| {
-                store
-                    .require_gc_store_mut()?
-                    .alloc_externref(value)
-                    .context("unrecoverable error when allocating new `externref`")?
-                    .map_err(|(x, n)| GcHeapOutOfMemory::new(x, n).into())
-            })
-            .await
-            // Translate the `GcHeapOutOfMemory`'s inner value from the boxed
-            // trait object into `T`.
-            .map_err(
-                |e| match e.downcast::<GcHeapOutOfMemory<Box<dyn Any + Send + Sync>>>() {
-                    Ok(oom) => oom.map_inner(|x| *x.downcast::<T>().unwrap()).into(),
-                    Err(e) => e,
-                },
-            )?;
-
-        let mut ctx = AutoAssertNoGc::new(store);
-        Ok(Self::from_cloned_gc_ref(&mut ctx, gc_ref.into()))
+        Self::_new(ctx, value).await
     }
 
     /// Convert an `anyref` into an `externref`.

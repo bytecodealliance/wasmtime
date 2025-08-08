@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::memory::{LocalMemory, MmapMemory, validate_atomic_addr};
 use crate::runtime::vm::parking_spot::{ParkingSpot, Waiter};
-use crate::runtime::vm::{Memory, VMMemoryDefinition, VMStore, WaitResult};
+use crate::runtime::vm::{self, Memory, VMMemoryDefinition, WaitResult};
 use std::cell::RefCell;
 use std::ops::Range;
 use std::ptr::NonNull;
@@ -31,7 +31,10 @@ struct SharedMemoryInner {
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(ty: &wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
-        let (minimum_bytes, maximum_bytes) = Memory::limit_new(ty, None)?;
+        // Note that `vm::assert_ready` here should be valid because no store is
+        // passed in so it's not possible to trigger anything async like async
+        // resource limiting.
+        let (minimum_bytes, maximum_bytes) = vm::assert_ready(Memory::limit_new(ty, None))?;
         let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes)?;
         Self::wrap(
             ty,
@@ -68,13 +71,12 @@ impl SharedMemory {
     }
 
     /// Same as `RuntimeLinearMemory::grow`, except with `&self`.
-    pub fn grow(
-        &self,
-        delta_pages: u64,
-        store: Option<&mut dyn VMStore>,
-    ) -> Result<Option<(usize, usize)>, Error> {
+    pub fn grow(&self, delta_pages: u64) -> Result<Option<(usize, usize)>, Error> {
         let mut memory = self.0.memory.write().unwrap();
-        let result = memory.grow(delta_pages, store)?;
+        // Note that `assert_ready` should be valid here because no store is
+        // passed in to growth so there's no opportunity to hit an async yield
+        // point.
+        let result = vm::assert_ready(memory.grow(delta_pages, None))?;
         if let Some((_old_size_in_bytes, new_size_in_bytes)) = result {
             // Store the new size to the `VMMemoryDefinition` for JIT-generated
             // code (and runtime functions) to access. No other code can be

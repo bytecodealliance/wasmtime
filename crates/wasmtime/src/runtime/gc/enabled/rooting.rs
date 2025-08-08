@@ -446,14 +446,13 @@ impl RootSet {
         self.lifo_roots = lifo_roots;
     }
 
-    pub(crate) fn with_lifo_scope<S, T>(store: &mut S, f: impl FnOnce(&mut S) -> T) -> T
+    // TODO: replace with `OpaqueRootScope`
+    pub(crate) fn with_lifo_scope<S>(store: &mut S) -> RootSetLifoScope<'_, S>
     where
-        S: ?Sized + DerefMut<Target = StoreOpaque>,
+        S: DerefMut<Target = StoreOpaque> + ?Sized,
     {
         let scope = store.gc_roots().enter_lifo_scope();
-        let ret = f(store);
-        store.exit_gc_lifo_scope(scope);
-        ret
+        RootSetLifoScope { store, scope }
     }
 
     pub(crate) fn push_lifo_root(&mut self, store_id: StoreId, gc_ref: VMGcRef) -> GcRootIndex {
@@ -466,6 +465,42 @@ impl RootSet {
             generation,
             index,
         }
+    }
+}
+
+pub(crate) struct RootSetLifoScope<'a, S>
+where
+    S: DerefMut<Target = StoreOpaque> + ?Sized,
+{
+    store: &'a mut S,
+    scope: usize,
+}
+
+impl<S> Deref for RootSetLifoScope<'_, S>
+where
+    S: DerefMut<Target = StoreOpaque> + ?Sized,
+{
+    type Target = S;
+    fn deref(&self) -> &S {
+        self.store
+    }
+}
+
+impl<S> DerefMut for RootSetLifoScope<'_, S>
+where
+    S: DerefMut<Target = StoreOpaque> + ?Sized,
+{
+    fn deref_mut(&mut self) -> &mut S {
+        self.store
+    }
+}
+
+impl<S> Drop for RootSetLifoScope<'_, S>
+where
+    S: DerefMut<Target = StoreOpaque> + ?Sized,
+{
+    fn drop(&mut self) {
+        self.store.exit_gc_lifo_scope(self.scope);
     }
 }
 
@@ -1796,12 +1831,12 @@ where
         debug_assert_ne!(raw_gc_ref, 0);
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref).expect("non-null");
         let gc_ref = store.clone_gc_ref(&gc_ref);
-        RootSet::with_lifo_scope(store, |store| {
-            let rooted = from_cloned_gc_ref(store, gc_ref);
-            rooted
-                ._to_manually_rooted(store)
-                .expect("rooted is in scope")
-        })
+        let mut store = RootSet::with_lifo_scope(store);
+        let store = &mut *store;
+        let rooted = from_cloned_gc_ref(store, gc_ref);
+        rooted
+            ._to_manually_rooted(store)
+            .expect("rooted is in scope")
     }
 
     /// Common implementation of the `WasmTy::store` trait method for all
@@ -1830,14 +1865,14 @@ where
     ) -> Option<Self> {
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
         let gc_ref = store.clone_gc_ref(&gc_ref);
-        RootSet::with_lifo_scope(store, |store| {
-            let rooted = from_cloned_gc_ref(store, gc_ref);
-            Some(
-                rooted
-                    ._to_manually_rooted(store)
-                    .expect("rooted is in scope"),
-            )
-        })
+        let mut store = RootSet::with_lifo_scope(store);
+        let store = &mut *store;
+        let rooted = from_cloned_gc_ref(store, gc_ref);
+        Some(
+            rooted
+                ._to_manually_rooted(store)
+                .expect("rooted is in scope"),
+        )
     }
 }
 

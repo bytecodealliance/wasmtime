@@ -261,6 +261,7 @@ runtime = [
   "dep:windows-sys",
   "pulley-interpreter/interp",
   "dep:wasmtime-unwinder",
+  "dep:async-trait",
 ]
 
 # Enable support for garbage collection-related things.

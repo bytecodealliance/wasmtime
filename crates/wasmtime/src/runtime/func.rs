@@ -2228,7 +2228,7 @@ impl<T: Send> Caller<'_, T> {
     ///
     /// Same as [`Store::gc_async`](crate::Store::gc_async).
     #[cfg(all(feature = "async", feature = "gc"))]
-    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>)
     where
         T: Send + 'static,
     {

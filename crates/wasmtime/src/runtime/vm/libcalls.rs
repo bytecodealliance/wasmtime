@@ -63,7 +63,7 @@ use crate::runtime::vm::VMGcRef;
 use crate::runtime::vm::table::TableElementType;
 use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{
-    HostResultHasUnwindSentinel, Instance, TrapReason, VMStore, f32x4, f64x2, i8x16,
+    self, HostResultHasUnwindSentinel, Instance, TrapReason, VMStore, f32x4, f64x2, i8x16,
 };
 use core::convert::Infallible;
 use core::pin::Pin;
@@ -166,6 +166,52 @@ pub mod raw {
     wasmtime_environ::foreach_builtin_function!(libcall);
 }
 
+/// Uses the `$store` provided to invoke the async closure `$f` and block on the
+/// result.
+///
+/// This will internally multiplex on `$store.with_blocking(...)` vs simply
+/// asserting the closure is ready depending on whether a store's
+/// `async_support` flag is set or not.
+///
+/// FIXME: ideally this would be a function, not a macro. If this is a function
+/// though it would require placing a bound on the async closure $f where the
+/// returned future is itself `Send`. That's not possible in Rust right now,
+/// unfortunately.
+///
+/// As a workaround this takes advantage of the fact that we can assume that the
+/// compiler can infer that the future returned by `$f` is indeed `Send` so long
+/// as we don't try to name the type or place it behind a generic. In the future
+/// when we can bound the return future of async functions with `Send` this
+/// macro should be replaced with an equivalent function.
+macro_rules! block_on {
+    ($store:expr, $f:expr) => {{
+        let store: &mut dyn VMStore = $store;
+        let closure = assert_async_fn_closure($f);
+        if store.async_support() {
+            #[cfg(feature = "async")]
+            {
+                store.with_blocking(|store, cx| cx.block_on(closure(store)))
+            }
+            #[cfg(not(feature = "async"))]
+            {
+                unreachable!()
+            }
+        } else {
+            // Note that if `async_support` is disabled then it should not be
+            // possible to introduce await points so the provided future should
+            // always be ready.
+            anyhow::Ok(vm::assert_ready(closure(store)))
+        }
+    }};
+}
+
+fn assert_async_fn_closure<F, R>(f: F) -> F
+where
+    F: AsyncFnOnce(&mut dyn VMStore) -> R,
+{
+    f
+}
+
 fn memory_grow(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
@@ -176,12 +222,14 @@ fn memory_grow(
     let module = instance.env_module();
     let page_size_log2 = module.memories[module.memory_index(memory_index)].page_size_log2;
 
-    let result = instance
-        .as_mut()
-        .memory_grow(store, memory_index, delta)?
-        .map(|size_in_bytes| AllocationSize(size_in_bytes >> page_size_log2));
-
-    Ok(result)
+    block_on!(store, async |store| {
+        let result = instance
+            .as_mut()
+            .memory_grow(store, memory_index, delta)
+            .await?
+            .map(|size_in_bytes| AllocationSize(size_in_bytes >> page_size_log2));
+        Ok(result)
+    })?
 }
 
 /// A helper structure to represent the return value of a memory or table growth
@@ -235,13 +283,16 @@ unsafe fn table_grow_func_ref(
         instance.as_mut().table_element_type(table_index),
         TableElementType::Func,
     ));
-    let element = NonNull::new(init_value.cast::<VMFuncRef>());
-    let result = instance
-        .defined_table_grow(defined_table_index, |table| unsafe {
-            table.grow_func(store, delta, element)
-        })?
-        .map(AllocationSize);
-    Ok(result)
+    let element = NonNull::new(init_value.cast::<VMFuncRef>()).map(|p| p.into());
+    block_on!(store, async |store| {
+        let result = instance
+            .defined_table_grow(defined_table_index, async |table| unsafe {
+                table.grow_func(store, delta, element).await
+            })
+            .await?
+            .map(AllocationSize);
+        Ok(result)
+    })?
 }
 
 /// Implementation of `table.grow` for GC-reference tables.
@@ -261,12 +312,15 @@ unsafe fn table_grow_gc_ref(
     ));
 
     let element = VMGcRef::from_raw_u32(init_value);
-    let result = instance
-        .defined_table_grow(defined_table_index, |table| unsafe {
-            table.grow_gc_ref(store, delta, element.as_ref())
-        })?
-        .map(AllocationSize);
-    Ok(result)
+    block_on!(store, async |store| {
+        let result = instance
+            .defined_table_grow(defined_table_index, async |table| unsafe {
+                table.grow_gc_ref(store, delta, element.as_ref()).await
+            })
+            .await?
+            .map(AllocationSize);
+        Ok(result)
+    })?
 }
 
 #[cfg(feature = "stack-switching")]
@@ -287,12 +341,15 @@ unsafe fn table_grow_cont_obj(
         TableElementType::Cont,
     ));
     let element = unsafe { VMContObj::from_raw_parts(init_value_contref, init_value_revision) };
-    let result = instance
-        .defined_table_grow(defined_table_index, |table| unsafe {
-            table.grow_cont(store, delta, element)
-        })?
-        .map(AllocationSize);
-    Ok(result)
+    block_on!(store, async |store| {
+        let result = instance
+            .defined_table_grow(defined_table_index, async |table| unsafe {
+                table.grow_cont(store, delta, element).await
+            })
+            .await?
+            .map(AllocationSize);
+        Ok(result)
+    })?
 }
 
 /// Implementation of `table.fill` for `funcref`s.
@@ -411,17 +468,22 @@ fn table_init(
     dst: u64,
     src: u64,
     len: u64,
-) -> Result<(), Trap> {
+) -> Result<()> {
     let table_index = TableIndex::from_u32(table_index);
     let elem_index = ElemIndex::from_u32(elem_index);
-    instance.table_init(
-        store.store_opaque_mut(),
-        table_index,
-        elem_index,
-        dst,
-        src,
-        len,
-    )
+    block_on!(store, async |store| {
+        instance
+            .table_init(
+                store.store_opaque_mut(),
+                table_index,
+                elem_index,
+                dst,
+                src,
+                len,
+            )
+            .await?;
+        Ok(())
+    })?
 }
 
 // Implementation of `elem.drop`.
@@ -538,12 +600,9 @@ unsafe fn grow_gc_heap(
     )
     .unwrap();
 
-    unsafe {
-        store
-            .maybe_async_gc(None, Some(bytes_needed))
-            .context("failed to grow the GC heap")
-            .context(crate::Trap::AllocationTooLarge)?;
-    }
+    block_on!(store, async |store| {
+        store.gc(None, Some(bytes_needed)).await;
+    })?;
 
     // JIT code relies on the memory having grown by `bytes_needed` bytes if
     // this libcall returns successfully, so trap if we didn't grow that much.
@@ -605,18 +664,20 @@ unsafe fn gc_alloc_raw(
         err.context(e)
     })?;
 
-    let store = store.store_opaque_mut();
-    let gc_ref = unsafe {
-        store.retry_after_gc_maybe_async((), |store, ()| {
-            store
-                .unwrap_gc_store_mut()
-                .alloc_raw(header, layout)?
-                .map_err(|bytes_needed| crate::GcHeapOutOfMemory::new((), bytes_needed).into())
-        })?
-    };
+    block_on!(store, async |store| {
+        let store = store.store_opaque_mut();
+        let gc_ref = store
+            .retry_after_gc((), |store, ()| {
+                store
+                    .unwrap_gc_store_mut()
+                    .alloc_raw(header, layout)?
+                    .map_err(|bytes_needed| crate::GcHeapOutOfMemory::new((), bytes_needed).into())
+            })
+            .await?;
 
-    let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
-    Ok(raw)
+        let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
+        Ok(raw)
+    })?
 }
 
 // Intern a `funcref` into the GC heap, returning its `FuncRefTableId`.
@@ -695,59 +756,61 @@ unsafe fn array_new_data(
     use crate::ArrayType;
     use wasmtime_environ::ModuleInternedTypeIndex;
 
-    let store = store.store_opaque_mut();
-    let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
-    let data_index = DataIndex::from_u32(data_index);
+    block_on!(store, async |store| {
+        let store = store.store_opaque_mut();
+        let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
+        let data_index = DataIndex::from_u32(data_index);
 
-    // Calculate the byte-length of the data (as opposed to the element-length
-    // of the array).
-    let data_range = instance.wasm_data_range(data_index);
-    let shared_ty = instance.engine_type_index(array_type_index);
-    let array_ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
-    let one_elem_size = array_ty
-        .element_type()
-        .data_byte_size()
-        .expect("Wasm validation ensures that this type have a defined byte size");
-    let byte_len = len
-        .checked_mul(one_elem_size)
-        .and_then(|x| usize::try_from(x).ok())
-        .ok_or_else(|| Trap::MemoryOutOfBounds)?;
+        // Calculate the byte-length of the data (as opposed to the element-length
+        // of the array).
+        let data_range = instance.wasm_data_range(data_index);
+        let shared_ty = instance.engine_type_index(array_type_index);
+        let array_ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
+        let one_elem_size = array_ty
+            .element_type()
+            .data_byte_size()
+            .expect("Wasm validation ensures that this type have a defined byte size");
+        let byte_len = len
+            .checked_mul(one_elem_size)
+            .and_then(|x| usize::try_from(x).ok())
+            .ok_or_else(|| Trap::MemoryOutOfBounds)?;
 
-    // Get the data from the segment, checking bounds.
-    let src = usize::try_from(src).map_err(|_| Trap::MemoryOutOfBounds)?;
-    let data = instance
-        .wasm_data(data_range)
-        .get(src..)
-        .and_then(|d| d.get(..byte_len))
-        .ok_or_else(|| Trap::MemoryOutOfBounds)?;
+        // Get the data from the segment, checking bounds.
+        let src = usize::try_from(src).map_err(|_| Trap::MemoryOutOfBounds)?;
+        let data = instance
+            .wasm_data(data_range)
+            .get(src..)
+            .and_then(|d| d.get(..byte_len))
+            .ok_or_else(|| Trap::MemoryOutOfBounds)?;
 
-    // Allocate the (uninitialized) array.
-    let gc_layout = store
-        .engine()
-        .signatures()
-        .layout(shared_ty)
-        .expect("array types have GC layouts");
-    let array_layout = gc_layout.unwrap_array();
-    let array_ref = unsafe {
-        store.retry_after_gc_maybe_async((), |store, ()| {
-            store
-                .unwrap_gc_store_mut()
-                .alloc_uninit_array(shared_ty, len, &array_layout)?
-                .map_err(|bytes_needed| crate::GcHeapOutOfMemory::new((), bytes_needed).into())
-        })?
-    };
+        // Allocate the (uninitialized) array.
+        let gc_layout = store
+            .engine()
+            .signatures()
+            .layout(shared_ty)
+            .expect("array types have GC layouts");
+        let array_layout = gc_layout.unwrap_array();
+        let array_ref = store
+            .retry_after_gc((), |store, ()| {
+                store
+                    .unwrap_gc_store_mut()
+                    .alloc_uninit_array(shared_ty, len, &array_layout)?
+                    .map_err(|bytes_needed| crate::GcHeapOutOfMemory::new((), bytes_needed).into())
+            })
+            .await?;
 
-    // Copy the data into the array, initializing it.
-    store
-        .unwrap_gc_store_mut()
-        .gc_object_data(array_ref.as_gc_ref())
-        .copy_from_slice(array_layout.base_size, data);
+        // Copy the data into the array, initializing it.
+        store
+            .unwrap_gc_store_mut()
+            .gc_object_data(array_ref.as_gc_ref())
+            .copy_from_slice(array_layout.base_size, data);
 
-    // Return the array to Wasm!
-    let raw = store
-        .unwrap_gc_store_mut()
-        .expose_gc_ref_to_wasm(array_ref.into());
-    Ok(raw)
+        // Return the array to Wasm!
+        let raw = store
+            .unwrap_gc_store_mut()
+            .expose_gc_ref_to_wasm(array_ref.into());
+        Ok(raw)
+    })?
 }
 
 /// Implementation of the `array.init_data` instruction.
@@ -862,47 +925,53 @@ unsafe fn array_new_elem(
     let array_ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
     let pre = ArrayRefPre::_new(store, array_ty);
 
-    let mut store = OpaqueRootScope::new(&mut **store);
-    // Turn the elements into `Val`s.
-    let mut vals = Vec::with_capacity(usize::try_from(elements.len()).unwrap());
-    match elements {
-        TableSegmentElements::Functions(fs) => {
-            vals.extend(
-                fs.get(src..)
+    block_on!(store, async |store| {
+        let mut store = OpaqueRootScope::new(&mut **store);
+        // Turn the elements into `Val`s.
+        let mut vals = Vec::with_capacity(usize::try_from(elements.len()).unwrap());
+        match elements {
+            TableSegmentElements::Functions(fs) => {
+                vals.extend(
+                    fs.get(src..)
+                        .and_then(|s| s.get(..len))
+                        .ok_or_else(|| Trap::TableOutOfBounds)?
+                        .iter()
+                        .map(|f| {
+                            let raw_func_ref = instance.as_mut().get_func_ref(*f);
+                            let func = unsafe {
+                                raw_func_ref.map(|p| Func::from_vm_func_ref(store.id(), p))
+                            };
+                            Val::FuncRef(func)
+                        }),
+                );
+            }
+            TableSegmentElements::Expressions(xs) => {
+                let xs = xs
+                    .get(src..)
                     .and_then(|s| s.get(..len))
-                    .ok_or_else(|| Trap::TableOutOfBounds)?
-                    .iter()
-                    .map(|f| {
-                        let raw_func_ref = instance.as_mut().get_func_ref(*f);
-                        let func =
-                            unsafe { raw_func_ref.map(|p| Func::from_vm_func_ref(store.id(), p)) };
-                        Val::FuncRef(func)
-                    }),
-            );
+                    .ok_or_else(|| Trap::TableOutOfBounds)?;
+
+                let mut const_context = ConstEvalContext::new(instance.id());
+                let mut const_evaluator = ConstExprEvaluator::default();
+
+                for x in xs.iter() {
+                    vals.push(
+                        *const_evaluator
+                            .eval(&mut store, &mut const_context, x)
+                            .await
+                            .expect("const expr should be valid"),
+                    );
+                }
+            }
         }
-        TableSegmentElements::Expressions(xs) => {
-            let xs = xs
-                .get(src..)
-                .and_then(|s| s.get(..len))
-                .ok_or_else(|| Trap::TableOutOfBounds)?;
 
-            let mut const_context = ConstEvalContext::new(instance.id());
-            let mut const_evaluator = ConstExprEvaluator::default();
+        let array = ArrayRef::_new_fixed(&mut store, &pre, &vals).await?;
 
-            vals.extend(xs.iter().map(|x| unsafe {
-                *const_evaluator
-                    .eval(&mut store, &mut const_context, x)
-                    .expect("const expr should be valid")
-            }));
-        }
-    }
-
-    let array = unsafe { ArrayRef::new_fixed_maybe_async(&mut store, &pre, &vals)? };
-
-    let mut store = AutoAssertNoGc::new(&mut store);
-    let gc_ref = array.try_clone_gc_ref(&mut store)?;
-    let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
-    Ok(raw)
+        let mut store = AutoAssertNoGc::new(&mut store);
+        let gc_ref = array.try_clone_gc_ref(&mut store)?;
+        let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
+        Ok(raw)
+    })?
 }
 
 #[cfg(feature = "gc")]
@@ -923,77 +992,83 @@ unsafe fn array_init_elem(
     };
     use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
-    let mut store = OpaqueRootScope::new(store.store_opaque_mut());
+    block_on!(store, async |store| {
+        let mut store = OpaqueRootScope::new(store.store_opaque_mut());
 
-    // Convert the indices into their typed forms.
-    let _array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
-    let elem_index = ElemIndex::from_u32(elem_index);
+        // Convert the indices into their typed forms.
+        let _array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
+        let elem_index = ElemIndex::from_u32(elem_index);
 
-    log::trace!(
-        "array.init_elem(array={array:#x}, dst={dst}, elem_index={elem_index:?}, src={src}, len={len})",
-    );
+        log::trace!(
+            "array.init_elem(array={array:#x}, dst={dst}, elem_index={elem_index:?}, src={src}, len={len})",
+        );
 
-    // Convert the raw GC ref into a `Rooted<ArrayRef>`.
-    let array = VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference)?;
-    let array = store.unwrap_gc_store_mut().clone_gc_ref(&array);
-    let array = {
-        let mut no_gc = AutoAssertNoGc::new(&mut store);
-        ArrayRef::from_cloned_gc_ref(&mut no_gc, array)
-    };
+        // Convert the raw GC ref into a `Rooted<ArrayRef>`.
+        let array = VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference)?;
+        let array = store.unwrap_gc_store_mut().clone_gc_ref(&array);
+        let array = {
+            let mut no_gc = AutoAssertNoGc::new(&mut store);
+            ArrayRef::from_cloned_gc_ref(&mut no_gc, array)
+        };
 
-    // Bounds check the destination within the array.
-    let array_len = array._len(&store)?;
-    log::trace!("array_len = {array_len}");
-    if dst.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)? > array_len {
-        return Err(Trap::ArrayOutOfBounds.into());
-    }
+        // Bounds check the destination within the array.
+        let array_len = array._len(&store)?;
+        log::trace!("array_len = {array_len}");
+        if dst.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)? > array_len {
+            return Err(Trap::ArrayOutOfBounds.into());
+        }
 
-    // Get the passive element segment.
-    let mut storage = None;
-    let elements = instance.passive_element_segment(&mut storage, elem_index);
+        // Get the passive element segment.
+        let mut storage = None;
+        let elements = instance.passive_element_segment(&mut storage, elem_index);
 
-    // Convert array offsets into `usize`s.
-    let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
-    let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
+        // Convert array offsets into `usize`s.
+        let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
+        let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
 
-    // Turn the elements into `Val`s.
-    let vals = match elements {
-        TableSegmentElements::Functions(fs) => fs
-            .get(src..)
-            .and_then(|s| s.get(..len))
-            .ok_or_else(|| Trap::TableOutOfBounds)?
-            .iter()
-            .map(|f| {
-                let raw_func_ref = instance.as_mut().get_func_ref(*f);
-                let func = unsafe { raw_func_ref.map(|p| Func::from_vm_func_ref(store.id(), p)) };
-                Val::FuncRef(func)
-            })
-            .collect::<Vec<_>>(),
-        TableSegmentElements::Expressions(xs) => {
-            let mut const_context = ConstEvalContext::new(instance.id());
-            let mut const_evaluator = ConstExprEvaluator::default();
-
-            xs.get(src..)
+        // Turn the elements into `Val`s.
+        let vals = match elements {
+            TableSegmentElements::Functions(fs) => fs
+                .get(src..)
                 .and_then(|s| s.get(..len))
                 .ok_or_else(|| Trap::TableOutOfBounds)?
                 .iter()
-                .map(|x| unsafe {
-                    *const_evaluator
-                        .eval(&mut store, &mut const_context, x)
-                        .expect("const expr should be valid")
+                .map(|f| {
+                    let raw_func_ref = instance.as_mut().get_func_ref(*f);
+                    let func =
+                        unsafe { raw_func_ref.map(|p| Func::from_vm_func_ref(store.id(), p)) };
+                    Val::FuncRef(func)
                 })
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
+
+            TableSegmentElements::Expressions(xs) => {
+                let mut const_context = ConstEvalContext::new(instance.id());
+                let mut const_evaluator = ConstExprEvaluator::default();
+
+                let xs = xs
+                    .get(src..)
+                    .and_then(|s| s.get(..len))
+                    .ok_or_else(|| Trap::TableOutOfBounds)?;
+                let mut ret = Vec::new();
+                for x in xs {
+                    let val = const_evaluator
+                        .eval(&mut store, &mut const_context, x)
+                        .await
+                        .expect("const expr should be valid");
+                    ret.push(*val);
+                }
+                ret
+            }
+        };
+
+        // Copy the values into the array.
+        for (i, val) in vals.into_iter().enumerate() {
+            let i = u32::try_from(i).unwrap();
+            let j = dst.checked_add(i).unwrap();
+            array._set(&mut store, j, val)?;
         }
-    };
-
-    // Copy the values into the array.
-    for (i, val) in vals.into_iter().enumerate() {
-        let i = u32::try_from(i).unwrap();
-        let j = dst.checked_add(i).unwrap();
-        array._set(&mut store, j, val)?;
-    }
-
-    Ok(())
+        Ok(())
+    })?
 }
 
 // TODO: Specialize this libcall for only non-GC array elements, so we never

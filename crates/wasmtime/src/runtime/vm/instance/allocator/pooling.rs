@@ -505,6 +505,7 @@ impl PoolingInstanceAllocator {
     }
 }
 
+#[async_trait::async_trait]
 unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
     #[cfg(feature = "component-model")]
     fn validate_component_impl<'a>(
@@ -626,14 +627,35 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         self.live_core_instances.fetch_sub(1, Ordering::AcqRel);
     }
 
-    fn allocate_memory(
+    async fn allocate_memory(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_>,
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
-        self.with_flush_and_retry(|| self.memories.allocate(request, ty, tunables, memory_index))
+        // FIXME(rust-lang/rust#145127) this should ideally use a version of
+        // `with_flush_and_retry` but adapted for async closures instead of only
+        // sync closures. Right now that won't compile though so this is the
+        // manually expanded version of the method.
+        let err = match self
+            .memories
+            .allocate(request, ty, tunables, memory_index)
+            .await
+        {
+            Ok(result) => return Ok(result),
+            Err(err) => err,
+        };
+        if err.is::<PoolConcurrencyLimitError>() {
+            let queue = self.decommit_queue.lock().unwrap();
+            if self.flush_decommit_queue(queue) {
+                return self
+                    .memories
+                    .allocate(request, ty, tunables, memory_index)
+                    .await;
+            }
+        }
+        Err(err)
     }
 
     unsafe fn deallocate_memory(
@@ -671,14 +693,28 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         self.merge_or_flush(queue);
     }
 
-    fn allocate_table(
+    async fn allocate_table(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_>,
         ty: &wasmtime_environ::Table,
         tunables: &Tunables,
         _table_index: DefinedTableIndex,
     ) -> Result<(super::TableAllocationIndex, Table)> {
-        self.with_flush_and_retry(|| self.tables.allocate(request, ty, tunables))
+        // FIXME(rust-lang/rust#145127) this should ideally use a version of
+        // `with_flush_and_retry` but adapted for async closures instead of only
+        // sync closures. Right now that won't compile though so this is the
+        // manually expanded version of the method.
+        let err = match self.tables.allocate(request, ty, tunables).await {
+            Ok(result) => return Ok(result),
+            Err(err) => err,
+        };
+        if err.is::<PoolConcurrencyLimitError>() {
+            let queue = self.decommit_queue.lock().unwrap();
+            if self.flush_decommit_queue(queue) {
+                return self.tables.allocate(request, ty, tunables).await;
+            }
+        }
+        Err(err)
     }
 
     unsafe fn deallocate_table(

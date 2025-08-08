@@ -637,7 +637,7 @@ impl<'a> Instantiator<'a> {
         }
     }
 
-    fn run<T: Send>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
+    async fn run<T: Send>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         let env_component = self.component.env_component();
 
         // Before all initializers are processed configure all destructors for
@@ -717,7 +717,7 @@ impl<'a> Instantiator<'a> {
                     // if required.
 
                     let i = unsafe {
-                        crate::Instance::new_started_impl(store, module, imports.as_ref())?
+                        crate::Instance::new_started(store, module, imports.as_ref()).await?
                     };
                     self.instance_mut(store.0).push_instance_id(i.id());
                 }
@@ -994,37 +994,28 @@ impl<T: Send + 'static> InstancePre<T> {
             !store.as_context().async_support(),
             "must use async instantiation when async support is enabled"
         );
-        self.instantiate_impl(store)
+
+        // Note that `vm:assert_ready` should work as async is asserted to be
+        // disabled above.
+        vm::assert_ready(self.instantiate_async(store))
     }
+
     /// Performs the instantiation process into the store specified.
     ///
     /// Exactly like [`Self::instantiate`] except for use on async stores.
     //
     // TODO: needs more docs
-    #[cfg(feature = "async")]
     pub async fn instantiate_async(
         &self,
         mut store: impl AsContextMut<Data = T>,
-    ) -> Result<Instance>
-    where
-        T: Send,
-    {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "must use sync instantiation when async support is disabled"
-        );
-        store.on_fiber(|store| self.instantiate_impl(store)).await?
-    }
-
-    fn instantiate_impl(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+    ) -> Result<Instance> {
         let mut store = store.as_context_mut();
         store
             .engine()
             .allocator()
             .increment_component_instance_count()?;
         let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports);
-        instantiator.run(&mut store).map_err(|e| {
+        instantiator.run(&mut store).await.map_err(|e| {
             store
                 .engine()
                 .allocator()

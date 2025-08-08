@@ -230,14 +230,14 @@ pub enum Memory {
 
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
-    pub fn new_dynamic(
+    pub async fn new_dynamic(
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
         creator: &dyn RuntimeMemoryCreator,
         store: &mut dyn VMStore,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
+        let (minimum, maximum) = Self::limit_new(ty, Some(store)).await?;
         let allocation = creator.new_memory(ty, tunables, minimum, maximum)?;
 
         let memory = LocalMemory::new(ty, tunables, allocation, memory_image)?;
@@ -250,7 +250,7 @@ impl Memory {
 
     /// Create a new static (immovable) memory instance for the specified plan.
     #[cfg(feature = "pooling-allocator")]
-    pub fn new_static(
+    pub async fn new_static(
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
         base: MemoryBase,
@@ -258,7 +258,7 @@ impl Memory {
         memory_image: MemoryImageSlot,
         store: &mut dyn VMStore,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
+        let (minimum, maximum) = Self::limit_new(ty, Some(store)).await?;
         let pooled_memory = StaticMemory::new(base, base_capacity, minimum, maximum)?;
         let allocation = Box::new(pooled_memory);
 
@@ -285,7 +285,7 @@ impl Memory {
     ///
     /// Returns a tuple of the minimum size, optional maximum size, and log(page
     /// size) of the memory, all in bytes.
-    pub(crate) fn limit_new(
+    pub(crate) async fn limit_new(
         ty: &wasmtime_environ::Memory,
         store: Option<&mut dyn VMStore>,
     ) -> Result<(usize, Option<usize>)> {
@@ -331,7 +331,10 @@ impl Memory {
         // informing the limiter is lossy and may not be 100% accurate, but for
         // now the expected uses of limiter means that's ok.
         if let Some(store) = store {
-            if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
+            if !store
+                .memory_growing(0, minimum.unwrap_or(absolute_max), maximum)
+                .await?
+            {
                 bail!(
                     "memory minimum size of {} pages exceeds memory limits",
                     ty.limits.min
@@ -394,14 +397,14 @@ impl Memory {
     ///
     /// Ensure that the provided Store is not used to get access any Memory
     /// which lives inside it.
-    pub unsafe fn grow(
+    pub async unsafe fn grow(
         &mut self,
         delta_pages: u64,
         store: Option<&mut dyn VMStore>,
     ) -> Result<Option<usize>, Error> {
         let result = match self {
-            Memory::Local(mem) => mem.grow(delta_pages, store)?,
-            Memory::Shared(mem) => mem.grow(delta_pages, store)?,
+            Memory::Local(mem) => mem.grow(delta_pages, store).await?,
+            Memory::Shared(mem) => mem.grow(delta_pages)?,
         };
         match result {
             Some((old, _new)) => Ok(Some(old)),
@@ -600,7 +603,7 @@ impl LocalMemory {
     /// the underlying `grow_to` implementation.
     ///
     /// The `store` is used only for error reporting.
-    pub fn grow(
+    pub async fn grow(
         &mut self,
         delta_pages: u64,
         mut store: Option<&mut dyn VMStore>,
@@ -635,7 +638,10 @@ impl LocalMemory {
 
         // Store limiter gets first chance to reject memory_growing.
         if let Some(store) = &mut store {
-            if !store.memory_growing(old_byte_size, new_byte_size, maximum)? {
+            if !store
+                .memory_growing(old_byte_size, new_byte_size, maximum)
+                .await?
+            {
                 return Ok(None);
             }
         }
