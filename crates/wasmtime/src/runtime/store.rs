@@ -93,7 +93,7 @@ use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
-    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
+    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
@@ -1638,7 +1638,7 @@ impl StoreOpaque {
             let raw: u32 = unsafe { core::ptr::read(stack_slot) };
             log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
 
-            let gc_ref = VMGcRef::from_raw_u32(raw);
+            let gc_ref = vm::VMGcRef::from_raw_u32(raw);
             if gc_ref.is_some() {
                 unsafe {
                     gc_roots_list
@@ -2296,24 +2296,6 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
         // Put back the original behavior which was replaced by `take`.
         self.epoch_deadline_behavior = behavior;
         delta_result
-    }
-
-    #[cfg(feature = "gc")]
-    unsafe fn maybe_async_grow_or_collect_gc_heap(
-        &mut self,
-        root: Option<VMGcRef>,
-        bytes_needed: Option<u64>,
-    ) -> Result<Option<VMGcRef>> {
-        unsafe { self.inner.maybe_async_gc(root, bytes_needed) }
-    }
-
-    #[cfg(not(feature = "gc"))]
-    unsafe fn maybe_async_grow_or_collect_gc_heap(
-        &mut self,
-        root: Option<VMGcRef>,
-        _bytes_needed: Option<u64>,
-    ) -> Result<Option<VMGcRef>> {
-        Ok(root)
     }
 
     #[cfg(feature = "component-model")]
