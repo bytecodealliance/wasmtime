@@ -1,28 +1,28 @@
+use libtest_mimic::Arguments;
 use wasmtime::Result;
 
 fn main() -> Result<()> {
-    #[cfg(unix)]
-    if true {
-        use libtest_mimic::{Arguments, Trial};
+    let mut trials = Vec::new();
 
-        let mut trials = Vec::new();
-        for (name, test) in linux::TESTS {
-            trials.push(Trial::test(*name, || {
+    #[cfg(unix)]
+    if !cfg!(miri) && !cfg!(asan) {
+        for (name, test) in unix::TESTS {
+            trials.push(libtest_mimic::Trial::test(*name, || {
                 test().map_err(|e| format!("{e:?}").into())
             }));
         }
-
-        let mut args = Arguments::from_args();
-        // I'll be honest, I'm scared of threads + fork, so I'm just
-        // preemptively disabling threads here.
-        args.test_threads = Some(1);
-        libtest_mimic::run(&args, trials).exit()
     }
+    let _ = &mut trials;
 
-    Ok(())
+    let mut args = Arguments::from_args();
+    // I'll be honest, I'm scared of threads + fork, so I'm just
+    // preemptively disabling threads here.
+    args.test_threads = Some(1);
+    libtest_mimic::run(&args, trials).exit()
 }
 
-mod linux {
+#[cfg(unix)]
+mod unix {
     use rustix::fd::AsRawFd;
     use rustix::process::{Pid, WaitOptions, waitpid};
     use std::io::{self, BufRead, BufReader};
@@ -34,6 +34,8 @@ mod linux {
     ];
 
     fn smoke() -> Result<()> {
+        let mut config = Config::new();
+        config.macos_use_mach_ports(false);
         let engine = Engine::default();
         let module = Module::new(&engine, r#"(module (func (export "")))"#)?;
         run_in_child(|| {
@@ -51,6 +53,7 @@ mod linux {
         pooling.linear_memory_keep_resident(4096);
         let mut config = Config::new();
         config.allocation_strategy(pooling);
+        config.macos_use_mach_ports(false);
         let engine = Engine::new(&config)?;
         let module = Module::new(
             &engine,
