@@ -259,7 +259,6 @@ wasmtime-fiber = { path = "crates/fiber", version = "=38.0.0", package = 'wasmti
 wasmtime-jit-debug = { path = "crates/jit-debug", version = "=38.0.0", package = 'wasmtime-internal-jit-debug' }
 wasmtime-component-util = { path = "crates/component-util", version = "=38.0.0", package = 'wasmtime-internal-component-util' }
 wasmtime-component-macro = { path = "crates/component-macro", version = "=38.0.0", package = 'wasmtime-internal-component-macro' }
-wasmtime-asm-macros = { path = "crates/asm-macros", version = "=38.0.0", package = 'wasmtime-internal-asm-macros' }
 wasmtime-versioned-export-macros = { path = "crates/versioned-export-macros", version = "=38.0.0", package = 'wasmtime-internal-versioned-export-macros' }
 wasmtime-slab = { path = "crates/slab", version = "=38.0.0", package = 'wasmtime-internal-slab' }
 wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=38.0.0", package = 'wasmtime-internal-jit-icache-coherence' }
