@@ -775,7 +775,7 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
 /// case -- used to test below that gc happens reasonably soon and eventually.
 pub fn table_ops(
     mut fuzz_config: generators::Config,
-    ops: generators::table_ops::TableOps,
+    mut ops: generators::table_ops::TableOps,
 ) -> Result<usize> {
     let expected_drops = Arc::new(AtomicUsize::new(0));
     let num_dropped = Arc::new(AtomicUsize::new(0));
@@ -922,9 +922,9 @@ pub fn table_ops(
 
             log::info!(
                 "table_ops: begin allocating {} externref arguments",
-                ops.num_globals
+                ops.limits.num_globals
             );
-            let args: Vec<_> = (0..ops.num_params)
+            let args: Vec<_> = (0..ops.limits.num_params)
                 .map(|_| {
                     Ok(Val::ExternRef(Some(ExternRef::new(
                         &mut scope,
@@ -934,7 +934,7 @@ pub fn table_ops(
                 .collect::<Result<_>>()?;
             log::info!(
                 "table_ops: end allocating {} externref arguments",
-                ops.num_globals
+                ops.limits.num_globals
             );
 
             // The generated function should always return a trap. The only two
