@@ -552,8 +552,10 @@ impl AddressTransform {
     }
 
     fn translate_raw(&self, addr: u64) -> Option<(usize, GeneratedAddress)> {
-        if addr == 0 {
-            // It's normally 0 for debug info without the linked code.
+        const TOMBSTONE: u64 = u32::MAX as u64;
+        if addr == 0 || addr == TOMBSTONE {
+            // Addresses for unlinked code may be left as 0 or replaced
+            // with -1, depending on the linker used.
             return None;
         }
         if let Some(func) = self.find_func(addr) {
