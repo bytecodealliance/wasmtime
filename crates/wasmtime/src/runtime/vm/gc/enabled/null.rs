@@ -219,7 +219,7 @@ unsafe impl GcHeap for NullHeap {
         self.no_gc_count -= 1;
     }
 
-    unsafe fn take_memory(&mut self) -> crate::vm::Memory {
+    fn take_memory(&mut self) -> crate::vm::Memory {
         debug_assert!(self.is_attached());
         self.memory.take().unwrap()
     }

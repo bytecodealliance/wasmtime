@@ -423,10 +423,11 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
 
     /// Take the underlying memory storage out of this GC heap.
     ///
-    /// # Safety
+    /// # Panics
     ///
-    /// You may not use this GC heap again until after you replace the memory.
-    unsafe fn take_memory(&mut self) -> crate::vm::Memory;
+    /// If this GC heap is used while the memory is taken then a panic will
+    /// occur. This will also panic if the memory is already taken.
+    fn take_memory(&mut self) -> crate::vm::Memory;
 
     /// Replace this GC heap's underlying memory storage.
     ///
