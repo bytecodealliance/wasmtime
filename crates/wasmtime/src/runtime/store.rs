@@ -93,7 +93,7 @@ use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
-    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
+    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
@@ -1638,7 +1638,7 @@ impl StoreOpaque {
             let raw: u32 = unsafe { core::ptr::read(stack_slot) };
             log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
 
-            let gc_ref = VMGcRef::from_raw_u32(raw);
+            let gc_ref = vm::VMGcRef::from_raw_u32(raw);
             if gc_ref.is_some() {
                 unsafe {
                     gc_roots_list
