@@ -492,6 +492,7 @@ impl From<Advice> for system_interface::fs::Advice {
     }
 }
 
+#[derive(Clone)]
 pub enum Descriptor {
     File(File),
     Dir(Dir),

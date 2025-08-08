@@ -1,6 +1,6 @@
 mod host;
 
-use crate::p3::bindings::random;
+use crate::p3::bindings::random::{insecure, insecure_seed, random};
 use crate::random::{WasiRandom, WasiRandomView};
 use wasmtime::component::Linker;
 
@@ -55,8 +55,8 @@ pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiRandomView + 'static,
 {
-    random::random::add_to_linker::<_, WasiRandom>(linker, T::random)?;
-    random::insecure::add_to_linker::<_, WasiRandom>(linker, T::random)?;
-    random::insecure_seed::add_to_linker::<_, WasiRandom>(linker, T::random)?;
+    random::add_to_linker::<_, WasiRandom>(linker, T::random)?;
+    insecure::add_to_linker::<_, WasiRandom>(linker, T::random)?;
+    insecure_seed::add_to_linker::<_, WasiRandom>(linker, T::random)?;
     Ok(())
 }
