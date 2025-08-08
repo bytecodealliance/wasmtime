@@ -4483,7 +4483,6 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "tempfile",
- "wasi-common",
  "wasm-encoder 0.236.0",
  "wasm-wave",
  "wasmparser 0.236.0",

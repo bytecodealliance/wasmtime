@@ -100,7 +100,6 @@ env_logger = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
-wasi-common = { path = "../wasi-common", default-features = true }
 libtest-mimic = { workspace = true }
 cranelift-native = { workspace = true }
 wasmtime-test-util = { workspace = true }
