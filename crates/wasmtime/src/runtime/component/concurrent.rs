@@ -2500,7 +2500,7 @@ impl Instance {
     /// it an `&Accessor<T>`.
     ///
     /// See the `Accessor` documentation for details.
-    pub(crate) fn wrap_call<T: 'static, F, R>(
+    pub(crate) fn wrap_call<T, F, R>(
         self,
         store: StoreContextMut<T>,
         closure: F,

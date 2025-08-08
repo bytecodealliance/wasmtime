@@ -40,7 +40,7 @@ enum HostResult<T> {
 }
 
 impl HostFunc {
-    fn from_canonical<T: 'static, F, P, R>(func: F) -> Arc<HostFunc>
+    fn from_canonical<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
         F: Fn(StoreContextMut<'_, T>, Instance, P) -> HostResult<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
@@ -55,8 +55,9 @@ impl HostFunc {
         })
     }
 
-    pub(crate) fn from_closure<T: 'static, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn from_closure<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
+        T: 'static,
         F: Fn(StoreContextMut<T>, P) -> Result<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
@@ -67,7 +68,7 @@ impl HostFunc {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn from_concurrent<T: 'static, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn from_concurrent<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
         T: 'static,
         F: Fn(&Accessor<T>, P) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
@@ -86,7 +87,7 @@ impl HostFunc {
         })
     }
 
-    extern "C" fn entrypoint<T: 'static, F, P, R>(
+    extern "C" fn entrypoint<T, F, P, R>(
         cx: NonNull<VMOpaqueContext>,
         data: NonNull<u8>,
         ty: u32,
@@ -115,7 +116,7 @@ impl HostFunc {
         }
     }
 
-    fn new_dynamic_canonical<T: 'static, F>(func: F) -> Arc<HostFunc>
+    fn new_dynamic_canonical<T, F>(func: F) -> Arc<HostFunc>
     where
         F: Fn(
                 StoreContextMut<'_, T>,
@@ -152,7 +153,7 @@ impl HostFunc {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn new_dynamic_concurrent<T: 'static, F>(func: F) -> Arc<HostFunc>
+    pub(crate) fn new_dynamic_concurrent<T, F>(func: F) -> Arc<HostFunc>
     where
         T: 'static,
         F: for<'a> Fn(
@@ -922,7 +923,7 @@ pub(crate) fn validate_inbounds_dynamic(
     Ok(ptr)
 }
 
-extern "C" fn dynamic_entrypoint<T: 'static, F>(
+extern "C" fn dynamic_entrypoint<T, F>(
     cx: NonNull<VMOpaqueContext>,
     data: NonNull<u8>,
     ty: u32,
