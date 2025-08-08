@@ -36,7 +36,7 @@ mod unix {
     fn smoke() -> Result<()> {
         let mut config = Config::new();
         config.macos_use_mach_ports(false);
-        let engine = Engine::default();
+        let engine = Engine::new(&config)?;
         let module = Module::new(&engine, r#"(module (func (export "")))"#)?;
         run_in_child(|| {
             let mut store = Store::new(&engine, ());
