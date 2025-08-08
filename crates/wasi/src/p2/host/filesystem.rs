@@ -633,10 +633,8 @@ impl From<crate::filesystem::DescriptorType> for types::DescriptorType {
             crate::filesystem::DescriptorType::BlockDevice => Self::BlockDevice,
             crate::filesystem::DescriptorType::CharacterDevice => Self::CharacterDevice,
             crate::filesystem::DescriptorType::Directory => Self::Directory,
-            crate::filesystem::DescriptorType::Fifo => Self::Fifo,
             crate::filesystem::DescriptorType::SymbolicLink => Self::SymbolicLink,
             crate::filesystem::DescriptorType::RegularFile => Self::RegularFile,
-            crate::filesystem::DescriptorType::Socket => Self::Socket,
         }
     }
 }

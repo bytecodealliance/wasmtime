@@ -94,8 +94,6 @@ impl From<crate::filesystem::ErrorCode> for types::ErrorCode {
             crate::filesystem::ErrorCode::Already => Self::Already,
             crate::filesystem::ErrorCode::BadDescriptor => Self::BadDescriptor,
             crate::filesystem::ErrorCode::Busy => Self::Busy,
-            crate::filesystem::ErrorCode::Deadlock => Self::Deadlock,
-            crate::filesystem::ErrorCode::Quota => Self::Quota,
             crate::filesystem::ErrorCode::Exist => Self::Exist,
             crate::filesystem::ErrorCode::FileTooLarge => Self::FileTooLarge,
             crate::filesystem::ErrorCode::IllegalByteSequence => Self::IllegalByteSequence,
@@ -106,26 +104,17 @@ impl From<crate::filesystem::ErrorCode> for types::ErrorCode {
             crate::filesystem::ErrorCode::IsDirectory => Self::IsDirectory,
             crate::filesystem::ErrorCode::Loop => Self::Loop,
             crate::filesystem::ErrorCode::TooManyLinks => Self::TooManyLinks,
-            crate::filesystem::ErrorCode::MessageSize => Self::MessageSize,
             crate::filesystem::ErrorCode::NameTooLong => Self::NameTooLong,
-            crate::filesystem::ErrorCode::NoDevice => Self::NoDevice,
             crate::filesystem::ErrorCode::NoEntry => Self::NoEntry,
-            crate::filesystem::ErrorCode::NoLock => Self::NoLock,
             crate::filesystem::ErrorCode::InsufficientMemory => Self::InsufficientMemory,
             crate::filesystem::ErrorCode::InsufficientSpace => Self::InsufficientSpace,
             crate::filesystem::ErrorCode::NotDirectory => Self::NotDirectory,
             crate::filesystem::ErrorCode::NotEmpty => Self::NotEmpty,
-            crate::filesystem::ErrorCode::NotRecoverable => Self::NotRecoverable,
             crate::filesystem::ErrorCode::Unsupported => Self::Unsupported,
-            crate::filesystem::ErrorCode::NoTty => Self::NoTty,
-            crate::filesystem::ErrorCode::NoSuchDevice => Self::NoSuchDevice,
             crate::filesystem::ErrorCode::Overflow => Self::Overflow,
             crate::filesystem::ErrorCode::NotPermitted => Self::NotPermitted,
             crate::filesystem::ErrorCode::Pipe => Self::Pipe,
-            crate::filesystem::ErrorCode::ReadOnly => Self::ReadOnly,
             crate::filesystem::ErrorCode::InvalidSeek => Self::InvalidSeek,
-            crate::filesystem::ErrorCode::TextFileBusy => Self::TextFileBusy,
-            crate::filesystem::ErrorCode::CrossDevice => Self::CrossDevice,
         }
     }
 }
@@ -293,10 +282,8 @@ impl From<crate::filesystem::DescriptorType> for types::DescriptorType {
             crate::filesystem::DescriptorType::BlockDevice => Self::BlockDevice,
             crate::filesystem::DescriptorType::CharacterDevice => Self::CharacterDevice,
             crate::filesystem::DescriptorType::Directory => Self::Directory,
-            crate::filesystem::DescriptorType::Fifo => Self::Fifo,
             crate::filesystem::DescriptorType::SymbolicLink => Self::SymbolicLink,
             crate::filesystem::DescriptorType::RegularFile => Self::RegularFile,
-            crate::filesystem::DescriptorType::Socket => Self::Socket,
         }
     }
 }

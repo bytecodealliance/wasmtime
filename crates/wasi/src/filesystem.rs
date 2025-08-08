@@ -145,10 +145,6 @@ pub(crate) enum ErrorCode {
     BadDescriptor,
     /// Device or resource busy, similar to `EBUSY` in POSIX.
     Busy,
-    /// Resource deadlock would occur, similar to `EDEADLK` in POSIX.
-    Deadlock,
-    /// Storage quota exceeded, similar to `EDQUOT` in POSIX.
-    Quota,
     /// File exists, similar to `EEXIST` in POSIX.
     Exist,
     /// File too large, similar to `EFBIG` in POSIX.
@@ -169,16 +165,10 @@ pub(crate) enum ErrorCode {
     Loop,
     /// Too many links, similar to `EMLINK` in POSIX.
     TooManyLinks,
-    /// Message too large, similar to `EMSGSIZE` in POSIX.
-    MessageSize,
     /// Filename too long, similar to `ENAMETOOLONG` in POSIX.
     NameTooLong,
-    /// No such device, similar to `ENODEV` in POSIX.
-    NoDevice,
     /// No such file or directory, similar to `ENOENT` in POSIX.
     NoEntry,
-    /// No locks available, similar to `ENOLCK` in POSIX.
-    NoLock,
     /// Not enough space, similar to `ENOMEM` in POSIX.
     InsufficientMemory,
     /// No space left on device, similar to `ENOSPC` in POSIX.
@@ -187,28 +177,16 @@ pub(crate) enum ErrorCode {
     NotDirectory,
     /// Directory not empty, similar to `ENOTEMPTY` in POSIX.
     NotEmpty,
-    /// State not recoverable, similar to `ENOTRECOVERABLE` in POSIX.
-    NotRecoverable,
     /// Not supported, similar to `ENOTSUP` and `ENOSYS` in POSIX.
     Unsupported,
-    /// Inappropriate I/O control operation, similar to `ENOTTY` in POSIX.
-    NoTty,
-    /// No such device or address, similar to `ENXIO` in POSIX.
-    NoSuchDevice,
     /// Value too large to be stored in data type, similar to `EOVERFLOW` in POSIX.
     Overflow,
     /// Operation not permitted, similar to `EPERM` in POSIX.
     NotPermitted,
     /// Broken pipe, similar to `EPIPE` in POSIX.
     Pipe,
-    /// Read-only file system, similar to `EROFS` in POSIX.
-    ReadOnly,
     /// Invalid seek, similar to `ESPIPE` in POSIX.
     InvalidSeek,
-    /// Text file busy, similar to `ETXTBSY` in POSIX.
-    TextFileBusy,
-    /// Cross-device link, similar to `EXDEV` in POSIX.
-    CrossDevice,
 }
 
 /// When setting a timestamp, this gives the value to set it to.
@@ -258,14 +236,10 @@ pub(crate) enum DescriptorType {
     CharacterDevice,
     /// The descriptor refers to a directory inode.
     Directory,
-    /// The descriptor refers to a named pipe.
-    Fifo,
     /// The file refers to a symbolic link inode.
     SymbolicLink,
     /// The descriptor refers to a regular file inode.
     RegularFile,
-    /// The descriptor refers to a socket.
-    Socket,
 }
 
 impl From<cap_std::fs::FileType> for DescriptorType {
@@ -510,20 +484,6 @@ impl Descriptor {
         match self {
             Descriptor::Dir(d) => Ok(d),
             Descriptor::File(_) => Err(ErrorCode::NotDirectory),
-        }
-    }
-
-    pub(crate) fn is_file(&self) -> bool {
-        match self {
-            Descriptor::File(_) => true,
-            Descriptor::Dir(_) => false,
-        }
-    }
-
-    pub(crate) fn is_dir(&self) -> bool {
-        match self {
-            Descriptor::File(_) => false,
-            Descriptor::Dir(_) => true,
         }
     }
 
