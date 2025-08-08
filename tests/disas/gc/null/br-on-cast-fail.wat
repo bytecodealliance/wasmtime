@@ -27,10 +27,7 @@
 ;;     gv6 = load.i64 notrap aligned gv4+32
 ;;     sig0 = (i64 vmctx, i32, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) tail
-;;     sig2 = (i64 vmctx, i64) tail
 ;;     fn0 = colocated u1:35 sig0
-;;     fn1 = u0:0 sig1
-;;     fn2 = u0:1 sig2
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -81,6 +78,6 @@
 ;;                                 block2:
 ;; @0038                               v30 = load.i64 notrap aligned readonly can_move v0+72
 ;; @0038                               v29 = load.i64 notrap aligned readonly can_move v0+88
-;; @0038                               call_indirect sig2, v30(v29, v0)
+;; @0038                               call_indirect sig1, v30(v29, v0)
 ;; @003a                               return
 ;; }

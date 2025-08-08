@@ -22,11 +22,11 @@ use smallvec::SmallVec;
 use std::mem;
 use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
-    BuiltinFunctionIndex, DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncIndex, GlobalIndex,
-    IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation,
-    ModuleTypesBuilder, PtrSize, Table, TableIndex, TripleExt, Tunables, TypeConvert, TypeIndex,
-    VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType,
-    WasmResult, WasmValType,
+    BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
+    FuncIndex, GlobalIndex, IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex,
+    ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, TripleExt, Tunables,
+    TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType,
+    WasmHeapType, WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 use wasmtime_math::f64_cvt_to_int_bounds;
@@ -1176,9 +1176,14 @@ pub(crate) struct WasmEntities {
     /// `ir::SigRef` in the Cranelift function we are building.
     pub(crate) sig_refs: SecondaryMap<ModuleInternedTypeIndex, PackedOption<ir::SigRef>>,
 
-    /// Map from a Wasm function index to its associated function reference in
-    /// the Cranelift function we are building.
-    pub(crate) func_refs: SecondaryMap<FuncIndex, PackedOption<ir::FuncRef>>,
+    /// Map from a defined Wasm function index to its associated function
+    /// reference in the Cranelift function we are building.
+    pub(crate) defined_func_refs: SecondaryMap<DefinedFuncIndex, PackedOption<ir::FuncRef>>,
+
+    /// Map from an imported Wasm function index for which we statically know
+    /// which function will always be used to satisfy that import to its
+    /// associated function reference in the Cranelift function we are building.
+    pub(crate) imported_func_refs: SecondaryMap<FuncIndex, PackedOption<ir::FuncRef>>,
 
     /// Map from a Wasm table index to its associated implementation in the
     /// Cranelift function we are building.
@@ -1207,7 +1212,8 @@ impl FuncEnvironment<'_> {
         get_or_create_global(globals) : make_global : GlobalIndex => GlobalVariable;
         get_or_create_heap(memories) : make_heap : MemoryIndex => Heap;
         get_or_create_interned_sig_ref(sig_refs) : make_sig_ref : ModuleInternedTypeIndex => ir::SigRef;
-        get_or_create_func_ref(func_refs) : make_func_ref : FuncIndex => ir::FuncRef;
+        get_or_create_defined_func_ref(defined_func_refs) : make_defined_func_ref : DefinedFuncIndex => ir::FuncRef;
+        get_or_create_imported_func_ref(imported_func_refs) : make_imported_func_ref : FuncIndex => ir::FuncRef;
         get_or_create_table(tables) : make_table : TableIndex => TableData;
     }
 
@@ -1253,39 +1259,48 @@ impl FuncEnvironment<'_> {
         sig_ref
     }
 
-    fn make_func_ref(&mut self, func: &mut ir::Function, index: FuncIndex) -> ir::FuncRef {
-        let sig = self.module.functions[index]
+    fn make_defined_func_ref(
+        &mut self,
+        func: &mut ir::Function,
+        def_func_index: DefinedFuncIndex,
+    ) -> ir::FuncRef {
+        let func_index = self.module.func_index(def_func_index);
+        let ty = self.module.functions[func_index]
             .signature
             .unwrap_module_type_index();
-        let wasm_func_ty = self.types[sig].unwrap_func();
-        let sig = crate::wasm_call_signature(self.isa, wasm_func_ty, &self.tunables);
-        let signature = func.import_signature(sig);
-        self.sig_ref_to_ty[signature] = Some(wasm_func_ty);
+        let signature = self.get_or_create_interned_sig_ref(func, ty);
         let name =
             ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
                 namespace: crate::NS_WASM_FUNC,
-                index: index.as_u32(),
+                index: func_index.as_u32(),
             }));
         func.import_function(ir::ExtFuncData {
             name,
             signature,
+            colocated: true,
+        })
+    }
 
-            // the value of this flag determines the codegen for calls to this
-            // function. if this flag is `false` then absolute relocations will
-            // be generated for references to the function, which requires
-            // load-time relocation resolution. if this flag is set to `true`
-            // then relative relocations are emitted which can be resolved at
-            // object-link-time, just after all functions are compiled.
-            //
-            // this flag is set to `true` for functions defined in the object
-            // we'll be defining in this compilation unit, or everything local
-            // to the wasm module. this means that between functions in a wasm
-            // module there's relative calls encoded. all calls external to a
-            // wasm module (e.g. imports or libcalls) are either encoded through
-            // the `vmcontext` as relative jumps (hence no relocations) or
-            // they're libcalls with absolute relocations.
-            colocated: self.module.defined_func_index(index).is_some()
-                || self.translation.known_imported_functions[index].is_some(),
+    fn make_imported_func_ref(
+        &mut self,
+        func: &mut ir::Function,
+        func_index: FuncIndex,
+    ) -> ir::FuncRef {
+        assert!(self.module.is_imported_function(func_index));
+        assert!(self.translation.known_imported_functions[func_index].is_some());
+        let ty = self.module.functions[func_index]
+            .signature
+            .unwrap_module_type_index();
+        let signature = self.get_or_create_interned_sig_ref(func, ty);
+        let name =
+            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
+                namespace: crate::NS_WASM_FUNC,
+                index: func_index.as_u32(),
+            }));
+        func.import_function(ir::ExtFuncData {
+            name,
+            signature,
+            colocated: true,
         })
     }
 
@@ -1628,11 +1643,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         }
     }
 
-    /// Do a direct call to the given callee function.
+    /// Do a Wasm-level direct call to the given callee function.
     pub fn direct_call(
         mut self,
         callee_index: FuncIndex,
-        callee: ir::FuncRef,
+        sig_ref: ir::SigRef,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
         let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
@@ -1643,7 +1658,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             .unwrap();
 
         // Handle direct calls to locally-defined functions.
-        if !self.env.module.is_imported_function(callee_index) {
+        if let Some(def_func_index) = self.env.module.defined_func_index(callee_index) {
             // First append the callee vmctx address, which is the same as the caller vmctx in
             // this case.
             real_call_args.push(caller_vmctx);
@@ -1655,13 +1670,15 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             real_call_args.extend_from_slice(call_args);
 
             // Finally, make the direct call!
+            let callee = self
+                .env
+                .get_or_create_defined_func_ref(self.builder.func, def_func_index);
             return Ok(self.direct_call_inst(callee, &real_call_args));
         }
 
         // Handle direct calls to imported functions. We use an indirect call
         // so that we don't have to patch the code at runtime.
         let pointer_type = self.env.pointer_type();
-        let sig_ref = self.builder.func.dfg.ext_funcs[callee].signature;
         let vmctx = self.env.vmctx(self.builder.func);
         let base = self.builder.ins().global_value(pointer_type, vmctx);
 
@@ -1694,6 +1711,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // pass the callee's vmctx that we just loaded, not our own). Otherwise,
         // we really do an indirect call.
         if self.env.translation.known_imported_functions[callee_index].is_some() {
+            let callee = self
+                .env
+                .get_or_create_imported_func_ref(self.builder.func, callee_index);
             Ok(self.direct_call_inst(callee, &real_call_args))
         } else {
             let func_addr = self
@@ -1704,7 +1724,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         }
     }
 
-    /// Do an indirect call through the given funcref table.
+    /// Do a Wasm-level indirect call through the given funcref table.
     pub fn indirect_call(
         mut self,
         features: &WasmFeatures,
@@ -2773,10 +2793,10 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
         callee_index: FuncIndex,
-        callee: ir::FuncRef,
+        sig_ref: ir::SigRef,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        Call::new(builder, self).direct_call(callee_index, callee, call_args)
+        Call::new(builder, self).direct_call(callee_index, sig_ref, call_args)
     }
 
     pub fn translate_call_ref(
@@ -2793,10 +2813,10 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
         callee_index: FuncIndex,
-        callee: ir::FuncRef,
+        sig_ref: ir::SigRef,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self).direct_call(callee_index, callee, call_args)?;
+        Call::new_tail(builder, self).direct_call(callee_index, sig_ref, call_args)?;
         Ok(())
     }
 
