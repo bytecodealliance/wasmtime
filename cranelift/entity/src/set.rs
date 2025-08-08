@@ -23,9 +23,9 @@ where
     unused: PhantomData<K>,
 }
 
-impl<K: fmt::Debug> fmt::Debug for EntitySet<K>
+impl<K> fmt::Debug for EntitySet<K>
 where
-    K: EntityRef,
+    K: fmt::Debug + EntityRef,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_set().entries(self.keys()).finish()
