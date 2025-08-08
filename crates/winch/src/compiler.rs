@@ -7,9 +7,8 @@ use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift::CompiledFunction;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, CompileError, CompiledFunctionBody, DefinedFuncIndex, FunctionBodyData,
-    FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, RelocationTarget,
-    StaticModuleIndex, Tunables, VMOffsets,
+    CompileError, CompiledFunctionBody, DefinedFuncIndex, FuncKey, FunctionBodyData, FunctionLoc,
+    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, StaticModuleIndex, Tunables, VMOffsets,
 };
 use winch_codegen::{BuiltinFunctions, CallingConvention, TargetIsa};
 
@@ -96,12 +95,15 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_function(
         &self,
         translation: &ModuleTranslation<'_>,
-        index: DefinedFuncIndex,
+        key: FuncKey,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
         _symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
-        let index = translation.module.func_index(index);
+        let (module_index, def_func_index) = key.unwrap_defined_wasm_function();
+        debug_assert_eq!(module_index, translation.module_index);
+
+        let index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[index]
             .signature
             .unwrap_module_type_index();
@@ -148,27 +150,28 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
-        index: DefinedFuncIndex,
+        key: FuncKey,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         self.trampolines
-            .compile_array_to_wasm_trampoline(translation, types, index, symbol)
+            .compile_array_to_wasm_trampoline(translation, types, key, symbol)
     }
 
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &wasmtime_environ::WasmFuncType,
+        key: FuncKey,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         self.trampolines
-            .compile_wasm_to_array_trampoline(wasm_func_ty, symbol)
+            .compile_wasm_to_array_trampoline(wasm_func_ty, key, symbol)
     }
 
     fn append_code(
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send + Sync>)],
-        resolve_reloc: &dyn Fn(usize, wasmtime_environ::RelocationTarget) -> usize,
+        resolve_reloc: &dyn Fn(usize, wasmtime_environ::FuncKey) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         self.trampolines.append_code(obj, funcs, resolve_reloc)
     }
@@ -214,16 +217,16 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn compile_wasm_to_builtin(
         &self,
-        index: BuiltinFunctionIndex,
+        key: FuncKey,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
-        self.trampolines.compile_wasm_to_builtin(index, symbol)
+        self.trampolines.compile_wasm_to_builtin(key, symbol)
     }
 
     fn compiled_function_relocation_targets<'a>(
         &'a self,
         func: &'a dyn Any,
-    ) -> Box<dyn Iterator<Item = RelocationTarget> + 'a> {
+    ) -> Box<dyn Iterator<Item = FuncKey> + 'a> {
         self.trampolines.compiled_function_relocation_targets(func)
     }
 }
@@ -240,7 +243,7 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
     fn compile_function(
         &self,
         translation: &ModuleTranslation<'_>,
-        index: DefinedFuncIndex,
+        key: FuncKey,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
         symbol: &str,
@@ -248,7 +251,7 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
         let input = data.body.clone();
         let mut body = self
             .0
-            .compile_function(translation, index, data, types, symbol)?;
+            .compile_function(translation, key, data, types, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
             c.finish_compiling(&mut body, Some(input), symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;
@@ -260,12 +263,12 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
         &self,
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
-        index: DefinedFuncIndex,
+        key: FuncKey,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
-        let mut body =
-            self.0
-                .compile_array_to_wasm_trampoline(translation, types, index, symbol)?;
+        let mut body = self
+            .0
+            .compile_array_to_wasm_trampoline(translation, types, key, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
             c.finish_compiling(&mut body, None, symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;
@@ -276,11 +279,12 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &wasmtime_environ::WasmFuncType,
+        key: FuncKey,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let mut body = self
             .0
-            .compile_wasm_to_array_trampoline(wasm_func_ty, symbol)?;
+            .compile_wasm_to_array_trampoline(wasm_func_ty, key, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
             c.finish_compiling(&mut body, None, symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;
@@ -290,10 +294,10 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
 
     fn compile_wasm_to_builtin(
         &self,
-        index: BuiltinFunctionIndex,
+        key: FuncKey,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
-        let mut body = self.0.compile_wasm_to_builtin(index, symbol)?;
+        let mut body = self.0.compile_wasm_to_builtin(key, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
             c.finish_compiling(&mut body, None, symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;
@@ -304,7 +308,7 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
     fn compiled_function_relocation_targets<'a>(
         &'a self,
         func: &'a dyn Any,
-    ) -> Box<dyn Iterator<Item = RelocationTarget> + 'a> {
+    ) -> Box<dyn Iterator<Item = FuncKey> + 'a> {
         self.0.compiled_function_relocation_targets(func)
     }
 
@@ -312,7 +316,7 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send + Sync>)],
-        resolve_reloc: &dyn Fn(usize, RelocationTarget) -> usize,
+        resolve_reloc: &dyn Fn(usize, FuncKey) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         self.0.append_code(obj, funcs, resolve_reloc)
     }
@@ -360,14 +364,14 @@ impl wasmtime_environ::component::ComponentCompiler for NoInlineCompiler {
         &self,
         component: &wasmtime_environ::component::ComponentTranslation,
         types: &wasmtime_environ::component::ComponentTypesBuilder,
-        trampoline: wasmtime_environ::component::TrampolineIndex,
+        key: FuncKey,
         tunables: &Tunables,
         symbol: &str,
     ) -> Result<wasmtime_environ::component::AllCallFunc<CompiledFunctionBody>> {
         let mut body = self
             .0
             .component_compiler()
-            .compile_trampoline(component, types, trampoline, tunables, symbol)?;
+            .compile_trampoline(component, types, key, tunables, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
             c.finish_compiling(&mut body.array_call, None, symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;

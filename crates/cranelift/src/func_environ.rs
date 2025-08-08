@@ -23,10 +23,10 @@ use std::mem;
 use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
-    FuncIndex, GlobalIndex, IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex,
-    ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, TripleExt, Tunables,
-    TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType,
-    WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    FuncIndex, FuncKey, GlobalIndex, IndexType, Memory, MemoryIndex, Module,
+    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex,
+    TripleExt, Tunables, TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType,
+    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 use wasmtime_math::f64_cvt_to_int_bounds;
@@ -53,17 +53,17 @@ impl BuiltinFunctions {
         }
     }
 
-    fn load_builtin(&mut self, func: &mut Function, index: BuiltinFunctionIndex) -> ir::FuncRef {
-        let cache = &mut self.builtins[index.index() as usize];
+    fn load_builtin(&mut self, func: &mut Function, builtin: BuiltinFunctionIndex) -> ir::FuncRef {
+        let cache = &mut self.builtins[builtin.index() as usize];
         if let Some(f) = cache {
             return *f;
         }
-        let signature = func.import_signature(self.types.wasm_signature(index));
-        let name =
-            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
-                namespace: crate::NS_WASMTIME_BUILTIN,
-                index: index.index(),
-            }));
+        let signature = func.import_signature(self.types.wasm_signature(builtin));
+        let key = FuncKey::WasmToBuiltinTrampoline(builtin);
+        let (namespace, index) = key.into_raw_parts();
+        let name = ir::ExternalName::User(
+            func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
+        );
         let f = func.import_function(ir::ExtFuncData {
             name,
             signature,
@@ -1265,15 +1265,18 @@ impl FuncEnvironment<'_> {
         def_func_index: DefinedFuncIndex,
     ) -> ir::FuncRef {
         let func_index = self.module.func_index(def_func_index);
+
         let ty = self.module.functions[func_index]
             .signature
             .unwrap_module_type_index();
         let signature = self.get_or_create_interned_sig_ref(func, ty);
-        let name =
-            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
-                namespace: crate::NS_WASM_FUNC,
-                index: func_index.as_u32(),
-            }));
+
+        let key = FuncKey::DefinedWasmFunction(self.translation.module_index, def_func_index);
+        let (namespace, index) = key.into_raw_parts();
+        let name = ir::ExternalName::User(
+            func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
+        );
+
         func.import_function(ir::ExtFuncData {
             name,
             signature,
@@ -1288,15 +1291,20 @@ impl FuncEnvironment<'_> {
     ) -> ir::FuncRef {
         assert!(self.module.is_imported_function(func_index));
         assert!(self.translation.known_imported_functions[func_index].is_some());
+
         let ty = self.module.functions[func_index]
             .signature
             .unwrap_module_type_index();
         let signature = self.get_or_create_interned_sig_ref(func, ty);
-        let name =
-            ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
-                namespace: crate::NS_WASM_FUNC,
-                index: func_index.as_u32(),
-            }));
+
+        let (module, def_func_index) =
+            self.translation.known_imported_functions[func_index].unwrap();
+        let key = FuncKey::DefinedWasmFunction(module, def_func_index);
+        let (namespace, index) = key.into_raw_parts();
+        let name = ir::ExternalName::User(
+            func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
+        );
+
         func.import_function(ir::ExtFuncData {
             name,
             signature,

@@ -445,7 +445,7 @@ fn inline_one(
     // terminator, so do a quick pass over the inlined blocks and remove any
     // empty blocks from the caller's layout.
     for block in entity_map.iter_inlined_blocks(func) {
-        if func.layout.first_inst(block).is_none() {
+        if func.layout.is_block_inserted(block) && func.layout.first_inst(block).is_none() {
             func.layout.remove_block(block);
         }
     }

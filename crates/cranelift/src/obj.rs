@@ -13,7 +13,7 @@
 //! function body, the imported wasm function do not. The trampolines symbol
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
-use crate::{CompiledFunction, RelocationTarget};
+use crate::CompiledFunction;
 use anyhow::Result;
 use cranelift_codegen::TextSectionBuilder;
 use cranelift_codegen::isa::unwind::{UnwindInfo, systemv};
@@ -23,8 +23,8 @@ use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
 use object::{Architecture, SectionFlags, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::ops::Range;
-use wasmtime_environ::obj;
 use wasmtime_environ::{Compiler, TripleExt};
+use wasmtime_environ::{FuncKey, obj};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -120,7 +120,7 @@ impl<'a> ModuleTextBuilder<'a> {
         &mut self,
         name: &str,
         compiled_func: &'a CompiledFunction,
-        resolve_reloc_target: impl Fn(wasmtime_environ::RelocationTarget) -> usize,
+        resolve_reloc_target: impl Fn(wasmtime_environ::FuncKey) -> usize,
     ) -> (SymbolId, Range<u64>) {
         let body = compiled_func.buffer.data();
         let alignment = compiled_func.alignment;
@@ -146,65 +146,49 @@ impl<'a> ModuleTextBuilder<'a> {
 
         for r in compiled_func.relocations() {
             let reloc_offset = off + u64::from(r.offset);
-            match r.reloc_target {
-                // Relocations against user-defined functions means that this is
-                // a relocation against a module-local function, typically a
-                // call between functions. The `text` field is given priority to
-                // resolve this relocation before we actually emit an object
-                // file, but if it can't handle it then we pass through the
-                // relocation.
-                RelocationTarget::Wasm(_) | RelocationTarget::Builtin(_) => {
-                    let target = resolve_reloc_target(r.reloc_target);
-                    if self
-                        .text
-                        .resolve_reloc(reloc_offset, r.reloc, r.addend, target)
-                    {
-                        continue;
-                    }
 
-                    // At this time it's expected that all relocations are
-                    // handled by `text.resolve_reloc`, and anything that isn't
-                    // handled is a bug in `text.resolve_reloc` or something
-                    // transitively there. If truly necessary, though, then this
-                    // loop could also be updated to forward the relocation to
-                    // the final object file as well.
-                    panic!(
-                        "unresolved relocation could not be processed against \
-                         {:?}: {r:?}",
-                        r.reloc_target,
-                    );
+            // This relocation is used to fill in which hostcall id is
+            // desired within the `call_indirect_host` opcode of Pulley
+            // itself. The relocation target is the start of the instruction
+            // and the goal is to insert the static signature number, `n`,
+            // into the instruction.
+            //
+            // At this time the instruction looks like:
+            //
+            //      +------+------+------+------+
+            //      | OP   | OP_EXTENDED |  N   |
+            //      +------+------+------+------+
+            //
+            // This 4-byte encoding has `OP` indicating this is an "extended
+            // opcode" where `OP_EXTENDED` is a 16-bit extended opcode.
+            // The `N` byte is the index of the signature being called and
+            // is what's b eing filled in.
+            //
+            // See the `test_call_indirect_host_width` in
+            // `pulley/tests/all.rs` for this guarantee as well.
+            if let FuncKey::PulleyHostCall(host_call) = r.reloc_target {
+                #[cfg(feature = "pulley")]
+                {
+                    use pulley_interpreter::encode::Encode;
+                    assert_eq!(pulley_interpreter::CallIndirectHost::WIDTH, 4);
                 }
+                let n = host_call.index();
+                let byte = u8::try_from(n).unwrap();
+                self.text.write(reloc_offset + 3, &[byte]);
+                continue;
+            }
 
-                // This relocation is used to fill in which hostcall id is
-                // desired within the `call_indirect_host` opcode of Pulley
-                // itself. The relocation target is the start of the instruction
-                // and the goal is to insert the static signature number, `n`,
-                // into the instruction.
-                //
-                // At this time the instruction looks like:
-                //
-                //      +------+------+------+------+
-                //      | OP   | OP_EXTENDED |  N   |
-                //      +------+------+------+------+
-                //
-                // This 4-byte encoding has `OP` indicating this is an "extended
-                // opcode" where `OP_EXTENDED` is a 16-bit extended opcode.
-                // The `N` byte is the index of the signature being called and
-                // is what's b eing filled in.
-                //
-                // See the `test_call_indirect_host_width` in
-                // `pulley/tests/all.rs` for this guarantee as well.
-                RelocationTarget::PulleyHostcall(n) => {
-                    #[cfg(feature = "pulley")]
-                    {
-                        use pulley_interpreter::encode::Encode;
-                        assert_eq!(pulley_interpreter::CallIndirectHost::WIDTH, 4);
-                    }
-                    let byte = u8::try_from(n).unwrap();
-                    self.text.write(reloc_offset + 3, &[byte]);
-                }
-            };
+            let target = resolve_reloc_target(r.reloc_target);
+            if self
+                .text
+                .resolve_reloc(reloc_offset, r.reloc, r.addend, target)
+            {
+                continue;
+            }
+
+            panic!("failed to resolve relocation: {r:?} -> {target}");
         }
+
         (symbol_id, off..off + body_len)
     }
 

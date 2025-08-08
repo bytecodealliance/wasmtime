@@ -231,10 +231,12 @@ impl<'data> Translator<'_, 'data> {
             // likely to use that if anything is actually indirected through
             // memory.
             self.validator.reset();
+            let static_module_index = self.static_modules.next_key();
             let translation = ModuleEnvironment::new(
                 self.tunables,
                 &mut self.validator,
                 self.types.module_types_builder(),
+                static_module_index,
             )
             .translate(Parser::new(0), wasm)
             .expect("invalid adapter module generated");
@@ -260,8 +262,9 @@ impl<'data> Translator<'_, 'data> {
                 .zip(translation.module.imports())
                 .map(|(arg, (_, _, ty))| fact_import_to_core_def(component, arg, ty))
                 .collect::<Vec<_>>();
-            let static_index = self.static_modules.push(translation);
-            let id = component.adapter_modules.push((static_index, args));
+            let static_module_index2 = self.static_modules.push(translation);
+            assert_eq!(static_module_index, static_module_index2);
+            let id = component.adapter_modules.push((static_module_index, args));
             assert_eq!(id, module_id);
         }
     }

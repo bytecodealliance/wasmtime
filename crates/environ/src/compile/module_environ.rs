@@ -37,13 +37,16 @@ pub struct ModuleEnvironment<'a, 'data> {
     tunables: &'a Tunables,
 }
 
-/// The result of translating via `ModuleEnvironment`. Function bodies are not
-/// yet translated, and data initializers have not yet been copied out of the
-/// original buffer.
-#[derive(Default)]
+/// The result of translating via `ModuleEnvironment`.
+///
+/// Function bodies are not yet translated, and data initializers have not yet
+/// been copied out of the original buffer.
 pub struct ModuleTranslation<'data> {
     /// Module information.
     pub module: Module,
+
+    /// This module's index.
+    pub module_index: StaticModuleIndex,
 
     /// The input wasm binary.
     ///
@@ -109,6 +112,27 @@ pub struct ModuleTranslation<'data> {
 }
 
 impl<'data> ModuleTranslation<'data> {
+    /// Create a new translation for the module with the given index.
+    pub fn new(module_index: StaticModuleIndex) -> Self {
+        Self {
+            module_index,
+            module: Module::default(),
+            wasm: &[],
+            function_body_inputs: PrimaryMap::default(),
+            known_imported_functions: SecondaryMap::default(),
+            exported_signatures: Vec::default(),
+            debuginfo: DebugInfoData::default(),
+            has_unparsed_debuginfo: false,
+            data: Vec::default(),
+            data_align: None,
+            total_data: 0,
+            passive_data: Vec::default(),
+            total_passive_data: 0,
+            code_index: 0,
+            types: None,
+        }
+    }
+
     /// Returns a reference to the type information of the current module.
     pub fn get_types(&self) -> &Types {
         self.types
@@ -174,9 +198,10 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
         tunables: &'a Tunables,
         validator: &'a mut Validator,
         types: &'a mut ModuleTypesBuilder,
+        module_index: StaticModuleIndex,
     ) -> Self {
         Self {
-            result: ModuleTranslation::default(),
+            result: ModuleTranslation::new(module_index),
             types,
             tunables,
             validator,
