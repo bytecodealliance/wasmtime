@@ -82,7 +82,7 @@ impl StoreOpaque {
 
         // Take the GC heap's underlying memory out of the GC heap, attempt to
         // grow it, then replace it.
-        let mut memory = unsafe { self.unwrap_gc_store_mut().gc_heap.take_memory() };
+        let mut memory = self.unwrap_gc_store_mut().gc_heap.take_memory();
         let mut delta_bytes_grown = 0;
         let grow_result: Result<()> = (|| {
             let page_size = self.engine().tunables().gc_heap_memory_type().page_size();
