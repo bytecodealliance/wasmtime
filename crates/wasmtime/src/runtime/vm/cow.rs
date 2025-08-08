@@ -2,12 +2,15 @@
 //! modules, and logic to support mapping these backing images into memory.
 
 use super::sys::DecommitBehavior;
+use crate::Engine;
 use crate::prelude::*;
-use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
-use crate::runtime::vm::{HostAlignedByteCount, MmapOffset, MmapVec, host_page_size};
+use crate::runtime::vm::sys::vm::{self, MemoryImageSource, PageMap, reset_with_pagemap};
+use crate::runtime::vm::{
+    HostAlignedByteCount, MmapOffset, ModuleMemoryImageSource, host_page_size,
+};
 use alloc::sync::Arc;
+use core::fmt;
 use core::ops::Range;
-use core::ptr;
 use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, PrimaryMap, Tunables};
 
 /// Backing images for memories in a module.
@@ -26,7 +29,6 @@ impl ModuleMemoryImages {
 }
 
 /// One backing image for one memory.
-#[derive(Debug, PartialEq)]
 pub struct MemoryImage {
     /// The platform-specific source of this image.
     ///
@@ -60,20 +62,29 @@ pub struct MemoryImage {
     ///
     /// Must be a multiple of the system page size.
     linear_memory_offset: HostAlignedByteCount,
+
+    /// The original source of data that this image is derived from.
+    module_source: Arc<dyn ModuleMemoryImageSource>,
+
+    /// The offset, within `module_source.wasm_data()`, that this image starts
+    /// at.
+    module_source_offset: usize,
 }
 
 impl MemoryImage {
     fn new(
+        engine: &Engine,
         page_size: u32,
         linear_memory_offset: HostAlignedByteCount,
-        data: &[u8],
-        mmap: Option<&MmapVec>,
+        module_source: &Arc<impl ModuleMemoryImageSource>,
+        data_range: Range<usize>,
     ) -> Result<Option<MemoryImage>> {
         let assert_page_aligned = |val: usize| {
             assert_eq!(val % (page_size as usize), 0);
         };
         // Sanity-check that various parameters are page-aligned.
-        let len = HostAlignedByteCount::new(data.len()).expect("memory image data is page-aligned");
+        let len =
+            HostAlignedByteCount::new(data_range.len()).expect("memory image data is page-aligned");
 
         // If a backing `mmap` is present then `data` should be a sub-slice of
         // the `mmap`. The sanity-checks here double-check that. Additionally
@@ -89,25 +100,30 @@ impl MemoryImage {
         // files, but for now this is still a Linux-specific region of Wasmtime.
         // Some work will be needed to get this file compiling for macOS and
         // Windows.
-        if let Some(mmap) = mmap {
-            let start = mmap.as_ptr() as usize;
-            let end = start + mmap.len();
-            let data_start = data.as_ptr() as usize;
-            let data_end = data_start + data.len();
-            assert!(start <= data_start && data_end <= end);
-            assert_page_aligned(start);
-            assert_page_aligned(data_start);
-            assert_page_aligned(data_end);
+        let data = &module_source.wasm_data()[data_range.clone()];
+        if !engine.config().force_memory_init_memfd {
+            if let Some(mmap) = module_source.mmap() {
+                let start = mmap.as_ptr() as usize;
+                let end = start + mmap.len();
+                let data_start = data.as_ptr() as usize;
+                let data_end = data_start + data.len();
+                assert!(start <= data_start && data_end <= end);
+                assert_page_aligned(start);
+                assert_page_aligned(data_start);
+                assert_page_aligned(data_end);
 
-            #[cfg(feature = "std")]
-            if let Some(file) = mmap.original_file() {
-                if let Some(source) = MemoryImageSource::from_file(file) {
-                    return Ok(Some(MemoryImage {
-                        source,
-                        source_offset: u64::try_from(data_start - start).unwrap(),
-                        linear_memory_offset,
-                        len,
-                    }));
+                #[cfg(feature = "std")]
+                if let Some(file) = mmap.original_file() {
+                    if let Some(source) = MemoryImageSource::from_file(file) {
+                        return Ok(Some(MemoryImage {
+                            source,
+                            source_offset: u64::try_from(data_start - start).unwrap(),
+                            linear_memory_offset,
+                            len,
+                            module_source: module_source.clone(),
+                            module_source_offset: data_range.start,
+                        }));
+                    }
                 }
             }
         }
@@ -120,6 +136,8 @@ impl MemoryImage {
                 source_offset: 0,
                 linear_memory_offset,
                 len,
+                module_source: module_source.clone(),
+                module_source_offset: data_range.start,
             }));
         }
 
@@ -153,9 +171,9 @@ impl ModuleMemoryImages {
     /// passed in as part of a `InstanceAllocationRequest` to speed up
     /// instantiation and execution by using copy-on-write-backed memories.
     pub fn new(
+        engine: &Engine,
         module: &Module,
-        wasm_data: &[u8],
-        mmap: Option<&MmapVec>,
+        source: &Arc<impl ModuleMemoryImageSource>,
     ) -> Result<Option<ModuleMemoryImages>> {
         let map = match &module.memory_initialization {
             MemoryInitialization::Static { map } => map,
@@ -183,15 +201,11 @@ impl ModuleMemoryImages {
                 }
             };
 
-            // Get the image for this wasm module  as a subslice of `wasm_data`,
-            // and then use that to try to create the `MemoryImage`. If this
-            // creation files then we fail creating `ModuleMemoryImages` since this
-            // memory couldn't be represented.
-            let data = &wasm_data[init.data.start as usize..init.data.end as usize];
+            let data_range = init.data.start as usize..init.data.end as usize;
             if module.memories[memory_index]
                 .minimum_byte_size()
                 .map_or(false, |mem_initial_len| {
-                    init.offset + u64::try_from(data.len()).unwrap() > mem_initial_len
+                    init.offset + u64::try_from(data_range.len()).unwrap() > mem_initial_len
                 })
             {
                 // The image is rounded up to multiples of the host OS page
@@ -211,7 +225,10 @@ impl ModuleMemoryImages {
             };
             let offset = HostAlignedByteCount::new(offset_usize)
                 .expect("memory init offset is a multiple of the host page size");
-            let image = match MemoryImage::new(page_size, offset, data, mmap)? {
+
+            // If this creation fails then we fail creating
+            // `ModuleMemoryImages` since this memory couldn't be represented.
+            let image = match MemoryImage::new(engine, page_size, offset, source, data_range)? {
                 Some(image) => image,
                 None => return Ok(None),
             };
@@ -280,7 +297,6 @@ impl ModuleMemoryImages {
 /// original mappings, effectively resetting everything back to its initial
 /// state. Non-linux platforms will replace all memory below `self.accessible`
 /// with a fresh zero'd mmap, meaning that reuse is effectively not supported.
-#[derive(Debug)]
 pub struct MemoryImageSlot {
     /// The mmap and offset within it that contains the linear memory for this
     /// slot.
@@ -323,6 +339,18 @@ pub struct MemoryImageSlot {
     /// specific to this slot) in place when it is dropped. Default
     /// on, unless the caller knows what they are doing.
     clear_on_drop: bool,
+}
+
+impl fmt::Debug for MemoryImageSlot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MemoryImageSlot")
+            .field("base", &self.base)
+            .field("static_size", &self.static_size)
+            .field("accessible", &self.accessible)
+            .field("dirty", &self.dirty)
+            .field("clear_on_drop", &self.clear_on_drop)
+            .finish_non_exhaustive()
+    }
 }
 
 impl MemoryImageSlot {
@@ -423,7 +451,12 @@ impl MemoryImageSlot {
         // Note that this intentionally a "small mmap" which only covers the
         // extent of the prior initialization image in order to preserve
         // resident memory that might come before or after the image.
-        if self.image.as_ref() != maybe_image {
+        let images_equal = match (self.image.as_ref(), maybe_image) {
+            (Some(a), Some(b)) if Arc::ptr_eq(a, b) => true,
+            (None, None) => true,
+            _ => false,
+        };
+        if !images_equal {
             self.remove_image()?;
         }
 
@@ -454,7 +487,7 @@ impl MemoryImageSlot {
         // skipped if `self.image` matches `maybe_image`.
         assert!(initial_size_bytes <= self.accessible.byte_count());
         assert!(initial_size_bytes_page_aligned <= self.accessible);
-        if self.image.as_ref() != maybe_image {
+        if !images_equal {
             if let Some(image) = maybe_image.as_ref() {
                 assert!(
                     image
@@ -500,13 +533,14 @@ impl MemoryImageSlot {
     #[allow(dead_code, reason = "only used in some cfgs")]
     pub(crate) fn clear_and_remain_ready(
         &mut self,
+        pagemap: Option<&PageMap>,
         keep_resident: HostAlignedByteCount,
         decommit: impl FnMut(*mut u8, usize),
     ) -> Result<()> {
         assert!(self.dirty);
 
         unsafe {
-            self.reset_all_memory_contents(keep_resident, decommit)?;
+            self.reset_all_memory_contents(pagemap, keep_resident, decommit)?;
         }
 
         self.dirty = false;
@@ -516,6 +550,7 @@ impl MemoryImageSlot {
     #[allow(dead_code, reason = "only used in some cfgs")]
     unsafe fn reset_all_memory_contents(
         &mut self,
+        pagemap: Option<&PageMap>,
         keep_resident: HostAlignedByteCount,
         decommit: impl FnMut(*mut u8, usize),
     ) -> Result<()> {
@@ -531,7 +566,7 @@ impl MemoryImageSlot {
             }
             DecommitBehavior::RestoreOriginalMapping => {
                 unsafe {
-                    self.reset_with_original_mapping(keep_resident, decommit);
+                    self.reset_with_original_mapping(pagemap, keep_resident, decommit);
                 }
                 Ok(())
             }
@@ -541,174 +576,99 @@ impl MemoryImageSlot {
     #[allow(dead_code, reason = "only used in some cfgs")]
     unsafe fn reset_with_original_mapping(
         &mut self,
+        pagemap: Option<&PageMap>,
         keep_resident: HostAlignedByteCount,
-        mut decommit: impl FnMut(*mut u8, usize),
+        decommit: impl FnMut(*mut u8, usize),
     ) {
-        match &self.image {
-            Some(image) => {
-                if image.linear_memory_offset < keep_resident {
-                    // If the image starts below the `keep_resident` then
-                    // memory looks something like this:
-                    //
-                    //               up to `keep_resident` bytes
-                    //                          |
-                    //          +--------------------------+  remaining_memset
-                    //          |                          | /
-                    //  <-------------->                <------->
-                    //
-                    //                              image_end
-                    // 0        linear_memory_offset   |             accessible
-                    // |                |              |                  |
-                    // +----------------+--------------+---------+--------+
-                    // |  dirty memory  |    image     |   dirty memory   |
-                    // +----------------+--------------+---------+--------+
-                    //
-                    //  <------+-------> <-----+----->  <---+---> <--+--->
-                    //         |               |            |        |
-                    //         |               |            |        |
-                    //   memset (1)            /            |   madvise (4)
-                    //                  mmadvise (2)       /
-                    //                                    /
-                    //                              memset (3)
-                    //
-                    //
-                    // In this situation there are two disjoint regions that are
-                    // `memset` manually to zero. Note that `memset (3)` may be
-                    // zero bytes large. Furthermore `madvise (4)` may also be
-                    // zero bytes large.
-
-                    let image_end = image
-                        .linear_memory_offset
-                        .checked_add(image.len)
-                        .expect("image is in bounds");
-                    let mem_after_image = self
-                        .accessible
-                        .checked_sub(image_end)
-                        .expect("image_end falls before self.accessible");
-                    let excess = keep_resident
-                        .checked_sub(image.linear_memory_offset)
-                        .expect(
-                            "if statement checks that keep_resident > image.linear_memory_offset",
-                        );
-                    let remaining_memset = excess.min(mem_after_image);
-
-                    // This is memset (1)
-                    unsafe {
-                        ptr::write_bytes(
-                            self.base.as_mut_ptr(),
-                            0u8,
-                            image.linear_memory_offset.byte_count(),
-                        );
-                    }
-
-                    // This is madvise (2)
-                    unsafe {
-                        self.restore_original_mapping(
-                            image.linear_memory_offset,
-                            image.len,
-                            &mut decommit,
-                        );
-                    }
-
-                    // This is memset (3)
-                    unsafe {
-                        ptr::write_bytes(
-                            self.base.as_mut_ptr().add(image_end.byte_count()),
-                            0u8,
-                            remaining_memset.byte_count(),
-                        );
-                    }
-
-                    // This is madvise (4)
-                    unsafe {
-                        self.restore_original_mapping(
-                            image_end
-                                .checked_add(remaining_memset)
-                                .expect("image_end + remaining_memset is in bounds"),
-                            mem_after_image
-                                .checked_sub(remaining_memset)
-                                .expect("remaining_memset defined to be <= mem_after_image"),
-                            &mut decommit,
-                        );
-                    }
-                } else {
-                    // If the image starts after the `keep_resident` threshold
-                    // then we memset the start of linear memory and then use
-                    // madvise below for the rest of it, including the image.
-                    //
-                    // 0             keep_resident                   accessible
-                    // |                |                                 |
-                    // +----------------+---+----------+------------------+
-                    // |  dirty memory      |  image   |   dirty memory   |
-                    // +----------------+---+----------+------------------+
-                    //
-                    //  <------+-------> <-------------+----------------->
-                    //         |                       |
-                    //         |                       |
-                    //   memset (1)                 madvise (2)
-                    //
-                    // Here only a single memset is necessary since the image
-                    // started after the threshold which we're keeping resident.
-                    // Note that the memset may be zero bytes here.
-
-                    // This is memset (1)
-                    unsafe {
-                        ptr::write_bytes(self.base.as_mut_ptr(), 0u8, keep_resident.byte_count());
-                    }
-
-                    // This is madvise (2)
-                    unsafe {
-                        self.restore_original_mapping(
-                            keep_resident,
-                            self.accessible
-                                .checked_sub(keep_resident)
-                                .expect("keep_resident is a subset of accessible memory"),
-                            decommit,
-                        );
-                    }
-                };
-            }
-
-            // If there's no memory image for this slot then memset the first
-            // bytes in the memory back to zero while using `madvise` to purge
-            // the rest.
-            None => {
-                let size_to_memset = keep_resident.min(self.accessible);
-                unsafe {
-                    ptr::write_bytes(self.base.as_mut_ptr(), 0u8, size_to_memset.byte_count());
-                    self.restore_original_mapping(
-                        size_to_memset,
-                        self.accessible
-                            .checked_sub(size_to_memset)
-                            .expect("size_to_memset is defined to be <= self.accessible"),
-                        decommit,
-                    );
-                }
-            }
-        }
-    }
-
-    #[allow(dead_code, reason = "only used in some cfgs")]
-    unsafe fn restore_original_mapping(
-        &self,
-        base: HostAlignedByteCount,
-        len: HostAlignedByteCount,
-        mut decommit: impl FnMut(*mut u8, usize),
-    ) {
-        assert!(base.checked_add(len).unwrap() <= self.accessible);
-        if len == 0 {
-            return;
-        }
-
         assert_eq!(
             vm::decommit_behavior(),
             DecommitBehavior::RestoreOriginalMapping
         );
+
         unsafe {
-            decommit(
-                self.base.as_mut_ptr().add(base.byte_count()),
-                len.byte_count(),
-            );
+            match &self.image {
+                // If there's a backing image then manually resetting a region
+                // is a bit trickier than without an image, so delegate to the
+                // helper function below.
+                Some(image) => {
+                    reset_with_pagemap(
+                        pagemap,
+                        self.base.as_mut_ptr(),
+                        self.accessible,
+                        keep_resident,
+                        |region| {
+                            manually_reset_region(self.base.as_mut_ptr().addr(), image, region)
+                        },
+                        decommit,
+                    );
+                }
+
+                // If there's no memory image for this slot then pages are always
+                // manually reset back to zero or given to `decommit`.
+                None => reset_with_pagemap(
+                    pagemap,
+                    self.base.as_mut_ptr(),
+                    self.accessible,
+                    keep_resident,
+                    |region| region.fill(0),
+                    decommit,
+                ),
+            }
+        }
+
+        /// Manually resets `region` back to its original contents as specified
+        /// in `image`.
+        ///
+        /// This assumes that the original mmap starts at `base_addr` and
+        /// `region` is a subslice within the original mmap.
+        ///
+        /// # Panics
+        ///
+        /// Panics if `base_addr` is not the right index due to the various
+        /// indexing calculations below.
+        fn manually_reset_region(base_addr: usize, image: &MemoryImage, mut region: &mut [u8]) {
+            let image_start = image.linear_memory_offset.byte_count();
+            let image_end = image_start + image.len.byte_count();
+            let mut region_start = region.as_ptr().addr() - base_addr;
+            let region_end = region_start + region.len();
+            let image_bytes = image.module_source.wasm_data();
+            let image_bytes = &image_bytes[image.module_source_offset..][..image.len.byte_count()];
+
+            // 1. Zero out the part before the image (if any).
+            if let Some(len_before_image) = image_start.checked_sub(region_start) {
+                let len = len_before_image.min(region.len());
+                let (a, b) = region.split_at_mut(len);
+                a.fill(0);
+                region = b;
+                region_start += len;
+
+                if region.is_empty() {
+                    return;
+                }
+            }
+
+            debug_assert_eq!(region_end - region_start, region.len());
+            debug_assert!(region_start >= image_start);
+
+            // 2. Copy the original bytes from the image for the part that
+            //    overlaps with the image.
+            if let Some(len_in_image) = image_end.checked_sub(region_start) {
+                let len = len_in_image.min(region.len());
+                let (a, b) = region.split_at_mut(len);
+                a.copy_from_slice(&image_bytes[region_start - image_start..][..len]);
+                region = b;
+                region_start += len;
+
+                if region.is_empty() {
+                    return;
+                }
+            }
+
+            debug_assert_eq!(region_end - region_start, region.len());
+            debug_assert!(region_start >= image_end);
+
+            // 3. Zero out the part after the image.
+            region.fill(0);
         }
     }
 
@@ -809,7 +769,7 @@ mod test {
     use super::*;
     use crate::runtime::vm::mmap::{AlignedLength, Mmap};
     use crate::runtime::vm::sys::vm::decommit_pages;
-    use crate::runtime::vm::{HostAlignedByteCount, host_page_size};
+    use crate::runtime::vm::{HostAlignedByteCount, MmapVec, host_page_size};
     use std::sync::Arc;
     use wasmtime_environ::{IndexType, Limits, Memory};
 
@@ -820,12 +780,32 @@ mod test {
         // The image length is rounded up to the nearest page size
         let image_len = HostAlignedByteCount::new_rounded_up(data.len()).unwrap();
 
-        Ok(MemoryImage {
+        let mut source = TestDataSource {
+            data: vec![0; image_len.byte_count()],
+        };
+        source.data[..data.len()].copy_from_slice(data);
+
+        return Ok(MemoryImage {
             source: MemoryImageSource::from_data(data)?.unwrap(),
             len: image_len,
             source_offset: 0,
             linear_memory_offset,
-        })
+            module_source: Arc::new(source),
+            module_source_offset: 0,
+        });
+
+        struct TestDataSource {
+            data: Vec<u8>,
+        }
+
+        impl ModuleMemoryImageSource for TestDataSource {
+            fn wasm_data(&self) -> &[u8] {
+                &self.data
+            }
+            fn mmap(&self) -> Option<&MmapVec> {
+                None
+            }
+        }
     }
 
     fn dummy_memory() -> Memory {
@@ -903,7 +883,7 @@ mod test {
         // instantiate again; we should see zeroes, even as the
         // reuse-anon-mmap-opt kicks in
         memfd
-            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
@@ -944,7 +924,7 @@ mod test {
 
         // Clear and re-instantiate same image
         memfd
-            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
@@ -956,7 +936,7 @@ mod test {
 
         // Clear and re-instantiate no image
         memfd
-            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
@@ -967,7 +947,7 @@ mod test {
 
         // Clear and re-instantiate image again
         memfd
-            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
@@ -980,7 +960,7 @@ mod test {
         // Create another image with different data.
         let image2 = Arc::new(create_memfd_with_data(page_size, &[10, 11, 12, 13]).unwrap());
         memfd
-            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
@@ -993,7 +973,7 @@ mod test {
         // Instantiate the original image again; we should notice it's
         // a different image and not reuse the mappings.
         memfd
-            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
@@ -1041,7 +1021,7 @@ mod test {
                 };
 
                 memfd
-                    .clear_and_remain_ready(amt_to_memset, |ptr, len| unsafe {
+                    .clear_and_remain_ready(None, amt_to_memset, |ptr, len| unsafe {
                         decommit_pages(ptr, len).unwrap()
                     })
                     .unwrap();
@@ -1062,7 +1042,7 @@ mod test {
                 });
             }
             memfd
-                .clear_and_remain_ready(amt_to_memset, |ptr, len| unsafe {
+                .clear_and_remain_ready(None, amt_to_memset, |ptr, len| unsafe {
                     decommit_pages(ptr, len).unwrap()
                 })
                 .unwrap();
@@ -1103,7 +1083,7 @@ mod test {
         }
 
         memfd
-            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
@@ -1128,7 +1108,7 @@ mod test {
         }
 
         memfd
-            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
@@ -1153,7 +1133,7 @@ mod test {
         }
 
         memfd
-            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
@@ -1163,5 +1143,131 @@ mod test {
         assert!(!memfd.has_image());
         assert_eq!(&[0, 0, 0, 0], &slice[page_size..][..4]);
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
+    }
+
+    #[test]
+    fn reset_with_pagemap() {
+        let page_size = host_page_size();
+        let ty = dummy_memory();
+        let tunables = Tunables {
+            memory_reservation: 100 << 16,
+            ..Tunables::default_miri()
+        };
+        let mmap = mmap_4mib_inaccessible();
+        let mmap_len = page_size * 9;
+        let mut memfd =
+            MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, mmap_len);
+        memfd.no_clear_on_drop();
+        let pagemap = PageMap::new();
+        let pagemap = pagemap.as_ref();
+
+        let mut data = vec![0; 3 * page_size];
+        for (i, chunk) in data.chunks_mut(page_size).enumerate() {
+            for slot in chunk {
+                *slot = u8::try_from(i + 1).unwrap();
+            }
+        }
+        let image = Arc::new(create_memfd_with_data(3 * page_size, &data).unwrap());
+
+        memfd
+            .instantiate(mmap_len, Some(&image), &ty, &tunables)
+            .unwrap();
+
+        let keep_resident = HostAlignedByteCount::new(mmap_len).unwrap();
+        let assert_pristine_after_reset = |memfd: &mut MemoryImageSlot| unsafe {
+            // Wipe the image, keeping some bytes resident.
+            memfd
+                .clear_and_remain_ready(pagemap, keep_resident, |ptr, len| {
+                    decommit_pages(ptr, len).unwrap()
+                })
+                .unwrap();
+
+            // Double check that the contents of memory are as expected after
+            // reset.
+            with_slice_mut(&mmap, 0..mmap_len, move |slice| {
+                for (i, chunk) in slice.chunks(page_size).enumerate() {
+                    let expected = match i {
+                        0..3 => 0,
+                        3..6 => u8::try_from(i).unwrap() - 2,
+                        6..9 => 0,
+                        _ => unreachable!(),
+                    };
+                    for slot in chunk {
+                        assert_eq!(*slot, expected);
+                    }
+                }
+            });
+
+            // Re-instantiate, but then wipe the image entirely by keeping
+            // nothing resident.
+            memfd
+                .instantiate(mmap_len, Some(&image), &ty, &tunables)
+                .unwrap();
+            memfd
+                .clear_and_remain_ready(pagemap, HostAlignedByteCount::ZERO, |ptr, len| {
+                    decommit_pages(ptr, len).unwrap()
+                })
+                .unwrap();
+
+            // Next re-instantiate a final time to get used for the next test.
+            memfd
+                .instantiate(mmap_len, Some(&image), &ty, &tunables)
+                .unwrap();
+        };
+
+        let write_page = |_memfd: &mut MemoryImageSlot, page: usize| unsafe {
+            with_slice_mut(
+                &mmap,
+                page * page_size..(page + 1) * page_size,
+                move |slice| slice.fill(0xff),
+            );
+        };
+
+        // Test various combinations of dirty pages and regions. For example
+        // test a dirty region of memory entirely in the zero-initialized zone
+        // before/after the image and also test when the dirty region straddles
+        // just the start of the image, just the end of the image, both ends,
+        // and is entirely contained in just the image.
+        assert_pristine_after_reset(&mut memfd);
+
+        for i in 0..9 {
+            write_page(&mut memfd, i);
+            assert_pristine_after_reset(&mut memfd);
+        }
+        write_page(&mut memfd, 0);
+        write_page(&mut memfd, 1);
+        assert_pristine_after_reset(&mut memfd);
+        write_page(&mut memfd, 1);
+        assert_pristine_after_reset(&mut memfd);
+        write_page(&mut memfd, 2);
+        write_page(&mut memfd, 3);
+        assert_pristine_after_reset(&mut memfd);
+        write_page(&mut memfd, 3);
+        write_page(&mut memfd, 4);
+        write_page(&mut memfd, 5);
+        assert_pristine_after_reset(&mut memfd);
+        write_page(&mut memfd, 0);
+        write_page(&mut memfd, 1);
+        write_page(&mut memfd, 2);
+        assert_pristine_after_reset(&mut memfd);
+        write_page(&mut memfd, 0);
+        write_page(&mut memfd, 3);
+        write_page(&mut memfd, 6);
+        assert_pristine_after_reset(&mut memfd);
+        write_page(&mut memfd, 2);
+        write_page(&mut memfd, 3);
+        write_page(&mut memfd, 4);
+        write_page(&mut memfd, 5);
+        write_page(&mut memfd, 6);
+        assert_pristine_after_reset(&mut memfd);
+        write_page(&mut memfd, 4);
+        write_page(&mut memfd, 5);
+        write_page(&mut memfd, 6);
+        write_page(&mut memfd, 7);
+        assert_pristine_after_reset(&mut memfd);
+        write_page(&mut memfd, 4);
+        write_page(&mut memfd, 5);
+        write_page(&mut memfd, 8);
+        assert_pristine_after_reset(&mut memfd);
     }
 }

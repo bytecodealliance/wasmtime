@@ -18,6 +18,11 @@ pub mod machports;
 #[cfg(has_native_signals)]
 pub mod signals;
 
+#[cfg(all(target_os = "linux", target_pointer_width = "64", feature = "std"))]
+mod pagemap;
+#[cfg(not(all(target_os = "linux", target_pointer_width = "64", feature = "std")))]
+use crate::vm::pagemap_disabled as pagemap;
+
 std::thread_local!(static TLS: Cell<*mut u8> = const { Cell::new(std::ptr::null_mut()) });
 
 #[inline]

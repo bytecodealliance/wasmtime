@@ -60,6 +60,8 @@ mod imports;
 mod instance;
 mod memory;
 mod mmap_vec;
+#[cfg(has_virtual_memory)]
+mod pagemap_disabled;
 mod provenance;
 mod send_sync_ptr;
 mod stack_switching;
@@ -159,6 +161,17 @@ cfg_if::cfg_if! {
     } else {
         pub use self::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
     }
+}
+
+/// Source of data used for [`MemoryImage`]
+pub trait ModuleMemoryImageSource: Send + Sync + 'static {
+    /// Returns this image's slice of all wasm data for a module which is then
+    /// further sub-sliced for a particular initialization segment.
+    fn wasm_data(&self) -> &[u8];
+
+    /// Optionally returns the backing mmap. Used for using the backing mmap's
+    /// file to perform other mmaps, for example.
+    fn mmap(&self) -> Option<&MmapVec>;
 }
 
 /// Dynamic runtime functionality needed by this crate throughout the execution

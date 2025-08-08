@@ -52,6 +52,7 @@ use crate::runtime::vm::{
     CompiledModuleId, Memory, Table,
     instance::Instance,
     mpk::{self, ProtectionKey, ProtectionMask},
+    sys::vm::PageMap,
 };
 use std::borrow::Cow;
 use std::fmt::Display;
@@ -303,6 +304,8 @@ pub struct PoolingInstanceAllocator {
 
     #[cfg(feature = "async")]
     stacks: StackPool,
+
+    pagemap: Option<PageMap>,
 }
 
 impl Drop for PoolingInstanceAllocator {
@@ -350,6 +353,7 @@ impl PoolingInstanceAllocator {
             gc_heaps: GcHeapPool::new(config)?,
             #[cfg(feature = "async")]
             stacks: StackPool::new(config)?,
+            pagemap: PageMap::new(),
         })
     }
 
@@ -645,14 +649,18 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         let mut image = memory.unwrap_static_image();
         let mut queue = DecommitQueue::default();
         image
-            .clear_and_remain_ready(self.memories.keep_resident, |ptr, len| {
-                // SAFETY: the memory in `image` won't be used until this
-                // decommit queue is flushed, and by definition the memory is
-                // not in use when calling this function.
-                unsafe {
-                    queue.push_raw(ptr, len);
-                }
-            })
+            .clear_and_remain_ready(
+                self.pagemap.as_ref(),
+                self.memories.keep_resident,
+                |ptr, len| {
+                    // SAFETY: the memory in `image` won't be used until this
+                    // decommit queue is flushed, and by definition the memory is
+                    // not in use when calling this function.
+                    unsafe {
+                        queue.push_raw(ptr, len);
+                    }
+                },
+            )
             .expect("failed to reset memory image");
 
         // SAFETY: this image is not in use and its memory regions were enqueued
@@ -685,10 +693,14 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         // the understanding that the memory won't get used until the whole
         // queue is flushed.
         unsafe {
-            self.tables
-                .reset_table_pages_to_zero(allocation_index, &mut table, |ptr, len| {
+            self.tables.reset_table_pages_to_zero(
+                self.pagemap.as_ref(),
+                allocation_index,
+                &mut table,
+                |ptr, len| {
                     queue.push_raw(ptr, len);
-                });
+                },
+            );
         }
 
         // SAFETY: the table has had all its memory regions enqueued above.

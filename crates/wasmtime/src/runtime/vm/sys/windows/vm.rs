@@ -6,6 +6,8 @@ use std::sync::Arc;
 use windows_sys::Win32::System::Memory::*;
 use windows_sys::Win32::System::SystemInformation::*;
 
+pub use crate::runtime::vm::pagemap_disabled::{PageMap, reset_with_pagemap};
+
 pub unsafe fn expose_existing_mapping(ptr: *mut u8, len: usize) -> io::Result<()> {
     if len == 0 {
         return Ok(());
