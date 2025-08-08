@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::GcHeapOutOfMemory;
+use crate::runtime::vm::VMGcRef;
 
 impl StoreOpaque {
     /// Collect garbage, potentially growing the GC heap.
