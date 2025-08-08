@@ -1,24 +1,9 @@
 use crate::clocks::WasiClocksCtxView;
 use crate::p3::bindings::clocks::{monotonic_clock, wall_clock};
 use crate::p3::clocks::WasiClocks;
-use cap_std::time::SystemTime;
 use core::time::Duration;
 use tokio::time::sleep;
 use wasmtime::component::Accessor;
-
-impl TryFrom<SystemTime> for wall_clock::Datetime {
-    type Error = wasmtime::Error;
-
-    fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
-        let duration =
-            time.duration_since(SystemTime::from_std(std::time::SystemTime::UNIX_EPOCH))?;
-
-        Ok(Self {
-            seconds: duration.as_secs(),
-            nanoseconds: duration.subsec_nanos(),
-        })
-    }
-}
 
 impl wall_clock::Host for WasiClocksCtxView<'_> {
     fn now(&mut self) -> wasmtime::Result<wall_clock::Datetime> {
