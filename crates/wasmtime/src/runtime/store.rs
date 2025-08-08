@@ -2298,24 +2298,6 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
         delta_result
     }
 
-    #[cfg(feature = "gc")]
-    unsafe fn maybe_async_grow_or_collect_gc_heap(
-        &mut self,
-        root: Option<VMGcRef>,
-        bytes_needed: Option<u64>,
-    ) -> Result<Option<VMGcRef>> {
-        unsafe { self.inner.maybe_async_gc(root, bytes_needed) }
-    }
-
-    #[cfg(not(feature = "gc"))]
-    unsafe fn maybe_async_grow_or_collect_gc_heap(
-        &mut self,
-        root: Option<VMGcRef>,
-        _bytes_needed: Option<u64>,
-    ) -> Result<Option<VMGcRef>> {
-        Ok(root)
-    }
-
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut vm::component::CallContexts {
         &mut self.component_calls
