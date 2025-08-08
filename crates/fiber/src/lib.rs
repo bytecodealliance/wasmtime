@@ -22,6 +22,7 @@ cfg_if::cfg_if! {
     if #[cfg(not(feature = "std"))] {
         mod nostd;
         use nostd as imp;
+        mod stackswitch;
     } else if #[cfg(miri)] {
         mod miri;
         use miri as imp;
@@ -31,15 +32,11 @@ cfg_if::cfg_if! {
     } else if #[cfg(unix)] {
         mod unix;
         use unix as imp;
+        mod stackswitch;
     } else {
         compile_error!("fibers are not supported on this platform");
     }
 }
-
-// Our own stack switcher routines are used on Unix and no_std
-// platforms, but not on Windows (it has its own fiber API).
-#[cfg(any(unix, not(feature = "std")))]
-pub(crate) mod stackswitch;
 
 /// Represents an execution stack to use for a fiber.
 pub struct FiberStack(imp::FiberStack);
