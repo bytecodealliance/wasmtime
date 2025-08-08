@@ -8,12 +8,12 @@
 // Also at this time this file is heavily based off the x86_64 file, so you'll
 // probably want to read that one as well.
 
-use wasmtime_asm_macros::asm_func;
+use core::arch::naked_asm;
 
-// fn(top_of_stack(%r0): *mut u8)
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_switch),
-    "
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* r0 */) {
+    naked_asm!(
+        "
         // Save callee-saved registers
         push {{r4-r11,lr}}
 
@@ -25,17 +25,18 @@ asm_func!(
         // Restore and return
         pop {{r4-r11,lr}}
         bx lr
-    ",
-);
+        ",
+    );
+}
 
-// fn(
-//    top_of_stack(%r0): *mut u8,
-//    entry_point(%r1): extern fn(*mut u8, *mut u8),
-//    entry_arg0(%r2): *mut u8,
-// )
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
-    "
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn wasmtime_fiber_init(
+    top_of_stack: *mut u8,                        // r0
+    entry_point: extern "C" fn(*mut u8, *mut u8), // r1
+    entry_arg0: *mut u8,                          // r2
+) {
+    naked_asm!(
+        "
         adr r3, {start}
         str r3, [r0, #-0x0c] // => lr
         str r0, [r0, #-0x10] // => r11
@@ -45,13 +46,15 @@ asm_func!(
         add r3, r0, #-0x2c
         str r3, [r0, #-0x08]
         bx lr
-    ",
-    start = sym super::wasmtime_fiber_start,
-);
+        ",
+        start = sym wasmtime_fiber_start,
+    );
+}
 
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_start),
-    "
+#[unsafe(naked)]
+unsafe extern "C" fn wasmtime_fiber_start() -> ! {
+    naked_asm!(
+        "
         .cfi_startproc simple
         .cfi_def_cfa_offset 0
         // See the x86_64 file for more commentary on what these CFI directives
@@ -82,5 +85,6 @@ asm_func!(
         mov r0, r9
         blx r10
         .cfi_endproc
-    ",
-);
+        ",
+    );
+}
