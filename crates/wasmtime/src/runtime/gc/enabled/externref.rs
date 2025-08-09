@@ -229,7 +229,7 @@ impl ExternRef {
         let gc_ref = store
             .retry_after_gc(value, |store, value| {
                 store
-                    .gc_store_mut()?
+                    .require_gc_store_mut()?
                     .alloc_externref(value)
                     .context("unrecoverable error when allocating new `externref`")?
                     .map_err(|(x, n)| GcHeapOutOfMemory::new(x, n).into())
@@ -346,7 +346,7 @@ impl ExternRef {
         let gc_ref = store
             .retry_after_gc_async(value, |store, value| {
                 store
-                    .gc_store_mut()?
+                    .require_gc_store_mut()?
                     .alloc_externref(value)
                     .context("unrecoverable error when allocating new `externref`")?
                     .map_err(|(x, n)| GcHeapOutOfMemory::new(x, n).into())
@@ -481,7 +481,7 @@ impl ExternRef {
     {
         let store = store.into().0;
         let gc_ref = self.inner.try_gc_ref(&store)?;
-        let gc_store = store.gc_store()?;
+        let gc_store = store.require_gc_store()?;
         if let Some(externref) = gc_ref.as_externref(&*gc_store.gc_heap) {
             Ok(Some(gc_store.externref_host_data(externref)))
         } else {
@@ -532,7 +532,7 @@ impl ExternRef {
         // so that we can get the store's GC store. But importantly we cannot
         // trigger a GC while we are working with `gc_ref` here.
         let gc_ref = self.inner.try_gc_ref(store)?.unchecked_copy();
-        let gc_store = store.gc_store_mut()?;
+        let gc_store = store.require_gc_store_mut()?;
         if let Some(externref) = gc_ref.as_externref(&*gc_store.gc_heap) {
             Ok(Some(gc_store.externref_host_data_mut(externref)))
         } else {

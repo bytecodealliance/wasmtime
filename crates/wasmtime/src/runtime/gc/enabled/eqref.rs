@@ -198,7 +198,7 @@ impl EqRef {
             return Ok(HeapType::I31);
         }
 
-        let header = store.gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref);
 
         if header.kind().matches(VMGcKind::StructRef) {
             return Ok(HeapType::ConcreteStruct(
@@ -320,7 +320,11 @@ impl EqRef {
 
     pub(crate) fn _is_struct(&self, store: &StoreOpaque) -> Result<bool> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(!gc_ref.is_i31() && store.gc_store()?.kind(gc_ref).matches(VMGcKind::StructRef))
+        Ok(!gc_ref.is_i31()
+            && store
+                .require_gc_store()?
+                .kind(gc_ref)
+                .matches(VMGcKind::StructRef))
     }
 
     /// Downcast this `eqref` to a `structref`.
@@ -384,7 +388,11 @@ impl EqRef {
 
     pub(crate) fn _is_array(&self, store: &StoreOpaque) -> Result<bool> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(!gc_ref.is_i31() && store.gc_store()?.kind(gc_ref).matches(VMGcKind::ArrayRef))
+        Ok(!gc_ref.is_i31()
+            && store
+                .require_gc_store()?
+                .kind(gc_ref)
+                .matches(VMGcKind::ArrayRef))
     }
 
     /// Downcast this `eqref` to an `arrayref`.
