@@ -274,7 +274,7 @@ impl Instance {
 
         // Allocate the GC heap, if necessary.
         if module.env_module().needs_gc_heap {
-            let _ = store.gc_store_mut()?;
+            store.ensure_gc_store()?;
         }
 
         let compiled_module = module.compiled_module();

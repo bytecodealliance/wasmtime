@@ -1419,8 +1419,17 @@ impl StoreOpaque {
         &mut self.vm_store_context
     }
 
+    /// Allocates
+    #[inline]
+    pub(crate) fn ensure_gc_store(&mut self) -> Result<&mut GcStore> {
+        if self.gc_store.is_some() {
+            return Ok(self.gc_store.as_mut().unwrap());
+        }
+        self.allocate_gc_store()
+    }
+
     #[inline(never)]
-    pub(crate) fn allocate_gc_heap(&mut self) -> Result<()> {
+    fn allocate_gc_store(&mut self) -> Result<&mut GcStore> {
         log::trace!("allocating GC heap for store {:?}", self.id());
 
         assert!(self.gc_store.is_none());
@@ -1433,8 +1442,7 @@ impl StoreOpaque {
         let vmstore = self.traitobj();
         let gc_store = allocate_gc_store(self.engine(), vmstore, self.get_pkey())?;
         self.vm_store_context.gc_heap = gc_store.vmmemory_definition();
-        self.gc_store = Some(gc_store);
-        return Ok(());
+        return Ok(self.gc_store.insert(gc_store));
 
         #[cfg(feature = "gc")]
         fn allocate_gc_store(
@@ -1493,24 +1501,36 @@ impl StoreOpaque {
         }
     }
 
+    /// Helper method to require that a `GcStore` was previously allocated for
+    /// this store, failing if it has not yet been allocated.
+    ///
+    /// Note that this should only be used in a context where allocation of a
+    /// `GcStore` is sure to have already happened prior, otherwise this may
+    /// return a confusing error to embedders which is a bug in Wasmtime.
     #[inline]
-    pub(crate) fn gc_store(&self) -> Result<&GcStore> {
+    pub(crate) fn require_gc_store(&self) -> Result<&GcStore> {
         match &self.gc_store {
             Some(gc_store) => Ok(gc_store),
             None => bail!("GC heap not initialized yet"),
         }
     }
 
+    /// Same as [`Self::require_gc_store`], but mutable.
     #[inline]
-    pub(crate) fn gc_store_mut(&mut self) -> Result<&mut GcStore> {
-        if self.gc_store.is_none() {
-            self.allocate_gc_heap()?;
+    pub(crate) fn require_gc_store_mut(&mut self) -> Result<&mut GcStore> {
+        match &mut self.gc_store {
+            Some(gc_store) => Ok(gc_store),
+            None => bail!("GC heap not initialized yet"),
         }
-        Ok(self.unwrap_gc_store_mut())
     }
 
-    /// If this store is configured with a GC heap, return a mutable reference
-    /// to it. Otherwise, return `None`.
+    /// Attempts to access the GC store that has been previously allocated.
+    ///
+    /// This method will return `Some` if the GC store was previously allocated.
+    /// A `None` return value means either that the GC heap hasn't yet been
+    /// allocated or that it does not need to be allocated for this store. Note
+    /// that to require a GC store in a particular situation it's recommended to
+    /// use [`Self::require_gc_store_mut`] instead.
     #[inline]
     pub(crate) fn optional_gc_store_mut(&mut self) -> Option<&mut GcStore> {
         if cfg!(not(feature = "gc")) || !self.engine.features().gc_types() {
@@ -1521,6 +1541,14 @@ impl StoreOpaque {
         }
     }
 
+    /// Helper to assert that a GC store was previously allocated and is
+    /// present.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if the GC store has not yet been allocated. This
+    /// should only be used in a context where there's an existing GC reference,
+    /// for example, or if `ensure_gc_store` has already been called.
     #[inline]
     #[track_caller]
     #[cfg(feature = "gc")]
@@ -1530,6 +1558,7 @@ impl StoreOpaque {
             .expect("attempted to access the store's GC heap before it has been allocated")
     }
 
+    /// Same as [`Self::unwrap_gc_store`], but mutable.
     #[inline]
     #[track_caller]
     pub(crate) fn unwrap_gc_store_mut(&mut self) -> &mut GcStore {
