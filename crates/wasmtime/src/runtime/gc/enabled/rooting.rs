@@ -175,7 +175,7 @@ mod sealed {
         /// objects that have been unrooted.
         fn try_clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
             let gc_ref = self.try_gc_ref(store)?.unchecked_copy();
-            Ok(store.gc_store_mut()?.clone_gc_ref(&gc_ref))
+            Ok(store.require_gc_store_mut()?.clone_gc_ref(&gc_ref))
         }
     }
 }
@@ -263,7 +263,7 @@ impl GcRootIndex {
     /// particular `T: GcRef`.
     pub(crate) fn try_clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
         let gc_ref = self.try_gc_ref(store)?.unchecked_copy();
-        Ok(store.gc_store_mut()?.clone_gc_ref(&gc_ref))
+        Ok(store.require_gc_store_mut()?.clone_gc_ref(&gc_ref))
     }
 }
 
@@ -1781,7 +1781,7 @@ where
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
         let gc_ref = self.try_clone_gc_ref(store)?;
-        let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        let raw = store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
         ptr.write(val_raw(raw.get()));
         Ok(())
     }

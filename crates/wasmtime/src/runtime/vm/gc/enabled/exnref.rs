@@ -179,12 +179,11 @@ impl VMExnRef {
         instance: InstanceId,
         tag: DefinedTagIndex,
     ) -> Result<()> {
+        let store = store.require_gc_store_mut()?;
         store
-            .gc_store_mut()?
             .gc_object_data(&self.0)
             .write_u32(layout.tag_offset, instance.as_u32());
         store
-            .gc_store_mut()?
             .gc_object_data(&self.0)
             .write_u32(layout.tag_offset + 4, tag.as_u32());
         Ok(())
@@ -196,13 +195,10 @@ impl VMExnRef {
         store: &mut AutoAssertNoGc,
         layout: &GcExceptionLayout,
     ) -> Result<(InstanceId, DefinedTagIndex)> {
-        let instance = store
-            .gc_store_mut()?
-            .gc_object_data(&self.0)
-            .read_u32(layout.tag_offset);
+        let store = store.require_gc_store_mut()?;
+        let instance = store.gc_object_data(&self.0).read_u32(layout.tag_offset);
         let instance = InstanceId::from_u32(instance);
         let tag = store
-            .gc_store_mut()?
             .gc_object_data(&self.0)
             .read_u32(layout.tag_offset + 4);
         let tag = DefinedTagIndex::from_u32(tag);
