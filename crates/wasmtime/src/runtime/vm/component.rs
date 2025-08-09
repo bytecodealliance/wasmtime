@@ -31,14 +31,16 @@ use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 )]
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
+mod handle_table;
 mod libcalls;
 mod resources;
 
+pub use self::handle_table::{HandleTable, RemovedResource};
+#[cfg(feature = "component-model-async")]
+pub use self::handle_table::{TransmitLocalState, Waitable};
 #[cfg(feature = "component-model-async")]
 pub use self::resources::CallContext;
-pub use self::resources::{
-    CallContexts, ResourceTable, ResourceTables, TypedResource, TypedResourceIndex,
-};
+pub use self::resources::{CallContexts, ResourceTables, TypedResource, TypedResourceIndex};
 
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent;
@@ -78,11 +80,13 @@ pub struct ComponentInstance {
     // of the component can be thrown away (theoretically).
     component: Component,
 
-    /// State of resources for this component.
+    /// State of handles (e.g. resources, waitables, etc.) for this component.
     ///
-    /// This is paired with other information to create a `ResourceTables` which
-    /// is how this field is manipulated.
-    instance_resource_tables: PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
+    /// For resource handles, this is paired with other information to create a
+    /// `ResourceTables` and manipulated through that.  For other handles, this
+    /// is used directly to translate guest handles to host representations and
+    /// vice-versa.
+    instance_handle_tables: PrimaryMap<RuntimeComponentInstanceIndex, HandleTable>,
 
     /// State related to async for this component, e.g. futures, streams, tasks,
     /// etc.
@@ -273,16 +277,16 @@ impl ComponentInstance {
     ) -> OwnedComponentInstance {
         let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
         let num_instances = component.env_component().num_runtime_component_instances;
-        let mut instance_resource_tables =
+        let mut instance_handle_tables =
             PrimaryMap::with_capacity(num_instances.try_into().unwrap());
         for _ in 0..num_instances {
-            instance_resource_tables.push(ResourceTable::default());
+            instance_handle_tables.push(HandleTable::default());
         }
 
         let mut ret = OwnedInstance::new(ComponentInstance {
             id,
             offsets,
-            instance_resource_tables,
+            instance_handle_tables,
             instances: PrimaryMap::with_capacity(
                 component
                     .env_component()
@@ -734,14 +738,14 @@ impl ComponentInstance {
     pub fn guest_tables(
         self: Pin<&mut Self>,
     ) -> (
-        &mut PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
+        &mut PrimaryMap<RuntimeComponentInstanceIndex, HandleTable>,
         &ComponentTypes,
     ) {
         // safety: we've chosen the `pin` guarantee of `self` to not apply to
         // the map returned.
         unsafe {
             let me = self.get_unchecked_mut();
-            (&mut me.instance_resource_tables, me.component.types())
+            (&mut me.instance_handle_tables, me.component.types())
         }
     }
 
