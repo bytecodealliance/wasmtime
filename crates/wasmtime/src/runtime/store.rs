@@ -1508,6 +1508,7 @@ impl StoreOpaque {
     /// `GcStore` is sure to have already happened prior, otherwise this may
     /// return a confusing error to embedders which is a bug in Wasmtime.
     #[inline]
+    #[cfg(feature = "gc")]
     pub(crate) fn require_gc_store(&self) -> Result<&GcStore> {
         match &self.gc_store {
             Some(gc_store) => Ok(gc_store),
@@ -1551,7 +1552,6 @@ impl StoreOpaque {
     /// for example, or if `ensure_gc_store` has already been called.
     #[inline]
     #[track_caller]
-    #[cfg(feature = "gc")]
     pub(crate) fn unwrap_gc_store(&self) -> &GcStore {
         self.gc_store
             .as_ref()
