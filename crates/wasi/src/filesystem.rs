@@ -634,9 +634,6 @@ pub struct File {
     /// oflags back out using fcntl.
     pub open_mode: OpenMode,
 
-    #[cfg(feature = "p3")]
-    pub(crate) tasks: Arc<std::sync::Mutex<crate::runtime::TaskTable>>,
-
     allow_blocking_current_thread: bool,
 }
 
@@ -651,8 +648,6 @@ impl File {
             file: Arc::new(file),
             perms,
             open_mode,
-            #[cfg(feature = "p3")]
-            tasks: Arc::default(),
             allow_blocking_current_thread,
         }
     }
@@ -747,9 +742,6 @@ pub struct Dir {
     /// oflags back out using fcntl.
     pub open_mode: OpenMode,
 
-    #[cfg(feature = "p3")]
-    pub(crate) tasks: Arc<std::sync::Mutex<crate::runtime::TaskTable>>,
-
     allow_blocking_current_thread: bool,
 }
 
@@ -766,8 +758,6 @@ impl Dir {
             perms,
             file_perms,
             open_mode,
-            #[cfg(feature = "p3")]
-            tasks: Arc::default(),
             allow_blocking_current_thread,
         }
     }
