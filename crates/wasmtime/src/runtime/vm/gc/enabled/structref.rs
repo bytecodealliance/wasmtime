@@ -165,7 +165,8 @@ impl VMStructRef {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
 
         let offset = layout.fields[field].offset;
-        let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
+        let gcstore = store.require_gc_store_mut()?;
+        let data = gcstore.gc_object_data(self.as_gc_ref());
         match val {
             Val::I32(i) if ty.is_i8() => data.write_i8(offset, truncate_i32_to_i8(i)),
             Val::I32(i) if ty.is_i16() => data.write_i16(offset, truncate_i32_to_i16(i)),
@@ -194,8 +195,9 @@ impl VMStructRef {
                     Some(e) => Some(e.try_gc_ref(store)?.unchecked_copy()),
                     None => None,
                 };
-                store.gc_store_mut()?.write_gc_ref(&mut gc_ref, e.as_ref());
-                let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
+                let store = store.require_gc_store_mut()?;
+                store.write_gc_ref(&mut gc_ref, e.as_ref());
+                let data = store.gc_object_data(self.as_gc_ref());
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
             }
             Val::AnyRef(a) => {
@@ -205,8 +207,9 @@ impl VMStructRef {
                     Some(a) => Some(a.try_gc_ref(store)?.unchecked_copy()),
                     None => None,
                 };
-                store.gc_store_mut()?.write_gc_ref(&mut gc_ref, a.as_ref());
-                let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
+                let store = store.require_gc_store_mut()?;
+                store.write_gc_ref(&mut gc_ref, a.as_ref());
+                let data = store.gc_object_data(self.as_gc_ref());
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
             }
             Val::ExnRef(e) => {
@@ -216,16 +219,17 @@ impl VMStructRef {
                     Some(e) => Some(e.try_gc_ref(store)?.unchecked_copy()),
                     None => None,
                 };
-                store.gc_store_mut()?.write_gc_ref(&mut gc_ref, e.as_ref());
-                let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
+                let store = store.require_gc_store_mut()?;
+                store.write_gc_ref(&mut gc_ref, e.as_ref());
+                let data = store.gc_object_data(self.as_gc_ref());
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
             }
 
             Val::FuncRef(f) => {
                 let f = f.map(|f| SendSyncPtr::new(f.vm_func_ref(store)));
-                let id = unsafe { store.gc_store_mut()?.func_ref_table.intern(f) };
-                store
-                    .gc_store_mut()?
+                let gcstore = store.require_gc_store_mut()?;
+                let id = unsafe { gcstore.func_ref_table.intern(f) };
+                gcstore
                     .gc_object_data(self.as_gc_ref())
                     .write_u32(offset, id.into_raw());
             }
@@ -326,35 +330,19 @@ pub(crate) fn initialize_field_impl(
     offset: u32,
     val: Val,
 ) -> Result<()> {
+    let gcstore = store.require_gc_store_mut()?;
     match val {
-        Val::I32(i) if ty.is_i8() => store
-            .gc_store_mut()?
+        Val::I32(i) if ty.is_i8() => gcstore
             .gc_object_data(gc_ref)
             .write_i8(offset, truncate_i32_to_i8(i)),
-        Val::I32(i) if ty.is_i16() => store
-            .gc_store_mut()?
+        Val::I32(i) if ty.is_i16() => gcstore
             .gc_object_data(gc_ref)
             .write_i16(offset, truncate_i32_to_i16(i)),
-        Val::I32(i) => store
-            .gc_store_mut()?
-            .gc_object_data(gc_ref)
-            .write_i32(offset, i),
-        Val::I64(i) => store
-            .gc_store_mut()?
-            .gc_object_data(gc_ref)
-            .write_i64(offset, i),
-        Val::F32(f) => store
-            .gc_store_mut()?
-            .gc_object_data(gc_ref)
-            .write_u32(offset, f),
-        Val::F64(f) => store
-            .gc_store_mut()?
-            .gc_object_data(gc_ref)
-            .write_u64(offset, f),
-        Val::V128(v) => store
-            .gc_store_mut()?
-            .gc_object_data(gc_ref)
-            .write_v128(offset, v),
+        Val::I32(i) => gcstore.gc_object_data(gc_ref).write_i32(offset, i),
+        Val::I64(i) => gcstore.gc_object_data(gc_ref).write_i64(offset, i),
+        Val::F32(f) => gcstore.gc_object_data(gc_ref).write_u32(offset, f),
+        Val::F64(f) => gcstore.gc_object_data(gc_ref).write_u64(offset, f),
+        Val::V128(v) => gcstore.gc_object_data(gc_ref).write_v128(offset, v),
 
         // NB: We don't need to do a write barrier when initializing a
         // field, because there is nothing being overwritten. Therefore, we
@@ -365,7 +353,7 @@ pub(crate) fn initialize_field_impl(
                 Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),
             };
             store
-                .gc_store_mut()?
+                .require_gc_store_mut()?
                 .gc_object_data(gc_ref)
                 .write_u32(offset, x);
         }
@@ -375,7 +363,7 @@ pub(crate) fn initialize_field_impl(
                 Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),
             };
             store
-                .gc_store_mut()?
+                .require_gc_store_mut()?
                 .gc_object_data(gc_ref)
                 .write_u32(offset, x);
         }
@@ -385,16 +373,16 @@ pub(crate) fn initialize_field_impl(
                 Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),
             };
             store
-                .gc_store_mut()?
+                .require_gc_store_mut()?
                 .gc_object_data(gc_ref)
                 .write_u32(offset, x);
         }
 
         Val::FuncRef(f) => {
             let f = f.map(|f| SendSyncPtr::new(f.vm_func_ref(store)));
-            let id = unsafe { store.gc_store_mut()?.func_ref_table.intern(f) };
-            store
-                .gc_store_mut()?
+            let gcstore = store.require_gc_store_mut()?;
+            let id = unsafe { gcstore.func_ref_table.intern(f) };
+            gcstore
                 .gc_object_data(gc_ref)
                 .write_u32(offset, id.into_raw());
         }

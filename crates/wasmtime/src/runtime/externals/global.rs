@@ -158,7 +158,7 @@ impl Global {
                         HeapType::NoFunc => Ref::Func(None),
 
                         HeapType::Extern => Ref::Extern(definition.as_gc_ref().map(|r| {
-                            let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
+                            let r = store.clone_gc_ref(r);
                             ExternRef::from_cloned_gc_ref(&mut store, r)
                         })),
 
@@ -180,7 +180,7 @@ impl Global {
                         | HeapType::ConcreteExn(_) => definition
                             .as_gc_ref()
                             .map(|r| {
-                                let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
+                                let r = store.clone_gc_ref(r);
                                 AnyRef::from_cloned_gc_ref(&mut store, r)
                             })
                             .into(),
@@ -236,7 +236,7 @@ impl Global {
                         Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
+                    definition.write_gc_ref(&mut store, new);
                 }
                 Val::AnyRef(a) => {
                     let new = match a {
@@ -244,7 +244,7 @@ impl Global {
                         Some(a) => Some(a.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
+                    definition.write_gc_ref(&mut store, new);
                 }
                 Val::ExnRef(e) => {
                     let new = match e {
@@ -252,7 +252,7 @@ impl Global {
                         Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(store.unwrap_gc_store_mut(), new);
+                    definition.write_gc_ref(&mut store, new);
                 }
             }
         }

@@ -280,11 +280,7 @@ impl AnyRef {
     // (Not actually memory unsafe since we have indexed GC heaps.)
     pub(crate) fn _from_raw(store: &mut AutoAssertNoGc, raw: u32) -> Option<Rooted<Self>> {
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
-        let gc_ref = if gc_ref.is_i31() {
-            gc_ref.copy_i31()
-        } else {
-            store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref)
-        };
+        let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(Self::from_cloned_gc_ref(store, gc_ref))
     }
 
@@ -340,7 +336,7 @@ impl AnyRef {
         let raw = if gc_ref.is_i31() {
             gc_ref.as_raw_non_zero_u32()
         } else {
-            store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
+            store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
         };
         Ok(raw.get())
     }
@@ -364,7 +360,7 @@ impl AnyRef {
             return Ok(HeapType::I31);
         }
 
-        let header = store.gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref);
 
         if header.kind().matches(VMGcKind::ExternRef) {
             return Ok(HeapType::Any);
@@ -437,7 +433,11 @@ impl AnyRef {
     pub(crate) fn _is_eqref(&self, store: &StoreOpaque) -> Result<bool> {
         assert!(self.comes_from_same_store(store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(gc_ref.is_i31() || store.gc_store()?.kind(gc_ref).matches(VMGcKind::EqRef))
+        Ok(gc_ref.is_i31()
+            || store
+                .require_gc_store()?
+                .kind(gc_ref)
+                .matches(VMGcKind::EqRef))
     }
 
     /// Downcast this `anyref` to an `eqref`.
@@ -558,7 +558,11 @@ impl AnyRef {
 
     pub(crate) fn _is_struct(&self, store: &StoreOpaque) -> Result<bool> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(!gc_ref.is_i31() && store.gc_store()?.kind(gc_ref).matches(VMGcKind::StructRef))
+        Ok(!gc_ref.is_i31()
+            && store
+                .require_gc_store()?
+                .kind(gc_ref)
+                .matches(VMGcKind::StructRef))
     }
 
     /// Downcast this `anyref` to a `structref`.
@@ -622,7 +626,11 @@ impl AnyRef {
 
     pub(crate) fn _is_array(&self, store: &StoreOpaque) -> Result<bool> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(!gc_ref.is_i31() && store.gc_store()?.kind(gc_ref).matches(VMGcKind::ArrayRef))
+        Ok(!gc_ref.is_i31()
+            && store
+                .require_gc_store()?
+                .kind(gc_ref)
+                .matches(VMGcKind::ArrayRef))
     }
 
     /// Downcast this `anyref` to an `arrayref`.

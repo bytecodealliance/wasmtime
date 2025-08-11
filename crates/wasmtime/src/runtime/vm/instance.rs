@@ -581,10 +581,7 @@ impl Instance {
                 }
 
                 if self.env_module().needs_gc_heap {
-                    self.as_mut().set_gc_heap(Some(store.gc_store().expect(
-                        "if we need a GC heap, then `Instance::new_raw` should have already \
-                     allocated it for us",
-                    )));
+                    self.as_mut().set_gc_heap(Some(store.unwrap_gc_store()));
                 } else {
                     self.as_mut().set_gc_heap(None);
                 }

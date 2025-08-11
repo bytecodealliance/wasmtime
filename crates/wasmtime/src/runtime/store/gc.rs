@@ -52,7 +52,7 @@ impl StoreOpaque {
                     .get_gc_ref(&scope)
                     .expect("still in scope")
                     .unchecked_copy();
-                Some(scope.gc_store_mut()?.clone_gc_ref(&r))
+                Some(scope.clone_gc_ref(&r))
             }
         };
 
@@ -163,6 +163,7 @@ impl StoreOpaque {
             !self.async_support(),
             "use the `*_async` versions of methods when async is configured"
         );
+        self.ensure_gc_store()?;
         match alloc_func(self, value) {
             Ok(x) => Ok(x),
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
@@ -190,6 +191,7 @@ impl StoreOpaque {
     where
         T: Send + Sync + 'static,
     {
+        self.ensure_gc_store()?;
         match alloc_func(self, value) {
             Ok(x) => Ok(x),
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
@@ -245,6 +247,7 @@ impl StoreOpaque {
             self.async_support(),
             "you must configure async to use the `*_async` versions of methods"
         );
+        self.ensure_gc_store()?;
         match alloc_func(self, value) {
             Ok(x) => Ok(x),
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {

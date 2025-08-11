@@ -533,7 +533,14 @@ unsafe fn grow_gc_heap(
     _instance: Pin<&mut Instance>,
     bytes_needed: u64,
 ) -> Result<()> {
-    let orig_len = u64::try_from(store.gc_store()?.gc_heap.vmmemory().current_length()).unwrap();
+    let orig_len = u64::try_from(
+        store
+            .require_gc_store()?
+            .gc_heap
+            .vmmemory()
+            .current_length(),
+    )
+    .unwrap();
 
     unsafe {
         store
@@ -544,7 +551,14 @@ unsafe fn grow_gc_heap(
 
     // JIT code relies on the memory having grown by `bytes_needed` bytes if
     // this libcall returns successfully, so trap if we didn't grow that much.
-    let new_len = u64::try_from(store.gc_store()?.gc_heap.vmmemory().current_length()).unwrap();
+    let new_len = u64::try_from(
+        store
+            .require_gc_store()?
+            .gc_heap
+            .vmmemory()
+            .current_length(),
+    )
+    .unwrap();
     if orig_len
         .checked_add(bytes_needed)
         .is_none_or(|expected_len| new_len < expected_len)
@@ -626,7 +640,12 @@ unsafe fn intern_func_ref_for_gc_heap(
     let func_ref = func_ref.cast::<VMFuncRef>();
     let func_ref = NonNull::new(func_ref).map(SendSyncPtr::new);
 
-    let func_ref_id = unsafe { store.gc_store_mut()?.func_ref_table.intern(func_ref) };
+    let func_ref_id = unsafe {
+        store
+            .require_gc_store_mut()?
+            .func_ref_table
+            .intern(func_ref)
+    };
     Ok(func_ref_id.into_raw())
 }
 

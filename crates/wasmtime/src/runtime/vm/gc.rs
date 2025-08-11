@@ -97,7 +97,7 @@ impl GcStore {
     /// Clone a GC reference, calling GC write barriers as necessary.
     pub fn clone_gc_ref(&mut self, gc_ref: &VMGcRef) -> VMGcRef {
         if gc_ref.is_i31() {
-            gc_ref.unchecked_copy()
+            gc_ref.copy_i31()
         } else {
             self.gc_heap.clone_gc_ref(gc_ref)
         }
@@ -116,21 +116,55 @@ impl GcStore {
         self.write_gc_ref(destination, source);
     }
 
+    /// Dynamically tests whether a `init_gc_ref` is needed to write `gc_ref`
+    /// into an uninitialized destination.
+    pub(crate) fn needs_init_barrier(gc_ref: Option<&VMGcRef>) -> bool {
+        assert!(cfg!(feature = "gc") || gc_ref.is_none());
+        gc_ref.is_some_and(|r| !r.is_i31())
+    }
+
+    /// Dynamically tests whether a `write_gc_ref` is needed to write `gc_ref`
+    /// into `dest`.
+    pub(crate) fn needs_write_barrier(
+        dest: &mut Option<VMGcRef>,
+        gc_ref: Option<&VMGcRef>,
+    ) -> bool {
+        assert!(cfg!(feature = "gc") || gc_ref.is_none());
+        assert!(cfg!(feature = "gc") || dest.is_none());
+        dest.as_ref().is_some_and(|r| !r.is_i31()) || gc_ref.is_some_and(|r| !r.is_i31())
+    }
+
+    /// Same as [`Self::write_gc_ref`] but doesn't require a `store` when
+    /// possible.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is `None` and one of `dest` or `gc_ref` requires a
+    /// write barrier.
+    pub(crate) fn write_gc_ref_optional_store(
+        store: Option<&mut Self>,
+        dest: &mut Option<VMGcRef>,
+        gc_ref: Option<&VMGcRef>,
+    ) {
+        if Self::needs_write_barrier(dest, gc_ref) {
+            store.unwrap().write_gc_ref(dest, gc_ref)
+        } else {
+            *dest = gc_ref.map(|r| r.copy_i31());
+        }
+    }
+
     /// Write the `source` GC reference into the `destination` slot, performing
     /// write barriers as necessary.
     pub fn write_gc_ref(&mut self, destination: &mut Option<VMGcRef>, source: Option<&VMGcRef>) {
         // If neither the source nor destination actually point to a GC object
         // (that is, they are both either null or `i31ref`s) then we can skip
         // the GC barrier.
-        if destination.as_ref().map_or(true, |d| d.is_i31())
-            && source.as_ref().map_or(true, |s| s.is_i31())
-        {
-            *destination = source.map(|s| s.unchecked_copy());
-            return;
+        if Self::needs_write_barrier(destination, source) {
+            self.gc_heap
+                .write_gc_ref(&mut self.host_data_table, destination, source);
+        } else {
+            *destination = source.map(|s| s.copy_i31());
         }
-
-        self.gc_heap
-            .write_gc_ref(&mut self.host_data_table, destination, source);
     }
 
     /// Drop the given GC reference, performing drop barriers as necessary.

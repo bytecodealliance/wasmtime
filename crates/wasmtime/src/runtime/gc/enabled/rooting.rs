@@ -168,14 +168,14 @@ mod sealed {
         /// Panics if this root is not associated with the given store.
         fn clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Option<VMGcRef> {
             let gc_ref = self.get_gc_ref(store)?.unchecked_copy();
-            Some(store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref))
+            Some(store.clone_gc_ref(&gc_ref))
         }
 
         /// Same as `clone_gc_ref` but returns an error instead of `None` for
         /// objects that have been unrooted.
         fn try_clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
             let gc_ref = self.try_gc_ref(store)?.unchecked_copy();
-            Ok(store.gc_store_mut()?.clone_gc_ref(&gc_ref))
+            Ok(store.clone_gc_ref(&gc_ref))
         }
     }
 }
@@ -263,14 +263,14 @@ impl GcRootIndex {
     /// particular `T: GcRef`.
     pub(crate) fn try_clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
         let gc_ref = self.try_gc_ref(store)?.unchecked_copy();
-        Ok(store.gc_store_mut()?.clone_gc_ref(&gc_ref))
+        Ok(store.clone_gc_ref(&gc_ref))
     }
 }
 
 /// This is a bit-packed version of
 ///
 /// ```ignore
-/// enema {
+/// enum {
 ///     Lifo(usize),
 ///     Manual(SlabId),
 /// }
@@ -1031,7 +1031,7 @@ impl<T: GcRef> Rooted<T> {
         from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Self,
     ) -> Option<Self> {
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(from_cloned_gc_ref(store, gc_ref))
     }
 }
@@ -1781,7 +1781,7 @@ where
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
         let gc_ref = self.try_clone_gc_ref(store)?;
-        let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        let raw = store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
         ptr.write(val_raw(raw.get()));
         Ok(())
     }
@@ -1795,7 +1795,7 @@ where
     ) -> Self {
         debug_assert_ne!(raw_gc_ref, 0);
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref).expect("non-null");
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        let gc_ref = store.clone_gc_ref(&gc_ref);
         RootSet::with_lifo_scope(store, |store| {
             let rooted = from_cloned_gc_ref(store, gc_ref);
             rooted
@@ -1829,7 +1829,7 @@ where
         from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Rooted<T>,
     ) -> Option<Self> {
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        let gc_ref = store.clone_gc_ref(&gc_ref);
         RootSet::with_lifo_scope(store, |store| {
             let rooted = from_cloned_gc_ref(store, gc_ref);
             Some(

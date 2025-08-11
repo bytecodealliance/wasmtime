@@ -229,7 +229,7 @@ impl ExternRef {
         let gc_ref = store
             .retry_after_gc(value, |store, value| {
                 store
-                    .gc_store_mut()?
+                    .require_gc_store_mut()?
                     .alloc_externref(value)
                     .context("unrecoverable error when allocating new `externref`")?
                     .map_err(|(x, n)| GcHeapOutOfMemory::new(x, n).into())
@@ -346,7 +346,7 @@ impl ExternRef {
         let gc_ref = store
             .retry_after_gc_async(value, |store, value| {
                 store
-                    .gc_store_mut()?
+                    .require_gc_store_mut()?
                     .alloc_externref(value)
                     .context("unrecoverable error when allocating new `externref`")?
                     .map_err(|(x, n)| GcHeapOutOfMemory::new(x, n).into())
@@ -435,11 +435,13 @@ impl ExternRef {
         store: &mut AutoAssertNoGc<'_>,
         gc_ref: VMGcRef,
     ) -> Rooted<Self> {
-        assert!(
-            gc_ref.is_extern_ref(&*store.unwrap_gc_store().gc_heap)
-                || gc_ref.is_any_ref(&*store.unwrap_gc_store().gc_heap),
-            "GC reference {gc_ref:#p} should be an externref or anyref"
-        );
+        if !gc_ref.is_i31() {
+            assert!(
+                gc_ref.is_extern_ref(&*store.unwrap_gc_store().gc_heap)
+                    || gc_ref.is_any_ref(&*store.unwrap_gc_store().gc_heap),
+                "GC reference {gc_ref:#p} should be an externref or anyref"
+            );
+        }
         Rooted::new(store, gc_ref)
     }
 
@@ -481,7 +483,10 @@ impl ExternRef {
     {
         let store = store.into().0;
         let gc_ref = self.inner.try_gc_ref(&store)?;
-        let gc_store = store.gc_store()?;
+        if gc_ref.is_i31() {
+            return Ok(None);
+        }
+        let gc_store = store.require_gc_store()?;
         if let Some(externref) = gc_ref.as_externref(&*gc_store.gc_heap) {
             Ok(Some(gc_store.externref_host_data(externref)))
         } else {
@@ -532,7 +537,10 @@ impl ExternRef {
         // so that we can get the store's GC store. But importantly we cannot
         // trigger a GC while we are working with `gc_ref` here.
         let gc_ref = self.inner.try_gc_ref(store)?.unchecked_copy();
-        let gc_store = store.gc_store_mut()?;
+        if gc_ref.is_i31() {
+            return Ok(None);
+        }
+        let gc_store = store.require_gc_store_mut()?;
         if let Some(externref) = gc_ref.as_externref(&*gc_store.gc_heap) {
             Ok(Some(gc_store.externref_host_data_mut(externref)))
         } else {
@@ -579,7 +587,7 @@ impl ExternRef {
     // (Not actually memory unsafe since we have indexed GC heaps.)
     pub(crate) fn _from_raw(store: &mut AutoAssertNoGc, raw: u32) -> Option<Rooted<ExternRef>> {
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(Self::from_cloned_gc_ref(store, gc_ref))
     }
 

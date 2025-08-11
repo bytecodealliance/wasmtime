@@ -1126,7 +1126,7 @@ impl Table {
     }
 
     fn copy_elements(
-        gc_store: Option<&mut GcStore>,
+        mut gc_store: Option<&mut GcStore>,
         dst_table: &mut Self,
         src_table: &Self,
         dst_range: Range<usize>,
@@ -1151,9 +1151,9 @@ impl Table {
                 );
                 assert!(dst_range.end <= dst_table.gc_refs().len());
                 assert!(src_range.end <= src_table.gc_refs().len());
-                let gc_store = gc_store.unwrap();
                 for (dst, src) in dst_range.zip(src_range) {
-                    gc_store.write_gc_ref(
+                    GcStore::write_gc_ref_optional_store(
+                        gc_store.as_deref_mut(),
                         &mut dst_table.gc_refs_mut()[dst],
                         src_table.gc_refs()[src].as_ref(),
                     );
@@ -1169,7 +1169,7 @@ impl Table {
 
     fn copy_elements_within(
         &mut self,
-        gc_store: Option<&mut GcStore>,
+        mut gc_store: Option<&mut GcStore>,
         dst_range: Range<usize>,
         src_range: Range<usize>,
     ) {
@@ -1191,8 +1191,6 @@ impl Table {
                 funcrefs.copy_within(src_range, dst_range.start);
             }
             TableElementType::GcRef => {
-                let gc_store = gc_store.unwrap();
-
                 // We need to clone each `externref` while handling overlapping
                 // ranges
                 let elements = self.gc_refs_mut();
@@ -1201,14 +1199,14 @@ impl Table {
                         let (ds, ss) = elements.split_at_mut(s);
                         let dst = &mut ds[d];
                         let src = ss[0].as_ref();
-                        gc_store.write_gc_ref(dst, src);
+                        GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), dst, src);
                     }
                 } else {
                     for (s, d) in src_range.rev().zip(dst_range.rev()) {
                         let (ss, ds) = elements.split_at_mut(d);
                         let dst = &mut ds[0];
                         let src = ss[s].as_ref();
-                        gc_store.write_gc_ref(dst, src);
+                        GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), dst, src);
                     }
                 }
             }

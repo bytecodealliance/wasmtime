@@ -166,7 +166,7 @@ impl ExnRef {
     // (Not actually memory unsafe since we have indexed GC heaps.)
     pub(crate) fn _from_raw(store: &mut AutoAssertNoGc, raw: u32) -> Option<Rooted<Self>> {
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(Self::from_cloned_gc_ref(store, gc_ref))
     }
 
@@ -335,7 +335,7 @@ impl ExnRef {
         // Allocate the exn and write each field value into the appropriate
         // offset.
         let exnref = store
-            .gc_store_mut()?
+            .require_gc_store_mut()?
             .alloc_uninit_exn(allocator.type_index(), &allocator.layout())
             .context("unrecoverable error when allocating new `exnref`")?
             .map_err(|n| GcHeapOutOfMemory::new((), n))?;
@@ -361,7 +361,7 @@ impl ExnRef {
         })() {
             Ok(()) => Ok(Rooted::new(&mut store, exnref.into())),
             Err(e) => {
-                store.gc_store_mut()?.dealloc_uninit_exn(exnref);
+                store.require_gc_store_mut()?.dealloc_uninit_exn(exnref);
                 Err(e)
             }
         }
@@ -369,7 +369,7 @@ impl ExnRef {
 
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        let header = store.gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref);
         debug_assert!(header.kind().matches(VMGcKind::ExnRef));
         Ok(header.ty().expect("exnrefs should have concrete types"))
     }
@@ -421,7 +421,7 @@ impl ExnRef {
         let raw = if gc_ref.is_i31() {
             gc_ref.as_raw_non_zero_u32()
         } else {
-            store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
+            store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
         };
         Ok(raw.get())
     }
@@ -501,7 +501,7 @@ impl ExnRef {
         let store = AutoAssertNoGc::new(store);
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
-        let header = store.gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref);
         debug_assert!(header.kind().matches(VMGcKind::ExnRef));
 
         let index = header.ty().expect("exnrefs should have concrete types");
@@ -554,7 +554,7 @@ impl ExnRef {
     fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(store.gc_store()?.header(gc_ref))
+        Ok(store.require_gc_store()?.header(gc_ref))
     }
 
     fn exnref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMExnRef> {

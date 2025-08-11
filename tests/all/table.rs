@@ -366,3 +366,23 @@ fn host_table_keep_type_registration() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn gc_store_with_table_initializers() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+
+    let test = |wat: &str| -> Result<()> {
+        let module = Module::new(&engine, wat)?;
+        Instance::new(&mut Store::new(&engine, ()), &module, &[])?;
+        Ok(())
+    };
+
+    test("(module (table 1 i31ref))")?;
+    test("(module (table 1 i31ref (ref.i31 (i32.const 1))))")?;
+    test("(module (table 1 i31ref (ref.null i31)))")?;
+
+    Ok(())
+}
