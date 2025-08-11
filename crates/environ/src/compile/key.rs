@@ -1,4 +1,5 @@
-//! TODO FITZGEN
+//! Keys for identifying functions during compilation, in call graphs, and when
+//! resolving relocations.
 
 #[cfg(feature = "component-model")]
 use crate::component;
