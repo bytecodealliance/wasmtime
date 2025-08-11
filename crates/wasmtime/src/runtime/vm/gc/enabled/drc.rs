@@ -935,7 +935,7 @@ unsafe impl GcHeap for DrcHeap {
         ptr.cast()
     }
 
-    unsafe fn take_memory(&mut self) -> crate::vm::Memory {
+    fn take_memory(&mut self) -> crate::vm::Memory {
         debug_assert!(self.is_attached());
         self.vmmemory.take();
         self.memory.take().unwrap()
