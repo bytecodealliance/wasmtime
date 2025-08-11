@@ -1,3 +1,4 @@
+use crate::DirPerms;
 use crate::filesystem::{Descriptor, Dir, File, WasiFilesystem, WasiFilesystemCtxView};
 use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::clocks::wall_clock;
@@ -7,9 +8,14 @@ use crate::p3::bindings::filesystem::types::{
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::{FilePerms, TrappableError};
-use anyhow::{Context as _, bail};
+use anyhow::Context as _;
+use bytes::BytesMut;
+use std::io::Cursor;
 use system_interface::fs::FileIoExt as _;
-use wasmtime::component::{Accessor, FutureReader, Resource, ResourceTable, StreamReader};
+use wasmtime::component::{
+    Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureWriter, GuardedStreamWriter,
+    Resource, ResourceTable, StreamReader, StreamWriter,
+};
 
 fn get_descriptor<'a>(
     table: &'a ResourceTable,
@@ -86,6 +92,131 @@ fn systemtimespec_from(t: NewTimestamp) -> Result<Option<fs_set_times::SystemTim
     }
 }
 
+struct ReadFileTask {
+    file: File,
+    offset: u64,
+    data_tx: StreamWriter<u8>,
+    result_tx: FutureWriter<Result<(), ErrorCode>>,
+}
+
+impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadFileTask {
+    async fn run(self, store: &Accessor<T, WasiFilesystem>) -> wasmtime::Result<()> {
+        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
+        let mut offset = self.offset;
+        let mut data_tx = GuardedStreamWriter::new(store, self.data_tx);
+        let result_tx = GuardedFutureWriter::new(store, self.result_tx);
+        let res = loop {
+            match self
+                .file
+                .run_blocking(move |file| {
+                    let n = file.read_at(&mut buf, offset)?;
+                    buf.truncate(n);
+                    std::io::Result::Ok(buf)
+                })
+                .await
+            {
+                Ok(chunk) if chunk.is_empty() => {
+                    break Ok(());
+                }
+                Ok(chunk) => {
+                    let Ok(n) = chunk.len().try_into() else {
+                        break Err(ErrorCode::Overflow);
+                    };
+
+                    let Some(n) = offset.checked_add(n) else {
+                        break Err(ErrorCode::Overflow);
+                    };
+                    offset = n;
+                    buf = data_tx.write_all(Cursor::new(chunk)).await.into_inner();
+                    if data_tx.is_closed() {
+                        break Ok(());
+                    }
+                    buf.clear();
+                }
+                Err(err) => {
+                    break Err(err.into());
+                }
+            }
+        };
+        drop(self.file);
+        drop(data_tx);
+        result_tx.write(res).await;
+        Ok(())
+    }
+}
+
+struct ReadDirectoryTask {
+    dir: Dir,
+    data_tx: StreamWriter<DirectoryEntry>,
+    result_tx: FutureWriter<Result<(), ErrorCode>>,
+}
+
+impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadDirectoryTask {
+    async fn run(self, store: &Accessor<T, WasiFilesystem>) -> wasmtime::Result<()> {
+        let mut data_tx = GuardedStreamWriter::new(store, self.data_tx);
+        let result_tx = GuardedFutureWriter::new(store, self.result_tx);
+        let res = loop {
+            let mut entries = match self.dir.run_blocking(cap_std::fs::Dir::entries).await {
+                Ok(entries) => entries,
+                Err(err) => break Err(err.into()),
+            };
+            if let Err(err) = loop {
+                let (entry, tail) = match self
+                    .dir
+                    .run_blocking(move |_| {
+                        entries
+                            .next()
+                            .map(|entry| entry.map(|entry| (entry, entries)))
+                    })
+                    .await
+                {
+                    None => break Ok(()),
+                    Some(Ok((entry, tail))) => (entry, tail),
+                    Some(Err(err)) => {
+                        // On windows, filter out files like `C:\DumpStack.log.tmp` which we
+                        // can't get full metadata for.
+                        #[cfg(windows)]
+                        {
+                            use windows_sys::Win32::Foundation::{
+                                ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION,
+                            };
+                            if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
+                                || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
+                            {
+                                continue;
+                            }
+                        }
+                        break Err(err.into());
+                    }
+                };
+                let meta = match entry.metadata() {
+                    Ok(meta) => meta,
+                    Err(err) => break Err(err.into()),
+                };
+                let Ok(name) = entry.file_name().into_string() else {
+                    break Err(ErrorCode::IllegalByteSequence);
+                };
+                data_tx
+                    .write(Some(DirectoryEntry {
+                        type_: meta.file_type().into(),
+                        name,
+                    }))
+                    .await;
+                if data_tx.is_closed() {
+                    break Ok(());
+                }
+                entries = tail;
+            } {
+                break Err(err);
+            };
+        };
+        drop(self.dir);
+        drop(data_tx);
+        result_tx.write(res).await;
+        Ok(())
+    }
+}
+
 impl types::Host for WasiFilesystemCtxView<'_> {
     fn convert_error_code(&mut self, error: FilesystemError) -> wasmtime::Result<ErrorCode> {
         error.downcast()
@@ -93,17 +224,35 @@ impl types::Host for WasiFilesystemCtxView<'_> {
 }
 
 impl types::HostDescriptorWithStore for WasiFilesystem {
-    #[expect(unused)]
     async fn read_via_stream<U>(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         offset: Filesize,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        let file = store.get_file(&fd)?;
+        let (file, (data_tx, data_rx), (result_tx, result_rx)) = store.with(|mut view| {
+            let instance = view.instance();
+            let file = store.get_file(&fd)?;
+            let data = instance
+                .stream(&mut view)
+                .context("failed to create stream")?;
+            let result = if !file.perms.contains(FilePerms::READ) {
+                instance.future(&mut view, || Err(types::ErrorCode::NotPermitted))
+            } else {
+                instance.future(&mut view, || unreachable!())
+            }
+            .context("failed to create future")?;
+            anyhow::Ok((file, data, result))
+        })?;
         if !file.perms.contains(FilePerms::READ) {
-            return Err(types::ErrorCode::NotPermitted.into());
+            return Ok((data_rx, result_rx));
         }
-        bail!("TODO: read_via_stream")
+        store.spawn(ReadFileTask {
+            file,
+            offset,
+            data_tx,
+            result_tx,
+        });
+        Ok((data_rx, result_rx))
     }
 
     async fn write_via_stream<U>(
@@ -225,7 +374,6 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    #[expect(unused)]
     async fn read_directory<U>(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
@@ -233,8 +381,29 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         StreamReader<DirectoryEntry>,
         FutureReader<Result<(), ErrorCode>>,
     )> {
-        let dir = store.get_dir(&fd)?;
-        bail!("TODO: read_directory")
+        let (dir, (data_tx, data_rx), (result_tx, result_rx)) = store.with(|mut view| {
+            let instance = view.instance();
+            let dir = store.get_dir(&fd)?;
+            let data = instance
+                .stream(&mut view)
+                .context("failed to create stream")?;
+            let result = if !dir.perms.contains(DirPerms::READ) {
+                instance.future(&mut view, || Err(types::ErrorCode::NotPermitted))
+            } else {
+                instance.future(&mut view, || unreachable!())
+            }
+            .context("failed to create future")?;
+            anyhow::Ok((dir, data, result))
+        })?;
+        if !dir.perms.contains(DirPerms::READ) {
+            return Ok((data_rx, result_rx));
+        }
+        store.spawn(ReadDirectoryTask {
+            dir,
+            data_tx,
+            result_tx,
+        });
+        Ok((data_rx, result_rx))
     }
 
     async fn sync<U>(store: &Accessor<U, Self>, fd: Resource<Descriptor>) -> FilesystemResult<()> {

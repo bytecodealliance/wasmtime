@@ -265,3 +265,22 @@ impl From<crate::filesystem::DescriptorType> for types::DescriptorType {
         }
     }
 }
+
+impl From<cap_std::fs::FileType> for types::DescriptorType {
+    fn from(ft: cap_std::fs::FileType) -> Self {
+        use cap_fs_ext::FileTypeExt as _;
+        if ft.is_dir() {
+            Self::Directory
+        } else if ft.is_symlink() {
+            Self::SymbolicLink
+        } else if ft.is_block_device() {
+            Self::BlockDevice
+        } else if ft.is_char_device() {
+            Self::CharacterDevice
+        } else if ft.is_file() {
+            Self::RegularFile
+        } else {
+            Self::Unknown
+        }
+    }
+}
