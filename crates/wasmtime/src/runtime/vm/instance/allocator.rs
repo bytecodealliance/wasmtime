@@ -612,7 +612,6 @@ fn initialize_tables(
                 let idx = module.table_index(table);
                 match module.tables[idx].ref_type.heap_type.top() {
                     WasmHeapTopType::Extern => {
-                        store.ensure_gc_store()?;
                         let (gc_store, instance) =
                             store.optional_gc_store_and_instance_mut(context.instance);
                         let gc_store = gc_store.unwrap();
@@ -624,7 +623,6 @@ fn initialize_tables(
                     }
 
                     WasmHeapTopType::Any => {
-                        store.ensure_gc_store()?;
                         let (gc_store, instance) =
                             store.optional_gc_store_and_instance_mut(context.instance);
                         let gc_store = gc_store.unwrap();
@@ -636,7 +634,6 @@ fn initialize_tables(
                     }
 
                     WasmHeapTopType::Exn => {
-                        store.ensure_gc_store()?;
                         let (gc_store, instance) =
                             store.optional_gc_store_and_instance_mut(context.instance);
                         let gc_store = gc_store.unwrap();
