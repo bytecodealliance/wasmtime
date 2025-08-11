@@ -8,6 +8,10 @@ use std::task::{Context, Poll, Waker};
 /// This represents a handle to a running task which can be cancelled with
 /// [`JoinHandle::abort`]. The final result and drop of the task can be
 /// determined by `await`-ing this handle.
+///
+/// Note that dropping this handle does not affect the running task it's
+/// connected to. A manual invocation of [`JoinHandle::abort`] is required to
+/// affect the task.
 pub struct JoinHandle {
     state: Arc<Mutex<JoinState>>,
 }
