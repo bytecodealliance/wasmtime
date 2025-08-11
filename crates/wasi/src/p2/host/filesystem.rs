@@ -274,11 +274,6 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         new_path: String,
     ) -> FsResult<()> {
         let old_dir = self.table.get(&fd)?.dir()?;
-        // NOTE: `Dir::link_at` will check permissions as well, but we're doing it here early to
-        // preserve legacy behavior
-        if !old_dir.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
         let new_dir = self.table.get(&new_descriptor)?.dir()?;
         old_dir
             .link_at(old_path_flags.into(), old_path, new_dir, new_path)
@@ -347,11 +342,6 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         new_path: String,
     ) -> FsResult<()> {
         let old_dir = self.table.get(&fd)?.dir()?;
-        // NOTE: `Dir::rename_at` will check permissions as well, but we're doing it here early to
-        // preserve legacy behavior
-        if !old_dir.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
         let new_dir = self.table.get(&new_fd)?.dir()?;
         old_dir.rename_at(old_path, new_dir, new_path).await?;
         Ok(())
