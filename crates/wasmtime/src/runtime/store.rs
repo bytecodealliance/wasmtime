@@ -1419,7 +1419,13 @@ impl StoreOpaque {
         &mut self.vm_store_context
     }
 
-    /// Allocates
+    /// Performs a lazy allocation of the `GcStore` within this store, returning
+    /// the previous allocation if it's already present.
+    ///
+    /// This method will, if necessary, allocate a new `GcStore` -- linear
+    /// memory and all. This is a blocking operation due to
+    /// `ResourceLimiterAsync` which means that this should only be executed
+    /// in a fiber context at this time.
     #[inline]
     pub(crate) fn ensure_gc_store(&mut self) -> Result<&mut GcStore> {
         if self.gc_store.is_some() {
@@ -1507,6 +1513,13 @@ impl StoreOpaque {
     /// Note that this should only be used in a context where allocation of a
     /// `GcStore` is sure to have already happened prior, otherwise this may
     /// return a confusing error to embedders which is a bug in Wasmtime.
+    ///
+    /// Some situations where it's safe to call this method:
+    ///
+    /// * There's already a non-null and non-i31 `VMGcRef` in scope. By existing
+    ///   this shows proof that the `GcStore` was previously allocated.
+    /// * During instantiation and instance's `needs_gc_heap` flag will be
+    ///   handled and instantiation will automatically create a GC store.
     #[inline]
     #[cfg(feature = "gc")]
     pub(crate) fn require_gc_store(&self) -> Result<&GcStore> {
