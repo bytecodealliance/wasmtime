@@ -27,6 +27,22 @@ fn get_descriptor<'a>(
         .map_err(TrappableError::trap)
 }
 
+fn get_file<'a>(
+    table: &'a ResourceTable,
+    fd: &'a Resource<Descriptor>,
+) -> FilesystemResult<&'a File> {
+    let file = get_descriptor(table, fd).map(Descriptor::file)??;
+    Ok(file)
+}
+
+fn get_dir<'a>(
+    table: &'a ResourceTable,
+    fd: &'a Resource<Descriptor>,
+) -> FilesystemResult<&'a Dir> {
+    let dir = get_descriptor(table, fd).map(Descriptor::dir)??;
+    Ok(dir)
+}
+
 trait AccessorExt {
     fn get_descriptor(&self, fd: &Resource<Descriptor>) -> FilesystemResult<Descriptor>;
     fn get_file(&self, fd: &Resource<Descriptor>) -> FilesystemResult<File>;
@@ -40,22 +56,22 @@ trait AccessorExt {
 
 impl<T> AccessorExt for Accessor<T, WasiFilesystem> {
     fn get_descriptor(&self, fd: &Resource<Descriptor>) -> FilesystemResult<Descriptor> {
-        self.with(|mut view| {
-            let fd = get_descriptor(view.get().table, fd)?;
+        self.with(|mut store| {
+            let fd = get_descriptor(store.get().table, fd)?;
             Ok(fd.clone())
         })
     }
 
     fn get_file(&self, fd: &Resource<Descriptor>) -> FilesystemResult<File> {
-        self.with(|mut view| {
-            let file = get_descriptor(view.get().table, fd).map(Descriptor::file)??;
+        self.with(|mut store| {
+            let file = get_file(store.get().table, fd)?;
             Ok(file.clone())
         })
     }
 
     fn get_dir(&self, fd: &Resource<Descriptor>) -> FilesystemResult<Dir> {
-        self.with(|mut view| {
-            let dir = get_descriptor(view.get().table, fd).map(Descriptor::dir)??;
+        self.with(|mut store| {
+            let dir = get_dir(store.get().table, fd)?;
             Ok(dir.clone())
         })
     }
@@ -65,10 +81,10 @@ impl<T> AccessorExt for Accessor<T, WasiFilesystem> {
         a: &Resource<Descriptor>,
         b: &Resource<Descriptor>,
     ) -> FilesystemResult<(Dir, Dir)> {
-        self.with(|mut view| {
-            let table = view.get().table;
-            let a = get_descriptor(table, a).map(Descriptor::dir)??;
-            let b = get_descriptor(table, b).map(Descriptor::dir)??;
+        self.with(|mut store| {
+            let table = store.get().table;
+            let a = get_dir(table, a)?;
+            let b = get_dir(table, b)?;
             Ok((a.clone(), b.clone()))
         })
     }
@@ -229,16 +245,16 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         fd: Resource<Descriptor>,
         offset: Filesize,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        let (file, (data_tx, data_rx), (result_tx, result_rx)) = store.with(|mut view| {
-            let instance = view.instance();
-            let file = store.get_file(&fd)?;
+        let (file, (data_tx, data_rx), (result_tx, result_rx)) = store.with(|mut store| {
+            let file = get_file(store.get().table, &fd).cloned()?;
+            let instance = store.instance();
             let data = instance
-                .stream(&mut view)
+                .stream(&mut store)
                 .context("failed to create stream")?;
             let result = if !file.perms.contains(FilePerms::READ) {
-                instance.future(&mut view, || Err(types::ErrorCode::NotPermitted))
+                instance.future(&mut store, || Err(types::ErrorCode::NotPermitted))
             } else {
-                instance.future(&mut view, || unreachable!())
+                instance.future(&mut store, || unreachable!())
             }
             .context("failed to create future")?;
             anyhow::Ok((file, data, result))
@@ -381,16 +397,16 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         StreamReader<DirectoryEntry>,
         FutureReader<Result<(), ErrorCode>>,
     )> {
-        let (dir, (data_tx, data_rx), (result_tx, result_rx)) = store.with(|mut view| {
-            let instance = view.instance();
-            let dir = store.get_dir(&fd)?;
+        let (dir, (data_tx, data_rx), (result_tx, result_rx)) = store.with(|mut store| {
+            let dir = get_dir(store.get().table, &fd).cloned()?;
+            let instance = store.instance();
             let data = instance
-                .stream(&mut view)
+                .stream(&mut store)
                 .context("failed to create stream")?;
             let result = if !dir.perms.contains(DirPerms::READ) {
-                instance.future(&mut view, || Err(types::ErrorCode::NotPermitted))
+                instance.future(&mut store, || Err(types::ErrorCode::NotPermitted))
             } else {
-                instance.future(&mut view, || unreachable!())
+                instance.future(&mut store, || unreachable!())
             }
             .context("failed to create future")?;
             anyhow::Ok((dir, data, result))
@@ -481,11 +497,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         open_flags: OpenFlags,
         flags: DescriptorFlags,
     ) -> FilesystemResult<Resource<Descriptor>> {
-        let (allow_blocking_current_thread, dir) = store.with(|mut view| {
-            let view = view.get();
-            let fd = get_descriptor(&view.table, &fd)?;
-            let dir = fd.dir()?;
-            FilesystemResult::Ok((view.ctx.allow_blocking_current_thread, dir.clone()))
+        let (allow_blocking_current_thread, dir) = store.with(|mut store| {
+            let store = store.get();
+            let dir = get_dir(&store.table, &fd)?;
+            FilesystemResult::Ok((store.ctx.allow_blocking_current_thread, dir.clone()))
         })?;
         let fd = dir
             .open_at(
@@ -496,7 +511,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                 allow_blocking_current_thread,
             )
             .await?;
-        let fd = store.with(|mut view| view.get().table.push(fd))?;
+        let fd = store.with(|mut store| store.get().table.push(fd))?;
         Ok(fd)
     }
 
@@ -558,8 +573,8 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         fd: Resource<Descriptor>,
         other: Resource<Descriptor>,
     ) -> wasmtime::Result<bool> {
-        let (fd, other) = store.with(|mut view| {
-            let table = view.get().table;
+        let (fd, other) = store.with(|mut store| {
+            let table = store.get().table;
             let fd = get_descriptor(table, &fd).map(|fd| fd.clone())?;
             let other = get_descriptor(table, &other).map(|other| other.clone())?;
             anyhow::Ok((fd, other))
