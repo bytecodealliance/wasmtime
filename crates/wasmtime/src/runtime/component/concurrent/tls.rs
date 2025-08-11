@@ -72,16 +72,27 @@ pub fn set<R>(store: &mut dyn VMStore, f: impl FnOnce() -> R) -> R {
 pub fn get<R>(f: impl FnOnce(&mut dyn VMStore) -> R) -> R {
     try_get(|val| match val {
         TryGet::Some(store) => f(store),
-        TryGet::None | TryGet::Taken => get_failed(),
+        TryGet::None => get_failed(false),
+        TryGet::Taken => get_failed(true),
     })
 }
 
 #[cold]
-fn get_failed() -> ! {
-    panic!(
-        "attempted to recursively call `tls::get` when the pointer was not \
-         present or already taken by a previous call to `tls::get`"
-    );
+fn get_failed(taken: bool) -> ! {
+    if taken {
+        panic!(
+            "attempted to recursively call `Accessor::with` when the pointer \
+            was already taken by a previous call to `Accessor::with`; try \
+            using `RUST_BACKTRACE=1` to find two stack frames to \
+            `Accessor::with` on the stack"
+        );
+    } else {
+        panic!(
+            "`Accessor::with` was called when the TLS pointer was not \
+             previously set; this is likely a bug in Wasmtime and we would \
+             appreciate an issue being filed to help fix this."
+        );
+    }
 }
 
 /// Values yielded to the [`try_get`] closure as an argument.
