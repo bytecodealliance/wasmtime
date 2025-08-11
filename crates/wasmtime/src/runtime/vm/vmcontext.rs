@@ -5,7 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
-use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
+use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
 use crate::vm::stack_switching::VMStackChain;
 use core::cell::UnsafeCell;
@@ -560,17 +560,17 @@ impl VMGlobalDefinition {
                 WasmValType::Ref(r) => match r.heap_type.top() {
                     WasmHeapTopType::Extern => {
                         let r = VMGcRef::from_raw_u32(raw.get_externref());
-                        global.init_gc_ref(store.require_gc_store_mut()?, r.as_ref())
+                        global.init_gc_ref(store, r.as_ref())
                     }
                     WasmHeapTopType::Any => {
                         let r = VMGcRef::from_raw_u32(raw.get_anyref());
-                        global.init_gc_ref(store.require_gc_store_mut()?, r.as_ref())
+                        global.init_gc_ref(store, r.as_ref())
                     }
                     WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
                     WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
                     WasmHeapTopType::Exn => {
                         let r = VMGcRef::from_raw_u32(raw.get_exnref());
-                        global.init_gc_ref(store.require_gc_store_mut()?, r.as_ref())
+                        global.init_gc_ref(store, r.as_ref())
                     }
                 },
             }
@@ -597,18 +597,18 @@ impl VMGlobalDefinition {
                 WasmValType::V128 => ValRaw::v128(self.get_u128()),
                 WasmValType::Ref(r) => match r.heap_type.top() {
                     WasmHeapTopType::Extern => ValRaw::externref(match self.as_gc_ref() {
-                        Some(r) => store.require_gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
+                        Some(r) => store.clone_gc_ref(r).as_raw_u32(),
                         None => 0,
                     }),
                     WasmHeapTopType::Any => ValRaw::anyref({
                         match self.as_gc_ref() {
-                            Some(r) => store.require_gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
+                            Some(r) => store.clone_gc_ref(r).as_raw_u32(),
                             None => 0,
                         }
                     }),
                     WasmHeapTopType::Exn => ValRaw::exnref({
                         match self.as_gc_ref() {
-                            Some(r) => store.require_gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
+                            Some(r) => store.clone_gc_ref(r).as_raw_u32(),
                             None => 0,
                         }
                     }),
@@ -736,9 +736,7 @@ impl VMGlobalDefinition {
     }
 
     /// Initialize a global to the given GC reference.
-    pub unsafe fn init_gc_ref(&mut self, gc_store: &mut GcStore, gc_ref: Option<&VMGcRef>) {
-        assert!(cfg!(feature = "gc") || gc_ref.is_none());
-
+    pub unsafe fn init_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
         let dest = unsafe {
             &mut *(self
                 .storage
@@ -747,17 +745,13 @@ impl VMGlobalDefinition {
                 .cast::<MaybeUninit<Option<VMGcRef>>>())
         };
 
-        gc_store.init_gc_ref(dest, gc_ref)
+        store.init_gc_ref(dest, gc_ref)
     }
 
     /// Write a GC reference into this global value.
-    pub unsafe fn write_gc_ref(&mut self, gc_store: &mut GcStore, gc_ref: Option<&VMGcRef>) {
-        assert!(cfg!(feature = "gc") || gc_ref.is_none());
-
+    pub unsafe fn write_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
         let dest = unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>()) };
-        assert!(cfg!(feature = "gc") || dest.is_none());
-
-        gc_store.write_gc_ref(dest, gc_ref)
+        store.write_gc_ref(dest, gc_ref)
     }
 
     /// Return a reference to the value as a `VMFuncRef`.

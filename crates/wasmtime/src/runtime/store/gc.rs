@@ -3,6 +3,7 @@
 use super::*;
 use crate::GcHeapOutOfMemory;
 use crate::runtime::vm::VMGcRef;
+use core::mem::MaybeUninit;
 
 impl StoreOpaque {
     /// Collect garbage, potentially growing the GC heap.
@@ -52,7 +53,7 @@ impl StoreOpaque {
                     .get_gc_ref(&scope)
                     .expect("still in scope")
                     .unchecked_copy();
-                Some(scope.require_gc_store_mut()?.clone_gc_ref(&r))
+                Some(scope.clone_gc_ref(&r))
             }
         };
 
@@ -206,6 +207,38 @@ impl StoreOpaque {
                 }
                 Err(e) => Err(e),
             },
+        }
+    }
+
+    /// Helper function execute a `init_gc_ref` when placing `gc_ref` in `dest`.
+    ///
+    /// This avoids allocating `GcStore` where possible.
+    pub(crate) fn init_gc_ref(
+        &mut self,
+        dest: &mut MaybeUninit<Option<VMGcRef>>,
+        gc_ref: Option<&VMGcRef>,
+    ) {
+        if GcStore::needs_init_barrier(gc_ref) {
+            self.unwrap_gc_store_mut().init_gc_ref(dest, gc_ref)
+        } else {
+            dest.write(gc_ref.map(|r| r.copy_i31()));
+        }
+    }
+
+    /// Helper function execute a write barrier when placing `gc_ref` in `dest`.
+    ///
+    /// This avoids allocating `GcStore` where possible.
+    pub(crate) fn write_gc_ref(&mut self, dest: &mut Option<VMGcRef>, gc_ref: Option<&VMGcRef>) {
+        GcStore::write_gc_ref_optional_store(self.optional_gc_store_mut(), dest, gc_ref)
+    }
+
+    /// Helper function to clone `gc_ref` notably avoiding allocating a
+    /// `GcStore` where possible.
+    pub(crate) fn clone_gc_ref(&mut self, gc_ref: &VMGcRef) -> VMGcRef {
+        if gc_ref.is_i31() {
+            gc_ref.copy_i31()
+        } else {
+            self.unwrap_gc_store_mut().clone_gc_ref(gc_ref)
         }
     }
 }
