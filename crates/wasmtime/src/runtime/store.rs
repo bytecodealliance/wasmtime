@@ -93,7 +93,7 @@ use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
-    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMStoreContext,
+    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
@@ -101,7 +101,7 @@ use crate::{Global, Instance, Memory, Table, Uninhabited};
 use alloc::sync::Arc;
 use core::fmt;
 use core::marker;
-use core::mem::{self, ManuallyDrop};
+use core::mem::{self, ManuallyDrop, MaybeUninit};
 use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
@@ -1766,6 +1766,38 @@ impl StoreOpaque {
     #[cfg(feature = "gc")]
     pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: crate::type_registry::RegisteredType) {
         self.gc_host_alloc_types.insert(ty);
+    }
+
+    /// Helper function execute a `init_gc_ref` when placing `gc_ref` in `dest`.
+    ///
+    /// This avoids allocating `GcStore` where possible.
+    pub(crate) fn init_gc_ref(
+        &mut self,
+        dest: &mut MaybeUninit<Option<VMGcRef>>,
+        gc_ref: Option<&VMGcRef>,
+    ) {
+        if GcStore::needs_init_barrier(gc_ref) {
+            self.unwrap_gc_store_mut().init_gc_ref(dest, gc_ref)
+        } else {
+            dest.write(gc_ref.map(|r| r.copy_i31()));
+        }
+    }
+
+    /// Helper function execute a write barrier when placing `gc_ref` in `dest`.
+    ///
+    /// This avoids allocating `GcStore` where possible.
+    pub(crate) fn write_gc_ref(&mut self, dest: &mut Option<VMGcRef>, gc_ref: Option<&VMGcRef>) {
+        GcStore::write_gc_ref_optional_store(self.optional_gc_store_mut(), dest, gc_ref)
+    }
+
+    /// Helper function to clone `gc_ref` notably avoiding allocating a
+    /// `GcStore` where possible.
+    pub(crate) fn clone_gc_ref(&mut self, gc_ref: &VMGcRef) -> VMGcRef {
+        if gc_ref.is_i31() {
+            gc_ref.copy_i31()
+        } else {
+            self.unwrap_gc_store_mut().clone_gc_ref(gc_ref)
+        }
     }
 
     pub fn get_fuel(&self) -> Result<u64> {
