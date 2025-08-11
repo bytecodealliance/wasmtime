@@ -8,9 +8,11 @@ use crate::p3::bindings::filesystem::types::{
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::{FilePerms, TrappableError};
-use anyhow::Context as _;
+use anyhow::{Context as _, anyhow};
 use bytes::BytesMut;
+use core::mem;
 use std::io::Cursor;
+use std::sync::Arc;
 use system_interface::fs::FileIoExt as _;
 use wasmtime::component::{
     Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureWriter, GuardedStreamWriter,
@@ -93,6 +95,7 @@ fn systemtimespec_from(t: NewTimestamp) -> Result<Option<fs_set_times::SystemTim
 }
 
 struct ReadFileTask {
+    id: u32,
     file: File,
     offset: u64,
     data_tx: StreamWriter<u8>,
@@ -138,14 +141,18 @@ impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadFileTask {
                 }
             }
         };
+        let tasks = Arc::clone(&self.file.tasks);
         drop(self.file);
         drop(data_tx);
         result_tx.write(res).await;
+        let mut tasks = tasks.lock().map_err(|_| anyhow!("lock poisoned"))?;
+        tasks.remove(self.id);
         Ok(())
     }
 }
 
 struct ReadDirectoryTask {
+    id: u32,
     dir: Dir,
     data_tx: StreamWriter<DirectoryEntry>,
     result_tx: FutureWriter<Result<(), ErrorCode>>,
@@ -210,9 +217,12 @@ impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadDirectoryT
                 break Err(err);
             };
         };
+        let tasks = Arc::clone(&self.dir.tasks);
         drop(self.dir);
         drop(data_tx);
         result_tx.write(res).await;
+        let mut tasks = tasks.lock().map_err(|_| anyhow!("lock poisoned"))?;
+        tasks.remove(self.id);
         Ok(())
     }
 }
@@ -238,7 +248,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let result = if !file.perms.contains(FilePerms::READ) {
                 instance.future(&mut view, || Err(types::ErrorCode::NotPermitted))
             } else {
-                instance.future(&mut view, || unreachable!())
+                instance.future(&mut view, || Err(types::ErrorCode::BadDescriptor))
             }
             .context("failed to create future")?;
             anyhow::Ok((file, data, result))
@@ -246,12 +256,17 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         if !file.perms.contains(FilePerms::READ) {
             return Ok((data_rx, result_rx));
         }
-        store.spawn(ReadFileTask {
+        let tasks = Arc::clone(&file.tasks);
+        let mut tasks = tasks.lock().map_err(|_| anyhow!("lock poisoned"))?;
+        let entry = tasks.next_entry().context("failed to get task entry")?;
+        let task = store.spawn(ReadFileTask {
+            id: *entry.key(),
             file,
             offset,
             data_tx,
             result_tx,
         });
+        entry.insert(task);
         Ok((data_rx, result_rx))
     }
 
@@ -390,7 +405,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let result = if !dir.perms.contains(DirPerms::READ) {
                 instance.future(&mut view, || Err(types::ErrorCode::NotPermitted))
             } else {
-                instance.future(&mut view, || unreachable!())
+                instance.future(&mut view, || Err(types::ErrorCode::BadDescriptor))
             }
             .context("failed to create future")?;
             anyhow::Ok((dir, data, result))
@@ -398,11 +413,16 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         if !dir.perms.contains(DirPerms::READ) {
             return Ok((data_rx, result_rx));
         }
-        store.spawn(ReadDirectoryTask {
+        let tasks = Arc::clone(&dir.tasks);
+        let mut tasks = tasks.lock().map_err(|_| anyhow!("lock poisoned"))?;
+        let entry = tasks.next_entry().context("failed to get task entry")?;
+        let task = store.spawn(ReadDirectoryTask {
+            id: *entry.key(),
             dir,
             data_tx,
             result_tx,
         });
+        entry.insert(task);
         Ok((data_rx, result_rx))
     }
 
@@ -590,9 +610,17 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
 
 impl types::HostDescriptor for WasiFilesystemCtxView<'_> {
     fn drop(&mut self, fd: Resource<Descriptor>) -> wasmtime::Result<()> {
-        self.table
+        match self
+            .table
             .delete(fd)
-            .context("failed to delete descriptor resource from table")?;
+            .context("failed to delete descriptor resource from table")?
+        {
+            Descriptor::File(File { tasks, .. }) | Descriptor::Dir(Dir { tasks, .. }) => {
+                // Abort all active tasks
+                let mut tasks = tasks.lock().map_err(|_| anyhow!("lock poisoned"))?;
+                mem::take(&mut *tasks);
+            }
+        }
         Ok(())
     }
 }

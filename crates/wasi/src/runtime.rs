@@ -23,6 +23,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::LazyLock;
 use std::task::{Context, Poll, Waker};
+#[cfg(feature = "p3")]
+use wasmtime::component::AbortHandle;
 
 pub(crate) static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
@@ -185,5 +187,48 @@ where
     match future.poll(&mut task) {
         Poll::Ready(result) => Some(result),
         Poll::Pending => None,
+    }
+}
+
+#[cfg(feature = "p3")]
+#[derive(Default)]
+pub(crate) struct TaskTable {
+    tasks: std::collections::HashMap<u32, AbortHandle>,
+    next_task_id: u32,
+    free_task_ids: Vec<u32>,
+}
+
+#[cfg(feature = "p3")]
+impl TaskTable {
+    pub fn next_entry(
+        &mut self,
+    ) -> Option<std::collections::hash_map::VacantEntry<'_, u32, AbortHandle>> {
+        let id = if let Some(id) = self.free_task_ids.pop() {
+            id
+        } else {
+            let id = self.next_task_id;
+            let next = self.next_task_id.checked_add(1)?;
+            self.next_task_id = next;
+            id
+        };
+        let std::collections::hash_map::Entry::Vacant(entry) = self.tasks.entry(id) else {
+            return None;
+        };
+        Some(entry)
+    }
+
+    pub fn remove(&mut self, id: u32) -> Option<AbortHandle> {
+        let task = self.tasks.remove(&id)?;
+        self.free_task_ids.push(id);
+        Some(task)
+    }
+}
+
+#[cfg(feature = "p3")]
+impl Drop for TaskTable {
+    fn drop(&mut self) {
+        for task in self.tasks.values() {
+            task.abort()
+        }
     }
 }
