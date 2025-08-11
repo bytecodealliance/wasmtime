@@ -403,41 +403,6 @@ impl From<std::io::Error> for ErrorCode {
     }
 }
 
-/// File or memory access pattern advisory information.
-pub(crate) enum Advice {
-    /// The application has no advice to give on its behavior with respect
-    /// to the specified data.
-    Normal,
-    /// The application expects to access the specified data sequentially
-    /// from lower offsets to higher offsets.
-    Sequential,
-    /// The application expects to access the specified data in a random
-    /// order.
-    Random,
-    /// The application expects to access the specified data in the near
-    /// future.
-    WillNeed,
-    /// The application expects that it will not access the specified data
-    /// in the near future.
-    DontNeed,
-    /// The application expects to access the specified data once and then
-    /// not reuse it thereafter.
-    NoReuse,
-}
-
-impl From<Advice> for system_interface::fs::Advice {
-    fn from(advice: Advice) -> Self {
-        match advice {
-            Advice::Normal => Self::Normal,
-            Advice::Sequential => Self::Sequential,
-            Advice::Random => Self::Random,
-            Advice::WillNeed => Self::WillNeed,
-            Advice::DontNeed => Self::DontNeed,
-            Advice::NoReuse => Self::NoReuse,
-        }
-    }
-}
-
 #[derive(Clone)]
 pub enum Descriptor {
     File(File),
@@ -736,10 +701,10 @@ impl File {
         &self,
         offset: u64,
         len: u64,
-        advice: Advice,
+        advice: system_interface::fs::Advice,
     ) -> Result<(), ErrorCode> {
-        use system_interface::fs::FileIoExt;
-        self.run_blocking(move |f| f.advise(offset, len, advice.into()))
+        use system_interface::fs::FileIoExt as _;
+        self.run_blocking(move |f| f.advise(offset, len, advice))
             .await?;
         Ok(())
     }

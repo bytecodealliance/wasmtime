@@ -131,7 +131,7 @@ impl From<wasmtime::component::ResourceTableError> for FilesystemError {
     }
 }
 
-impl From<types::Advice> for crate::filesystem::Advice {
+impl From<types::Advice> for system_interface::fs::Advice {
     fn from(advice: types::Advice) -> Self {
         match advice {
             types::Advice::Normal => Self::Normal,
