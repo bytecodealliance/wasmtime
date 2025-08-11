@@ -87,20 +87,6 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
     }
 }
 
-struct ResultWriteTask {
-    result: Result<(), ErrorCode>,
-    result_tx: FutureWriter<Result<(), ErrorCode>>,
-}
-
-impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ResultWriteTask {
-    async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
-        GuardedFutureWriter::new(store, self.result_tx)
-            .write(self.result)
-            .await;
-        Ok(())
-    }
-}
-
 struct ReceiveTask {
     stream: Arc<TcpStream>,
     data_tx: StreamWriter<u8>,
@@ -149,13 +135,9 @@ impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
             .stream
             .as_socketlike_view::<std::net::TcpStream>()
             .shutdown(Shutdown::Read);
-
-        // Write the result async from a separate task to ensure that all resources used by this
-        // task are freed
-        store.spawn(ResultWriteTask {
-            result: res,
-            result_tx: result_tx.into(),
-        });
+        drop(self.stream);
+        drop(data_tx);
+        result_tx.write(res).await;
         Ok(())
     }
 }
