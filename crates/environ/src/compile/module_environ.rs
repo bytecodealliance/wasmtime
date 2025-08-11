@@ -360,12 +360,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 for entry in tables {
                     let wasmparser::Table { ty, init } = entry?;
                     let table = self.convert_table_type(&ty)?;
-                    self.result.module.needs_gc_heap |= match table.ref_type.heap_type.top() {
-                        WasmHeapTopType::Extern | WasmHeapTopType::Exn | WasmHeapTopType::Any => {
-                            true
-                        }
-                        WasmHeapTopType::Func | WasmHeapTopType::Cont => false,
-                    };
+                    self.result.module.needs_gc_heap |= table.ref_type.is_vmgcref_type();
                     self.result.module.tables.push(table);
                     let init = match init {
                         wasmparser::TableInit::RefNull => TableInitialValue::Null {

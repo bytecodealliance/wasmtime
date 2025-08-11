@@ -1531,6 +1531,7 @@ impl StoreOpaque {
 
     /// Same as [`Self::require_gc_store`], but mutable.
     #[inline]
+    #[cfg(feature = "gc")]
     pub(crate) fn require_gc_store_mut(&mut self) -> Result<&mut GcStore> {
         match &mut self.gc_store {
             Some(gc_store) => Ok(gc_store),
