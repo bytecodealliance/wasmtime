@@ -117,7 +117,7 @@ struct ReadFileTask {
 
 impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadFileTask {
     async fn run(self, store: &Accessor<T, WasiFilesystem>) -> wasmtime::Result<()> {
-        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
+        let mut buf = BytesMut::zeroed(DEFAULT_BUFFER_CAPACITY);
         let mut offset = self.offset;
         let mut data_tx = GuardedStreamWriter::new(store, self.data_tx);
         let result_tx = GuardedFutureWriter::new(store, self.result_tx);
@@ -138,7 +138,6 @@ impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadFileTask {
                     let Ok(n) = chunk.len().try_into() else {
                         break Err(ErrorCode::Overflow);
                     };
-
                     let Some(n) = offset.checked_add(n) else {
                         break Err(ErrorCode::Overflow);
                     };
@@ -147,7 +146,7 @@ impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadFileTask {
                     if data_tx.is_closed() {
                         break Ok(());
                     }
-                    buf.clear();
+                    buf.resize(DEFAULT_BUFFER_CAPACITY, 0);
                 }
                 Err(err) => {
                     break Err(err.into());
@@ -296,6 +295,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     FilesystemResult::Ok(buf)
                 })
                 .await?;
+            offset = offset.saturating_add(buf.len() as _);
             buf.clear();
         }
         Ok(())
