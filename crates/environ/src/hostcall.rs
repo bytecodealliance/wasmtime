@@ -61,13 +61,7 @@ impl HostCall {
                     index - 2 - BuiltinFunctionIndex::len(),
                 ))
             }
-            _ => panic!(
-                "bad host call index: {index}\n\
-                 BuiltinFunctionIndex::len() = {}\n\
-                 ComponentBuiltinFunctionIndex::len() = {}",
-                BuiltinFunctionIndex::len(),
-                ComponentBuiltinFunctionIndex::len()
-            ),
+            _ => panic!("bad host call index: {index}"),
         };
         debug_assert_eq!(index, host_call.index());
         host_call
