@@ -1412,7 +1412,7 @@ impl Definition {
                 *size = m.size();
             }
             Definition::Extern(Extern::Table(m), DefinitionType::Table(_, size)) => {
-                *size = m.internal_size(store);
+                *size = m.size_(store);
             }
             _ => {}
         }
@@ -1423,9 +1423,7 @@ impl DefinitionType {
     pub(crate) fn from(store: &StoreOpaque, item: &Extern) -> DefinitionType {
         match item {
             Extern::Func(f) => DefinitionType::Func(f.type_index(store)),
-            Extern::Table(t) => {
-                DefinitionType::Table(*t.wasmtime_ty(store), t.internal_size(store))
-            }
+            Extern::Table(t) => DefinitionType::Table(*t.wasmtime_ty(store), t.size_(store)),
             Extern::Global(t) => DefinitionType::Global(*t.wasmtime_ty(store)),
             Extern::Memory(t) => {
                 DefinitionType::Memory(*t.wasmtime_ty(store), t.internal_size(store))

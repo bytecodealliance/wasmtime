@@ -627,52 +627,6 @@ impl Table {
         }
     }
 
-    /// Initializes the contents of this table to the specified function
-    ///
-    /// # Panics
-    ///
-    /// Panics if the table is not a function table.
-    pub fn init_func(
-        &mut self,
-        dst: u64,
-        items: impl ExactSizeIterator<Item = Option<NonNull<VMFuncRef>>>,
-    ) -> Result<(), Trap> {
-        let dst = usize::try_from(dst).map_err(|_| Trap::TableOutOfBounds)?;
-
-        let (funcrefs, lazy_init) = self.funcrefs_mut();
-        let elements = funcrefs
-            .get_mut(dst..)
-            .and_then(|s| s.get_mut(..items.len()))
-            .ok_or(Trap::TableOutOfBounds)?;
-
-        for (item, slot) in items.zip(elements) {
-            *slot = MaybeTaggedFuncRef::from(item, lazy_init);
-        }
-        Ok(())
-    }
-
-    /// Fill `table[dst..]` with values from `items`
-    ///
-    /// Returns a trap error on out-of-bounds accesses.
-    pub fn init_gc_refs(
-        &mut self,
-        dst: u64,
-        items: impl ExactSizeIterator<Item = Option<VMGcRef>>,
-    ) -> Result<(), Trap> {
-        let dst = usize::try_from(dst).map_err(|_| Trap::TableOutOfBounds)?;
-
-        let elements = self
-            .gc_refs_mut()
-            .get_mut(dst..)
-            .and_then(|s| s.get_mut(..items.len()))
-            .ok_or(Trap::TableOutOfBounds)?;
-
-        for (item, slot) in items.zip(elements) {
-            *slot = item;
-        }
-        Ok(())
-    }
-
     /// Fill `table[dst..dst + len]` with `val`.
     ///
     /// Returns a trap error on out-of-bounds accesses.

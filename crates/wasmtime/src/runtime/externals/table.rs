@@ -222,8 +222,11 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn set(&self, mut store: impl AsContextMut, index: u64, val: Ref) -> Result<()> {
-        let store = store.as_context_mut().0;
-        let ty = self.ty(&store);
+        self.set_(store.as_context_mut().0, index, val)
+    }
+
+    pub(crate) fn set_(&self, store: &mut StoreOpaque, index: u64, val: Ref) -> Result<()> {
+        let ty = self._ty(store);
         let val = val.into_table_element(store, ty.element())?;
         let (table, _) = self.wasmtime_table(store, iter::empty());
         table
@@ -237,10 +240,10 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn size(&self, store: impl AsContext) -> u64 {
-        self.internal_size(store.as_context().0)
+        self.size_(store.as_context().0)
     }
 
-    pub(crate) fn internal_size(&self, store: &StoreOpaque) -> u64 {
+    pub(crate) fn size_(&self, store: &StoreOpaque) -> u64 {
         // unwrap here should be ok because the runtime should always guarantee
         // that we can fit the number of elements in a 64-bit integer.
         u64::try_from(store[self.instance].table(self.index).current_elements).unwrap()
@@ -448,8 +451,17 @@ impl Table {
     ///
     /// Panics if `store` does not own either `dst_table` or `src_table`.
     pub fn fill(&self, mut store: impl AsContextMut, dst: u64, val: Ref, len: u64) -> Result<()> {
-        let store = store.as_context_mut().0;
-        let ty = self.ty(&store);
+        self.fill_(store.as_context_mut().0, dst, val, len)
+    }
+
+    pub(crate) fn fill_(
+        &self,
+        store: &mut StoreOpaque,
+        dst: u64,
+        val: Ref,
+        len: u64,
+    ) -> Result<()> {
+        let ty = self._ty(&store);
         let val = val.into_table_element(store, ty.element())?;
 
         let (table, gc_store) = self.wasmtime_table(store, iter::empty());

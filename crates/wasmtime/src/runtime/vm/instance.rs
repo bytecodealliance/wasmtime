@@ -2,6 +2,7 @@
 //! wasm module (except its callstack and register state). An
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
+use crate::OpaqueRootScope;
 use crate::prelude::*;
 use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::runtime::vm::export::Export;
@@ -13,8 +14,8 @@ use crate::runtime::vm::vmcontext::{
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    GcStore, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMGlobalKind, VMStore,
-    VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
+    GcStore, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGlobalKind, VMStore, VMStoreRawPtr, VmPtr,
+    VmSafe, WasmFault,
 };
 use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque};
 use alloc::sync::Arc;
@@ -32,8 +33,7 @@ use wasmtime_environ::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex,
     ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex, HostPtr, MemoryIndex,
     Module, PrimaryMap, PtrSize, TableIndex, TableInitialValue, TableSegmentElements, TagIndex,
-    Trap, VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
-    packed_option::ReservedValue,
+    Trap, VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex, packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -502,21 +502,6 @@ impl Instance {
         unsafe { self.vmctx_plus_offset_raw(self.offsets().vmctx_vmglobal_definition(index)) }
     }
 
-    /// Get a raw pointer to the global at the given index regardless whether it
-    /// is defined locally or imported from another module.
-    ///
-    /// Panics if the index is out of bound or is the reserved value.
-    pub(crate) fn defined_or_imported_global_ptr(
-        self: Pin<&mut Self>,
-        index: GlobalIndex,
-    ) -> NonNull<VMGlobalDefinition> {
-        if let Some(index) = self.env_module().defined_global_index(index) {
-            self.global_ptr(index)
-        } else {
-            self.imported_global(index).from.as_non_null()
-        }
-    }
-
     /// Get all globals within this instance.
     ///
     /// Returns both import and defined globals.
@@ -673,7 +658,12 @@ impl Instance {
         crate::Memory::from_raw(StoreInstanceId::new(store, id), def_index)
     }
 
-    fn get_exported_global(&self, store: StoreId, index: GlobalIndex) -> crate::Global {
+    /// Lookup a global by index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out-of-bounds for this instance.
+    pub(crate) fn get_exported_global(&self, store: StoreId, index: GlobalIndex) -> crate::Global {
         // If this global is defined within this instance, then that's easy to
         // calculate the `Global`.
         if let Some(def_index) = self.env_module().defined_global_index(index) {
@@ -995,105 +985,56 @@ impl Instance {
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
+        let store_id = store.id();
         let elements_instance = store.instance_mut(elements_instance_id);
-        let elements_module = elements_instance.env_module();
-        let top = elements_module.tables[table_index].ref_type.heap_type.top();
-        let (defined_table_index, mut table_instance) =
-            elements_instance.defined_table_index_and_instance(table_index);
-        let table_instance_id = table_instance.id;
+        let table = elements_instance.get_exported_table(store_id, table_index);
+        let table_size = u64::try_from(table.size_(store)).unwrap();
+
+        // Perform a bounds check on the table being written to. This is done by
+        // ensuring that `dst + len <= table.size()` via checked arithmetic.
+        //
+        // Note that the bounds check for the element segment happens below when
+        // the original segment is sliced via `src` and `len`.
+        table_size
+            .checked_sub(dst)
+            .and_then(|i| i.checked_sub(len))
+            .ok_or(Trap::TableOutOfBounds)?;
 
         let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
         let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
 
-        // In the initialization below we need to simultaneously have a mutable
-        // borrow on the `Table` that we're initializing and the `StoreOpaque`
-        // that it comes from. To solve this the tables are temporarily removed
-        // from the instance at `id` to be re-inserted at the end of this
-        // function via a `Drop` helper. The table and the store are then
-        // accessed through the drop helper below.
-        //
-        // This will cause a runtime panic if the table is actually accessed
-        // during the lifetime of the functions below, but that's a bug if that
-        // happens which needs to be fixed anyway.
-        let tables = mem::replace(table_instance.as_mut().tables_mut(), PrimaryMap::new());
-        let mut replace = ReplaceTables {
-            tables,
-            id: table_instance_id,
-            store,
-        };
-
-        struct ReplaceTables<'a> {
-            tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
-            id: InstanceId,
-            store: &'a mut StoreOpaque,
-        }
-
-        impl Drop for ReplaceTables<'_> {
-            fn drop(&mut self) {
-                mem::swap(
-                    self.store.instance_mut(self.id).tables_mut(),
-                    &mut self.tables,
-                );
-                debug_assert!(self.tables.is_empty());
-            }
-        }
-
-        // Reborrow the table/store from `replace` for the below code.
-        let table = &mut replace.tables[defined_table_index].1;
-        let store = &mut *replace.store;
-
+        let positions = dst..dst + u64::try_from(len).unwrap();
         match elements {
             TableSegmentElements::Functions(funcs) => {
-                let mut instance = store.instance_mut(elements_instance_id);
                 let elements = funcs
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                table.init_func(
-                    dst,
-                    elements
-                        .iter()
-                        .map(|idx| instance.as_mut().get_func_ref(*idx)),
-                )?;
+                for (i, func_idx) in positions.zip(elements) {
+                    // SAFETY: the `store_id` passed to `get_exported_func` is
+                    // indeed the store that owns the function.
+                    let func = unsafe {
+                        store
+                            .instance_mut(elements_instance_id)
+                            .get_exported_func(store_id, *func_idx)
+                    };
+                    table.set_(store, i, func.into()).unwrap();
+                }
             }
             TableSegmentElements::Expressions(exprs) => {
+                let mut store = OpaqueRootScope::new(store);
                 let exprs = exprs
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
                 let mut context = ConstEvalContext::new(elements_instance_id);
-                match top {
-                    WasmHeapTopType::Extern => table.init_gc_refs(
-                        dst,
-                        exprs.iter().map(|expr| unsafe {
-                            let raw = const_evaluator
-                                .eval(store, &mut context, expr)
-                                .expect("const expr should be valid");
-                            VMGcRef::from_raw_u32(raw.get_externref())
-                        }),
-                    )?,
-                    WasmHeapTopType::Any | WasmHeapTopType::Exn => table.init_gc_refs(
-                        dst,
-                        exprs.iter().map(|expr| unsafe {
-                            let raw = const_evaluator
-                                .eval(store, &mut context, expr)
-                                .expect("const expr should be valid");
-                            VMGcRef::from_raw_u32(raw.get_anyref())
-                        }),
-                    )?,
-                    WasmHeapTopType::Func => table.init_func(
-                        dst,
-                        exprs.iter().map(|expr| unsafe {
-                            NonNull::new(
-                                const_evaluator
-                                    .eval(store, &mut context, expr)
-                                    .expect("const expr should be valid")
-                                    .get_funcref()
-                                    .cast(),
-                            )
-                        }),
-                    )?,
-                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+                for (i, expr) in positions.zip(exprs) {
+                    let element = unsafe {
+                        const_evaluator
+                            .eval(&mut store, &mut context, expr)
+                            .expect("const expr should be valid")
+                    };
+                    table.set_(&mut store, i, element.ref_().unwrap()).unwrap();
                 }
             }
         }

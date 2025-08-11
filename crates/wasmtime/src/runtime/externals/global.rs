@@ -139,10 +139,13 @@ impl Global {
     ///
     /// Panics if `store` does not own this global.
     pub fn get(&self, mut store: impl AsContextMut) -> Val {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        self.get_(&mut store)
+    }
+
+    pub(crate) fn get_(&self, store: &mut AutoAssertNoGc<'_>) -> Val {
         unsafe {
-            let store = store.as_context_mut();
-            let definition = self.definition(store.0).as_ref();
-            let mut store = AutoAssertNoGc::new(store.0);
+            let definition = self.definition(store).as_ref();
             match self._ty(&store).content() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
@@ -152,14 +155,14 @@ impl Global {
                 ValType::Ref(ref_ty) => {
                     let reference: Ref = match ref_ty.heap_type() {
                         HeapType::Func | HeapType::ConcreteFunc(_) => {
-                            Func::_from_raw(&mut store, definition.as_func_ref().cast()).into()
+                            Func::_from_raw(store, definition.as_func_ref().cast()).into()
                         }
 
                         HeapType::NoFunc => Ref::Func(None),
 
                         HeapType::Extern => Ref::Extern(definition.as_gc_ref().map(|r| {
                             let r = store.clone_gc_ref(r);
-                            ExternRef::from_cloned_gc_ref(&mut store, r)
+                            ExternRef::from_cloned_gc_ref(store, r)
                         })),
 
                         HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont => {
@@ -181,7 +184,7 @@ impl Global {
                             .as_gc_ref()
                             .map(|r| {
                                 let r = store.clone_gc_ref(r);
-                                AnyRef::from_cloned_gc_ref(&mut store, r)
+                                AnyRef::from_cloned_gc_ref(store, r)
                             })
                             .into(),
 
@@ -211,11 +214,20 @@ impl Global {
     ///
     /// Panics if `store` does not own this global.
     pub fn set(&self, mut store: impl AsContextMut, val: Val) -> Result<()> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        self.set_(store.as_context_mut().0, val)
+    }
+
+    pub(crate) fn set_(&self, store: &mut StoreOpaque, val: Val) -> Result<()> {
         let global_ty = self._ty(&store);
         if global_ty.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");
         }
+        self.set_bypass_mutability(store, val)
+    }
+
+    pub(crate) fn set_bypass_mutability(&self, store: &mut StoreOpaque, val: Val) -> Result<()> {
+        let mut store = AutoAssertNoGc::new(store);
+        let global_ty = self._ty(&store);
         val.ensure_matches_ty(&store, global_ty.content())
             .context("type mismatch: attempt to set global to value of wrong type")?;
         unsafe {

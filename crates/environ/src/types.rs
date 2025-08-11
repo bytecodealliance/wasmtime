@@ -645,7 +645,7 @@ impl WasmHeapType {
 }
 
 /// A top heap type.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum WasmHeapTopType {
     /// The common supertype of all external references.
     Extern,
@@ -1800,6 +1800,7 @@ impl ConstExpr {
     /// Returns the new const expression as well as the escaping function
     /// indices that appeared in `ref.func` instructions, if any.
     pub fn from_wasmparser(
+        env: &dyn TypeConvert,
         expr: wasmparser::ConstExpr<'_>,
     ) -> WasmResult<(Self, SmallVec<[FuncIndex; 1]>)> {
         let mut iter = expr
@@ -1825,7 +1826,7 @@ impl ConstExpr {
                 escaped.push(FuncIndex::from_u32(*function_index));
             }
 
-            ops.push(ConstOp::from_wasmparser(op, offset)?);
+            ops.push(ConstOp::from_wasmparser(env, op, offset)?);
         }
         Ok((Self { ops }, escaped))
     }
@@ -1875,7 +1876,7 @@ pub enum ConstOp {
     V128Const(u128),
     GlobalGet(GlobalIndex),
     RefI31,
-    RefNull,
+    RefNull(WasmHeapTopType),
     RefFunc(FuncIndex),
     I32Add,
     I32Sub,
@@ -1905,7 +1906,11 @@ pub enum ConstOp {
 
 impl ConstOp {
     /// Convert a `wasmparser::Operator` to a `ConstOp`.
-    pub fn from_wasmparser(op: wasmparser::Operator<'_>, offset: usize) -> WasmResult<Self> {
+    pub fn from_wasmparser(
+        env: &dyn TypeConvert,
+        op: wasmparser::Operator<'_>,
+        offset: usize,
+    ) -> WasmResult<Self> {
         use wasmparser::Operator as O;
         Ok(match op {
             O::I32Const { value } => Self::I32Const(value),
@@ -1913,7 +1918,7 @@ impl ConstOp {
             O::F32Const { value } => Self::F32Const(value.bits()),
             O::F64Const { value } => Self::F64Const(value.bits()),
             O::V128Const { value } => Self::V128Const(u128::from_le_bytes(*value.bytes())),
-            O::RefNull { hty: _ } => Self::RefNull,
+            O::RefNull { hty } => Self::RefNull(env.convert_heap_type(hty)?.top()),
             O::RefFunc { function_index } => Self::RefFunc(FuncIndex::from_u32(function_index)),
             O::GlobalGet { global_index } => Self::GlobalGet(GlobalIndex::from_u32(global_index)),
             O::RefI31 => Self::RefI31,
