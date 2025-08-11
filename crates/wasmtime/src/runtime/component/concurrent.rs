@@ -87,7 +87,7 @@ use wasmtime_environ::component::{
     TypeTupleIndex,
 };
 
-pub use abort::AbortHandle;
+pub use abort::JoinHandle;
 pub use futures_and_streams::{
     ErrorContext, FutureReader, FutureWriter, GuardedFutureReader, GuardedFutureWriter,
     GuardedStreamReader, GuardedStreamWriter, ReadBuffer, StreamReader, StreamWriter, VecBuffer,
@@ -226,7 +226,7 @@ where
     /// Spawn a background task.
     ///
     /// See [`Accessor::spawn`] for details.
-    pub fn spawn(&mut self, task: impl AccessorTask<T, D, Result<()>>) -> AbortHandle
+    pub fn spawn(&mut self, task: impl AccessorTask<T, D, Result<()>>) -> JoinHandle
     where
         T: 'static,
     {
@@ -497,14 +497,14 @@ where
     /// or `future` such that the code to write to the write end of that
     /// `stream` or `future` must run after the function returns.
     ///
-    /// The returned [`AbortHandle`] may be used to cancel the task.
+    /// The returned [`JoinHandle`] may be used to cancel the task.
     ///
     /// # Panics
     ///
     /// Panics if called within a closure provided to the [`Accessor::with`]
     /// function. This can only be called outside an active invocation of
     /// [`Accessor::with`].
-    pub fn spawn(&self, task: impl AccessorTask<T, D, Result<()>>) -> AbortHandle
+    pub fn spawn(&self, task: impl AccessorTask<T, D, Result<()>>) -> JoinHandle
     where
         T: 'static,
     {
@@ -1123,7 +1123,7 @@ impl ConcurrentState {
             WaitableState::HostTask => {
                 let id = TableId::<HostTask>::new(rep);
                 let task = self.get(id)?;
-                if task.abort_handle.is_some() {
+                if task.join_handle.is_some() {
                     bail!("cannot drop a subtask which has not yet resolved");
                 }
                 (Waitable::Host(id), task.caller_instance, true)
@@ -1344,7 +1344,7 @@ impl Instance {
         self,
         mut store: impl AsContextMut<Data = U>,
         task: impl AccessorTask<U, HasSelf<U>, Result<()>>,
-    ) -> AbortHandle {
+    ) -> JoinHandle {
         let mut store = store.as_context_mut();
         let accessor = Accessor::new(StoreToken::new(store.as_context_mut()), Some(self));
         self.spawn_with_accessor(store, accessor, task)
@@ -1357,7 +1357,7 @@ impl Instance {
         mut store: StoreContextMut<T>,
         accessor: Accessor<T, D>,
         task: impl AccessorTask<T, D, Result<()>>,
-    ) -> AbortHandle
+    ) -> JoinHandle
     where
         T: 'static,
         D: HasData + ?Sized,
@@ -1368,7 +1368,7 @@ impl Instance {
         // hook calls to poll and possibly spawn more background tasks on each
         // iteration.
         let (handle, future) =
-            AbortHandle::run(async move { HostTaskOutput::Result(task.run(&accessor).await) });
+            JoinHandle::run(async move { HostTaskOutput::Result(task.run(&accessor).await) });
         self.concurrent_state_mut(store.0)
             .push_future(Box::pin(async move {
                 future.await.unwrap_or(HostTaskOutput::Result(Ok(())))
@@ -2544,7 +2544,7 @@ impl Instance {
 
         // Create an abortable future which hooks calls to poll and manages call
         // context state for the future.
-        let (abort_handle, future) = AbortHandle::run(async move {
+        let (join_handle, future) = JoinHandle::run(async move {
             let mut future = pin!(future);
             let mut call_context = None;
             future::poll_fn(move |cx| {
@@ -2586,7 +2586,7 @@ impl Instance {
         // We create a new host task even though it might complete immediately
         // (in which case we won't need to pass a waitable back to the guest).
         // If it does complete immediately, we'll remove it before we return.
-        let task = state.push(HostTask::new(caller_instance, Some(abort_handle)))?;
+        let task = state.push(HostTask::new(caller_instance, Some(join_handle)))?;
 
         log::trace!("new host task child of {caller:?}: {task:?}");
         let token = StoreToken::new(store.as_context_mut());
@@ -2604,7 +2604,7 @@ impl Instance {
                 let mut store = token.as_context_mut(store);
                 lower(store.as_context_mut(), instance, result?)?;
                 let state = instance.concurrent_state_mut(store.0);
-                state.get_mut(task)?.abort_handle.take();
+                state.get_mut(task)?.join_handle.take();
                 Waitable::Host(task).set_event(
                     state,
                     Some(Event::Subtask {
@@ -3106,7 +3106,7 @@ impl Instance {
         log::trace!("subtask_cancel {waitable:?} (handle {task_id})");
 
         if let Waitable::Host(host_task) = waitable {
-            if let Some(handle) = concurrent_state.get_mut(host_task)?.abort_handle.take() {
+            if let Some(handle) = concurrent_state.get_mut(host_task)?.join_handle.take() {
                 handle.abort();
                 return Ok(Status::ReturnCancelled as u32);
             }
@@ -3678,18 +3678,18 @@ type HostTaskFuture = Pin<Box<dyn Future<Output = HostTaskOutput> + Send + 'stat
 struct HostTask {
     common: WaitableCommon,
     caller_instance: RuntimeComponentInstanceIndex,
-    abort_handle: Option<AbortHandle>,
+    join_handle: Option<JoinHandle>,
 }
 
 impl HostTask {
     fn new(
         caller_instance: RuntimeComponentInstanceIndex,
-        abort_handle: Option<AbortHandle>,
+        join_handle: Option<JoinHandle>,
     ) -> Self {
         Self {
             common: WaitableCommon::default(),
             caller_instance,
-            abort_handle,
+            join_handle,
         }
     }
 }
