@@ -1,5 +1,6 @@
 use crate::filesystem::{Descriptor, Dir, File, WasiFilesystem, WasiFilesystemCtxView};
 use crate::p3::DEFAULT_BUFFER_CAPACITY;
+use crate::p3::bindings::clocks::wall_clock;
 use crate::p3::bindings::filesystem::types::{
     self, Advice, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry, ErrorCode,
     Filesize, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
@@ -64,6 +65,24 @@ impl<T> AccessorExt for Accessor<T, WasiFilesystem> {
             let b = get_descriptor(table, b).map(Descriptor::dir)??;
             Ok((a.clone(), b.clone()))
         })
+    }
+}
+
+fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, ErrorCode> {
+    std::time::SystemTime::UNIX_EPOCH
+        .checked_add(core::time::Duration::new(t.seconds, t.nanoseconds))
+        .ok_or(ErrorCode::Overflow)
+}
+
+fn systemtimespec_from(t: NewTimestamp) -> Result<Option<fs_set_times::SystemTimeSpec>, ErrorCode> {
+    use fs_set_times::SystemTimeSpec;
+    match t {
+        NewTimestamp::NoChange => Ok(None),
+        NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
+        NewTimestamp::Timestamp(st) => {
+            let st = systemtime_from(st)?;
+            Ok(Some(SystemTimeSpec::Absolute(st)))
+        }
     }
 }
 
@@ -200,11 +219,9 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         data_modification_timestamp: NewTimestamp,
     ) -> FilesystemResult<()> {
         let fd = store.get_descriptor(&fd)?;
-        fd.set_times(
-            data_access_timestamp.into(),
-            data_modification_timestamp.into(),
-        )
-        .await?;
+        let atim = systemtimespec_from(data_access_timestamp)?;
+        let mtim = systemtimespec_from(data_modification_timestamp)?;
+        fd.set_times(atim, mtim).await?;
         Ok(())
     }
 
@@ -265,13 +282,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         data_modification_timestamp: NewTimestamp,
     ) -> FilesystemResult<()> {
         let dir = store.get_dir(&fd)?;
-        dir.set_times_at(
-            path_flags.into(),
-            path,
-            data_access_timestamp.into(),
-            data_modification_timestamp.into(),
-        )
-        .await?;
+        let atim = systemtimespec_from(data_access_timestamp)?;
+        let mtim = systemtimespec_from(data_modification_timestamp)?;
+        dir.set_times_at(path_flags.into(), path, atim, mtim)
+            .await?;
         Ok(())
     }
 

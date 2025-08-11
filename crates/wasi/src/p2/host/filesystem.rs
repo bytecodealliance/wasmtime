@@ -1,4 +1,5 @@
 use crate::filesystem::{Descriptor, WasiFilesystemCtxView};
+use crate::p2::bindings::clocks::wall_clock;
 use crate::p2::bindings::filesystem::preopens;
 use crate::p2::bindings::filesystem::types::{
     self, ErrorCode, HostDescriptor, HostDirectoryEntryStream,
@@ -92,7 +93,9 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         mtim: types::NewTimestamp,
     ) -> FsResult<()> {
         let descriptor = self.table.get(&fd)?;
-        descriptor.set_times(atim.into(), mtim.into()).await?;
+        let atim = systemtimespec_from(atim)?;
+        let mtim = systemtimespec_from(mtim)?;
+        descriptor.set_times(atim, mtim).await?;
         Ok(())
     }
 
@@ -255,8 +258,9 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         mtim: types::NewTimestamp,
     ) -> FsResult<()> {
         let d = self.table.get(&fd)?.dir()?;
-        d.set_times_at(path_flags.into(), path, atim.into(), mtim.into())
-            .await?;
+        let atim = systemtimespec_from(atim)?;
+        let mtim = systemtimespec_from(mtim)?;
+        d.set_times_at(path_flags.into(), path, atim, mtim).await?;
         Ok(())
     }
 
@@ -491,28 +495,6 @@ impl From<types::Advice> for crate::filesystem::Advice {
             types::Advice::WillNeed => Self::WillNeed,
             types::Advice::DontNeed => Self::DontNeed,
             types::Advice::NoReuse => Self::NoReuse,
-        }
-    }
-}
-
-impl From<types::NewTimestamp> for crate::filesystem::NewTimestamp {
-    fn from(t: types::NewTimestamp) -> Self {
-        match t {
-            types::NewTimestamp::NoChange => Self::NoChange,
-            types::NewTimestamp::Now => Self::Now,
-            types::NewTimestamp::Timestamp(datetime) => Self::Timestamp(datetime.into()),
-        }
-    }
-}
-
-impl From<crate::filesystem::NewTimestamp> for types::NewTimestamp {
-    fn from(t: crate::filesystem::NewTimestamp) -> Self {
-        match t {
-            crate::filesystem::NewTimestamp::NoChange => Self::NoChange,
-            crate::filesystem::NewTimestamp::Now => Self::Now,
-            crate::filesystem::NewTimestamp::Timestamp(datetime) => {
-                Self::Timestamp(datetime.into())
-            }
         }
     }
 }
@@ -763,6 +745,26 @@ fn descriptortype_from(ft: cap_std::fs::FileType) -> types::DescriptorType {
         DescriptorType::RegularFile
     } else {
         DescriptorType::Unknown
+    }
+}
+
+fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, ErrorCode> {
+    std::time::SystemTime::UNIX_EPOCH
+        .checked_add(core::time::Duration::new(t.seconds, t.nanoseconds))
+        .ok_or(ErrorCode::Overflow)
+}
+
+fn systemtimespec_from(
+    t: types::NewTimestamp,
+) -> Result<Option<fs_set_times::SystemTimeSpec>, ErrorCode> {
+    use fs_set_times::SystemTimeSpec;
+    match t {
+        types::NewTimestamp::NoChange => Ok(None),
+        types::NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
+        types::NewTimestamp::Timestamp(st) => {
+            let st = systemtime_from(st)?;
+            Ok(Some(SystemTimeSpec::Absolute(st)))
+        }
     }
 }
 

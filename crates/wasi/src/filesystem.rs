@@ -2,6 +2,7 @@ use crate::clocks::Datetime;
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use anyhow::Context as _;
 use cap_fs_ext::{FileTypeExt as _, MetadataExt as _};
+use fs_set_times::SystemTimeSpec;
 use std::collections::hash_map;
 use std::sync::Arc;
 use tracing::debug;
@@ -189,38 +190,9 @@ pub(crate) enum ErrorCode {
     InvalidSeek,
 }
 
-/// When setting a timestamp, this gives the value to set it to.
-pub(crate) enum NewTimestamp {
-    /// Leave the timestamp set to its previous value.
-    NoChange,
-    /// Set the timestamp to the current time of the system clock associated
-    /// with the filesystem.
-    Now,
-    /// Set the timestamp to the given value.
-    Timestamp(Datetime),
-}
-
 fn datetime_from(t: std::time::SystemTime) -> Datetime {
     // FIXME make this infallible or handle errors properly
     Datetime::try_from(cap_std::time::SystemTime::from_std(t)).unwrap()
-}
-
-fn systemtime_from(t: Datetime) -> Result<std::time::SystemTime, ErrorCode> {
-    std::time::SystemTime::UNIX_EPOCH
-        .checked_add(core::time::Duration::new(t.seconds, t.nanoseconds))
-        .ok_or(ErrorCode::Overflow)
-}
-
-fn systemtimespec_from(t: NewTimestamp) -> Result<Option<fs_set_times::SystemTimeSpec>, ErrorCode> {
-    use fs_set_times::SystemTimeSpec;
-    match t {
-        NewTimestamp::NoChange => Ok(None),
-        NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
-        NewTimestamp::Timestamp(st) => {
-            let st = systemtime_from(st)?;
-            Ok(Some(SystemTimeSpec::Absolute(st)))
-        }
-    }
 }
 
 /// The type of a filesystem object referenced by a descriptor.
@@ -583,18 +555,15 @@ impl Descriptor {
 
     pub(crate) async fn set_times(
         &self,
-        atim: NewTimestamp,
-        mtim: NewTimestamp,
+        atim: Option<SystemTimeSpec>,
+        mtim: Option<SystemTimeSpec>,
     ) -> Result<(), ErrorCode> {
         use fs_set_times::SetTimes as _;
-
         match self {
             Self::File(f) => {
                 if !f.perms.contains(FilePerms::WRITE) {
                     return Err(ErrorCode::NotPermitted);
                 }
-                let atim = systemtimespec_from(atim)?;
-                let mtim = systemtimespec_from(mtim)?;
                 f.run_blocking(|f| f.set_times(atim, mtim)).await?;
                 Ok(())
             }
@@ -602,8 +571,6 @@ impl Descriptor {
                 if !d.perms.contains(DirPerms::MUTATE) {
                     return Err(ErrorCode::NotPermitted);
                 }
-                let atim = systemtimespec_from(atim)?;
-                let mtim = systemtimespec_from(mtim)?;
                 d.run_blocking(|d| d.set_times(atim, mtim)).await?;
                 Ok(())
             }
@@ -887,16 +854,14 @@ impl Dir {
         &self,
         path_flags: PathFlags,
         path: String,
-        atim: NewTimestamp,
-        mtim: NewTimestamp,
+        atim: Option<SystemTimeSpec>,
+        mtim: Option<SystemTimeSpec>,
     ) -> Result<(), ErrorCode> {
         use cap_fs_ext::DirExt as _;
 
         if !self.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted);
         }
-        let atim = systemtimespec_from(atim)?;
-        let mtim = systemtimespec_from(mtim)?;
         if path_flags.contains(PathFlags::SYMLINK_FOLLOW) {
             self.run_blocking(move |d| {
                 d.set_times(

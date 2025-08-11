@@ -144,28 +144,6 @@ impl From<types::Advice> for crate::filesystem::Advice {
     }
 }
 
-impl From<types::NewTimestamp> for crate::filesystem::NewTimestamp {
-    fn from(t: types::NewTimestamp) -> Self {
-        match t {
-            types::NewTimestamp::NoChange => Self::NoChange,
-            types::NewTimestamp::Now => Self::Now,
-            types::NewTimestamp::Timestamp(datetime) => Self::Timestamp(datetime.into()),
-        }
-    }
-}
-
-impl From<crate::filesystem::NewTimestamp> for types::NewTimestamp {
-    fn from(t: crate::filesystem::NewTimestamp) -> Self {
-        match t {
-            crate::filesystem::NewTimestamp::NoChange => Self::NoChange,
-            crate::filesystem::NewTimestamp::Now => Self::Now,
-            crate::filesystem::NewTimestamp::Timestamp(datetime) => {
-                Self::Timestamp(datetime.into())
-            }
-        }
-    }
-}
-
 impl From<types::OpenFlags> for crate::filesystem::OpenFlags {
     fn from(flags: types::OpenFlags) -> Self {
         let mut out = Self::empty();
