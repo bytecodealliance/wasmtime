@@ -395,7 +395,7 @@ pub struct StoreOpaque {
     /// and calls. These also interact with the `ResourceAny` type and its
     /// internal representation.
     #[cfg(feature = "component-model")]
-    component_host_table: vm::component::ResourceTable,
+    component_host_table: vm::component::HandleTable,
     #[cfg(feature = "component-model")]
     component_calls: vm::component::CallContexts,
     #[cfg(feature = "component-model")]
@@ -2032,7 +2032,7 @@ at https://bytecodealliance.org/security.
         &mut self,
     ) -> (
         &mut vm::component::CallContexts,
-        &mut vm::component::ResourceTable,
+        &mut vm::component::HandleTable,
         &mut crate::component::HostResourceData,
     ) {
         (
@@ -2059,7 +2059,7 @@ at https://bytecodealliance.org/security.
         instance: crate::component::Instance,
     ) -> (
         &mut vm::component::CallContexts,
-        &mut vm::component::ResourceTable,
+        &mut vm::component::HandleTable,
         &mut crate::component::HostResourceData,
         Pin<&mut vm::component::ComponentInstance>,
     ) {

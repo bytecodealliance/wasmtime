@@ -1,8 +1,5 @@
 use super::table::{TableDebug, TableId};
-use super::{
-    Event, GlobalErrorContextRefCount, LocalErrorContextRefCount, StateTable, Waitable,
-    WaitableCommon, WaitableState,
-};
+use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
 use crate::component::concurrent::{ConcurrentState, WorkItem};
 use crate::component::func::{self, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
@@ -10,6 +7,7 @@ use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
 use crate::component::{AsAccessor, Instance, Lower, Val, WasmList, WasmStr};
 use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::VMStore;
+use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{Context, Result, anyhow, bail};
 use buffers::Extender;
@@ -21,12 +19,13 @@ use std::future;
 use std::iter;
 use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
+use std::pin::Pin;
 use std::string::{String, ToString};
 use std::sync::{Arc, Mutex};
 use std::task::{Poll, Waker};
 use std::vec::Vec;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex, RuntimeComponentInstanceIndex,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
     TypeFutureTableIndex, TypeStreamTableIndex,
 };
@@ -38,7 +37,7 @@ mod buffers;
 /// Enum for distinguishing between a stream or future in functions that handle
 /// both.
 #[derive(Copy, Clone, Debug)]
-enum TransmitKind {
+pub enum TransmitKind {
     Stream,
     Future,
 }
@@ -95,16 +94,16 @@ impl ReturnCode {
 /// This is useful as a parameter type for functions which operate on either a
 /// future or a stream.
 #[derive(Copy, Clone, Debug)]
-pub(super) enum TableIndex {
+pub enum TransmitIndex {
     Stream(TypeStreamTableIndex),
     Future(TypeFutureTableIndex),
 }
 
-impl TableIndex {
-    fn kind(&self) -> TransmitKind {
+impl TransmitIndex {
+    pub fn kind(&self) -> TransmitKind {
         match self {
-            TableIndex::Stream(_) => TransmitKind::Stream,
-            TableIndex::Future(_) => TransmitKind::Future,
+            TransmitIndex::Stream(_) => TransmitKind::Stream,
+            TransmitIndex::Future(_) => TransmitKind::Future,
         }
     }
 }
@@ -127,51 +126,23 @@ struct HostResult<B> {
 
 /// Retrieve the payload type of the specified stream or future, or `None` if it
 /// has no payload type.
-fn payload(ty: TableIndex, types: &Arc<ComponentTypes>) -> Option<InterfaceType> {
+fn payload(ty: TransmitIndex, types: &Arc<ComponentTypes>) -> Option<InterfaceType> {
     match ty {
-        TableIndex::Future(ty) => types[types[ty].ty].payload,
-        TableIndex::Stream(ty) => types[types[ty].ty].payload,
+        TransmitIndex::Future(ty) => types[types[ty].ty].payload,
+        TransmitIndex::Stream(ty) => types[types[ty].ty].payload,
     }
 }
 
 /// Retrieve the host rep and state for the specified guest-visible waitable
 /// handle.
 fn get_mut_by_index_from(
-    state_table: &mut StateTable<WaitableState>,
-    ty: TableIndex,
+    handle_table: &mut HandleTable,
+    ty: TransmitIndex,
     index: u32,
-) -> Result<(u32, &mut StreamFutureState)> {
-    Ok(match ty {
-        TableIndex::Stream(ty) => {
-            let (rep, WaitableState::Stream(actual_ty, state)) =
-                state_table.get_mut_by_index(index)?
-            else {
-                bail!("invalid stream handle");
-            };
-            if *actual_ty != ty {
-                bail!("invalid stream handle");
-            }
-            (rep, state)
-        }
-        TableIndex::Future(ty) => {
-            let (rep, WaitableState::Future(actual_ty, state)) =
-                state_table.get_mut_by_index(index)?
-            else {
-                bail!("invalid future handle");
-            };
-            if *actual_ty != ty {
-                bail!("invalid future handle");
-            }
-            (rep, state)
-        }
-    })
-}
-
-/// Construct a `WaitableState` using the specified type and state.
-fn waitable_state(ty: TableIndex, state: StreamFutureState) -> WaitableState {
+) -> Result<(u32, &mut TransmitLocalState)> {
     match ty {
-        TableIndex::Stream(ty) => WaitableState::Stream(ty, state),
-        TableIndex::Future(ty) => WaitableState::Future(ty, state),
+        TransmitIndex::Stream(ty) => handle_table.stream_rep(ty, index),
+        TransmitIndex::Future(ty) => handle_table.future_rep(ty, index),
     }
 }
 
@@ -367,28 +338,6 @@ async fn watch_writer(accessor: impl AsAccessor, instance: Instance, id: TableId
             .unwrap_or(Poll::Ready(()))
     })
     .await
-}
-
-/// Represents the state of a stream or future handle from the perspective of a
-/// given component instance.
-#[derive(Debug, Eq, PartialEq)]
-pub(super) enum StreamFutureState {
-    /// The write end of the stream or future.
-    Write {
-        /// Whether the component instance has been notified that the stream or
-        /// future is "done" (i.e. the other end has dropped, or, in the case of
-        /// a future, a value has been transmitted).
-        done: bool,
-    },
-    /// The read end of the stream or future.
-    Read {
-        /// Whether the component instance has been notified that the stream or
-        /// future is "done" (i.e. the other end has dropped, or, in the case of
-        /// a future, a value has been transmitted).
-        done: bool,
-    },
-    /// A read or write is in progress.
-    Busy,
 }
 
 /// Represents the state associated with an error context
@@ -697,24 +646,18 @@ impl<T> FutureReader<T> {
     fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
         match ty {
             InterfaceType::Future(src) => {
-                let state_table = cx
+                let handle_table = cx
                     .instance_mut()
-                    .concurrent_state_mut()
-                    .state_table(TableIndex::Future(src));
-                let (rep, state) =
-                    get_mut_by_index_from(state_table, TableIndex::Future(src), index)?;
-
-                match state {
-                    StreamFutureState::Read { .. } => {
-                        state_table.remove_by_index(index)?;
-                    }
-                    StreamFutureState::Write { .. } => bail!("cannot transfer write end of future"),
-                    StreamFutureState::Busy => bail!("cannot transfer busy future"),
+                    .table_for_transmit(TransmitIndex::Future(src));
+                let (rep, is_done) = handle_table.future_remove_readable(src, index)?;
+                if is_done {
+                    bail!("cannot lift future after being notified that the writable end dropped");
                 }
-
                 let id = TableId::<TransmitHandle>::new(rep);
                 let concurrent_state = cx.instance_mut().concurrent_state_mut();
-                let state = concurrent_state.get(id)?.state;
+                let future = concurrent_state.get_mut(id)?;
+                future.common.handle = None;
+                let state = future.state;
 
                 if concurrent_state.get(state)?.done {
                     bail!("cannot lift future after previous read succeeded");
@@ -781,17 +724,22 @@ pub(crate) fn lower_future_to_index<U>(
     match ty {
         InterfaceType::Future(dst) => {
             let concurrent_state = cx.instance_mut().concurrent_state_mut();
-            let state = concurrent_state
-                .get(TableId::<TransmitHandle>::new(rep))?
-                .state;
+            let id = TableId::<TransmitHandle>::new(rep);
+            let state = concurrent_state.get(id)?.state;
             let rep = concurrent_state.get(state)?.read_handle.rep();
 
-            concurrent_state
-                .state_table(TableIndex::Future(dst))
-                .insert(
-                    rep,
-                    WaitableState::Future(dst, StreamFutureState::Read { done: false }),
-                )
+            let handle = cx
+                .instance_mut()
+                .table_for_transmit(TransmitIndex::Future(dst))
+                .future_insert_read(dst, rep)?;
+
+            cx.instance_mut()
+                .concurrent_state_mut()
+                .get_mut(id)?
+                .common
+                .handle = Some(handle);
+
+            Ok(handle)
         }
         _ => func::bad_type_info(),
     }
@@ -1274,26 +1222,19 @@ impl<T> StreamReader<T> {
     fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
         match ty {
             InterfaceType::Stream(src) => {
-                let state_table = cx
+                let handle_table = cx
                     .instance_mut()
-                    .concurrent_state_mut()
-                    .state_table(TableIndex::Stream(src));
-                let (rep, state) =
-                    get_mut_by_index_from(state_table, TableIndex::Stream(src), index)?;
-
-                match state {
-                    StreamFutureState::Read { done: true } => bail!(
-                        "cannot lift stream after being notified that the writable end dropped"
-                    ),
-                    StreamFutureState::Read { done: false } => {
-                        state_table.remove_by_index(index)?;
-                    }
-                    StreamFutureState::Write { .. } => bail!("cannot transfer write end of stream"),
-                    StreamFutureState::Busy => bail!("cannot transfer busy stream"),
+                    .table_for_transmit(TransmitIndex::Stream(src));
+                let (rep, is_done) = handle_table.stream_remove_readable(src, index)?;
+                if is_done {
+                    bail!("cannot lift stream after being notified that the writable end dropped");
                 }
-
                 let id = TableId::<TransmitHandle>::new(rep);
-
+                cx.instance_mut()
+                    .concurrent_state_mut()
+                    .get_mut(id)?
+                    .common
+                    .handle = None;
                 Ok(Self::new(id, cx.instance_handle()))
             }
             _ => func::bad_type_info(),
@@ -1355,17 +1296,22 @@ pub(crate) fn lower_stream_to_index<U>(
     match ty {
         InterfaceType::Stream(dst) => {
             let concurrent_state = cx.instance_mut().concurrent_state_mut();
-            let state = concurrent_state
-                .get(TableId::<TransmitHandle>::new(rep))?
-                .state;
+            let id = TableId::<TransmitHandle>::new(rep);
+            let state = concurrent_state.get(id)?.state;
             let rep = concurrent_state.get(state)?.read_handle.rep();
 
-            concurrent_state
-                .state_table(TableIndex::Stream(dst))
-                .insert(
-                    rep,
-                    WaitableState::Stream(dst, StreamFutureState::Read { done: false }),
-                )
+            let handle = cx
+                .instance_mut()
+                .table_for_transmit(TransmitIndex::Stream(dst))
+                .stream_insert_read(dst, rep)?;
+
+            cx.instance_mut()
+                .concurrent_state_mut()
+                .get_mut(id)?
+                .common
+                .handle = Some(handle);
+
+            Ok(handle)
         }
         _ => func::bad_type_info(),
     }
@@ -1545,13 +1491,10 @@ impl ErrorContext {
     fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
         match ty {
             InterfaceType::ErrorContext(src) => {
-                let (rep, _) = cx
+                let rep = cx
                     .instance_mut()
-                    .concurrent_state_mut()
-                    .error_context_tables
-                    .get_mut(src)
-                    .expect("error context table index present in (sub)component table during lift")
-                    .get_mut_by_index(index)?;
+                    .table_for_error_context(src)
+                    .error_context_rep(index)?;
 
                 Ok(Self { rep })
             }
@@ -1567,24 +1510,12 @@ pub(crate) fn lower_error_context_to_index<U>(
 ) -> Result<u32> {
     match ty {
         InterfaceType::ErrorContext(dst) => {
-            let tbl = cx
-                .instance_mut()
-                .concurrent_state_mut()
-                .error_context_tables
-                .get_mut(dst)
-                .expect("error context table index present in (sub)component table during lower");
-
-            if let Some((dst_idx, dst_state)) = tbl.get_mut_by_rep(rep) {
-                dst_state.0 += 1;
-                Ok(dst_idx)
-            } else {
-                tbl.insert(rep, LocalErrorContextRefCount(1))
-            }
+            let tbl = cx.instance_mut().table_for_error_context(dst);
+            tbl.error_context_insert(rep)
         }
         _ => func::bad_type_info(),
     }
 }
-
 // SAFETY: This relies on the `ComponentType` implementation for `u32` being
 // safe and correct since we lift and lower future handles as `u32`s.
 unsafe impl func::ComponentType for ErrorContext {
@@ -1720,7 +1651,7 @@ enum WriteState {
     Open,
     /// The write end is owned by a guest task and a write is pending.
     GuestReady {
-        ty: TableIndex,
+        ty: TransmitIndex,
         flat_abi: Option<FlatAbi>,
         options: Options,
         address: usize,
@@ -1755,7 +1686,7 @@ enum ReadState {
     Open,
     /// The read end is owned by a guest task and a read is pending.
     GuestReady {
-        ty: TableIndex,
+        ty: TransmitIndex,
         flat_abi: Option<FlatAbi>,
         options: Options,
         address: usize,
@@ -1808,7 +1739,7 @@ enum Reader<'a> {
     /// The read end is owned by a guest task.
     Guest {
         options: &'a Options,
-        ty: TableIndex,
+        ty: TransmitIndex,
         address: usize,
         count: usize,
     },
@@ -1942,11 +1873,11 @@ impl Instance {
                     self.concurrent_state_mut(store.0).set_event(
                         read_handle.rep(),
                         match ty {
-                            TableIndex::Future(ty) => Event::FutureRead {
+                            TransmitIndex::Future(ty) => Event::FutureRead {
                                 code,
                                 pending: Some((ty, handle)),
                             },
-                            TableIndex::Stream(ty) => Event::StreamRead {
+                            TransmitIndex::Stream(ty) => Event::StreamRead {
                                 code,
                                 pending: Some((ty, handle)),
                             },
@@ -2072,7 +2003,7 @@ impl Instance {
                 post_write,
                 ..
             } => {
-                if let TableIndex::Future(_) = ty {
+                if let TransmitIndex::Future(_) = ty {
                     transmit.done = true;
                 }
 
@@ -2100,11 +2031,11 @@ impl Instance {
                 state.set_event(
                     write_handle.rep(),
                     match ty {
-                        TableIndex::Future(ty) => Event::FutureWrite {
+                        TransmitIndex::Future(ty) => Event::FutureWrite {
                             code,
                             pending: pending.then_some((ty, handle)),
                         },
-                        TableIndex::Stream(ty) => Event::StreamWrite {
+                        TransmitIndex::Stream(ty) => Event::StreamWrite {
                             code,
                             pending: pending.then_some((ty, handle)),
                         },
@@ -2211,11 +2142,11 @@ impl Instance {
                     state.update_event(
                         write_handle.rep(),
                         match ty {
-                            TableIndex::Future(ty) => Event::FutureWrite {
+                            TransmitIndex::Future(ty) => Event::FutureWrite {
                                 code: ReturnCode::Dropped(0),
                                 pending: Some((ty, handle)),
                             },
-                            TableIndex::Stream(ty) => Event::StreamWrite {
+                            TransmitIndex::Stream(ty) => Event::StreamWrite {
                                 code: ReturnCode::Dropped(0),
                                 pending: Some((ty, handle)),
                             },
@@ -2328,11 +2259,11 @@ impl Instance {
                 self.concurrent_state_mut(store.0).update_event(
                     read_handle.rep(),
                     match ty {
-                        TableIndex::Future(ty) => Event::FutureRead {
+                        TransmitIndex::Future(ty) => Event::FutureRead {
                             code: ReturnCode::Dropped(0),
                             pending: Some((ty, handle)),
                         },
-                        TableIndex::Stream(ty) => Event::StreamRead {
+                        TransmitIndex::Stream(ty) => Event::StreamRead {
                             code: ReturnCode::Dropped(0),
                             pending: Some((ty, handle)),
                         },
@@ -2378,36 +2309,22 @@ impl Instance {
     pub(super) fn guest_drop_writable<T>(
         self,
         store: StoreContextMut<T>,
-        ty: TableIndex,
+        ty: TransmitIndex,
         writer: u32,
     ) -> Result<()> {
-        let (transmit_rep, state) = self
-            .concurrent_state_mut(store.0)
-            .state_table(ty)
-            .remove_by_index(writer)
-            .context("failed to find writer")?;
-        let (state, kind) = match state {
-            WaitableState::Stream(_, state) => (state, TransmitKind::Stream),
-            WaitableState::Future(_, state) => (state, TransmitKind::Future),
-            _ => {
-                bail!("invalid stream or future handle");
-            }
+        let table = self.id().get_mut(store.0).table_for_transmit(ty);
+        let transmit_rep = match ty {
+            TransmitIndex::Future(ty) => table.future_remove_writable(ty, writer)?,
+            TransmitIndex::Stream(ty) => table.stream_remove_writable(ty, writer)?,
         };
-        match state {
-            StreamFutureState::Write { .. } => {}
-            StreamFutureState::Read { .. } => {
-                bail!("passed read end to `{{stream|future}}.drop-writable`")
-            }
-            StreamFutureState::Busy => bail!("cannot drop busy stream or future"),
-        }
 
         let id = TableId::<TransmitHandle>::new(transmit_rep);
         log::trace!("guest_drop_writable: drop writer {id:?}");
-        match kind {
-            TransmitKind::Stream => {
+        match ty {
+            TransmitIndex::Stream(_) => {
                 self.host_drop_writer(store, id, None::<&dyn Fn() -> Result<()>>)
             }
-            TransmitKind::Future => self.host_drop_writer(
+            TransmitIndex::Future(_) => self.host_drop_writer(
                 store,
                 id,
                 Some(&|| {
@@ -2425,10 +2342,10 @@ impl Instance {
         self,
         mut store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
-        write_ty: TableIndex,
+        write_ty: TransmitIndex,
         write_options: &Options,
         write_address: usize,
-        read_ty: TableIndex,
+        read_ty: TransmitIndex,
         read_options: &Options,
         read_address: usize,
         count: usize,
@@ -2436,7 +2353,7 @@ impl Instance {
     ) -> Result<()> {
         let types = self.id().get(store.0).component().types().clone();
         match (write_ty, read_ty) {
-            (TableIndex::Future(write_ty), TableIndex::Future(read_ty)) => {
+            (TransmitIndex::Future(write_ty), TransmitIndex::Future(read_ty)) => {
                 assert_eq!(count, 1);
 
                 let val = types[types[write_ty].ty]
@@ -2474,7 +2391,7 @@ impl Instance {
                     val.store(lower, ty, ptr)?;
                 }
             }
-            (TableIndex::Stream(write_ty), TableIndex::Stream(read_ty)) => {
+            (TransmitIndex::Stream(write_ty), TransmitIndex::Stream(read_ty)) => {
                 if let Some(flat_abi) = flat_abi {
                     // Fast path memcpy for "flat" (i.e. no pointers or handles) payloads:
                     let length_in_bytes = usize::try_from(flat_abi.size).unwrap() * count;
@@ -2562,7 +2479,7 @@ impl Instance {
     pub(super) fn guest_write<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
-        ty: TableIndex,
+        ty: TransmitIndex,
         options: OptionsIndex,
         flat_abi: Option<FlatAbi>,
         handle: u32,
@@ -2575,9 +2492,8 @@ impl Instance {
         if !options.async_() {
             bail!("synchronous stream and future writes not yet supported");
         }
-        let concurrent_state = self.concurrent_state_mut(store.0);
-        let (rep, state) = concurrent_state.get_mut_by_index(ty, handle)?;
-        let StreamFutureState::Write { done } = *state else {
+        let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
+        let TransmitLocalState::Write { done } = *state else {
             bail!(
                 "invalid handle {handle}; expected `Write`; got {:?}",
                 *state
@@ -2588,8 +2504,9 @@ impl Instance {
             bail!("cannot write to stream after being notified that the readable end dropped");
         }
 
-        *state = StreamFutureState::Busy;
+        *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
+        let concurrent_state = self.concurrent_state_mut(store.0);
         let transmit_id = concurrent_state.get(transmit_handle)?.state;
         let transmit = concurrent_state.get_mut(transmit_id)?;
         log::trace!(
@@ -2633,7 +2550,7 @@ impl Instance {
             } => {
                 assert_eq!(flat_abi, read_flat_abi);
 
-                if let TableIndex::Future(_) = ty {
+                if let TransmitIndex::Future(_) = ty {
                     transmit.done = true;
                 }
 
@@ -2702,11 +2619,11 @@ impl Instance {
                     concurrent_state.set_event(
                         read_handle_rep,
                         match read_ty {
-                            TableIndex::Future(ty) => Event::FutureRead {
+                            TransmitIndex::Future(ty) => Event::FutureRead {
                                 code,
                                 pending: Some((ty, read_handle)),
                             },
-                            TableIndex::Stream(ty) => Event::StreamRead {
+                            TransmitIndex::Stream(ty) => Event::StreamRead {
                                 code,
                                 pending: Some((ty, read_handle)),
                             },
@@ -2735,7 +2652,7 @@ impl Instance {
             }
 
             ReadState::HostReady { accept } => {
-                if let TableIndex::Future(_) = ty {
+                if let TransmitIndex::Future(_) = ty {
                     transmit.done = true;
                 }
 
@@ -2754,7 +2671,7 @@ impl Instance {
             }
 
             ReadState::Dropped => {
-                if let TableIndex::Future(_) = ty {
+                if let TransmitIndex::Future(_) = ty {
                     transmit.done = true;
                 }
 
@@ -2763,13 +2680,13 @@ impl Instance {
         };
 
         if result != ReturnCode::Blocked {
-            let state = self.concurrent_state_mut(store.0);
-            *state.get_mut_by_index(ty, handle)?.1 = StreamFutureState::Write {
-                done: matches!(
-                    (result, ty),
-                    (ReturnCode::Dropped(_), TableIndex::Stream(_))
-                ),
-            };
+            *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
+                TransmitLocalState::Write {
+                    done: matches!(
+                        (result, ty),
+                        (ReturnCode::Dropped(_), TransmitIndex::Stream(_))
+                    ),
+                };
         }
 
         Ok(result)
@@ -2779,7 +2696,7 @@ impl Instance {
     pub(super) fn guest_read<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
-        ty: TableIndex,
+        ty: TransmitIndex,
         options: OptionsIndex,
         flat_abi: Option<FlatAbi>,
         handle: u32,
@@ -2791,9 +2708,8 @@ impl Instance {
         if !options.async_() {
             bail!("synchronous stream and future reads not yet supported");
         }
-        let concurrent_state = self.concurrent_state_mut(store.0);
-        let (rep, state) = concurrent_state.get_mut_by_index(ty, handle)?;
-        let StreamFutureState::Read { done } = *state else {
+        let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
+        let TransmitLocalState::Read { done } = *state else {
             bail!("invalid handle {handle}; expected `Read`; got {:?}", *state);
         };
 
@@ -2801,8 +2717,9 @@ impl Instance {
             bail!("cannot read from stream after being notified that the writable end dropped");
         }
 
-        *state = StreamFutureState::Busy;
+        *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
+        let concurrent_state = self.concurrent_state_mut(store.0);
         let transmit_id = concurrent_state.get(transmit_handle)?.state;
         let transmit = concurrent_state.get_mut(transmit_id)?;
         log::trace!(
@@ -2846,7 +2763,7 @@ impl Instance {
             } => {
                 assert_eq!(flat_abi, write_flat_abi);
 
-                if let TableIndex::Future(_) = ty {
+                if let TransmitIndex::Future(_) = ty {
                     transmit.done = true;
                 }
 
@@ -2907,11 +2824,11 @@ impl Instance {
                     concurrent_state.set_event(
                         write_handle_rep,
                         match write_ty {
-                            TableIndex::Future(ty) => Event::FutureWrite {
+                            TransmitIndex::Future(ty) => Event::FutureWrite {
                                 code,
                                 pending: pending.then_some((ty, write_handle)),
                             },
-                            TableIndex::Stream(ty) => Event::StreamWrite {
+                            TransmitIndex::Stream(ty) => Event::StreamWrite {
                                 code,
                                 pending: pending.then_some((ty, write_handle)),
                             },
@@ -2941,7 +2858,7 @@ impl Instance {
             }
 
             WriteState::HostReady { accept, post_write } => {
-                if let TableIndex::Future(_) = ty {
+                if let TransmitIndex::Future(_) = ty {
                     transmit.done = true;
                 }
 
@@ -2974,13 +2891,13 @@ impl Instance {
         };
 
         if result != ReturnCode::Blocked {
-            let state = self.concurrent_state_mut(store.0);
-            *state.get_mut_by_index(ty, handle)?.1 = StreamFutureState::Read {
-                done: matches!(
-                    (result, ty),
-                    (ReturnCode::Dropped(_), TableIndex::Stream(_))
-                ),
-            };
+            *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
+                TransmitLocalState::Read {
+                    done: matches!(
+                        (result, ty),
+                        (ReturnCode::Dropped(_), TransmitIndex::Stream(_))
+                    ),
+                };
         }
 
         Ok(result)
@@ -2990,25 +2907,18 @@ impl Instance {
     fn guest_drop_readable(
         self,
         store: &mut dyn VMStore,
-        ty: TableIndex,
+        ty: TransmitIndex,
         reader: u32,
     ) -> Result<()> {
-        let concurrent_state = self.concurrent_state_mut(store);
-        let (rep, state) = concurrent_state.state_table(ty).remove_by_index(reader)?;
-        let (state, kind) = match state {
-            WaitableState::Stream(_, state) => (state, TransmitKind::Stream),
-            WaitableState::Future(_, state) => (state, TransmitKind::Future),
-            _ => {
-                bail!("invalid stream or future handle");
-            }
+        let table = self.id().get_mut(store).table_for_transmit(ty);
+        let (rep, _is_done) = match ty {
+            TransmitIndex::Stream(ty) => table.stream_remove_readable(ty, reader)?,
+            TransmitIndex::Future(ty) => table.future_remove_readable(ty, reader)?,
         };
-        match state {
-            StreamFutureState::Read { .. } => {}
-            StreamFutureState::Write { .. } => {
-                bail!("passed write end to `{{stream|future}}.drop-readable`")
-            }
-            StreamFutureState::Busy => bail!("cannot drop busy stream or future"),
-        }
+        let kind = match ty {
+            TransmitIndex::Stream(_) => TransmitKind::Stream,
+            TransmitIndex::Future(_) => TransmitKind::Future,
+        };
         let id = TableId::<TransmitHandle>::new(rep);
         log::trace!("guest_drop_readable: drop reader {id:?}");
         self.host_drop_reader(store, id, kind)
@@ -3057,13 +2967,11 @@ impl Instance {
         // Here we reflect the newly created global concurrent error context state into the
         // component instance's locally tracked count, along with the appropriate key into the global
         // ref tracking data structures to enable later lookup
-        let local_tbl = &mut state.error_context_tables[ty];
-
-        assert!(
-            !local_tbl.has_handle(table_id.rep()),
-            "newly created error context state already tracked by component"
-        );
-        let local_idx = local_tbl.insert(table_id.rep(), LocalErrorContextRefCount(1))?;
+        let local_idx = self
+            .id()
+            .get_mut(store)
+            .table_for_error_context(ty)
+            .error_context_insert(table_id.rep())?;
 
         Ok(local_idx)
     }
@@ -3078,16 +2986,16 @@ impl Instance {
         debug_msg_address: u32,
     ) -> Result<()> {
         // Retrieve the error context and internal debug message
-        let state = self.concurrent_state_mut(store.0);
-        let (state_table_id_rep, _) = state
-            .error_context_tables
-            .get_mut(ty)
-            .context("error context table index present in (sub)component lookup during debug_msg")?
-            .get_mut_by_index(err_ctx_handle)?;
+        let handle_table_id_rep = self
+            .id()
+            .get_mut(store.0)
+            .table_for_error_context(ty)
+            .error_context_rep(err_ctx_handle)?;
 
+        let state = self.concurrent_state_mut(store.0);
         // Get the state associated with the error context
         let ErrorContextState { debug_msg } =
-            state.get_mut(TableId::<ErrorContextState>::new(state_table_id_rep))?;
+            state.get_mut(TableId::<ErrorContextState>::new(handle_table_id_rep))?;
         let debug_msg = debug_msg.clone();
 
         let options = Options::new_index(store.0, self, options);
@@ -3115,7 +3023,7 @@ impl Instance {
         ty: TypeFutureTableIndex,
         reader: u32,
     ) -> Result<()> {
-        self.guest_drop_readable(store, TableIndex::Future(ty), reader)
+        self.guest_drop_readable(store, TransmitIndex::Future(ty), reader)
     }
 
     /// Implements the `stream.drop-readable` intrinsic.
@@ -3125,7 +3033,296 @@ impl Instance {
         ty: TypeStreamTableIndex,
         reader: u32,
     ) -> Result<()> {
-        self.guest_drop_readable(store, TableIndex::Stream(ty), reader)
+        self.guest_drop_readable(store, TransmitIndex::Stream(ty), reader)
+    }
+}
+
+impl ComponentInstance {
+    fn table_for_transmit(self: Pin<&mut Self>, ty: TransmitIndex) -> &mut HandleTable {
+        let (tables, types) = self.guest_tables();
+        let runtime_instance = match ty {
+            TransmitIndex::Stream(ty) => types[ty].instance,
+            TransmitIndex::Future(ty) => types[ty].instance,
+        };
+        &mut tables[runtime_instance]
+    }
+
+    fn table_for_error_context(
+        self: Pin<&mut Self>,
+        ty: TypeComponentLocalErrorContextTableIndex,
+    ) -> &mut HandleTable {
+        let (tables, types) = self.guest_tables();
+        let runtime_instance = types[ty].instance;
+        &mut tables[runtime_instance]
+    }
+
+    fn get_mut_by_index(
+        self: Pin<&mut Self>,
+        ty: TransmitIndex,
+        index: u32,
+    ) -> Result<(u32, &mut TransmitLocalState)> {
+        get_mut_by_index_from(self.table_for_transmit(ty), ty, index)
+    }
+
+    /// Allocate a new future or stream and grant ownership of both the read and
+    /// write ends to the (sub-)component instance to which the specified
+    /// `TransmitIndex` belongs.
+    fn guest_new(mut self: Pin<&mut Self>, ty: TransmitIndex) -> Result<ResourcePair> {
+        let (write, read) = self.as_mut().concurrent_state_mut().new_transmit()?;
+
+        let table = self.as_mut().table_for_transmit(ty);
+        let (read_handle, write_handle) = match ty {
+            TransmitIndex::Future(ty) => (
+                table.future_insert_read(ty, read.rep())?,
+                table.future_insert_write(ty, write.rep())?,
+            ),
+            TransmitIndex::Stream(ty) => (
+                table.stream_insert_read(ty, read.rep())?,
+                table.stream_insert_write(ty, write.rep())?,
+            ),
+        };
+
+        let state = self.as_mut().concurrent_state_mut();
+        state.get_mut(read)?.common.handle = Some(read_handle);
+        state.get_mut(write)?.common.handle = Some(write_handle);
+
+        Ok(ResourcePair {
+            write: write_handle,
+            read: read_handle,
+        })
+    }
+
+    /// Cancel a pending write for the specified stream or future from the guest.
+    fn guest_cancel_write(
+        mut self: Pin<&mut Self>,
+        ty: TransmitIndex,
+        writer: u32,
+        _async_: bool,
+    ) -> Result<ReturnCode> {
+        let (rep, state) = get_mut_by_index_from(self.as_mut().table_for_transmit(ty), ty, writer)?;
+        let id = TableId::<TransmitHandle>::new(rep);
+        log::trace!("guest cancel write {id:?} (handle {writer})");
+        match state {
+            TransmitLocalState::Write { .. } => {
+                bail!("stream or future write cancelled when no write is pending")
+            }
+            TransmitLocalState::Read { .. } => {
+                bail!("passed read end to `{{stream|future}}.cancel-write`")
+            }
+            TransmitLocalState::Busy => {
+                *state = TransmitLocalState::Write { done: false };
+            }
+        }
+        let state = self.concurrent_state_mut();
+        let rep = state.get(id)?.state.rep();
+        state.host_cancel_write(rep)
+    }
+
+    /// Cancel a pending read for the specified stream or future from the guest.
+    fn guest_cancel_read(
+        mut self: Pin<&mut Self>,
+        ty: TransmitIndex,
+        reader: u32,
+        _async_: bool,
+    ) -> Result<ReturnCode> {
+        let (rep, state) = get_mut_by_index_from(self.as_mut().table_for_transmit(ty), ty, reader)?;
+        let id = TableId::<TransmitHandle>::new(rep);
+        log::trace!("guest cancel read {id:?} (handle {reader})");
+        match state {
+            TransmitLocalState::Read { .. } => {
+                bail!("stream or future read cancelled when no read is pending")
+            }
+            TransmitLocalState::Write { .. } => {
+                bail!("passed write end to `{{stream|future}}.cancel-read`")
+            }
+            TransmitLocalState::Busy => {
+                *state = TransmitLocalState::Read { done: false };
+            }
+        }
+        let state = self.concurrent_state_mut();
+        let rep = state.get(id)?.state.rep();
+        state.host_cancel_read(rep)
+    }
+
+    /// Drop the specified error context.
+    pub(crate) fn error_context_drop(
+        mut self: Pin<&mut Self>,
+        ty: TypeComponentLocalErrorContextTableIndex,
+        error_context: u32,
+    ) -> Result<()> {
+        let local_handle_table = self.as_mut().table_for_error_context(ty);
+
+        let rep = local_handle_table.error_context_drop(error_context)?;
+
+        let global_ref_count_idx = TypeComponentGlobalErrorContextTableIndex::from_u32(rep);
+
+        let state = self.concurrent_state_mut();
+        let GlobalErrorContextRefCount(global_ref_count) = state
+            .global_error_context_ref_counts
+            .get_mut(&global_ref_count_idx)
+            .expect("retrieve concurrent state for error context during drop");
+
+        // Reduce the component-global ref count, removing tracking if necessary
+        assert!(*global_ref_count >= 1);
+        *global_ref_count -= 1;
+        if *global_ref_count == 0 {
+            state
+                .global_error_context_ref_counts
+                .remove(&global_ref_count_idx);
+
+            state
+                .delete(TableId::<ErrorContextState>::new(rep))
+                .context("deleting component-global error context data")?;
+        }
+
+        Ok(())
+    }
+
+    /// Transfer ownership of the specified stream or future read end from one
+    /// guest to another.
+    fn guest_transfer(
+        mut self: Pin<&mut Self>,
+        src_idx: u32,
+        src: TransmitIndex,
+        dst: TransmitIndex,
+    ) -> Result<u32> {
+        let src_table = self.as_mut().table_for_transmit(src);
+        let (rep, is_done) = match src {
+            TransmitIndex::Future(idx) => src_table.future_remove_readable(idx, src_idx)?,
+            TransmitIndex::Stream(idx) => src_table.stream_remove_readable(idx, src_idx)?,
+        };
+        if is_done {
+            bail!("cannot lift after being notified that the writable end dropped");
+        }
+        let dst_table = self.as_mut().table_for_transmit(dst);
+        let handle = match dst {
+            TransmitIndex::Future(idx) => dst_table.future_insert_read(idx, rep),
+            TransmitIndex::Stream(idx) => dst_table.stream_insert_read(idx, rep),
+        }?;
+        self.concurrent_state_mut()
+            .get_mut(TableId::<TransmitHandle>::new(rep))?
+            .common
+            .handle = Some(handle);
+        Ok(handle)
+    }
+
+    /// Implements the `future.new` intrinsic.
+    pub(crate) fn future_new(
+        self: Pin<&mut Self>,
+        ty: TypeFutureTableIndex,
+    ) -> Result<ResourcePair> {
+        self.guest_new(TransmitIndex::Future(ty))
+    }
+
+    /// Implements the `future.cancel-write` intrinsic.
+    pub(crate) fn future_cancel_write(
+        self: Pin<&mut Self>,
+        ty: TypeFutureTableIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_write(TransmitIndex::Future(ty), writer, async_)
+            .map(|result| result.encode())
+    }
+
+    /// Implements the `future.cancel-read` intrinsic.
+    pub(crate) fn future_cancel_read(
+        self: Pin<&mut Self>,
+        ty: TypeFutureTableIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_read(TransmitIndex::Future(ty), reader, async_)
+            .map(|result| result.encode())
+    }
+
+    /// Implements the `stream.new` intrinsic.
+    pub(crate) fn stream_new(
+        self: Pin<&mut Self>,
+        ty: TypeStreamTableIndex,
+    ) -> Result<ResourcePair> {
+        self.guest_new(TransmitIndex::Stream(ty))
+    }
+
+    /// Implements the `stream.cancel-write` intrinsic.
+    pub(crate) fn stream_cancel_write(
+        self: Pin<&mut Self>,
+        ty: TypeStreamTableIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_write(TransmitIndex::Stream(ty), writer, async_)
+            .map(|result| result.encode())
+    }
+
+    /// Implements the `stream.cancel-read` intrinsic.
+    pub(crate) fn stream_cancel_read(
+        self: Pin<&mut Self>,
+        ty: TypeStreamTableIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_read(TransmitIndex::Stream(ty), reader, async_)
+            .map(|result| result.encode())
+    }
+
+    /// Transfer ownership of the specified future read end from one guest to
+    /// another.
+    pub(crate) fn future_transfer(
+        self: Pin<&mut Self>,
+        src_idx: u32,
+        src: TypeFutureTableIndex,
+        dst: TypeFutureTableIndex,
+    ) -> Result<u32> {
+        self.guest_transfer(
+            src_idx,
+            TransmitIndex::Future(src),
+            TransmitIndex::Future(dst),
+        )
+    }
+
+    /// Transfer ownership of the specified stream read end from one guest to
+    /// another.
+    pub(crate) fn stream_transfer(
+        self: Pin<&mut Self>,
+        src_idx: u32,
+        src: TypeStreamTableIndex,
+        dst: TypeStreamTableIndex,
+    ) -> Result<u32> {
+        self.guest_transfer(
+            src_idx,
+            TransmitIndex::Stream(src),
+            TransmitIndex::Stream(dst),
+        )
+    }
+
+    /// Copy the specified error context from one component to another.
+    pub(crate) fn error_context_transfer(
+        mut self: Pin<&mut Self>,
+        src_idx: u32,
+        src: TypeComponentLocalErrorContextTableIndex,
+        dst: TypeComponentLocalErrorContextTableIndex,
+    ) -> Result<u32> {
+        let rep = self
+            .as_mut()
+            .table_for_error_context(src)
+            .error_context_rep(src_idx)?;
+        let dst_idx = self
+            .as_mut()
+            .table_for_error_context(dst)
+            .error_context_insert(rep)?;
+
+        // Update the global (cross-subcomponent) count for error contexts
+        // as the new component has essentially created a new reference that will
+        // be dropped/handled independently
+        let global_ref_count = self
+            .concurrent_state_mut()
+            .global_error_context_ref_counts
+            .get_mut(&TypeComponentGlobalErrorContextTableIndex::from_u32(rep))
+            .context("global ref count present for existing (sub)component error context")?;
+        global_ref_count.0 += 1;
+
+        Ok(dst_idx)
     }
 }
 
@@ -3196,14 +3393,6 @@ impl ConcurrentState {
         waitable.set_event(self, Some(event))
     }
 
-    fn get_mut_by_index(
-        &mut self,
-        ty: TableIndex,
-        index: u32,
-    ) -> Result<(u32, &mut StreamFutureState)> {
-        get_mut_by_index_from(self.state_table(ty), ty, index)
-    }
-
     /// Allocate a new future or stream, including the `TransmitState` and the
     /// `TransmitHandle`s corresponding to the read and write ends.
     fn new_transmit(&mut self) -> Result<(TableId<TransmitHandle>, TableId<TransmitHandle>)> {
@@ -3234,30 +3423,6 @@ impl ConcurrentState {
         );
 
         Ok(())
-    }
-
-    fn state_table(&mut self, ty: TableIndex) -> &mut StateTable<WaitableState> {
-        let runtime_instance = match ty {
-            TableIndex::Stream(ty) => self.component.types()[ty].instance,
-            TableIndex::Future(ty) => self.component.types()[ty].instance,
-        };
-        &mut self.waitable_tables[runtime_instance]
-    }
-
-    /// Allocate a new future or stream and grant ownership of both the read and
-    /// write ends to the (sub-)component instance to which the specified
-    /// `TableIndex` belongs.
-    fn guest_new(&mut self, ty: TableIndex) -> Result<ResourcePair> {
-        let (write, read) = self.new_transmit()?;
-        let read = self.state_table(ty).insert(
-            read.rep(),
-            waitable_state(ty, StreamFutureState::Read { done: false }),
-        )?;
-        let write = self.state_table(ty).insert(
-            write.rep(),
-            waitable_state(ty, StreamFutureState::Write { done: false }),
-        )?;
-        Ok(ResourcePair { write, read })
     }
 
     /// Cancel a pending stream or future write from the host.
@@ -3348,301 +3513,6 @@ impl ConcurrentState {
         log::trace!("cancelled read {transmit_id:?}");
 
         Ok(code)
-    }
-
-    /// Cancel a pending write for the specified stream or future from the guest.
-    fn guest_cancel_write(
-        &mut self,
-        ty: TableIndex,
-        writer: u32,
-        _async_: bool,
-    ) -> Result<ReturnCode> {
-        let (rep, WaitableState::Stream(_, state) | WaitableState::Future(_, state)) =
-            self.state_table(ty).get_mut_by_index(writer)?
-        else {
-            bail!("invalid stream or future handle");
-        };
-        let id = TableId::<TransmitHandle>::new(rep);
-        log::trace!("guest cancel write {id:?} (handle {writer})");
-        match state {
-            StreamFutureState::Write { .. } => {
-                bail!("stream or future write cancelled when no write is pending")
-            }
-            StreamFutureState::Read { .. } => {
-                bail!("passed read end to `{{stream|future}}.cancel-write`")
-            }
-            StreamFutureState::Busy => {
-                *state = StreamFutureState::Write { done: false };
-            }
-        }
-        let rep = self.get(id)?.state.rep();
-        self.host_cancel_write(rep)
-    }
-
-    /// Cancel a pending read for the specified stream or future from the guest.
-    fn guest_cancel_read(
-        &mut self,
-        ty: TableIndex,
-        reader: u32,
-        _async_: bool,
-    ) -> Result<ReturnCode> {
-        let (rep, WaitableState::Stream(_, state) | WaitableState::Future(_, state)) =
-            self.state_table(ty).get_mut_by_index(reader)?
-        else {
-            bail!("invalid stream or future handle");
-        };
-        let id = TableId::<TransmitHandle>::new(rep);
-        log::trace!("guest cancel read {id:?} (handle {reader})");
-        match state {
-            StreamFutureState::Read { .. } => {
-                bail!("stream or future read cancelled when no read is pending")
-            }
-            StreamFutureState::Write { .. } => {
-                bail!("passed write end to `{{stream|future}}.cancel-read`")
-            }
-            StreamFutureState::Busy => {
-                *state = StreamFutureState::Read { done: false };
-            }
-        }
-        let rep = self.get(id)?.state.rep();
-        self.host_cancel_read(rep)
-    }
-
-    /// Drop the specified error context.
-    pub(crate) fn error_context_drop(
-        &mut self,
-        ty: TypeComponentLocalErrorContextTableIndex,
-        error_context: u32,
-    ) -> Result<()> {
-        let local_state_table = self
-            .error_context_tables
-            .get_mut(ty)
-            .context("error context table index present in (sub)component table during drop")?;
-
-        // Reduce the local (sub)component ref count, removing tracking if necessary
-        let (rep, local_ref_removed) = {
-            let (rep, LocalErrorContextRefCount(local_ref_count)) =
-                local_state_table.get_mut_by_index(error_context)?;
-            assert!(*local_ref_count > 0);
-            *local_ref_count -= 1;
-            let mut local_ref_removed = false;
-            if *local_ref_count == 0 {
-                local_ref_removed = true;
-                local_state_table
-                    .remove_by_index(error_context)
-                    .context("removing error context from component-local tracking")?;
-            }
-            (rep, local_ref_removed)
-        };
-
-        let global_ref_count_idx = TypeComponentGlobalErrorContextTableIndex::from_u32(rep);
-
-        let GlobalErrorContextRefCount(global_ref_count) = self
-            .global_error_context_ref_counts
-            .get_mut(&global_ref_count_idx)
-            .expect("retrieve concurrent state for error context during drop");
-
-        // Reduce the component-global ref count, removing tracking if necessary
-        assert!(*global_ref_count >= 1);
-        *global_ref_count -= 1;
-        if *global_ref_count == 0 {
-            assert!(local_ref_removed);
-
-            self.global_error_context_ref_counts
-                .remove(&global_ref_count_idx);
-
-            self.delete(TableId::<ErrorContextState>::new(rep))
-                .context("deleting component-global error context data")?;
-        }
-
-        Ok(())
-    }
-
-    /// Transfer ownership of the specified stream or future read end from one
-    /// guest to another.
-    fn guest_transfer<U: PartialEq + Eq + std::fmt::Debug>(
-        &mut self,
-        src_idx: u32,
-        src: U,
-        src_instance: RuntimeComponentInstanceIndex,
-        dst: U,
-        dst_instance: RuntimeComponentInstanceIndex,
-        match_state: impl Fn(&mut WaitableState) -> Result<(U, &mut StreamFutureState)>,
-        make_state: impl Fn(U, StreamFutureState) -> WaitableState,
-    ) -> Result<u32> {
-        let src_table = &mut self.waitable_tables[src_instance];
-        let (_rep, src_state) = src_table.get_mut_by_index(src_idx)?;
-        let (src_ty, _) = match_state(src_state)?;
-        if src_ty != src {
-            bail!("invalid future handle");
-        }
-
-        let src_table = &mut self.waitable_tables[src_instance];
-        let (rep, src_state) = src_table.get_mut_by_index(src_idx)?;
-        let (_, src_state) = match_state(src_state)?;
-
-        match src_state {
-            StreamFutureState::Read { done: true } => {
-                bail!("cannot lift stream after being notified that the writable end dropped")
-            }
-            StreamFutureState::Read { done: false } => {
-                src_table.remove_by_index(src_idx)?;
-
-                let dst_table = &mut self.waitable_tables[dst_instance];
-                dst_table.insert(
-                    rep,
-                    make_state(dst, StreamFutureState::Read { done: false }),
-                )
-            }
-            StreamFutureState::Write { .. } => {
-                bail!("cannot transfer write end of stream or future")
-            }
-            StreamFutureState::Busy => bail!("cannot transfer busy stream or future"),
-        }
-    }
-
-    /// Implements the `future.new` intrinsic.
-    pub(crate) fn future_new(&mut self, ty: TypeFutureTableIndex) -> Result<ResourcePair> {
-        self.guest_new(TableIndex::Future(ty))
-    }
-
-    /// Implements the `future.cancel-write` intrinsic.
-    pub(crate) fn future_cancel_write(
-        &mut self,
-        ty: TypeFutureTableIndex,
-        async_: bool,
-        writer: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_write(TableIndex::Future(ty), writer, async_)
-            .map(|result| result.encode())
-    }
-
-    /// Implements the `future.cancel-read` intrinsic.
-    pub(crate) fn future_cancel_read(
-        &mut self,
-        ty: TypeFutureTableIndex,
-        async_: bool,
-        reader: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_read(TableIndex::Future(ty), reader, async_)
-            .map(|result| result.encode())
-    }
-
-    /// Implements the `stream.new` intrinsic.
-    pub(crate) fn stream_new(&mut self, ty: TypeStreamTableIndex) -> Result<ResourcePair> {
-        self.guest_new(TableIndex::Stream(ty))
-    }
-
-    /// Implements the `stream.cancel-write` intrinsic.
-    pub(crate) fn stream_cancel_write(
-        &mut self,
-        ty: TypeStreamTableIndex,
-        async_: bool,
-        writer: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_write(TableIndex::Stream(ty), writer, async_)
-            .map(|result| result.encode())
-    }
-
-    /// Implements the `stream.cancel-read` intrinsic.
-    pub(crate) fn stream_cancel_read(
-        &mut self,
-        ty: TypeStreamTableIndex,
-        async_: bool,
-        reader: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_read(TableIndex::Stream(ty), reader, async_)
-            .map(|result| result.encode())
-    }
-
-    /// Transfer ownership of the specified future read end from one guest to
-    /// another.
-    pub(crate) fn future_transfer(
-        &mut self,
-        src_idx: u32,
-        src: TypeFutureTableIndex,
-        dst: TypeFutureTableIndex,
-    ) -> Result<u32> {
-        self.guest_transfer(
-            src_idx,
-            src,
-            self.component.types()[src].instance,
-            dst,
-            self.component.types()[dst].instance,
-            |state| {
-                if let WaitableState::Future(ty, state) = state {
-                    Ok((*ty, state))
-                } else {
-                    Err(anyhow!("invalid future handle"))
-                }
-            },
-            WaitableState::Future,
-        )
-    }
-
-    /// Transfer ownership of the specified stream read end from one guest to
-    /// another.
-    pub(crate) fn stream_transfer(
-        &mut self,
-        src_idx: u32,
-        src: TypeStreamTableIndex,
-        dst: TypeStreamTableIndex,
-    ) -> Result<u32> {
-        self.guest_transfer(
-            src_idx,
-            src,
-            self.component.types()[src].instance,
-            dst,
-            self.component.types()[dst].instance,
-            |state| {
-                if let WaitableState::Stream(ty, state) = state {
-                    Ok((*ty, state))
-                } else {
-                    Err(anyhow!("invalid stream handle"))
-                }
-            },
-            WaitableState::Stream,
-        )
-    }
-
-    /// Copy the specified error context from one component to another.
-    pub(crate) fn error_context_transfer(
-        &mut self,
-        src_idx: u32,
-        src: TypeComponentLocalErrorContextTableIndex,
-        dst: TypeComponentLocalErrorContextTableIndex,
-    ) -> Result<u32> {
-        let (rep, _) = {
-            let rep = self
-                .error_context_tables
-                .get_mut(src)
-                .context("error context table index present in (sub)component lookup")?
-                .get_mut_by_index(src_idx)?;
-            rep
-        };
-        let dst = self
-            .error_context_tables
-            .get_mut(dst)
-            .context("error context table index present in (sub)component lookup")?;
-
-        // Update the component local for the destination
-        let updated_count = if let Some((dst_idx, count)) = dst.get_mut_by_rep(rep) {
-            (*count).0 += 1;
-            dst_idx
-        } else {
-            dst.insert(rep, LocalErrorContextRefCount(1))?
-        };
-
-        // Update the global (cross-subcomponent) count for error contexts
-        // as the new component has essentially created a new reference that will
-        // be dropped/handled independently
-        let global_ref_count = self
-            .global_error_context_ref_counts
-            .get_mut(&TypeComponentGlobalErrorContextTableIndex::from_u32(rep))
-            .context("global ref count present for existing (sub)component error context")?;
-        global_ref_count.0 += 1;
-
-        Ok(updated_count)
     }
 }
 

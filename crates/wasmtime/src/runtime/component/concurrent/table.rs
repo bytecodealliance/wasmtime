@@ -172,11 +172,16 @@ impl TableEntry {
 impl Table {
     /// Create an empty table
     pub fn new() -> Self {
-        Self {
+        let mut me = Self {
             entries: Vec::new(),
             free_head: None,
             debug: false,
-        }
+        };
+
+        // Reserve 0 as an invalid entry.
+        me.push(Tombstone).unwrap();
+
+        me
     }
 
     /// Returns whether or not this table is empty.
