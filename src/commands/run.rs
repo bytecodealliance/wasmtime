@@ -493,30 +493,13 @@ impl RunCommand {
             #[cfg(feature = "component-model")]
             CliLinker::Component(linker) => {
                 let component = main_target.unwrap_component();
-                if self.invoke.is_some() {
+                let result = if self.invoke.is_some() {
                     self.invoke_component(&mut *store, component, linker).await
                 } else {
-                    let command = wasmtime_wasi::p2::bindings::Command::instantiate_async(
-                        &mut *store,
-                        component,
-                        linker,
-                    )
-                    .await?;
-
-                    let result = command
-                        .wasi_cli_run()
-                        .call_run(&mut *store)
+                    self.run_command_component(&mut *store, component, linker)
                         .await
-                        .context("failed to invoke `run` function")
-                        .map_err(|e| self.handle_core_dump(&mut *store, e));
-
-                    // Translate the `Result<(),()>` produced by wasm into a feigned
-                    // explicit exit here with status 1 if `Err(())` is returned.
-                    result.and_then(|wasm_result| match wasm_result {
-                        Ok(()) => Ok(()),
-                        Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
-                    })
-                }
+                };
+                result.map_err(|e| self.handle_core_dump(&mut *store, e))
             }
         };
         finish_epoch_handler(store);
@@ -594,6 +577,56 @@ impl RunCommand {
         println!("{}", DisplayFuncResults(&results));
 
         Ok(())
+    }
+
+    /// Execute the default behavior for components on the CLI, looking for
+    /// `wasi:cli`-based commands and running their exported `run` function.
+    #[cfg(feature = "component-model")]
+    async fn run_command_component(
+        &self,
+        store: &mut Store<Host>,
+        component: &wasmtime::component::Component,
+        linker: &wasmtime::component::Linker<Host>,
+    ) -> Result<()> {
+        let instance = linker.instantiate_async(&mut *store, component).await?;
+
+        let mut result = None;
+        let _ = &mut result;
+
+        // If WASIp3 is enabled at compile time, enabled at runtime, and found
+        // in this component then use that to generate the result.
+        #[cfg(feature = "component-model-async")]
+        if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
+            if let Ok(command) = wasmtime_wasi::p3::bindings::Command::new(&mut *store, &instance) {
+                result = Some(
+                    instance
+                        .run_concurrent(&mut *store, async |store| {
+                            command.wasi_cli_run().call_run(store).await
+                        })
+                        .await?,
+                );
+            }
+        }
+
+        let result = match result {
+            Some(result) => result,
+            // If WASIp3 wasn't found then fall back to requiring WASIp2 and
+            // this'll report an error if the right export doesn't exist.
+            None => {
+                wasmtime_wasi::p2::bindings::Command::new(&mut *store, &instance)?
+                    .wasi_cli_run()
+                    .call_run(&mut *store)
+                    .await
+            }
+        };
+        let wasm_result = result.context("failed to invoke `run` function")?;
+
+        // Translate the `Result<(),()>` produced by wasm into a feigned
+        // explicit exit here with status 1 if `Err(())` is returned.
+        match wasm_result {
+            Ok(()) => Ok(()),
+            Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
+        }
     }
 
     #[cfg(feature = "component-model")]
@@ -756,20 +789,8 @@ impl RunCommand {
         store: &mut Store<Host>,
         module: &RunTarget,
     ) -> Result<()> {
-        let mut cli = self.run.common.wasi.cli;
-
-        // Accept -Scommon as a deprecated alias for -Scli.
-        if let Some(common) = self.run.common.wasi.common {
-            if cli.is_some() {
-                bail!(
-                    "The -Scommon option should not be use with -Scli as it is a deprecated alias"
-                );
-            } else {
-                // In the future, we may add a warning here to tell users to use
-                // `-S cli` instead of `-S common`.
-                cli = Some(common);
-            }
-        }
+        self.run.validate_p3_option()?;
+        let cli = self.run.validate_cli_enabled()?;
 
         if cli != Some(false) {
             match linker {
@@ -801,8 +822,7 @@ impl RunCommand {
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
-                    let link_options = self.run.compute_wasi_features();
-                    wasmtime_wasi::p2::add_to_linker_with_options_async(linker, &link_options)?;
+                    self.run.add_wasmtime_wasi_to_linker(linker)?;
                     self.set_wasi_ctx(store)?;
                 }
             }

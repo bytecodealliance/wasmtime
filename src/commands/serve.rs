@@ -256,20 +256,8 @@ impl ServeCommand {
     }
 
     fn add_to_linker(&self, linker: &mut Linker<Host>) -> Result<()> {
-        let mut cli = self.run.common.wasi.cli;
-
-        // Accept -Scommon as a deprecated alias for -Scli.
-        if let Some(common) = self.run.common.wasi.common {
-            if cli.is_some() {
-                bail!(
-                    "The -Scommon option should not be use with -Scli as it is a deprecated alias"
-                );
-            } else {
-                // In the future, we may add a warning here to tell users to use
-                // `-S cli` instead of `-S common`.
-                cli = Some(common);
-            }
-        }
+        self.run.validate_p3_option()?;
+        let cli = self.run.validate_cli_enabled()?;
 
         // Repurpose the `-Scli` flag of `wasmtime run` for `wasmtime serve`
         // to serve as a signal to enable all WASI interfaces instead of just
@@ -280,8 +268,7 @@ impl ServeCommand {
         // bindings which adds just those interfaces that the proxy interface
         // uses.
         if cli == Some(true) {
-            let link_options = self.run.compute_wasi_features();
-            wasmtime_wasi::p2::add_to_linker_with_options_async(linker, &link_options)?;
+            self.run.add_wasmtime_wasi_to_linker(linker)?;
             wasmtime_wasi_http::add_only_http_to_linker_async(linker)?;
         } else {
             wasmtime_wasi_http::add_to_linker_async(linker)?;
