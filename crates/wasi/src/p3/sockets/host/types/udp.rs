@@ -103,11 +103,12 @@ impl HostUdpSocketWithStore for WasiSockets {
 }
 
 impl HostUdpSocket for WasiSocketsCtxView<'_> {
-    fn new(&mut self, address_family: IpAddressFamily) -> wasmtime::Result<Resource<UdpSocket>> {
+    fn create(&mut self, address_family: IpAddressFamily) -> SocketResult<Resource<UdpSocket>> {
         let socket = UdpSocket::new(self.ctx, address_family.into())?;
         self.table
             .push(socket)
             .context("failed to push socket resource to table")
+            .map_err(TrappableError::trap)
     }
 
     fn disconnect(&mut self, socket: Resource<UdpSocket>) -> SocketResult<()> {
@@ -116,22 +117,25 @@ impl HostUdpSocket for WasiSocketsCtxView<'_> {
         Ok(())
     }
 
-    fn local_address(&mut self, socket: Resource<UdpSocket>) -> SocketResult<IpSocketAddress> {
+    fn get_local_address(&mut self, socket: Resource<UdpSocket>) -> SocketResult<IpSocketAddress> {
         let sock = get_socket(self.table, &socket)?;
         Ok(sock.local_address()?.into())
     }
 
-    fn remote_address(&mut self, socket: Resource<UdpSocket>) -> SocketResult<IpSocketAddress> {
+    fn get_remote_address(&mut self, socket: Resource<UdpSocket>) -> SocketResult<IpSocketAddress> {
         let sock = get_socket(self.table, &socket)?;
         Ok(sock.remote_address()?.into())
     }
 
-    fn address_family(&mut self, socket: Resource<UdpSocket>) -> wasmtime::Result<IpAddressFamily> {
+    fn get_address_family(
+        &mut self,
+        socket: Resource<UdpSocket>,
+    ) -> wasmtime::Result<IpAddressFamily> {
         let sock = get_socket(self.table, &socket)?;
         Ok(sock.address_family().into())
     }
 
-    fn unicast_hop_limit(&mut self, socket: Resource<UdpSocket>) -> SocketResult<u8> {
+    fn get_unicast_hop_limit(&mut self, socket: Resource<UdpSocket>) -> SocketResult<u8> {
         let sock = get_socket(self.table, &socket)?;
         Ok(sock.unicast_hop_limit()?)
     }
@@ -146,7 +150,7 @@ impl HostUdpSocket for WasiSocketsCtxView<'_> {
         Ok(())
     }
 
-    fn receive_buffer_size(&mut self, socket: Resource<UdpSocket>) -> SocketResult<u64> {
+    fn get_receive_buffer_size(&mut self, socket: Resource<UdpSocket>) -> SocketResult<u64> {
         let sock = get_socket(self.table, &socket)?;
         Ok(sock.receive_buffer_size()?)
     }
@@ -161,7 +165,7 @@ impl HostUdpSocket for WasiSocketsCtxView<'_> {
         Ok(())
     }
 
-    fn send_buffer_size(&mut self, socket: Resource<UdpSocket>) -> SocketResult<u64> {
+    fn get_send_buffer_size(&mut self, socket: Resource<UdpSocket>) -> SocketResult<u64> {
         let sock = get_socket(self.table, &socket)?;
         Ok(sock.send_buffer_size()?)
     }

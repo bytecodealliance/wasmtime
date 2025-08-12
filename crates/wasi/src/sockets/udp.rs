@@ -10,7 +10,6 @@ use io_lifetimes::AsSocketlike as _;
 use io_lifetimes::raw::{FromRawSocketlike as _, IntoRawSocketlike as _};
 use rustix::io::Errno;
 use rustix::net::connect;
-use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::debug;
@@ -23,7 +22,8 @@ enum UdpState {
     /// The initial state for a newly-created socket.
     Default,
 
-    /// TODO
+    /// A `bind` operation has started but has yet to complete with
+    /// `finish_bind`.
     BindStarted,
 
     /// Binding finished via `finish_bind`. The socket has an address but
@@ -58,7 +58,7 @@ pub struct UdpSocket {
 
 impl UdpSocket {
     /// Create a new socket in the given family.
-    pub(crate) fn new(cx: &WasiSocketsCtx, family: AddressFamily) -> io::Result<Self> {
+    pub(crate) fn new(cx: &WasiSocketsCtx, family: AddressFamily) -> Result<Self, ErrorCode> {
         cx.allowed_network_uses.check_allowed_udp()?;
 
         // Delegate socket creation to cap_net_ext. They handle a couple of things for us:

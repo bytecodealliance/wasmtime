@@ -10,21 +10,21 @@ test_programs::p3::export!(Component);
 const SECOND: u64 = 1_000_000_000;
 
 fn test_tcp_sockopt_defaults(family: IpAddressFamily) {
-    let sock = TcpSocket::new(family);
+    let sock = TcpSocket::create(family).unwrap();
 
-    assert_eq!(sock.address_family(), family);
+    assert_eq!(sock.get_address_family(), family);
 
-    sock.keep_alive_enabled().unwrap(); // Only verify that it has a default value at all, but either value is valid.
-    assert!(sock.keep_alive_idle_time().unwrap() > 0);
-    assert!(sock.keep_alive_interval().unwrap() > 0);
-    assert!(sock.keep_alive_count().unwrap() > 0);
-    assert!(sock.hop_limit().unwrap() > 0);
-    assert!(sock.receive_buffer_size().unwrap() > 0);
-    assert!(sock.send_buffer_size().unwrap() > 0);
+    sock.get_keep_alive_enabled().unwrap(); // Only verify that it has a default value at all, but either value is valid.
+    assert!(sock.get_keep_alive_idle_time().unwrap() > 0);
+    assert!(sock.get_keep_alive_interval().unwrap() > 0);
+    assert!(sock.get_keep_alive_count().unwrap() > 0);
+    assert!(sock.get_hop_limit().unwrap() > 0);
+    assert!(sock.get_receive_buffer_size().unwrap() > 0);
+    assert!(sock.get_send_buffer_size().unwrap() > 0);
 }
 
 fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
-    let sock = TcpSocket::new(family);
+    let sock = TcpSocket::create(family).unwrap();
 
     assert!(matches!(
         sock.set_listen_backlog_size(0),
@@ -41,7 +41,7 @@ fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
         Err(ErrorCode::InvalidArgument)
     ));
     assert!(matches!(sock.set_keep_alive_idle_time(1), Ok(_))); // Unsupported sizes should be silently clamped.
-    let idle_time = sock.keep_alive_idle_time().unwrap(); // Check that the special 0/reset behavior was not triggered by the previous line.
+    let idle_time = sock.get_keep_alive_idle_time().unwrap(); // Check that the special 0/reset behavior was not triggered by the previous line.
     assert!(idle_time > 0 && idle_time <= 1 * SECOND);
     assert!(matches!(sock.set_keep_alive_idle_time(u64::MAX), Ok(_))); // Unsupported sizes should be silently clamped.
 
@@ -50,7 +50,7 @@ fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
         Err(ErrorCode::InvalidArgument)
     ));
     assert!(matches!(sock.set_keep_alive_interval(1), Ok(_))); // Unsupported sizes should be silently clamped.
-    let idle_time = sock.keep_alive_interval().unwrap(); // Check that the special 0/reset behavior was not triggered by the previous line.
+    let idle_time = sock.get_keep_alive_interval().unwrap(); // Check that the special 0/reset behavior was not triggered by the previous line.
     assert!(idle_time > 0 && idle_time <= 1 * SECOND);
     assert!(matches!(sock.set_keep_alive_interval(u64::MAX), Ok(_))); // Unsupported sizes should be silently clamped.
 
@@ -83,37 +83,37 @@ fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
 }
 
 fn test_tcp_sockopt_readback(family: IpAddressFamily) {
-    let sock = TcpSocket::new(family);
+    let sock = TcpSocket::create(family).unwrap();
 
     sock.set_keep_alive_enabled(true).unwrap();
-    assert_eq!(sock.keep_alive_enabled().unwrap(), true);
+    assert_eq!(sock.get_keep_alive_enabled().unwrap(), true);
     sock.set_keep_alive_enabled(false).unwrap();
-    assert_eq!(sock.keep_alive_enabled().unwrap(), false);
+    assert_eq!(sock.get_keep_alive_enabled().unwrap(), false);
 
     sock.set_keep_alive_idle_time(42 * SECOND).unwrap();
-    assert_eq!(sock.keep_alive_idle_time().unwrap(), 42 * SECOND);
+    assert_eq!(sock.get_keep_alive_idle_time().unwrap(), 42 * SECOND);
 
     sock.set_keep_alive_interval(42 * SECOND).unwrap();
-    assert_eq!(sock.keep_alive_interval().unwrap(), 42 * SECOND);
+    assert_eq!(sock.get_keep_alive_interval().unwrap(), 42 * SECOND);
 
     sock.set_keep_alive_count(42).unwrap();
-    assert_eq!(sock.keep_alive_count().unwrap(), 42);
+    assert_eq!(sock.get_keep_alive_count().unwrap(), 42);
 
     sock.set_hop_limit(42).unwrap();
-    assert_eq!(sock.hop_limit().unwrap(), 42);
+    assert_eq!(sock.get_hop_limit().unwrap(), 42);
 
     sock.set_receive_buffer_size(0x10000).unwrap();
-    assert_eq!(sock.receive_buffer_size().unwrap(), 0x10000);
+    assert_eq!(sock.get_receive_buffer_size().unwrap(), 0x10000);
 
     sock.set_send_buffer_size(0x10000).unwrap();
-    assert_eq!(sock.send_buffer_size().unwrap(), 0x10000);
+    assert_eq!(sock.get_send_buffer_size().unwrap(), 0x10000);
 }
 
 async fn test_tcp_sockopt_inheritance(family: IpAddressFamily) {
     let bind_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
-    let listener = TcpSocket::new(family);
+    let listener = TcpSocket::create(family).unwrap();
 
-    let default_keep_alive = listener.keep_alive_enabled().unwrap();
+    let default_keep_alive = listener.get_keep_alive_enabled().unwrap();
 
     // Configure options on listener:
     {
@@ -130,8 +130,8 @@ async fn test_tcp_sockopt_inheritance(family: IpAddressFamily) {
 
     listener.bind(bind_addr).unwrap();
     let mut accept = listener.listen().unwrap();
-    let bound_addr = listener.local_address().unwrap();
-    let client = TcpSocket::new(family);
+    let bound_addr = listener.get_local_address().unwrap();
+    let client = TcpSocket::create(family).unwrap();
     let ((), sock) = join!(
         async {
             client.connect(bound_addr).await.unwrap();
@@ -141,13 +141,13 @@ async fn test_tcp_sockopt_inheritance(family: IpAddressFamily) {
 
     // Verify options on accepted socket:
     {
-        assert_eq!(sock.keep_alive_enabled().unwrap(), !default_keep_alive);
-        assert_eq!(sock.keep_alive_idle_time().unwrap(), 42 * SECOND);
-        assert_eq!(sock.keep_alive_interval().unwrap(), 42 * SECOND);
-        assert_eq!(sock.keep_alive_count().unwrap(), 42);
-        assert_eq!(sock.hop_limit().unwrap(), 42);
-        assert_eq!(sock.receive_buffer_size().unwrap(), 0x10000);
-        assert_eq!(sock.send_buffer_size().unwrap(), 0x10000);
+        assert_eq!(sock.get_keep_alive_enabled().unwrap(), !default_keep_alive);
+        assert_eq!(sock.get_keep_alive_idle_time().unwrap(), 42 * SECOND);
+        assert_eq!(sock.get_keep_alive_interval().unwrap(), 42 * SECOND);
+        assert_eq!(sock.get_keep_alive_count().unwrap(), 42);
+        assert_eq!(sock.get_hop_limit().unwrap(), 42);
+        assert_eq!(sock.get_receive_buffer_size().unwrap(), 0x10000);
+        assert_eq!(sock.get_send_buffer_size().unwrap(), 0x10000);
     }
 
     // Update options on listener to something else:
@@ -163,24 +163,24 @@ async fn test_tcp_sockopt_inheritance(family: IpAddressFamily) {
 
     // Verify that the already accepted socket was not affected:
     {
-        assert_eq!(sock.keep_alive_enabled().unwrap(), !default_keep_alive);
-        assert_eq!(sock.keep_alive_idle_time().unwrap(), 42 * SECOND);
-        assert_eq!(sock.keep_alive_interval().unwrap(), 42 * SECOND);
-        assert_eq!(sock.keep_alive_count().unwrap(), 42);
-        assert_eq!(sock.hop_limit().unwrap(), 42);
-        assert_eq!(sock.receive_buffer_size().unwrap(), 0x10000);
-        assert_eq!(sock.send_buffer_size().unwrap(), 0x10000);
+        assert_eq!(sock.get_keep_alive_enabled().unwrap(), !default_keep_alive);
+        assert_eq!(sock.get_keep_alive_idle_time().unwrap(), 42 * SECOND);
+        assert_eq!(sock.get_keep_alive_interval().unwrap(), 42 * SECOND);
+        assert_eq!(sock.get_keep_alive_count().unwrap(), 42);
+        assert_eq!(sock.get_hop_limit().unwrap(), 42);
+        assert_eq!(sock.get_receive_buffer_size().unwrap(), 0x10000);
+        assert_eq!(sock.get_send_buffer_size().unwrap(), 0x10000);
     }
 }
 
 async fn test_tcp_sockopt_after_listen(family: IpAddressFamily) {
     let bind_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
-    let listener = TcpSocket::new(family);
+    let listener = TcpSocket::create(family).unwrap();
     listener.bind(bind_addr).unwrap();
     let mut accept = listener.listen().unwrap();
-    let bound_addr = listener.local_address().unwrap();
+    let bound_addr = listener.get_local_address().unwrap();
 
-    let default_keep_alive = listener.keep_alive_enabled().unwrap();
+    let default_keep_alive = listener.get_keep_alive_enabled().unwrap();
 
     // Update options while the socket is already listening:
     {
@@ -195,7 +195,7 @@ async fn test_tcp_sockopt_after_listen(family: IpAddressFamily) {
         listener.set_send_buffer_size(0x10000).unwrap();
     }
 
-    let client = TcpSocket::new(family);
+    let client = TcpSocket::create(family).unwrap();
     let ((), sock) = join!(
         async {
             client.connect(bound_addr).await.unwrap();
@@ -205,13 +205,13 @@ async fn test_tcp_sockopt_after_listen(family: IpAddressFamily) {
 
     // Verify options on accepted socket:
     {
-        assert_eq!(sock.keep_alive_enabled().unwrap(), !default_keep_alive);
-        assert_eq!(sock.keep_alive_idle_time().unwrap(), 42 * SECOND);
-        assert_eq!(sock.keep_alive_interval().unwrap(), 42 * SECOND);
-        assert_eq!(sock.keep_alive_count().unwrap(), 42);
-        assert_eq!(sock.hop_limit().unwrap(), 42);
-        assert_eq!(sock.receive_buffer_size().unwrap(), 0x10000);
-        assert_eq!(sock.send_buffer_size().unwrap(), 0x10000);
+        assert_eq!(sock.get_keep_alive_enabled().unwrap(), !default_keep_alive);
+        assert_eq!(sock.get_keep_alive_idle_time().unwrap(), 42 * SECOND);
+        assert_eq!(sock.get_keep_alive_interval().unwrap(), 42 * SECOND);
+        assert_eq!(sock.get_keep_alive_count().unwrap(), 42);
+        assert_eq!(sock.get_hop_limit().unwrap(), 42);
+        assert_eq!(sock.get_receive_buffer_size().unwrap(), 0x10000);
+        assert_eq!(sock.get_send_buffer_size().unwrap(), 0x10000);
     }
 }
 

@@ -5,17 +5,17 @@ struct Component;
 test_programs::p3::export!(Component);
 
 fn test_udp_sockopt_defaults(family: IpAddressFamily) {
-    let sock = UdpSocket::new(family);
+    let sock = UdpSocket::create(family).unwrap();
 
-    assert_eq!(sock.address_family(), family);
+    assert_eq!(sock.get_address_family(), family);
 
-    assert!(sock.unicast_hop_limit().unwrap() > 0);
-    assert!(sock.receive_buffer_size().unwrap() > 0);
-    assert!(sock.send_buffer_size().unwrap() > 0);
+    assert!(sock.get_unicast_hop_limit().unwrap() > 0);
+    assert!(sock.get_receive_buffer_size().unwrap() > 0);
+    assert!(sock.get_send_buffer_size().unwrap() > 0);
 }
 
 fn test_udp_sockopt_input_ranges(family: IpAddressFamily) {
-    let sock = UdpSocket::new(family);
+    let sock = UdpSocket::create(family).unwrap();
 
     assert!(matches!(
         sock.set_unicast_hop_limit(0),
@@ -39,16 +39,16 @@ fn test_udp_sockopt_input_ranges(family: IpAddressFamily) {
 }
 
 fn test_udp_sockopt_readback(family: IpAddressFamily) {
-    let sock = UdpSocket::new(family);
+    let sock = UdpSocket::create(family).unwrap();
 
     sock.set_unicast_hop_limit(42).unwrap();
-    assert_eq!(sock.unicast_hop_limit().unwrap(), 42);
+    assert_eq!(sock.get_unicast_hop_limit().unwrap(), 42);
 
     sock.set_receive_buffer_size(0x10000).unwrap();
-    assert_eq!(sock.receive_buffer_size().unwrap(), 0x10000);
+    assert_eq!(sock.get_receive_buffer_size().unwrap(), 0x10000);
 
     sock.set_send_buffer_size(0x10000).unwrap();
-    assert_eq!(sock.send_buffer_size().unwrap(), 0x10000);
+    assert_eq!(sock.get_send_buffer_size().unwrap(), 0x10000);
 }
 
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {

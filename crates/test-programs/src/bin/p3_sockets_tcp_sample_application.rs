@@ -13,17 +13,17 @@ async fn test_tcp_sample_application(family: IpAddressFamily, bind_address: IpSo
     let first_message = b"Hello, world!";
     let second_message = b"Greetings, planet!";
 
-    let listener = TcpSocket::new(family);
+    let listener = TcpSocket::create(family).unwrap();
 
     listener.bind(bind_address).unwrap();
     listener.set_listen_backlog_size(32).unwrap();
     let mut accept = listener.listen().unwrap();
 
-    let addr = listener.local_address().unwrap();
+    let addr = listener.get_local_address().unwrap();
 
     join!(
         async {
-            let client = TcpSocket::new(family);
+            let client = TcpSocket::create(family).unwrap();
             client.connect(addr).await.unwrap();
             let (mut data_tx, data_rx) = wit_stream::new();
             join!(
@@ -54,7 +54,7 @@ async fn test_tcp_sample_application(family: IpAddressFamily, bind_address: IpSo
     // Another client
     join!(
         async {
-            let client = TcpSocket::new(family);
+            let client = TcpSocket::create(family).unwrap();
             client.connect(addr).await.unwrap();
             let (mut data_tx, data_rx) = wit_stream::new();
             join!(

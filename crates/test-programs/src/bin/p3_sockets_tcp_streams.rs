@@ -78,7 +78,7 @@ async fn test_tcp_shutdown_should_not_lose_data(family: IpAddressFamily) {
     setup(family, |server, client| async move {
         // Minimize the local send buffer:
         client.set_send_buffer_size(1024).unwrap();
-        let small_buffer_size = client.send_buffer_size().unwrap();
+        let small_buffer_size = client.get_send_buffer_size().unwrap();
 
         // Create a significantly bigger buffer, so that we can be pretty sure the `write` won't finish immediately:
         let big_buffer_size = 100 * small_buffer_size;
@@ -136,11 +136,11 @@ async fn setup<Fut: Future<Output = ()>>(
     body: impl FnOnce(TcpSocket, TcpSocket) -> Fut,
 ) {
     let bind_address = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
-    let listener = TcpSocket::new(family);
+    let listener = TcpSocket::create(family).unwrap();
     listener.bind(bind_address).unwrap();
     let mut accept = listener.listen().unwrap();
-    let bound_address = listener.local_address().unwrap();
-    let client_socket = TcpSocket::new(family);
+    let bound_address = listener.get_local_address().unwrap();
+    let client_socket = TcpSocket::create(family).unwrap();
     let ((), accepted_socket) = join!(
         async {
             client_socket.connect(bound_address).await.unwrap();

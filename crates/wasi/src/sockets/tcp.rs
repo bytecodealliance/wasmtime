@@ -149,7 +149,10 @@ pub struct TcpSocket {
 
 impl TcpSocket {
     /// Create a new socket in the given family.
-    pub(crate) fn new(ctx: &WasiSocketsCtx, family: SocketAddressFamily) -> std::io::Result<Self> {
+    pub(crate) fn new(
+        ctx: &WasiSocketsCtx,
+        family: SocketAddressFamily,
+    ) -> Result<Self, ErrorCode> {
         ctx.allowed_network_uses.check_allowed_tcp()?;
 
         with_ambient_tokio_runtime(|| {
