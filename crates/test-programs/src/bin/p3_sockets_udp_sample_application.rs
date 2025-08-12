@@ -14,15 +14,15 @@ async fn test_udp_sample_application(family: IpAddressFamily, bind_address: IpSo
     let second_message = b"Hello, world!";
     let third_message = b"Greetings, planet!";
 
-    let server = UdpSocket::new(family);
+    let server = UdpSocket::create(family).unwrap();
 
     server.bind(bind_address).unwrap();
-    let addr = server.local_address().unwrap();
+    let addr = server.get_local_address().unwrap();
 
-    let client = UdpSocket::new(family);
+    let client = UdpSocket::create(family).unwrap();
     client.bind(unspecified_addr).unwrap();
     client.connect(addr).unwrap();
-    let client_addr = client.local_address().unwrap();
+    let client_addr = client.get_local_address().unwrap();
     join!(
         async {
             client.send(first_message.to_vec(), None).await.unwrap();
@@ -45,7 +45,7 @@ async fn test_udp_sample_application(family: IpAddressFamily, bind_address: IpSo
     join!(
         async {
             // Another client
-            let client = UdpSocket::new(family);
+            let client = UdpSocket::create(family).unwrap();
             client.bind(unspecified_addr).unwrap();
             client
                 .send(third_message.to_vec(), Some(addr))

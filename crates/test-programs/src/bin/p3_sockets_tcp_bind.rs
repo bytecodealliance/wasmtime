@@ -14,10 +14,10 @@ test_programs::p3::export!(Component);
 fn test_tcp_bind_ephemeral_port(ip: IpAddress) {
     let bind_addr = IpSocketAddress::new(ip, 0);
 
-    let sock = TcpSocket::new(ip.family());
+    let sock = TcpSocket::create(ip.family()).unwrap();
     sock.bind(bind_addr).unwrap();
 
-    let bound_addr = sock.local_address().unwrap();
+    let bound_addr = sock.get_local_address().unwrap();
 
     assert_eq!(bind_addr.ip(), bound_addr.ip());
     assert_ne!(bind_addr.port(), bound_addr.port());
@@ -25,11 +25,11 @@ fn test_tcp_bind_ephemeral_port(ip: IpAddress) {
 
 /// Bind a socket on a specified port.
 fn test_tcp_bind_specific_port(ip: IpAddress) {
-    let sock = TcpSocket::new(ip.family());
+    let sock = TcpSocket::create(ip.family()).unwrap();
 
     let bind_addr = attempt_random_port(ip, |bind_addr| sock.bind(bind_addr)).unwrap();
 
-    let bound_addr = sock.local_address().unwrap();
+    let bound_addr = sock.get_local_address().unwrap();
 
     assert_eq!(bind_addr.ip(), bound_addr.ip());
     assert_eq!(bind_addr.port(), bound_addr.port());
@@ -39,22 +39,22 @@ fn test_tcp_bind_specific_port(ip: IpAddress) {
 fn test_tcp_bind_addrinuse(ip: IpAddress) {
     let bind_addr = IpSocketAddress::new(ip, 0);
 
-    let sock1 = TcpSocket::new(ip.family());
+    let sock1 = TcpSocket::create(ip.family()).unwrap();
     sock1.bind(bind_addr).unwrap();
     sock1.listen().unwrap();
 
-    let bound_addr = sock1.local_address().unwrap();
+    let bound_addr = sock1.get_local_address().unwrap();
 
-    let sock2 = TcpSocket::new(ip.family());
+    let sock2 = TcpSocket::create(ip.family()).unwrap();
     assert_eq!(sock2.bind(bound_addr), Err(ErrorCode::AddressInUse));
 }
 
 // The WASI runtime should set SO_REUSEADDR for us
 async fn test_tcp_bind_reuseaddr(ip: IpAddress) {
-    let client = TcpSocket::new(ip.family());
+    let client = TcpSocket::create(ip.family()).unwrap();
 
     let bind_addr = {
-        let listener1 = TcpSocket::new(ip.family());
+        let listener1 = TcpSocket::create(ip.family()).unwrap();
 
         let bind_addr = attempt_random_port(ip, |bind_addr| listener1.bind(bind_addr)).unwrap();
 
@@ -97,7 +97,7 @@ async fn test_tcp_bind_reuseaddr(ip: IpAddress) {
     // time to see if we can reuse the address. This loop is bounded because it
     // should complete "quickly".
     for _ in 0..10 {
-        let listener2 = TcpSocket::new(ip.family());
+        let listener2 = TcpSocket::create(ip.family()).unwrap();
         if listener2.bind(bind_addr).is_ok() {
             listener2.listen().unwrap();
             return;
@@ -112,7 +112,7 @@ async fn test_tcp_bind_reuseaddr(ip: IpAddress) {
 fn test_tcp_bind_addrnotavail(ip: IpAddress) {
     let bind_addr = IpSocketAddress::new(ip, 0);
 
-    let sock = TcpSocket::new(ip.family());
+    let sock = TcpSocket::create(ip.family()).unwrap();
 
     assert_eq!(sock.bind(bind_addr), Err(ErrorCode::AddressNotBindable));
 }
@@ -124,7 +124,7 @@ fn test_tcp_bind_wrong_family(family: IpAddressFamily) {
         IpAddressFamily::Ipv6 => IpAddress::IPV4_LOOPBACK,
     };
 
-    let sock = TcpSocket::new(family);
+    let sock = TcpSocket::create(family).unwrap();
     let result = sock.bind(IpSocketAddress::new(wrong_ip, 0));
 
     assert!(matches!(result, Err(ErrorCode::InvalidArgument)));
@@ -136,8 +136,8 @@ fn test_tcp_bind_non_unicast() {
     let ipv4_multicast = IpSocketAddress::new(IpAddress::Ipv4((224, 254, 0, 0)), 0);
     let ipv6_multicast = IpSocketAddress::new(IpAddress::Ipv6((0xff00, 0, 0, 0, 0, 0, 0, 0)), 0);
 
-    let sock_v4 = TcpSocket::new(IpAddressFamily::Ipv4);
-    let sock_v6 = TcpSocket::new(IpAddressFamily::Ipv6);
+    let sock_v4 = TcpSocket::create(IpAddressFamily::Ipv4).unwrap();
+    let sock_v6 = TcpSocket::create(IpAddressFamily::Ipv6).unwrap();
 
     assert!(matches!(
         sock_v4.bind(ipv4_broadcast),
@@ -154,7 +154,7 @@ fn test_tcp_bind_non_unicast() {
 }
 
 fn test_tcp_bind_dual_stack() {
-    let sock = TcpSocket::new(IpAddressFamily::Ipv6);
+    let sock = TcpSocket::create(IpAddressFamily::Ipv6).unwrap();
     let addr = IpSocketAddress::new(IpAddress::IPV4_MAPPED_LOOPBACK, 0);
 
     // Binding an IPv4-mapped-IPv6 address on a ipv6-only socket should fail:

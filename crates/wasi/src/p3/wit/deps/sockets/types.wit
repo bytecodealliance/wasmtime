@@ -153,7 +153,7 @@ interface types {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsasocketw>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=socket&sektion=2>
         @since(version = 0.3.0)
-        constructor(address-family: ip-address-family);
+        create: static func(address-family: ip-address-family) -> result<tcp-socket, error-code>;
 
         /// Bind the socket to the provided IP address and port.
         ///
@@ -221,7 +221,7 @@ interface types {
         @since(version = 0.3.0)
         connect: async func(remote-address: ip-socket-address) -> result<_, error-code>;
 
-        /// Start listening return a stream of new inbound connections.
+        /// Start listening and return a stream of new inbound connections.
         ///
         /// Transitions the socket into the `listening` state. This can be called
         /// at most once per socket.
@@ -351,7 +351,7 @@ interface types {
         /// > If the socket has not been bound to a local name, the value
         /// > stored in the object pointed to by `address` is unspecified.
         ///
-        /// WASI is stricter and requires `local-address` to return `invalid-state` when the socket hasn't been bound yet.
+        /// WASI is stricter and requires `get-local-address` to return `invalid-state` when the socket hasn't been bound yet.
         ///
         /// # Typical errors
         /// - `invalid-state`: The socket is not bound to any local address.
@@ -362,7 +362,7 @@ interface types {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getsockname>
         /// - <https://man.freebsd.org/cgi/man.cgi?getsockname>
         @since(version = 0.3.0)
-        local-address: func() -> result<ip-socket-address, error-code>;
+        get-local-address: func() -> result<ip-socket-address, error-code>;
 
         /// Get the remote address.
         ///
@@ -375,13 +375,13 @@ interface types {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getpeername>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=getpeername&sektion=2&n=1>
         @since(version = 0.3.0)
-        remote-address: func() -> result<ip-socket-address, error-code>;
+        get-remote-address: func() -> result<ip-socket-address, error-code>;
 
         /// Whether the socket is in the `listening` state.
         ///
         /// Equivalent to the SO_ACCEPTCONN socket option.
         @since(version = 0.3.0)
-        is-listening: func() -> bool;
+        get-is-listening: func() -> bool;
 
         /// Whether this is a IPv4 or IPv6 socket.
         ///
@@ -389,7 +389,7 @@ interface types {
         ///
         /// Equivalent to the SO_DOMAIN socket option.
         @since(version = 0.3.0)
-        address-family: func() -> ip-address-family;
+        get-address-family: func() -> ip-address-family;
 
         /// Hints the desired listen queue size. Implementations are free to ignore this.
         ///
@@ -413,7 +413,7 @@ interface types {
         ///
         /// Equivalent to the SO_KEEPALIVE socket option.
         @since(version = 0.3.0)
-        keep-alive-enabled: func() -> result<bool, error-code>;
+        get-keep-alive-enabled: func() -> result<bool, error-code>;
         @since(version = 0.3.0)
         set-keep-alive-enabled: func(value: bool) -> result<_, error-code>;
 
@@ -428,7 +428,7 @@ interface types {
         /// # Typical errors
         /// - `invalid-argument`:     (set) The provided value was 0.
         @since(version = 0.3.0)
-        keep-alive-idle-time: func() -> result<duration, error-code>;
+        get-keep-alive-idle-time: func() -> result<duration, error-code>;
         @since(version = 0.3.0)
         set-keep-alive-idle-time: func(value: duration) -> result<_, error-code>;
 
@@ -443,7 +443,7 @@ interface types {
         /// # Typical errors
         /// - `invalid-argument`:     (set) The provided value was 0.
         @since(version = 0.3.0)
-        keep-alive-interval: func() -> result<duration, error-code>;
+        get-keep-alive-interval: func() -> result<duration, error-code>;
         @since(version = 0.3.0)
         set-keep-alive-interval: func(value: duration) -> result<_, error-code>;
 
@@ -458,7 +458,7 @@ interface types {
         /// # Typical errors
         /// - `invalid-argument`:     (set) The provided value was 0.
         @since(version = 0.3.0)
-        keep-alive-count: func() -> result<u32, error-code>;
+        get-keep-alive-count: func() -> result<u32, error-code>;
         @since(version = 0.3.0)
         set-keep-alive-count: func(value: u32) -> result<_, error-code>;
 
@@ -469,7 +469,7 @@ interface types {
         /// # Typical errors
         /// - `invalid-argument`:     (set) The TTL value must be 1 or higher.
         @since(version = 0.3.0)
-        hop-limit: func() -> result<u8, error-code>;
+        get-hop-limit: func() -> result<u8, error-code>;
         @since(version = 0.3.0)
         set-hop-limit: func(value: u8) -> result<_, error-code>;
 
@@ -484,11 +484,11 @@ interface types {
         /// # Typical errors
         /// - `invalid-argument`:     (set) The provided value was 0.
         @since(version = 0.3.0)
-        receive-buffer-size: func() -> result<u64, error-code>;
+        get-receive-buffer-size: func() -> result<u64, error-code>;
         @since(version = 0.3.0)
         set-receive-buffer-size: func(value: u64) -> result<_, error-code>;
         @since(version = 0.3.0)
-        send-buffer-size: func() -> result<u64, error-code>;
+        get-send-buffer-size: func() -> result<u64, error-code>;
         @since(version = 0.3.0)
         set-send-buffer-size: func(value: u64) -> result<_, error-code>;
     }
@@ -512,7 +512,7 @@ interface types {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsasocketw>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=socket&sektion=2>
         @since(version = 0.3.0)
-        constructor(address-family: ip-address-family);
+        create: static func(address-family: ip-address-family) -> result<udp-socket, error-code>;
 
         /// Bind the socket to the provided IP address and port.
         ///
@@ -658,7 +658,7 @@ interface types {
         /// > If the socket has not been bound to a local name, the value
         /// > stored in the object pointed to by `address` is unspecified.
         ///
-        /// WASI is stricter and requires `local-address` to return `invalid-state` when the socket hasn't been bound yet.
+        /// WASI is stricter and requires `get-local-address` to return `invalid-state` when the socket hasn't been bound yet.
         ///
         /// # Typical errors
         /// - `invalid-state`: The socket is not bound to any local address.
@@ -669,7 +669,7 @@ interface types {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getsockname>
         /// - <https://man.freebsd.org/cgi/man.cgi?getsockname>
         @since(version = 0.3.0)
-        local-address: func() -> result<ip-socket-address, error-code>;
+        get-local-address: func() -> result<ip-socket-address, error-code>;
 
         /// Get the address the socket is currently "connected" to.
         ///
@@ -682,7 +682,7 @@ interface types {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getpeername>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=getpeername&sektion=2&n=1>
         @since(version = 0.3.0)
-        remote-address: func() -> result<ip-socket-address, error-code>;
+        get-remote-address: func() -> result<ip-socket-address, error-code>;
 
         /// Whether this is a IPv4 or IPv6 socket.
         ///
@@ -690,7 +690,7 @@ interface types {
         ///
         /// Equivalent to the SO_DOMAIN socket option.
         @since(version = 0.3.0)
-        address-family: func() -> ip-address-family;
+        get-address-family: func() -> ip-address-family;
 
         /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
         ///
@@ -699,7 +699,7 @@ interface types {
         /// # Typical errors
         /// - `invalid-argument`:     (set) The TTL value must be 1 or higher.
         @since(version = 0.3.0)
-        unicast-hop-limit: func() -> result<u8, error-code>;
+        get-unicast-hop-limit: func() -> result<u8, error-code>;
         @since(version = 0.3.0)
         set-unicast-hop-limit: func(value: u8) -> result<_, error-code>;
 
@@ -714,11 +714,11 @@ interface types {
         /// # Typical errors
         /// - `invalid-argument`:     (set) The provided value was 0.
         @since(version = 0.3.0)
-        receive-buffer-size: func() -> result<u64, error-code>;
+        get-receive-buffer-size: func() -> result<u64, error-code>;
         @since(version = 0.3.0)
         set-receive-buffer-size: func(value: u64) -> result<_, error-code>;
         @since(version = 0.3.0)
-        send-buffer-size: func() -> result<u64, error-code>;
+        get-send-buffer-size: func() -> result<u64, error-code>;
         @since(version = 0.3.0)
         set-send-buffer-size: func(value: u64) -> result<_, error-code>;
     }

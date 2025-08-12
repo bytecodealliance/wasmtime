@@ -149,7 +149,7 @@ where
 
 impl UdpSocket {
     pub fn bind_unspecified(&self) -> Result<(), ErrorCode> {
-        let ip = IpAddress::new_unspecified(self.address_family());
+        let ip = IpAddress::new_unspecified(self.get_address_family());
         let port = 0;
 
         self.bind(IpSocketAddress::new(ip, port))

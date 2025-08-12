@@ -11,10 +11,10 @@ test_programs::p3::export!(Component);
 fn test_udp_bind_ephemeral_port(ip: IpAddress) {
     let bind_addr = IpSocketAddress::new(ip, 0);
 
-    let sock = UdpSocket::new(ip.family());
+    let sock = UdpSocket::create(ip.family()).unwrap();
     sock.bind(bind_addr).unwrap();
 
-    let bound_addr = sock.local_address().unwrap();
+    let bound_addr = sock.get_local_address().unwrap();
 
     assert_eq!(bind_addr.ip(), bound_addr.ip());
     assert_ne!(bind_addr.port(), bound_addr.port());
@@ -22,11 +22,11 @@ fn test_udp_bind_ephemeral_port(ip: IpAddress) {
 
 /// Bind a socket on a specified port.
 fn test_udp_bind_specific_port(ip: IpAddress) {
-    let sock = UdpSocket::new(ip.family());
+    let sock = UdpSocket::create(ip.family()).unwrap();
 
     let bind_addr = attempt_random_port(ip, |bind_addr| sock.bind(bind_addr)).unwrap();
 
-    let bound_addr = sock.local_address().unwrap();
+    let bound_addr = sock.get_local_address().unwrap();
 
     assert_eq!(bind_addr.ip(), bound_addr.ip());
     assert_eq!(bind_addr.port(), bound_addr.port());
@@ -36,12 +36,12 @@ fn test_udp_bind_specific_port(ip: IpAddress) {
 fn test_udp_bind_addrinuse(ip: IpAddress) {
     let bind_addr = IpSocketAddress::new(ip, 0);
 
-    let sock1 = UdpSocket::new(ip.family());
+    let sock1 = UdpSocket::create(ip.family()).unwrap();
     sock1.bind(bind_addr).unwrap();
 
-    let bound_addr = sock1.local_address().unwrap();
+    let bound_addr = sock1.get_local_address().unwrap();
 
-    let sock2 = UdpSocket::new(ip.family());
+    let sock2 = UdpSocket::create(ip.family()).unwrap();
     assert!(matches!(
         sock2.bind(bound_addr),
         Err(ErrorCode::AddressInUse)
@@ -52,7 +52,7 @@ fn test_udp_bind_addrinuse(ip: IpAddress) {
 fn test_udp_bind_addrnotavail(ip: IpAddress) {
     let bind_addr = IpSocketAddress::new(ip, 0);
 
-    let sock = UdpSocket::new(ip.family());
+    let sock = UdpSocket::create(ip.family()).unwrap();
 
     assert!(matches!(
         sock.bind(bind_addr),
@@ -67,14 +67,14 @@ fn test_udp_bind_wrong_family(family: IpAddressFamily) {
         IpAddressFamily::Ipv6 => IpAddress::IPV4_LOOPBACK,
     };
 
-    let sock = UdpSocket::new(family);
+    let sock = UdpSocket::create(family).unwrap();
     let result = sock.bind(IpSocketAddress::new(wrong_ip, 0));
 
     assert!(matches!(result, Err(ErrorCode::InvalidArgument)));
 }
 
 fn test_udp_bind_dual_stack() {
-    let sock = UdpSocket::new(IpAddressFamily::Ipv6);
+    let sock = UdpSocket::create(IpAddressFamily::Ipv6).unwrap();
     let addr = IpSocketAddress::new(IpAddress::IPV4_MAPPED_LOOPBACK, 0);
 
     // Binding an IPv4-mapped-IPv6 address on a ipv6-only socket should fail:

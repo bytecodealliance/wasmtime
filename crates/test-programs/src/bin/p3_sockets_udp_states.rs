@@ -7,7 +7,7 @@ struct Component;
 test_programs::p3::export!(Component);
 
 async fn test_udp_unbound_state_invariants(family: IpAddressFamily) {
-    let sock = UdpSocket::new(family);
+    let sock = UdpSocket::create(family).unwrap();
 
     // Skipping: udp::start_bind
 
@@ -16,21 +16,21 @@ async fn test_udp_unbound_state_invariants(family: IpAddressFamily) {
         Err(ErrorCode::InvalidArgument)
     );
     assert_eq!(sock.disconnect(), Err(ErrorCode::InvalidState));
-    assert_eq!(sock.local_address(), Err(ErrorCode::InvalidState));
-    assert_eq!(sock.remote_address(), Err(ErrorCode::InvalidState));
-    assert_eq!(sock.address_family(), family);
+    assert_eq!(sock.get_local_address(), Err(ErrorCode::InvalidState));
+    assert_eq!(sock.get_remote_address(), Err(ErrorCode::InvalidState));
+    assert_eq!(sock.get_address_family(), family);
 
-    assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
+    assert!(matches!(sock.get_unicast_hop_limit(), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
-    assert!(matches!(sock.receive_buffer_size(), Ok(_)));
+    assert!(matches!(sock.get_receive_buffer_size(), Ok(_)));
     assert!(matches!(sock.set_receive_buffer_size(16000), Ok(_)));
-    assert!(matches!(sock.send_buffer_size(), Ok(_)));
+    assert!(matches!(sock.get_send_buffer_size(), Ok(_)));
     assert!(matches!(sock.set_send_buffer_size(16000), Ok(_)));
 }
 
 fn test_udp_bound_state_invariants(family: IpAddressFamily) {
     let bind_address = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
-    let sock = UdpSocket::new(family);
+    let sock = UdpSocket::create(family).unwrap();
     sock.bind(bind_address).unwrap();
 
     assert!(matches!(
@@ -39,25 +39,25 @@ fn test_udp_bound_state_invariants(family: IpAddressFamily) {
     ));
     // Skipping: udp::stream
 
-    assert!(matches!(sock.local_address(), Ok(_)));
+    assert!(matches!(sock.get_local_address(), Ok(_)));
     assert!(matches!(
-        sock.remote_address(),
+        sock.get_remote_address(),
         Err(ErrorCode::InvalidState)
     ));
-    assert_eq!(sock.address_family(), family);
+    assert_eq!(sock.get_address_family(), family);
 
-    assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
+    assert!(matches!(sock.get_unicast_hop_limit(), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
-    assert!(matches!(sock.receive_buffer_size(), Ok(_)));
+    assert!(matches!(sock.get_receive_buffer_size(), Ok(_)));
     assert!(matches!(sock.set_receive_buffer_size(16000), Ok(_)));
-    assert!(matches!(sock.send_buffer_size(), Ok(_)));
+    assert!(matches!(sock.get_send_buffer_size(), Ok(_)));
     assert!(matches!(sock.set_send_buffer_size(16000), Ok(_)));
 }
 
 fn test_udp_connected_state_invariants(family: IpAddressFamily) {
     let bind_address = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
     let connect_address = IpSocketAddress::new(IpAddress::new_loopback(family), 54321);
-    let sock = UdpSocket::new(family);
+    let sock = UdpSocket::create(family).unwrap();
     sock.bind(bind_address).unwrap();
     sock.connect(connect_address).unwrap();
 
@@ -67,15 +67,15 @@ fn test_udp_connected_state_invariants(family: IpAddressFamily) {
     ));
     // Skipping: udp::stream
 
-    assert!(matches!(sock.local_address(), Ok(_)));
-    assert!(matches!(sock.remote_address(), Ok(_)));
-    assert_eq!(sock.address_family(), family);
+    assert!(matches!(sock.get_local_address(), Ok(_)));
+    assert!(matches!(sock.get_remote_address(), Ok(_)));
+    assert_eq!(sock.get_address_family(), family);
 
-    assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
+    assert!(matches!(sock.get_unicast_hop_limit(), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
-    assert!(matches!(sock.receive_buffer_size(), Ok(_)));
+    assert!(matches!(sock.get_receive_buffer_size(), Ok(_)));
     assert!(matches!(sock.set_receive_buffer_size(16000), Ok(_)));
-    assert!(matches!(sock.send_buffer_size(), Ok(_)));
+    assert!(matches!(sock.get_send_buffer_size(), Ok(_)));
     assert!(matches!(sock.set_send_buffer_size(16000), Ok(_)));
 }
 

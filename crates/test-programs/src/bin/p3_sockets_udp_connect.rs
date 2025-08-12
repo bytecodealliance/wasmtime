@@ -13,36 +13,36 @@ fn test_udp_connect_disconnect_reconnect(family: IpAddressFamily) {
     let remote1 = IpSocketAddress::new(IpAddress::new_loopback(family), 4321);
     let remote2 = IpSocketAddress::new(IpAddress::new_loopback(family), 4320);
 
-    let client = UdpSocket::new(family);
+    let client = UdpSocket::create(family).unwrap();
     client.bind(unspecified_addr).unwrap();
 
     assert_eq!(client.disconnect(), Err(ErrorCode::InvalidState));
-    assert_eq!(client.remote_address(), Err(ErrorCode::InvalidState));
+    assert_eq!(client.get_remote_address(), Err(ErrorCode::InvalidState));
 
     assert_eq!(client.disconnect(), Err(ErrorCode::InvalidState));
-    assert_eq!(client.remote_address(), Err(ErrorCode::InvalidState));
+    assert_eq!(client.get_remote_address(), Err(ErrorCode::InvalidState));
 
     _ = client.connect(remote1).unwrap();
-    assert_eq!(client.remote_address(), Ok(remote1));
+    assert_eq!(client.get_remote_address(), Ok(remote1));
 
     _ = client.connect(remote1).unwrap();
-    assert_eq!(client.remote_address(), Ok(remote1));
+    assert_eq!(client.get_remote_address(), Ok(remote1));
 
     _ = client.connect(remote2).unwrap();
-    assert_eq!(client.remote_address(), Ok(remote2));
+    assert_eq!(client.get_remote_address(), Ok(remote2));
 
     _ = client.disconnect().unwrap();
-    assert_eq!(client.remote_address(), Err(ErrorCode::InvalidState));
+    assert_eq!(client.get_remote_address(), Err(ErrorCode::InvalidState));
 
     _ = client.connect(remote1).unwrap();
-    assert_eq!(client.remote_address(), Ok(remote1));
+    assert_eq!(client.get_remote_address(), Ok(remote1));
 }
 
 /// `0.0.0.0` / `::` is not a valid remote address in WASI.
 fn test_udp_connect_unspec(family: IpAddressFamily) {
     let ip = IpAddress::new_unspecified(family);
     let addr = IpSocketAddress::new(ip, SOME_PORT);
-    let sock = UdpSocket::new(family);
+    let sock = UdpSocket::create(family).unwrap();
     sock.bind_unspecified().unwrap();
 
     assert!(matches!(
@@ -54,7 +54,7 @@ fn test_udp_connect_unspec(family: IpAddressFamily) {
 /// 0 is not a valid remote port.
 fn test_udp_connect_port_0(family: IpAddressFamily) {
     let addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
-    let sock = UdpSocket::new(family);
+    let sock = UdpSocket::create(family).unwrap();
     sock.bind_unspecified().unwrap();
 
     assert!(matches!(
@@ -71,7 +71,7 @@ fn test_udp_connect_wrong_family(family: IpAddressFamily) {
     };
     let remote_addr = IpSocketAddress::new(wrong_ip, SOME_PORT);
 
-    let sock = UdpSocket::new(family);
+    let sock = UdpSocket::create(family).unwrap();
     sock.bind_unspecified().unwrap();
 
     assert!(matches!(
@@ -82,17 +82,17 @@ fn test_udp_connect_wrong_family(family: IpAddressFamily) {
 
 fn test_udp_connect_dual_stack() {
     // Set-up:
-    let v4_server = UdpSocket::new(IpAddressFamily::Ipv4);
+    let v4_server = UdpSocket::create(IpAddressFamily::Ipv4).unwrap();
     v4_server
         .bind(IpSocketAddress::new(IpAddress::IPV4_LOOPBACK, 0))
         .unwrap();
 
-    let v4_server_addr = v4_server.local_address().unwrap();
+    let v4_server_addr = v4_server.get_local_address().unwrap();
     let v6_server_addr =
         IpSocketAddress::new(IpAddress::IPV4_MAPPED_LOOPBACK, v4_server_addr.port());
 
     // Tests:
-    let v6_client = UdpSocket::new(IpAddressFamily::Ipv6);
+    let v6_client = UdpSocket::create(IpAddressFamily::Ipv6).unwrap();
 
     v6_client.bind_unspecified().unwrap();
 
