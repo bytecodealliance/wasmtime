@@ -477,6 +477,8 @@ wasmtime_option_group! {
         /// Preset data for the In-Memory provider of WASI key-value API.
         #[serde(skip)]
         pub keyvalue_in_memory_data: Vec<KeyValuePair>,
+        /// Enable support for WASIp3 APIs.
+        pub p3: Option<bool>,
     }
 
     enum Wasi {
