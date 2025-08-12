@@ -169,15 +169,14 @@ impl HostTcpSocketWithStore for WasiSockets {
         if !is_addr_allowed(store, remote_address, SocketAddrUse::TcpConnect).await {
             return Err(ErrorCode::AccessDenied.into());
         }
-        let addr = remote_address.into();
         let sock = store.with(|mut view| -> SocketResult<_> {
             let socket = get_socket_mut(view.get().table, &socket)?;
-            Ok(socket.start_connect(&addr)?)
+            Ok(socket.start_connect(&remote_address)?)
         })?;
 
         // FIXME: handle possible cancellation of the outer `connect`
         // https://github.com/bytecodealliance/wasmtime/pull/11291#discussion_r2223917986
-        let res = sock.connect(addr).await;
+        let res = sock.connect(remote_address).await;
         store.with(|mut view| -> SocketResult<_> {
             let socket = get_socket_mut(view.get().table, &socket)?;
             socket.finish_connect(res)?;
