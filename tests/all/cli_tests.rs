@@ -2123,8 +2123,8 @@ start a print 1234
         cli_serve_guest_never_invoked_set(CLI_SERVE_TRAP_BEFORE_SET_COMPONENT).await
     }
 
-    #[tokio::test]
-    async fn cli_p3_hello_stdout() -> Result<()> {
+    #[test]
+    fn cli_p3_hello_stdout() -> Result<()> {
         let output = run_wasmtime(&[
             "run",
             "-Wcomponent-model-async",
