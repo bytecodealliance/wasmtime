@@ -655,7 +655,9 @@ impl<T> FutureReader<T> {
                 }
                 let id = TableId::<TransmitHandle>::new(rep);
                 let concurrent_state = cx.instance_mut().concurrent_state_mut();
-                let state = concurrent_state.get(id)?.state;
+                let future = concurrent_state.get_mut(id)?;
+                future.common.handle = None;
+                let state = future.state;
 
                 if concurrent_state.get(state)?.done {
                     bail!("cannot lift future after previous read succeeded");
@@ -722,14 +724,22 @@ pub(crate) fn lower_future_to_index<U>(
     match ty {
         InterfaceType::Future(dst) => {
             let concurrent_state = cx.instance_mut().concurrent_state_mut();
-            let state = concurrent_state
-                .get(TableId::<TransmitHandle>::new(rep))?
-                .state;
+            let id = TableId::<TransmitHandle>::new(rep);
+            let state = concurrent_state.get(id)?.state;
             let rep = concurrent_state.get(state)?.read_handle.rep();
 
-            cx.instance_mut()
+            let handle = cx
+                .instance_mut()
                 .table_for_transmit(TransmitIndex::Future(dst))
-                .future_insert_read(dst, rep)
+                .future_insert_read(dst, rep)?;
+
+            cx.instance_mut()
+                .concurrent_state_mut()
+                .get_mut(id)?
+                .common
+                .handle = Some(handle);
+
+            Ok(handle)
         }
         _ => func::bad_type_info(),
     }
@@ -1220,6 +1230,11 @@ impl<T> StreamReader<T> {
                     bail!("cannot lift stream after being notified that the writable end dropped");
                 }
                 let id = TableId::<TransmitHandle>::new(rep);
+                cx.instance_mut()
+                    .concurrent_state_mut()
+                    .get_mut(id)?
+                    .common
+                    .handle = None;
                 Ok(Self::new(id, cx.instance_handle()))
             }
             _ => func::bad_type_info(),
@@ -1281,14 +1296,22 @@ pub(crate) fn lower_stream_to_index<U>(
     match ty {
         InterfaceType::Stream(dst) => {
             let concurrent_state = cx.instance_mut().concurrent_state_mut();
-            let state = concurrent_state
-                .get(TableId::<TransmitHandle>::new(rep))?
-                .state;
+            let id = TableId::<TransmitHandle>::new(rep);
+            let state = concurrent_state.get(id)?.state;
             let rep = concurrent_state.get(state)?.read_handle.rep();
 
-            cx.instance_mut()
+            let handle = cx
+                .instance_mut()
                 .table_for_transmit(TransmitIndex::Stream(dst))
-                .stream_insert_read(dst, rep)
+                .stream_insert_read(dst, rep)?;
+
+            cx.instance_mut()
+                .concurrent_state_mut()
+                .get_mut(id)?
+                .common
+                .handle = Some(handle);
+
+            Ok(handle)
         }
         _ => func::bad_type_info(),
     }
@@ -3048,7 +3071,7 @@ impl ComponentInstance {
         let (write, read) = self.as_mut().concurrent_state_mut().new_transmit()?;
 
         let table = self.as_mut().table_for_transmit(ty);
-        let (read, write) = match ty {
+        let (read_handle, write_handle) = match ty {
             TransmitIndex::Future(ty) => (
                 table.future_insert_read(ty, read.rep())?,
                 table.future_insert_write(ty, write.rep())?,
@@ -3058,7 +3081,15 @@ impl ComponentInstance {
                 table.stream_insert_write(ty, write.rep())?,
             ),
         };
-        Ok(ResourcePair { write, read })
+
+        let state = self.as_mut().concurrent_state_mut();
+        state.get_mut(read)?.common.handle = Some(read_handle);
+        state.get_mut(write)?.common.handle = Some(write_handle);
+
+        Ok(ResourcePair {
+            write: write_handle,
+            read: read_handle,
+        })
     }
 
     /// Cancel a pending write for the specified stream or future from the guest.
@@ -3167,10 +3198,15 @@ impl ComponentInstance {
             bail!("cannot lift after being notified that the writable end dropped");
         }
         let dst_table = self.as_mut().table_for_transmit(dst);
-        match dst {
+        let handle = match dst {
             TransmitIndex::Future(idx) => dst_table.future_insert_read(idx, rep),
             TransmitIndex::Stream(idx) => dst_table.stream_insert_read(idx, rep),
-        }
+        }?;
+        self.concurrent_state_mut()
+            .get_mut(TableId::<TransmitHandle>::new(rep))?
+            .common
+            .handle = Some(handle);
+        Ok(handle)
     }
 
     /// Implements the `future.new` intrinsic.

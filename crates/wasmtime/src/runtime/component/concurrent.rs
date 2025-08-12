@@ -569,7 +569,7 @@ enum WaitMode {
     Fiber(StoreFiber<'static>),
     /// The guest task is waiting via a callback declared as part of an
     /// async-lifted export.
-    Callback(RuntimeComponentInstanceIndex),
+    Callback,
 }
 
 /// Represents the reason a fiber is suspending itself.
@@ -594,13 +594,6 @@ enum GuestCallKind {
     /// Indicates there's an event to deliver to the task, possibly related to a
     /// waitable set the task has been waiting on or polling.
     DeliverEvent {
-        /// The (sub-)component instance in which the task has most recently
-        /// been executing.
-        ///
-        /// Note that this might not be the same as the instance the guest task
-        /// started executing in given that one or more synchronous guest->guest
-        /// calls may have occurred involving multiple instances.
-        instance: RuntimeComponentInstanceIndex,
         /// The waitable set the event belongs to, if any.
         ///
         /// If this is `None` the event will be waiting in the
@@ -615,11 +608,7 @@ enum GuestCallKind {
 impl fmt::Debug for GuestCallKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::DeliverEvent { instance, set } => f
-                .debug_struct("DeliverEvent")
-                .field("instance", instance)
-                .field("set", set)
-                .finish(),
+            Self::DeliverEvent { set } => f.debug_struct("DeliverEvent").field("set", set).finish(),
             Self::Start(_) => f.debug_tuple("Start").finish(),
         }
     }
@@ -672,13 +661,6 @@ struct PollParams {
     task: TableId<GuestTask>,
     /// The waitable set being polled.
     set: TableId<WaitableSet>,
-    /// The (sub-)component instance in which the task has most recently been
-    /// executing.
-    ///
-    /// Note that this might not be the same as the instance the guest task
-    /// started executing in given that one or more synchronous guest->guest
-    /// calls may have occurred involving multiple instances.
-    instance: RuntimeComponentInstanceIndex,
 }
 
 /// Represents a pending work item to be handled by the event loop for a given
@@ -781,10 +763,7 @@ impl ComponentInstance {
                 task.event = Some(Event::None);
                 state.push_low_priority(WorkItem::GuestCall(GuestCall {
                     task: guest_task,
-                    kind: GuestCallKind::DeliverEvent {
-                        instance: runtime_instance,
-                        set: None,
-                    },
+                    kind: GuestCallKind::DeliverEvent { set: None },
                 }));
             }
             callback_code::WAIT | callback_code::POLL => {
@@ -797,10 +776,7 @@ impl ComponentInstance {
                     // An event is immediately available; deliver it ASAP.
                     state.push_high_priority(WorkItem::GuestCall(GuestCall {
                         task: guest_task,
-                        kind: GuestCallKind::DeliverEvent {
-                            instance: runtime_instance,
-                            set: Some(set),
-                        },
+                        kind: GuestCallKind::DeliverEvent { set: Some(set) },
                     }));
                 } else {
                     // No event is immediately available.
@@ -810,7 +786,6 @@ impl ComponentInstance {
                             // event has arrived after that.
                             state.push_low_priority(WorkItem::Poll(PollParams {
                                 task: guest_task,
-                                instance: runtime_instance,
                                 set,
                             }));
                         }
@@ -826,7 +801,7 @@ impl ComponentInstance {
                             let old = state
                                 .get_mut(set)?
                                 .waiting
-                                .insert(guest_task, WaitMode::Callback(runtime_instance));
+                                .insert(guest_task, WaitMode::Callback);
                             assert!(old.is_none());
                         }
                         _ => unreachable!(),
@@ -844,7 +819,6 @@ impl ComponentInstance {
     fn get_event(
         mut self: Pin<&mut Self>,
         guest_task: TableId<GuestTask>,
-        instance: RuntimeComponentInstanceIndex,
         set: Option<TableId<WaitableSet>>,
     ) -> Result<Option<(Event, Option<(Waitable, u32)>)>> {
         let state = self.as_mut().concurrent_state_mut();
@@ -863,14 +837,13 @@ impl ComponentInstance {
                 })
                 .transpose()?
             {
-                let event = waitable.common(state)?.event.take().unwrap();
+                let common = waitable.common(state)?;
+                let handle = common.handle.unwrap();
+                let event = common.event.take().unwrap();
 
                 log::trace!(
-                    "deliver event {event:?} to {guest_task:?} for {waitable:?}; set {set:?}"
+                    "deliver event {event:?} to {guest_task:?} for {waitable:?} (handle {handle}); set {set:?}"
                 );
-
-                let handle =
-                    self.as_mut().guest_tables().0[instance].waitable_by_rep(waitable.rep())?;
 
                 waitable.on_delivery(self, event);
 
@@ -972,6 +945,8 @@ impl ComponentInstance {
                 unreachable!()
             }
         };
+
+        waitable.common(concurrent_state)?.handle = None;
 
         if waitable.take_event(concurrent_state)?.is_some() {
             bail!("cannot drop a subtask with an undelivered event");
@@ -1396,7 +1371,6 @@ impl Instance {
                     state.push_high_priority(WorkItem::GuestCall(GuestCall {
                         task: params.task,
                         kind: GuestCallKind::DeliverEvent {
-                            instance: params.instance,
                             set: Some(params.set),
                         },
                     }));
@@ -1407,7 +1381,6 @@ impl Instance {
                     state.push_high_priority(WorkItem::GuestCall(GuestCall {
                         task: params.task,
                         kind: GuestCallKind::DeliverEvent {
-                            instance: params.instance,
                             set: Some(params.set),
                         },
                     }));
@@ -1487,15 +1460,9 @@ impl Instance {
     /// Execute the specified guest call.
     fn handle_guest_call(self, store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
         match call.kind {
-            GuestCallKind::DeliverEvent {
-                instance: runtime_instance,
-                set,
-            } => {
-                let (event, waitable) = self
-                    .id()
-                    .get_mut(store)
-                    .get_event(call.task, runtime_instance, set)?
-                    .unwrap();
+            GuestCallKind::DeliverEvent { set } => {
+                let (event, waitable) =
+                    self.id().get_mut(store).get_event(call.task, set)?.unwrap();
                 let state = self.concurrent_state_mut(store);
                 let task = state.get_mut(call.task)?;
                 let runtime_instance = task.instance;
@@ -2257,7 +2224,7 @@ impl Instance {
 
             let state = self.concurrent_state_mut(store.0);
 
-            let event = Waitable::Guest(guest_task).take_event(state)?;
+            let event = guest_waitable.take_event(state)?;
             let Some(Event::Subtask { status }) = event else {
                 unreachable!();
             };
@@ -2271,13 +2238,13 @@ impl Instance {
                 // It hasn't returned yet, but the caller is calling via an
                 // async-lowered import, so we generate a handle for the task
                 // waitable and return the status.
-                break (
-                    status,
-                    Some(
-                        self.id().get_mut(store.0).guest_tables().0[caller_instance]
-                            .subtask_insert_guest(guest_task.rep())?,
-                    ),
-                );
+                let handle = self.id().get_mut(store.0).guest_tables().0[caller_instance]
+                    .subtask_insert_guest(guest_task.rep())?;
+                self.concurrent_state_mut(store.0)
+                    .get_mut(guest_task)?
+                    .common
+                    .handle = Some(handle);
+                break (status, Some(handle));
             } else {
                 // The callee hasn't returned yet, and the caller is calling via
                 // a sync-lowered import, so we loop and keep waiting until the
@@ -2459,6 +2426,10 @@ impl Instance {
                 self.concurrent_state_mut(store.0).push_future(future);
                 let handle = self.id().get_mut(store.0).guest_tables().0[caller_instance]
                     .subtask_insert_host(task.rep())?;
+                self.concurrent_state_mut(store.0)
+                    .get_mut(task)?
+                    .common
+                    .handle = Some(handle);
                 log::trace!(
                     "assign {task:?} handle {handle} for {caller:?} instance {caller_instance:?}"
                 );
@@ -2731,7 +2702,6 @@ impl Instance {
             async_,
             WaitableCheck::Wait(WaitableCheckParams {
                 set: TableId::new(rep),
-                caller_instance,
                 options,
                 payload,
             }),
@@ -2757,7 +2727,6 @@ impl Instance {
             async_,
             WaitableCheck::Poll(WaitableCheckParams {
                 set: TableId::new(rep),
-                caller_instance,
                 options,
                 payload,
             }),
@@ -2832,11 +2801,10 @@ impl Instance {
         let result = match check {
             // Deliver any pending events to the guest and return.
             WaitableCheck::Wait(params) | WaitableCheck::Poll(params) => {
-                let event = self.id().get_mut(store).get_event(
-                    guest_task,
-                    params.caller_instance,
-                    Some(params.set),
-                )?;
+                let event = self
+                    .id()
+                    .get_mut(store)
+                    .get_event(guest_task, Some(params.set))?;
 
                 let (ordinal, handle, result) = if wait {
                     let (event, waitable) = event.unwrap();
@@ -2954,12 +2922,9 @@ impl Instance {
                         .unwrap()
                     {
                         WaitMode::Fiber(fiber) => WorkItem::ResumeFiber(fiber),
-                        WaitMode::Callback(instance) => WorkItem::GuestCall(GuestCall {
+                        WaitMode::Callback => WorkItem::GuestCall(GuestCall {
                             task: guest_task,
-                            kind: GuestCallKind::DeliverEvent {
-                                instance,
-                                set: None,
-                            },
+                            kind: GuestCallKind::DeliverEvent { set: None },
                         }),
                     };
                     concurrent_state.push_high_priority(item);
@@ -3710,6 +3675,8 @@ struct WaitableCommon {
     event: Option<Event>,
     /// The set to which this waitable belongs, if any.
     set: Option<TableId<WaitableSet>>,
+    /// The handle with which the guest refers to this waitable, if any.
+    handle: Option<u32>,
 }
 
 /// Represents a Component Model Async `waitable`.
@@ -3824,12 +3791,9 @@ impl Waitable {
 
                 let item = match mode {
                     WaitMode::Fiber(fiber) => WorkItem::ResumeFiber(fiber),
-                    WaitMode::Callback(instance) => WorkItem::GuestCall(GuestCall {
+                    WaitMode::Callback => WorkItem::GuestCall(GuestCall {
                         task,
-                        kind: GuestCallKind::DeliverEvent {
-                            instance,
-                            set: Some(set),
-                        },
+                        kind: GuestCallKind::DeliverEvent { set: Some(set) },
                     }),
                 };
                 state.push_high_priority(item);
@@ -4358,7 +4322,6 @@ fn unpack_callback_code(code: u32) -> (u32, u32) {
 /// `waitable-set.poll`.
 struct WaitableCheckParams {
     set: TableId<WaitableSet>,
-    caller_instance: RuntimeComponentInstanceIndex,
     options: OptionsIndex,
     payload: u32,
 }

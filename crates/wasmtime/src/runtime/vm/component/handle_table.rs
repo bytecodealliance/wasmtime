@@ -114,11 +114,7 @@ enum Slot {
 impl Slot {
     fn rep_for_reps_to_indexes(&self) -> Option<u32> {
         match self {
-            Self::HostTask { rep }
-            | Self::GuestTask { rep }
-            | Self::Stream { rep, .. }
-            | Self::Future { rep, .. }
-            | Self::ErrorContext { rep, .. } => Some(*rep),
+            Self::ErrorContext { rep, .. } => Some(*rep),
             _ => None,
         }
     }
@@ -645,20 +641,6 @@ impl HandleTable {
             Slot::HostTask { rep } => Ok((*rep, Waitable::Subtask { is_host: true })),
             Slot::Future { rep, .. } => Ok((*rep, Waitable::Future)),
             Slot::Stream { rep, .. } => Ok((*rep, Waitable::Stream)),
-            _ => bail!("handle is not a waitable"),
-        }
-    }
-
-    /// TODO: delete this ideally?
-    pub fn waitable_by_rep(&mut self, rep: u32) -> Result<u32> {
-        let Some((idx, slot)) = self.get_mut_by_rep(rep) else {
-            bail!("handle does not exist")
-        };
-        match slot {
-            Slot::GuestTask { .. } => Ok(idx),
-            Slot::HostTask { .. } => Ok(idx),
-            Slot::Future { .. } => Ok(idx),
-            Slot::Stream { .. } => Ok(idx),
             _ => bail!("handle is not a waitable"),
         }
     }
