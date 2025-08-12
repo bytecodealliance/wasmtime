@@ -7,7 +7,7 @@ use crate::{
 use core::fmt::{self, Debug};
 use core::hash::{Hash, Hasher};
 use core::marker;
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 
 mod sealed {
     use super::*;
@@ -203,5 +203,29 @@ where
 impl<T: GcRef> RootedGcRefImpl<T> for ManuallyRooted<T> {
     fn assert_unreachable<U>(&self) -> U {
         match self.inner {}
+    }
+}
+
+pub(crate) struct OpaqueRootScope<S> {
+    store: S,
+}
+
+impl<S> Deref for OpaqueRootScope<S> {
+    type Target = S;
+
+    fn deref(&self) -> &Self::Target {
+        &self.store
+    }
+}
+
+impl<S> DerefMut for OpaqueRootScope<S> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.store
+    }
+}
+
+impl<S> OpaqueRootScope<S> {
+    pub(crate) fn new(store: S) -> Self {
+        OpaqueRootScope { store }
     }
 }

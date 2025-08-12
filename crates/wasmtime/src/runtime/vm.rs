@@ -117,7 +117,7 @@ pub use crate::runtime::vm::store_box::*;
 pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
 #[cfg(has_host_compiler_backend)]
 pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
-pub use crate::runtime::vm::table::{Table, TableElement};
+pub use crate::runtime::vm::table::{Table, TableElementType};
 pub use crate::runtime::vm::traphandlers::*;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,

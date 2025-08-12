@@ -235,9 +235,11 @@ unsafe fn table_grow_func_ref(
         instance.as_mut().table_element_type(table_index),
         TableElementType::Func,
     ));
-    let element = NonNull::new(init_value.cast::<VMFuncRef>()).into();
+    let element = NonNull::new(init_value.cast::<VMFuncRef>());
     let result = instance
-        .defined_table_grow(store, defined_table_index, delta, element)?
+        .defined_table_grow(defined_table_index, |table| unsafe {
+            table.grow_func(store, delta, element)
+        })?
         .map(AllocationSize);
     Ok(result)
 }
@@ -258,17 +260,11 @@ unsafe fn table_grow_gc_ref(
         TableElementType::GcRef,
     ));
 
-    let element = VMGcRef::from_raw_u32(init_value)
-        .map(|r| {
-            store
-                .store_opaque_mut()
-                .unwrap_gc_store_mut()
-                .clone_gc_ref(&r)
-        })
-        .into();
-
+    let element = VMGcRef::from_raw_u32(init_value);
     let result = instance
-        .defined_table_grow(store, defined_table_index, delta, element)?
+        .defined_table_grow(defined_table_index, |table| unsafe {
+            table.grow_gc_ref(store, delta, element.as_ref())
+        })?
         .map(AllocationSize);
     Ok(result)
 }
@@ -290,17 +286,18 @@ unsafe fn table_grow_cont_obj(
         instance.as_mut().table_element_type(table_index),
         TableElementType::Cont,
     ));
-    let element =
-        unsafe { VMContObj::from_raw_parts(init_value_contref, init_value_revision).into() };
+    let element = unsafe { VMContObj::from_raw_parts(init_value_contref, init_value_revision) };
     let result = instance
-        .defined_table_grow(store, defined_table_index, delta, element)?
+        .defined_table_grow(defined_table_index, |table| unsafe {
+            table.grow_cont(store, delta, element)
+        })?
         .map(AllocationSize);
     Ok(result)
 }
 
 /// Implementation of `table.fill` for `funcref`s.
 unsafe fn table_fill_func_ref(
-    store: &mut dyn VMStore,
+    _store: &mut dyn VMStore,
     instance: Pin<&mut Instance>,
     table_index: u32,
     dst: u64,
@@ -312,7 +309,7 @@ unsafe fn table_fill_func_ref(
     match table.element_type() {
         TableElementType::Func => {
             let val = NonNull::new(val.cast::<VMFuncRef>());
-            table.fill(store.optional_gc_store_mut(), dst, val.into(), len)?;
+            table.fill_func(dst, val, len)?;
             Ok(())
         }
         TableElementType::GcRef => unreachable!(),
@@ -336,8 +333,7 @@ unsafe fn table_fill_gc_ref(
         TableElementType::GcRef => {
             let gc_store = store.store_opaque_mut().unwrap_gc_store_mut();
             let gc_ref = VMGcRef::from_raw_u32(val);
-            let gc_ref = gc_ref.map(|r| gc_store.clone_gc_ref(&r));
-            table.fill(Some(gc_store), dst, gc_ref.into(), len)?;
+            table.fill_gc_ref(Some(gc_store), dst, gc_ref.as_ref(), len)?;
             Ok(())
         }
 
@@ -347,7 +343,7 @@ unsafe fn table_fill_gc_ref(
 
 #[cfg(feature = "stack-switching")]
 unsafe fn table_fill_cont_obj(
-    store: &mut dyn VMStore,
+    _store: &mut dyn VMStore,
     instance: Pin<&mut Instance>,
     table_index: u32,
     dst: u64,
@@ -360,7 +356,7 @@ unsafe fn table_fill_cont_obj(
     match table.element_type() {
         TableElementType::Cont => {
             let contobj = unsafe { VMContObj::from_raw_parts(value_contref, value_revision) };
-            table.fill(store.optional_gc_store_mut(), dst, contobj.into(), len)?;
+            table.fill_cont(dst, contobj, len)?;
             Ok(())
         }
         _ => panic!("Wrong table filling function"),
@@ -506,10 +502,10 @@ unsafe fn table_get_lazy_init_func_ref(
     let table_index = TableIndex::from_u32(table_index);
     let table = instance.get_table_with_lazy_init(table_index, core::iter::once(index));
     let elem = (*table)
-        .get(None, index)
+        .get_func(index)
         .expect("table access already bounds-checked");
 
-    match unsafe { elem.into_func_ref_asserting_initialized() } {
+    match elem {
         Some(ptr) => ptr.as_ptr().cast(),
         None => core::ptr::null_mut(),
     }
@@ -846,7 +842,7 @@ unsafe fn array_new_elem(
     len: u32,
 ) -> Result<core::num::NonZeroU32> {
     use crate::{
-        ArrayRef, ArrayRefPre, ArrayType, Func, RootSet, RootedGcRefImpl, Val,
+        ArrayRef, ArrayRefPre, ArrayType, Func, OpaqueRootScope, RootedGcRefImpl, Val,
         store::AutoAssertNoGc,
         vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
     };
@@ -864,54 +860,49 @@ unsafe fn array_new_elem(
 
     let shared_ty = instance.engine_type_index(array_type_index);
     let array_ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
-    let elem_ty = array_ty.element_type();
     let pre = ArrayRefPre::_new(store, array_ty);
 
-    RootSet::with_lifo_scope(store, |store| {
-        // Turn the elements into `Val`s.
-        let mut vals = Vec::with_capacity(usize::try_from(elements.len()).unwrap());
-        match elements {
-            TableSegmentElements::Functions(fs) => {
-                vals.extend(
-                    fs.get(src..)
-                        .and_then(|s| s.get(..len))
-                        .ok_or_else(|| Trap::TableOutOfBounds)?
-                        .iter()
-                        .map(|f| {
-                            let raw_func_ref = instance.as_mut().get_func_ref(*f);
-                            let func = unsafe {
-                                raw_func_ref.map(|p| Func::from_vm_func_ref(store.id(), p))
-                            };
-                            Val::FuncRef(func)
-                        }),
-                );
-            }
-            TableSegmentElements::Expressions(xs) => {
-                let xs = xs
-                    .get(src..)
+    let mut store = OpaqueRootScope::new(&mut **store);
+    // Turn the elements into `Val`s.
+    let mut vals = Vec::with_capacity(usize::try_from(elements.len()).unwrap());
+    match elements {
+        TableSegmentElements::Functions(fs) => {
+            vals.extend(
+                fs.get(src..)
                     .and_then(|s| s.get(..len))
-                    .ok_or_else(|| Trap::TableOutOfBounds)?;
-
-                let mut const_context = ConstEvalContext::new(instance.id());
-                let mut const_evaluator = ConstExprEvaluator::default();
-
-                vals.extend(xs.iter().map(|x| unsafe {
-                    let raw = const_evaluator
-                        .eval(store, &mut const_context, x)
-                        .expect("const expr should be valid");
-                    let mut store = AutoAssertNoGc::new(store);
-                    Val::_from_raw(&mut store, raw, elem_ty.unwrap_val_type())
-                }));
-            }
+                    .ok_or_else(|| Trap::TableOutOfBounds)?
+                    .iter()
+                    .map(|f| {
+                        let raw_func_ref = instance.as_mut().get_func_ref(*f);
+                        let func =
+                            unsafe { raw_func_ref.map(|p| Func::from_vm_func_ref(store.id(), p)) };
+                        Val::FuncRef(func)
+                    }),
+            );
         }
+        TableSegmentElements::Expressions(xs) => {
+            let xs = xs
+                .get(src..)
+                .and_then(|s| s.get(..len))
+                .ok_or_else(|| Trap::TableOutOfBounds)?;
 
-        let array = unsafe { ArrayRef::new_fixed_maybe_async(store, &pre, &vals)? };
+            let mut const_context = ConstEvalContext::new(instance.id());
+            let mut const_evaluator = ConstExprEvaluator::default();
 
-        let mut store = AutoAssertNoGc::new(store);
-        let gc_ref = array.try_clone_gc_ref(&mut store)?;
-        let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
-        Ok(raw)
-    })
+            vals.extend(xs.iter().map(|x| unsafe {
+                *const_evaluator
+                    .eval(&mut store, &mut const_context, x)
+                    .expect("const expr should be valid")
+            }));
+        }
+    }
+
+    let array = unsafe { ArrayRef::new_fixed_maybe_async(&mut store, &pre, &vals)? };
+
+    let mut store = AutoAssertNoGc::new(&mut store);
+    let gc_ref = array.try_clone_gc_ref(&mut store)?;
+    let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
+    Ok(raw)
 }
 
 #[cfg(feature = "gc")]
@@ -979,9 +970,6 @@ unsafe fn array_init_elem(
             })
             .collect::<Vec<_>>(),
         TableSegmentElements::Expressions(xs) => {
-            let elem_ty = array._ty(&store)?.element_type();
-            let elem_ty = elem_ty.unwrap_val_type();
-
             let mut const_context = ConstEvalContext::new(instance.id());
             let mut const_evaluator = ConstExprEvaluator::default();
 
@@ -990,11 +978,9 @@ unsafe fn array_init_elem(
                 .ok_or_else(|| Trap::TableOutOfBounds)?
                 .iter()
                 .map(|x| unsafe {
-                    let raw = const_evaluator
+                    *const_evaluator
                         .eval(&mut store, &mut const_context, x)
-                        .expect("const expr should be valid");
-                    let mut store = AutoAssertNoGc::new(&mut store);
-                    Val::_from_raw(&mut store, raw, elem_ty)
+                        .expect("const expr should be valid")
                 })
                 .collect::<Vec<_>>()
         }

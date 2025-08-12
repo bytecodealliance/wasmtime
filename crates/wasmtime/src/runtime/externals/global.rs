@@ -139,10 +139,13 @@ impl Global {
     ///
     /// Panics if `store` does not own this global.
     pub fn get(&self, mut store: impl AsContextMut) -> Val {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        self._get(&mut store)
+    }
+
+    pub(crate) fn _get(&self, store: &mut AutoAssertNoGc<'_>) -> Val {
         unsafe {
-            let store = store.as_context_mut();
-            let definition = self.definition(store.0).as_ref();
-            let mut store = AutoAssertNoGc::new(store.0);
+            let definition = self.definition(store).as_ref();
             match self._ty(&store).content() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
@@ -152,14 +155,14 @@ impl Global {
                 ValType::Ref(ref_ty) => {
                     let reference: Ref = match ref_ty.heap_type() {
                         HeapType::Func | HeapType::ConcreteFunc(_) => {
-                            Func::_from_raw(&mut store, definition.as_func_ref().cast()).into()
+                            Func::_from_raw(store, definition.as_func_ref().cast()).into()
                         }
 
                         HeapType::NoFunc => Ref::Func(None),
 
                         HeapType::Extern => Ref::Extern(definition.as_gc_ref().map(|r| {
                             let r = store.clone_gc_ref(r);
-                            ExternRef::from_cloned_gc_ref(&mut store, r)
+                            ExternRef::from_cloned_gc_ref(store, r)
                         })),
 
                         HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont => {
@@ -181,7 +184,7 @@ impl Global {
                             .as_gc_ref()
                             .map(|r| {
                                 let r = store.clone_gc_ref(r);
-                                AnyRef::from_cloned_gc_ref(&mut store, r)
+                                AnyRef::from_cloned_gc_ref(store, r)
                             })
                             .into(),
 
@@ -211,21 +214,38 @@ impl Global {
     ///
     /// Panics if `store` does not own this global.
     pub fn set(&self, mut store: impl AsContextMut, val: Val) -> Result<()> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        self._set(store.as_context_mut().0, val)
+    }
+
+    pub(crate) fn _set(&self, store: &mut StoreOpaque, val: Val) -> Result<()> {
         let global_ty = self._ty(&store);
         if global_ty.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");
         }
         val.ensure_matches_ty(&store, global_ty.content())
             .context("type mismatch: attempt to set global to value of wrong type")?;
+
+        // SAFETY: mutability and a type-check above makes this safe to perform.
+        unsafe { self.set_unchecked(store, &val) }
+    }
+
+    /// Sets this global to `val`.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that `val` is of the correct type for this
+    /// global. Furthermore this requires that the global is mutable or this is
+    /// the first time the global is initialized.
+    pub(crate) unsafe fn set_unchecked(&self, store: &mut StoreOpaque, val: &Val) -> Result<()> {
+        let mut store = AutoAssertNoGc::new(store);
         unsafe {
             let definition = self.definition(&store).as_mut();
             match val {
-                Val::I32(i) => *definition.as_i32_mut() = i,
-                Val::I64(i) => *definition.as_i64_mut() = i,
-                Val::F32(f) => *definition.as_u32_mut() = f,
-                Val::F64(f) => *definition.as_u64_mut() = f,
-                Val::V128(i) => definition.set_u128(i.into()),
+                Val::I32(i) => *definition.as_i32_mut() = *i,
+                Val::I64(i) => *definition.as_i64_mut() = *i,
+                Val::F32(f) => *definition.as_u32_mut() = *f,
+                Val::F64(f) => *definition.as_u64_mut() = *f,
+                Val::V128(i) => definition.set_u128((*i).into()),
                 Val::FuncRef(f) => {
                     *definition.as_func_ref_mut() =
                         f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&store).as_ptr().cast());

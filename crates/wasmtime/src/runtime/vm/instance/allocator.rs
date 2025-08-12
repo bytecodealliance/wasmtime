@@ -5,15 +5,15 @@ use crate::runtime::vm::instance::{Instance, InstanceHandle};
 use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
-use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, VMFuncRef, VMGcRef, VMStore};
-use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque};
-use crate::vm::VMGlobalDefinition;
+use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, VMStore};
+use crate::store::{InstanceId, StoreOpaque};
+use crate::{OpaqueRootScope, Val};
 use core::ptr::NonNull;
 use core::{mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
     MemoryInitializer, Module, PrimaryMap, SizeOverflow, TableInitialValue, Trap, Tunables,
-    VMOffsets, WasmHeapTopType,
+    VMOffsets,
 };
 
 #[cfg(feature = "gc")]
@@ -567,15 +567,16 @@ fn check_table_init_bounds(
     module: &Module,
 ) -> Result<()> {
     let mut const_evaluator = ConstExprEvaluator::default();
+    let mut store = OpaqueRootScope::new(store);
 
     for segment in module.table_initialization.segments.iter() {
         let mut context = ConstEvalContext::new(instance);
         let start = unsafe {
             const_evaluator
-                .eval(store, &mut context, &segment.offset)
+                .eval(&mut store, &mut context, &segment.offset)
                 .expect("const expression should be valid")
         };
-        let start = usize::try_from(start.get_u32()).unwrap();
+        let start = usize::try_from(start.unwrap_i32().cast_unsigned()).unwrap();
         let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
 
         let table = store.instance_mut(instance).get_table(segment.table_index);
@@ -598,63 +599,25 @@ fn initialize_tables(
     const_evaluator: &mut ConstExprEvaluator,
     module: &Module,
 ) -> Result<()> {
+    let mut store = OpaqueRootScope::new(store);
     for (table, init) in module.table_initialization.initial_values.iter() {
         match init {
             // Tables are always initially null-initialized at this time
             TableInitialValue::Null { precomputed: _ } => {}
 
             TableInitialValue::Expr(expr) => {
-                let raw = unsafe {
+                let init = unsafe {
                     const_evaluator
-                        .eval(store, context, expr)
+                        .eval(&mut store, context, expr)
                         .expect("const expression should be valid")
                 };
                 let idx = module.table_index(table);
-                match module.tables[idx].ref_type.heap_type.top() {
-                    WasmHeapTopType::Extern => {
-                        let (gc_store, instance) =
-                            store.optional_gc_store_and_instance_mut(context.instance);
-                        let gc_store = gc_store.unwrap();
-                        let table = instance.get_defined_table(table);
-                        let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
-                        let items = (0..table.size())
-                            .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
-                        table.init_gc_refs(0, items)?;
-                    }
-
-                    WasmHeapTopType::Any => {
-                        let (gc_store, instance) =
-                            store.optional_gc_store_and_instance_mut(context.instance);
-                        let gc_store = gc_store.unwrap();
-                        let table = instance.get_defined_table(table);
-                        let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
-                        let items = (0..table.size())
-                            .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
-                        table.init_gc_refs(0, items)?;
-                    }
-
-                    WasmHeapTopType::Exn => {
-                        let (gc_store, instance) =
-                            store.optional_gc_store_and_instance_mut(context.instance);
-                        let gc_store = gc_store.unwrap();
-                        let table = instance.get_defined_table(table);
-                        let gc_ref = VMGcRef::from_raw_u32(raw.get_exnref());
-                        let items = (0..table.size())
-                            .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
-                        table.init_gc_refs(0, items)?;
-                    }
-
-                    WasmHeapTopType::Func => {
-                        let table = store
-                            .instance_mut(context.instance)
-                            .get_defined_table(table);
-                        let funcref = NonNull::new(raw.get_funcref().cast::<VMFuncRef>());
-                        let items = (0..table.size()).map(|_| funcref);
-                        table.init_func(0, items)?;
-                    }
-
-                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
-                }
+                let id = store.id();
+                let table = store
+                    .instance_mut(context.instance)
+                    .get_exported_table(id, idx);
+                let size = table._size(&store);
+                table._fill(&mut store, 0, init.ref_().unwrap(), size)?;
             }
         }
     }
@@ -669,22 +632,33 @@ fn initialize_tables(
     for segment in module.table_initialization.segments.iter() {
         let start = unsafe {
             const_evaluator
-                .eval(store, context, &segment.offset)
+                .eval(&mut store, context, &segment.offset)
                 .expect("const expression should be valid")
         };
+        let start = get_index(
+            start,
+            store.instance(context.instance).env_module().tables[segment.table_index].idx_type,
+        );
         Instance::table_init_segment(
-            store,
+            &mut store,
             context.instance,
             const_evaluator,
             segment.table_index,
             &segment.elements,
-            start.get_u64(),
+            start,
             0,
             segment.elements.len(),
         )?;
     }
 
     Ok(())
+}
+
+fn get_index(val: &Val, ty: wasmtime_environ::IndexType) -> u64 {
+    match ty {
+        wasmtime_environ::IndexType::I32 => val.unwrap_i32().cast_unsigned().into(),
+        wasmtime_environ::IndexType::I64 => val.unwrap_i64().cast_unsigned(),
+    }
 }
 
 fn get_memory_init_start(
@@ -694,11 +668,12 @@ fn get_memory_init_start(
 ) -> Result<u64> {
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
-    unsafe { const_evaluator.eval(store, &mut context, &init.offset) }.map(|v| {
-        match store.instance(instance).env_module().memories[init.memory_index].idx_type {
-            wasmtime_environ::IndexType::I32 => v.get_u32().into(),
-            wasmtime_environ::IndexType::I64 => v.get_u64(),
-        }
+    let mut store = OpaqueRootScope::new(store);
+    unsafe { const_evaluator.eval(&mut store, &mut context, &init.offset) }.map(|v| {
+        get_index(
+            v,
+            store.instance(instance).env_module().memories[init.memory_index].idx_type,
+        )
     })
 }
 
@@ -768,20 +743,13 @@ fn initialize_memories(
             memory: wasmtime_environ::MemoryIndex,
             expr: &wasmtime_environ::ConstExpr,
         ) -> Option<u64> {
-            let val = unsafe { self.const_evaluator.eval(self.store, self.context, expr) }
+            let mut store = OpaqueRootScope::new(&mut *self.store);
+            let val = unsafe { self.const_evaluator.eval(&mut store, self.context, expr) }
                 .expect("const expression should be valid");
-            Some(
-                match self
-                    .store
-                    .instance(self.context.instance)
-                    .env_module()
-                    .memories[memory]
-                    .idx_type
-                {
-                    wasmtime_environ::IndexType::I32 => val.get_u32().into(),
-                    wasmtime_environ::IndexType::I64 => val.get_u64(),
-                },
-            )
+            Some(get_index(
+                val,
+                store.instance(self.context.instance).env_module().memories[memory].idx_type,
+            ))
         }
 
         fn write(
@@ -857,32 +825,41 @@ fn initialize_globals(
         module
     ));
 
-    let mut store = AutoAssertNoGc::new(store);
+    let mut store = OpaqueRootScope::new(store);
 
     for (index, init) in module.global_initializers.iter() {
-        let raw = unsafe {
+        let val = unsafe {
             const_evaluator
                 .eval(&mut store, context, init)
                 .expect("should be a valid const expr")
         };
 
-        let instance = store.instance_mut(context.instance);
-        let to = instance.global_ptr(index);
-        let wasm_ty = module.globals[module.global_index(index)].wasm_ty;
+        let id = store.id();
+        let index = module.global_index(index);
+        let mut instance = store.instance_mut(context.instance);
 
         #[cfg(feature = "wmemcheck")]
-        if index.as_u32() == 0 && wasm_ty == wasmtime_environ::WasmValType::I32 {
-            if let Some(wmemcheck) = instance.wmemcheck_state_mut() {
-                let size = usize::try_from(raw.get_i32()).unwrap();
+        if index.as_u32() == 0
+            && module.globals[index].wasm_ty == wasmtime_environ::WasmValType::I32
+        {
+            if let Some(wmemcheck) = instance.as_mut().wmemcheck_state_mut() {
+                let size = usize::try_from(val.unwrap_i32()).unwrap();
                 wmemcheck.set_stack_size(size);
             }
         }
 
-        // This write is safe because we know we have the correct module for
-        // this instance and its vmctx due to the assert above.
+        let global = instance.as_mut().get_exported_global(id, index);
+
+        // Note that mutability is bypassed here because this is, by definition,
+        // initialization of globals meaning that if it's an immutable global
+        // this is the one and only write.
+        //
+        // SAFETY: this is a valid module so `val` should have the correct type
+        // for this global, and it's safe to write to a global for the first
+        // time as-is happening here.
         unsafe {
-            to.write(VMGlobalDefinition::from_val_raw(&mut store, wasm_ty, raw)?);
-        };
+            global.set_unchecked(&mut store, &val)?;
+        }
     }
     Ok(())
 }

@@ -392,7 +392,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             precomputed: Vec::new(),
                         },
                         wasmparser::TableInit::Expr(expr) => {
-                            let (init, escaped) = ConstExpr::from_wasmparser(expr)?;
+                            let (init, escaped) = ConstExpr::from_wasmparser(self, expr)?;
                             for f in escaped {
                                 self.flag_func_escaped(f);
                             }
@@ -438,7 +438,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
                 for entry in globals {
                     let wasmparser::Global { ty, init_expr } = entry?;
-                    let (initializer, escaped) = ConstExpr::from_wasmparser(init_expr)?;
+                    let (initializer, escaped) = ConstExpr::from_wasmparser(self, init_expr)?;
                     for f in escaped {
                         self.flag_func_escaped(f);
                     }
@@ -513,7 +513,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let mut exprs =
                                 Vec::with_capacity(usize::try_from(items.count()).unwrap());
                             for expr in items {
-                                let (expr, escaped) = ConstExpr::from_wasmparser(expr?)?;
+                                let (expr, escaped) = ConstExpr::from_wasmparser(self, expr?)?;
                                 exprs.push(expr);
                                 for func in escaped {
                                     self.flag_func_escaped(func);
@@ -529,7 +529,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             offset_expr,
                         } => {
                             let table_index = TableIndex::from_u32(table_index.unwrap_or(0));
-                            let (offset, escaped) = ConstExpr::from_wasmparser(offset_expr)?;
+                            let (offset, escaped) = ConstExpr::from_wasmparser(self, offset_expr)?;
                             debug_assert!(escaped.is_empty());
 
                             self.result
@@ -638,9 +638,13 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         } => {
                             let range = mk_range(&mut self.result.total_data)?;
                             let memory_index = MemoryIndex::from_u32(memory_index);
-                            let (offset, escaped) = ConstExpr::from_wasmparser(offset_expr)?;
+                            let (offset, escaped) = ConstExpr::from_wasmparser(self, offset_expr)?;
                             debug_assert!(escaped.is_empty());
 
+                            let initializers = match &mut self.result.module.memory_initialization {
+                                MemoryInitialization::Segmented(i) => i,
+                                _ => unreachable!(),
+                            };
                             initializers.push(MemoryInitializer {
                                 memory_index,
                                 offset,
