@@ -1,5 +1,5 @@
 use crate::component::{AllCallFunc, ComponentTranslation, ComponentTypesBuilder};
-use crate::{FuncKey, CompiledFunctionBody, Tunables};
+use crate::{CompiledFunctionBody, FuncKey, Tunables};
 use anyhow::Result;
 
 /// Compilation support necessary for components.
