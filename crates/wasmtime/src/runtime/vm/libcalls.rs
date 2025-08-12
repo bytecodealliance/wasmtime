@@ -893,6 +893,7 @@ unsafe fn array_new_elem(
                 const_evaluator
                     .eval(&mut store, &mut const_context, x)
                     .expect("const expr should be valid")
+                    .clone()
             }));
         }
     }
@@ -981,6 +982,7 @@ unsafe fn array_init_elem(
                     const_evaluator
                         .eval(&mut store, &mut const_context, x)
                         .expect("const expr should be valid")
+                        .clone()
                 })
                 .collect::<Vec<_>>()
         }

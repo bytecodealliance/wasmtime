@@ -372,6 +372,7 @@ impl EngineOrModuleTypeIndex {
     }
 
     /// Get the underlying engine-level type index, if any.
+    #[inline]
     pub fn as_engine_type_index(self) -> Option<VMSharedTypeIndex> {
         match self {
             Self::Engine(e) => Some(e),
@@ -381,6 +382,7 @@ impl EngineOrModuleTypeIndex {
 
     /// Get the underlying engine-level type index, or panic.
     #[track_caller]
+    #[inline]
     pub fn unwrap_engine_type_index(self) -> VMSharedTypeIndex {
         match self.as_engine_type_index() {
             Some(x) => x,
@@ -1832,6 +1834,7 @@ impl ConstExpr {
     }
 
     /// Get the opcodes that make up this const expression.
+    #[inline]
     pub fn ops(&self) -> &[ConstOp] {
         &self.ops
     }

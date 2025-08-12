@@ -654,7 +654,7 @@ fn initialize_tables(
     Ok(())
 }
 
-fn get_index(val: Val, ty: wasmtime_environ::IndexType) -> u64 {
+fn get_index(val: &Val, ty: wasmtime_environ::IndexType) -> u64 {
     match ty {
         wasmtime_environ::IndexType::I32 => val.unwrap_i32().cast_unsigned().into(),
         wasmtime_environ::IndexType::I64 => val.unwrap_i64().cast_unsigned(),
@@ -853,7 +853,13 @@ fn initialize_globals(
         // Note that mutability is bypassed here because this is, by definition,
         // initialization of globals meaning that if it's an immutable global
         // this is the one and only write.
-        global.set_bypass_mutability(&mut store, val)?;
+        //
+        // SAFETY: this is a valid module so `val` should have the correct type
+        // for this global, and it's safe to write to a global for the first
+        // time as-is happening here.
+        unsafe {
+            global.set_unchecked(&mut store, &val)?;
+        }
     }
     Ok(())
 }

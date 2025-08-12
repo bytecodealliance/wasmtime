@@ -222,22 +222,30 @@ impl Global {
         if global_ty.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");
         }
-        self.set_bypass_mutability(store, val)
-    }
-
-    pub(crate) fn set_bypass_mutability(&self, store: &mut StoreOpaque, val: Val) -> Result<()> {
-        let mut store = AutoAssertNoGc::new(store);
-        let global_ty = self._ty(&store);
         val.ensure_matches_ty(&store, global_ty.content())
             .context("type mismatch: attempt to set global to value of wrong type")?;
+
+        // SAFETY: mutability and a type-check above makes this safe to perform.
+        unsafe { self.set_unchecked(store, &val) }
+    }
+
+    /// Sets this global to `val`.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that `val` is of the correct type for this
+    /// global. Furthermore this requires that the global is mutable or this is
+    /// the first time the global is initialized.
+    pub(crate) unsafe fn set_unchecked(&self, store: &mut StoreOpaque, val: &Val) -> Result<()> {
+        let mut store = AutoAssertNoGc::new(store);
         unsafe {
             let definition = self.definition(&store).as_mut();
             match val {
-                Val::I32(i) => *definition.as_i32_mut() = i,
-                Val::I64(i) => *definition.as_i64_mut() = i,
-                Val::F32(f) => *definition.as_u32_mut() = f,
-                Val::F64(f) => *definition.as_u64_mut() = f,
-                Val::V128(i) => definition.set_u128(i.into()),
+                Val::I32(i) => *definition.as_i32_mut() = *i,
+                Val::I64(i) => *definition.as_i64_mut() = *i,
+                Val::F32(f) => *definition.as_u32_mut() = *f,
+                Val::F64(f) => *definition.as_u64_mut() = *f,
+                Val::V128(i) => definition.set_u128((*i).into()),
                 Val::FuncRef(f) => {
                     *definition.as_func_ref_mut() =
                         f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&store).as_ptr().cast());

@@ -18,7 +18,7 @@ use wasmtime_environ::{VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeT
 /// allocated resources, if any.
 #[derive(Default)]
 pub struct ConstExprEvaluator {
-    stack: SmallVec<[Val; 2]>,
+    stack: Vec<Val>,
 }
 
 /// The context within which a particular const expression is evaluated.
@@ -153,12 +153,42 @@ impl ConstExprEvaluator {
         store: &mut OpaqueRootScope<&mut StoreOpaque>,
         context: &mut ConstEvalContext,
         expr: &ConstExpr,
-    ) -> Result<Val> {
-        log::trace!("evaluating const expr: {expr:?}");
+    ) -> Result<&Val> {
+        match expr.ops() {
+            // Skip the interpreter loop for some known constant patterns that
+            // are easy to calculate the result of.
+            [ConstOp::I32Const(i)] => self.return_one(Val::I32(*i)),
+            [ConstOp::I64Const(i)] => self.return_one(Val::I64(*i)),
+            [ConstOp::F32Const(f)] => self.return_one(Val::F32(*f)),
+            [ConstOp::F64Const(f)] => self.return_one(Val::F64(*f)),
+
+            // Fall back to the interpreter loop for all other expressions.
+            //
+            // SAFETY: this function has the same contract as `eval_loop`.
+            other => unsafe { self.eval_loop(store, context, other) },
+        }
+    }
+
+    fn return_one(&mut self, val: Val) -> Result<&Val> {
+        self.stack.clear();
+        self.stack.push(val);
+        Ok(&self.stack[0])
+    }
+
+    /// # Safety
+    ///
+    /// See [`Self::eval`].
+    unsafe fn eval_loop(
+        &mut self,
+        store: &mut OpaqueRootScope<&mut StoreOpaque>,
+        context: &mut ConstEvalContext,
+        ops: &[ConstOp],
+    ) -> Result<&Val> {
+        log::trace!("evaluating const expr: {ops:?}");
 
         self.stack.clear();
 
-        for op in expr.ops() {
+        for op in ops {
             log::trace!("const-evaluating op: {op:?}");
             match op {
                 ConstOp::I32Const(i) => self.stack.push(Val::I32(*i)),
@@ -337,7 +367,7 @@ impl ConstExprEvaluator {
 
         if self.stack.len() == 1 {
             log::trace!("const expr evaluated to {:?}", self.stack[0]);
-            Ok(self.stack.pop().unwrap())
+            Ok(&self.stack[0])
         } else {
             bail!(
                 "const expr evaluation error: expected 1 resulting value, found {}",
