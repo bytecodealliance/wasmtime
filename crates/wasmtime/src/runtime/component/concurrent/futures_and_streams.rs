@@ -3152,8 +3152,7 @@ impl ComponentInstance {
     ) -> Result<()> {
         let local_handle_table = self.as_mut().table_for_error_context(ty);
 
-        // Reduce the local (sub)component ref count, removing tracking if necessary
-        let (rep, local_ref_removed) = local_handle_table.error_context_drop(error_context)?;
+        let rep = local_handle_table.error_context_drop(error_context)?;
 
         let global_ref_count_idx = TypeComponentGlobalErrorContextTableIndex::from_u32(rep);
 
@@ -3167,8 +3166,6 @@ impl ComponentInstance {
         assert!(*global_ref_count >= 1);
         *global_ref_count -= 1;
         if *global_ref_count == 0 {
-            assert!(local_ref_removed);
-
             state
                 .global_error_context_ref_counts
                 .remove(&global_ref_count_idx);

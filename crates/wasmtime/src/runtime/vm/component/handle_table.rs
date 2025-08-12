@@ -101,33 +101,13 @@ enum Slot {
 
     /// Represents an error-context handle.
     ErrorContext {
-        /// Number of references held by the (sub-)component.
-        ///
-        /// This does not include the number of references which might be held
-        /// by other (sub-)components.
-        local_ref_count: u32,
-
         rep: u32,
     },
-}
-
-impl Slot {
-    fn rep_for_reps_to_indexes(&self) -> Option<u32> {
-        match self {
-            Self::ErrorContext { rep, .. } => Some(*rep),
-            _ => None,
-        }
-    }
 }
 
 pub struct HandleTable {
     next: u32,
     slots: Vec<Slot>,
-    // TODO: This is a sparse table (where zero means "no entry"); it might make
-    // more sense to use a `HashMap` here, but we'd need one that's
-    // no_std-compatible.  A `BTreeMap` might also be appropriate if we restrict
-    // ourselves to `alloc::collections`.
-    reps_to_indexes: Vec<u32>,
 }
 
 impl Default for HandleTable {
@@ -135,7 +115,6 @@ impl Default for HandleTable {
         Self {
             next: 0,
             slots: Vec::new(),
-            reps_to_indexes: Vec::new(),
         }
     }
 }
@@ -149,16 +128,6 @@ impl HandleTable {
     }
 
     fn insert(&mut self, slot: Slot) -> Result<u32> {
-        let rep_usize = slot
-            .rep_for_reps_to_indexes()
-            .map(|r| usize::try_from(r).unwrap());
-
-        if let Some(rep) = rep_usize {
-            if matches!(self.reps_to_indexes.get(rep), Some(idx) if *idx != 0) {
-                bail!("rep {rep} already exists in this table");
-            }
-        }
-
         let next = self.next as usize;
         if next == self.slots.len() {
             self.slots.push(Slot::Free {
@@ -179,28 +148,14 @@ impl HandleTable {
             bail!("cannot allocate another handle: index overflow");
         }
 
-        if let Some(rep) = rep_usize {
-            if self.reps_to_indexes.len() <= rep {
-                self.reps_to_indexes.resize(rep.checked_add(1).unwrap(), 0);
-            }
-            self.reps_to_indexes[rep] = ret;
-        }
-
         Ok(ret)
     }
 
     fn remove(&mut self, idx: u32) -> Result<()> {
         let to_fill = Slot::Free { next: self.next };
         let slot = self.get_mut(idx)?;
-        let rep = slot.rep_for_reps_to_indexes();
         *slot = to_fill;
         self.next = idx - 1;
-
-        if let Some(rep) = rep {
-            let rep = usize::try_from(rep).unwrap();
-            assert_eq!(idx, self.reps_to_indexes[rep]);
-            self.reps_to_indexes[rep] = 0;
-        }
         Ok(())
     }
 
@@ -218,16 +173,6 @@ impl HandleTable {
         match slot {
             None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
             Some(slot) => Ok(slot),
-        }
-    }
-
-    fn get_mut_by_rep(&mut self, rep: u32) -> Option<(u32, &mut Slot)> {
-        let index = *self.reps_to_indexes.get(usize::try_from(rep).unwrap())?;
-        if index > 0 {
-            let slot = self.get_mut(index).unwrap();
-            Some((index, slot))
-        } else {
-            None
         }
     }
 
@@ -532,51 +477,27 @@ impl HandleTable {
     /// Inserts the error-context `rep` into this table, returning the index it
     /// now resides at.
     pub fn error_context_insert(&mut self, rep: u32) -> Result<u32> {
-        if let Some((
-            dst_idx,
-            Slot::ErrorContext {
-                local_ref_count, ..
-            },
-        )) = self.get_mut_by_rep(rep)
-        {
-            *local_ref_count += 1;
-            return Ok(dst_idx);
-        }
-
-        self.insert(Slot::ErrorContext {
-            rep,
-            local_ref_count: 1,
-        })
+        self.insert(Slot::ErrorContext { rep })
     }
 
     /// Returns the `rep` of an error-context pointed to by `idx`.
     pub fn error_context_rep(&mut self, idx: u32) -> Result<u32> {
         match self.get_mut(idx)? {
-            Slot::ErrorContext { rep, .. } => Ok(*rep),
+            Slot::ErrorContext { rep } => Ok(*rep),
             _ => bail!("handle is not an error-context"),
         }
     }
 
     /// Drops the error-context pointed to by `idx`.
     ///
-    /// Returns the internal `rep` and whether the reference count has reached
-    /// 0 meaning it was fully removed.
-    pub fn error_context_drop(&mut self, idx: u32) -> Result<(u32, bool)> {
+    /// Returns the internal `rep`.
+    pub fn error_context_drop(&mut self, idx: u32) -> Result<u32> {
         let rep = match self.get_mut(idx)? {
-            Slot::ErrorContext {
-                rep,
-                local_ref_count,
-            } => {
-                *local_ref_count -= 1;
-                if *local_ref_count > 0 {
-                    return Ok((*rep, false));
-                }
-                *rep
-            }
+            Slot::ErrorContext { rep } => *rep,
             _ => bail!("handle is not an error-context"),
         };
         self.remove(idx)?;
-        Ok((rep, true))
+        Ok(rep)
     }
 
     /// Inserts `rep` as a guest subtask into this table.
