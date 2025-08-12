@@ -7,7 +7,7 @@ use crate::prelude::*;
 use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::runtime::vm::export::Export;
 use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
-use crate::runtime::vm::table::{Table, TableElement, TableElementType};
+use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStoreContext,
@@ -763,32 +763,18 @@ impl Instance {
         self.get_table(table_index).element_type()
     }
 
-    /// Grow table by the specified amount of elements, filling them with
-    /// `init_value`.
+    /// Performs a grow operation on the `table_index` specified using `grow`.
     ///
-    /// Returns `None` if table can't be grown by the specified amount of
-    /// elements, or if `init_value` is the wrong type of table element.
+    /// This will handle updating the VMTableDefinition internally as necessary.
     pub(crate) fn defined_table_grow(
         mut self: Pin<&mut Self>,
-        store: &mut dyn VMStore,
         table_index: DefinedTableIndex,
-        delta: u64,
-        init_value: TableElement,
-    ) -> Result<Option<usize>, Error> {
-        let table = &mut self
-            .as_mut()
-            .tables_mut()
-            .get_mut(table_index)
-            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
-            .1;
-
-        let result = unsafe { table.grow(delta, init_value, store) };
-
-        // Keep the `VMContext` pointers used by compiled Wasm code up to
-        // date.
+        grow: impl FnOnce(&mut Table) -> Result<Option<usize>>,
+    ) -> Result<Option<usize>> {
+        let table = self.as_mut().get_defined_table(table_index);
+        let result = grow(table);
         let element = table.vmtable();
         self.set_table(table_index, element);
-
         result
     }
 
@@ -1237,25 +1223,22 @@ impl Instance {
     pub fn get_defined_table_with_lazy_init(
         mut self: Pin<&mut Self>,
         idx: DefinedTableIndex,
-        range: impl Iterator<Item = u64>,
+        range: impl IntoIterator<Item = u64>,
     ) -> &mut Table {
         let elt_ty = self.tables[idx].1.element_type();
 
         if elt_ty == TableElementType::Func {
             for i in range {
-                let value = match self.tables[idx].1.get(None, i) {
-                    Some(value) => value,
-                    None => {
-                        // Out-of-bounds; caller will handle by likely
-                        // throwing a trap. No work to do to lazy-init
-                        // beyond the end.
-                        break;
-                    }
+                match self.tables[idx].1.get_func_maybe_init(i) {
+                    // Uninitialized table element.
+                    Ok(None) => {}
+                    // Initialized table element, move on to the next.
+                    Ok(Some(_)) => continue,
+                    // Out-of-bounds; caller will handle by likely
+                    // throwing a trap. No work to do to lazy-init
+                    // beyond the end.
+                    Err(_) => break,
                 };
-
-                if !value.is_uninit() {
-                    continue;
-                }
 
                 // The table element `i` is uninitialized and is now being
                 // initialized. This must imply that a `precompiled` list of
@@ -1275,7 +1258,7 @@ impl Instance {
                     func_index.and_then(|func_index| self.as_mut().get_func_ref(func_index));
                 self.as_mut().tables_mut()[idx]
                     .1
-                    .set(i, TableElement::FuncRef(func_ref))
+                    .set_func(i, func_ref)
                     .expect("Table type should match and index should be in-bounds");
             }
         }

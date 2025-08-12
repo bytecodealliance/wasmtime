@@ -235,9 +235,11 @@ unsafe fn table_grow_func_ref(
         instance.as_mut().table_element_type(table_index),
         TableElementType::Func,
     ));
-    let element = NonNull::new(init_value.cast::<VMFuncRef>()).into();
+    let element = NonNull::new(init_value.cast::<VMFuncRef>());
     let result = instance
-        .defined_table_grow(store, defined_table_index, delta, element)?
+        .defined_table_grow(defined_table_index, |table| unsafe {
+            table.grow_func(store, delta, element)
+        })?
         .map(AllocationSize);
     Ok(result)
 }
@@ -258,17 +260,11 @@ unsafe fn table_grow_gc_ref(
         TableElementType::GcRef,
     ));
 
-    let element = VMGcRef::from_raw_u32(init_value)
-        .map(|r| {
-            store
-                .store_opaque_mut()
-                .unwrap_gc_store_mut()
-                .clone_gc_ref(&r)
-        })
-        .into();
-
+    let element = VMGcRef::from_raw_u32(init_value);
     let result = instance
-        .defined_table_grow(store, defined_table_index, delta, element)?
+        .defined_table_grow(defined_table_index, |table| unsafe {
+            table.grow_gc_ref(store, delta, element.as_ref())
+        })?
         .map(AllocationSize);
     Ok(result)
 }
@@ -290,17 +286,18 @@ unsafe fn table_grow_cont_obj(
         instance.as_mut().table_element_type(table_index),
         TableElementType::Cont,
     ));
-    let element =
-        unsafe { VMContObj::from_raw_parts(init_value_contref, init_value_revision).into() };
+    let element = unsafe { VMContObj::from_raw_parts(init_value_contref, init_value_revision) };
     let result = instance
-        .defined_table_grow(store, defined_table_index, delta, element)?
+        .defined_table_grow(defined_table_index, |table| unsafe {
+            table.grow_cont(store, delta, element)
+        })?
         .map(AllocationSize);
     Ok(result)
 }
 
 /// Implementation of `table.fill` for `funcref`s.
 unsafe fn table_fill_func_ref(
-    store: &mut dyn VMStore,
+    _store: &mut dyn VMStore,
     instance: Pin<&mut Instance>,
     table_index: u32,
     dst: u64,
@@ -312,7 +309,7 @@ unsafe fn table_fill_func_ref(
     match table.element_type() {
         TableElementType::Func => {
             let val = NonNull::new(val.cast::<VMFuncRef>());
-            table.fill(store.optional_gc_store_mut(), dst, val.into(), len)?;
+            table.fill_func(dst, val.into(), len)?;
             Ok(())
         }
         TableElementType::GcRef => unreachable!(),
@@ -336,8 +333,7 @@ unsafe fn table_fill_gc_ref(
         TableElementType::GcRef => {
             let gc_store = store.store_opaque_mut().unwrap_gc_store_mut();
             let gc_ref = VMGcRef::from_raw_u32(val);
-            let gc_ref = gc_ref.map(|r| gc_store.clone_gc_ref(&r));
-            table.fill(Some(gc_store), dst, gc_ref.into(), len)?;
+            table.fill_gc_ref(Some(gc_store), dst, gc_ref.as_ref(), len)?;
             Ok(())
         }
 
@@ -347,7 +343,7 @@ unsafe fn table_fill_gc_ref(
 
 #[cfg(feature = "stack-switching")]
 unsafe fn table_fill_cont_obj(
-    store: &mut dyn VMStore,
+    _store: &mut dyn VMStore,
     instance: Pin<&mut Instance>,
     table_index: u32,
     dst: u64,
@@ -360,7 +356,7 @@ unsafe fn table_fill_cont_obj(
     match table.element_type() {
         TableElementType::Cont => {
             let contobj = unsafe { VMContObj::from_raw_parts(value_contref, value_revision) };
-            table.fill(store.optional_gc_store_mut(), dst, contobj.into(), len)?;
+            table.fill_cont(dst, contobj.into(), len)?;
             Ok(())
         }
         _ => panic!("Wrong table filling function"),
@@ -506,10 +502,10 @@ unsafe fn table_get_lazy_init_func_ref(
     let table_index = TableIndex::from_u32(table_index);
     let table = instance.get_table_with_lazy_init(table_index, core::iter::once(index));
     let elem = (*table)
-        .get(None, index)
+        .get_func(index)
         .expect("table access already bounds-checked");
 
-    match unsafe { elem.into_func_ref_asserting_initialized() } {
+    match elem {
         Some(ptr) => ptr.as_ptr().cast(),
         None => core::ptr::null_mut(),
     }

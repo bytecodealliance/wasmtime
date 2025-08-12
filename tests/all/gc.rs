@@ -878,6 +878,107 @@ fn table_copy_doesnt_leak() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
+fn table_set_doesnt_leak() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut store = Store::<()>::default();
+    let flag = Arc::new(AtomicBool::new(false));
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        let table = Table::new(
+            &mut scope,
+            TableType::new(RefType::EXTERNREF, 10, Some(10)),
+            Ref::Extern(None),
+        )?;
+
+        let x = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?;
+        table.set(&mut scope, 2, x.into())?;
+        table.set(&mut scope, 2, x.into())?;
+        table.set(&mut scope, 2, Ref::Extern(None))?;
+    }
+
+    store.gc(None);
+    assert!(flag.load(SeqCst));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn table_grow_doesnt_leak() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut store = Store::<()>::default();
+    let flag = Arc::new(AtomicBool::new(false));
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        let table = Table::new(
+            &mut scope,
+            TableType::new(RefType::EXTERNREF, 10, Some(10)),
+            Ref::Extern(None),
+        )?;
+
+        let x = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?;
+        table.grow(&mut scope, 0, x.into())?;
+    }
+
+    store.gc(None);
+    assert!(flag.load(SeqCst));
+    Ok(())
+}
+
+// This is a test that the argument to `table.init` is properly handled w.r.t.
+// write barriers and such. This doesn't use `SetFlagOnDrop` because that would
+// require initializing a table with an element initialized from a global and
+// the global keeps the externref alive regardless. Instead this has a small GC
+// heap and we continuously make more garbage than is in the heap and expect
+// this to work as when it triggers a GC everything prior should get cleaned up.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn table_init_doesnt_leak() -> Result<()> {
+    const SIZE: u64 = 64 << 10;
+
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.memory_may_move(false);
+    config.memory_reservation(SIZE);
+    config.memory_reservation_for_growth(0);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (table 1 arrayref)
+
+                (type $a (array i31ref))
+
+                (func (export "run")
+                    i32.const 0
+                    i32.const 0
+                    i32.const 1
+                    table.init $e)
+                (elem $e arrayref (array.new $a (ref.i31 (i32.const 0)) (i32.const 200)))
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    for _ in 0..200 {
+        func.call(&mut store, ())?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn ref_matches() -> Result<()> {
     let mut store = Store::<()>::default();
     let engine = store.engine().clone();

@@ -1,8 +1,7 @@
-use crate::runtime::vm::TableElement;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapType, RefType, Rooted,
-    RootedGcRefImpl, StructRef, V128, ValType, prelude::*,
+    StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
 use wasmtime_environ::WasmHeapTopType;
@@ -1115,65 +1114,6 @@ impl Ref {
             Ref::Any(None) => true,
             Ref::Exn(Some(e)) => e.comes_from_same_store(store),
             Ref::Exn(None) => true,
-        }
-    }
-
-    pub(crate) fn into_table_element(
-        self,
-        store: &mut StoreOpaque,
-        ty: &RefType,
-    ) -> Result<TableElement> {
-        let mut store = AutoAssertNoGc::new(store);
-        self.ensure_matches_ty(&store, &ty)
-            .context("type mismatch: value does not match table element type")?;
-
-        match (self, ty.heap_type().top()) {
-            (Ref::Func(None), HeapType::Func) => {
-                assert!(ty.is_nullable());
-                Ok(TableElement::FuncRef(None))
-            }
-            (Ref::Func(Some(f)), HeapType::Func) => {
-                debug_assert!(
-                    f.comes_from_same_store(&store),
-                    "checked in `ensure_matches_ty`"
-                );
-                Ok(TableElement::FuncRef(Some(f.vm_func_ref(&store))))
-            }
-
-            (Ref::Extern(e), HeapType::Extern) => match e {
-                None => {
-                    assert!(ty.is_nullable());
-                    Ok(TableElement::GcRef(None))
-                }
-                Some(e) => {
-                    let gc_ref = e.try_clone_gc_ref(&mut store)?;
-                    Ok(TableElement::GcRef(Some(gc_ref)))
-                }
-            },
-
-            (Ref::Any(a), HeapType::Any) => match a {
-                None => {
-                    assert!(ty.is_nullable());
-                    Ok(TableElement::GcRef(None))
-                }
-                Some(a) => {
-                    let gc_ref = a.try_clone_gc_ref(&mut store)?;
-                    Ok(TableElement::GcRef(Some(gc_ref)))
-                }
-            },
-
-            (Ref::Exn(e), HeapType::Exn) => match e {
-                None => {
-                    assert!(ty.is_nullable());
-                    Ok(TableElement::GcRef(None))
-                }
-                Some(e) => {
-                    let gc_ref = e.try_clone_gc_ref(&mut store)?;
-                    Ok(TableElement::GcRef(Some(gc_ref)))
-                }
-            },
-
-            _ => unreachable!("checked that the value matches the type above"),
         }
     }
 }
