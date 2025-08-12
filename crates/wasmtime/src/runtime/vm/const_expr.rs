@@ -7,7 +7,6 @@ use crate::{
     AnyRef, ArrayRef, ArrayRefPre, ArrayType, ExternRef, I31, StructRef, StructRefPre, StructType,
 };
 use crate::{OpaqueRootScope, Val};
-use smallvec::SmallVec;
 use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex};
 #[cfg(feature = "gc")]
 use wasmtime_environ::{VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType};
@@ -120,7 +119,7 @@ impl ConstEvalContext {
                     }
                 },
             })
-            .collect::<SmallVec<[_; 8]>>();
+            .collect::<smallvec::SmallVec<[_; 8]>>();
 
         unsafe { self.struct_new(store, shared_ty, &fields) }
     }
@@ -335,7 +334,10 @@ impl ConstExprEvaluator {
 
                     let start = self.stack.len() - array_size;
 
-                    let elems = self.stack.drain(start..).collect::<SmallVec<[_; 8]>>();
+                    let elems = self
+                        .stack
+                        .drain(start..)
+                        .collect::<smallvec::SmallVec<[_; 8]>>();
 
                     let pre = ArrayRefPre::_new(store, ty);
                     let array = unsafe { ArrayRef::new_fixed_maybe_async(store, &pre, &elems)? };
