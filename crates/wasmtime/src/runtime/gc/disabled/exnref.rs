@@ -3,6 +3,7 @@
 use crate::{
     AsContext, AsContextMut, ExnType, GcRefImpl, HeapType, Result, Rooted, Tag, Val,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
+    vm::VMGcRef,
 };
 
 /// Support for `ExnRefPre` disabled at compile time because the `gc`
@@ -16,6 +17,13 @@ pub enum ExnRef {}
 impl GcRefImpl for ExnRef {}
 
 impl ExnRef {
+    pub(crate) fn from_cloned_gc_ref(
+        _store: &mut AutoAssertNoGc<'_>,
+        _gc_ref: VMGcRef,
+    ) -> Rooted<Self> {
+        unimplemented!()
+    }
+
     pub fn from_raw(_store: impl AsContextMut, _raw: u32) -> Option<Rooted<Self>> {
         None
     }

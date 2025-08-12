@@ -4,9 +4,9 @@ use crate::prelude::*;
 use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque};
 #[cfg(feature = "gc")]
 use crate::{
-    AnyRef, ArrayRef, ArrayRefPre, ArrayType, ExternRef, I31, OpaqueRootScope, StructRef,
-    StructRefPre, StructType, Val,
+    AnyRef, ArrayRef, ArrayRefPre, ArrayType, ExternRef, I31, StructRef, StructRefPre, StructType,
 };
+use crate::{OpaqueRootScope, Val};
 use smallvec::SmallVec;
 use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex};
 #[cfg(feature = "gc")]
@@ -167,12 +167,15 @@ impl ConstExprEvaluator {
                 ConstOp::GlobalGet(g) => self.stack.push(context.global_get(store, *g)?),
                 ConstOp::RefNull(ty) => self.stack.push(Val::null_top(*ty)),
                 ConstOp::RefFunc(f) => self.stack.push(context.ref_func(store, *f)?),
+                #[cfg(feature = "gc")]
                 ConstOp::RefI31 => {
                     let i = self.pop()?.unwrap_i32();
                     let i31 = I31::wrapping_i32(i);
                     let r = AnyRef::_from_i31(&mut AutoAssertNoGc::new(store), i31);
                     self.stack.push(Val::AnyRef(Some(r)));
                 }
+                #[cfg(not(feature = "gc"))]
+                ConstOp::RefI31 => panic!("should not have validated"),
                 ConstOp::I32Add => {
                     let b = self.pop()?.unwrap_i32();
                     let a = self.pop()?.unwrap_i32();

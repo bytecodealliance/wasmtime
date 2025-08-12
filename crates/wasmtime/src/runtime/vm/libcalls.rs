@@ -309,7 +309,7 @@ unsafe fn table_fill_func_ref(
     match table.element_type() {
         TableElementType::Func => {
             let val = NonNull::new(val.cast::<VMFuncRef>());
-            table.fill_func(dst, val.into(), len)?;
+            table.fill_func(dst, val, len)?;
             Ok(())
         }
         TableElementType::GcRef => unreachable!(),
@@ -356,7 +356,7 @@ unsafe fn table_fill_cont_obj(
     match table.element_type() {
         TableElementType::Cont => {
             let contobj = unsafe { VMContObj::from_raw_parts(value_contref, value_revision) };
-            table.fill_cont(dst, contobj.into(), len)?;
+            table.fill_cont(dst, contobj, len)?;
             Ok(())
         }
         _ => panic!("Wrong table filling function"),

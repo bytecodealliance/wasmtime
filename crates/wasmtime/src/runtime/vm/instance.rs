@@ -974,7 +974,7 @@ impl Instance {
         let store_id = store.id();
         let elements_instance = store.instance_mut(elements_instance_id);
         let table = elements_instance.get_exported_table(store_id, table_index);
-        let table_size = u64::try_from(table.size_(store)).unwrap();
+        let table_size = table.size_(store);
 
         // Perform a bounds check on the table being written to. This is done by
         // ensuring that `dst + len <= table.size()` via checked arithmetic.
