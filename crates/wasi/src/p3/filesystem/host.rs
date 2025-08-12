@@ -176,14 +176,17 @@ impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadDirectoryT
                 Err(err) => break Err(err.into()),
             };
             if let Err(err) = loop {
-                let (entry, tail) = match self
+                let Some((res, tail)) = self
                     .dir
                     .run_blocking(move |_| entries.next().map(|entry| (entry, entries)))
                     .await
-                {
-                    None => break Ok(()),
-                    Some((Ok(entry), tail)) => (entry, tail),
-                    Some((Err(err), tail)) => {
+                else {
+                    break Ok(());
+                };
+                entries = tail;
+                let entry = match res {
+                    Ok(entry) => entry,
+                    Err(err) => {
                         // On windows, filter out files like `C:\DumpStack.log.tmp` which we
                         // can't get full metadata for.
                         #[cfg(windows)]
@@ -194,7 +197,6 @@ impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadDirectoryT
                             if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
                                 || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
                             {
-                                entries = tail;
                                 continue;
                             }
                         }
@@ -217,7 +219,6 @@ impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadDirectoryT
                 if data_tx.is_closed() {
                     break Ok(());
                 }
-                entries = tail;
             } {
                 break Err(err);
             };
