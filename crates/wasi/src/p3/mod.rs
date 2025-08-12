@@ -88,6 +88,7 @@ where
 {
     cli::add_to_linker_with_options(linker, &options.into())?;
     clocks::add_to_linker(linker)?;
+    filesystem::add_to_linker(linker)?;
     random::add_to_linker(linker)?;
     sockets::add_to_linker(linker)?;
     Ok(())

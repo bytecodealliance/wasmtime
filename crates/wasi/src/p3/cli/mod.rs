@@ -1,7 +1,10 @@
 mod host;
 
 use crate::cli::{WasiCli, WasiCliView};
-use crate::p3::bindings::cli;
+use crate::p3::bindings::cli::{
+    environment, exit, stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr,
+    terminal_stdin, terminal_stdout,
+};
 use wasmtime::component::Linker;
 
 /// Add all WASI interfaces from this module into the `linker` provided.
@@ -60,28 +63,28 @@ pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiCliView + 'static,
 {
-    let exit_options = cli::exit::LinkOptions::default();
+    let exit_options = exit::LinkOptions::default();
     add_to_linker_with_options(linker, &exit_options)
 }
 
 /// Similar to [`add_to_linker`], but with the ability to enable unstable features.
 pub fn add_to_linker_with_options<T>(
     linker: &mut Linker<T>,
-    exit_options: &cli::exit::LinkOptions,
+    exit_options: &exit::LinkOptions,
 ) -> anyhow::Result<()>
 where
     T: WasiCliView + 'static,
 {
-    cli::exit::add_to_linker::<_, WasiCli>(linker, exit_options, T::cli)?;
-    cli::environment::add_to_linker::<_, WasiCli>(linker, T::cli)?;
-    cli::stdin::add_to_linker::<_, WasiCli>(linker, T::cli)?;
-    cli::stdout::add_to_linker::<_, WasiCli>(linker, T::cli)?;
-    cli::stderr::add_to_linker::<_, WasiCli>(linker, T::cli)?;
-    cli::terminal_input::add_to_linker::<_, WasiCli>(linker, T::cli)?;
-    cli::terminal_output::add_to_linker::<_, WasiCli>(linker, T::cli)?;
-    cli::terminal_stdin::add_to_linker::<_, WasiCli>(linker, T::cli)?;
-    cli::terminal_stdout::add_to_linker::<_, WasiCli>(linker, T::cli)?;
-    cli::terminal_stderr::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    exit::add_to_linker::<_, WasiCli>(linker, exit_options, T::cli)?;
+    environment::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    stdin::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    stdout::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    stderr::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    terminal_input::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    terminal_output::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    terminal_stdin::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    terminal_stdout::add_to_linker::<_, WasiCli>(linker, T::cli)?;
+    terminal_stderr::add_to_linker::<_, WasiCli>(linker, T::cli)?;
     Ok(())
 }
 

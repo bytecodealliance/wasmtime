@@ -1,4 +1,4 @@
-use cap_std::time::{Duration, Instant, SystemClock};
+use cap_std::time::{Duration, Instant, SystemClock, SystemTime};
 use cap_std::{AmbientAuthority, ambient_authority};
 use cap_time_ext::{MonotonicClockExt as _, SystemClockExt as _};
 use wasmtime::component::{HasData, ResourceTable};
@@ -121,4 +121,23 @@ pub fn monotonic_clock() -> Box<dyn HostMonotonicClock + Send> {
 
 pub fn wall_clock() -> Box<dyn HostWallClock + Send> {
     Box::new(WallClock::default())
+}
+
+pub(crate) struct Datetime {
+    pub seconds: u64,
+    pub nanoseconds: u32,
+}
+
+impl TryFrom<SystemTime> for Datetime {
+    type Error = wasmtime::Error;
+
+    fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
+        let duration =
+            time.duration_since(SystemTime::from_std(std::time::SystemTime::UNIX_EPOCH))?;
+
+        Ok(Self {
+            seconds: duration.as_secs(),
+            nanoseconds: duration.subsec_nanos(),
+        })
+    }
 }

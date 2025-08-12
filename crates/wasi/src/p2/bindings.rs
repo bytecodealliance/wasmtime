@@ -168,7 +168,7 @@ pub mod sync {
                 // Configure the resource types of the bound interfaces here
                 // to be the same as the async versions of the resources, that
                 // way everything has the same type.
-                "wasi:filesystem/types/descriptor": super::super::filesystem::types::Descriptor,
+                "wasi:filesystem/types/descriptor": crate::filesystem::Descriptor,
                 "wasi:filesystem/types/directory-entry-stream": super::super::filesystem::types::DirectoryEntryStream,
                 "wasi:sockets/tcp/tcp-socket": super::super::sockets::tcp::TcpSocket,
                 "wasi:sockets/udp/incoming-datagram-stream": super::super::sockets::udp::IncomingDatagramStream,
@@ -399,7 +399,7 @@ mod async_io {
             "wasi:sockets/udp/outgoing-datagram-stream": crate::p2::udp::OutgoingDatagramStream,
             "wasi:sockets/ip-name-lookup/resolve-address-stream": crate::p2::ip_name_lookup::ResolveAddressStream,
             "wasi:filesystem/types/directory-entry-stream": crate::p2::filesystem::ReaddirIterator,
-            "wasi:filesystem/types/descriptor": crate::p2::filesystem::Descriptor,
+            "wasi:filesystem/types/descriptor": crate::filesystem::Descriptor,
             "wasi:cli/terminal-input/terminal-input": crate::p2::stdio::TerminalInput,
             "wasi:cli/terminal-output/terminal-output": crate::p2::stdio::TerminalOutput,
         },

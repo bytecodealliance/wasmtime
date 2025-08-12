@@ -16,7 +16,7 @@ pub mod cli;
 pub mod clocks;
 mod ctx;
 mod error;
-mod filesystem;
+pub mod filesystem;
 #[cfg(feature = "p1")]
 pub mod p0;
 #[cfg(feature = "p1")]

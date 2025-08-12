@@ -72,7 +72,7 @@ use crate::p2::bindings::{
         terminal_stderr::Host as _, terminal_stdin::Host as _, terminal_stdout::Host as _,
     },
     clocks::{monotonic_clock, wall_clock},
-    filesystem::{preopens::Host as _, types as filesystem},
+    filesystem::types as filesystem,
 };
 use crate::p2::{FsError, IsATTY};
 use crate::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
@@ -168,7 +168,7 @@ impl WasiView for WasiP1Ctx {
 
 #[derive(Debug)]
 struct File {
-    /// The handle to the preview2 descriptor of type [`crate::p2::filesystem::Descriptor::File`].
+    /// The handle to the preview2 descriptor of type [`crate::filesystem::Descriptor::File`].
     fd: Resource<filesystem::Descriptor>,
 
     /// The current-position pointer.
@@ -259,14 +259,14 @@ enum Descriptor {
         stream: Resource<streams::OutputStream>,
         isatty: IsATTY,
     },
-    /// A fd of type [`crate::p2::filesystem::Descriptor::Dir`]
+    /// A fd of type [`crate::filesystem::Descriptor::Dir`]
     Directory {
         fd: Resource<filesystem::Descriptor>,
         /// The path this directory was preopened as.
         /// `None` means this directory was opened using `open-at`.
         preopen_path: Option<String>,
     },
-    /// A fd of type [`crate::p2::filesystem::Descriptor::File`]
+    /// A fd of type [`crate::filesystem::Descriptor::File`]
     File(File),
 }
 
@@ -975,6 +975,38 @@ impl From<IsATTY> for types::Filetype {
     }
 }
 
+impl From<crate::filesystem::ErrorCode> for types::Errno {
+    fn from(code: crate::filesystem::ErrorCode) -> Self {
+        match code {
+            crate::filesystem::ErrorCode::Access => types::Errno::Acces,
+            crate::filesystem::ErrorCode::Already => types::Errno::Already,
+            crate::filesystem::ErrorCode::BadDescriptor => types::Errno::Badf,
+            crate::filesystem::ErrorCode::Busy => types::Errno::Busy,
+            crate::filesystem::ErrorCode::Exist => types::Errno::Exist,
+            crate::filesystem::ErrorCode::FileTooLarge => types::Errno::Fbig,
+            crate::filesystem::ErrorCode::IllegalByteSequence => types::Errno::Ilseq,
+            crate::filesystem::ErrorCode::InProgress => types::Errno::Inprogress,
+            crate::filesystem::ErrorCode::Interrupted => types::Errno::Intr,
+            crate::filesystem::ErrorCode::Invalid => types::Errno::Inval,
+            crate::filesystem::ErrorCode::Io => types::Errno::Io,
+            crate::filesystem::ErrorCode::IsDirectory => types::Errno::Isdir,
+            crate::filesystem::ErrorCode::Loop => types::Errno::Loop,
+            crate::filesystem::ErrorCode::TooManyLinks => types::Errno::Mlink,
+            crate::filesystem::ErrorCode::NameTooLong => types::Errno::Nametoolong,
+            crate::filesystem::ErrorCode::NoEntry => types::Errno::Noent,
+            crate::filesystem::ErrorCode::InsufficientMemory => types::Errno::Nomem,
+            crate::filesystem::ErrorCode::InsufficientSpace => types::Errno::Nospc,
+            crate::filesystem::ErrorCode::Unsupported => types::Errno::Notsup,
+            crate::filesystem::ErrorCode::NotDirectory => types::Errno::Notdir,
+            crate::filesystem::ErrorCode::NotEmpty => types::Errno::Notempty,
+            crate::filesystem::ErrorCode::Overflow => types::Errno::Overflow,
+            crate::filesystem::ErrorCode::NotPermitted => types::Errno::Perm,
+            crate::filesystem::ErrorCode::Pipe => types::Errno::Pipe,
+            crate::filesystem::ErrorCode::InvalidSeek => types::Errno::Spipe,
+        }
+    }
+}
+
 impl From<filesystem::ErrorCode> for types::Errno {
     fn from(code: filesystem::ErrorCode) -> Self {
         match code {
@@ -1054,6 +1086,12 @@ impl From<GuestError> for types::Error {
 
 impl From<filesystem::ErrorCode> for types::Error {
     fn from(code: filesystem::ErrorCode) -> Self {
+        types::Errno::from(code).into()
+    }
+}
+
+impl From<crate::filesystem::ErrorCode> for types::Error {
+    fn from(code: crate::filesystem::ErrorCode) -> Self {
         types::Errno::from(code).into()
     }
 }
@@ -2137,11 +2175,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             .await?;
         let mut t = self.transact()?;
         let desc = match t.view.table.get(&fd)? {
-            crate::p2::filesystem::Descriptor::Dir(_) => Descriptor::Directory {
+            crate::filesystem::Descriptor::Dir(_) => Descriptor::Directory {
                 fd,
                 preopen_path: None,
             },
-            crate::p2::filesystem::Descriptor::File(_) => Descriptor::File(File {
+            crate::filesystem::Descriptor::File(_) => Descriptor::File(File {
                 fd,
                 position: Default::default(),
                 append: fdflags.contains(types::Fdflags::APPEND),
