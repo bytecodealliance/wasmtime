@@ -1087,14 +1087,13 @@ impl FunctionIndices {
                         self.indices[&FuncKey::DefinedWasmFunction(module, func)].unwrap_function();
                     let (symbol, _) = symbol_ids_and_locs[i];
                     let (_, compiled_func) = &compiled_funcs[i];
-                    (symbol, compiled_func)
+                    (symbol, &**compiled_func)
                 },
                 dwarf_package_bytes,
                 tunables,
             )?;
         }
 
-        // TODO FITZGEN
         let mut def_funcs = SecondaryMap::<
             StaticModuleIndex,
             PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
@@ -1110,6 +1109,9 @@ impl FunctionIndices {
         let mut resource_drop_trampoline = None;
 
         for (key, index) in &self.indices {
+            // NB: exhaustively match on function keys to make sure that we are
+            // remembering to handle everything we are compiling when doing this
+            // final linking and metadata-collection step.
             match *key {
                 FuncKey::DefinedWasmFunction(module, def_func) => {
                     let index = index.unwrap_function();

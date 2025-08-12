@@ -1330,7 +1330,7 @@ impl ComponentCompiler for Compiler {
             compiler.cx.abi = Some(abi);
 
             Ok(CompiledFunctionBody {
-                code: Box::new(Some(compiler.cx)),
+                code: super::box_dyn_any_compiler_context(Some(compiler.cx)),
                 needs_gc_heap: false,
             })
         };

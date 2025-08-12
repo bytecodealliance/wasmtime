@@ -199,6 +199,29 @@ impl Compiler {
     }
 }
 
+fn box_dyn_any_compiled_function(f: CompiledFunction) -> Box<dyn Any + Send + Sync> {
+    let b = box_dyn_any(f);
+    debug_assert!(b.is::<CompiledFunction>());
+    b
+}
+
+fn box_dyn_any_compiler_context(ctx: Option<CompilerContext>) -> Box<dyn Any + Send + Sync> {
+    let b = box_dyn_any(ctx);
+    debug_assert!(b.is::<Option<CompilerContext>>());
+    b
+}
+
+fn box_dyn_any(x: impl Any + Send + Sync) -> Box<dyn Any + Send + Sync> {
+    log::trace!(
+        "making Box<dyn Any + Send + Sync> of {}",
+        std::any::type_name_of_val(&x)
+    );
+    let b = Box::new(x);
+    let r: &(dyn Any + Sync + Send) = &*b;
+    log::trace!("  --> {r:#p}");
+    b
+}
+
 impl wasmtime_environ::Compiler for Compiler {
     fn inlining_compiler(&self) -> Option<&dyn wasmtime_environ::InliningCompiler> {
         Some(self)
@@ -212,6 +235,8 @@ impl wasmtime_environ::Compiler for Compiler {
         types: &ModuleTypesBuilder,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling Wasm function: {key:?} = {symbol:?}");
+
         let isa = &*self.isa;
         let module = &translation.module;
 
@@ -314,7 +339,7 @@ impl wasmtime_environ::Compiler for Compiler {
         log::trace!("`{symbol}` timing info\n{timing}");
 
         Ok(CompiledFunctionBody {
-            code: Box::new(Some(compiler.cx)),
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
             needs_gc_heap: func_env.needs_gc_heap(),
         })
     }
@@ -324,8 +349,10 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         key: FuncKey,
-        _symbol: &str,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling array-to-wasm trampoline: {key:?} = {symbol:?}");
+
         let (module_index, def_func_index) = key.unwrap_array_to_wasm_trampoline();
         debug_assert_eq!(translation.module_index, module_index);
 
@@ -397,7 +424,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(Some(compiler.cx)),
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
             needs_gc_heap: false,
         })
     }
@@ -405,9 +432,11 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
-        _key: FuncKey,
-        _symbol: &str,
+        key: FuncKey,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling wasm-to-array trampoline: {key:?} = {symbol:?}");
+
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
@@ -472,7 +501,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(Some(compiler.cx)),
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
             needs_gc_heap: false,
         })
     }
@@ -483,6 +512,11 @@ impl wasmtime_environ::Compiler for Compiler {
         funcs: &[(String, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, FuncKey) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
+        log::trace!(
+            "appending functions to object file: {:#?}",
+            funcs.iter().map(|(sym, _)| sym).collect::<Vec<_>>()
+        );
+
         let mut builder =
             ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
         if self.linkopts.force_jump_veneers {
@@ -494,24 +528,32 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
+            debug_assert!(!func.is::<Option<CompilerContext>>());
+            debug_assert!(func.is::<CompiledFunction>());
             let func = func.downcast_ref::<CompiledFunction>().unwrap();
-            let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
+
+            let (sym_id, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
+            log::trace!("symbol id {sym_id:?} = {sym:?}");
+
             if self.tunables.generate_address_map {
                 let addr = func.address_map();
                 addrs.push(range.clone(), &addr.instructions);
             }
+
             clif_to_env_stack_maps(
                 &mut stack_maps,
                 range.clone(),
                 func.buffer.user_stack_maps(),
             );
+
             traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
             builder.append_padding(self.linkopts.padding_between_functions);
+
             let info = FunctionLoc {
                 start: u32::try_from(range.start).unwrap(),
                 length: u32::try_from(range.end - range.start).unwrap(),
             };
-            ret.push((sym, info));
+            ret.push((sym_id, info));
         }
 
         builder.finish();
@@ -557,13 +599,19 @@ impl wasmtime_environ::Compiler for Compiler {
         dwarf_package_bytes: Option<&'a [u8]>,
         tunables: &'a Tunables,
     ) -> Result<()> {
+        log::trace!("appending DWARF debug info");
+
         let get_func = move |m, f| {
             let (sym, any) = get_func(m, f);
+            log::trace!("get_func({m:?}, {f:?}) -> ({sym:?}, {any:#p})");
+            debug_assert!(!any.is::<Option<CompilerContext>>());
+            debug_assert!(any.is::<CompiledFunction>());
             (
                 sym,
                 any.downcast_ref::<CompiledFunction>().unwrap().metadata(),
             )
         };
+
         let mut compilation = crate::debug::Compilation::new(
             &*self.isa,
             translations,
@@ -622,8 +670,10 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_builtin(
         &self,
         key: FuncKey,
-        _symbol: &str,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling wasm-to-builtin trampoline: {key:?} = {symbol:?}");
+
         let isa = &*self.isa;
         let ptr_size = isa.pointer_bytes();
         let pointer_type = isa.pointer_type();
@@ -694,7 +744,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(Some(compiler.cx)),
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
             needs_gc_heap: false,
         })
     }
@@ -703,6 +753,8 @@ impl wasmtime_environ::Compiler for Compiler {
         &'a self,
         func: &'a dyn Any,
     ) -> Box<dyn Iterator<Item = FuncKey> + 'a> {
+        debug_assert!(!func.is::<Option<CompilerContext>>());
+        debug_assert!(func.is::<CompiledFunction>());
         let func = func.downcast_ref::<CompiledFunction>().unwrap();
         Box::new(func.relocations().map(|r| r.reloc_target))
     }
@@ -714,6 +766,8 @@ impl InliningCompiler for Compiler {
         func_body: &CompiledFunctionBody,
         calls: &mut wasmtime_environ::prelude::IndexSet<FuncKey>,
     ) -> Result<()> {
+        debug_assert!(!func_body.code.is::<CompiledFunction>());
+        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
         let cx = func_body
             .code
             .downcast_ref::<Option<CompilerContext>>()
@@ -732,6 +786,8 @@ impl InliningCompiler for Compiler {
     }
 
     fn size(&self, func_body: &CompiledFunctionBody) -> u32 {
+        debug_assert!(!func_body.code.is::<CompiledFunction>());
+        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
         let cx = func_body
             .code
             .downcast_ref::<Option<CompilerContext>>()
@@ -748,6 +804,8 @@ impl InliningCompiler for Compiler {
         func_body: &mut CompiledFunctionBody,
         get_callee: &'a mut dyn FnMut(FuncKey) -> Option<&'a CompiledFunctionBody>,
     ) -> Result<()> {
+        debug_assert!(!func_body.code.is::<CompiledFunction>());
+        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
         let code = func_body
             .code
             .downcast_mut::<Option<CompilerContext>>()
@@ -781,6 +839,8 @@ impl InliningCompiler for Compiler {
                     FuncKey::DefinedWasmFunction(_, _) => match (self.0)(callee) {
                         None => InlineCommand::KeepCall,
                         Some(func_body) => {
+                            debug_assert!(!func_body.code.is::<CompiledFunction>());
+                            debug_assert!(func_body.code.is::<Option<CompilerContext>>());
                             let cx = func_body
                                 .code
                                 .downcast_ref::<Option<CompilerContext>>()
@@ -802,6 +862,9 @@ impl InliningCompiler for Compiler {
         input: Option<wasmparser::FunctionBody<'_>>,
         symbol: &str,
     ) -> Result<()> {
+        log::trace!("finish compiling {symbol:?}");
+        debug_assert!(!func_body.code.is::<CompiledFunction>());
+        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
         let cx = func_body
             .code
             .downcast_mut::<Option<CompilerContext>>()
@@ -826,7 +889,7 @@ impl InliningCompiler for Compiler {
         log::debug!("`{symbol}` compiled in {:?}", timing.total());
         log::trace!("`{symbol}` timing info\n{timing}");
 
-        func_body.code = Box::new(compiled_func);
+        func_body.code = box_dyn_any_compiled_function(compiled_func);
         Ok(())
     }
 }

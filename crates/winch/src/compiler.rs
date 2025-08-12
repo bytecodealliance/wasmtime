@@ -87,6 +87,23 @@ impl Compiler {
     }
 }
 
+fn box_dyn_any_compiled_function(f: CompiledFunction) -> Box<dyn Any + Send + Sync> {
+    let b = box_dyn_any(f);
+    debug_assert!(b.is::<CompiledFunction>());
+    b
+}
+
+fn box_dyn_any(x: impl Any + Send + Sync) -> Box<dyn Any + Send + Sync> {
+    log::trace!(
+        "making Box<dyn Any + Send + Sync> of {}",
+        std::any::type_name_of_val(&x)
+    );
+    let b = Box::new(x);
+    let r: &(dyn Any + Sync + Send) = &*b;
+    log::trace!("  --> {r:#p}");
+    b
+}
+
 impl wasmtime_environ::Compiler for Compiler {
     fn inlining_compiler(&self) -> Option<&dyn wasmtime_environ::InliningCompiler> {
         None
@@ -98,8 +115,10 @@ impl wasmtime_environ::Compiler for Compiler {
         key: FuncKey,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
-        _symbol: &str,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling function: {key:?} = {symbol:?}");
+
         let (module_index, def_func_index) = key.unwrap_defined_wasm_function();
         debug_assert_eq!(module_index, translation.module_index);
 
@@ -140,7 +159,7 @@ impl wasmtime_environ::Compiler for Compiler {
         }
 
         Ok(CompiledFunctionBody {
-            code: Box::new(func),
+            code: box_dyn_any_compiled_function(func),
             // TODO: Winch doesn't support GC objects and stack maps and all that yet.
             needs_gc_heap: false,
         })
