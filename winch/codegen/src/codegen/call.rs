@@ -70,7 +70,7 @@ use crate::{
     stack::Val,
 };
 use anyhow::{Result, ensure};
-use wasmtime_environ::{FuncIndex, PtrSize, VMOffsets};
+use wasmtime_environ::{DefinedFuncIndex, FuncIndex, PtrSize, VMOffsets};
 
 /// All the information needed to emit a function call.
 #[derive(Copy, Clone)]
@@ -148,7 +148,10 @@ impl FnCall {
             Callee::FuncRef(_) => {
                 Self::lower_funcref(env.callee_sig::<M::ABI>(callee)?, ptr, context, masm)
             }
-            Callee::Local(i) => Ok(Self::lower_local(env, *i)),
+            Callee::Local(i) => {
+                let f = env.translation.module.defined_func_index(*i).unwrap();
+                Ok(Self::lower_local(env, f))
+            }
             Callee::Import(i) => {
                 let sig = env.callee_sig::<M::ABI>(callee)?;
                 Self::lower_import(*i, sig, context, masm, vmoffsets)
@@ -177,7 +180,7 @@ impl FnCall {
     /// Lower  a local function to a [`CalleeKind`] and [ContextArgs] pair.
     fn lower_local<P: PtrSize>(
         env: &mut FuncEnv<P>,
-        index: FuncIndex,
+        index: DefinedFuncIndex,
     ) -> (CalleeKind, ContextArgs) {
         (
             CalleeKind::direct(env.name_wasm(index)),

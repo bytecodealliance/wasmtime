@@ -14,7 +14,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i32, i32) -> i32 tail
-;;     fn0 = colocated u1:35 sig0
+;;     fn0 = colocated u1610612736:35 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):

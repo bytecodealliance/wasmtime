@@ -21,6 +21,7 @@ cranelift-codegen = { workspace = true }
 wasmtime-cranelift = { workspace = true }
 wasmparser = { workspace = true }
 gimli = { workspace = true, features = ['std'] }
+log = { workspace = true }
 
 [features]
 component-model = [

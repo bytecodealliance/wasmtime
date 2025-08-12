@@ -12,9 +12,9 @@ use std::collections::{
 use std::mem;
 use wasmparser::BlockType;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, FuncIndex, GlobalIndex, IndexType, Memory, MemoryIndex,
-    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, Table, TableIndex, TypeConvert,
-    TypeIndex, VMOffsets, WasmHeapType, WasmValType,
+    BuiltinFunctionIndex, DefinedFuncIndex, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
+    MemoryIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, Table, TableIndex,
+    TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -354,18 +354,16 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
 
     /// Creates a name to reference the `builtin` provided.
     pub fn name_builtin(&mut self, builtin: BuiltinFunctionIndex) -> UserExternalNameRef {
-        self.intern_name(UserExternalName {
-            namespace: wasmtime_cranelift::NS_WASMTIME_BUILTIN,
-            index: builtin.index(),
-        })
+        let key = FuncKey::WasmToBuiltinTrampoline(builtin);
+        let (namespace, index) = key.into_raw_parts();
+        self.intern_name(UserExternalName { namespace, index })
     }
 
     /// Creates a name to reference the wasm function `index` provided.
-    pub fn name_wasm(&mut self, index: FuncIndex) -> UserExternalNameRef {
-        self.intern_name(UserExternalName {
-            namespace: wasmtime_cranelift::NS_WASM_FUNC,
-            index: index.as_u32(),
-        })
+    pub fn name_wasm(&mut self, def_func: DefinedFuncIndex) -> UserExternalNameRef {
+        let key = FuncKey::DefinedWasmFunction(self.translation.module_index, def_func);
+        let (namespace, index) = key.into_raw_parts();
+        self.intern_name(UserExternalName { namespace, index })
     }
 
     /// Interns `name` into a `UserExternalNameRef` and ensures that duplicate

@@ -30,10 +30,10 @@ use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
     AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
-    DefinedFuncIndex, FlagValue, FuncIndex, FunctionBodyData, FunctionLoc, HostCall,
-    InliningCompiler, ModuleTranslation, ModuleTypesBuilder, PtrSize, RelocationTarget,
-    StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables,
-    VMOffsets, WasmFuncType, WasmValType,
+    DefinedFuncIndex, FlagValue, FuncKey, FunctionBodyData, FunctionLoc, HostCall,
+    InliningCompiler, ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection,
+    StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, VMOffsets,
+    WasmFuncType, WasmValType,
 };
 
 #[cfg(feature = "component-model")]
@@ -176,12 +176,13 @@ impl Compiler {
                 .params
                 .insert(0, ir::AbiParam::new(self.isa.pointer_type()));
             let new_sig = builder.func.import_signature(new_signature);
-            let name = ir::ExternalName::User(builder.func.declare_imported_user_function(
-                ir::UserExternalName {
-                    namespace: crate::NS_PULLEY_HOSTCALL,
-                    index: hostcall.into().index(),
-                },
-            ));
+            let key = FuncKey::PulleyHostCall(hostcall.into());
+            let (namespace, index) = key.into_raw_parts();
+            let name = ir::ExternalName::User(
+                builder
+                    .func
+                    .declare_imported_user_function(ir::UserExternalName { namespace, index }),
+            );
             let func = builder.func.import_function(ir::ExtFuncData {
                 name,
                 signature: new_sig,
@@ -198,6 +199,29 @@ impl Compiler {
     }
 }
 
+fn box_dyn_any_compiled_function(f: CompiledFunction) -> Box<dyn Any + Send + Sync> {
+    let b = box_dyn_any(f);
+    debug_assert!(b.is::<CompiledFunction>());
+    b
+}
+
+fn box_dyn_any_compiler_context(ctx: Option<CompilerContext>) -> Box<dyn Any + Send + Sync> {
+    let b = box_dyn_any(ctx);
+    debug_assert!(b.is::<Option<CompilerContext>>());
+    b
+}
+
+fn box_dyn_any(x: impl Any + Send + Sync) -> Box<dyn Any + Send + Sync> {
+    log::trace!(
+        "making Box<dyn Any + Send + Sync> of {}",
+        std::any::type_name_of_val(&x)
+    );
+    let b = Box::new(x);
+    let r: &(dyn Any + Sync + Send) = &*b;
+    log::trace!("  --> {r:#p}");
+    b
+}
+
 impl wasmtime_environ::Compiler for Compiler {
     fn inlining_compiler(&self) -> Option<&dyn wasmtime_environ::InliningCompiler> {
         Some(self)
@@ -206,14 +230,20 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_function(
         &self,
         translation: &ModuleTranslation<'_>,
-        func_index: DefinedFuncIndex,
+        key: FuncKey,
         input: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling Wasm function: {key:?} = {symbol:?}");
+
         let isa = &*self.isa;
         let module = &translation.module;
-        let func_index = module.func_index(func_index);
+
+        let (module_index, def_func_index) = key.unwrap_defined_wasm_function();
+        debug_assert_eq!(translation.module_index, module_index);
+
+        let func_index = module.func_index(def_func_index);
         let sig = translation.module.functions[func_index]
             .signature
             .unwrap_module_type_index();
@@ -223,10 +253,8 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let context = &mut compiler.cx.codegen_context;
         context.func.signature = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
-        context.func.name = UserFuncName::User(UserExternalName {
-            namespace: crate::NS_WASM_FUNC,
-            index: func_index.as_u32(),
-        });
+        let (namespace, index) = key.into_raw_parts();
+        context.func.name = UserFuncName::User(UserExternalName { namespace, index });
 
         if self.tunables.generate_native_debuginfo {
             context.func.collect_debug_info();
@@ -311,7 +339,7 @@ impl wasmtime_environ::Compiler for Compiler {
         log::trace!("`{symbol}` timing info\n{timing}");
 
         Ok(CompiledFunctionBody {
-            code: Box::new(Some(compiler.cx)),
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
             needs_gc_heap: func_env.needs_gc_heap(),
         })
     }
@@ -320,9 +348,14 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
-        def_func_index: DefinedFuncIndex,
-        _symbol: &str,
+        key: FuncKey,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling array-to-wasm trampoline: {key:?} = {symbol:?}");
+
+        let (module_index, def_func_index) = key.unwrap_array_to_wasm_trampoline();
+        debug_assert_eq!(translation.module_index, module_index);
+
         let func_index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[func_index]
             .signature
@@ -369,7 +402,8 @@ impl wasmtime_environ::Compiler for Compiler {
         );
 
         // Then call the Wasm function with those arguments.
-        let call = declare_and_call(&mut builder, wasm_call_sig, func_index.as_u32(), &args);
+        let callee_key = FuncKey::DefinedWasmFunction(module_index, def_func_index);
+        let call = declare_and_call(&mut builder, wasm_call_sig, callee_key, &args);
         let results = builder.func.dfg.inst_results(call).to_vec();
 
         // Then store the results back into the array.
@@ -390,7 +424,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(Some(compiler.cx)),
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
             needs_gc_heap: false,
         })
     }
@@ -398,8 +432,11 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
-        _symbol: &str,
+        key: FuncKey,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling wasm-to-array trampoline: {key:?} = {symbol:?}");
+
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
@@ -464,7 +501,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(Some(compiler.cx)),
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
             needs_gc_heap: false,
         })
     }
@@ -473,8 +510,13 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send + Sync>)],
-        resolve_reloc: &dyn Fn(usize, RelocationTarget) -> usize,
+        resolve_reloc: &dyn Fn(usize, FuncKey) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
+        log::trace!(
+            "appending functions to object file: {:#?}",
+            funcs.iter().map(|(sym, _)| sym).collect::<Vec<_>>()
+        );
+
         let mut builder =
             ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
         if self.linkopts.force_jump_veneers {
@@ -486,24 +528,32 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
+            debug_assert!(!func.is::<Option<CompilerContext>>());
+            debug_assert!(func.is::<CompiledFunction>());
             let func = func.downcast_ref::<CompiledFunction>().unwrap();
-            let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
+
+            let (sym_id, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
+            log::trace!("symbol id {sym_id:?} = {sym:?}");
+
             if self.tunables.generate_address_map {
                 let addr = func.address_map();
                 addrs.push(range.clone(), &addr.instructions);
             }
+
             clif_to_env_stack_maps(
                 &mut stack_maps,
                 range.clone(),
                 func.buffer.user_stack_maps(),
             );
+
             traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
             builder.append_padding(self.linkopts.padding_between_functions);
+
             let info = FunctionLoc {
                 start: u32::try_from(range.start).unwrap(),
                 length: u32::try_from(range.end - range.start).unwrap(),
             };
-            ret.push((sym, info));
+            ret.push((sym_id, info));
         }
 
         builder.finish();
@@ -549,13 +599,19 @@ impl wasmtime_environ::Compiler for Compiler {
         dwarf_package_bytes: Option<&'a [u8]>,
         tunables: &'a Tunables,
     ) -> Result<()> {
+        log::trace!("appending DWARF debug info");
+
         let get_func = move |m, f| {
             let (sym, any) = get_func(m, f);
+            log::trace!("get_func({m:?}, {f:?}) -> ({sym:?}, {any:#p})");
+            debug_assert!(!any.is::<Option<CompilerContext>>());
+            debug_assert!(any.is::<CompiledFunction>());
             (
                 sym,
                 any.downcast_ref::<CompiledFunction>().unwrap().metadata(),
             )
         };
+
         let mut compilation = crate::debug::Compilation::new(
             &*self.isa,
             translations,
@@ -613,15 +669,18 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn compile_wasm_to_builtin(
         &self,
-        index: BuiltinFunctionIndex,
-        _symbol: &str,
+        key: FuncKey,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling wasm-to-builtin trampoline: {key:?} = {symbol:?}");
+
         let isa = &*self.isa;
         let ptr_size = isa.pointer_bytes();
         let pointer_type = isa.pointer_type();
         let sigs = BuiltinFunctionSignatures::new(self);
-        let wasm_sig = sigs.wasm_signature(index);
-        let host_sig = sigs.host_signature(index);
+        let builtin_func_index = key.unwrap_wasm_to_builtin_trampoline();
+        let wasm_sig = sigs.wasm_signature(builtin_func_index);
+        let host_sig = sigs.host_signature(builtin_func_index);
 
         let mut compiler = self.function_compiler();
         let func = ir::Function::with_name_signature(Default::default(), wasm_sig.clone());
@@ -643,7 +702,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // Now it's time to delegate to the actual builtin. Forward all our own
         // arguments to the libcall itself.
         let args = builder.block_params(block0).to_vec();
-        let call = self.call_builtin(&mut builder, vmctx, &args, index, host_sig);
+        let call = self.call_builtin(&mut builder, vmctx, &args, builtin_func_index, host_sig);
         let results = builder.func.dfg.inst_results(call).to_vec();
 
         // Libcalls do not explicitly `longjmp` for example but instead return a
@@ -652,7 +711,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // value and raise a trap as appropriate. With the `results` above check
         // what `index` is and for each libcall that has a trapping return value
         // process it here.
-        match index.trap_sentinel() {
+        match builtin_func_index.trap_sentinel() {
             Some(TrapSentinel::Falsy) => {
                 self.raise_if_host_trapped(&mut builder, vmctx, results[0]);
             }
@@ -685,7 +744,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(Some(compiler.cx)),
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
             needs_gc_heap: false,
         })
     }
@@ -693,7 +752,9 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compiled_function_relocation_targets<'a>(
         &'a self,
         func: &'a dyn Any,
-    ) -> Box<dyn Iterator<Item = RelocationTarget> + 'a> {
+    ) -> Box<dyn Iterator<Item = FuncKey> + 'a> {
+        debug_assert!(!func.is::<Option<CompilerContext>>());
+        debug_assert!(func.is::<CompiledFunction>());
         let func = func.downcast_ref::<CompiledFunction>().unwrap();
         Box::new(func.relocations().map(|r| r.reloc_target))
     }
@@ -703,8 +764,10 @@ impl InliningCompiler for Compiler {
     fn calls(
         &self,
         func_body: &CompiledFunctionBody,
-        calls: &mut wasmtime_environ::prelude::IndexSet<FuncIndex>,
+        calls: &mut wasmtime_environ::prelude::IndexSet<FuncKey>,
     ) -> Result<()> {
+        debug_assert!(!func_body.code.is::<CompiledFunction>());
+        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
         let cx = func_body
             .code
             .downcast_ref::<Option<CompilerContext>>()
@@ -716,13 +779,15 @@ impl InliningCompiler for Compiler {
             func.params
                 .user_named_funcs()
                 .values()
-                .filter(|name| name.namespace == crate::NS_WASM_FUNC)
-                .map(|name| FuncIndex::from_u32(name.index)),
+                .map(|name| FuncKey::from_raw_parts(name.namespace, name.index))
+                .filter(|key| matches!(key, FuncKey::DefinedWasmFunction(_, _))),
         );
         Ok(())
     }
 
     fn size(&self, func_body: &CompiledFunctionBody) -> u32 {
+        debug_assert!(!func_body.code.is::<CompiledFunction>());
+        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
         let cx = func_body
             .code
             .downcast_ref::<Option<CompilerContext>>()
@@ -737,8 +802,10 @@ impl InliningCompiler for Compiler {
     fn inline<'a>(
         &self,
         func_body: &mut CompiledFunctionBody,
-        get_callee: &'a mut dyn FnMut(FuncIndex) -> Option<&'a CompiledFunctionBody>,
+        get_callee: &'a mut dyn FnMut(FuncKey) -> Option<&'a CompiledFunctionBody>,
     ) -> Result<()> {
+        debug_assert!(!func_body.code.is::<CompiledFunction>());
+        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
         let code = func_body
             .code
             .downcast_mut::<Option<CompilerContext>>()
@@ -748,7 +815,7 @@ impl InliningCompiler for Compiler {
         cx.codegen_context.inline(Inliner(get_callee))?;
         return Ok(());
 
-        struct Inliner<'a>(&'a mut dyn FnMut(FuncIndex) -> Option<&'a CompiledFunctionBody>);
+        struct Inliner<'a>(&'a mut dyn FnMut(FuncKey) -> Option<&'a CompiledFunctionBody>);
 
         impl cranelift_codegen::inline::Inline for Inliner<'_> {
             fn inline(
@@ -767,22 +834,23 @@ impl InliningCompiler for Compiler {
                     | ir::ExternalName::KnownSymbol(_) => return InlineCommand::KeepCall,
                 };
                 let callee = &caller.params.user_named_funcs()[callee];
-                let callee = if callee.namespace == crate::NS_WASM_FUNC {
-                    FuncIndex::from_u32(callee.index)
-                } else {
-                    return InlineCommand::KeepCall;
-                };
-                match (self.0)(callee) {
-                    None => InlineCommand::KeepCall,
-                    Some(func_body) => {
-                        let cx = func_body
-                            .code
-                            .downcast_ref::<Option<CompilerContext>>()
-                            .unwrap();
-                        InlineCommand::Inline(Cow::Borrowed(
-                            &cx.as_ref().unwrap().codegen_context.func,
-                        ))
-                    }
+                let callee = FuncKey::from_raw_parts(callee.namespace, callee.index);
+                match callee {
+                    FuncKey::DefinedWasmFunction(_, _) => match (self.0)(callee) {
+                        None => InlineCommand::KeepCall,
+                        Some(func_body) => {
+                            debug_assert!(!func_body.code.is::<CompiledFunction>());
+                            debug_assert!(func_body.code.is::<Option<CompilerContext>>());
+                            let cx = func_body
+                                .code
+                                .downcast_ref::<Option<CompilerContext>>()
+                                .unwrap();
+                            InlineCommand::Inline(Cow::Borrowed(
+                                &cx.as_ref().unwrap().codegen_context.func,
+                            ))
+                        }
+                    },
+                    _ => InlineCommand::KeepCall,
                 }
             }
         }
@@ -794,6 +862,9 @@ impl InliningCompiler for Compiler {
         input: Option<wasmparser::FunctionBody<'_>>,
         symbol: &str,
     ) -> Result<()> {
+        log::trace!("finish compiling {symbol:?}");
+        debug_assert!(!func_body.code.is::<CompiledFunction>());
+        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
         let cx = func_body
             .code
             .downcast_mut::<Option<CompilerContext>>()
@@ -818,7 +889,7 @@ impl InliningCompiler for Compiler {
         log::debug!("`{symbol}` compiled in {:?}", timing.total());
         log::trace!("`{symbol}` timing info\n{timing}");
 
-        func_body.code = Box::new(compiled_func);
+        func_body.code = box_dyn_any_compiled_function(compiled_func);
         Ok(())
     }
 }
@@ -1256,15 +1327,15 @@ fn clif_to_env_stack_maps(
 fn declare_and_call(
     builder: &mut FunctionBuilder,
     signature: ir::Signature,
-    func_index: u32,
+    callee_key: FuncKey,
     args: &[ir::Value],
 ) -> ir::Inst {
-    let name = ir::ExternalName::User(builder.func.declare_imported_user_function(
-        ir::UserExternalName {
-            namespace: crate::NS_WASM_FUNC,
-            index: func_index,
-        },
-    ));
+    let (namespace, index) = callee_key.into_raw_parts();
+    let name = ir::ExternalName::User(
+        builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName { namespace, index }),
+    );
     let signature = builder.func.import_signature(signature);
     let callee = builder.func.dfg.ext_funcs.push(ir::ExtFuncData {
         name,

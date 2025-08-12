@@ -1082,10 +1082,12 @@ impl<'a, 'data> Translator<'a, 'data> {
             } => {
                 let index = self.validator.types(0).unwrap().module_count();
                 self.validator.module_section(&unchecked_range)?;
+                let static_module_index = self.static_modules.next_key();
                 let translation = ModuleEnvironment::new(
                     self.tunables,
                     self.validator,
                     self.types.module_types_builder(),
+                    static_module_index,
                 )
                 .translate(
                     parser,
@@ -1101,12 +1103,13 @@ impl<'a, 'data> Translator<'a, 'data> {
                             .context("wasm component contains an invalid module section")
                         })?,
                 )?;
-                let static_idx = self.static_modules.push(translation);
+                let static_module_index2 = self.static_modules.push(translation);
+                assert_eq!(static_module_index, static_module_index2);
                 let types = self.validator.types(0).unwrap();
                 let ty = types.module_at(index);
                 self.result
                     .initializers
-                    .push(LocalInitializer::ModuleStatic(static_idx, ty));
+                    .push(LocalInitializer::ModuleStatic(static_module_index, ty));
                 return Ok(Action::Skip(unchecked_range.end - unchecked_range.start));
             }
 

@@ -9,12 +9,12 @@ use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::fact::PREPARE_CALL_FIXED_PARAMS;
 use wasmtime_environ::{CompiledFunctionBody, component::*};
 use wasmtime_environ::{
     EntityRef, HostCall, ModuleInternedTypeIndex, PtrSize, TrapSentinel, Tunables, WasmFuncType,
     WasmValType,
 };
+use wasmtime_environ::{FuncKey, fact::PREPARE_CALL_FIXED_PARAMS};
 
 struct TrampolineCompiler<'a> {
     compiler: &'a Compiler,
@@ -1281,7 +1281,7 @@ impl ComponentCompiler for Compiler {
         &self,
         component: &ComponentTranslation,
         types: &ComponentTypesBuilder,
-        index: TrampolineIndex,
+        key: FuncKey,
         tunables: &Tunables,
         _symbol: &str,
     ) -> Result<AllCallFunc<CompiledFunctionBody>> {
@@ -1292,7 +1292,7 @@ impl ComponentCompiler for Compiler {
                 &mut compiler,
                 &component.component,
                 types,
-                index,
+                key.unwrap_component_trampoline(),
                 abi,
                 tunables,
             );
@@ -1325,12 +1325,12 @@ impl ComponentCompiler for Compiler {
                 );
             }
 
-            c.translate(&component.trampolines[index]);
+            c.translate(&component.trampolines[key.unwrap_component_trampoline()]);
             c.builder.finalize();
             compiler.cx.abi = Some(abi);
 
             Ok(CompiledFunctionBody {
-                code: Box::new(Some(compiler.cx)),
+                code: super::box_dyn_any_compiler_context(Some(compiler.cx)),
                 needs_gc_heap: false,
             })
         };

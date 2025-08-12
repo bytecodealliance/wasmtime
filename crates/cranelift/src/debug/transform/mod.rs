@@ -121,16 +121,20 @@ fn read_dwarf_package_from_bytes<'data>(
     let mut validator = wasmparser::Validator::new();
     let parser = wasmparser::Parser::new(0);
     let mut types = wasmtime_environ::ModuleTypesBuilder::new(&validator);
-    let translation =
-        match wasmtime_environ::ModuleEnvironment::new(tunables, &mut validator, &mut types)
-            .translate(parser, dwp_bytes)
-        {
-            Ok(translation) => translation,
-            Err(e) => {
-                log::warn!("failed to parse wasm dwarf package: {e:?}");
-                return None;
-            }
-        };
+    let translation = match wasmtime_environ::ModuleEnvironment::new(
+        tunables,
+        &mut validator,
+        &mut types,
+        StaticModuleIndex::from_u32(0),
+    )
+    .translate(parser, dwp_bytes)
+    {
+        Ok(translation) => translation,
+        Err(e) => {
+            log::warn!("failed to parse wasm dwarf package: {e:?}");
+            return None;
+        }
+    };
 
     match load_dwp(translation, buffer) {
         Ok(package) => Some(package),
