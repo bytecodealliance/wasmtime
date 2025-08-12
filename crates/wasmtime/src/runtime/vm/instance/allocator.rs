@@ -616,8 +616,8 @@ fn initialize_tables(
                 let table = store
                     .instance_mut(context.instance)
                     .get_exported_table(id, idx);
-                let size = table.size_(&store);
-                table.fill_(&mut store, 0, init.ref_().unwrap(), size)?;
+                let size = table._size(&store);
+                table._fill(&mut store, 0, init.ref_().unwrap(), size)?;
             }
         }
     }

@@ -140,10 +140,10 @@ impl Global {
     /// Panics if `store` does not own this global.
     pub fn get(&self, mut store: impl AsContextMut) -> Val {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self.get_(&mut store)
+        self._get(&mut store)
     }
 
-    pub(crate) fn get_(&self, store: &mut AutoAssertNoGc<'_>) -> Val {
+    pub(crate) fn _get(&self, store: &mut AutoAssertNoGc<'_>) -> Val {
         unsafe {
             let definition = self.definition(store).as_ref();
             match self._ty(&store).content() {
@@ -214,10 +214,10 @@ impl Global {
     ///
     /// Panics if `store` does not own this global.
     pub fn set(&self, mut store: impl AsContextMut, val: Val) -> Result<()> {
-        self.set_(store.as_context_mut().0, val)
+        self._set(store.as_context_mut().0, val)
     }
 
-    pub(crate) fn set_(&self, store: &mut StoreOpaque, val: Val) -> Result<()> {
+    pub(crate) fn _set(&self, store: &mut StoreOpaque, val: Val) -> Result<()> {
         let global_ty = self._ty(&store);
         if global_ty.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");

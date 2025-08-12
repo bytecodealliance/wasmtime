@@ -613,7 +613,7 @@ impl Table {
         delta: u64,
         init_value: Option<NonNull<VMFuncRef>>,
     ) -> Result<Option<usize>, Error> {
-        self.grow_(delta, store, |me, _store, base, len| {
+        self._grow(delta, store, |me, _store, base, len| {
             me.fill_func(base, init_value, len)
         })
     }
@@ -625,7 +625,7 @@ impl Table {
         delta: u64,
         init_value: Option<&VMGcRef>,
     ) -> Result<Option<usize>, Error> {
-        self.grow_(delta, store, |me, store, base, len| {
+        self._grow(delta, store, |me, store, base, len| {
             me.fill_gc_ref(store, base, init_value, len)
         })
     }
@@ -637,12 +637,12 @@ impl Table {
         delta: u64,
         init_value: Option<VMContObj>,
     ) -> Result<Option<usize>, Error> {
-        self.grow_(delta, store, |me, _store, base, len| {
+        self._grow(delta, store, |me, _store, base, len| {
             me.fill_cont(base, init_value, len)
         })
     }
 
-    fn grow_(
+    fn _grow(
         &mut self,
         delta: u64,
         store: &mut dyn VMStore,

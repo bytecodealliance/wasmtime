@@ -121,7 +121,7 @@ impl Table {
 
     fn _new(store: &mut StoreOpaque, ty: TableType, init: Ref) -> Result<Table> {
         let table = generate_table_export(store, &ty)?;
-        table.fill_(store, 0, init, ty.minimum())?;
+        table._fill(store, 0, init, ty.minimum())?;
         Ok(table)
     }
 
@@ -250,10 +250,10 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn size(&self, store: impl AsContext) -> u64 {
-        self.size_(store.as_context().0)
+        self._size(store.as_context().0)
     }
 
-    pub(crate) fn size_(&self, store: &StoreOpaque) -> u64 {
+    pub(crate) fn _size(&self, store: &StoreOpaque) -> u64 {
         // unwrap here should be ok because the runtime should always guarantee
         // that we can fit the number of elements in a 64-bit integer.
         u64::try_from(store[self.instance].table(self.index).current_elements).unwrap()
@@ -480,10 +480,10 @@ impl Table {
     ///
     /// Panics if `store` does not own either `dst_table` or `src_table`.
     pub fn fill(&self, mut store: impl AsContextMut, dst: u64, val: Ref, len: u64) -> Result<()> {
-        self.fill_(store.as_context_mut().0, dst, val, len)
+        self._fill(store.as_context_mut().0, dst, val, len)
     }
 
-    pub(crate) fn fill_(
+    pub(crate) fn _fill(
         &self,
         store: &mut StoreOpaque,
         dst: u64,

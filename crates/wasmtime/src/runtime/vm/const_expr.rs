@@ -37,7 +37,7 @@ impl ConstEvalContext {
         Ok(store
             .instance_mut(self.instance)
             .get_exported_global(id, index)
-            .get_(&mut AutoAssertNoGc::new(store)))
+            ._get(&mut AutoAssertNoGc::new(store)))
     }
 
     fn ref_func(&mut self, store: &mut StoreOpaque, index: FuncIndex) -> Result<Val> {
@@ -129,6 +129,13 @@ impl ConstEvalContext {
 impl ConstExprEvaluator {
     /// Evaluate the given const expression in the given context.
     ///
+    ///
+    /// Note that the `store` argument is an `OpaqueRootScope` which is used to
+    /// require that a GC rooting scope external to evaluation of this constant
+    /// is required. Constant expression evaluation may perform GC allocations
+    /// and itself trigger a GC meaning that all references must be rooted,
+    /// hence the external requirement of a rooting scope.
+    ///
     /// # Unsafety
     ///
     /// When async is enabled, this may only be executed on a fiber stack.
@@ -143,11 +150,6 @@ impl ConstExprEvaluator {
     /// stack.
     pub unsafe fn eval(
         &mut self,
-        // Ensure that we don't permanently root any GC references we allocate
-        // during const evaluation, keeping them alive for the duration of the
-        // store's lifetime.
-        //
-        // TODO: move this comment
         store: &mut OpaqueRootScope<&mut StoreOpaque>,
         context: &mut ConstEvalContext,
         expr: &ConstExpr,
