@@ -498,8 +498,10 @@ impl AddressTransform {
         >,
         wasm_file: wasmtime_environ::WasmFileInfo,
     ) -> Self {
+        use cranelift_entity::EntityRef;
+
         let mut translations = wasmtime_environ::PrimaryMap::new();
-        let mut translation = wasmtime_environ::ModuleTranslation::default();
+        let mut translation = wasmtime_environ::ModuleTranslation::new(StaticModuleIndex::new(0));
         translation.debuginfo.wasm_file = wasm_file;
         translation
             .module

@@ -35,14 +35,14 @@ use std::{
 };
 
 use call_graph::CallGraph;
-#[cfg(feature = "component-model")]
-use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
     BuiltinFunctionIndex, CompiledFunctionBody, CompiledFunctionInfo, CompiledModuleInfo, Compiler,
-    DefinedFuncIndex, FilePos, FinishedObject, FuncKey, FunctionBodyData, FunctionLoc,
-    InliningCompiler, IntraModuleInlining, ModuleEnvironment, ModuleTranslation, ModuleTypes,
-    ModuleTypesBuilder, ObjectKind, PrimaryMap, SecondaryMap, StaticModuleIndex, Tunables,
+    DefinedFuncIndex, FilePos, FinishedObject, FuncKey, FunctionBodyData, InliningCompiler,
+    IntraModuleInlining, ModuleEnvironment, ModuleTranslation, ModuleTypes, ModuleTypesBuilder,
+    ObjectKind, PrimaryMap, SecondaryMap, StaticModuleIndex, Tunables,
 };
+#[cfg(feature = "component-model")]
+use wasmtime_environ::{FunctionLoc, component::Translator};
 
 mod call_graph;
 mod scc;
