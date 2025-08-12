@@ -213,7 +213,7 @@ impl UdpSocket {
         let socket = match self.udp_state {
             UdpState::Default | UdpState::BindStarted => Err(ErrorCode::InvalidState),
             UdpState::Bound => Ok(Mode::RecvFrom(Arc::clone(&self.socket))),
-            UdpState::Connected(addr) => Ok(Mode::Recv(Arc::clone(&self.socket), addr.into())),
+            UdpState::Connected(addr) => Ok(Mode::Recv(Arc::clone(&self.socket), addr)),
         };
         async move {
             let socket = socket?;

@@ -573,8 +573,8 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
     ) -> wasmtime::Result<bool> {
         let (fd, other) = store.with(|mut store| {
             let table = store.get().table;
-            let fd = get_descriptor(table, &fd).map(|fd| fd.clone())?;
-            let other = get_descriptor(table, &other).map(|other| other.clone())?;
+            let fd = get_descriptor(table, &fd)?.clone();
+            let other = get_descriptor(table, &other)?.clone();
             anyhow::Ok((fd, other))
         })?;
         fd.is_same_object(&other).await

@@ -447,7 +447,7 @@ jobs:
     - uses: ./.github/actions/install-rust
 
     - run: rustup component add clippy
-    - run: cargo clippy --workspace --all-targets
+    - run: cargo clippy --workspace --all-targets --features p3,component-model-async
 
   # Similar to `micro_checks` but where we need to install some more state
   # (e.g. Android NDK) and we haven't factored support for those things out into
