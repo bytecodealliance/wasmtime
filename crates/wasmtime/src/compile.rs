@@ -1224,7 +1224,9 @@ impl FunctionIndices {
 
         let artifacts = Artifacts {
             modules,
+            #[cfg(feature = "component-model")]
             trampolines,
+            #[cfg(feature = "component-model")]
             resource_drop_trampoline,
         };
 
