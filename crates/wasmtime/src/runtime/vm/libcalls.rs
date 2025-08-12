@@ -890,10 +890,9 @@ unsafe fn array_new_elem(
             let mut const_evaluator = ConstExprEvaluator::default();
 
             vals.extend(xs.iter().map(|x| unsafe {
-                const_evaluator
+                *const_evaluator
                     .eval(&mut store, &mut const_context, x)
                     .expect("const expr should be valid")
-                    .clone()
             }));
         }
     }
@@ -979,10 +978,9 @@ unsafe fn array_init_elem(
                 .ok_or_else(|| Trap::TableOutOfBounds)?
                 .iter()
                 .map(|x| unsafe {
-                    const_evaluator
+                    *const_evaluator
                         .eval(&mut store, &mut const_context, x)
                         .expect("const expr should be valid")
-                        .clone()
                 })
                 .collect::<Vec<_>>()
         }
