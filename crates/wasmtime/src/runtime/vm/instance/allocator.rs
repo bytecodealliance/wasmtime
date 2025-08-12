@@ -836,22 +836,24 @@ fn initialize_globals(
 
         let id = store.id();
         let index = module.global_index(index);
-        let global = store
-            .instance_mut(context.instance)
-            .get_exported_global(id, index);
+        let mut instance = store.instance_mut(context.instance);
+
+        #[cfg(feature = "wmemcheck")]
+        if index.as_u32() == 0
+            && module.globals[index].wasm_ty == wasmtime_environ::WasmValType::I32
+        {
+            if let Some(wmemcheck) = instance.as_mut().wmemcheck_state_mut() {
+                let size = usize::try_from(val.unwrap_i32()).unwrap();
+                wmemcheck.set_stack_size(size);
+            }
+        }
+
+        let global = instance.as_mut().get_exported_global(id, index);
 
         // Note that mutability is bypassed here because this is, by definition,
         // initialization of globals meaning that if it's an immutable global
         // this is the one and only write.
         global.set_bypass_mutability(&mut store, val)?;
-
-        #[cfg(feature = "wmemcheck")]
-        if index.as_u32() == 0 && wasm_ty == wasmtime_environ::WasmValType::I32 {
-            if let Some(wmemcheck) = instance.wmemcheck_state_mut() {
-                let size = usize::try_from(raw.unwrap_i32()).unwrap();
-                wmemcheck.set_stack_size(size);
-            }
-        }
     }
     Ok(())
 }
