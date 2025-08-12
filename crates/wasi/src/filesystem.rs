@@ -137,6 +137,10 @@ bitflags::bitflags! {
 /// Not all of these error codes are returned by the functions provided by this
 /// API; some are used in higher-level library layers, and others are provided
 /// merely for alignment with POSIX.
+#[cfg_attr(
+    windows,
+    expect(dead_code, reason = "on Windows, some of these are not used")
+)]
 pub(crate) enum ErrorCode {
     /// Permission denied, similar to `EACCES` in POSIX.
     Access,
