@@ -57,7 +57,7 @@ fn fuel_consumed(config: &Config, wasm: &[u8]) -> Result<u64> {
     Ok(u64::MAX - store.get_fuel()?)
 }
 
-#[wasmtime_test]
+#[wasmtime_test(wasm_features(gc, function_references))]
 #[cfg_attr(miri, ignore)]
 fn iloop(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);
@@ -110,6 +110,64 @@ fn iloop(config: &mut Config) -> Result<()> {
                 (func $f14 call $f15 call $f15)
                 (func $f15 call $f16 call $f16)
                 (func $f16)
+            )
+        "#,
+    )?;
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (start 0)
+                (func loop ref.null func br_on_null 0 drop end)
+            )
+        "#,
+    )?;
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (start 0)
+                (func
+                    ref.func 0
+                    loop (param (ref func))
+                        br_on_non_null 0
+                        unreachable
+                    end
+                )
+                (elem declare func 0)
+            )
+        "#,
+    )?;
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (start 0)
+                (func
+                    i32.const 0
+                    ref.i31
+                    loop (param (ref i31))
+                        br_on_cast 0 anyref (ref i31)
+                        unreachable
+                    end
+                )
+                (elem declare func 0)
+            )
+        "#,
+    )?;
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (start 0)
+                (func
+                    ref.null any
+                    loop (param anyref)
+                        br_on_cast_fail 0 anyref (ref i31)
+                        unreachable
+                    end
+                )
+                (elem declare func 0)
             )
         "#,
     )?;

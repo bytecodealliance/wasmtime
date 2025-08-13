@@ -419,6 +419,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             | Operator::Br { .. }
             | Operator::BrIf { .. }
             | Operator::BrTable { .. }
+            | Operator::BrOnNull { .. }
+            | Operator::BrOnNonNull { .. }
+            | Operator::BrOnCast { .. }
+            | Operator::BrOnCastFail { .. }
 
             // Exiting a scope means that we need to update the fuel
             // consumption because there are multiple ways to exit a scope and
