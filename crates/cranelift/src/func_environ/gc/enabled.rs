@@ -607,6 +607,7 @@ fn emit_array_fill_impl(
     builder.switch_to_block(loop_header_block);
     builder.append_block_param(loop_header_block, pointer_ty);
     log::trace!("emit_array_fill_impl: loop header");
+    func_env.translate_loop_header(builder)?;
     let elem_addr = builder.block_params(loop_header_block)[0];
     let done = builder.ins().icmp(IntCC::Equal, elem_addr, fill_end);
     builder

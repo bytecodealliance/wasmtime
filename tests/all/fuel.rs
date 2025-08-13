@@ -171,6 +171,20 @@ fn iloop(config: &mut Config) -> Result<()> {
             )
         "#,
     )?;
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (type $a (array i8))
+                (start 0)
+                (func
+                    i32.const 0x400_0000
+                    array.new_default $a
+                    drop
+                )
+            )
+        "#,
+    )?;
 
     fn iloop_aborts(config: &Config, wat: &str) -> Result<()> {
         let engine = Engine::new(&config)?;
