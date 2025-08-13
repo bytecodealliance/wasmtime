@@ -454,41 +454,15 @@ impl Module for ObjectModule {
 
         if used {
             match self.object.format() {
-                object::BinaryFormat::Elf => {
-                    let section = self.object.section_mut(section);
-                    match &mut section.flags {
-                        SectionFlags::None => {
-                            // Explicitly specify default flags as SectionFlags::Elf overwrites them
-                            let sh_flags = if decl.tls {
-                                elf::SHF_ALLOC | elf::SHF_WRITE | elf::SHF_TLS
-                            } else if decl.writable || !relocs.is_empty() {
-                                elf::SHF_ALLOC | elf::SHF_WRITE
-                            } else {
-                                elf::SHF_ALLOC
-                            };
-                            section.flags = SectionFlags::Elf {
-                                sh_flags: u64::from(sh_flags | elf::SHF_GNU_RETAIN),
-                            }
-                        }
-                        SectionFlags::Elf { sh_flags } => {
-                            *sh_flags |= u64::from(elf::SHF_GNU_RETAIN)
-                        }
-                        _ => unreachable!(),
-                    }
-                }
+                object::BinaryFormat::Elf => match self.object.section_flags_mut(section) {
+                    SectionFlags::Elf { sh_flags } => *sh_flags |= u64::from(elf::SHF_GNU_RETAIN),
+                    _ => unreachable!(),
+                },
                 object::BinaryFormat::Coff => {}
-                object::BinaryFormat::MachO => {
-                    let symbol = self.object.symbol_mut(symbol);
-                    assert!(matches!(symbol.flags, SymbolFlags::None));
-                    let n_desc = if decl.linkage == Linkage::Preemptible {
-                        object::macho::N_WEAK_DEF
-                    } else {
-                        0
-                    };
-                    symbol.flags = SymbolFlags::MachO {
-                        n_desc: n_desc | object::macho::N_NO_DEAD_STRIP,
-                    }
-                }
+                object::BinaryFormat::MachO => match self.object.symbol_flags_mut(symbol) {
+                    SymbolFlags::MachO { n_desc } => *n_desc |= object::macho::N_NO_DEAD_STRIP,
+                    _ => unreachable!(),
+                },
                 _ => unreachable!(),
             }
         }

@@ -944,7 +944,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "log",
- "object 0.37.1",
+ "object 0.37.3",
  "target-lexicon",
 ]
 
@@ -2377,7 +2377,7 @@ version = "37.0.0"
 dependencies = [
  "anyhow",
  "libloading",
- "object 0.37.1",
+ "object 0.37.3",
  "wasmtime",
 ]
 
@@ -2532,9 +2532,9 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.37.1"
+version = "0.37.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03fd943161069e1768b4b3d050890ba48730e590f57e56d4aa04e7e090e61b4a"
+checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
 dependencies = [
  "crc32fast",
  "hashbrown 0.15.2",
@@ -4177,7 +4177,7 @@ version = "37.0.0"
 dependencies = [
  "bitflags 2.6.0",
  "byte-array-literals",
- "object 0.37.1",
+ "object 0.37.3",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "wasm-encoder 0.236.0",
  "wit-bindgen-rust-macro",
@@ -4468,7 +4468,7 @@ dependencies = [
  "log",
  "mach2",
  "memfd",
- "object 0.37.1",
+ "object 0.37.3",
  "once_cell",
  "postcard",
  "proptest",
@@ -4578,7 +4578,7 @@ dependencies = [
  "log",
  "memchr",
  "num_cpus",
- "object 0.37.1",
+ "object 0.37.3",
  "pulley-interpreter",
  "rayon",
  "rustix 1.0.3",
@@ -4648,7 +4648,7 @@ dependencies = [
  "gimli 0.32.0",
  "indexmap 2.7.0",
  "log",
- "object 0.37.1",
+ "object 0.37.3",
  "postcard",
  "rustc-demangle",
  "semver",
@@ -4815,7 +4815,7 @@ dependencies = [
  "gimli 0.32.0",
  "itertools 0.14.0",
  "log",
- "object 0.37.1",
+ "object 0.37.3",
  "pulley-interpreter",
  "smallvec",
  "target-lexicon",
@@ -4861,7 +4861,7 @@ name = "wasmtime-internal-jit-debug"
 version = "37.0.0"
 dependencies = [
  "cc",
- "object 0.37.1",
+ "object 0.37.3",
  "rustix 1.0.3",
  "wasmtime-internal-versioned-export-macros",
 ]
@@ -4895,7 +4895,7 @@ dependencies = [
  "cfg-if",
  "cranelift-codegen",
  "log",
- "object 0.37.1",
+ "object 0.37.3",
 ]
 
 [[package]]
@@ -4915,7 +4915,7 @@ dependencies = [
  "cranelift-codegen",
  "gimli 0.32.0",
  "log",
- "object 0.37.1",
+ "object 0.37.3",
  "target-lexicon",
  "wasmparser 0.236.0",
  "wasmtime-environ",
@@ -5133,7 +5133,7 @@ dependencies = [
  "anyhow",
  "json-from-wast",
  "log",
- "object 0.37.1",
+ "object 0.37.3",
  "serde_json",
  "tokio",
  "wasmparser 0.236.0",
