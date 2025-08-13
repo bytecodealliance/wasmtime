@@ -2909,6 +2909,12 @@ criteria = "safe-to-deploy"
 delta = "0.36.5 -> 0.37.1"
 notes = "New object file formats, new formatting, new other minor changes, no new `unsafe`."
 
+[[audits.object]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.37.1 -> 0.37.3"
+notes = "Lots of new support for new object features, no new unsafe or anything suspicious."
+
 [[audits.once_cell]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
