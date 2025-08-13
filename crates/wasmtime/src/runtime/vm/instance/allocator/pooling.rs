@@ -457,6 +457,7 @@ impl PoolingInstanceAllocator {
     /// Execute `f` and if it returns `Err(PoolConcurrencyLimitError)`, then try
     /// flushing the decommit queue. If flushing the queue freed up slots, then
     /// try running `f` again.
+    #[cfg(feature = "async")]
     fn with_flush_and_retry<T>(&self, mut f: impl FnMut() -> Result<T>) -> Result<T> {
         f().or_else(|e| {
             if e.is::<PoolConcurrencyLimitError>() {

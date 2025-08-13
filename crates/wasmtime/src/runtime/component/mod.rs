@@ -440,12 +440,6 @@ pub(crate) use self::store::ComponentStoreData;
 ///         serde::Serialize,
 ///     ],
 ///
-///     // An niche configuration option to require that the `T` in `Store<T>`
-///     // is always `Send` in the generated bindings. Typically not needed
-///     // but if synchronous bindings depend on asynchronous bindings using
-///     // the `with` key then this may be required.
-///     require_store_data_send: false,
-///
 ///     // If the `wasmtime` crate is depended on at a nonstandard location
 ///     // or is renamed then this is the path to the root of the `wasmtime`
 ///     // crate. Much of the generated code needs to refer to `wasmtime` so
