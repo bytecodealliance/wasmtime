@@ -347,7 +347,7 @@ json-from-wast = "0.236.0"
 arbitrary = "1.4.0"
 mutatis = "0.3.2"
 cc = "1.0"
-object = { version = "0.37.0", default-features = false, features = ['read_core', 'elf'] }
+object = { version = "0.37.3", default-features = false, features = ['read_core', 'elf'] }
 gimli = { version = "0.32.0", default-features = false, features = ['read'] }
 addr2line = { version = "0.25.0", default-features = false }
 anyhow = { version = "1.0.93", default-features = false }
