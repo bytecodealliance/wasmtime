@@ -18,7 +18,7 @@ impl<T: 'static> Clone for ImportsPre<T> {
         }
     }
 }
-impl<_T: 'static> ImportsPre<_T> {
+impl<_T: Send + 'static> ImportsPre<_T> {
     /// Creates a new copy of `ImportsPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -107,7 +107,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -132,7 +132,7 @@ const _: () = {
     impl Imports {
         /// Convenience wrapper around [`ImportsPre::new`] and
         /// [`ImportsPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -173,7 +173,7 @@ const _: () = {
                 'a,
             >: a::b::interface_with_live_type::Host
                 + a::b::interface_with_dead_type::Host,
-            T: 'static,
+            T: Send + 'static,
         {
             a::b::interface_with_live_type::add_to_linker::<T, D>(linker, host_getter)?;
             a::b::interface_with_dead_type::add_to_linker::<T, D>(linker, host_getter)?;
@@ -227,7 +227,7 @@ pub mod a {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("a:b/interface-with-live-type")?;
                 inst.func_wrap(
@@ -309,7 +309,7 @@ pub mod a {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("a:b/interface-with-dead-type")?;
                 Ok(())

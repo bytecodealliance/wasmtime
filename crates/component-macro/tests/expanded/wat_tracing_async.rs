@@ -18,7 +18,7 @@ impl<T: 'static> Clone for ExamplePre<T> {
         }
     }
 }
-impl<_T: 'static> ExamplePre<_T> {
+impl<_T: Send + 'static> ExamplePre<_T> {
     /// Creates a new copy of `ExamplePre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -111,7 +111,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -140,7 +140,7 @@ const _: () = {
     impl Example {
         /// Convenience wrapper around [`ExamplePre::new`] and
         /// [`ExamplePre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -198,7 +198,7 @@ pub mod exports {
                     ///
                     /// This constructor can be used to front-load string lookups to find exports
                     /// within a component.
-                    pub fn new<_T>(
+                    pub fn new<_T: Send>(
                         _instance_pre: &wasmtime::component::InstancePre<_T>,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance = _instance_pre

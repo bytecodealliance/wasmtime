@@ -50,7 +50,7 @@ impl<T: 'static> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T: 'static> TheWorldPre<_T> {
+impl<_T: Send + 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -158,7 +158,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -226,7 +226,7 @@ const _: () = {
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -263,7 +263,7 @@ const _: () = {
         where
             D: TheWorldImportsWithStore,
             for<'a> D::Data<'a>: TheWorldImports,
-            T: 'static,
+            T: Send + 'static,
         {
             let mut linker = linker.root();
             linker
@@ -336,7 +336,7 @@ const _: () = {
                 + foo::foo::long_use_chain2::Host + foo::foo::long_use_chain3::Host
                 + foo::foo::long_use_chain4::Host
                 + foo::foo::transitive_interface_with_resource::Host + TheWorldImports,
-            T: 'static,
+            T: Send + 'static,
         {
             Self::add_to_linker_imports::<T, D>(linker, host_getter)?;
             foo::foo::resources::add_to_linker::<T, D>(linker, host_getter)?;
@@ -637,7 +637,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/resources")?;
                 inst.resource(
@@ -921,7 +921,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain1")?;
                 inst.resource(
@@ -956,7 +956,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain2")?;
                 Ok(())
@@ -981,7 +981,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain3")?;
                 Ok(())
@@ -1012,7 +1012,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain4")?;
                 inst.func_wrap(
@@ -1064,7 +1064,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker
                     .instance("foo:foo/transitive-interface-with-resource")?;
@@ -1105,7 +1105,7 @@ pub mod exports {
                     ///
                     /// This constructor can be used to front-load string lookups to find exports
                     /// within a component.
-                    pub fn new<_T>(
+                    pub fn new<_T: Send>(
                         _instance_pre: &wasmtime::component::InstancePre<_T>,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance = _instance_pre

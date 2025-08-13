@@ -18,7 +18,7 @@ impl<T: 'static> Clone for Path2Pre<T> {
         }
     }
 }
-impl<_T: 'static> Path2Pre<_T> {
+impl<_T: Send + 'static> Path2Pre<_T> {
     /// Creates a new copy of `Path2Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -107,7 +107,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -132,7 +132,7 @@ const _: () = {
     impl Path2 {
         /// Convenience wrapper around [`Path2Pre::new`] and
         /// [`Path2Pre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -169,7 +169,7 @@ const _: () = {
         where
             D: paths::path2::test::HostWithStore,
             for<'a> D::Data<'a>: paths::path2::test::Host,
-            T: 'static,
+            T: Send + 'static,
         {
             paths::path2::test::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
@@ -196,7 +196,7 @@ pub mod paths {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("paths:path2/test")?;
                 Ok(())

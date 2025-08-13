@@ -18,7 +18,7 @@ impl<T: 'static> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T: 'static> TheWorldPre<_T> {
+impl<_T: Send + 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -111,7 +111,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -140,7 +140,7 @@ const _: () = {
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -177,7 +177,7 @@ const _: () = {
         where
             D: foo::foo::records::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::records::Host + Send,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             foo::foo::records::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
@@ -349,42 +349,42 @@ pub mod foo {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn tuple_arg<T: 'static>(
+                fn tuple_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: (char, u32),
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn tuple_result<T: 'static>(
+                fn tuple_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = (char, u32)> + Send;
-                fn empty_arg<T: 'static>(
+                fn empty_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Empty,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn empty_result<T: 'static>(
+                fn empty_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Empty> + Send;
-                fn scalar_arg<T: 'static>(
+                fn scalar_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Scalars,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn scalar_result<T: 'static>(
+                fn scalar_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Scalars> + Send;
-                fn flags_arg<T: 'static>(
+                fn flags_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: ReallyFlags,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn flags_result<T: 'static>(
+                fn flags_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ReallyFlags> + Send;
-                fn aggregate_arg<T: 'static>(
+                fn aggregate_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Aggregates,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn aggregate_result<T: 'static>(
+                fn aggregate_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Aggregates> + Send;
-                fn typedef_inout<T: 'static>(
+                fn typedef_inout<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     e: TupleTypedef2,
                 ) -> impl ::core::future::Future<Output = i32> + Send;
@@ -398,7 +398,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/records")?;
                 inst.func_wrap_concurrent(
@@ -763,7 +763,7 @@ pub mod exports {
                     ///
                     /// This constructor can be used to front-load string lookups to find exports
                     /// within a component.
-                    pub fn new<_T>(
+                    pub fn new<_T: Send>(
                         _instance_pre: &wasmtime::component::InstancePre<_T>,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance = _instance_pre

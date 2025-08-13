@@ -18,7 +18,7 @@ impl<T: 'static> Clone for MyWorldPre<T> {
         }
     }
 }
-impl<_T: 'static> MyWorldPre<_T> {
+impl<_T: Send + 'static> MyWorldPre<_T> {
     /// Creates a new copy of `MyWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -111,7 +111,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -140,7 +140,7 @@ const _: () = {
     impl MyWorld {
         /// Convenience wrapper around [`MyWorldPre::new`] and
         /// [`MyWorldPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -177,7 +177,7 @@ const _: () = {
         where
             D: foo::foo::variants::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::variants::Host + Send,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             foo::foo::variants::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
@@ -466,28 +466,28 @@ pub mod foo {
                 assert!(4 == < IsClone as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn e1_arg<T: 'static>(
+                fn e1_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: E1,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn e1_result<T: 'static>(
+                fn e1_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = E1> + Send;
-                fn v1_arg<T: 'static>(
+                fn v1_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: V1,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn v1_result<T: 'static>(
+                fn v1_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = V1> + Send;
-                fn bool_arg<T: 'static>(
+                fn bool_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: bool,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn bool_result<T: 'static>(
+                fn bool_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = bool> + Send;
-                fn option_arg<T: 'static>(
+                fn option_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Option<bool>,
                     b: Option<()>,
@@ -496,7 +496,7 @@ pub mod foo {
                     e: Option<f32>,
                     g: Option<Option<bool>>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn option_result<T: 'static>(
+                fn option_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = (
@@ -508,7 +508,7 @@ pub mod foo {
                         Option<Option<bool>>,
                     ),
                 > + Send;
-                fn casts<T: 'static>(
+                fn casts<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Casts1,
                     b: Casts2,
@@ -519,7 +519,7 @@ pub mod foo {
                 ) -> impl ::core::future::Future<
                     Output = (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),
                 > + Send;
-                fn result_arg<T: 'static>(
+                fn result_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Result<(), ()>,
                     b: Result<(), E1>,
@@ -531,7 +531,7 @@ pub mod foo {
                         wasmtime::component::__internal::Vec<u8>,
                     >,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn result_result<T: 'static>(
+                fn result_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = (
@@ -546,36 +546,36 @@ pub mod foo {
                         >,
                     ),
                 > + Send;
-                fn return_result_sugar<T: 'static>(
+                fn return_result_sugar<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<i32, MyErrno>> + Send;
-                fn return_result_sugar2<T: 'static>(
+                fn return_result_sugar2<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<(), MyErrno>> + Send;
-                fn return_result_sugar3<T: 'static>(
+                fn return_result_sugar3<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<MyErrno, MyErrno>,
                 > + Send;
-                fn return_result_sugar4<T: 'static>(
+                fn return_result_sugar4<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<(i32, u32), MyErrno>,
                 > + Send;
-                fn return_option_sugar<T: 'static>(
+                fn return_option_sugar<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Option<i32>> + Send;
-                fn return_option_sugar2<T: 'static>(
+                fn return_option_sugar2<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Option<MyErrno>> + Send;
-                fn result_simple<T: 'static>(
+                fn result_simple<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<u32, i32>> + Send;
-                fn is_clone_arg<T: 'static>(
+                fn is_clone_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: IsClone,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn is_clone_return<T: 'static>(
+                fn is_clone_return<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = IsClone> + Send;
             }
@@ -588,7 +588,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/variants")?;
                 inst.func_wrap_concurrent(
@@ -1284,7 +1284,7 @@ pub mod exports {
                     ///
                     /// This constructor can be used to front-load string lookups to find exports
                     /// within a component.
-                    pub fn new<_T>(
+                    pub fn new<_T: Send>(
                         _instance_pre: &wasmtime::component::InstancePre<_T>,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance = _instance_pre
