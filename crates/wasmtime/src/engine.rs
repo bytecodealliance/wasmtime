@@ -845,7 +845,9 @@ impl Engine {
         memory: NonNull<[u8]>,
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
-        self.load_code(crate::runtime::vm::MmapVec::from_raw(memory)?, expected)
+        // SAFETY: the contract of this function is the same as that of
+        // `from_raw`.
+        unsafe { self.load_code(crate::runtime::vm::MmapVec::from_raw(memory)?, expected) }
     }
 
     /// Like `load_code_bytes`, but creates a mmap from a file on disk.
@@ -925,8 +927,11 @@ impl Engine {
         assert_eq!(Arc::weak_count(&self.inner), 0);
         assert_eq!(Arc::strong_count(&self.inner), 1);
 
+        // SAFETY: the contract of this function is the same as `deinit_traps`.
         #[cfg(not(miri))]
-        crate::runtime::vm::deinit_traps();
+        unsafe {
+            crate::runtime::vm::deinit_traps();
+        }
     }
 }
 
