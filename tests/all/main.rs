@@ -103,7 +103,7 @@ pub(crate) fn small_pool_config() -> wasmtime::PoolingAllocationConfig {
     // When testing, we may choose to start with MPK force-enabled to ensure
     // we use that functionality.
     if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
-        config.memory_protection_keys(wasmtime::MpkEnabled::Enable);
+        config.memory_protection_keys(wasmtime::Enabled::No);
     }
 
     config.total_stacks(1);

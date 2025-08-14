@@ -1126,7 +1126,7 @@ fn total_memories_limit() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.total_memories(TOTAL_MEMORIES)
         .total_core_instances(TOTAL_MEMORIES + 1)
-        .memory_protection_keys(MpkEnabled::Disable);
+        .memory_protection_keys(Enabled::No);
     let mut config = Config::new();
     config.allocation_strategy(pool);
 
@@ -1170,7 +1170,7 @@ fn decommit_batching() -> Result<()> {
         pool.total_memories(capacity)
             .total_core_instances(capacity)
             .decommit_batch_size(batch_size)
-            .memory_protection_keys(MpkEnabled::Disable);
+            .memory_protection_keys(Enabled::No);
         let mut config = Config::new();
         config.allocation_strategy(pool);
 
@@ -1331,5 +1331,22 @@ fn instantiate_non_page_aligned_sizes() -> Result<()> {
     )?;
     let mut store = Store::new(&engine, ());
     Instance::new(&mut store, &module, &[])?;
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn pagemap_scan_enabled_or_disabled() -> Result<()> {
+    let mut config = Config::new();
+    let mut cfg = crate::small_pool_config();
+    cfg.total_memories(1);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(cfg));
+    let result = Engine::new(&config);
+
+    if PoolingAllocationConfig::is_pagemap_scan_available() {
+        assert!(result.is_ok());
+    } else {
+        assert!(result.is_err());
+    }
     Ok(())
 }

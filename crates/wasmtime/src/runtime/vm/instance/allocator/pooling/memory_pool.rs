@@ -60,7 +60,7 @@ use crate::runtime::vm::{
     MemoryImageSlot, Mmap, MmapOffset, PoolingInstanceAllocatorConfig, mmap::AlignedLength,
 };
 use crate::{
-    MpkEnabled,
+    Enabled,
     runtime::vm::mpk::{self, ProtectionKey, ProtectionMask},
     vm::HostAlignedByteCount,
 };
@@ -151,21 +151,21 @@ impl MemoryPool {
             );
         }
         let pkeys = match config.memory_protection_keys {
-            MpkEnabled::Auto => {
+            Enabled::Auto => {
                 if mpk::is_supported() {
                     mpk::keys(config.max_memory_protection_keys)
                 } else {
                     &[]
                 }
             }
-            MpkEnabled::Enable => {
+            Enabled::Yes => {
                 if mpk::is_supported() {
                     mpk::keys(config.max_memory_protection_keys)
                 } else {
                     bail!("mpk is disabled on this system")
                 }
             }
-            MpkEnabled::Disable => &[],
+            Enabled::No => &[],
         };
 
         // This is a tricky bit of global state: when creating a memory pool
@@ -840,7 +840,7 @@ mod tests {
 
         // Force the use of MPK.
         let config = PoolingInstanceAllocatorConfig {
-            memory_protection_keys: MpkEnabled::Enable,
+            memory_protection_keys: Enabled::Yes,
             ..PoolingInstanceAllocatorConfig::default()
         };
         let pool = MemoryPool::new(&config, &Tunables::default_host()).unwrap();

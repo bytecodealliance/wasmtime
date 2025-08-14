@@ -97,7 +97,7 @@ wasmtime_option_group! {
         /// optimize the size of memory slots.
         #[serde(default)]
         #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
-        pub pooling_memory_protection_keys: Option<wasmtime::MpkEnabled>,
+        pub pooling_memory_protection_keys: Option<wasmtime::Enabled>,
 
         /// Sets an upper limit on how many memory protection keys (MPK) Wasmtime
         /// will use. (default: 16)
@@ -193,6 +193,12 @@ wasmtime_option_group! {
 
         /// DEPRECATED: Use `-Cmemory-reservation-for-growth=N` instead.
         pub dynamic_memory_reserved_for_growth: Option<u64>,
+
+        /// Whether or not `PAGEMAP_SCAN` ioctls are used to reset linear
+        /// memory.
+        #[serde(default)]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
+        pub pooling_pagemap_scan: Option<wasmtime::Enabled>,
     }
 
     enum Optimize {
@@ -932,6 +938,9 @@ impl CommonOptions {
                         ["gc" : self.opts.pooling_total_gc_heaps]
                         max => cfg.total_gc_heaps(max),
                         _ => err,
+                    }
+                    if let Some(enabled) = self.opts.pooling_pagemap_scan {
+                        cfg.pagemap_scan(enabled);
                     }
                     config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
                 }

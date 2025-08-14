@@ -2,7 +2,7 @@ use anyhow::{Context, bail};
 use libtest_mimic::{Arguments, FormatSetting, Trial};
 use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
-    Config, Engine, InstanceAllocationStrategy, MpkEnabled, PoolingAllocationConfig, Store,
+    Config, Enabled, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, Store,
 };
 use wasmtime_test_util::wast::{Collector, Compiler, WastConfig, WastTest, limits};
 use wasmtime_wast::{Async, SpectestConfig, WastContext};
@@ -225,7 +225,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
         // When testing, we may choose to start with MPK force-enabled to ensure
         // we use that functionality.
         if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
-            pool.memory_protection_keys(MpkEnabled::Enable);
+            pool.memory_protection_keys(Enabled::Yes);
         }
 
         cfg.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
