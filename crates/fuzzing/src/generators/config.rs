@@ -5,7 +5,7 @@ use crate::oracles::{StoreLimits, Timeout};
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use std::time::Duration;
-use wasmtime::{Engine, Module, MpkEnabled, Store};
+use wasmtime::{Enabled, Engine, Module, Store};
 use wasmtime_test_util::wast::{WastConfig, WastTest, limits};
 
 /// Configuration for `wasmtime::Config` and generated modules for a session of
@@ -75,7 +75,7 @@ impl Config {
             pooling.total_memories = config.max_memories as u32;
             pooling.max_memory_size = 10 << 16;
             pooling.max_memories_per_module = config.max_memories as u32;
-            if pooling.memory_protection_keys == MpkEnabled::Auto
+            if pooling.memory_protection_keys == Enabled::Auto
                 && pooling.max_memory_protection_keys > 1
             {
                 pooling.total_memories =

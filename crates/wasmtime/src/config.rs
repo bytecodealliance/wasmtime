@@ -2950,16 +2950,17 @@ pub enum WasmBacktraceDetails {
     Environment,
 }
 
-/// Describe the tri-state configuration of memory protection keys (MPK).
+/// Describe the tri-state configuration of keys such as MPK or PAGEMAP_SCAN.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum MpkEnabled {
-    /// Use MPK if supported by the current system; fall back to guard regions
-    /// otherwise.
+pub enum Enabled {
+    /// Enable this feature if it's detected on the host system, otherwise leave
+    /// it disabled.
     Auto,
-    /// Use MPK or fail if not supported.
-    Enable,
-    /// Do not use MPK.
-    Disable,
+    /// Enable this feature and fail configuration if the feature is not
+    /// detected on the host system.
+    Yes,
+    /// Do not enable this feature, even if the host system supports it.
+    No,
 }
 
 /// Configuration options used with [`InstanceAllocationStrategy::Pooling`] to
@@ -3482,11 +3483,11 @@ impl PoolingAllocationConfig {
     ///
     /// - `auto`: if MPK support is available the guard regions are removed; if
     ///   not, the guard regions remain
-    /// - `enable`: use MPK to eliminate guard regions; fail if MPK is not
+    /// - `yes`: use MPK to eliminate guard regions; fail if MPK is not
     ///   supported
-    /// - `disable`: never use MPK
+    /// - `no`: never use MPK
     ///
-    /// By default this value is `disabled`, but may become `auto` in future
+    /// By default this value is `no`, but may become `auto` in future
     /// releases.
     ///
     /// __WARNING__: this configuration options is still experimental--use at
@@ -3494,7 +3495,7 @@ impl PoolingAllocationConfig {
     /// regions; you may observe segmentation faults if anything is
     /// misconfigured.
     #[cfg(feature = "memory-protection-keys")]
-    pub fn memory_protection_keys(&mut self, enable: MpkEnabled) -> &mut Self {
+    pub fn memory_protection_keys(&mut self, enable: Enabled) -> &mut Self {
         self.config.memory_protection_keys = enable;
         self
     }
@@ -3520,7 +3521,7 @@ impl PoolingAllocationConfig {
     /// Check if memory protection keys (MPK) are available on the current host.
     ///
     /// This is a convenience method for determining MPK availability using the
-    /// same method that [`MpkEnabled::Auto`] does. See
+    /// same method that [`Enabled::Auto`] does. See
     /// [`PoolingAllocationConfig::memory_protection_keys`] for more
     /// information.
     #[cfg(feature = "memory-protection-keys")]
@@ -3540,6 +3541,45 @@ impl PoolingAllocationConfig {
     pub fn total_gc_heaps(&mut self, count: u32) -> &mut Self {
         self.config.limits.total_gc_heaps = count;
         self
+    }
+
+    /// Configures whether the Linux-specific [`PAGEMAP_SCAN` ioctl][ioctl] is
+    /// used to help reset linear memory.
+    ///
+    /// When [`Self::linear_memory_keep_resident`] or
+    /// [`Self::table_keep_resident`] options are configured to nonzero values
+    /// the default behavior is to `memset` the lowest addresses of a table or
+    /// memory back to their original contents. With the `PAGEMAP_SCAN` ioctl on
+    /// Linux this can be done to more intelligently scan for resident pages in
+    /// the region and only reset those pages back to their original contents
+    /// with `memset` rather than assuming the low addresses are all resident.
+    ///
+    /// This ioctl has the potential to provide a number of performance benefits
+    /// in high-reuse and high concurrency scenarios. Notably this enables
+    /// Wasmtime to scan the entire region of WebAssembly linear memory and
+    /// manually reset memory back to its original contents, up to
+    /// [`Self::linear_memory_keep_resident`] bytes, possibly skipping an
+    /// `madvise` entirely. This can be more efficient by avoiding removing
+    /// pages from the address space entirely and additionally ensuring that
+    /// future use of the linear memory doesn't incur page faults as the pages
+    /// remain resident.
+    ///
+    /// At this time this configuration option is still being evaluated as to
+    /// how appropriate it is for all use cases. It currently defaults to
+    /// `no` or disabled but may change to `auto`, enable if supported, in the
+    /// future. This option is only supported on Linux and requires a kernel
+    /// version of 6.7 or higher.
+    ///
+    /// [ioctl]: https://www.man7.org/linux/man-pages/man2/PAGEMAP_SCAN.2const.html
+    pub fn pagemap_scan(&mut self, enable: Enabled) -> &mut Self {
+        self.config.pagemap_scan = enable;
+        self
+    }
+
+    /// Tests whether [`Self::pagemap_scan`] is available or not on the host
+    /// system.
+    pub fn is_pagemap_scan_available() -> bool {
+        crate::runtime::vm::PoolingInstanceAllocatorConfig::is_pagemap_scan_available()
     }
 }
 

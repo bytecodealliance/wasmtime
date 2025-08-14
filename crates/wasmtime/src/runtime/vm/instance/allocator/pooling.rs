@@ -46,7 +46,7 @@ use self::table_pool::TablePool;
 use super::{
     InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
 };
-use crate::MpkEnabled;
+use crate::Enabled;
 use crate::prelude::*;
 use crate::runtime::vm::{
     CompiledModuleId, Memory, Table,
@@ -222,9 +222,11 @@ pub struct PoolingInstanceAllocatorConfig {
     /// Same as `linear_memory_keep_resident` but for tables.
     pub table_keep_resident: usize,
     /// Whether to enable memory protection keys.
-    pub memory_protection_keys: MpkEnabled,
+    pub memory_protection_keys: Enabled,
     /// How many memory protection keys to allocate.
     pub max_memory_protection_keys: usize,
+    /// Whether to enable PAGEMAP_SCAN on Linux.
+    pub pagemap_scan: Enabled,
 }
 
 impl Default for PoolingInstanceAllocatorConfig {
@@ -239,9 +241,16 @@ impl Default for PoolingInstanceAllocatorConfig {
             async_stack_keep_resident: 0,
             linear_memory_keep_resident: 0,
             table_keep_resident: 0,
-            memory_protection_keys: MpkEnabled::Disable,
+            memory_protection_keys: Enabled::No,
             max_memory_protection_keys: 16,
+            pagemap_scan: Enabled::No,
         }
+    }
+}
+
+impl PoolingInstanceAllocatorConfig {
+    pub fn is_pagemap_scan_available() -> bool {
+        PageMap::new().is_some()
     }
 }
 
@@ -353,7 +362,16 @@ impl PoolingInstanceAllocator {
             gc_heaps: GcHeapPool::new(config)?,
             #[cfg(feature = "async")]
             stacks: StackPool::new(config)?,
-            pagemap: PageMap::new(),
+            pagemap: match config.pagemap_scan {
+                Enabled::Auto => PageMap::new(),
+                Enabled::Yes => Some(PageMap::new().ok_or_else(|| {
+                    anyhow!(
+                        "required to enable PAGEMAP_SCAN but this system \
+                         does not support it"
+                    )
+                })?),
+                Enabled::No => None,
+            },
         })
     }
 

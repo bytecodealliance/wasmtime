@@ -51,7 +51,7 @@ fn engines() -> Vec<(Engine, IsAsync)> {
 
     let mut pool = PoolingAllocationConfig::default();
     if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
-        pool.memory_protection_keys(MpkEnabled::Enable);
+        pool.memory_protection_keys(Enabled::Yes);
     }
 
     vec![

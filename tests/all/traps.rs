@@ -1345,7 +1345,7 @@ fn wasm_fault_address_reported_from_mpk_protected_memory() -> Result<()> {
     // this calculation for MPK-protected, causing an abort.
     let mut pool = crate::small_pool_config();
     pool.total_memories(16);
-    pool.memory_protection_keys(MpkEnabled::Auto);
+    pool.memory_protection_keys(Enabled::Auto);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config)?;

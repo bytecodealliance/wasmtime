@@ -51,6 +51,7 @@ mod unix {
     fn pooling_allocator_reset() -> Result<()> {
         let mut pooling = PoolingAllocationConfig::new();
         pooling.linear_memory_keep_resident(4096);
+        pooling.pagemap_scan(Enabled::Auto);
         let mut config = Config::new();
         config.allocation_strategy(pooling);
         config.macos_use_mach_ports(false);
