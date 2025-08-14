@@ -23,7 +23,19 @@ pub fn cargo_test_runner() -> Option<String> {
 pub fn command(bin: impl AsRef<Path>) -> Command {
     let bin = bin.as_ref();
     match cargo_test_runner() {
-        Some(runner) => {
+        Some(mut runner) => {
+            match runner.as_str() {
+                "qemu-aarch64" => {
+                    runner.push_str(" -L /usr/aarch64-linux-gnu -E LD_LIBRARY_PATH=/usr/aarch64-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1");
+                }
+                "qemu-riscv64" => {
+                    runner.push_str(" -L /usr/riscv64-linux-gnu -E LD_LIBRARY_PATH=/usr/riscv64-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1");
+                }
+                "qemu-s390x" => {
+                    runner.push_str(" -L /usr/s390x-linux-gnu -E LD_LIBRARY_PATH=/usr/s390x-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1");
+                }
+                _ => {}
+            }
             let mut parts = runner.split_whitespace();
             let mut cmd = Command::new(parts.next().unwrap());
             for arg in parts {
