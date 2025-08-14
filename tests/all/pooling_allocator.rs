@@ -1340,6 +1340,7 @@ fn pagemap_scan_enabled_or_disabled() -> Result<()> {
     let mut config = Config::new();
     let mut cfg = crate::small_pool_config();
     cfg.total_memories(1);
+    cfg.pagemap_scan(Enabled::Yes);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(cfg));
     let result = Engine::new(&config);
 
