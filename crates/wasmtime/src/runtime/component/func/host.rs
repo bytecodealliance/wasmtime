@@ -683,15 +683,12 @@ where
 {
     let cx = unsafe { VMComponentContext::from_opaque(cx) };
     unsafe {
-        ComponentInstance::from_vmctx(cx, |store, instance| {
+        ComponentInstance::enter_host_from_wasm(cx, |store, instance| {
             let mut store = store.unchecked_context_mut();
-
-            crate::runtime::vm::catch_unwind_and_record_trap(|| {
-                store.0.call_hook(CallHook::CallingHost)?;
-                let res = func(store.as_context_mut(), instance);
-                store.0.call_hook(CallHook::ReturningFromHost)?;
-                res
-            })
+            store.0.call_hook(CallHook::CallingHost)?;
+            let res = func(store.as_context_mut(), instance);
+            store.0.call_hook(CallHook::ReturningFromHost)?;
+            res
         })
     }
 }

@@ -97,8 +97,8 @@ pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
 pub use crate::runtime::vm::instance::{
     GcHeapAllocationIndex, Instance, InstanceAllocationRequest, InstanceAllocator,
-    InstanceAllocatorImpl, InstanceAndStore, InstanceHandle, MemoryAllocationIndex,
-    OnDemandInstanceAllocator, StorePtr, TableAllocationIndex, initialize_instance,
+    InstanceAllocatorImpl, InstanceHandle, MemoryAllocationIndex, OnDemandInstanceAllocator,
+    StorePtr, TableAllocationIndex, initialize_instance,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::instance::{

@@ -11,9 +11,9 @@ use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::{
-    SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableImport, VMWasmCallFunction, ValRaw, VmPtr,
-    VmSafe,
+    HostResult, SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition,
+    VMMemoryDefinition, VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableImport, VMWasmCallFunction,
+    ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
 };
 use crate::store::InstanceId;
 use alloc::alloc::Layout;
@@ -203,6 +203,10 @@ impl ComponentInstance {
     /// Converts the `vmctx` provided into a `ComponentInstance` and runs the
     /// provided closure with that instance.
     ///
+    /// This function will also catch any failures that `f` produces and returns
+    /// an appropriate ABI value to return to wasm. This includes normal errors
+    /// such as traps as well as Rust-side panics which require wasm to unwind.
+    ///
     /// # Unsafety
     ///
     /// This is `unsafe` because `vmctx` cannot be guaranteed to be a valid
@@ -210,10 +214,13 @@ impl ComponentInstance {
     /// mutable reference at this time to the instance from `vmctx`. Note that
     /// it must be also safe to borrow the store mutably, meaning it can't
     /// already be in use elsewhere.
-    pub unsafe fn from_vmctx<R>(
+    pub unsafe fn enter_host_from_wasm<R>(
         vmctx: NonNull<VMComponentContext>,
         f: impl FnOnce(&mut dyn VMStore, Instance) -> R,
-    ) -> R {
+    ) -> R::Abi
+    where
+        R: HostResult,
+    {
         // SAFETY: it's a contract of this function that `vmctx` is a valid
         // allocation which can go backwards to a `ComponentInstance`.
         let mut ptr = unsafe {
@@ -230,7 +237,7 @@ impl ComponentInstance {
         let store = unsafe { &mut *reference.store.0.as_ptr() };
 
         let instance = Instance::from_wasmtime(store, reference.id);
-        f(store, instance)
+        catch_unwind_and_record_trap(store, |store| f(store, instance))
     }
 
     /// Returns the `InstanceId` associated with the `vmctx` provided.
