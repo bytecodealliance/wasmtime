@@ -18,7 +18,7 @@ pub fn cargo_test_runner() -> Option<String> {
         .filter(|(k, _v)| {
             k.starts_with("CARGO_TARGET")
                 && k.ends_with("RUNNER")
-                && std::env::var("CARGO_LOCAL_TARGET_ARCH")
+                && std::env::var("CARGO_TARGET_ARCH")
                     .map(|arch| k.contains(&arch.to_uppercase()))
                     .unwrap_or(true)
         })
