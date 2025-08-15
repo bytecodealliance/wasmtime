@@ -14,6 +14,7 @@ workspace = true
 [features]
 default = ["default-send-request"]
 default-send-request = ["dep:tokio-rustls", "dep:rustls", "dep:webpki-roots"]
+p3 = ["wasmtime-wasi/p3"]
 
 [dependencies]
 anyhow = { workspace = true }
