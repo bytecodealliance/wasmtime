@@ -7,16 +7,17 @@ use std::{
     thread::JoinHandle,
 };
 use tokio::net::TcpListener;
+use tracing::{debug, trace, warn};
 use wasmtime_wasi_http::io::TokioIo;
 
 async fn test(
     mut req: Request<hyper::body::Incoming>,
 ) -> http::Result<Response<BoxBody<Bytes, std::convert::Infallible>>> {
-    tracing::debug!("preparing mocked response",);
+    debug!("preparing mocked response",);
     let method = req.method().to_string();
     let body = req.body_mut().collect().await.unwrap();
     let buf = body.to_bytes();
-    tracing::trace!("hyper request body size {:?}", buf.len());
+    trace!("hyper request body size {:?}", buf.len());
 
     Response::builder()
         .status(http::StatusCode::OK)
@@ -32,7 +33,8 @@ pub struct Server {
 
 impl Server {
     fn new<F>(
-        run: impl FnOnce(TokioIo<tokio::net::TcpStream>) -> F + Send + 'static,
+        run: impl Fn(TokioIo<tokio::net::TcpStream>) -> F + Send + 'static,
+        conns: usize,
     ) -> Result<Self>
     where
         F: Future<Output = Result<()>>,
@@ -51,11 +53,17 @@ impl Server {
         let (rt, listener) = thread.join().unwrap()?;
         let addr = listener.local_addr().context("failed to get local addr")?;
         let worker = std::thread::spawn(move || {
-            tracing::debug!("dedicated thread to start listening");
+            debug!("dedicated thread to start listening");
             rt.block_on(async move {
-                tracing::debug!("preparing to accept connection");
-                let (stream, _) = listener.accept().await.map_err(anyhow::Error::from)?;
-                run(TokioIo::new(stream)).await
+                for i in 0..conns {
+                    debug!(i, "preparing to accept connection");
+                    let (stream, _) = listener.accept().await.map_err(anyhow::Error::from)?;
+                    if let Err(err) = run(TokioIo::new(stream)).await {
+                        warn!(i, ?err, "failed to serve connection");
+                        return Err(err);
+                    }
+                }
+                Ok(())
             })
         });
         Ok(Self {
@@ -64,40 +72,46 @@ impl Server {
         })
     }
 
-    pub fn http1() -> Result<Self> {
-        tracing::debug!("initializing http1 server");
-        Self::new(|io| async move {
-            let mut builder = hyper::server::conn::http1::Builder::new();
-            let http = builder.keep_alive(false).pipeline_flush(true);
+    pub fn http1(conns: usize) -> Result<Self> {
+        debug!("initializing http1 server");
+        Self::new(
+            |io| async move {
+                let mut builder = hyper::server::conn::http1::Builder::new();
+                let http = builder.keep_alive(false).pipeline_flush(true);
 
-            tracing::debug!("preparing to bind connection to service");
-            let conn = http.serve_connection(io, service_fn(test)).await;
-            tracing::trace!("connection result {:?}", conn);
-            conn?;
-            Ok(())
-        })
+                debug!("preparing to bind connection to service");
+                let conn = http.serve_connection(io, service_fn(test)).await;
+                trace!("connection result {:?}", conn);
+                conn?;
+                Ok(())
+            },
+            conns,
+        )
     }
 
-    pub fn http2() -> Result<Self> {
-        tracing::debug!("initializing http2 server");
-        Self::new(|io| async move {
-            let mut builder = hyper::server::conn::http2::Builder::new(TokioExecutor);
-            let http = builder.max_concurrent_streams(20);
+    pub fn http2(conns: usize) -> Result<Self> {
+        debug!("initializing http2 server");
+        Self::new(
+            |io| async move {
+                let mut builder = hyper::server::conn::http2::Builder::new(TokioExecutor);
+                let http = builder.max_concurrent_streams(20);
 
-            tracing::debug!("preparing to bind connection to service");
-            let conn = http.serve_connection(io, service_fn(test)).await;
-            tracing::trace!("connection result {:?}", conn);
-            if let Err(e) = &conn {
-                let message = e.to_string();
-                if message.contains("connection closed before reading preface")
-                    || message.contains("unspecific protocol error detected")
-                {
-                    return Ok(());
+                debug!("preparing to bind connection to service");
+                let conn = http.serve_connection(io, service_fn(test)).await;
+                trace!("connection result {:?}", conn);
+                if let Err(e) = &conn {
+                    let message = e.to_string();
+                    if message.contains("connection closed before reading preface")
+                        || message.contains("unspecific protocol error detected")
+                    {
+                        return Ok(());
+                    }
                 }
-            }
-            conn?;
-            Ok(())
-        })
+                conn?;
+                Ok(())
+            },
+            conns,
+        )
     }
 
     pub fn addr(&self) -> String {
@@ -107,7 +121,7 @@ impl Server {
 
 impl Drop for Server {
     fn drop(&mut self) {
-        tracing::debug!("shutting down http1 server");
+        debug!("shutting down http1 server");
         // Force a connection to happen in case one hasn't happened already.
         let _ = TcpStream::connect(&self.addr);
 

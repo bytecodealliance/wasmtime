@@ -21,85 +21,85 @@ async fn run(path: &str, server: &Server) -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_get() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_GET_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_timeout() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_post() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_POST_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_large_post() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_LARGE_POST_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_put() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_PUT_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_invalid_version() -> Result<()> {
-    let server = Server::http2()?;
+    let server = Server::http2(1)?;
     run(HTTP_OUTBOUND_REQUEST_INVALID_VERSION_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_invalid_header() -> Result<()> {
-    let server = Server::http2()?;
+    let server = Server::http2(1)?;
     run(HTTP_OUTBOUND_REQUEST_INVALID_HEADER_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_unknown_method() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_UNKNOWN_METHOD_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_unsupported_scheme() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_UNSUPPORTED_SCHEME_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_invalid_port() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_INVALID_PORT_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_invalid_dnsname() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_INVALID_DNSNAME_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_response_build() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_content_length() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn http_outbound_request_missing_path_and_query() -> Result<()> {
-    let server = Server::http1()?;
+    let server = Server::http1(1)?;
     run(
         HTTP_OUTBOUND_REQUEST_MISSING_PATH_AND_QUERY_COMPONENT,
         &server,
