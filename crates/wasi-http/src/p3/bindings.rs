@@ -12,7 +12,21 @@ mod generated {
             default: trappable | tracing,
         },
         exports: { default: async | store },
+        with: {
+            "wasi:http/types/fields": with::Fields,
+            "wasi:http/types/request": crate::p3::Request,
+            "wasi:http/types/request-options": with::RequestOptions,
+            "wasi:http/types/response": crate::p3::Response,
+        },
     });
+
+    mod with {
+        /// The concrete type behind a `wasi:http/types/fields` resource.
+        pub type Fields = crate::p3::MaybeMutable<http::HeaderMap>;
+
+        /// The concrete type behind a `wasi:http/types/request-options` resource.
+        pub type RequestOptions = crate::p3::MaybeMutable<crate::p3::RequestOptions>;
+    }
 }
 
 pub use self::generated::wasi::*;
