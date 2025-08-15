@@ -1516,13 +1516,13 @@ fn trap(
     ))
 }
 
-fn raise(_store: &mut dyn VMStore, _instance: Pin<&mut Instance>) {
+fn raise(store: &mut dyn VMStore, _instance: Pin<&mut Instance>) {
     // SAFETY: this is only called from compiled wasm so we know that wasm has
     // already been entered. It's a dynamic safety precondition that the trap
     // information has already been arranged to be present.
     #[cfg(has_host_compiler_backend)]
     unsafe {
-        crate::runtime::vm::traphandlers::raise_preexisting_trap()
+        crate::runtime::vm::traphandlers::raise_preexisting_trap(store)
     }
 
     // When Cranelift isn't in use then this is an unused libcall for Pulley, so
@@ -1544,4 +1544,26 @@ fn cont_new(
     let ans =
         crate::vm::stack_switching::cont_new(store, instance, func, param_count, result_count)?;
     Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
+}
+
+#[cfg(feature = "gc")]
+unsafe fn get_instance_id(_store: &mut dyn VMStore, instance: Pin<&mut Instance>) -> u32 {
+    instance.id().as_u32()
+}
+
+#[cfg(feature = "gc")]
+unsafe fn throw_ref(
+    mut store: &mut dyn VMStore,
+    _instance: Pin<&mut Instance>,
+    exnref: u32,
+) -> Result<(), TrapReason> {
+    use crate::{AsStoreOpaqueMut, vm::ExceptionTombstone};
+
+    let exnref = VMGcRef::from_raw_u32(exnref).ok_or_else(|| Trap::NullReference)?;
+    let exnref = store.unwrap_gc_store_mut().clone_gc_ref(&exnref);
+    let exnref = exnref
+        .into_exnref(&*store.unwrap_gc_store().gc_heap)
+        .expect("gc ref should be an exception object");
+    store.as_store_opaque_mut().set_pending_exception(exnref);
+    Err(TrapReason::User(ExceptionTombstone.into()))
 }

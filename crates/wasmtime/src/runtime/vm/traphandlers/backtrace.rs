@@ -160,7 +160,7 @@ impl Backtrace {
             // through the Wasm-to-host trampoline.
             None => unsafe {
                 let pc = *(*vm_store_context).last_wasm_exit_pc.get();
-                let fp = *(*vm_store_context).last_wasm_exit_fp.get();
+                let fp = (*vm_store_context).last_wasm_exit_fp();
                 (pc, fp)
             },
         };

@@ -141,7 +141,7 @@ impl Config {
             component_model_gc,
             simd,
             exceptions,
-            legacy_exceptions,
+            legacy_exceptions: _,
 
             hogs_memory: _,
             nan_canonicalization: _,
@@ -161,7 +161,6 @@ impl Config {
             component_model_async_stackful.unwrap_or(false);
         self.module_config.component_model_error_context =
             component_model_error_context.unwrap_or(false);
-        self.module_config.legacy_exceptions = legacy_exceptions.unwrap_or(false);
         self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
@@ -305,7 +304,6 @@ impl Config {
             Some(self.module_config.config.shared_everything_threads_enabled);
         cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
         cfg.wasm.exceptions = Some(self.module_config.config.exceptions_enabled);
-        cfg.wasm.legacy_exceptions = Some(self.module_config.legacy_exceptions);
         if !self.module_config.config.simd_enabled {
             cfg.wasm.relaxed_simd = Some(false);
         }

@@ -4,7 +4,9 @@
 //! track of the WebAssembly value and control stacks during the translation of
 //! a single function.
 
-use cranelift_codegen::ir::{self, Block, Inst, Value};
+use cranelift_codegen::ir::{self, Block, ExceptionTag, Inst, Value};
+use cranelift_frontend::FunctionBuilder;
+use std::collections::BTreeMap;
 use std::vec::Vec;
 
 /// Information about the presence of an associated `else` for an `if`, or the
@@ -74,6 +76,10 @@ pub enum ControlStackFrame {
         num_return_values: usize,
         original_stack_size: usize,
         exit_is_branched_to: bool,
+        /// If this block is a try-table block, the handler state
+        /// checkpoint to rewind to when we leave the block, and the
+        /// list of catch blocks to seal when done.
+        try_table_info: Option<(HandlerStateCheckpoint, Vec<Block>)>,
     },
     Loop {
         destination: Block,
@@ -209,6 +215,26 @@ impl ControlStackFrame {
         };
         stack.truncate(self.original_stack_size() - num_duplicated_params);
     }
+
+    /// Restore the catch-handlers as they were outside of this block.
+    pub fn restore_catch_handlers(
+        &self,
+        handlers: &mut HandlerState,
+        builder: &mut FunctionBuilder,
+    ) {
+        match self {
+            ControlStackFrame::Block {
+                try_table_info: Some((ckpt, catch_blocks)),
+                ..
+            } => {
+                handlers.restore_checkpoint(*ckpt);
+                for block in catch_blocks {
+                    builder.seal_block(*block);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Keeps track of Wasm's operand and control stacks, as well as reachability
@@ -219,6 +245,9 @@ pub struct FuncTranslationStacks {
     pub(crate) stack: Vec<Value>,
     /// A stack of active control flow operations at this point in the input wasm function.
     pub(crate) control_stack: Vec<ControlStackFrame>,
+    /// Exception handler state, updated as we enter and exit
+    /// `try_table` scopes and attached to each call that we make.
+    pub(crate) handlers: HandlerState,
     /// Is the current translation state still reachable? This is false when translating operators
     /// like End, Return, or Unreachable.
     pub(crate) reachable: bool,
@@ -239,6 +268,7 @@ impl FuncTranslationStacks {
         Self {
             stack: Vec::new(),
             control_stack: Vec::new(),
+            handlers: HandlerState::default(),
             reachable: true,
         }
     }
@@ -364,12 +394,12 @@ impl FuncTranslationStacks {
         &mut self.stack[len - n..]
     }
 
-    /// Push a block on the control stack.
-    pub(crate) fn push_block(
+    fn push_block_impl(
         &mut self,
         following_code: Block,
         num_param_types: usize,
         num_result_types: usize,
+        try_table_info: Option<(HandlerStateCheckpoint, Vec<Block>)>,
     ) {
         debug_assert!(num_param_types <= self.stack.len());
         self.control_stack.push(ControlStackFrame::Block {
@@ -378,7 +408,35 @@ impl FuncTranslationStacks {
             num_param_values: num_param_types,
             num_return_values: num_result_types,
             exit_is_branched_to: false,
+            try_table_info,
         });
+    }
+
+    /// Push a block on the control stack.
+    pub(crate) fn push_block(
+        &mut self,
+        following_code: Block,
+        num_param_types: usize,
+        num_result_types: usize,
+    ) {
+        self.push_block_impl(following_code, num_param_types, num_result_types, None);
+    }
+
+    /// Push a try-table block on the control stack.
+    pub(crate) fn push_try_table_block(
+        &mut self,
+        following_code: Block,
+        catch_blocks: Vec<Block>,
+        num_param_types: usize,
+        num_result_types: usize,
+    ) {
+        let ckpt = self.handlers.take_checkpoint();
+        self.push_block_impl(
+            following_code,
+            num_param_types,
+            num_result_types,
+            Some((ckpt, catch_blocks)),
+        );
     }
 
     /// Push a loop on the control stack.
@@ -432,5 +490,88 @@ impl FuncTranslationStacks {
             consequent_ends_reachable: None,
             blocktype,
         });
+    }
+}
+
+/// Exception handler state.
+///
+/// We update this state as we enter and exit `try_table` scopes. When
+/// we visit a call, we use this state to attach handler info to a
+/// `try_call` CLIF instruction.
+///
+/// Note that `try_table`s are lexically-scoped (as for all Wasm
+/// structured control flow), and their handlers can "shadow" each
+/// other. So if we have
+///
+/// ```plain
+/// (try_table
+///  (catch $e0 $label0)
+///  (catch $e1 $label1)
+///  (try_table
+///   (catch $e1 $label2)
+///   ...))
+/// ```
+///
+/// then when translating the body inside the nested `try_table`
+/// (`...`) we need to attach info to all callsites so that tag `$e0`
+/// maps to `$label0` and `$e1` to `$label2` (*not* `$label1` -- that
+/// `catch` clause was shadowed).
+///
+/// To implement this, we keep a BTreeMap from tag to label (BTree
+/// rather than hash so tags are sorted and we get deterministic
+/// CLIF), we keep the map updated as per the current translation
+/// point (with shadowing performing overwrites), and we keep an *undo
+/// list* of these shadowing overwrites with their old values so when
+/// we pop a scope, we can restore the map. We hand out indices in
+/// this undo list as "checkpoints".
+#[derive(Default)]
+pub struct HandlerState {
+    /// Map from CLIF-level exception tag to CLIF-level block. We will
+    /// have already filled in these blocks with the appropriate
+    /// branch implementation when we start the `try_table` scope.
+    pub(crate) handlers: BTreeMap<Option<ExceptionTag>, Block>,
+
+    /// Undo-list of tag -> block mappings. The `Option<Block>` is the
+    /// *old* mapping (`None` means remove from `handlers`).
+    pub(crate) undo: Vec<(Option<ExceptionTag>, Option<Block>)>,
+}
+
+/// A checkpoint in the handler state. Can be restored in LIFO order
+/// only: the last-taken checkpoint can be restored first, then the
+/// one before it, etc.
+#[derive(Clone, Copy, Debug)]
+pub struct HandlerStateCheckpoint(usize);
+
+impl HandlerState {
+    /// Set a given tag's handler to a given CLIF block.
+    pub fn add_handler(&mut self, tag: Option<ExceptionTag>, block: Block) {
+        let old_val = self.handlers.insert(tag, block);
+        self.undo.push((tag, old_val));
+    }
+
+    /// Take a checkpoint.
+    pub fn take_checkpoint(&self) -> HandlerStateCheckpoint {
+        HandlerStateCheckpoint(self.undo.len())
+    }
+
+    /// Restore to a checkpoint.
+    pub fn restore_checkpoint(&mut self, ckpt: HandlerStateCheckpoint) {
+        assert!(ckpt.0 <= self.undo.len());
+        while self.undo.len() > ckpt.0 {
+            let (tag, old_val) = self.undo.pop().expect("Verified size is > 0 above");
+            match old_val {
+                Some(old_val) => {
+                    self.handlers.insert(tag, old_val);
+                }
+                None => {
+                    self.handlers.remove(&tag);
+                }
+            }
+        }
+    }
+
+    /// Get an iterator over handlers.
+    pub fn handlers(&self) -> impl Iterator<Item = (Option<ExceptionTag>, Block)> + '_ {
+        self.handlers.iter().map(|(tag, block)| (*tag, *block))
     }
 }

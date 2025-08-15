@@ -7,10 +7,14 @@ use crate::runtime::vm::{
 };
 use crate::store::{AutoAssertNoGc, InstanceId, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
+#[cfg(feature = "gc")]
+use crate::vm::{ExceptionTombstone, VMGcRef};
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, ModuleExport, Ref,
     StoreContext, StoreContextMut, Val, ValRaw, ValType,
 };
+#[cfg(feature = "gc")]
+use crate::{ExnRef, Rooted};
 use alloc::sync::Arc;
 use core::ffi::c_void;
 #[cfg(feature = "async")]
@@ -1266,7 +1270,21 @@ impl Func {
 
         val_vec.extend((0..ty.results().len()).map(|_| Val::null_func_ref()));
         let (params, results) = val_vec.split_at_mut(nparams);
-        func(caller.sub_caller(), params, results)?;
+        match func(caller.sub_caller(), params, results) {
+            Ok(()) => {}
+            #[cfg(feature = "gc")]
+            Err(e) if e.is::<Rooted<ExnRef>>() => {
+                let exnref = e.downcast::<Rooted<ExnRef>>().unwrap();
+                let exnref = VMGcRef::from_raw_u32(exnref.to_raw(&mut caller.store.0).unwrap())
+                    .unwrap()
+                    .into_exnref_unchecked();
+                caller.store.0.set_pending_exception(exnref);
+                return Err(ExceptionTombstone.into());
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
 
         // Unlike our arguments we need to dynamically check that the return
         // values produced are correct. There could be a bug in `func` that
@@ -1514,7 +1532,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         let result = crate::runtime::vm::catch_traps(store, &mut previous_runtime_state, closure);
         core::mem::drop(previous_runtime_state);
         store.0.call_hook(CallHook::ReturningFromWasm)?;
-        result.map_err(|t| crate::trap::from_runtime_box(store.0, t))
+        result
     }
 }
 
@@ -1530,9 +1548,9 @@ pub(crate) struct EntryStoreContext {
     /// Contains value of `last_wasm_exit_pc` field to restore in
     /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_exit_pc: usize,
-    /// Contains value of `last_wasm_exit_fp` field to restore in
+    /// Contains value of `last_wasm_exit_trampoline_fp` field to restore in
     /// `VMStoreContext` when exiting Wasm.
-    pub last_wasm_exit_fp: usize,
+    pub last_wasm_exit_trampoline_fp: usize,
     /// Contains value of `last_wasm_entry_fp` field to restore in
     /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_entry_fp: usize,
@@ -1625,7 +1643,11 @@ impl EntryStoreContext {
 
         unsafe {
             let last_wasm_exit_pc = *store.0.vm_store_context().last_wasm_exit_pc.get();
-            let last_wasm_exit_fp = *store.0.vm_store_context().last_wasm_exit_fp.get();
+            let last_wasm_exit_trampoline_fp = *store
+                .0
+                .vm_store_context()
+                .last_wasm_exit_trampoline_fp
+                .get();
             let last_wasm_entry_fp = *store.0.vm_store_context().last_wasm_entry_fp.get();
 
             let stack_chain = (*store.0.vm_store_context().stack_chain.get()).clone();
@@ -1638,7 +1660,7 @@ impl EntryStoreContext {
             Self {
                 stack_limit,
                 last_wasm_exit_pc,
-                last_wasm_exit_fp,
+                last_wasm_exit_trampoline_fp,
                 last_wasm_entry_fp,
                 stack_chain,
                 vm_store_context,
@@ -1657,7 +1679,8 @@ impl EntryStoreContext {
                 *(&*self.vm_store_context).stack_limit.get() = limit;
             }
 
-            *(*self.vm_store_context).last_wasm_exit_fp.get() = self.last_wasm_exit_fp;
+            *(*self.vm_store_context).last_wasm_exit_trampoline_fp.get() =
+                self.last_wasm_exit_trampoline_fp;
             *(*self.vm_store_context).last_wasm_exit_pc.get() = self.last_wasm_exit_pc;
             *(*self.vm_store_context).last_wasm_entry_fp.get() = self.last_wasm_entry_fp;
             *(*self.vm_store_context).stack_chain.get() = self.stack_chain.clone();

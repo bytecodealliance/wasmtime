@@ -230,6 +230,8 @@ impl StoreOpaque {
         self.trace_vmctx_roots(gc_roots_list);
         Yield::new().await;
         self.trace_user_roots(gc_roots_list);
+        Yield::new().await;
+        self.trace_pending_exception_roots(gc_roots_list);
 
         log::trace!("End trace GC roots")
     }

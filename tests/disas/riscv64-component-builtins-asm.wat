@@ -25,7 +25,7 @@
 ;;       beq     a1, a3, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;       ld      a1, 0x10(a0)
-;;       ld      a3, 0(s0)
+;;       mv      a3, s0
 ;;       sd      a3, 0x28(a1)
 ;;       ld      a3, 8(s0)
 ;;       sd      a3, 0x30(a1)
