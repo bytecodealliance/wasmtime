@@ -2,8 +2,8 @@
 use crate::CallHook;
 use crate::fiber::{self};
 use crate::prelude::*;
-use crate::store::{ResourceLimiterInner, StoreInner, StoreOpaque, StoreToken};
-use crate::{AsContextMut, Store, StoreContextMut, UpdateDeadline};
+use crate::store::{ResourceLimiterInner, StoreInner, StoreOpaque};
+use crate::{Store, StoreContextMut, UpdateDeadline};
 
 /// An object that can take callbacks when the runtime enters or exits hostcalls.
 #[cfg(feature = "call-hook")]
@@ -281,9 +281,6 @@ impl<T> StoreContextMut<'_, T> {
     where
         T: Send + 'static,
     {
-        let token = StoreToken::new(self.as_context_mut());
-        self.0
-            .on_fiber(|opaque| func(&mut token.as_context_mut(opaque.traitobj_mut())))
-            .await
+        fiber::on_fiber(self.0, |me| func(&mut StoreContextMut(me))).await
     }
 }
