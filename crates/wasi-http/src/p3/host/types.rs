@@ -1,84 +1,246 @@
+use super::{
+    delete_fields, delete_request, delete_response, get_fields, get_fields_mut, get_request,
+    get_request_mut, get_response, get_response_mut, push_fields,
+};
 use crate::p3::bindings::clocks::monotonic_clock::Duration;
 use crate::p3::bindings::http::types::{
     ErrorCode, FieldName, FieldValue, Fields, HeaderError, Headers, Host, HostFields, HostRequest,
     HostRequestOptions, HostRequestWithStore, HostResponse, HostResponseWithStore, Method, Request,
-    RequestOptions, RequestOptionsError, Response, Scheme, StatusCode, Trailers,
+    RequestOptionsError, Response, Scheme, StatusCode, Trailers,
 };
-use crate::p3::{WasiHttp, WasiHttpCtxView};
-use anyhow::bail;
+use crate::p3::{MaybeMutable, RequestOptions, WasiHttp, WasiHttpCtxView};
+use anyhow::{Context as _, bail};
+use http::header::CONTENT_LENGTH;
+use std::sync::Arc;
 use wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
+use wasmtime_wasi::ResourceTable;
+
+fn get_request_options<'a>(
+    table: &'a ResourceTable,
+    opts: &Resource<MaybeMutable<RequestOptions>>,
+) -> wasmtime::Result<&'a MaybeMutable<RequestOptions>> {
+    table
+        .get(opts)
+        .context("failed to get request options from table")
+}
+
+fn get_request_options_inner<'a>(
+    table: &'a ResourceTable,
+    opts: &Resource<MaybeMutable<RequestOptions>>,
+) -> wasmtime::Result<&'a RequestOptions> {
+    let opts = get_request_options(table, opts)?;
+    Ok(opts)
+}
+
+fn get_request_options_mut<'a>(
+    table: &'a mut ResourceTable,
+    opts: &Resource<MaybeMutable<RequestOptions>>,
+) -> wasmtime::Result<&'a mut MaybeMutable<RequestOptions>> {
+    table
+        .get_mut(opts)
+        .context("failed to get request options from table")
+}
+
+fn push_request_options(
+    table: &mut ResourceTable,
+    opts: MaybeMutable<RequestOptions>,
+) -> wasmtime::Result<Resource<MaybeMutable<RequestOptions>>> {
+    table
+        .push(opts)
+        .context("failed to push request options to table")
+}
+
+fn delete_request_options(
+    table: &mut ResourceTable,
+    opts: Resource<MaybeMutable<RequestOptions>>,
+) -> wasmtime::Result<MaybeMutable<RequestOptions>> {
+    table
+        .delete(opts)
+        .context("failed to delete request options from table")
+}
+
+fn parse_header_value(
+    name: &http::HeaderName,
+    value: impl AsRef<[u8]>,
+) -> Result<http::HeaderValue, HeaderError> {
+    if name == CONTENT_LENGTH {
+        let s = str::from_utf8(value.as_ref()).or(Err(HeaderError::InvalidSyntax))?;
+        let v: u64 = s.parse().or(Err(HeaderError::InvalidSyntax))?;
+        Ok(v.into())
+    } else {
+        http::HeaderValue::from_bytes(value.as_ref()).or(Err(HeaderError::InvalidSyntax))
+    }
+}
 
 impl HostFields for WasiHttpCtxView<'_> {
     fn new(&mut self) -> wasmtime::Result<Resource<Fields>> {
-        bail!("TODO")
+        push_fields(self.table, Fields::new_mutable(http::HeaderMap::default()))
     }
 
     fn from_list(
         &mut self,
         entries: Vec<(FieldName, FieldValue)>,
     ) -> wasmtime::Result<Result<Resource<Fields>, HeaderError>> {
-        bail!("TODO")
+        let mut fields = http::HeaderMap::default();
+        for (name, value) in entries {
+            let Ok(name) = name.parse() else {
+                return Ok(Err(HeaderError::InvalidSyntax));
+            };
+            // TODO: Validation
+            //if self.is_forbidden_header(&name) {
+            //    return Ok(Err(HeaderError::Forbidden));
+            //}
+            match parse_header_value(&name, value) {
+                Ok(value) => {
+                    fields.append(name, value);
+                }
+                Err(err) => return Ok(Err(err)),
+            }
+        }
+        let fields = push_fields(self.table, Fields::new_mutable(fields))?;
+        Ok(Ok(fields))
     }
 
     fn get(
         &mut self,
-        self_: Resource<Fields>,
+        fields: Resource<Fields>,
         name: FieldName,
     ) -> wasmtime::Result<Vec<FieldValue>> {
-        bail!("TODO")
+        let fields = get_fields(self.table, &fields)?;
+        Ok(fields
+            .get_all(name)
+            .into_iter()
+            .map(|val| val.as_bytes().into())
+            .collect())
     }
 
-    fn has(&mut self, self_: Resource<Fields>, name: FieldName) -> wasmtime::Result<bool> {
-        bail!("TODO")
+    fn has(&mut self, fields: Resource<Fields>, name: FieldName) -> wasmtime::Result<bool> {
+        let fields = get_fields(self.table, &fields)?;
+        Ok(fields.contains_key(name))
     }
 
     fn set(
         &mut self,
-        self_: Resource<Fields>,
+        fields: Resource<Fields>,
         name: FieldName,
         value: Vec<FieldValue>,
     ) -> wasmtime::Result<Result<(), HeaderError>> {
-        bail!("TODO")
+        let Ok(name) = name.parse() else {
+            return Ok(Err(HeaderError::InvalidSyntax));
+        };
+        // TODO: Validation
+        //if self.is_forbidden_header(&name) {
+        //    return Ok(Err(HeaderError::Forbidden));
+        //}
+        let mut values = Vec::with_capacity(value.len());
+        for value in value {
+            match parse_header_value(&name, value) {
+                Ok(value) => {
+                    values.push(value);
+                }
+                Err(err) => return Ok(Err(err)),
+            }
+        }
+        let fields = get_fields_mut(self.table, &fields)?;
+        let Some(fields) = fields.get_mut() else {
+            return Ok(Err(HeaderError::Immutable));
+        };
+        fields.remove(&name);
+        for value in values {
+            fields.append(&name, value);
+        }
+        Ok(Ok(()))
     }
 
     fn delete(
         &mut self,
-        self_: Resource<Fields>,
+        fields: Resource<Fields>,
         name: FieldName,
     ) -> wasmtime::Result<Result<(), HeaderError>> {
-        bail!("TODO")
+        let header = match http::HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => header,
+            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+        };
+        // TODO: Validation
+        //if self.is_forbidden_header(&header) {
+        //    return Ok(Err(HeaderError::Forbidden));
+        //}
+        let fields = get_fields_mut(self.table, &fields)?;
+        let Some(fields) = fields.get_mut() else {
+            return Ok(Err(HeaderError::Immutable));
+        };
+        fields.remove(&name);
+        Ok(Ok(()))
     }
 
     fn get_and_delete(
         &mut self,
-        self_: Resource<Fields>,
+        fields: Resource<Fields>,
         name: FieldName,
     ) -> wasmtime::Result<Result<Vec<FieldValue>, HeaderError>> {
-        bail!("TODO")
+        let Ok(header) = http::header::HeaderName::from_bytes(name.as_bytes()) else {
+            return Ok(Err(HeaderError::InvalidSyntax));
+        };
+        // TODO: Validation
+        //if self.is_forbidden_header(&header) {
+        //    return Ok(Err(HeaderError::Forbidden));
+        //}
+        let fields = get_fields_mut(self.table, &fields)?;
+        let Some(fields) = fields.get_mut() else {
+            return Ok(Err(HeaderError::Immutable));
+        };
+        let http::header::Entry::Occupied(entry) = fields.entry(header) else {
+            return Ok(Ok(vec![]));
+        };
+        let (.., values) = entry.remove_entry_mult();
+        Ok(Ok(values.map(|header| header.as_bytes().into()).collect()))
     }
 
     fn append(
         &mut self,
-        self_: Resource<Fields>,
+        fields: Resource<Fields>,
         name: FieldName,
         value: FieldValue,
     ) -> wasmtime::Result<Result<(), HeaderError>> {
-        bail!("TODO")
+        let Ok(name) = name.parse() else {
+            return Ok(Err(HeaderError::InvalidSyntax));
+        };
+        // TODO: Validation
+        //if self.is_forbidden_header(&name) {
+        //    return Ok(Err(HeaderError::Forbidden));
+        //}
+        let value = match parse_header_value(&name, value) {
+            Ok(value) => value,
+            Err(err) => return Ok(Err(err)),
+        };
+        let fields = get_fields_mut(self.table, &fields)?;
+        let Some(fields) = fields.get_mut() else {
+            return Ok(Err(HeaderError::Immutable));
+        };
+        fields.append(name, value);
+        Ok(Ok(()))
     }
 
     fn copy_all(
         &mut self,
-        self_: Resource<Fields>,
+        fields: Resource<Fields>,
     ) -> wasmtime::Result<Vec<(FieldName, FieldValue)>> {
-        bail!("TODO")
+        let fields = get_fields(self.table, &fields)?;
+        let fields = fields
+            .iter()
+            .map(|(name, value)| (name.as_str().into(), value.as_bytes().into()))
+            .collect();
+        Ok(fields)
     }
 
-    fn clone(&mut self, self_: Resource<Fields>) -> wasmtime::Result<Resource<Fields>> {
-        bail!("TODO")
+    fn clone(&mut self, fields: Resource<Fields>) -> wasmtime::Result<Resource<Fields>> {
+        let fields = get_fields(self.table, &fields)?;
+        push_fields(self.table, MaybeMutable::new_mutable(Arc::clone(fields)))
     }
 
-    fn drop(&mut self, rep: Resource<Fields>) -> wasmtime::Result<()> {
-        bail!("TODO")
+    fn drop(&mut self, fields: Resource<Fields>) -> wasmtime::Result<()> {
+        delete_fields(self.table, fields)?;
+        Ok(())
     }
 }
 
@@ -88,78 +250,125 @@ impl HostRequestWithStore for WasiHttp {
         headers: Resource<Headers>,
         contents: Option<StreamReader<u8>>,
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-        options: Option<Resource<RequestOptions>>,
+        options: Option<Resource<MaybeMutable<RequestOptions>>>,
     ) -> wasmtime::Result<(Resource<Request>, FutureReader<Result<(), ErrorCode>>)> {
         bail!("TODO")
     }
 }
 
 impl HostRequest for WasiHttpCtxView<'_> {
-    fn get_method(&mut self, self_: Resource<Request>) -> wasmtime::Result<Method> {
-        bail!("TODO")
+    fn get_method(&mut self, req: Resource<Request>) -> wasmtime::Result<Method> {
+        let Request { method, .. } = get_request(self.table, &req)?;
+        Ok(method.into())
     }
 
     fn set_method(
         &mut self,
-        self_: Resource<Request>,
+        req: Resource<Request>,
         method: Method,
     ) -> wasmtime::Result<Result<(), ()>> {
-        bail!("TODO")
+        let req = get_request_mut(self.table, &req)?;
+        let Ok(method) = method.try_into() else {
+            return Ok(Err(()));
+        };
+        req.method = method;
+        Ok(Ok(()))
     }
 
-    fn get_path_with_query(
-        &mut self,
-        self_: Resource<Request>,
-    ) -> wasmtime::Result<Option<String>> {
-        bail!("TODO")
+    fn get_path_with_query(&mut self, req: Resource<Request>) -> wasmtime::Result<Option<String>> {
+        let Request {
+            path_with_query, ..
+        } = get_request(self.table, &req)?;
+        Ok(path_with_query.as_ref().map(|pq| pq.as_str().into()))
     }
 
     fn set_path_with_query(
         &mut self,
-        self_: Resource<Request>,
+        req: Resource<Request>,
         path_with_query: Option<String>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        bail!("TODO")
+        let req = get_request_mut(self.table, &req)?;
+        let Some(path_with_query) = path_with_query else {
+            req.path_with_query = None;
+            return Ok(Ok(()));
+        };
+        let Ok(path_with_query) = path_with_query.try_into() else {
+            return Ok(Err(()));
+        };
+        req.path_with_query = Some(path_with_query);
+        Ok(Ok(()))
     }
 
-    fn get_scheme(&mut self, self_: Resource<Request>) -> wasmtime::Result<Option<Scheme>> {
-        bail!("TODO")
+    fn get_scheme(&mut self, req: Resource<Request>) -> wasmtime::Result<Option<Scheme>> {
+        let Request { scheme, .. } = get_request(self.table, &req)?;
+        Ok(scheme.as_ref().map(Into::into))
     }
 
     fn set_scheme(
         &mut self,
-        self_: Resource<Request>,
+        req: Resource<Request>,
         scheme: Option<Scheme>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        bail!("TODO")
+        let req = get_request_mut(self.table, &req)?;
+        let Some(scheme) = scheme else {
+            req.scheme = None;
+            return Ok(Ok(()));
+        };
+        let Ok(scheme) = scheme.try_into() else {
+            return Ok(Err(()));
+        };
+        req.scheme = Some(scheme);
+        Ok(Ok(()))
     }
 
-    fn get_authority(&mut self, self_: Resource<Request>) -> wasmtime::Result<Option<String>> {
-        bail!("TODO")
+    fn get_authority(&mut self, req: Resource<Request>) -> wasmtime::Result<Option<String>> {
+        let Request { authority, .. } = get_request(self.table, &req)?;
+        Ok(authority.as_ref().map(|auth| auth.as_str().into()))
     }
 
     fn set_authority(
         &mut self,
-        self_: Resource<Request>,
+        req: Resource<Request>,
         authority: Option<String>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        bail!("TODO")
+        let req = get_request_mut(self.table, &req)?;
+        let Some(authority) = authority else {
+            req.authority = None;
+            return Ok(Ok(()));
+        };
+        let has_port = authority.contains(':');
+        let Ok(authority) = http::uri::Authority::try_from(authority) else {
+            return Ok(Err(()));
+        };
+        if has_port && authority.port_u16().is_none() {
+            return Ok(Err(()));
+        }
+        req.authority = Some(authority);
+        Ok(Ok(()))
     }
 
     fn get_options(
         &mut self,
-        self_: Resource<Request>,
-    ) -> wasmtime::Result<Option<Resource<RequestOptions>>> {
-        bail!("TODO")
+        req: Resource<Request>,
+    ) -> wasmtime::Result<Option<Resource<MaybeMutable<RequestOptions>>>> {
+        let Request { options, .. } = get_request(self.table, &req)?;
+        if let Some(options) = options {
+            let options =
+                push_request_options(self.table, MaybeMutable::new_immutable(Arc::clone(options)))?;
+            Ok(Some(options))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn get_headers(&mut self, self_: Resource<Request>) -> wasmtime::Result<Resource<Headers>> {
-        bail!("TODO")
+    fn get_headers(&mut self, req: Resource<Request>) -> wasmtime::Result<Resource<Headers>> {
+        let Request { headers, .. } = get_request(self.table, &req)?;
+        push_fields(self.table, Fields::new_immutable(Arc::clone(headers)))
     }
 
     fn consume_body(
         &mut self,
-        self_: Resource<Request>,
+        req: Resource<Request>,
     ) -> wasmtime::Result<
         Result<
             (
@@ -172,70 +381,124 @@ impl HostRequest for WasiHttpCtxView<'_> {
         bail!("TODO")
     }
 
-    fn drop(&mut self, rep: Resource<Request>) -> wasmtime::Result<()> {
-        bail!("TODO")
+    fn drop(&mut self, req: Resource<Request>) -> wasmtime::Result<()> {
+        delete_request(self.table, req)?;
+        Ok(())
     }
 }
 
 impl HostRequestOptions for WasiHttpCtxView<'_> {
-    fn new(&mut self) -> wasmtime::Result<Resource<RequestOptions>> {
-        bail!("TODO")
+    fn new(&mut self) -> wasmtime::Result<Resource<MaybeMutable<RequestOptions>>> {
+        push_request_options(
+            self.table,
+            MaybeMutable::new_mutable(RequestOptions::default()),
+        )
     }
 
     fn get_connect_timeout(
         &mut self,
-        self_: Resource<RequestOptions>,
+        opts: Resource<MaybeMutable<RequestOptions>>,
     ) -> wasmtime::Result<Option<Duration>> {
-        bail!("TODO")
+        let RequestOptions {
+            connect_timeout: Some(connect_timeout),
+            ..
+        } = get_request_options_inner(self.table, &opts)?
+        else {
+            return Ok(None);
+        };
+        let ns = connect_timeout.as_nanos();
+        let ns = ns
+            .try_into()
+            .context("connect timeout duration nanoseconds do not fit in u64")?;
+        Ok(Some(ns))
     }
 
     fn set_connect_timeout(
         &mut self,
-        self_: Resource<RequestOptions>,
+        opts: Resource<MaybeMutable<RequestOptions>>,
         duration: Option<Duration>,
     ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
-        bail!("TODO")
+        let opts = get_request_options_mut(self.table, &opts)?;
+        let Some(opts) = opts.get_mut() else {
+            return Ok(Err(RequestOptionsError::Immutable));
+        };
+        opts.connect_timeout = duration.map(core::time::Duration::from_nanos);
+        Ok(Ok(()))
     }
 
     fn get_first_byte_timeout(
         &mut self,
-        self_: Resource<RequestOptions>,
+        opts: Resource<MaybeMutable<RequestOptions>>,
     ) -> wasmtime::Result<Option<Duration>> {
-        bail!("TODO")
+        let RequestOptions {
+            first_byte_timeout: Some(first_byte_timeout),
+            ..
+        } = get_request_options_inner(self.table, &opts)?
+        else {
+            return Ok(None);
+        };
+        let ns = first_byte_timeout.as_nanos();
+        let ns = ns
+            .try_into()
+            .context("first byte timeout duration nanoseconds do not fit in u64")?;
+        Ok(Some(ns))
     }
 
     fn set_first_byte_timeout(
         &mut self,
-        self_: Resource<RequestOptions>,
+        opts: Resource<MaybeMutable<RequestOptions>>,
         duration: Option<Duration>,
     ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
-        bail!("TODO")
+        let opts = get_request_options_mut(self.table, &opts)?;
+        let Some(opts) = opts.get_mut() else {
+            return Ok(Err(RequestOptionsError::Immutable));
+        };
+        opts.first_byte_timeout = duration.map(core::time::Duration::from_nanos);
+        Ok(Ok(()))
     }
 
     fn get_between_bytes_timeout(
         &mut self,
-        self_: Resource<RequestOptions>,
+        opts: Resource<MaybeMutable<RequestOptions>>,
     ) -> wasmtime::Result<Option<Duration>> {
-        bail!("TODO")
+        let RequestOptions {
+            between_bytes_timeout: Some(between_bytes_timeout),
+            ..
+        } = get_request_options_inner(self.table, &opts)?
+        else {
+            return Ok(None);
+        };
+        let ns = between_bytes_timeout.as_nanos();
+        let ns = ns
+            .try_into()
+            .context("between bytes timeout duration nanoseconds do not fit in u64")?;
+        Ok(Some(ns))
     }
 
     fn set_between_bytes_timeout(
         &mut self,
-        self_: Resource<RequestOptions>,
+        opts: Resource<MaybeMutable<RequestOptions>>,
         duration: Option<Duration>,
     ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
-        bail!("TODO")
+        let opts = get_request_options_mut(self.table, &opts)?;
+        let Some(opts) = opts.get_mut() else {
+            return Ok(Err(RequestOptionsError::Immutable));
+        };
+        opts.between_bytes_timeout = duration.map(core::time::Duration::from_nanos);
+        Ok(Ok(()))
     }
 
     fn clone(
         &mut self,
-        self_: Resource<RequestOptions>,
-    ) -> wasmtime::Result<Resource<RequestOptions>> {
-        bail!("TODO")
+        opts: Resource<MaybeMutable<RequestOptions>>,
+    ) -> wasmtime::Result<Resource<MaybeMutable<RequestOptions>>> {
+        let opts = get_request_options(self.table, &opts)?;
+        push_request_options(self.table, MaybeMutable::new_mutable(Arc::clone(opts)))
     }
 
-    fn drop(&mut self, rep: Resource<RequestOptions>) -> wasmtime::Result<()> {
-        bail!("TODO")
+    fn drop(&mut self, opts: Resource<MaybeMutable<RequestOptions>>) -> wasmtime::Result<()> {
+        delete_request_options(self.table, opts)?;
+        Ok(())
     }
 }
 
@@ -251,25 +514,32 @@ impl HostResponseWithStore for WasiHttp {
 }
 
 impl HostResponse for WasiHttpCtxView<'_> {
-    fn get_status_code(&mut self, self_: Resource<Response>) -> wasmtime::Result<StatusCode> {
-        bail!("TODO")
+    fn get_status_code(&mut self, res: Resource<Response>) -> wasmtime::Result<StatusCode> {
+        let res = get_response(self.table, &res)?;
+        Ok(res.status.into())
     }
 
     fn set_status_code(
         &mut self,
-        self_: Resource<Response>,
+        res: Resource<Response>,
         status_code: StatusCode,
     ) -> wasmtime::Result<Result<(), ()>> {
-        bail!("TODO")
+        let res = get_response_mut(self.table, &res)?;
+        let Ok(status) = http::StatusCode::from_u16(status_code) else {
+            return Ok(Err(()));
+        };
+        res.status = status;
+        Ok(Ok(()))
     }
 
-    fn get_headers(&mut self, self_: Resource<Response>) -> wasmtime::Result<Resource<Headers>> {
-        bail!("TODO")
+    fn get_headers(&mut self, res: Resource<Response>) -> wasmtime::Result<Resource<Headers>> {
+        let Response { headers, .. } = get_response(self.table, &res)?;
+        push_fields(self.table, Fields::new_immutable(Arc::clone(headers)))
     }
 
     fn consume_body(
         &mut self,
-        self_: Resource<Response>,
+        res: Resource<Response>,
     ) -> wasmtime::Result<
         Result<
             (
@@ -282,8 +552,9 @@ impl HostResponse for WasiHttpCtxView<'_> {
         bail!("TODO")
     }
 
-    fn drop(&mut self, rep: Resource<Response>) -> wasmtime::Result<()> {
-        bail!("TODO")
+    fn drop(&mut self, res: Resource<Response>) -> wasmtime::Result<()> {
+        delete_response(self.table, res)?;
+        Ok(())
     }
 }
 
