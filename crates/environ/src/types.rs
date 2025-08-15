@@ -2238,6 +2238,8 @@ impl From<wasmparser::MemoryType> for Memory {
 pub struct Tag {
     /// The tag signature type.
     pub signature: EngineOrModuleTypeIndex,
+    /// The corresponding exception type.
+    pub exception: EngineOrModuleTypeIndex,
 }
 
 impl TypeTrace for Tag {
@@ -2245,14 +2247,18 @@ impl TypeTrace for Tag {
     where
         F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
     {
-        func(self.signature)
+        func(self.signature)?;
+        func(self.exception)?;
+        Ok(())
     }
 
     fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
     where
         F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
     {
-        func(&mut self.signature)
+        func(&mut self.signature)?;
+        func(&mut self.exception)?;
+        Ok(())
     }
 }
 

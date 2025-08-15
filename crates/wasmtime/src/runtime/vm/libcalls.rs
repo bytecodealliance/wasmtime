@@ -97,7 +97,7 @@ use wasmtime_wmemcheck::AccessError::{
 /// For more information on converting from host-defined values to Cranelift ABI
 /// values see the `catch_unwind_and_record_trap` function.
 pub mod raw {
-    use crate::runtime::vm::{InstanceAndStore, VMContext, f32x4, f64x2, i8x16};
+    use crate::runtime::vm::{Instance, VMContext, f32x4, f64x2, i8x16};
     use core::ptr::NonNull;
 
     macro_rules! libcall {
@@ -120,12 +120,9 @@ pub mod raw {
                     $( $pname : libcall!(@ty $param), )*
                 ) $(-> libcall!(@ty $result))? {
                     $(#[cfg($attr)])?
-                    {
-                        crate::runtime::vm::traphandlers::catch_unwind_and_record_trap(|| unsafe {
-                            InstanceAndStore::from_vmctx(vmctx, |pair| {
-                                let (instance, store) = pair.unpack_mut();
-                                super::$name(store, instance, $($pname),*)
-                            })
+                    unsafe {
+                        Instance::enter_host_from_wasm(vmctx, |store, instance| {
+                            super::$name(store, instance, $($pname),*)
                         })
                     }
                     $(
@@ -171,7 +168,7 @@ fn memory_grow(
     mut instance: Pin<&mut Instance>,
     delta: u64,
     memory_index: u32,
-) -> Result<Option<AllocationSize>, TrapReason> {
+) -> Result<Option<AllocationSize>> {
     let memory_index = DefinedMemoryIndex::from_u32(memory_index);
     let module = instance.env_module();
     let page_size_log2 = module.memories[module.memory_index(memory_index)].page_size_log2;
@@ -1519,13 +1516,13 @@ fn trap(
     ))
 }
 
-fn raise(_store: &mut dyn VMStore, _instance: Pin<&mut Instance>) {
+fn raise(store: &mut dyn VMStore, _instance: Pin<&mut Instance>) {
     // SAFETY: this is only called from compiled wasm so we know that wasm has
     // already been entered. It's a dynamic safety precondition that the trap
     // information has already been arranged to be present.
     #[cfg(has_host_compiler_backend)]
     unsafe {
-        crate::runtime::vm::traphandlers::raise_preexisting_trap()
+        crate::runtime::vm::traphandlers::raise_preexisting_trap(store)
     }
 
     // When Cranelift isn't in use then this is an unused libcall for Pulley, so
@@ -1543,8 +1540,30 @@ fn cont_new(
     func: *mut u8,
     param_count: u32,
     result_count: u32,
-) -> Result<Option<AllocationSize>, TrapReason> {
+) -> Result<Option<AllocationSize>> {
     let ans =
         crate::vm::stack_switching::cont_new(store, instance, func, param_count, result_count)?;
     Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
+}
+
+#[cfg(feature = "gc")]
+fn get_instance_id(_store: &mut dyn VMStore, instance: Pin<&mut Instance>) -> u32 {
+    instance.id().as_u32()
+}
+
+#[cfg(feature = "gc")]
+fn throw_ref(
+    mut store: &mut dyn VMStore,
+    _instance: Pin<&mut Instance>,
+    exnref: u32,
+) -> Result<(), TrapReason> {
+    use crate::AsStoreOpaqueMut;
+
+    let exnref = VMGcRef::from_raw_u32(exnref).ok_or_else(|| Trap::NullReference)?;
+    let exnref = store.unwrap_gc_store_mut().clone_gc_ref(&exnref);
+    let exnref = exnref
+        .into_exnref(&*store.unwrap_gc_store().gc_heap)
+        .expect("gc ref should be an exception object");
+    store.as_store_opaque_mut().set_pending_exception(exnref);
+    Err(TrapReason::Exception)
 }

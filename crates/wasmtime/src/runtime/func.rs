@@ -1,10 +1,11 @@
 use crate::prelude::*;
 use crate::runtime::Uninhabited;
 use crate::runtime::vm::{
-    InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMCommonStackInformation,
-    VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext, VMStoreContext,
+    self, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
+    VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
+    VMStoreContext,
 };
-use crate::store::{AutoAssertNoGc, StoreId, StoreOpaque};
+use crate::store::{AutoAssertNoGc, InstanceId, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, ModuleExport, Ref,
@@ -1513,7 +1514,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         let result = crate::runtime::vm::catch_traps(store, &mut previous_runtime_state, closure);
         core::mem::drop(previous_runtime_state);
         store.0.call_hook(CallHook::ReturningFromWasm)?;
-        result.map_err(|t| crate::trap::from_runtime_box(store.0, t))
+        result
     }
 }
 
@@ -1529,9 +1530,9 @@ pub(crate) struct EntryStoreContext {
     /// Contains value of `last_wasm_exit_pc` field to restore in
     /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_exit_pc: usize,
-    /// Contains value of `last_wasm_exit_fp` field to restore in
+    /// Contains value of `last_wasm_exit_trampoline_fp` field to restore in
     /// `VMStoreContext` when exiting Wasm.
-    pub last_wasm_exit_fp: usize,
+    pub last_wasm_exit_trampoline_fp: usize,
     /// Contains value of `last_wasm_entry_fp` field to restore in
     /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_entry_fp: usize,
@@ -1624,7 +1625,11 @@ impl EntryStoreContext {
 
         unsafe {
             let last_wasm_exit_pc = *store.0.vm_store_context().last_wasm_exit_pc.get();
-            let last_wasm_exit_fp = *store.0.vm_store_context().last_wasm_exit_fp.get();
+            let last_wasm_exit_trampoline_fp = *store
+                .0
+                .vm_store_context()
+                .last_wasm_exit_trampoline_fp
+                .get();
             let last_wasm_entry_fp = *store.0.vm_store_context().last_wasm_entry_fp.get();
 
             let stack_chain = (*store.0.vm_store_context().stack_chain.get()).clone();
@@ -1637,7 +1642,7 @@ impl EntryStoreContext {
             Self {
                 stack_limit,
                 last_wasm_exit_pc,
-                last_wasm_exit_fp,
+                last_wasm_exit_trampoline_fp,
                 last_wasm_entry_fp,
                 stack_chain,
                 vm_store_context,
@@ -1656,7 +1661,8 @@ impl EntryStoreContext {
                 *(&*self.vm_store_context).stack_limit.get() = limit;
             }
 
-            *(*self.vm_store_context).last_wasm_exit_fp.get() = self.last_wasm_exit_fp;
+            *(*self.vm_store_context).last_wasm_exit_trampoline_fp.get() =
+                self.last_wasm_exit_trampoline_fp;
             *(*self.vm_store_context).last_wasm_exit_pc.get() = self.last_wasm_exit_pc;
             *(*self.vm_store_context).last_wasm_entry_fp.get() = self.last_wasm_entry_fp;
             *(*self.vm_store_context).stack_chain.get() = self.stack_chain.clone();
@@ -2041,46 +2047,31 @@ impl<T> Caller<'_, T> {
 
     /// Executes `f` with an appropriate `Caller`.
     ///
-    /// This is the entrypoint for host functions in core wasm and converts from
-    /// `VMContext` to `Caller`
-    ///
-    /// # Safety
-    ///
-    /// This requires that `caller` is safe to wrap up as a `Caller`,
-    /// effectively meaning that we just entered the host from wasm.
-    /// Additionally this `Caller`'s `T` parameter must match the actual `T` in
-    /// the store of the vmctx of `caller`.
-    unsafe fn with<F, R>(caller: NonNull<VMContext>, f: F) -> R
+    /// This is the entrypoint for host functions in core wasm. The `store` and
+    /// `instance` are created from `Instance::enter_host_from_wasm` and this
+    /// will further invoke the host function that `f` refers to.
+    fn with<F, R>(mut store: StoreContextMut<T>, caller: InstanceId, f: F) -> R
     where
         F: FnOnce(Caller<'_, T>) -> R,
     {
-        // SAFETY: it's a contract of this function itself that `from_vmctx` is
-        // safe to call. Additionally it's a contract of this function itself
-        // that the `T` of `Caller` matches the store.
-        unsafe {
-            crate::runtime::vm::InstanceAndStore::from_vmctx(caller, |pair| {
-                let (instance, store) = pair.unpack_mut();
-                let mut store = store.unchecked_context_mut::<T>();
-                let caller = Instance::from_wasmtime(instance.id(), store.0);
+        let caller = Instance::from_wasmtime(caller, store.0);
 
-                let (gc_lifo_scope, ret) = {
-                    let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
+        let (gc_lifo_scope, ret) = {
+            let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
 
-                    let ret = f(Caller {
-                        store: store.as_context_mut(),
-                        caller,
-                    });
+            let ret = f(Caller {
+                store: store.as_context_mut(),
+                caller,
+            });
 
-                    (gc_lifo_scope, ret)
-                };
+            (gc_lifo_scope, ret)
+        };
 
-                // Safe to recreate a mutable borrow of the store because `ret`
-                // cannot be borrowing from the store.
-                store.0.exit_gc_lifo_scope(gc_lifo_scope);
+        // Safe to recreate a mutable borrow of the store because `ret`
+        // cannot be borrowing from the store.
+        store.0.exit_gc_lifo_scope(gc_lifo_scope);
 
-                ret
-            })
-        }
+        ret
     }
 
     fn sub_caller(&mut self) -> Caller<'_, T> {
@@ -2409,10 +2400,14 @@ impl HostContext {
         // closure and then run it as part of `Caller::with`.
         //
         // SAFETY: this is an entrypoint of wasm which requires correct type
-        // ascription of `T` itself, meaning that this should be safe to call.
-        crate::runtime::vm::catch_unwind_and_record_trap(move || unsafe {
-            Caller::with(caller_vmctx, run)
-        })
+        // ascription of `T` itself, meaning that this should be safe to call
+        // both `enter_host_from_wasm` as well as `unchecked_context_mut`.
+        unsafe {
+            vm::Instance::enter_host_from_wasm(caller_vmctx, |store, instance| {
+                let store = store.unchecked_context_mut();
+                Caller::with(store, instance.id(), run)
+            })
+        }
     }
 }
 
@@ -2485,20 +2480,23 @@ impl HostFunc {
         T: 'static,
     {
         assert!(ty.comes_from_same_engine(engine));
-        // SAFETY: This is only only called in the raw entrypoint of wasm
-        // meaning that `caller_vmctx` is appropriate to read, and additionally
-        // the later usage of `{,in}to_func` will connect `T` to an actual
-        // store's `T` to ensure it's the same.
-        let func = move |caller_vmctx, values: &mut [ValRaw]| unsafe {
-            Caller::<T>::with(caller_vmctx, |mut caller| {
-                caller.store.0.call_hook(CallHook::CallingHost)?;
-                let result = func(caller.sub_caller(), values)?;
-                caller.store.0.call_hook(CallHook::ReturningFromHost)?;
-                Ok(result)
-            })
-        };
-        let ctx = crate::trampoline::create_array_call_function(&ty, func)
-            .expect("failed to create function");
+        let ctx = crate::trampoline::create_array_call_function(
+            &ty,
+            move |store, instance, values: &mut [ValRaw]| {
+                // SAFETY: the later usage of `{,in}to_func` will connect `T` to
+                // an actual store's `T` to ensure it's the same. This means
+                // that the store this is invoked with always has `T` as a type
+                // parameter which should make this cast safe.
+                let store = unsafe { store.unchecked_context_mut::<T>() };
+                Caller::with(store, instance, |mut caller| {
+                    caller.store.0.call_hook(CallHook::CallingHost)?;
+                    let result = func(caller.sub_caller(), values)?;
+                    caller.store.0.call_hook(CallHook::ReturningFromHost)?;
+                    Ok(result)
+                })
+            },
+        )
+        .expect("failed to create function");
         HostFunc::_new(engine, ctx.into())
     }
 

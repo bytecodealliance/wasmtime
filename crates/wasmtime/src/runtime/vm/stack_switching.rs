@@ -306,7 +306,7 @@ pub fn cont_new(
     func: *mut u8,
     param_count: u32,
     result_count: u32,
-) -> Result<*mut VMContRef, crate::vm::TrapReason> {
+) -> anyhow::Result<*mut VMContRef> {
     let caller_vmctx = instance.vmctx();
 
     let stack_size = store.engine().config().async_stack_size;

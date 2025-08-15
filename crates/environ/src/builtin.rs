@@ -239,6 +239,14 @@ macro_rules! foreach_builtin_function {
             // the Option<VMContObj>, as in previous libcall.
             #[cfg(feature = "stack-switching")]
             table_fill_cont_obj(vmctx: vmctx, table: u32, dst: u64, value_contref: pointer, value_revision: u64, len: u64) -> bool;
+
+            // Return the instance ID for a given vmctx.
+            #[cfg(feature = "gc")]
+            get_instance_id(vmctx: vmctx) -> u32;
+
+            // Throw an exception.
+            #[cfg(feature = "gc")]
+            throw_ref(vmctx: vmctx, exnref: u32) -> bool;
         }
     };
 }
@@ -421,6 +429,8 @@ impl BuiltinFunctionIndex {
             (@get fma_f64x2 f64x2) => (return None);
 
             (@get cont_new pointer) => (TrapSentinel::Negative);
+
+            (@get get_instance_id u32) => (return None);
 
             // Bool-returning functions use `false` as an indicator of a trap.
             (@get $name:ident bool) => (TrapSentinel::Falsy);

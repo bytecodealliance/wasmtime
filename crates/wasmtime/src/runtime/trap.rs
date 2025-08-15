@@ -1,5 +1,7 @@
 #[cfg(feature = "coredump")]
 use super::coredump::WasmCoreDump;
+#[cfg(feature = "gc")]
+use super::{ExnRef, store::AutoAssertNoGc};
 use crate::prelude::*;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
@@ -79,6 +81,14 @@ pub(crate) fn from_runtime_box(
         coredumpstack,
     } = *runtime_trap;
     let (mut error, pc) = match reason {
+        #[cfg(feature = "gc")]
+        crate::runtime::vm::TrapReason::Exception => {
+            let mut nogc = AutoAssertNoGc::new(store);
+            let exnref = nogc.take_pending_exception();
+            let exnref = ExnRef::_from_raw(&mut nogc, exnref.as_gc_ref().as_raw_u32())
+                .expect("Exception should be non-null");
+            (exnref.into(), None)
+        }
         // For user-defined errors they're already an `anyhow::Error` so no
         // conversion is really necessary here, but a `backtrace` may have
         // been captured so it's attempted to get inserted here.

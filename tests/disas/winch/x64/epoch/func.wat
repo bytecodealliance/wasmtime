@@ -23,7 +23,7 @@
 ;;       cmpq    %rcx, %rdx
 ;;       jb      0x54
 ;;   47: movq    %r14, %rdi
-;;       callq   0x12d
+;;       callq   0x129
 ;;       movq    8(%rsp), %r14
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp

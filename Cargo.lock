@@ -4604,6 +4604,7 @@ dependencies = [
  "wasmtime-internal-component-util",
  "wasmtime-internal-cranelift",
  "wasmtime-internal-explorer",
+ "wasmtime-internal-unwinder",
  "wasmtime-test-macros",
  "wasmtime-test-util",
  "wasmtime-wasi",
@@ -4823,6 +4824,7 @@ dependencies = [
  "wasmparser 0.236.0",
  "wasmtime-environ",
  "wasmtime-internal-math",
+ "wasmtime-internal-unwinder",
  "wasmtime-internal-versioned-export-macros",
 ]
 

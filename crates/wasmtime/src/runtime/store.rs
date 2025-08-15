@@ -122,6 +122,9 @@ pub(crate) use token::StoreToken;
 mod async_;
 #[cfg(all(feature = "async", feature = "call-hook"))]
 pub use self::async_::CallHookHandler;
+
+#[cfg(feature = "gc")]
+use super::vm::VMExnRef;
 #[cfg(feature = "gc")]
 mod gc;
 
@@ -355,6 +358,12 @@ pub struct StoreOpaque {
     // Types for which the embedder has created an allocator for.
     #[cfg(feature = "gc")]
     gc_host_alloc_types: crate::hash_set::HashSet<crate::type_registry::RegisteredType>,
+    /// Pending exception, if any. This is also a GC root, because it
+    /// needs to be rooted somewhere between the time that a pending
+    /// exception is set and the time that the Wasm-to-host entry
+    /// trampoline starts the unwind (right before it would return).
+    #[cfg(feature = "gc")]
+    pending_exception: Option<VMGcRef>,
 
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
@@ -573,6 +582,8 @@ impl<T> Store<T> {
             gc_roots_list: GcRootsList::default(),
             #[cfg(feature = "gc")]
             gc_host_alloc_types: Default::default(),
+            #[cfg(feature = "gc")]
+            pending_exception: None,
             modules: ModuleRegistry::default(),
             func_refs: FuncRefs::default(),
             host_globals: PrimaryMap::new(),
@@ -1309,6 +1320,26 @@ impl StoreOpaque {
         self.instances[id].handle.get_mut()
     }
 
+    /// Accessor from a raw `vmctx` to `&vm::Instance`.
+    ///
+    /// # Safety
+    ///
+    /// The `vmctx` pointer must be a valid vmctx from an active
+    /// instance that belongs to this store.
+    #[inline]
+    pub unsafe fn instance_from_vmctx(&self, vmctx: NonNull<VMContext>) -> &vm::Instance {
+        // SAFETY: The validity of this `byte_sub` relies on `vmctx`
+        // being a valid allocation which is itself a contract of this
+        // function. Likewise, the `.as_ref()` converts a valid `*mut
+        // Instance` to a `&Instance`.
+        unsafe {
+            vmctx
+                .byte_sub(mem::size_of::<vm::Instance>())
+                .cast::<vm::Instance>()
+                .as_ref()
+        }
+    }
+
     /// Access multiple instances specified via `ids`.
     ///
     /// # Panics
@@ -1637,6 +1668,7 @@ impl StoreOpaque {
         self.trace_wasm_continuation_roots(gc_roots_list);
         self.trace_vmctx_roots(gc_roots_list);
         self.trace_user_roots(gc_roots_list);
+        self.trace_pending_exception_roots(gc_roots_list);
 
         log::trace!("End trace GC roots")
     }
@@ -1756,6 +1788,17 @@ impl StoreOpaque {
         log::trace!("Begin trace GC roots :: user");
         self.gc_roots.trace_roots(gc_roots_list);
         log::trace!("End trace GC roots :: user");
+    }
+
+    #[cfg(feature = "gc")]
+    fn trace_pending_exception_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        log::trace!("Begin trace GC roots :: pending exception");
+        if let Some(pending_exception) = self.pending_exception.as_mut() {
+            unsafe {
+                gc_roots_list.add_root(pending_exception.into(), "Pending exception");
+            }
+        }
+        log::trace!("End trace GC roots :: pending exception");
     }
 
     /// Insert a host-allocated GC type into this store.
@@ -2196,6 +2239,25 @@ at https://bytecodealliance.org/security.
         assert_eq!(id, actual);
 
         Ok(id)
+    }
+
+    /// Set a pending exception. The `exnref` is taken and held on
+    /// this store to be fetched later by an unwind. This method does
+    /// *not* set up an unwind request on the TLS call state; that
+    /// must be done separately.
+    #[cfg(feature = "gc")]
+    pub(crate) fn set_pending_exception(&mut self, exnref: VMExnRef) {
+        debug_assert!(self.pending_exception.is_none());
+        self.pending_exception = Some(exnref.into());
+    }
+
+    /// Take a pending exception.
+    #[cfg(feature = "gc")]
+    pub(crate) fn take_pending_exception(&mut self) -> VMExnRef {
+        self.pending_exception
+            .take()
+            .expect("No pending exception set")
+            .into_exnref_unchecked()
     }
 }
 
