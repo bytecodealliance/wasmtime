@@ -10,7 +10,7 @@
 
 pub mod bindings;
 mod conv;
-#[expect(unused)] // TODO: implement
+#[expect(unused, reason = "work in progress")] // TODO: implement
 mod host;
 
 use bindings::http::{handler, types};
