@@ -35,15 +35,15 @@ pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
 
 use crate::StoreContextMut;
 use crate::prelude::*;
-use crate::store::StoreInner;
-use crate::store::StoreOpaque;
+use crate::store::{StoreInner, StoreOpaque, StoreResourceLimiter};
 use crate::type_registry::RegisteredType;
 use alloc::sync::Arc;
 use core::fmt;
-use core::ops::Deref;
-use core::ops::DerefMut;
+use core::ops::{Deref, DerefMut};
+use core::pin::pin;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
+use core::task::{Context, Poll, Waker};
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex,
 };
@@ -200,6 +200,12 @@ pub unsafe trait VMStore: 'static {
 
     /// Get an exclusive borrow of this store's `StoreOpaque`.
     fn store_opaque_mut(&mut self) -> &mut StoreOpaque;
+
+    /// Returns a split borrow to the limiter plus `StoreOpaque` at the same
+    /// time.
+    fn resource_limiter_and_store_opaque(
+        &mut self,
+    ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque);
 
     /// Callback invoked to allow the store's resource limiter to reject a
     /// memory grow operation.
@@ -507,5 +513,40 @@ impl fmt::Display for WasmFault {
             "memory fault at wasm address 0x{:x} in linear memory of size 0x{:x}",
             self.wasm_address, self.memory_size,
         )
+    }
+}
+
+/// Asserts that the future `f` is ready and returns its output.
+///
+/// This function is intended to be used when `async_support` is verified as
+/// disabled. Internals of Wasmtime are generally `async` when they optionally
+/// can be, meaning that synchronous entrypoints will invoke this function
+/// after invoking the asynchronous internals. Due to `async_support` being
+/// disabled there should be no way to introduce a yield point meaning that all
+/// futures built from internal functions should always be ready.
+///
+/// # Panics
+///
+/// Panics if `f` is not yet ready.
+pub fn assert_ready<F: Future>(f: F) -> F::Output {
+    one_poll(f).unwrap()
+}
+
+/// Attempts one poll of `f` to see if its output is available.
+///
+/// This function is intended for a few minor entrypoints into the Wasmtime API
+/// where a synchronous function is documented to work even when `async_support`
+/// is enabled. For example growing a `Memory` can be done with a synchronous
+/// function, but it's documented to panic with an async resource limiter.
+///
+/// This function provides the opportunity to poll `f` once to see if its output
+/// is available. If it isn't then `None` is returned and an appropriate panic
+/// message should be generated recommending to use an async function (e.g.
+/// `grow_async` instead of `grow`).
+pub fn one_poll<F: Future>(f: F) -> Option<F::Output> {
+    let mut context = Context::from_waker(&Waker::noop());
+    match pin!(f).poll(&mut context) {
+        Poll::Ready(output) => Some(output),
+        Poll::Pending => None,
     }
 }
