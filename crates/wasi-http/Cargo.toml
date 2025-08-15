@@ -14,6 +14,7 @@ workspace = true
 [features]
 default = ["default-send-request"]
 default-send-request = ["dep:tokio-rustls", "dep:rustls", "dep:webpki-roots"]
+p3 = ["wasmtime-wasi/p3"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -42,7 +43,10 @@ test-programs-artifacts = { workspace = true }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
 wasmtime = { workspace = true, features = ['cranelift'] }
-tokio = { workspace = true, features = ['macros'] }
-futures = { workspace = true, default-features = false, features = ['alloc'] }
+tokio = { workspace = true, features = ['fs', 'macros'] }
+futures = { workspace = true, default-features = false, features = ['alloc', 'async-await'] }
 sha2 = "0.10.2"
 base64 = { workspace = true }
+flate2 = { workspace = true }
+wasm-compose = { workspace = true }
+tempfile = { workspace = true }

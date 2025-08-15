@@ -11,7 +11,7 @@ pub type FilesystemError = TrappableError<types::ErrorCode>;
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///
 /// This function will add all interfaces implemented by this module to the
-/// [`Linker`], which corresponds to the `wasi:sockets/imports` world supported by
+/// [`Linker`], which corresponds to the `wasi:filesystem/imports` world supported by
 /// this module.
 ///
 /// This is low-level API for advanced use cases,

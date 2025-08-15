@@ -229,6 +229,10 @@ pub mod types;
 
 pub mod bindings;
 
+#[cfg(feature = "p3")]
+#[expect(missing_docs, reason = "work in progress")] // TODO: add docs
+pub mod p3;
+
 pub use crate::error::{
     HttpError, HttpResult, http_request_error, hyper_request_error, hyper_response_error,
 };
