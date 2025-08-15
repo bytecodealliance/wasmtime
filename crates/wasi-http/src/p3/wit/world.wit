@@ -2,5 +2,5 @@
 package wasmtime:wasi-http;
 
 world bindings {
-  include wasi:http/proxy@0.3.0-draft;
+  include wasi:http/proxy@0.3.0-rc-2025-08-15;
 }

@@ -202,7 +202,7 @@ impl environment::Host for WasiCliCtxView<'_> {
         Ok(self.ctx.arguments.clone())
     }
 
-    fn initial_cwd(&mut self) -> wasmtime::Result<Option<String>> {
+    fn get_initial_cwd(&mut self) -> wasmtime::Result<Option<String>> {
         Ok(self.ctx.initial_cwd.clone())
     }
 }

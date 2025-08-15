@@ -1,9 +1,9 @@
-package wasi:random@0.3.0;
+package wasi:random@0.3.0-rc-2025-08-15;
 /// WASI Random is a random data API.
 ///
 /// It is intended to be portable at least between Unix-family platforms and
 /// Windows.
-@since(version = 0.3.0)
+@since(version = 0.3.0-rc-2025-08-15)
 interface random {
     /// Return `len` cryptographically-secure random or pseudo-random bytes.
     ///
@@ -17,13 +17,13 @@ interface random {
     /// This function must always return fresh data. Deterministic environments
     /// must omit this function, rather than implementing it with deterministic
     /// data.
-    @since(version = 0.3.0)
+    @since(version = 0.3.0-rc-2025-08-15)
     get-random-bytes: func(len: u64) -> list<u8>;
 
     /// Return a cryptographically-secure random or pseudo-random `u64` value.
     ///
     /// This function returns the same type of data as `get-random-bytes`,
     /// represented as a `u64`.
-    @since(version = 0.3.0)
+    @since(version = 0.3.0-rc-2025-08-15)
     get-random-u64: func() -> u64;
 }

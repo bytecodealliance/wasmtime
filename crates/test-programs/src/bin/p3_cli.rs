@@ -12,7 +12,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         assert_eq!(environment::get_arguments(), ["p3_cli.component", "."]);
         assert_ne!(environment::get_environment(), []);
-        assert_eq!(environment::initial_cwd(), None);
+        assert_eq!(environment::get_initial_cwd(), None);
 
         assert!(terminal_stdin::get_terminal_stdin().is_none());
         assert!(terminal_stdout::get_terminal_stdout().is_none());

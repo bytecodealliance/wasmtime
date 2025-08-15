@@ -14,7 +14,7 @@ impl wall_clock::Host for WasiClocksCtxView<'_> {
         })
     }
 
-    fn resolution(&mut self) -> wasmtime::Result<wall_clock::Datetime> {
+    fn get_resolution(&mut self) -> wasmtime::Result<wall_clock::Datetime> {
         let res = self.ctx.wall_clock.resolution();
         Ok(wall_clock::Datetime {
             seconds: res.as_secs(),
@@ -51,7 +51,7 @@ impl monotonic_clock::Host for WasiClocksCtxView<'_> {
         Ok(self.ctx.monotonic_clock.now())
     }
 
-    fn resolution(&mut self) -> wasmtime::Result<monotonic_clock::Instant> {
+    fn get_resolution(&mut self) -> wasmtime::Result<monotonic_clock::Instant> {
         Ok(self.ctx.monotonic_clock.resolution())
     }
 }
