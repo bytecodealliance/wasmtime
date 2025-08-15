@@ -1,6 +1,6 @@
-@since(version = 0.3.0)
+@since(version = 0.3.0-rc-2025-08-15)
 interface run {
   /// Run the program.
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   run: func() -> result;
 }

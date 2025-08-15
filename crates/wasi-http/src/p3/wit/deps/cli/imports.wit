@@ -1,34 +1,34 @@
-package wasi:cli@0.3.0;
+package wasi:cli@0.3.0-rc-2025-08-15;
 
-@since(version = 0.3.0)
+@since(version = 0.3.0-rc-2025-08-15)
 world imports {
-  @since(version = 0.3.0)
-  include wasi:clocks/imports@0.3.0;
-  @since(version = 0.3.0)
-  include wasi:filesystem/imports@0.3.0;
-  @since(version = 0.3.0)
-  include wasi:sockets/imports@0.3.0;
-  @since(version = 0.3.0)
-  include wasi:random/imports@0.3.0;
+  @since(version = 0.3.0-rc-2025-08-15)
+  include wasi:clocks/imports@0.3.0-rc-2025-08-15;
+  @since(version = 0.3.0-rc-2025-08-15)
+  include wasi:filesystem/imports@0.3.0-rc-2025-08-15;
+  @since(version = 0.3.0-rc-2025-08-15)
+  include wasi:sockets/imports@0.3.0-rc-2025-08-15;
+  @since(version = 0.3.0-rc-2025-08-15)
+  include wasi:random/imports@0.3.0-rc-2025-08-15;
 
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   import environment;
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   import exit;
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   import stdin;
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   import stdout;
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   import stderr;
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   import terminal-input;
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   import terminal-output;
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   import terminal-stdin;
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   import terminal-stdout;
-  @since(version = 0.3.0)
+  @since(version = 0.3.0-rc-2025-08-15)
   import terminal-stderr;
 }

@@ -1,9 +1,9 @@
-package wasi:filesystem@0.3.0;
+package wasi:filesystem@0.3.0-rc-2025-08-15;
 
-@since(version = 0.3.0)
+@since(version = 0.3.0-rc-2025-08-15)
 world imports {
-    @since(version = 0.3.0)
+    @since(version = 0.3.0-rc-2025-08-15)
     import types;
-    @since(version = 0.3.0)
+    @since(version = 0.3.0-rc-2025-08-15)
     import preopens;
 }
