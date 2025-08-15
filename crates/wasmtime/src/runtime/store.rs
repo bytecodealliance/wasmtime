@@ -706,7 +706,7 @@ impl<T> Store<T> {
         // in their `Drop::drop` implementations, in which case they'll need to
         // be called from with in the context of a `tls::set` closure.
         #[cfg(feature = "component-model-async")]
-        ComponentStoreData::drop_fibers_and_futures(&mut self.inner);
+        ComponentStoreData::drop_fibers_and_futures(&mut **self.inner);
 
         // Ensure all fiber stacks, even cached ones, are all flushed out to the
         // instance allocator.
@@ -1908,11 +1908,6 @@ impl StoreOpaque {
     #[inline]
     pub fn traitobj(&self) -> NonNull<dyn vm::VMStore> {
         self.traitobj.as_raw().unwrap()
-    }
-
-    #[inline]
-    pub fn traitobj_mut(&mut self) -> &mut dyn vm::VMStore {
-        unsafe { self.traitobj().as_mut() }
     }
 
     /// Takes the cached `Vec<Val>` stored internally across hostcalls to get

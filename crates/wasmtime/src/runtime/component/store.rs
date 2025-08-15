@@ -1,3 +1,4 @@
+use crate::runtime::vm::VMStore;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::store::{StoreData, StoreId, StoreOpaque};
 #[cfg(feature = "component-model-async")]
@@ -32,7 +33,7 @@ impl ComponentStoreData {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn drop_fibers_and_futures(store: &mut StoreOpaque) {
+    pub(crate) fn drop_fibers_and_futures(store: &mut dyn VMStore) {
         let mut fibers = Vec::new();
         let mut futures = Vec::new();
         for (_, instance) in store.store_data_mut().components.instances.iter_mut() {
@@ -50,7 +51,7 @@ impl ComponentStoreData {
             fiber.dispose(store);
         }
 
-        crate::component::concurrent::tls::set(store.traitobj_mut(), move || drop(futures));
+        crate::component::concurrent::tls::set(store, move || drop(futures));
     }
 }
 

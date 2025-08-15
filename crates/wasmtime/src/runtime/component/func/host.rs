@@ -344,7 +344,7 @@ where
             HostResult::Done(result) => result?,
             #[cfg(feature = "component-model-async")]
             HostResult::Future(future) => {
-                instance.poll_and_block(store.0.traitobj_mut(), future, caller_instance)?
+                instance.poll_and_block(store.0, future, caller_instance)?
             }
         };
 
@@ -826,8 +826,7 @@ where
             params_and_results,
             result_start,
         );
-        let result_vals =
-            instance.poll_and_block(store.0.traitobj_mut(), future, caller_instance)?;
+        let result_vals = instance.poll_and_block(store.0, future, caller_instance)?;
         let result_vals = &result_vals[result_start..];
 
         unsafe {
