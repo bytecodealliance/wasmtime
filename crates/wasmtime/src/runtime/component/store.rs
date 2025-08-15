@@ -1,3 +1,4 @@
+#[cfg(feature = "component-model-async")]
 use crate::runtime::vm::VMStore;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::store::{StoreData, StoreId, StoreOpaque};

@@ -114,9 +114,9 @@ mod data;
 pub use self::data::*;
 mod func_refs;
 use func_refs::FuncRefs;
-#[cfg(feature = "async")]
+#[cfg(feature = "component-model-async")]
 mod token;
-#[cfg(feature = "async")]
+#[cfg(feature = "component-model-async")]
 pub(crate) use token::StoreToken;
 #[cfg(feature = "async")]
 mod async_;
