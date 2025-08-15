@@ -4,17 +4,96 @@ Unreleased.
 
 ### Added
 
+* Cranelift's has initial support for inlining between functions. Wasmtime
+  additionally now has support for inlining as well, for example between modules
+  in a component.
+  [#11210](https://github.com/bytecodealliance/wasmtime/pull/11210)
+  [#11239](https://github.com/bytecodealliance/wasmtime/pull/11239)
+  [#11228](https://github.com/bytecodealliance/wasmtime/pull/11228)
+  [#11269](https://github.com/bytecodealliance/wasmtime/pull/11269)
+  [#11283](https://github.com/bytecodealliance/wasmtime/pull/11283)
+
+* The async proposal for the Component Model is now fully implemented in
+  Wasmtime with a number of WASIp3 interfaces implemented. The implementation
+  is still off-by-default and the implementation of WASIp3 is not fully
+  complete, but is remains suitable for testing.
+  [#11127](https://github.com/bytecodealliance/wasmtime/pull/11127)
+  [#11136](https://github.com/bytecodealliance/wasmtime/pull/11136)
+  [#11137](https://github.com/bytecodealliance/wasmtime/pull/11137)
+  [#11238](https://github.com/bytecodealliance/wasmtime/pull/11238)
+  [#11221](https://github.com/bytecodealliance/wasmtime/pull/11221)
+  [#11250](https://github.com/bytecodealliance/wasmtime/pull/11250)
+  [#11257](https://github.com/bytecodealliance/wasmtime/pull/11257)
+  [#11291](https://github.com/bytecodealliance/wasmtime/pull/11291)
+  [#11325](https://github.com/bytecodealliance/wasmtime/pull/11325)
+
 ### Changed
 
-Users who implemented `WasiHttpView::is_forbidden_header` from `wasmtime-wasi-http` now need to include `DEFAULT_FORBIDDEN_HEADERS`, e.g. `DEFAULT_FORBIDDEN_HEADERS.contains(name) || name.as_str() == "custom-forbidden-header"` #11292
+* Users who implemented `WasiHttpView::is_forbidden_header` from
+  `wasmtime-wasi-http` now need to include `DEFAULT_FORBIDDEN_HEADERS`, e.g.
+  `DEFAULT_FORBIDDEN_HEADERS.contains(name) || name.as_str() ==
+  "custom-forbidden-header"`
+  [#11292](https://github.com/bytecodealliance/wasmtime/pull/11292)
+
+* Cranelift's incremental cache has received some optimizations.
+  [#11186](https://github.com/bytecodealliance/wasmtime/pull/11186)
+
+* Wasmtime's internal implementations of WebAssembly primitives has been
+  refactored to be modeled with safer internal primitives.
+  [#11211](https://github.com/bytecodealliance/wasmtime/pull/11211)
+  [#11212](https://github.com/bytecodealliance/wasmtime/pull/11212)
+  [#11216](https://github.com/bytecodealliance/wasmtime/pull/11216)
+  [#11229](https://github.com/bytecodealliance/wasmtime/pull/11229)
+  [#11215](https://github.com/bytecodealliance/wasmtime/pull/11215)
+  [#11254](https://github.com/bytecodealliance/wasmtime/pull/11254)
+  [#11255](https://github.com/bytecodealliance/wasmtime/pull/11255)
+  [#11319](https://github.com/bytecodealliance/wasmtime/pull/11319)
+  [#11320](https://github.com/bytecodealliance/wasmtime/pull/11320)
+
+* Detection of native hardware features has been refactored on s390x.
+  [#11220](https://github.com/bytecodealliance/wasmtime/pull/11220)
+
+* Further progress has been made towards an implementation of the WebAssembly
+  exceptions proposal, although it is not yet complete.
+  [#11230](https://github.com/bytecodealliance/wasmtime/pull/11230)
+  [#11321](https://github.com/bytecodealliance/wasmtime/pull/11321)
+
+* Cranelift's assembler for x64 now supports EVEX encoding.
+  [#11153](https://github.com/bytecodealliance/wasmtime/pull/11153)
+  [#11270](https://github.com/bytecodealliance/wasmtime/pull/11270)
+  [#11303](https://github.com/bytecodealliance/wasmtime/pull/11303)
+
+* The default implementation of `send_request` in the `wasmtime-wasi-http` crate
+  is now behind an on-by-default feature gate.
+  [#11323](https://github.com/bytecodealliance/wasmtime/pull/11323)
+
+* Configuration of the `bindgen!` macro has been redesigned to more consistently
+  configure per-function options such as whether or not it's async.
+  [#11328](https://github.com/bytecodealliance/wasmtime/pull/11328)
+
+* Initial support fo `mutatis` has been added to Wasmtime's fuzzers.
+  [#11290](https://github.com/bytecodealliance/wasmtime/pull/11290)
+
+* The `debug-builtins` crate feature of `wasmtime` no compiles on `no_std`
+  targets.
+  [#11304](https://github.com/bytecodealliance/wasmtime/pull/11304)
 
 ### Fixed
 
-* Fix a panic in the host caused by preview1 guests using `fd_renumber`.
-  [CVE-2025-53901](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-fm79-3f68-h2fc).
+* Deserializing external modules no long unnecessarily requires the allocation
+  to be aligned.
+  [#11306](https://github.com/bytecodealliance/wasmtime/pull/11306)
 
-* Fix a panic in the preview1 adapter caused by guests using `fd_renumber`.
-  [#11277](https://github.com/bytecodealliance/wasmtime/pull/11277)
+* A CMake linker error and warning when using the C API on macOS has been fixed.
+  [#11293](https://github.com/bytecodealliance/wasmtime/pull/11293)
+  [#11315](https://github.com/bytecodealliance/wasmtime/pull/11315)
+
+* The C API declaration of `wasmtime_component_linker_instance_add_func` has
+  been fixed.
+  [#11327](https://github.com/bytecodealliance/wasmtime/pull/11327)
+
+* The calculation of reachable DWARF has been fixed.
+  [#11338](https://github.com/bytecodealliance/wasmtime/pull/11338)
 
 --------------------------------------------------------------------------------
 
