@@ -6,14 +6,15 @@ use super::util::{config, make_component, test_run, test_run_with_count};
 use anyhow::{Result, anyhow};
 use cancel::exports::local::local::cancel::Mode;
 use component_async_tests::transmit::bindings::exports::local::local::transmit::Control;
+use component_async_tests::util::{MpscConsumer, MpscProducer, OneshotConsumer, OneshotProducer};
 use component_async_tests::{Ctx, sleep, transmit};
 use futures::{
-    future::FutureExt,
-    stream::{FuturesUnordered, TryStreamExt},
+    FutureExt, SinkExt, StreamExt, TryStreamExt,
+    channel::{mpsc, oneshot},
+    stream::FuturesUnordered,
 };
 use wasmtime::component::{
-    Accessor, Component, FutureReader, GuardedFutureReader, GuardedStreamReader,
-    GuardedStreamWriter, HasSelf, Instance, Linker, ResourceTable, StreamReader, Val,
+    Accessor, Component, FutureReader, HasSelf, Instance, Linker, ResourceTable, StreamReader, Val,
 };
 use wasmtime::{AsContextMut, Engine, Store};
 use wasmtime_wasi::WasiCtxBuilder;
@@ -362,59 +363,60 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
 
     let (test, instance) = Test::instantiate(&mut store, &component, &linker).await?;
 
-    enum Event<'a, Test: TransmitTest> {
+    enum Event<Test: TransmitTest> {
         Result(Test::Result),
-        ControlWriteA(Option<GuardedStreamWriter<Control, &'a Accessor<Ctx>>>),
-        ControlWriteB(Option<GuardedStreamWriter<Control, &'a Accessor<Ctx>>>),
-        ControlWriteC(Option<GuardedStreamWriter<Control, &'a Accessor<Ctx>>>),
+        ControlWriteA(mpsc::Sender<Control>),
+        ControlWriteB(mpsc::Sender<Control>),
+        ControlWriteC(mpsc::Sender<Control>),
         ControlWriteD,
         WriteA,
-        WriteB(bool),
-        ReadC(
-            Option<GuardedStreamReader<String, &'a Accessor<Ctx>>>,
-            Option<String>,
-        ),
-        ReadD(Option<String>),
-        ReadNone(Option<GuardedStreamReader<String, &'a Accessor<Ctx>>>),
+        ReadC(mpsc::Receiver<String>, Option<String>),
+        ReadD(mpsc::Receiver<String>, Option<String>),
+        ReadNone(Option<String>),
     }
 
-    let (control_tx, control_rx) = instance.stream(&mut store)?;
-    let (caller_stream_tx, caller_stream_rx) = instance.stream(&mut store)?;
-    let (caller_future1_tx, caller_future1_rx) = instance.future(&mut store, || unreachable!())?;
-    let (_caller_future2_tx, caller_future2_rx) = instance.future(&mut store, || unreachable!())?;
-
+    let (mut control_tx, control_rx) = mpsc::channel(1);
+    let control_rx = StreamReader::new(instance, &mut store, MpscProducer::new(control_rx));
+    let (mut caller_stream_tx, caller_stream_rx) = mpsc::channel(1);
+    let caller_stream_rx =
+        StreamReader::new(instance, &mut store, MpscProducer::new(caller_stream_rx));
+    let (caller_future1_tx, caller_future1_rx) = oneshot::channel();
+    let caller_future1_rx = FutureReader::new(
+        instance,
+        &mut store,
+        OneshotProducer::new(caller_future1_rx),
+    );
+    let (_, caller_future2_rx) = oneshot::channel();
+    let caller_future2_rx = FutureReader::new(
+        instance,
+        &mut store,
+        OneshotProducer::new(caller_future2_rx),
+    );
+    let (callee_future1_tx, callee_future1_rx) = oneshot::channel();
+    let (callee_stream_tx, callee_stream_rx) = mpsc::channel(1);
     instance
-        .run_concurrent(&mut store, async move |accessor| {
-            let mut control_tx = GuardedStreamWriter::new(accessor, control_tx);
-            let control_rx = GuardedStreamReader::new(accessor, control_rx);
-            let mut caller_stream_tx = GuardedStreamWriter::new(accessor, caller_stream_tx);
-
-            let mut futures = FuturesUnordered::<
-                Pin<Box<dyn Future<Output = Result<Event<'_, Test>>> + Send>>,
-            >::new();
+        .run_concurrent(&mut store, async |accessor| {
             let mut caller_future1_tx = Some(caller_future1_tx);
-            let mut callee_stream_rx = None;
-            let mut callee_future1_rx = None;
+            let mut callee_future1_tx = Some(callee_future1_tx);
+            let mut callee_future1_rx = Some(callee_future1_rx);
+            let mut callee_stream_tx = Some(callee_stream_tx);
+            let mut callee_stream_rx = Some(callee_stream_rx);
             let mut complete = false;
+            let mut futures = FuturesUnordered::<
+                Pin<Box<dyn Future<Output = Result<Event<Test>>> + Send>>,
+            >::new();
 
             futures.push(
                 async move {
-                    control_tx
-                        .write_all(Some(Control::ReadStream("a".into())))
-                        .await;
-                    let w = if control_tx.is_closed() {
-                        None
-                    } else {
-                        Some(control_tx)
-                    };
-                    Ok(Event::ControlWriteA(w))
+                    control_tx.send(Control::ReadStream("a".into())).await?;
+                    Ok(Event::ControlWriteA(control_tx))
                 }
                 .boxed(),
             );
 
             futures.push(
                 async move {
-                    caller_stream_tx.write_all(Some(String::from("a"))).await;
+                    caller_stream_tx.send(String::from("a")).await?;
                     Ok(Event::WriteA)
                 }
                 .boxed(),
@@ -425,7 +427,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                     accessor,
                     &test,
                     Test::into_params(
-                        control_rx.into(),
+                        control_rx,
                         caller_stream_rx,
                         caller_future1_rx,
                         caller_future2_rx,
@@ -438,92 +440,76 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
             while let Some(event) = futures.try_next().await? {
                 match event {
                     Event::Result(result) => {
-                        let (stream_rx, future_rx, _) = accessor
-                            .with(|mut store| Test::from_result(&mut store, instance, result))?;
-                        callee_stream_rx = Some(GuardedStreamReader::new(accessor, stream_rx));
-                        callee_future1_rx = Some(GuardedFutureReader::new(accessor, future_rx));
+                        accessor.with(|mut store| {
+                            let (callee_stream_rx, callee_future1_rx, _) =
+                                Test::from_result(&mut store, instance, result)?;
+                            callee_stream_rx.pipe(
+                                &mut store,
+                                MpscConsumer::new(callee_stream_tx.take().unwrap()),
+                            );
+                            callee_future1_rx.pipe(
+                                &mut store,
+                                OneshotConsumer::new(callee_future1_tx.take().unwrap()),
+                            );
+                            anyhow::Ok(())
+                        })?;
                     }
-                    Event::ControlWriteA(tx) => {
+                    Event::ControlWriteA(mut control_tx) => {
                         futures.push(
                             async move {
-                                let mut tx = tx.unwrap();
-                                tx.write_all(Some(Control::ReadFuture("b".into()))).await;
-                                let w = if tx.is_closed() { None } else { Some(tx) };
-                                Ok(Event::ControlWriteB(w))
+                                control_tx.send(Control::ReadFuture("b".into())).await?;
+                                Ok(Event::ControlWriteB(control_tx))
                             }
                             .boxed(),
                         );
                     }
                     Event::WriteA => {
-                        futures.push(
-                            caller_future1_tx
-                                .take()
-                                .unwrap()
-                                .write(accessor, "b".into())
-                                .map(Event::WriteB)
-                                .map(Ok)
-                                .boxed(),
-                        );
-                    }
-                    Event::ControlWriteB(tx) => {
+                        _ = caller_future1_tx.take().unwrap().send("b".into());
+                        let mut callee_stream_rx = callee_stream_rx.take().unwrap();
                         futures.push(
                             async move {
-                                let mut tx = tx.unwrap();
-                                tx.write_all(Some(Control::WriteStream("c".into()))).await;
-                                let w = if tx.is_closed() { None } else { Some(tx) };
-                                Ok(Event::ControlWriteC(w))
+                                let value = callee_stream_rx.next().await;
+                                Ok(Event::ReadC(callee_stream_rx, value))
                             }
                             .boxed(),
                         );
                     }
-                    Event::WriteB(delivered) => {
-                        assert!(delivered);
-                        let mut rx = callee_stream_rx.take().unwrap();
+                    Event::ControlWriteB(mut control_tx) => {
                         futures.push(
                             async move {
-                                let b = rx.read(None).await;
-                                let r = if rx.is_closed() { None } else { Some(rx) };
-                                Ok(Event::ReadC(r, b))
+                                control_tx.send(Control::WriteStream("c".into())).await?;
+                                Ok(Event::ControlWriteC(control_tx))
                             }
                             .boxed(),
                         );
                     }
-                    Event::ControlWriteC(tx) => {
+                    Event::ControlWriteC(mut control_tx) => {
                         futures.push(
                             async move {
-                                let mut tx = tx.unwrap();
-                                tx.write_all(Some(Control::WriteFuture("d".into()))).await;
+                                control_tx.send(Control::WriteFuture("d".into())).await?;
                                 Ok(Event::ControlWriteD)
                             }
                             .boxed(),
                         );
                     }
-                    Event::ReadC(None, _) => unreachable!(),
-                    Event::ReadC(Some(rx), mut value) => {
+                    Event::ReadC(callee_stream_rx, mut value) => {
                         assert_eq!(value.take().as_deref(), Some("c"));
                         futures.push(
                             callee_future1_rx
                                 .take()
                                 .unwrap()
-                                .read()
-                                .map(Event::ReadD)
+                                .map(|v| Event::ReadD(callee_stream_rx, v.ok()))
                                 .map(Ok)
                                 .boxed(),
                         );
-                        callee_stream_rx = Some(rx);
                     }
                     Event::ControlWriteD => {}
-                    Event::ReadD(None) => unreachable!(),
-                    Event::ReadD(Some(value)) => {
+                    Event::ReadD(_, None) => unreachable!(),
+                    Event::ReadD(mut callee_stream_rx, Some(value)) => {
                         assert_eq!(&value, "d");
-                        let mut rx = callee_stream_rx.take().unwrap();
                         futures.push(
-                            async move {
-                                rx.read(None).await;
-                                let r = if rx.is_closed() { None } else { Some(rx) };
-                                Ok(Event::ReadNone(r))
-                            }
-                            .boxed(),
+                            async move { Ok(Event::ReadNone(callee_stream_rx.next().await)) }
+                                .boxed(),
                         );
                     }
                     Event::ReadNone(Some(_)) => unreachable!(),
@@ -537,5 +523,6 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
 
             anyhow::Ok(())
         })
-        .await?
+        .await??;
+    Ok(())
 }
