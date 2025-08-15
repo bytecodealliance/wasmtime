@@ -9,6 +9,7 @@
 //! Documentation of this module may be incorrect or out-of-sync with the implementation.
 
 pub mod bindings;
+mod conv;
 #[expect(unused)] // TODO: implement
 mod host;
 
