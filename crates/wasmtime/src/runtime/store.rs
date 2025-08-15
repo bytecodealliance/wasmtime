@@ -2247,6 +2247,7 @@ at https://bytecodealliance.org/security.
     /// must be done separately.
     #[cfg(feature = "gc")]
     pub(crate) fn set_pending_exception(&mut self, exnref: VMExnRef) {
+        debug_assert!(self.pending_exception.is_none());
         self.pending_exception = Some(exnref.into());
     }
 

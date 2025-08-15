@@ -7,14 +7,10 @@ use crate::runtime::vm::{
 };
 use crate::store::{AutoAssertNoGc, InstanceId, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
-#[cfg(feature = "gc")]
-use crate::vm::{ExceptionTombstone, VMGcRef};
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, ModuleExport, Ref,
     StoreContext, StoreContextMut, Val, ValRaw, ValType,
 };
-#[cfg(feature = "gc")]
-use crate::{ExnRef, Rooted};
 use alloc::sync::Arc;
 use core::ffi::c_void;
 #[cfg(feature = "async")]
@@ -1270,21 +1266,7 @@ impl Func {
 
         val_vec.extend((0..ty.results().len()).map(|_| Val::null_func_ref()));
         let (params, results) = val_vec.split_at_mut(nparams);
-        match func(caller.sub_caller(), params, results) {
-            Ok(()) => {}
-            #[cfg(feature = "gc")]
-            Err(e) if e.is::<Rooted<ExnRef>>() => {
-                let exnref = e.downcast::<Rooted<ExnRef>>().unwrap();
-                let exnref = VMGcRef::from_raw_u32(exnref.to_raw(&mut caller.store.0).unwrap())
-                    .unwrap()
-                    .into_exnref_unchecked();
-                caller.store.0.set_pending_exception(exnref);
-                return Err(ExceptionTombstone.into());
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        }
+        func(caller.sub_caller(), params, results)?;
 
         // Unlike our arguments we need to dynamically check that the return
         // values produced are correct. There could be a bug in `func` that

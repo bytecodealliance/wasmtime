@@ -168,7 +168,7 @@ fn memory_grow(
     mut instance: Pin<&mut Instance>,
     delta: u64,
     memory_index: u32,
-) -> Result<Option<AllocationSize>, TrapReason> {
+) -> Result<Option<AllocationSize>> {
     let memory_index = DefinedMemoryIndex::from_u32(memory_index);
     let module = instance.env_module();
     let page_size_log2 = module.memories[module.memory_index(memory_index)].page_size_log2;
@@ -1540,24 +1540,24 @@ fn cont_new(
     func: *mut u8,
     param_count: u32,
     result_count: u32,
-) -> Result<Option<AllocationSize>, TrapReason> {
+) -> Result<Option<AllocationSize>> {
     let ans =
         crate::vm::stack_switching::cont_new(store, instance, func, param_count, result_count)?;
     Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
 }
 
 #[cfg(feature = "gc")]
-unsafe fn get_instance_id(_store: &mut dyn VMStore, instance: Pin<&mut Instance>) -> u32 {
+fn get_instance_id(_store: &mut dyn VMStore, instance: Pin<&mut Instance>) -> u32 {
     instance.id().as_u32()
 }
 
 #[cfg(feature = "gc")]
-unsafe fn throw_ref(
+fn throw_ref(
     mut store: &mut dyn VMStore,
     _instance: Pin<&mut Instance>,
     exnref: u32,
 ) -> Result<(), TrapReason> {
-    use crate::{AsStoreOpaqueMut, vm::ExceptionTombstone};
+    use crate::AsStoreOpaqueMut;
 
     let exnref = VMGcRef::from_raw_u32(exnref).ok_or_else(|| Trap::NullReference)?;
     let exnref = store.unwrap_gc_store_mut().clone_gc_ref(&exnref);
@@ -1565,5 +1565,5 @@ unsafe fn throw_ref(
         .into_exnref(&*store.unwrap_gc_store().gc_heap)
         .expect("gc ref should be an exception object");
     store.as_store_opaque_mut().set_pending_exception(exnref);
-    Err(TrapReason::User(ExceptionTombstone.into()))
+    Err(TrapReason::Exception)
 }

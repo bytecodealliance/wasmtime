@@ -5,19 +5,23 @@ use core::ptr::NonNull;
 use wasmtime_environ::TagIndex;
 use wasmtime_unwinder::{Frame, ThrowAction};
 
-use super::{VMContext, VMExnRef};
+use super::{VMContext, VMStore};
 use crate::store::AutoAssertNoGc;
 
-/// Implementation of exception throw.
+/// Compute the target of the pending exception on the store.
 ///
 /// # Safety
 ///
 /// Must be invoked when Wasm is in the stack and control has
 /// re-entered the runtime.
-pub unsafe fn compute_throw(nogc: &mut AutoAssertNoGc, exnref: &VMExnRef) -> ThrowAction {
+pub unsafe fn compute_throw_action(store: &mut dyn VMStore) -> ThrowAction {
+    let mut nogc = AutoAssertNoGc::new(store.store_opaque_mut());
+
     // Get the tag identity relative to the store.
+    let exnref = nogc.take_pending_exception(); // Temporarily take, to avoid borrowing issues.
     let (throwing_tag_instance_id, throwing_tag_defined_tag_index) =
-        exnref.tag(nogc).expect("cannot read tag");
+        exnref.tag(&mut nogc).expect("cannot read tag");
+    nogc.set_pending_exception(exnref);
     log::trace!(
         "throwing: tag defined in instance {throwing_tag_instance_id:?} defined-tag {throwing_tag_defined_tag_index:?}"
     );

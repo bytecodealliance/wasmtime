@@ -1,7 +1,7 @@
 #[cfg(feature = "coredump")]
 use super::coredump::WasmCoreDump;
 #[cfg(feature = "gc")]
-use super::{ExnRef, store::AutoAssertNoGc, vm::ExceptionTombstone};
+use super::{ExnRef, store::AutoAssertNoGc};
 use crate::prelude::*;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
@@ -82,7 +82,7 @@ pub(crate) fn from_runtime_box(
     } = *runtime_trap;
     let (mut error, pc) = match reason {
         #[cfg(feature = "gc")]
-        crate::runtime::vm::TrapReason::User(error) if error.is::<ExceptionTombstone>() => {
+        crate::runtime::vm::TrapReason::Exception => {
             let mut nogc = AutoAssertNoGc::new(store);
             let exnref = nogc.take_pending_exception();
             let exnref = ExnRef::_from_raw(&mut nogc, exnref.as_gc_ref().as_raw_u32())

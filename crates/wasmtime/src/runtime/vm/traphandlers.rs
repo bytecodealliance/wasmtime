@@ -15,13 +15,13 @@ mod signals;
 #[cfg(all(has_native_signals))]
 pub use self::signals::*;
 
-#[cfg(feature = "gc")]
-use crate::ExnRef;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{InterpreterRef, VMContext, VMStore, VMStoreContext, f32x4, f64x2, i8x16};
-use crate::{EntryStoreContext, prelude::*};
+#[cfg(feature = "gc")]
+use crate::store::AutoAssertNoGc;
+use crate::{AsStoreOpaqueMut, EntryStoreContext, ExnRef, Rooted, prelude::*};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
@@ -92,9 +92,8 @@ fn lazy_per_thread_init() {
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
 #[cfg(has_host_compiler_backend)]
-pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn crate::vm::VMStore) -> ! {
-    let mut nogc = AutoAssertNoGc::new(store.store_opaque_mut());
-    tls::with(|info| unsafe { info.unwrap().unwind(&mut nogc) })
+pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) -> ! {
+    tls::with(|info| unsafe { info.unwrap().unwind(store) })
 }
 
 /// Invokes the closure `f` and handles any error/panic/trap that happens
@@ -132,9 +131,9 @@ where
     // return value is always provided and if unwind information is provided
     // (e.g. `ret` is a "false"-y value) then it's recorded in TLS for the
     // unwind operation that's about to happen from Cranelift-generated code.
-    let (ret, unwind) = R::maybe_catch_unwind(|| f(store));
+    let (ret, unwind) = R::maybe_catch_unwind(store, |store| f(store));
     if let Some(unwind) = unwind {
-        tls::with(|info| info.unwrap().record_unwind(unwind));
+        tls::with(|info| info.unwrap().record_unwind(store, unwind));
     }
     ret
 }
@@ -166,7 +165,10 @@ pub trait HostResult {
     /// back to wasm (which should be soon after calling this through
     /// `catch_unwind_and_record_trap`) then wasm will very quickly turn around
     /// and initiate an unwind (currently through `raise_preexisting_trap`).
-    fn maybe_catch_unwind(f: impl FnOnce() -> Self) -> (Self::Abi, Option<UnwindReason>);
+    fn maybe_catch_unwind(
+        store: &mut dyn VMStore,
+        f: impl FnOnce(&mut dyn VMStore) -> Self,
+    ) -> (Self::Abi, Option<UnwindReason>);
 }
 
 // Base case implementations that do not catch unwinds. These are for libcalls
@@ -179,8 +181,11 @@ macro_rules! host_result_no_catch {
         $(
             impl HostResult for $t {
                 type Abi = $t;
-                fn maybe_catch_unwind(f: impl FnOnce() -> $t) -> ($t, Option<UnwindReason>) {
-                    (f(), None)
+                fn maybe_catch_unwind(
+                    store: &mut dyn VMStore,
+                    f: impl FnOnce(&mut dyn VMStore) -> $t,
+                ) -> ($t, Option<UnwindReason>) {
+                    (f(store), None)
                 }
             }
         )*
@@ -202,12 +207,15 @@ host_result_no_catch! {
 
 impl HostResult for NonNull<u8> {
     type Abi = *mut u8;
-    fn maybe_catch_unwind(f: impl FnOnce() -> Self) -> (*mut u8, Option<UnwindReason>) {
-        (f().as_ptr(), None)
+    fn maybe_catch_unwind(
+        store: &mut dyn VMStore,
+        f: impl FnOnce(&mut dyn VMStore) -> Self,
+    ) -> (*mut u8, Option<UnwindReason>) {
+        (f(store).as_ptr(), None)
     }
 }
 
-/// Implementation of `HostResult` for `Result<T, E>`.
+/// Implementation of `HostResult` for `Result<T, Trap>`.
 ///
 /// This is where things get interesting for `HostResult`. This is generically
 /// defined to allow many shapes of the `Result` type to be returned from host
@@ -219,9 +227,6 @@ impl HostResult for NonNull<u8> {
 /// For example if `T = ()` then `true` means that the call succeeded and
 /// `false` means that an unwind happened. Here the sentinel is `false` and the
 /// ABI is `bool`.
-///
-/// This is the only implementation of `HostResult` which actually catches
-/// unwinds as there's a sentinel to encode.
 impl<T, E> HostResult for Result<T, E>
 where
     T: HostResultHasUnwindSentinel,
@@ -229,11 +234,14 @@ where
 {
     type Abi = T::Abi;
 
-    fn maybe_catch_unwind(f: impl FnOnce() -> Result<T, E>) -> (T::Abi, Option<UnwindReason>) {
+    fn maybe_catch_unwind(
+        store: &mut dyn VMStore,
+        f: impl FnOnce(&mut dyn VMStore) -> Result<T, E>,
+    ) -> (T::Abi, Option<UnwindReason>) {
         // First prepare the closure `f` as something that'll be invoked to
         // generate the return value of this function. This is the
         // conditionally, below, passed to `catch_unwind`.
-        let f = move || match f() {
+        let f = move || match f(store) {
             Ok(ret) => (ret.into_abi(), None),
             Err(reason) => (T::SENTINEL, Some(UnwindReason::Trap(reason.into()))),
         };
@@ -244,7 +252,56 @@ where
         {
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
                 Ok(result) => result,
-                Err(err) => (T::SENTINEL, Some(UnwindReason::Panic(err))),
+                Err(err) => (T::SENTINEL, Some(UnwindReason::Panic(err).into())),
+            }
+        }
+
+        // With `panic=abort` there's no use in using `std::panic::catch_unwind`
+        // since it won't actually catch anything. Note that
+        // `std::panic::catch_unwind` will technically optimize to this but having
+        // this branch avoids using the `std::panic` module entirely.
+        #[cfg(not(all(feature = "std", panic = "unwind")))]
+        {
+            f()
+        }
+    }
+}
+
+/// Implementation of `HostResult` for `Result<T>`, i.e., where the
+/// error type is `Error`.
+///
+/// This handles converting externally-sourced `Exception`s, which
+/// come in as boxed errors in a `Result`, into a rooted exception
+/// kept on the Store plus an internal `UnwindReason`. Otherwise it
+/// performs the same work as above.
+impl<T> HostResult for Result<T>
+where
+    T: HostResultHasUnwindSentinel,
+{
+    type Abi = T::Abi;
+
+    fn maybe_catch_unwind(
+        store: &mut dyn VMStore,
+        f: impl FnOnce(&mut dyn VMStore) -> Result<T>,
+    ) -> (T::Abi, Option<UnwindReason>) {
+        // First prepare the closure `f` as something that'll be invoked to
+        // generate the return value of this function. This is the
+        // conditionally, below, passed to `catch_unwind`.
+        let f = move || match f(store) {
+            Ok(ret) => (ret.into_abi(), None),
+            Err(err) => {
+                let reason = TrapReason::from_user_error(store, err);
+                (T::SENTINEL, Some(UnwindReason::Trap(reason)))
+            }
+        };
+
+        // With `panic=unwind` use `std::panic::catch_unwind` to catch possible
+        // panics to rethrow.
+        #[cfg(all(feature = "std", panic = "unwind"))]
+        {
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+                Ok(result) => result,
+                Err(err) => (T::SENTINEL, Some(UnwindReason::Panic(err).into())),
             }
         }
 
@@ -373,39 +430,33 @@ pub enum TrapReason {
 
     /// A trap raised from a wasm libcall
     Wasm(wasmtime_environ::Trap),
+
+    /// An exception.
+    ///
+    /// Note that internally, exceptions are rooted on the Store, while
+    /// when crossing the public API, exceptions are held in a
+    /// `wasmtime::Exception` which contains a boxed root and implements
+    /// `Error`. This choice is intentional, to keep the internal
+    /// implementation lightweight and ensure the types represent only
+    /// allowable states.
+    Exception,
 }
 
-/// Special tombstone Error object that we use to indicate a thrown
-/// exception. We use this tombstone directly in the libcall
-/// implementing `throw_ref` (throws from Wasm), and we create the
-/// tombstone when intercepting a `Rooted<ExnRef>` when wrapping a
-/// host function into a `Func`.
-///
-/// This will be captured in a `TrapReason::User` as a boxed
-/// error. When provided as a `TrapReason`, the rooted
-/// pending-exception slot on the `Store` must have already been
-/// set. Both of the above creation sites ensure this invariant.
-#[cfg(feature = "gc")]
-mod exception_tombstone {
-    pub(crate) struct ExceptionTombstone;
-    impl core::error::Error for ExceptionTombstone {}
-    impl core::fmt::Debug for ExceptionTombstone {
-        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-            write!(f, "Wasm exception")
+impl TrapReason {
+    /// Converts a boxed error from a host function into a TrapReason,
+    /// handling boxed exceptions appropriately by rooting them on the
+    /// store.
+    pub(crate) fn from_user_error(mut store: &mut dyn VMStore, err: Error) -> Self {
+        if err.is::<Rooted<ExnRef>>() {
+            let exnref = err.downcast::<Rooted<ExnRef>>().unwrap();
+            let mut nogc = AutoAssertNoGc::new(store.as_store_opaque_mut());
+            let raw = exnref._to_raw(&mut nogc).unwrap();
+            let exnref = VMGcRef::from_raw_u32(raw).unwrap().into_exnref_unchecked();
+            nogc.set_pending_exception(exnref);
+            TrapReason::Exception
+        } else {
+            TrapReason::User(err)
         }
-    }
-    impl core::fmt::Display for ExceptionTombstone {
-        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-            write!(f, "Wasm exception")
-        }
-    }
-}
-#[cfg(feature = "gc")]
-pub(crate) use exception_tombstone::ExceptionTombstone;
-
-impl From<Error> for TrapReason {
-    fn from(err: Error) -> Self {
-        TrapReason::User(err)
     }
 }
 
@@ -474,6 +525,22 @@ where
 
     match result {
         Ok(x) => Ok(x),
+        #[cfg(feature = "gc")]
+        Err(UnwindState::UnwindToHost {
+            reason: UnwindReason::Trap(TrapReason::Exception),
+            backtrace: _,
+            coredump_stack: _,
+        }) => {
+            let exnref = store.0.take_pending_exception();
+            let exnref = store
+                .0
+                .require_gc_store_mut()
+                .unwrap()
+                .clone_gc_ref(exnref.as_gc_ref());
+            let mut nogc = AutoAssertNoGc::new(store.0);
+            let rooted = ExnRef::from_cloned_gc_ref(&mut nogc, exnref);
+            Err(rooted.into())
+        }
         Err(UnwindState::UnwindToHost {
             reason: UnwindReason::Trap(reason),
             backtrace,
@@ -492,15 +559,8 @@ where
             ..
         }) => std::panic::resume_unwind(panic),
         #[cfg(feature = "gc")]
-        Err(UnwindState::ThrowException) => {
-            // We may have gotten here if a host function (created via
-            // `Func::new`) was called directly with `Func::call` and
-            // returned an exception: in that case, no trampoline to
-            // call `unwind()` exists, so we have to fetch the pending
-            // exception explicitly here.
-            let exnref = store.0.take_pending_exception();
-            let exnref = ExnRef::from_raw(store, exnref.as_gc_ref().as_raw_u32()).unwrap();
-            Err(exnref.into())
+        Err(UnwindState::UnwindToWasm { .. }) => {
+            unreachable!("We should not have returned to the host with an UnwindToWasm state");
         }
         Err(UnwindState::None) => {
             unreachable!("We should not have gotten an error with no unwind state");
@@ -530,16 +590,14 @@ mod call_thread_state {
             backtrace: Option<Backtrace>,
             coredump_stack: Option<CoreDumpStack>,
         },
-        /// Throw an exception: may unwind into a Wasm frame if a
-        /// handler exists, or to the entry point from the host if
-        /// not. The actual exception object is held rooted on the
-        /// `Store`. The destination and resume register state is not
-        /// resolved until we reach `unwind()` because we don't have
-        /// access to the `Store` until that point, and we don't want
-        /// to render the GC ref into a raw payload value until we no
-        /// longer need to root it.
+        /// Unwind into Wasm. The exception destination has been
+        /// resolved. Note that the payload value is still not
+        /// specified, because it must remain rooted on the Store
+        /// until `unwind()` actually takes the value. The first
+        /// payload word in the underlying exception ABI is used to
+        /// send the raw `VMExnRef`.
         #[cfg(feature = "gc")]
-        ThrowException,
+        UnwindToWasm { pc: usize, fp: usize, sp: usize },
         /// Do not unwind.
         None,
     }
@@ -740,7 +798,7 @@ mod call_thread_state {
 pub use call_thread_state::*;
 
 #[cfg(feature = "gc")]
-use super::compute_throw;
+use super::{VMGcRef, compute_throw_action};
 
 pub enum UnwindReason {
     #[cfg(all(feature = "std", panic = "unwind"))]
@@ -787,32 +845,46 @@ impl CallThreadState {
     ///
     /// Panics if unwind information has already been recorded as that should
     /// have been processed first.
-    fn record_unwind(&self, reason: UnwindReason) {
+    fn record_unwind(&self, store: &mut dyn VMStore, reason: UnwindReason) {
         if cfg!(debug_assertions) {
             let prev = self.unwind.replace(UnwindState::None);
             assert!(prev.is_none());
         }
-        match reason {
+        let state = match reason {
             #[cfg(all(feature = "std", panic = "unwind"))]
             UnwindReason::Panic(err) => {
                 // Panics don't need backtraces. There is nowhere to attach the
                 // hypothetical backtrace to and it doesn't really make sense to try
                 // in the first place since this is a Rust problem rather than a
                 // Wasm problem.
-                self.unwind.set(UnwindState::UnwindToHost {
+                UnwindState::UnwindToHost {
                     reason: UnwindReason::Panic(err),
                     backtrace: None,
                     coredump_stack: None,
-                });
+                }
             }
-            // An unwind due to an already-set pending exception sets
-            // a special UnwindState that triggers the handler-search
-            // stack-walk on unwind().
+            // An unwind due to an already-set pending exception
+            // triggers the handler-search stack-walk. We store the
+            // resolved handler if one exists. In either case, the
+            // exception remains rooted in the Store until we actually
+            // perform the unwind, and then gets taken and becomes the
+            // payload at that point.
             #[cfg(feature = "gc")]
-            UnwindReason::Trap(TrapReason::User(err))
-                if err.downcast_ref::<ExceptionTombstone>().is_some() =>
-            {
-                self.unwind.set(UnwindState::ThrowException);
+            UnwindReason::Trap(TrapReason::Exception) => {
+                // SAFETY: we are invoking `compute_throw()` while
+                // Wasm is on the stack and we have re-entered via a
+                // trampoline, as required by its stack-walking logic.
+                let action = unsafe { compute_throw_action(store) };
+                match action {
+                    wasmtime_unwinder::ThrowAction::Handler { pc, sp, fp } => {
+                        UnwindState::UnwindToWasm { pc, sp, fp }
+                    }
+                    wasmtime_unwinder::ThrowAction::None => UnwindState::UnwindToHost {
+                        reason: UnwindReason::Trap(TrapReason::Exception),
+                        backtrace: None,
+                        coredump_stack: None,
+                    },
+                }
             }
             // And if we are just propagating an existing trap that already has
             // a backtrace attached to it, then there is no need to capture a
@@ -820,21 +892,23 @@ impl CallThreadState {
             UnwindReason::Trap(TrapReason::User(err))
                 if err.downcast_ref::<WasmBacktrace>().is_some() =>
             {
-                self.unwind.set(UnwindState::UnwindToHost {
+                UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(TrapReason::User(err)),
                     backtrace: None,
                     coredump_stack: None,
-                });
+                }
             }
             UnwindReason::Trap(trap) => {
                 log::trace!("Capturing backtrace and coredump for {trap:?}");
-                self.unwind.set(UnwindState::UnwindToHost {
+                UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(trap),
                     backtrace: self.capture_backtrace(self.vm_store_context.as_ptr(), None),
                     coredump_stack: self.capture_coredump(self.vm_store_context.as_ptr(), None),
-                });
+                }
             }
-        }
+        };
+
+        self.unwind.set(state);
     }
 
     /// Helper function to perform an actual unwinding operation.
@@ -848,53 +922,38 @@ impl CallThreadState {
     /// called. Additionally this isn't safe as it will skip all Rust
     /// destructors on the stack, if there are any.
     #[cfg(has_host_compiler_backend)]
-    unsafe fn unwind(&self, nogc: &mut AutoAssertNoGc) -> ! {
-        #[cfg_attr(
-            not(feature = "gc"),
-            allow(unused_mut, reason = "mutated only in GC build")
-        )]
-        let mut unwind = self.unwind.replace(UnwindState::None);
-        #[cfg(feature = "gc")]
-        if let UnwindState::ThrowException = &unwind {
-            // Take the pending exception from the store and resolve its throw action.
-            let exnref = nogc.take_pending_exception();
-            let action = unsafe { compute_throw(nogc, &exnref) };
+    unsafe fn unwind(&self, store: &mut dyn VMStore) -> ! {
+        // Ensure used even in no-GC builds.
+        let _ = store;
 
-            match action {
-                wasmtime_unwinder::ThrowAction::Handler { pc, sp, fp } => unsafe {
-                    wasmtime_unwinder::resume_to_exception_handler(
-                        pc,
-                        sp,
-                        fp,
-                        usize::try_from(exnref.as_gc_ref().as_raw_u32())
-                            .expect("gcref does not fit in usize"),
-                        0,
-                    );
-                },
-                wasmtime_unwinder::ThrowAction::None => {
-                    // Throw all the way to entry from host, and put the exnref back on the store.
-                    nogc.set_pending_exception(exnref);
-                    unwind = UnwindState::UnwindToHost {
-                        reason: UnwindReason::Trap(TrapReason::User(ExceptionTombstone.into())),
-                        backtrace: None,
-                        coredump_stack: None,
-                    }
+        let unwind = self.unwind.replace(UnwindState::None);
+        match unwind {
+            UnwindState::UnwindToHost { .. } => {
+                // Keep the state around -- we will read it out again
+                // when we reach the entry-from-host side after the
+                // `longjmp`.
+                self.unwind.set(unwind);
+                debug_assert!(!self.jmp_buf.get().is_null());
+                debug_assert!(self.jmp_buf.get() != CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
+                unsafe {
+                    traphandlers::wasmtime_longjmp(self.jmp_buf.get());
                 }
             }
-        }
-
-        // Ensure used even in no-GC builds.
-        let _ = nogc;
-
-        assert!(matches!(unwind, UnwindState::UnwindToHost { .. }));
-        // Keep the state around -- we will read it out again
-        // when we reach the entry-from-host side after the
-        // `longjmp`.
-        self.unwind.set(unwind);
-        debug_assert!(!self.jmp_buf.get().is_null());
-        debug_assert!(self.jmp_buf.get() != CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
-        unsafe {
-            traphandlers::wasmtime_longjmp(self.jmp_buf.get());
+            #[cfg(feature = "gc")]
+            UnwindState::UnwindToWasm { pc, fp, sp } => {
+                // Take the pending exception at this time and use it as payload.
+                let payload1 =
+                    usize::try_from(store.take_pending_exception().as_gc_ref().as_raw_u32())
+                        .expect("GC ref does not fit in usize");
+                // We only use one of the payload words.
+                let payload2 = 0;
+                unsafe {
+                    wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2);
+                }
+            }
+            UnwindState::None => {
+                panic!("Attempting to unwind with no unwind state set.");
+            }
         }
     }
 
