@@ -1088,7 +1088,7 @@ impl Instance {
 
         impl<'a, T, V> Drop for Dropper<'a, T, V> {
             fn drop(&mut self) {
-                tls::set(self.store.0.traitobj_mut(), || {
+                tls::set(self.store.0, || {
                     // SAFETY: Here we drop the value without moving it for the
                     // first and only time -- per the contract for `Drop::drop`,
                     // this code won't run again, and the `value` field will no
@@ -1312,7 +1312,7 @@ impl Instance {
                 // any work items and then loop again.
                 Either::Right(ready) => {
                     for item in ready {
-                        self.handle_work_item(store.0.traitobj_mut(), item).await?;
+                        self.handle_work_item(store.0, item).await?;
                     }
                 }
             }
@@ -1320,7 +1320,7 @@ impl Instance {
     }
 
     /// Handle the specified work item, possibly resuming a fiber if applicable.
-    async fn handle_work_item(self, store: &mut StoreOpaque, item: WorkItem) -> Result<()> {
+    async fn handle_work_item(self, store: &mut dyn VMStore, item: WorkItem) -> Result<()> {
         log::trace!("handle work item {item:?}");
         match item {
             WorkItem::PushFuture(future) => {
@@ -1434,11 +1434,11 @@ impl Instance {
     }
 
     /// Execute the specified guest call on a worker fiber.
-    async fn run_on_worker(self, store: &mut StoreOpaque, item: WorkerItem) -> Result<()> {
+    async fn run_on_worker(self, store: &mut dyn VMStore, item: WorkerItem) -> Result<()> {
         let worker = if let Some(fiber) = self.concurrent_state_mut(store).worker.take() {
             fiber
         } else {
-            fiber::make_fiber(store.traitobj_mut(), move |store| {
+            fiber::make_fiber(store, move |store| {
                 loop {
                     match self.concurrent_state_mut(store).worker_item.take().unwrap() {
                         WorkerItem::GuestCall(call) => self.handle_guest_call(store, call)?,
@@ -1531,7 +1531,7 @@ impl Instance {
         };
 
         let old_guest_task = if let Some(task) = task {
-            self.maybe_pop_call_context(store.store_opaque_mut(), task)?;
+            self.maybe_pop_call_context(store, task)?;
             self.concurrent_state_mut(store).guest_task
         } else {
             None
@@ -1545,7 +1545,7 @@ impl Instance {
 
         if let Some(task) = task {
             self.concurrent_state_mut(store).guest_task = old_guest_task;
-            self.maybe_push_call_context(store.store_opaque_mut(), task)?;
+            self.maybe_push_call_context(store, task)?;
         }
 
         Ok(())
@@ -2217,10 +2217,7 @@ impl Instance {
         // before committing to such an optimization.  And again, we'd need to
         // update the spec to allow that.
         let (status, waitable) = loop {
-            self.suspend(
-                store.0.traitobj_mut(),
-                SuspendReason::Waiting { set, task: caller },
-            )?;
+            self.suspend(store.0, SuspendReason::Waiting { set, task: caller })?;
 
             let state = self.concurrent_state_mut(store.0);
 
@@ -2414,7 +2411,7 @@ impl Instance {
             Poll::Ready(output) => {
                 // It finished immediately; lower the result and delete the
                 // task.
-                output.consume(store.0.traitobj_mut(), self)?;
+                output.consume(store.0, self)?;
                 log::trace!("delete host task {task:?} (already ready)");
                 self.concurrent_state_mut(store.0).delete(task)?;
                 None

@@ -680,11 +680,7 @@ impl<T> FutureReader<T> {
         // `self` should never be used again, but leave an invalid handle there just in case.
         let id = mem::replace(&mut self.id, TableId::new(0));
         self.instance
-            .host_drop_reader(
-                store.as_context_mut().0.traitobj_mut(),
-                id,
-                TransmitKind::Future,
-            )
+            .host_drop_reader(store.as_context_mut().0, id, TransmitKind::Future)
             .unwrap();
     }
 
@@ -1252,11 +1248,7 @@ impl<T> StreamReader<T> {
         // `self` should never be used again, but leave an invalid handle there just in case.
         let id = mem::replace(&mut self.id, TableId::new(0));
         self.instance
-            .host_drop_reader(
-                store.as_context_mut().0.traitobj_mut(),
-                id,
-                TransmitKind::Stream,
-            )
+            .host_drop_reader(store.as_context_mut().0, id, TransmitKind::Stream)
             .unwrap()
     }
 
@@ -2047,7 +2039,7 @@ impl Instance {
 
             WriteState::HostReady { accept, post_write } => {
                 accept(
-                    store.0.traitobj_mut(),
+                    store.0,
                     self,
                     Reader::Host {
                         accept: Box::new(|input, count| {
@@ -2863,7 +2855,7 @@ impl Instance {
                 }
 
                 let code = accept(
-                    store.0.traitobj_mut(),
+                    store.0,
                     self,
                     Reader::Guest {
                         options: &options,
