@@ -76,6 +76,15 @@ make_vendor "wasi/src/p3" "
     sockets@bc1b8b1@wit-0.3.0-draft
 "
 
+make_vendor "wasi-http/src/p3" "
+    cli@939bd6d@wit-0.3.0-draft
+    clocks@13d1c82@wit-0.3.0-draft
+    filesystem@2007d36@wit-0.3.0-draft
+    http@376b674@wit-0.3.0-draft
+    random@4e94663@wit-0.3.0-draft
+    sockets@bc1b8b1@wit-0.3.0-draft
+"
+
 rm -rf $cache_dir
 
 # Separately (for now), vendor the `wasi-nn` WIT files since their retrieval is
