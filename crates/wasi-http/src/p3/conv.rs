@@ -2,8 +2,8 @@ use crate::p3::bindings::http::types::{ErrorCode, Method, Scheme};
 use core::convert::Infallible;
 
 impl From<Infallible> for ErrorCode {
-    fn from(_: Infallible) -> Self {
-        unreachable!()
+    fn from(x: Infallible) -> Self {
+        match x {}
     }
 }
 

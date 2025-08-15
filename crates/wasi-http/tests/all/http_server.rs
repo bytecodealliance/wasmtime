@@ -33,8 +33,8 @@ pub struct Server {
 
 impl Server {
     fn new<F>(
-        run: impl Fn(TokioIo<tokio::net::TcpStream>) -> F + Send + 'static,
         conns: usize,
+        run: impl Fn(TokioIo<tokio::net::TcpStream>) -> F + Send + 'static,
     ) -> Result<Self>
     where
         F: Future<Output = Result<()>>,
@@ -74,44 +74,38 @@ impl Server {
 
     pub fn http1(conns: usize) -> Result<Self> {
         debug!("initializing http1 server");
-        Self::new(
-            |io| async move {
-                let mut builder = hyper::server::conn::http1::Builder::new();
-                let http = builder.keep_alive(false).pipeline_flush(true);
+        Self::new(conns, |io| async move {
+            let mut builder = hyper::server::conn::http1::Builder::new();
+            let http = builder.keep_alive(false).pipeline_flush(true);
 
-                debug!("preparing to bind connection to service");
-                let conn = http.serve_connection(io, service_fn(test)).await;
-                trace!("connection result {:?}", conn);
-                conn?;
-                Ok(())
-            },
-            conns,
-        )
+            debug!("preparing to bind connection to service");
+            let conn = http.serve_connection(io, service_fn(test)).await;
+            trace!("connection result {:?}", conn);
+            conn?;
+            Ok(())
+        })
     }
 
     pub fn http2(conns: usize) -> Result<Self> {
         debug!("initializing http2 server");
-        Self::new(
-            |io| async move {
-                let mut builder = hyper::server::conn::http2::Builder::new(TokioExecutor);
-                let http = builder.max_concurrent_streams(20);
+        Self::new(conns, |io| async move {
+            let mut builder = hyper::server::conn::http2::Builder::new(TokioExecutor);
+            let http = builder.max_concurrent_streams(20);
 
-                debug!("preparing to bind connection to service");
-                let conn = http.serve_connection(io, service_fn(test)).await;
-                trace!("connection result {:?}", conn);
-                if let Err(e) = &conn {
-                    let message = e.to_string();
-                    if message.contains("connection closed before reading preface")
-                        || message.contains("unspecific protocol error detected")
-                    {
-                        return Ok(());
-                    }
+            debug!("preparing to bind connection to service");
+            let conn = http.serve_connection(io, service_fn(test)).await;
+            trace!("connection result {:?}", conn);
+            if let Err(e) = &conn {
+                let message = e.to_string();
+                if message.contains("connection closed before reading preface")
+                    || message.contains("unspecific protocol error detected")
+                {
+                    return Ok(());
                 }
-                conn?;
-                Ok(())
-            },
-            conns,
-        )
+            }
+            conn?;
+            Ok(())
+        })
     }
 
     pub fn addr(&self) -> String {
