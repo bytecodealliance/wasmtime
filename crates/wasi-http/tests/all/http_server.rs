@@ -27,6 +27,7 @@ async fn test(
 }
 
 pub struct Server {
+    conns: usize,
     addr: SocketAddr,
     worker: Option<JoinHandle<Result<()>>>,
 }
@@ -67,6 +68,7 @@ impl Server {
             })
         });
         Ok(Self {
+            conns,
             worker: Some(worker),
             addr,
         })
@@ -116,8 +118,10 @@ impl Server {
 impl Drop for Server {
     fn drop(&mut self) {
         debug!("shutting down http1 server");
-        // Force a connection to happen in case one hasn't happened already.
-        let _ = TcpStream::connect(&self.addr);
+        for _ in 0..self.conns {
+            // Force a connection to happen in case one hasn't happened already.
+            let _ = TcpStream::connect(&self.addr);
+        }
 
         // If the worker fails with an error, report it here but don't panic.
         // Some tests don't make a connection so the error will be that the tcp
