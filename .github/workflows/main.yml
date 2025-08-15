@@ -707,6 +707,7 @@ jobs:
 
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
         echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
+        echo CARGO_TARGET_ARCH=${{ matrix.isa }} >> $GITHUB_ENV
 
         # QEMU emulation is not always the speediest, so total testing time
         # goes down if we build the libs in release mode when running tests.
