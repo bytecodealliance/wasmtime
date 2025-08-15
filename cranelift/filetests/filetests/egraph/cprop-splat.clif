@@ -167,3 +167,58 @@ block0:
 ;     return v3  ; v3 = const0
 ; }
 
+function %i8x8() -> i8x8 {
+block0:
+    v1 = iconst.i8 0
+    v2 = splat.i8x8 v1
+    return v2
+}
+
+; function %i8x8() -> i8x8 fast {
+; block0:
+;     v1 = iconst.i8 0
+;     v2 = splat.i8x8 v1  ; v1 = 0
+;     return v2
+; }
+
+function %i16x4() -> i16x4 {
+block0:
+    v1 = iconst.i16 0
+    v2 = splat.i16x4 v1
+    return v2
+}
+
+; function %i16x4() -> i16x4 fast {
+; block0:
+;     v1 = iconst.i16 0
+;     v2 = splat.i16x4 v1  ; v1 = 0
+;     return v2
+; }
+
+function %i32x2() -> i32x2 {
+block0:
+    v1 = iconst.i32 0
+    v2 = splat.i32x2 v1
+    return v2
+}
+
+; function %i32x2() -> i32x2 fast {
+; block0:
+;     v1 = iconst.i32 0
+;     v2 = splat.i32x2 v1  ; v1 = 0
+;     return v2
+; }
+
+function %f32x2() -> f32x2 {
+block0:
+    v1 = f32const 0.0
+    v2 = splat.f32x2 v1
+    return v2
+}
+
+; function %f32x2() -> f32x2 fast {
+; block0:
+;     v1 = f32const 0.0
+;     v2 = splat.f32x2 v1  ; v1 = 0.0
+;     return v2
+; }
