@@ -15,7 +15,15 @@ pub fn cargo_test_runner() -> Option<String> {
     // instead of picking "any runner", but that's left for a future
     // refactoring.
     let (_, runner) = std::env::vars()
-        .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
+        .filter(|(k, _v)| {
+            k.starts_with("CARGO_TARGET")
+                && k.ends_with("RUNNER")
+                && k.contains(
+                    &std::env::var("CARGO_TARGET_ARCH")
+                        .map(|target_arch| target_arch.to_uppercase())
+                        .unwrap_or_else(|_| "".to_string()),
+                )
+        })
         .next()?;
     Some(runner)
 }
@@ -23,19 +31,7 @@ pub fn cargo_test_runner() -> Option<String> {
 pub fn command(bin: impl AsRef<Path>) -> Command {
     let bin = bin.as_ref();
     match cargo_test_runner() {
-        Some(mut runner) => {
-            match runner.as_str() {
-                "qemu-aarch64" => {
-                    runner.push_str(" -L /usr/aarch64-linux-gnu -E LD_LIBRARY_PATH=/usr/aarch64-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1");
-                }
-                "qemu-riscv64" => {
-                    runner.push_str(" -L /usr/riscv64-linux-gnu -E LD_LIBRARY_PATH=/usr/riscv64-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1");
-                }
-                "qemu-s390x" => {
-                    runner.push_str(" -L /usr/s390x-linux-gnu -E LD_LIBRARY_PATH=/usr/s390x-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1");
-                }
-                _ => {}
-            }
+        Some(runner) => {
             let mut parts = runner.split_whitespace();
             let mut cmd = Command::new(parts.next().unwrap());
             for arg in parts {
