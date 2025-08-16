@@ -57,13 +57,14 @@
 #[cfg(feature = "stack-switching")]
 use super::stack_switching::VMContObj;
 use crate::prelude::*;
-use crate::runtime::store::StoreInstanceId;
+use crate::runtime::store::{StoreInstanceId, StoreOpaque};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
 use crate::runtime::vm::table::TableElementType;
 use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{
-    HostResultHasUnwindSentinel, Instance, TrapReason, VMStore, f32x4, f64x2, i8x16,
+    self, HostResultHasUnwindSentinel, Instance, SendSyncPtr, TrapReason, VMStore, f32x4, f64x2,
+    i8x16,
 };
 use core::convert::Infallible;
 use core::pin::Pin;
@@ -166,6 +167,52 @@ pub mod raw {
     wasmtime_environ::foreach_builtin_function!(libcall);
 }
 
+/// Uses the `$store` provided to invoke the async closure `$f` and block on the
+/// result.
+///
+/// This will internally multiplex on `$store.with_blocking(...)` vs simply
+/// asserting the closure is ready depending on whether a store's
+/// `async_support` flag is set or not.
+///
+/// FIXME: ideally this would be a function, not a macro. If this is a function
+/// though it would require placing a bound on the async closure $f where the
+/// returned future is itself `Send`. That's not possible in Rust right now,
+/// unfortunately.
+///
+/// As a workaround this takes advantage of the fact that we can assume that the
+/// compiler can infer that the future returned by `$f` is indeed `Send` so long
+/// as we don't try to name the type or place it behind a generic. In the future
+/// when we can bound the return future of async functions with `Send` this
+/// macro should be replaced with an equivalent function.
+macro_rules! block_on {
+    ($store:expr, $f:expr) => {{
+        let store: &mut StoreOpaque = $store;
+        let closure = assert_async_fn_closure($f);
+        if store.async_support() {
+            #[cfg(feature = "async")]
+            {
+                store.with_blocking(|store, cx| cx.block_on(closure(store)))
+            }
+            #[cfg(not(feature = "async"))]
+            {
+                unreachable!()
+            }
+        } else {
+            // Note that if `async_support` is disabled then it should not be
+            // possible to introduce await points so the provided future should
+            // always be ready.
+            anyhow::Ok(vm::assert_ready(closure(store)))
+        }
+    }};
+}
+
+fn assert_async_fn_closure<F, R>(f: F) -> F
+where
+    F: AsyncFnOnce(&mut StoreOpaque) -> R,
+{
+    f
+}
+
 fn memory_grow(
     store: &mut dyn VMStore,
     mut instance: Pin<&mut Instance>,
@@ -235,13 +282,18 @@ unsafe fn table_grow_func_ref(
         instance.as_mut().table_element_type(table_index),
         TableElementType::Func,
     ));
-    let element = NonNull::new(init_value.cast::<VMFuncRef>());
-    let result = instance
-        .defined_table_grow(defined_table_index, |table| unsafe {
-            table.grow_func(store, delta, element)
-        })?
-        .map(AllocationSize);
-    Ok(result)
+    let element = NonNull::new(init_value.cast::<VMFuncRef>()).map(SendSyncPtr::new);
+    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
+    let limiter = limiter.as_mut();
+    block_on!(store, async |_store| {
+        let result = instance
+            .defined_table_grow(defined_table_index, async |table| unsafe {
+                table.grow_func(limiter, delta, element).await
+            })
+            .await?
+            .map(AllocationSize);
+        Ok(result)
+    })?
 }
 
 /// Implementation of `table.grow` for GC-reference tables.
@@ -261,12 +313,24 @@ unsafe fn table_grow_gc_ref(
     ));
 
     let element = VMGcRef::from_raw_u32(init_value);
-    let result = instance
-        .defined_table_grow(defined_table_index, |table| unsafe {
-            table.grow_gc_ref(store, delta, element.as_ref())
-        })?
-        .map(AllocationSize);
-    Ok(result)
+    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
+    let limiter = limiter.as_mut();
+    block_on!(store, async |store| {
+        let result = instance
+            .defined_table_grow(defined_table_index, async |table| unsafe {
+                table
+                    .grow_gc_ref(
+                        limiter,
+                        store.optional_gc_store_mut(),
+                        delta,
+                        element.as_ref(),
+                    )
+                    .await
+            })
+            .await?
+            .map(AllocationSize);
+        Ok(result)
+    })?
 }
 
 #[cfg(feature = "stack-switching")]
@@ -287,12 +351,17 @@ unsafe fn table_grow_cont_obj(
         TableElementType::Cont,
     ));
     let element = unsafe { VMContObj::from_raw_parts(init_value_contref, init_value_revision) };
-    let result = instance
-        .defined_table_grow(defined_table_index, |table| unsafe {
-            table.grow_cont(store, delta, element)
-        })?
-        .map(AllocationSize);
-    Ok(result)
+    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
+    let limiter = limiter.as_mut();
+    block_on!(store, async |_store| {
+        let result = instance
+            .defined_table_grow(defined_table_index, async |table| unsafe {
+                table.grow_cont(limiter, delta, element).await
+            })
+            .await?
+            .map(AllocationSize);
+        Ok(result)
+    })?
 }
 
 /// Implementation of `table.fill` for `funcref`s.

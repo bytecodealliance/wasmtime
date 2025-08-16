@@ -766,13 +766,13 @@ impl Instance {
     /// Performs a grow operation on the `table_index` specified using `grow`.
     ///
     /// This will handle updating the VMTableDefinition internally as necessary.
-    pub(crate) fn defined_table_grow(
+    pub(crate) async fn defined_table_grow(
         mut self: Pin<&mut Self>,
         table_index: DefinedTableIndex,
-        grow: impl FnOnce(&mut Table) -> Result<Option<usize>>,
+        grow: impl AsyncFnOnce(&mut Table) -> Result<Option<usize>>,
     ) -> Result<Option<usize>> {
         let table = self.as_mut().get_defined_table(table_index);
-        let result = grow(table);
+        let result = grow(table).await;
         let element = table.vmtable();
         self.set_table(table_index, element);
         result

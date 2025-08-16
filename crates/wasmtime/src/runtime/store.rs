@@ -247,6 +247,43 @@ enum ResourceLimiterInner<T> {
     Async(Box<dyn (FnMut(&mut T) -> &mut dyn crate::ResourceLimiterAsync) + Send + Sync>),
 }
 
+/// Representation of a configured resource limiter for a store.
+///
+/// This is acquired with `resource_limiter_and_store_opaque` for example and is
+/// threaded through to growth operations on tables/memories. Note that this is
+/// passed around as `Option<&mut StoreResourceLimiter<'_>>` to make it
+/// efficient to pass around (nullable pointer) and it's also notably passed
+/// around as an `Option` to represent how this is optionally specified within a
+/// store.
+pub enum StoreResourceLimiter<'a> {
+    Sync(&'a mut dyn crate::ResourceLimiter),
+    #[cfg(feature = "async")]
+    Async(&'a mut dyn crate::ResourceLimiterAsync),
+}
+
+impl StoreResourceLimiter<'_> {
+    pub(crate) async fn table_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> Result<bool, Error> {
+        match self {
+            Self::Sync(s) => s.table_growing(current, desired, maximum),
+            #[cfg(feature = "async")]
+            Self::Async(s) => s.table_growing(current, desired, maximum).await,
+        }
+    }
+
+    pub(crate) fn table_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+        match self {
+            Self::Sync(s) => s.table_grow_failed(error),
+            #[cfg(feature = "async")]
+            Self::Async(s) => s.table_grow_failed(error),
+        }
+    }
+}
+
 enum CallHookInner<T: 'static> {
     #[cfg(feature = "call-hook")]
     Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
@@ -2232,6 +2269,19 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
 
     fn store_opaque_mut(&mut self) -> &mut StoreOpaque {
         &mut self.inner
+    }
+
+    fn resource_limiter_and_store_opaque(
+        &mut self,
+    ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque) {
+        (
+            self.limiter.as_mut().map(|l| match l {
+                ResourceLimiterInner::Sync(s) => StoreResourceLimiter::Sync(s(&mut self.data)),
+                #[cfg(feature = "async")]
+                ResourceLimiterInner::Async(s) => StoreResourceLimiter::Async(s(&mut self.data)),
+            }),
+            &mut self.inner,
+        )
     }
 
     fn memory_growing(

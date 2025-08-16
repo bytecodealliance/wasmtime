@@ -3,6 +3,7 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use crate::prelude::*;
+use crate::runtime::store::StoreResourceLimiter;
 use crate::runtime::vm::stack_switching::VMContObj;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VMStore, VmPtr};
@@ -607,46 +608,50 @@ impl Table {
     ///
     /// Generally, prefer using `InstanceHandle::table_grow`, which encapsulates
     /// this unsafety.
-    pub unsafe fn grow_func(
+    pub async unsafe fn grow_func(
         &mut self,
-        store: &mut dyn VMStore,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         delta: u64,
-        init_value: Option<NonNull<VMFuncRef>>,
+        init_value: Option<SendSyncPtr<VMFuncRef>>,
     ) -> Result<Option<usize>, Error> {
-        self._grow(delta, store, |me, _store, base, len| {
-            me.fill_func(base, init_value, len)
+        self._grow(delta, limiter, |me, base, len| {
+            me.fill_func(base, init_value.map(|p| p.as_non_null()), len)
         })
+        .await
     }
 
     /// Same as [`Self::grow_func`], but for GC references.
-    pub unsafe fn grow_gc_ref(
+    pub async unsafe fn grow_gc_ref(
         &mut self,
-        store: &mut dyn VMStore,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        gc_store: Option<&mut GcStore>,
         delta: u64,
         init_value: Option<&VMGcRef>,
     ) -> Result<Option<usize>, Error> {
-        self._grow(delta, store, |me, store, base, len| {
-            me.fill_gc_ref(store, base, init_value, len)
+        self._grow(delta, limiter, |me, base, len| {
+            me.fill_gc_ref(gc_store, base, init_value, len)
         })
+        .await
     }
 
     /// Same as [`Self::grow_func`], but for continuations.
-    pub unsafe fn grow_cont(
+    pub async unsafe fn grow_cont(
         &mut self,
-        store: &mut dyn VMStore,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         delta: u64,
         init_value: Option<VMContObj>,
     ) -> Result<Option<usize>, Error> {
-        self._grow(delta, store, |me, _store, base, len| {
+        self._grow(delta, limiter, |me, base, len| {
             me.fill_cont(base, init_value, len)
         })
+        .await
     }
 
-    fn _grow(
+    async fn _grow(
         &mut self,
         delta: u64,
-        store: &mut dyn VMStore,
-        fill: impl FnOnce(&mut Self, Option<&mut GcStore>, u64, u64) -> Result<(), Trap>,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
+        fill: impl FnOnce(&mut Self, u64, u64) -> Result<(), Trap>,
     ) -> Result<Option<usize>, Error> {
         let old_size = self.size();
 
@@ -660,13 +665,21 @@ impl Table {
         let new_size = match old_size.checked_add(delta) {
             Some(s) => s,
             None => {
-                store.table_grow_failed(format_err!("overflow calculating new table size"))?;
+                if let Some(limiter) = limiter {
+                    limiter
+                        .table_grow_failed(format_err!("overflow calculating new table size"))?;
+                }
                 return Ok(None);
             }
         };
 
-        if !store.table_growing(old_size, new_size, self.maximum())? {
-            return Ok(None);
+        if let Some(limiter) = &mut limiter {
+            if !limiter
+                .table_growing(old_size, new_size, self.maximum())
+                .await?
+            {
+                return Ok(None);
+            }
         }
 
         // The WebAssembly spec requires failing a `table.grow` request if
@@ -674,7 +687,9 @@ impl Table {
         // limits in the instance allocator as well.
         if let Some(max) = self.maximum() {
             if new_size > max {
-                store.table_grow_failed(format_err!("Table maximum size exceeded"))?;
+                if let Some(limiter) = limiter {
+                    limiter.table_grow_failed(format_err!("Table maximum size exceeded"))?;
+                }
                 return Ok(None);
             }
         }
@@ -720,7 +735,6 @@ impl Table {
 
         fill(
             self,
-            store.store_opaque_mut().optional_gc_store_mut(),
             u64::try_from(old_size).unwrap(),
             u64::try_from(delta).unwrap(),
         )
