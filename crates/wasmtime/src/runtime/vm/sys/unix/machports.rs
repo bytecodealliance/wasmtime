@@ -40,7 +40,7 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::runtime::module::lookup_code;
+use crate::runtime::module::lookup_trap_for_pc;
 use crate::runtime::vm::sys::traphandlers::wasmtime_longjmp;
 use crate::runtime::vm::traphandlers::{TrapRegisters, tls};
 use mach2::exc::*;
@@ -422,11 +422,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // pointer value and if `MAP` changes happen after we read our entry that's
     // ok since they won't invalidate our entry.
     let (pc, fp) = get_pc_and_fp(&thread_state);
-    let Some((code, text_offset)) = lookup_code(pc as usize) else {
-        return false;
-    };
-
-    let Some(trap) = code.lookup_trap_code(text_offset) else {
+    let Some(trap) = lookup_trap_for_pc(pc as usize) else {
         return false;
     };
 
