@@ -18,8 +18,7 @@
 //   `DW_CFA_AARCH64_negate_ra_state` DWARF operation (aliased with the
 //   `.cfi_window_save` assembler directive) informs an unwinder about this
 
-use super::wasmtime_fiber_start;
-use wasmtime_asm_macros::asm_func;
+use core::arch::naked_asm;
 
 cfg_if::cfg_if! {
     if #[cfg(target_vendor = "apple")] {
@@ -37,10 +36,9 @@ cfg_if::cfg_if! {
     }
 }
 
-// fn(top_of_stack(%x0): *mut u8)
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_switch),
-    concat!(
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* x0 */) {
+    naked_asm!(concat!(
         "
             .cfi_startproc
         ",
@@ -87,14 +85,9 @@ asm_func!(
             ret
             .cfi_endproc
         ",
-    ),
-);
+    ));
+}
 
-// fn(
-//    top_of_stack(%x0): *mut u8,
-//    entry_point(%x1): extern fn(*mut u8, *mut u8),
-//    entry_arg0(%x2): *mut u8,
-// )
 // We set up the newly initialized fiber, so that it resumes execution
 // from wasmtime_fiber_start(). As a result, we need a signed address
 // of this function, so there are 2 requirements:
@@ -112,10 +105,14 @@ asm_func!(
 // TODO: Use the PACGA instruction to authenticate the saved register
 // state, which avoids creating signed pointers to
 // wasmtime_fiber_start(), and provides wider coverage.
-#[rustfmt::skip]
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
-    concat!(
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn wasmtime_fiber_init(
+    top_of_stack: *mut u8,                        // x0
+    entry_point: extern "C" fn(*mut u8, *mut u8), // x1
+    entry_arg0: *mut u8,                          // x2
+) {
+    naked_asm!(
+        concat!(
         "
             .cfi_startproc
             hint #34 // bti c
@@ -136,16 +133,18 @@ asm_func!(
             ret
             .cfi_endproc
         ",
-    ),
-    fiber = sym wasmtime_fiber_start,
-);
+        ),
+        fiber = sym wasmtime_fiber_start,
+    );
+}
 
 // See the x86_64 file for more commentary on what these CFI directives are
 // doing. Like over there note that the relative offsets to registers here
 // match the frame layout in `wasmtime_fiber_switch`.
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_start),
-    "
+#[unsafe(naked)]
+unsafe extern "C" fn wasmtime_fiber_start() -> ! {
+    naked_asm!(
+        "
         .cfi_startproc simple
         .cfi_def_cfa_offset 0
         .cfi_escape 0x0f,    /* DW_CFA_def_cfa_expression */ \
@@ -180,5 +179,6 @@ asm_func!(
         // codebase.
         brk 0xf1b3
         .cfi_endproc
-    ",
-);
+        ",
+    );
+}
