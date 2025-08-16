@@ -99,11 +99,11 @@ mod trampolines {
                     {
                         $(shims!(@validate_param $pname $param);)*
 
-                        let ret = crate::runtime::vm::traphandlers::catch_unwind_and_record_trap(|| unsafe {
-                            ComponentInstance::from_vmctx(vmctx, |store, instance| {
+                        let ret = unsafe {
+                            ComponentInstance::enter_host_from_wasm(vmctx, |store, instance| {
                                 shims!(@invoke $name(store, instance,) $($pname)*)
                             })
-                        });
+                        };
                         shims!(@convert_ret ret $($pname: $param)*)
                     }
                     $(

@@ -18,7 +18,7 @@ pub use self::signals::*;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
-use crate::runtime::vm::{InterpreterRef, VMContext, VMStoreContext, f32x4, f64x2, i8x16};
+use crate::runtime::vm::{InterpreterRef, VMContext, VMStore, VMStoreContext, f32x4, f64x2, i8x16};
 use crate::{EntryStoreContext, prelude::*};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
@@ -87,11 +87,13 @@ pub(super) unsafe fn raise_preexisting_trap() -> ! {
     tls::with(|info| unsafe { info.unwrap().unwind() })
 }
 
-/// Invokes the closure `f` and returns a `bool` if it succeeded.
+/// Invokes the closure `f` and handles any error/panic/trap that happens
+/// within.
 ///
-/// This will invoke the closure `f` which returns a value that implements
-/// `HostResult`. This trait abstracts over how host values are translated to
-/// ABI values when going back into wasm. Some examples are:
+/// This will invoke the closure `f` with the provided `store` and the closure
+/// will return a value that implements `HostResult`. This trait abstracts over
+/// how host values are translated to ABI values when going back into wasm.
+/// Some examples are:
 ///
 /// * `T` - bare return types (not results) are simply returned as-is. No
 ///   `catch_unwind` happens as if a trap can't happen then the host shouldn't
@@ -109,7 +111,10 @@ pub(super) unsafe fn raise_preexisting_trap() -> ! {
 /// This function acts as a bridge between the two to appropriately handle
 /// encoding host values to Cranelift-understood ABIs via the `HostResult`
 /// trait.
-pub fn catch_unwind_and_record_trap<R>(f: impl FnOnce() -> R) -> R::Abi
+pub fn catch_unwind_and_record_trap<R>(
+    store: &mut dyn VMStore,
+    f: impl FnOnce(&mut dyn VMStore) -> R,
+) -> R::Abi
 where
     R: HostResult,
 {
@@ -117,7 +122,7 @@ where
     // return value is always provided and if unwind information is provided
     // (e.g. `ret` is a "false"-y value) then it's recorded in TLS for the
     // unwind operation that's about to happen from Cranelift-generated code.
-    let (ret, unwind) = R::maybe_catch_unwind(f);
+    let (ret, unwind) = R::maybe_catch_unwind(|| f(store));
     if let Some(unwind) = unwind {
         tls::with(|info| info.unwrap().record_unwind(unwind));
     }
