@@ -12,8 +12,15 @@ pub mod bindings;
 mod conv;
 #[expect(unused, reason = "work in progress")] // TODO: implement
 mod host;
+mod request;
+mod response;
+
+pub use request::{Request, RequestOptions};
+pub use response::Response;
 
 use bindings::http::{handler, types};
+use core::ops::Deref;
+use std::sync::Arc;
 use wasmtime::component::{HasData, Linker, ResourceTable};
 
 pub(crate) struct WasiHttp;
@@ -89,4 +96,59 @@ where
     handler::add_to_linker::<_, WasiHttp>(linker, T::http)?;
     types::add_to_linker::<_, WasiHttp>(linker, T::http)?;
     Ok(())
+}
+
+pub enum MaybeMutable<T> {
+    Mutable(Arc<T>),
+    Immutable(Arc<T>),
+}
+
+impl<T> From<MaybeMutable<T>> for Arc<T> {
+    fn from(v: MaybeMutable<T>) -> Self {
+        v.into_arc()
+    }
+}
+
+impl<T> Deref for MaybeMutable<T> {
+    type Target = Arc<T>;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_arc()
+    }
+}
+
+impl<T> MaybeMutable<T> {
+    pub fn new_mutable(v: impl Into<Arc<T>>) -> Self {
+        Self::Mutable(v.into())
+    }
+
+    pub fn new_immutable(v: impl Into<Arc<T>>) -> Self {
+        Self::Immutable(v.into())
+    }
+
+    fn as_arc(&self) -> &Arc<T> {
+        match self {
+            Self::Mutable(v) | Self::Immutable(v) => v,
+        }
+    }
+
+    fn into_arc(self) -> Arc<T> {
+        match self {
+            Self::Mutable(v) | Self::Immutable(v) => v,
+        }
+    }
+
+    pub fn get(&self) -> &T {
+        self
+    }
+
+    pub fn get_mut(&mut self) -> Option<&mut T>
+    where
+        T: Clone,
+    {
+        match self {
+            Self::Mutable(v) => Some(Arc::make_mut(v)),
+            Self::Immutable(..) => None,
+        }
+    }
 }
