@@ -80,13 +80,13 @@ impl core::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions 
 }
 pub enum Baz {}
 pub trait HostBazWithStore: wasmtime::component::HasData + Send {
-    fn drop<T: 'static>(
+    fn drop<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
         rep: wasmtime::component::Resource<Baz>,
     ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
     where
         Self: Sized;
-    fn foo<T: 'static>(
+    fn foo<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
         self_: wasmtime::component::Resource<Baz>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
@@ -113,7 +113,7 @@ impl<T: 'static> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T: 'static> TheWorldPre<_T> {
+impl<_T: Send + 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -194,7 +194,7 @@ pub struct TheWorldIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct TheWorld {}
 pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostBazWithStore + Send {
-    fn foo<T: 'static>(
+    fn foo<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
@@ -209,7 +209,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -234,7 +234,7 @@ const _: () = {
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -272,7 +272,7 @@ const _: () = {
         where
             D: TheWorldImportsWithStore,
             for<'a> D::Data<'a>: TheWorldImports,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             let mut linker = linker.root();
             if options.experimental_world {
@@ -334,7 +334,7 @@ const _: () = {
         where
             D: foo::foo::the_interface::HostWithStore + TheWorldImportsWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::the_interface::Host + TheWorldImports + Send,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             if options.experimental_world {
                 Self::add_to_linker_imports::<T, D>(linker, options, host_getter)?;
@@ -396,13 +396,13 @@ pub mod foo {
             }
             pub enum Bar {}
             pub trait HostBarWithStore: wasmtime::component::HasData + Send {
-                fn drop<T: 'static>(
+                fn drop<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     rep: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
                 where
                     Self: Sized;
-                fn foo<T: 'static>(
+                fn foo<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     self_: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
@@ -410,7 +410,7 @@ pub mod foo {
             pub trait HostBar: Send {}
             impl<_T: HostBar + ?Sized + Send> HostBar for &mut _T {}
             pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + Send {
-                fn foo<T: 'static>(
+                fn foo<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
             }
@@ -424,7 +424,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 if options.experimental_interface {
                     let mut inst = linker.instance("foo:foo/the-interface")?;

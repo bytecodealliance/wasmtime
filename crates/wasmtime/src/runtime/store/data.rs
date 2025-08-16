@@ -57,7 +57,7 @@ where
 }
 
 // forward StoreContext => StoreOpaque
-impl<I, T> Index<I> for StoreContext<'_, T>
+impl<I, T: Send> Index<I> for StoreContext<'_, T>
 where
     StoreOpaque: Index<I>,
 {
@@ -70,7 +70,7 @@ where
 }
 
 // forward StoreContextMut => StoreOpaque
-impl<I, T> Index<I> for StoreContextMut<'_, T>
+impl<I, T: Send> Index<I> for StoreContextMut<'_, T>
 where
     StoreOpaque: Index<I>,
 {
@@ -82,7 +82,7 @@ where
     }
 }
 
-impl<I, T> IndexMut<I> for StoreContextMut<'_, T>
+impl<I, T: Send> IndexMut<I> for StoreContextMut<'_, T>
 where
     StoreOpaque: IndexMut<I>,
 {

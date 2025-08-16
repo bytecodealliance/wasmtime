@@ -18,7 +18,7 @@ impl<T: 'static> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T: 'static> TheWorldPre<_T> {
+impl<_T: Send + 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -111,7 +111,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -140,7 +140,7 @@ const _: () = {
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -177,7 +177,7 @@ const _: () = {
         where
             D: foo::foo::manyarg::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::manyarg::Host + Send,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             foo::foo::manyarg::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
@@ -275,7 +275,7 @@ pub mod foo {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn many_args<T: 'static>(
+                fn many_args<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a1: u64,
                     a2: u64,
@@ -294,7 +294,7 @@ pub mod foo {
                     a15: u64,
                     a16: u64,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn big_argument<T: 'static>(
+                fn big_argument<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: BigStruct,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
@@ -308,7 +308,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/manyarg")?;
                 inst.func_wrap_concurrent(
@@ -504,7 +504,7 @@ pub mod exports {
                     ///
                     /// This constructor can be used to front-load string lookups to find exports
                     /// within a component.
-                    pub fn new<_T>(
+                    pub fn new<_T: Send>(
                         _instance_pre: &wasmtime::component::InstancePre<_T>,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance = _instance_pre

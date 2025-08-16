@@ -29,7 +29,7 @@ pub trait StoreExt {
             + Sync;
 }
 
-impl<T> StoreExt for Store<T> {
+impl<T: Send> StoreExt for Store<T> {
     #[cfg(has_native_signals)]
     unsafe fn set_signal_handler<H>(&mut self, handler: H)
     where

@@ -315,9 +315,9 @@ impl MemoryPool {
     }
 
     /// Allocate a single memory for the given instance allocation request.
-    pub fn allocate(
+    pub async fn allocate(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_>,
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
         memory_index: Option<DefinedMemoryIndex>,
@@ -344,62 +344,80 @@ impl MemoryPool {
                     format!("memory stripe {stripe_index}"),
                 )
             })?;
+        let mut guard = DeallocateIndexGuard {
+            pool: self,
+            stripe_index,
+            striped_allocation_index,
+            active: true,
+        };
+
         let allocation_index =
             striped_allocation_index.as_unstriped_slot_index(stripe_index, self.stripes.len());
 
-        match (|| {
-            // Double-check that the runtime requirements of the memory are
-            // satisfied by the configuration of this pooling allocator. This
-            // should be returned as an error through `validate_memory_plans`
-            // but double-check here to be sure.
-            assert!(
-                tunables.memory_reservation + tunables.memory_guard_size
-                    <= u64::try_from(self.layout.bytes_to_next_stripe_slot().byte_count()).unwrap()
-            );
+        // Double-check that the runtime requirements of the memory are
+        // satisfied by the configuration of this pooling allocator. This
+        // should be returned as an error through `validate_memory_plans`
+        // but double-check here to be sure.
+        assert!(
+            tunables.memory_reservation + tunables.memory_guard_size
+                <= u64::try_from(self.layout.bytes_to_next_stripe_slot().byte_count()).unwrap()
+        );
 
-            let base = self.get_base(allocation_index);
-            let base_capacity = self.layout.max_memory_bytes;
+        let base = self.get_base(allocation_index);
+        let base_capacity = self.layout.max_memory_bytes;
 
-            let mut slot = self.take_memory_image_slot(allocation_index);
-            let image = match memory_index {
-                Some(memory_index) => request.runtime_info.memory_image(memory_index)?,
-                None => None,
-            };
-            let initial_size = ty
-                .minimum_byte_size()
-                .expect("min size checked in validation");
+        let mut slot = self.take_memory_image_slot(allocation_index);
+        let image = match memory_index {
+            Some(memory_index) => request.runtime_info.memory_image(memory_index)?,
+            None => None,
+        };
+        let initial_size = ty
+            .minimum_byte_size()
+            .expect("min size checked in validation");
 
-            // If instantiation fails, we can propagate the error
-            // upward and drop the slot. This will cause the Drop
-            // handler to attempt to map the range with PROT_NONE
-            // memory, to reserve the space while releasing any
-            // stale mappings. The next use of this slot will then
-            // create a new slot that will try to map over
-            // this, returning errors as well if the mapping
-            // errors persist. The unmap-on-drop is best effort;
-            // if it fails, then we can still soundly continue
-            // using the rest of the pool and allowing the rest of
-            // the process to continue, because we never perform a
-            // mmap that would leave an open space for someone
-            // else to come in and map something.
-            let initial_size = usize::try_from(initial_size).unwrap();
-            slot.instantiate(initial_size, image, ty, tunables)?;
+        // If instantiation fails, we can propagate the error
+        // upward and drop the slot. This will cause the Drop
+        // handler to attempt to map the range with PROT_NONE
+        // memory, to reserve the space while releasing any
+        // stale mappings. The next use of this slot will then
+        // create a new slot that will try to map over
+        // this, returning errors as well if the mapping
+        // errors persist. The unmap-on-drop is best effort;
+        // if it fails, then we can still soundly continue
+        // using the rest of the pool and allowing the rest of
+        // the process to continue, because we never perform a
+        // mmap that would leave an open space for someone
+        // else to come in and map something.
+        let initial_size = usize::try_from(initial_size).unwrap();
+        slot.instantiate(initial_size, image, ty, tunables)?;
 
-            Memory::new_static(
-                ty,
-                tunables,
-                MemoryBase::Mmap(base),
-                base_capacity.byte_count(),
-                slot,
-                unsafe { &mut *request.store.get().unwrap() },
-            )
-        })() {
-            Ok(memory) => Ok((allocation_index, memory)),
-            Err(e) => {
-                self.stripes[stripe_index]
+        let memory = Memory::new_static(
+            ty,
+            tunables,
+            MemoryBase::Mmap(base),
+            base_capacity.byte_count(),
+            slot,
+            unsafe { &mut *request.store.get().unwrap() },
+        )
+        .await?;
+        guard.active = false;
+        return Ok((allocation_index, memory));
+
+        struct DeallocateIndexGuard<'a> {
+            pool: &'a MemoryPool,
+            stripe_index: usize,
+            striped_allocation_index: StripedAllocationIndex,
+            active: bool,
+        }
+
+        impl Drop for DeallocateIndexGuard<'_> {
+            fn drop(&mut self) {
+                if !self.active {
+                    return;
+                }
+                self.pool.stripes[self.stripe_index]
                     .allocator
-                    .free(SlotId(striped_allocation_index.0));
-                Err(e)
+                    .free(SlotId(self.striped_allocation_index.0));
             }
         }
     }

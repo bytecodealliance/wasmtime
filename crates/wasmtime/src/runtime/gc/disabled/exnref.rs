@@ -60,7 +60,7 @@ impl ExnRef {
         match *self {}
     }
 
-    pub fn fields<'a, T: 'static>(
+    pub fn fields<'a, T: Send + 'static>(
         &self,
         _store: impl Into<StoreContextMut<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a + '_> {

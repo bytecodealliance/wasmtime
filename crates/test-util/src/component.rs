@@ -97,7 +97,7 @@ macro_rules! forward_impls {
         }
 
         unsafe impl Lower for $a {
-            fn linear_lower_to_flat<U>(
+            fn linear_lower_to_flat<U: Send>(
                 &self,
                 cx: &mut LowerContext<'_, U>,
                 ty: InterfaceType,
@@ -106,7 +106,7 @@ macro_rules! forward_impls {
                 <$b as Lower>::linear_lower_to_flat(&self.0, cx, ty, dst)
             }
 
-            fn linear_lower_to_memory<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType, offset: usize) -> Result<()> {
+            fn linear_lower_to_memory<U: Send>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType, offset: usize) -> Result<()> {
                 <$b as Lower>::linear_lower_to_memory(&self.0, cx, ty, offset)
             }
         }

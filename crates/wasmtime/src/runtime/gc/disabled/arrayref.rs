@@ -30,7 +30,7 @@ impl ArrayRef {
         match *self {}
     }
 
-    pub fn elems<'a, T: 'static>(
+    pub fn elems<'a, T: Send + 'static>(
         &self,
         _store: impl Into<StoreContextMut<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a + '_> {

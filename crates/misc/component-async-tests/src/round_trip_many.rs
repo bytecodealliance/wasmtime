@@ -23,7 +23,7 @@ pub mod non_concurrent_export_bindings {
 use bindings::local::local::many::Stuff;
 
 impl bindings::local::local::many::HostWithStore for Ctx {
-    async fn foo<T>(
+    async fn foo<T: Send>(
         _: &Accessor<T, Self>,
         a: String,
         b: u32,

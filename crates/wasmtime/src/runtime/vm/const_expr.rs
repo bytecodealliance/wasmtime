@@ -1,6 +1,7 @@
 //! Evaluating const expressions.
 
 use crate::prelude::*;
+use crate::runtime::vm;
 use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque};
 #[cfg(feature = "gc")]
 use crate::{
@@ -60,7 +61,7 @@ impl ConstEvalContext {
 
     /// Safety: field values must be of the correct types.
     #[cfg(feature = "gc")]
-    unsafe fn struct_new(
+    async fn struct_new(
         &mut self,
         store: &mut StoreOpaque,
         shared_ty: VMSharedTypeIndex,
@@ -68,12 +69,12 @@ impl ConstEvalContext {
     ) -> Result<Val> {
         let struct_ty = StructType::from_shared_type_index(store.engine(), shared_ty);
         let allocator = StructRefPre::_new(store, struct_ty);
-        let struct_ref = unsafe { StructRef::new_maybe_async(store, &allocator, &fields)? };
+        let struct_ref = StructRef::_new(store, &allocator, &fields).await?;
         Ok(Val::AnyRef(Some(struct_ref.into())))
     }
 
     #[cfg(feature = "gc")]
-    fn struct_new_default(
+    async fn struct_new_default(
         &mut self,
         store: &mut StoreOpaque,
         shared_ty: VMSharedTypeIndex,
@@ -121,11 +122,25 @@ impl ConstEvalContext {
             })
             .collect::<smallvec::SmallVec<[_; 8]>>();
 
-        unsafe { self.struct_new(store, shared_ty, &fields) }
+        self.struct_new(store, shared_ty, &fields).await
     }
 }
 
 impl ConstExprEvaluator {
+    /// Same as [`Self::eval`], except only suitable for when `Val`
+    /// represents an integer result.
+    pub fn eval_int(
+        &mut self,
+        store: &mut StoreOpaque,
+        context: &mut ConstEvalContext,
+        expr: &ConstExpr,
+    ) -> Result<&Val> {
+        // Note that `assert_ready` here should be valid as production of an
+        // integer cannot involve GC meaning that async operations aren't used.
+        let mut scope = OpaqueRootScope::new(store);
+        vm::assert_ready(self.eval(&mut scope, context, expr))
+    }
+
     /// Evaluate the given const expression in the given context.
     ///
     ///
@@ -135,19 +150,10 @@ impl ConstExprEvaluator {
     /// and itself trigger a GC meaning that all references must be rooted,
     /// hence the external requirement of a rooting scope.
     ///
-    /// # Unsafety
+    /// # Panics
     ///
-    /// When async is enabled, this may only be executed on a fiber stack.
-    ///
-    /// The given const expression must be valid within the given context,
-    /// e.g. the const expression must be well-typed and the context must return
-    /// global values of the expected types. This evaluator operates directly on
-    /// untyped `ValRaw`s and does not and cannot check that its operands are of
-    /// the correct type.
-    ///
-    /// If given async store, then this must be called from on an async fiber
-    /// stack.
-    pub unsafe fn eval(
+    /// This function will panic if `expr` is an invalid constant expression.
+    pub async fn eval(
         &mut self,
         store: &mut OpaqueRootScope<&mut StoreOpaque>,
         context: &mut ConstEvalContext,
@@ -162,22 +168,19 @@ impl ConstExprEvaluator {
             [ConstOp::F64Const(f)] => self.return_one(Val::F64(*f)),
 
             // Fall back to the interpreter loop for all other expressions.
-            //
-            // SAFETY: this function has the same contract as `eval_loop`.
-            other => unsafe { self.eval_loop(store, context, other) },
+            other => self.eval_loop(store, context, other).await,
         }
     }
 
+    #[inline]
     fn return_one(&mut self, val: Val) -> Result<&Val> {
         self.stack.clear();
         self.stack.push(val);
         Ok(&self.stack[0])
     }
 
-    /// # Safety
-    ///
-    /// See [`Self::eval`].
-    unsafe fn eval_loop(
+    #[cold]
+    async fn eval_loop(
         &mut self,
         store: &mut OpaqueRootScope<&mut StoreOpaque>,
         context: &mut ConstEvalContext,
@@ -267,9 +270,9 @@ impl ConstExprEvaluator {
                     }
 
                     let start = self.stack.len() - len;
-                    let s = unsafe {
-                        context.struct_new(store, interned_type_index, &self.stack[start..])?
-                    };
+                    let s = context
+                        .struct_new(store, interned_type_index, &self.stack[start..])
+                        .await?;
                     self.stack.truncate(start);
                     self.stack.push(s);
                 }
@@ -279,7 +282,8 @@ impl ConstExprEvaluator {
                     let ty = store.instance(context.instance).env_module().types
                         [*struct_type_index]
                         .unwrap_engine_type_index();
-                    self.stack.push(context.struct_new_default(store, ty)?);
+                    self.stack
+                        .push(context.struct_new_default(store, ty).await?);
                 }
 
                 #[cfg(feature = "gc")]
@@ -293,7 +297,7 @@ impl ConstExprEvaluator {
                     let elem = self.pop()?;
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array = unsafe { ArrayRef::new_maybe_async(store, &pre, &elem, len)? };
+                    let array = ArrayRef::_new(store, &pre, &elem, len).await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }
@@ -310,7 +314,7 @@ impl ConstExprEvaluator {
                         .expect("type should have a default value");
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array = unsafe { ArrayRef::new_maybe_async(store, &pre, &elem, len)? };
+                    let array = ArrayRef::_new(store, &pre, &elem, len).await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }
@@ -340,7 +344,7 @@ impl ConstExprEvaluator {
                         .collect::<smallvec::SmallVec<[_; 8]>>();
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array = unsafe { ArrayRef::new_fixed_maybe_async(store, &pre, &elems)? };
+                    let array = ArrayRef::_new_fixed(store, &pre, &elems).await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }

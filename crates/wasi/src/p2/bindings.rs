@@ -109,9 +109,6 @@
 ///     with: {
 ///         "wasi": wasmtime_wasi::p2::bindings::sync,
 ///     },
-///     // This is required for bindings using `wasmtime-wasi` and it otherwise
-///     // isn't the default for non-async bindings.
-///     require_store_data_send: true,
 /// });
 ///
 /// struct MyState {
@@ -184,7 +181,6 @@ pub mod sync {
                 "wasi:io/streams/output-stream": wasmtime_wasi_io::streams::DynOutputStream,
 
             },
-            require_store_data_send: true,
         });
     }
     pub use self::generated::exports;

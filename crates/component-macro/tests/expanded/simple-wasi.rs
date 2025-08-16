@@ -18,7 +18,7 @@ impl<T: 'static> Clone for WasiPre<T> {
         }
     }
 }
-impl<_T: 'static> WasiPre<_T> {
+impl<_T: Send + 'static> WasiPre<_T> {
     /// Creates a new copy of `WasiPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -107,7 +107,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -132,7 +132,7 @@ const _: () = {
     impl Wasi {
         /// Convenience wrapper around [`WasiPre::new`] and
         /// [`WasiPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -172,7 +172,7 @@ const _: () = {
             for<'a> D::Data<
                 'a,
             >: foo::foo::wasi_filesystem::Host + foo::foo::wall_clock::Host,
-            T: 'static,
+            T: Send + 'static,
         {
             foo::foo::wasi_filesystem::add_to_linker::<T, D>(linker, host_getter)?;
             foo::foo::wall_clock::add_to_linker::<T, D>(linker, host_getter)?;
@@ -271,7 +271,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/wasi-filesystem")?;
                 inst.func_wrap(
@@ -330,7 +330,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/wall-clock")?;
                 Ok(())

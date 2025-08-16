@@ -10,7 +10,6 @@ mod generated {
         world: "wasi:http/proxy",
         imports: { default: tracing | trappable },
         exports: { default: async },
-        require_store_data_send: true,
         with: {
             // Upstream package dependencies
             "wasi:io": wasmtime_wasi::p2::bindings::io,
@@ -57,7 +56,6 @@ pub mod sync {
                 // order to have in_tokio
                 "wasi:io": wasmtime_wasi::p2::bindings::sync::io,
             },
-            require_store_data_send: true,
         });
     }
 

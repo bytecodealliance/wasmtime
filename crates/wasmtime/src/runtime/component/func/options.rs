@@ -100,7 +100,7 @@ impl Options {
         }
     }
 
-    fn realloc<'a, T>(
+    fn realloc<'a, T: Send>(
         &self,
         store: &'a mut StoreContextMut<'_, T>,
         realloc_ty: &FuncType,
@@ -208,7 +208,7 @@ impl Options {
 /// contextual information necessary related to the context in which the
 /// lowering is happening.
 #[doc(hidden)]
-pub struct LowerContext<'a, T: 'static> {
+pub struct LowerContext<'a, T: Send + 'static> {
     /// Lowering may involve invoking memory allocation functions so part of the
     /// context here is carrying access to the entire store that wasm is
     /// executing within. This store serves as proof-of-ability to actually
@@ -236,7 +236,7 @@ pub struct LowerContext<'a, T: 'static> {
 }
 
 #[doc(hidden)]
-impl<'a, T: 'static> LowerContext<'a, T> {
+impl<'a, T: Send + 'static> LowerContext<'a, T> {
     /// Creates a new lowering context from the specified parameters.
     pub fn new(
         store: StoreContextMut<'a, T>,
@@ -244,8 +244,8 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         types: &'a ComponentTypes,
         instance: Instance,
     ) -> LowerContext<'a, T> {
-        #[cfg(all(debug_assertions, feature = "component-model-async"))]
-        if store.engine().config().async_support {
+        #[cfg(feature = "component-model-async")]
+        if cfg!(debug_assertions) && store.engine().config().async_support {
             // Assert that we're running on a fiber, which is necessary in
             // case we call the guest's realloc function.
             store.0.with_blocking(|_, _| {});

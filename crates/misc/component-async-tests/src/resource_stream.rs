@@ -34,7 +34,7 @@ impl bindings::local::local::resource_stream::HostX for Ctx {
 }
 
 impl bindings::local::local::resource_stream::HostWithStore for Ctx {
-    async fn foo<T: 'static>(
+    async fn foo<T: Send>(
         accessor: &Accessor<T, Self>,
         count: u32,
     ) -> wasmtime::Result<StreamReader<Resource<ResourceStreamX>>> {
@@ -44,7 +44,7 @@ impl bindings::local::local::resource_stream::HostWithStore for Ctx {
             count: u32,
         }
 
-        impl<T> AccessorTask<T, Ctx, Result<()>> for Task {
+        impl<T: Send + 'static> AccessorTask<T, Ctx, Result<()>> for Task {
             async fn run(self, accessor: &Accessor<T, Ctx>) -> Result<()> {
                 let mut tx = GuardedStreamWriter::new(accessor, self.tx);
                 for _ in 0..self.count {

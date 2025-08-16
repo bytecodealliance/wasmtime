@@ -14,7 +14,7 @@ pub fn link_module(
     let module_ident = names::module(&module.name);
 
     let send_bound = if settings.async_.contains_async(module) {
-        quote! { + Send, T: Send }
+        quote! { + Send }
     } else {
         quote! {}
     };
@@ -58,7 +58,7 @@ pub fn link_module(
             get_cx: impl Fn(&mut T) -> #u + Send + Sync + Copy + 'static,
         ) -> wiggle::anyhow::Result<()>
             where
-                T: 'static,
+                T: Send + 'static,
                 U: #ctx_bound #send_bound
         {
             #(#bodies)*

@@ -736,7 +736,7 @@ impl Instance {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages. Returns `Some` with the old size in bytes if growth was
     /// successful.
-    pub(crate) fn memory_grow(
+    pub(crate) async fn memory_grow(
         mut self: Pin<&mut Self>,
         store: &mut dyn VMStore,
         idx: DefinedMemoryIndex,
@@ -744,7 +744,7 @@ impl Instance {
     ) -> Result<Option<usize>, Error> {
         let memory = &mut self.as_mut().memories_mut()[idx].1;
 
-        let result = unsafe { memory.grow(delta, Some(store)) };
+        let result = unsafe { memory.grow(delta, Some(store)).await };
 
         // Update the state used by a non-shared Wasm memory in case the base
         // pointer and/or the length changed.
@@ -766,13 +766,13 @@ impl Instance {
     /// Performs a grow operation on the `table_index` specified using `grow`.
     ///
     /// This will handle updating the VMTableDefinition internally as necessary.
-    pub(crate) fn defined_table_grow(
+    pub(crate) async fn defined_table_grow(
         mut self: Pin<&mut Self>,
         table_index: DefinedTableIndex,
-        grow: impl FnOnce(&mut Table) -> Result<Option<usize>>,
+        grow: impl AsyncFnOnce(&mut Table) -> Result<Option<usize>>,
     ) -> Result<Option<usize>> {
         let table = self.as_mut().get_defined_table(table_index);
-        let result = grow(table);
+        let result = grow(table).await;
         let element = table.vmtable();
         self.set_table(table_index, element);
         result
@@ -935,7 +935,7 @@ impl Instance {
     ///
     /// Returns a `Trap` error when the range within the table is out of bounds
     /// or the range within the passive element is out of bounds.
-    pub(crate) fn table_init(
+    pub(crate) async fn table_init(
         self: Pin<&mut Self>,
         store: &mut StoreOpaque,
         table_index: TableIndex,
@@ -957,9 +957,10 @@ impl Instance {
             src,
             len,
         )
+        .await
     }
 
-    pub(crate) fn table_init_segment(
+    pub(crate) async fn table_init_segment(
         store: &mut StoreOpaque,
         elements_instance_id: InstanceId,
         const_evaluator: &mut ConstExprEvaluator,
@@ -1015,11 +1016,10 @@ impl Instance {
                     .ok_or(Trap::TableOutOfBounds)?;
                 let mut context = ConstEvalContext::new(elements_instance_id);
                 for (i, expr) in positions.zip(exprs) {
-                    let element = unsafe {
-                        const_evaluator
-                            .eval(&mut store, &mut context, expr)
-                            .expect("const expr should be valid")
-                    };
+                    let element = const_evaluator
+                        .eval(&mut store, &mut context, expr)
+                        .await
+                        .expect("const expr should be valid");
                     table.set_(&mut store, i, element.ref_().unwrap()).unwrap();
                 }
             }

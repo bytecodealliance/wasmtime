@@ -18,7 +18,7 @@ impl<T: 'static> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T: 'static> TheWorldPre<_T> {
+impl<_T: Send + 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -111,7 +111,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -140,7 +140,7 @@ const _: () = {
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -177,7 +177,7 @@ const _: () = {
         where
             D: foo::foo::simple::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::simple::Host + Send,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             foo::foo::simple::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
@@ -194,25 +194,25 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn f1<T: 'static>(
+                fn f1<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn f2<T: 'static>(
+                fn f2<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: u32,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn f3<T: 'static>(
+                fn f3<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: u32,
                     b: u32,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn f4<T: 'static>(
+                fn f4<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = u32> + Send;
-                fn f5<T: 'static>(
+                fn f5<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = (u32, u32)> + Send;
-                fn f6<T: 'static>(
+                fn f6<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: u32,
                     b: u32,
@@ -228,7 +228,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/simple")?;
                 inst.func_wrap_concurrent(
@@ -334,7 +334,7 @@ pub mod exports {
                     ///
                     /// This constructor can be used to front-load string lookups to find exports
                     /// within a component.
-                    pub fn new<_T>(
+                    pub fn new<_T: Send>(
                         _instance_pre: &wasmtime::component::InstancePre<_T>,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance = _instance_pre

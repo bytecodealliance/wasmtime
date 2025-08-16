@@ -152,7 +152,7 @@ where
     ///
     /// `func` must be of the given type, and it additionally must be a valid
     /// store-owned pointer within the `store` provided.
-    pub(crate) unsafe fn call_raw<T>(
+    pub(crate) unsafe fn call_raw<T: Send>(
         store: &mut StoreContextMut<'_, T>,
         ty: &FuncType,
         func: ptr::NonNull<VMFuncRef>,

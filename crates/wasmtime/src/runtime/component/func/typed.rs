@@ -213,12 +213,12 @@ where
                     Self::lower_args(cx, ty, dst, params)
                 })?;
 
-            struct RemoveOnDrop<'a, T: 'static> {
+            struct RemoveOnDrop<'a, T: Send + 'static> {
                 store: StoreContextMut<'a, T>,
                 task: TaskId,
             }
 
-            impl<'a, T> Drop for RemoveOnDrop<'a, T> {
+            impl<'a, T: Send> Drop for RemoveOnDrop<'a, T> {
                 fn drop(&mut self) {
                     self.task.remove(self.store.as_context_mut()).unwrap();
                 }
@@ -284,7 +284,7 @@ where
         result?.await
     }
 
-    fn lower_args<T>(
+    fn lower_args<T: Send>(
         cx: &mut LowerContext<T>,
         ty: InterfaceType,
         dst: &mut [MaybeUninit<ValRaw>],
@@ -309,7 +309,7 @@ where
     /// of core Wasm parameters and results in the signature of the function to
     /// be called.
     #[cfg(feature = "component-model-async")]
-    fn prepare_call<T>(
+    fn prepare_call<T: Send>(
         self,
         store: StoreContextMut<'_, T>,
         remove_task_automatically: bool,
@@ -447,7 +447,7 @@ where
     /// This is only valid to call when the "flatten count" is small enough, or
     /// when the canonical ABI says arguments go through the stack rather than
     /// the heap.
-    fn lower_stack_args<T>(
+    fn lower_stack_args<T: Send>(
         cx: &mut LowerContext<'_, T>,
         params: &Params,
         ty: InterfaceType,
@@ -464,7 +464,7 @@ where
     /// the `MAX_FLAT_PARAMS` threshold. Here the wasm's `realloc` function is
     /// invoked to allocate space and then parameters are stored at that heap
     /// pointer location.
-    fn lower_heap_args<T>(
+    fn lower_heap_args<T: Send>(
         cx: &mut LowerContext<'_, T>,
         params: &Params,
         ty: InterfaceType,
@@ -536,10 +536,7 @@ where
 
     /// See [`Func::post_return_async`]
     #[cfg(feature = "async")]
-    pub async fn post_return_async<T: Send>(
-        &self,
-        store: impl AsContextMut<Data = T>,
-    ) -> Result<()> {
+    pub async fn post_return_async(&self, store: impl AsContextMut) -> Result<()> {
         self.func.post_return_async(store).await
     }
 }
@@ -759,7 +756,7 @@ pub unsafe trait Lower: ComponentType {
     ///
     /// This will only be called if `typecheck` passes for `Op::Lower`.
     #[doc(hidden)]
-    fn linear_lower_to_flat<T>(
+    fn linear_lower_to_flat<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -785,7 +782,7 @@ pub unsafe trait Lower: ComponentType {
     ///
     /// This will only be called if `typecheck` passes for `Op::Lower`.
     #[doc(hidden)]
-    fn linear_lower_to_memory<T>(
+    fn linear_lower_to_memory<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -801,7 +798,7 @@ pub unsafe trait Lower: ComponentType {
     /// which can avoid some extra fluff and use a pattern that's more easily
     /// optimizable by LLVM.
     #[doc(hidden)]
-    fn linear_store_list_to_memory<T>(
+    fn linear_store_list_to_memory<T: Send>(
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
         mut offset: usize,
@@ -944,7 +941,7 @@ forward_type_impls! {
 macro_rules! forward_lowers {
     ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
         unsafe impl <$($generics)*> Lower for $a {
-            fn linear_lower_to_flat<U>(
+            fn linear_lower_to_flat<U: Send>(
                 &self,
                 cx: &mut LowerContext<'_, U>,
                 ty: InterfaceType,
@@ -953,7 +950,7 @@ macro_rules! forward_lowers {
                 <$b as Lower>::linear_lower_to_flat(self, cx, ty, dst)
             }
 
-            fn linear_lower_to_memory<U>(
+            fn linear_lower_to_memory<U: Send>(
                 &self,
                 cx: &mut LowerContext<'_, U>,
                 ty: InterfaceType,
@@ -1039,7 +1036,7 @@ macro_rules! integers {
         unsafe impl Lower for $primitive {
             #[inline]
             #[allow(trivial_numeric_casts, reason = "macro-generated code")]
-            fn linear_lower_to_flat<T>(
+            fn linear_lower_to_flat<T: Send>(
                 &self,
                 _cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
@@ -1051,7 +1048,7 @@ macro_rules! integers {
             }
 
             #[inline]
-            fn linear_lower_to_memory<T>(
+            fn linear_lower_to_memory<T: Send>(
                 &self,
                 cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
@@ -1063,7 +1060,7 @@ macro_rules! integers {
                 Ok(())
             }
 
-            fn linear_store_list_to_memory<T>(
+            fn linear_store_list_to_memory<T: Send>(
                 cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
                 offset: usize,
@@ -1165,7 +1162,7 @@ macro_rules! floats {
 
         unsafe impl Lower for $float {
             #[inline]
-            fn linear_lower_to_flat<T>(
+            fn linear_lower_to_flat<T: Send>(
                 &self,
                 _cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
@@ -1177,7 +1174,7 @@ macro_rules! floats {
             }
 
             #[inline]
-            fn linear_lower_to_memory<T>(
+            fn linear_lower_to_memory<T: Send>(
                 &self,
                 cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
@@ -1190,7 +1187,7 @@ macro_rules! floats {
                 Ok(())
             }
 
-            fn linear_store_list_to_memory<T>(
+            fn linear_store_list_to_memory<T: Send>(
                 cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
                 offset: usize,
@@ -1281,7 +1278,7 @@ unsafe impl ComponentType for bool {
 }
 
 unsafe impl Lower for bool {
-    fn linear_lower_to_flat<T>(
+    fn linear_lower_to_flat<T: Send>(
         &self,
         _cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1292,7 +1289,7 @@ unsafe impl Lower for bool {
         Ok(())
     }
 
-    fn linear_lower_to_memory<T>(
+    fn linear_lower_to_memory<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1348,7 +1345,7 @@ unsafe impl ComponentType for char {
 
 unsafe impl Lower for char {
     #[inline]
-    fn linear_lower_to_flat<T>(
+    fn linear_lower_to_flat<T: Send>(
         &self,
         _cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1360,7 +1357,7 @@ unsafe impl Lower for char {
     }
 
     #[inline]
-    fn linear_lower_to_memory<T>(
+    fn linear_lower_to_memory<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1417,7 +1414,7 @@ unsafe impl ComponentType for str {
 }
 
 unsafe impl Lower for str {
-    fn linear_lower_to_flat<T>(
+    fn linear_lower_to_flat<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1432,7 +1429,7 @@ unsafe impl Lower for str {
         Ok(())
     }
 
-    fn linear_lower_to_memory<T>(
+    fn linear_lower_to_memory<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1448,7 +1445,7 @@ unsafe impl Lower for str {
     }
 }
 
-fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize, usize)> {
+fn lower_string<T: Send>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize, usize)> {
     // Note that in general the wasm module can't assume anything about what the
     // host strings are encoded as. Additionally hosts are allowed to have
     // differently-encoded strings at runtime. Finally when copying a string
@@ -1645,7 +1642,7 @@ impl WasmStr {
     // in an opt-in basis don't do validation. Additionally there should be some
     // method that returns `[u16]` after validating to avoid the utf16-to-utf8
     // transcode.
-    pub fn to_str<'a, T: 'static>(
+    pub fn to_str<'a, T: Send + 'static>(
         &self,
         store: impl Into<StoreContext<'a, T>>,
     ) -> Result<Cow<'a, str>> {
@@ -1761,7 +1758,7 @@ unsafe impl<T> Lower for [T]
 where
     T: Lower,
 {
-    fn linear_lower_to_flat<U>(
+    fn linear_lower_to_flat<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -1779,7 +1776,7 @@ where
         Ok(())
     }
 
-    fn linear_lower_to_memory<U>(
+    fn linear_lower_to_memory<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -1819,6 +1816,7 @@ fn lower_list<T, U>(
 ) -> Result<(usize, usize)>
 where
     T: Lower,
+    U: Send,
 {
     let elem_size = T::SIZE32;
     let size = list
@@ -1927,7 +1925,7 @@ impl<T: Lift> WasmList<T> {
     ///
     /// Each item of the list may fail to decode and is represented through the
     /// `Result` value of the iterator.
-    pub fn iter<'a, U: 'static>(
+    pub fn iter<'a, U: Send + 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, U>>,
     ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
@@ -1958,7 +1956,7 @@ macro_rules! raw_wasm_list_accessors {
             ///
             /// Panics if the `store` provided is not the one from which this
             /// slice originated.
-            pub fn as_le_slice<'a, T: 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [$i] {
+            pub fn as_le_slice<'a, T: Send + 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [$i] {
                 let memory = self.options.memory(store.into().0);
                 self._as_le_slice(memory)
             }
@@ -2253,7 +2251,7 @@ unsafe impl<T> Lower for Option<T>
 where
     T: Lower,
 {
-    fn linear_lower_to_flat<U>(
+    fn linear_lower_to_flat<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -2284,7 +2282,7 @@ where
         Ok(())
     }
 
-    fn linear_lower_to_memory<U>(
+    fn linear_lower_to_memory<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -2437,7 +2435,7 @@ where
     T: Lower,
     E: Lower,
 {
-    fn linear_lower_to_flat<U>(
+    fn linear_lower_to_flat<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -2542,7 +2540,7 @@ where
         }
     }
 
-    fn linear_lower_to_memory<U>(
+    fn linear_lower_to_memory<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -2753,7 +2751,7 @@ macro_rules! impl_component_ty_for_tuples {
         unsafe impl<$($t,)*> Lower for ($($t,)*)
             where $($t: Lower),*
         {
-            fn linear_lower_to_flat<U>(
+            fn linear_lower_to_flat<U: Send>(
                 &self,
                 cx: &mut LowerContext<'_, U>,
                 ty: InterfaceType,
@@ -2772,7 +2770,7 @@ macro_rules! impl_component_ty_for_tuples {
                 Ok(())
             }
 
-            fn linear_lower_to_memory<U>(
+            fn linear_lower_to_memory<U: Send>(
                 &self,
                 cx: &mut LowerContext<'_, U>,
                 ty: InterfaceType,

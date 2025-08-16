@@ -22,6 +22,7 @@ struct InputTask<T> {
 
 impl<T, U, V> AccessorTask<T, U, wasmtime::Result<()>> for InputTask<V>
 where
+    T: Send + 'static,
     U: HasData,
     V: AsyncRead + Send + Sync + Unpin + 'static,
 {
@@ -52,6 +53,7 @@ struct OutputTask<T> {
 
 impl<T, U, V> AccessorTask<T, U, wasmtime::Result<()>> for OutputTask<V>
 where
+    T: Send + 'static,
     U: HasData,
     V: AsyncWrite + Send + Sync + Unpin + 'static,
 {
@@ -139,7 +141,7 @@ impl terminal_stderr::Host for WasiCliCtxView<'_> {
 }
 
 impl stdin::HostWithStore for WasiCli {
-    async fn get_stdin<U>(store: &Accessor<U, Self>) -> wasmtime::Result<StreamReader<u8>> {
+    async fn get_stdin<U: Send>(store: &Accessor<U, Self>) -> wasmtime::Result<StreamReader<u8>> {
         store.with(|mut view| {
             let instance = view.instance();
             let (tx, rx) = instance
@@ -158,7 +160,7 @@ impl stdin::HostWithStore for WasiCli {
 impl stdin::Host for WasiCliCtxView<'_> {}
 
 impl stdout::HostWithStore for WasiCli {
-    async fn set_stdout<U>(
+    async fn set_stdout<U: Send>(
         store: &Accessor<U, Self>,
         data: StreamReader<u8>,
     ) -> wasmtime::Result<()> {
@@ -176,7 +178,7 @@ impl stdout::HostWithStore for WasiCli {
 impl stdout::Host for WasiCliCtxView<'_> {}
 
 impl stderr::HostWithStore for WasiCli {
-    async fn set_stderr<U>(
+    async fn set_stderr<U: Send>(
         store: &Accessor<U, Self>,
         data: StreamReader<u8>,
     ) -> wasmtime::Result<()> {

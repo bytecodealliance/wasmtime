@@ -13,11 +13,11 @@ impl Host for WasiSocketsCtxView<'_> {
     }
 }
 
-fn get_socket_addr_check<T>(store: &Accessor<T, WasiSockets>) -> SocketAddrCheck {
+fn get_socket_addr_check<T: Send>(store: &Accessor<T, WasiSockets>) -> SocketAddrCheck {
     store.with(|mut view| view.get().ctx.socket_addr_check.clone())
 }
 
-async fn is_addr_allowed<T>(
+async fn is_addr_allowed<T: Send>(
     store: &Accessor<T, WasiSockets>,
     addr: SocketAddr,
     reason: SocketAddrUse,

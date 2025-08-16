@@ -133,7 +133,6 @@ wasmtime::component::bindgen!({
     world: "test-reactor",
     imports: { default: async },
     exports: { default: async },
-    require_store_data_send: true,
     with: { "wasi": wasmtime_wasi::p2::bindings },
     ownership: Borrowing {
         duplicate_if_necessary: false

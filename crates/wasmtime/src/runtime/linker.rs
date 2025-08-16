@@ -80,7 +80,7 @@ use log::warn;
 ///
 /// [`Store`]: crate::Store
 /// [`Global`]: crate::Global
-pub struct Linker<T> {
+pub struct Linker<T: Send + 'static> {
     engine: Engine,
     string2idx: HashMap<Arc<str>, usize>,
     strings: Vec<Arc<str>>,
@@ -90,13 +90,13 @@ pub struct Linker<T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-impl<T> Debug for Linker<T> {
+impl<T: Send + 'static> Debug for Linker<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Linker").finish_non_exhaustive()
     }
 }
 
-impl<T> Clone for Linker<T> {
+impl<T: Send + 'static> Clone for Linker<T> {
     fn clone(&self) -> Linker<T> {
         Linker {
             engine: self.engine.clone(),
@@ -138,7 +138,7 @@ pub(crate) enum DefinitionType {
     Tag(wasmtime_environ::Tag),
 }
 
-impl<T> Linker<T> {
+impl<T: Send + 'static> Linker<T> {
     /// Creates a new [`Linker`].
     ///
     /// The linker will define functions within the context of the `engine`
@@ -240,10 +240,7 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()>
-    where
-        T: 'static,
-    {
+    pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()> {
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
                 if let ExternType::Func(func_ty) = import_err.ty() {
@@ -281,10 +278,7 @@ impl<T> Linker<T> {
         &mut self,
         store: &mut impl AsContextMut<Data = T>,
         module: &Module,
-    ) -> anyhow::Result<()>
-    where
-        T: 'static,
-    {
+    ) -> anyhow::Result<()> {
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
                 let default_extern =
@@ -352,10 +346,7 @@ impl<T> Linker<T> {
         module: &str,
         name: &str,
         item: impl Into<Extern>,
-    ) -> Result<&mut Self>
-    where
-        T: 'static,
-    {
+    ) -> Result<&mut Self> {
         let store = store.as_context();
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::new(store.0, item.into()))?;
@@ -373,10 +364,7 @@ impl<T> Linker<T> {
         store: impl AsContext<Data = T>,
         name: &str,
         item: impl Into<Extern>,
-    ) -> Result<&mut Self>
-    where
-        T: 'static,
-    {
+    ) -> Result<&mut Self> {
         let store = store.as_context();
         let key = self.import_key(name, None);
         self.insert(key, Definition::new(store.0, item.into()))?;
@@ -397,10 +385,7 @@ impl<T> Linker<T> {
         name: &str,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
-    ) -> Result<&mut Self>
-    where
-        T: 'static,
-    {
+    ) -> Result<&mut Self> {
         assert!(ty.comes_from_same_engine(self.engine()));
         let func = HostFunc::new(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
@@ -426,10 +411,7 @@ impl<T> Linker<T> {
         name: &str,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
-    ) -> Result<&mut Self>
-    where
-        T: 'static,
-    {
+    ) -> Result<&mut Self> {
         assert!(ty.comes_from_same_engine(self.engine()));
         // SAFETY: the contract of this function is the same as `new_unchecked`.
         let func = unsafe { HostFunc::new_unchecked(&self.engine, ty, func) };
@@ -468,7 +450,6 @@ impl<T> Linker<T> {
             + Send
             + Sync
             + 'static,
-        T: 'static,
     {
         assert!(
             self.engine.config().async_support,
@@ -545,10 +526,7 @@ impl<T> Linker<T> {
         module: &str,
         name: &str,
         func: impl IntoFunc<T, Params, Args>,
-    ) -> Result<&mut Self>
-    where
-        T: 'static,
-    {
+    ) -> Result<&mut Self> {
         let func = HostFunc::wrap(&self.engine, func);
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
@@ -568,7 +546,6 @@ impl<T> Linker<T> {
             + Send
             + Sync
             + 'static,
-        T: 'static,
     {
         assert!(
             self.engine.config().async_support,
@@ -652,10 +629,7 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         module_name: &str,
         instance: Instance,
-    ) -> Result<&mut Self>
-    where
-        T: 'static,
-    {
+    ) -> Result<&mut Self> {
         let mut store = store.as_context_mut();
         let exports = instance
             .exports(&mut store)
@@ -793,10 +767,7 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         module_name: &str,
         module: &Module,
-    ) -> Result<&mut Self>
-    where
-        T: 'static,
-    {
+    ) -> Result<&mut Self> {
         // NB: this is intended to function the same as `Linker::module_async`,
         // they should be kept in sync.
 
@@ -863,10 +834,7 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         module_name: &str,
         module: &Module,
-    ) -> Result<&mut Self>
-    where
-        T: Send + 'static,
-    {
+    ) -> Result<&mut Self> {
         // NB: this is intended to function the same as `Linker::module`, they
         // should be kept in sync.
         assert!(
@@ -927,10 +895,7 @@ impl<T> Linker<T> {
         module_name: &str,
         module: &Module,
         mk_func: impl Fn(&mut StoreContextMut<T>, &FuncType, String, InstancePre<T>) -> Func,
-    ) -> Result<&mut Self>
-    where
-        T: 'static,
-    {
+    ) -> Result<&mut Self> {
         let mut store = store.as_context_mut();
         for export in module.exports() {
             if let Some(func_ty) = export.ty().func() {
@@ -1124,10 +1089,7 @@ impl<T> Linker<T> {
         &self,
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
-    ) -> Result<Instance>
-    where
-        T: 'static,
-    {
+    ) -> Result<Instance> {
         self._instantiate_pre(module, Some(store.as_context_mut().0))?
             .instantiate(store)
     }
@@ -1139,10 +1101,7 @@ impl<T> Linker<T> {
         &self,
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
-    ) -> Result<Instance>
-    where
-        T: Send + 'static,
-    {
+    ) -> Result<Instance> {
         self._instantiate_pre(module, Some(store.as_context_mut().0))?
             .instantiate_async(store)
             .await
@@ -1195,10 +1154,7 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn instantiate_pre(&self, module: &Module) -> Result<InstancePre<T>>
-    where
-        T: 'static,
-    {
+    pub fn instantiate_pre(&self, module: &Module) -> Result<InstancePre<T>> {
         self._instantiate_pre(module, None)
     }
 
@@ -1217,10 +1173,7 @@ impl<T> Linker<T> {
         &self,
         module: &Module,
         store: Option<&StoreOpaque>,
-    ) -> Result<InstancePre<T>>
-    where
-        T: 'static,
-    {
+    ) -> Result<InstancePre<T>> {
         let mut imports = module
             .imports()
             .map(|import| self._get_by_import(&import))
@@ -1250,10 +1203,7 @@ impl<T> Linker<T> {
     pub fn iter<'a: 'p, 'p>(
         &'a self,
         mut store: impl AsContextMut<Data = T> + 'p,
-    ) -> impl Iterator<Item = (&'a str, &'a str, Extern)> + 'p
-    where
-        T: 'static,
-    {
+    ) -> impl Iterator<Item = (&'a str, &'a str, Extern)> + 'p {
         self.map.iter().map(move |(key, item)| {
             let store = store.as_context_mut();
             (
@@ -1280,10 +1230,7 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         module: &str,
         name: &str,
-    ) -> Option<Extern>
-    where
-        T: 'static,
-    {
+    ) -> Option<Extern> {
         let store = store.as_context_mut().0;
         // Should be safe since `T` is connecting the linker and store
         Some(unsafe { self._get(module, name)?.to_extern(store) })
@@ -1310,10 +1257,7 @@ impl<T> Linker<T> {
         &self,
         mut store: impl AsContextMut<Data = T>,
         import: &ImportType,
-    ) -> Option<Extern>
-    where
-        T: 'static,
-    {
+    ) -> Option<Extern> {
         let store = store.as_context_mut().0;
         // Should be safe since `T` is connecting the linker and store
         Some(unsafe { self._get_by_import(import).ok()?.to_extern(store) })
@@ -1336,10 +1280,11 @@ impl<T> Linker<T> {
     /// Panics if the default function found is not owned by `store`. This
     /// function will also panic if the `store` provided does not come from the
     /// same [`Engine`] that this linker was created with.
-    pub fn get_default(&self, mut store: impl AsContextMut<Data = T>, module: &str) -> Result<Func>
-    where
-        T: 'static,
-    {
+    pub fn get_default(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        module: &str,
+    ) -> Result<Func> {
         if let Some(external) = self.get(&mut store, module, "") {
             if let Extern::Func(func) = external {
                 return Ok(func);
@@ -1360,7 +1305,7 @@ impl<T> Linker<T> {
     }
 }
 
-impl<T: 'static> Default for Linker<T> {
+impl<T: Send + 'static> Default for Linker<T> {
     fn default() -> Linker<T> {
         Linker::new(&Engine::default())
     }

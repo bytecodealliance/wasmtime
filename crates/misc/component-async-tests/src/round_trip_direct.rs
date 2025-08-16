@@ -10,7 +10,7 @@ pub mod bindings {
 }
 
 impl bindings::RoundTripDirectImportsWithStore for Ctx {
-    async fn foo<T>(_: &Accessor<T, Self>, s: String) -> String {
+    async fn foo<T: Send>(_: &Accessor<T, Self>, s: String) -> String {
         crate::util::sleep(Duration::from_millis(10)).await;
         format!("{s} - entered host - exited host")
     }

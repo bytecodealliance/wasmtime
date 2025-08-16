@@ -298,7 +298,7 @@ impl Func {
         }
     }
 
-    fn check_params_results<T>(
+    fn check_params_results<T: Send>(
         &self,
         store: StoreContextMut<T>,
         params: &[Val],
@@ -544,6 +544,7 @@ impl Func {
         lift: impl FnOnce(&mut LiftContext<'_>, InterfaceType, &LowerReturn) -> Result<Return>,
     ) -> Result<Return>
     where
+        T: Send,
         LowerParams: Copy,
         LowerReturn: Copy,
     {
@@ -763,7 +764,7 @@ impl Func {
         Ok(())
     }
 
-    fn lower_args<T>(
+    fn lower_args<T: Send>(
         cx: &mut LowerContext<'_, T>,
         params: &[Val],
         params_ty: InterfaceType,
@@ -785,7 +786,7 @@ impl Func {
         }
     }
 
-    fn store_args<T>(
+    fn store_args<T: Send>(
         cx: &mut LowerContext<'_, T>,
         params_ty: &TypeTuple,
         args: &[Val],
@@ -869,7 +870,7 @@ impl Func {
     /// The `lower` closure provided should perform the actual lowering and
     /// return the result of the lowering operation which is then returned from
     /// this function as well.
-    fn with_lower_context<T>(
+    fn with_lower_context<T: Send>(
         self,
         mut store: StoreContextMut<T>,
         may_enter: bool,

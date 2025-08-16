@@ -671,7 +671,11 @@ where
         }
     }
 
-    fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
+    fn lower_to_index<U: Send>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+    ) -> Result<u32> {
         match ty {
             InterfaceType::Own(t) => {
                 let rep = match self.state.get() {
@@ -849,7 +853,7 @@ unsafe impl<T: 'static> ComponentType for Resource<T> {
 }
 
 unsafe impl<T: 'static> Lower for Resource<T> {
-    fn linear_lower_to_flat<U>(
+    fn linear_lower_to_flat<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -859,7 +863,7 @@ unsafe impl<T: 'static> Lower for Resource<T> {
             .linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
-    fn linear_lower_to_memory<U>(
+    fn linear_lower_to_memory<U: Send>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -1018,10 +1022,7 @@ impl ResourceAny {
     /// Same as [`ResourceAny::resource_drop`] except for use with async stores
     /// to execute the destructor asynchronously.
     #[cfg(feature = "async")]
-    pub async fn resource_drop_async<T>(
-        self,
-        mut store: impl AsContextMut<Data: Send>,
-    ) -> Result<()> {
+    pub async fn resource_drop_async(self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
@@ -1032,7 +1033,10 @@ impl ResourceAny {
             .await?
     }
 
-    fn resource_drop_impl<T: 'static>(self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
+    fn resource_drop_impl<T: Send + 'static>(
+        self,
+        store: &mut StoreContextMut<'_, T>,
+    ) -> Result<()> {
         // Attempt to remove `self.idx` from the host table in `store`.
         //
         // This could fail if the index is invalid or if this is removing an
@@ -1077,7 +1081,11 @@ impl ResourceAny {
         unsafe { crate::Func::call_unchecked_raw(store, dtor, NonNull::from(&mut args)) }
     }
 
-    fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
+    fn lower_to_index<U: Send>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+    ) -> Result<u32> {
         match ty {
             InterfaceType::Own(t) => {
                 if cx.resource_type(t) != self.ty {
@@ -1138,7 +1146,7 @@ unsafe impl ComponentType for ResourceAny {
 }
 
 unsafe impl Lower for ResourceAny {
-    fn linear_lower_to_flat<T>(
+    fn linear_lower_to_flat<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1148,7 +1156,7 @@ unsafe impl Lower for ResourceAny {
             .linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
-    fn linear_lower_to_memory<T>(
+    fn linear_lower_to_memory<T: Send>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,

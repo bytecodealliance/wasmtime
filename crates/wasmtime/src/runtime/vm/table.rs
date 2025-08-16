@@ -323,12 +323,12 @@ unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> 
 
 impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
-    pub fn new_dynamic(
+    pub async fn new_dynamic(
         ty: &wasmtime_environ::Table,
         tunables: &Tunables,
         store: &mut dyn VMStore,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(ty, store)?;
+        let (minimum, maximum) = Self::limit_new(ty, store).await?;
         match wasm_to_table_type(ty.ref_type) {
             TableElementType::Func => Ok(Self::from(DynamicFuncTable {
                 elements: unsafe { alloc_dynamic_table_elements(minimum)? },
@@ -347,13 +347,13 @@ impl Table {
     }
 
     /// Create a new static (immovable) table instance for the specified table plan.
-    pub unsafe fn new_static(
+    pub async unsafe fn new_static(
         ty: &wasmtime_environ::Table,
         tunables: &Tunables,
         data: SendSyncPtr<[u8]>,
         store: &mut dyn VMStore,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(ty, store)?;
+        let (minimum, maximum) = Self::limit_new(ty, store).await?;
         let size = minimum;
         let max = maximum.unwrap_or(usize::MAX);
 
@@ -434,7 +434,7 @@ impl Table {
     // Calls the `store`'s limiter to optionally prevent the table from being created.
     //
     // Returns the minimum and maximum size of the table if the table can be created.
-    fn limit_new(
+    async fn limit_new(
         ty: &wasmtime_environ::Table,
         store: &mut dyn VMStore,
     ) -> Result<(usize, Option<usize>)> {
@@ -457,7 +457,10 @@ impl Table {
         };
 
         // Inform the store's limiter what's about to happen.
-        if !store.table_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
+        if !store
+            .table_growing(0, minimum.unwrap_or(absolute_max), maximum)
+            .await?
+        {
             bail!(
                 "table minimum size of {} elements exceeds table limits",
                 ty.limits.min
@@ -607,19 +610,20 @@ impl Table {
     ///
     /// Generally, prefer using `InstanceHandle::table_grow`, which encapsulates
     /// this unsafety.
-    pub unsafe fn grow_func(
+    pub async unsafe fn grow_func(
         &mut self,
         store: &mut dyn VMStore,
         delta: u64,
-        init_value: Option<NonNull<VMFuncRef>>,
+        init_value: Option<SendSyncPtr<VMFuncRef>>,
     ) -> Result<Option<usize>, Error> {
         self._grow(delta, store, |me, _store, base, len| {
-            me.fill_func(base, init_value, len)
+            me.fill_func(base, init_value.map(|p| p.as_non_null()), len)
         })
+        .await
     }
 
     /// Same as [`Self::grow_func`], but for GC references.
-    pub unsafe fn grow_gc_ref(
+    pub async unsafe fn grow_gc_ref(
         &mut self,
         store: &mut dyn VMStore,
         delta: u64,
@@ -628,10 +632,11 @@ impl Table {
         self._grow(delta, store, |me, store, base, len| {
             me.fill_gc_ref(store, base, init_value, len)
         })
+        .await
     }
 
     /// Same as [`Self::grow_func`], but for continuations.
-    pub unsafe fn grow_cont(
+    pub async unsafe fn grow_cont(
         &mut self,
         store: &mut dyn VMStore,
         delta: u64,
@@ -640,9 +645,10 @@ impl Table {
         self._grow(delta, store, |me, _store, base, len| {
             me.fill_cont(base, init_value, len)
         })
+        .await
     }
 
-    fn _grow(
+    async fn _grow(
         &mut self,
         delta: u64,
         store: &mut dyn VMStore,
@@ -665,7 +671,10 @@ impl Table {
             }
         };
 
-        if !store.table_growing(old_size, new_size, self.maximum())? {
+        if !store
+            .table_growing(old_size, new_size, self.maximum())
+            .await?
+        {
             return Ok(None);
         }
 

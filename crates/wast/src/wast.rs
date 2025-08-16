@@ -15,7 +15,7 @@ use wast::parser::{self, ParseBuffer};
 
 /// The wast test script language allows modules to be defined and actions
 /// to be performed on them.
-pub struct WastContext<T: 'static> {
+pub struct WastContext<T: Send + 'static> {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
     current: Option<InstanceKind>,

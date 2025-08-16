@@ -1,7 +1,5 @@
-use std::cell::Cell;
-use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 #[test]
@@ -212,15 +210,15 @@ fn allow_unknown_exports() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn no_leak() -> Result<()> {
-    struct DropMe(Rc<Cell<bool>>);
+    struct DropMe(Arc<AtomicBool>);
 
     impl Drop for DropMe {
         fn drop(&mut self) {
-            self.0.set(true);
+            self.0.store(true, SeqCst);
         }
     }
 
-    let flag = Rc::new(Cell::new(false));
+    let flag = Arc::new(AtomicBool::new(false));
     {
         let mut store = Store::new(&Engine::default(), DropMe(flag.clone()));
         let mut linker = Linker::new(store.engine());
@@ -234,7 +232,7 @@ fn no_leak() -> Result<()> {
         )?;
         linker.module(&mut store, "a", &module)?;
     }
-    assert!(flag.get(), "store was leaked");
+    assert!(flag.load(SeqCst), "store was leaked");
     Ok(())
 }
 

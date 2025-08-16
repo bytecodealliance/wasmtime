@@ -18,7 +18,7 @@ fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
     Ok(tempdir)
 }
 
-impl<T> Ctx<T> {
+impl<T: Send> Ctx<T> {
     pub fn new(
         engine: &Engine,
         name: &str,

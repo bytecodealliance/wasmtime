@@ -32,7 +32,7 @@ impl Instance {
     }
 }
 
-pub(crate) fn lower_future_to_index<U>(
+pub(crate) fn lower_future_to_index<U: Send>(
     _rep: u32,
     _cx: &mut LowerContext<'_, U>,
     _ty: InterfaceType,
@@ -40,7 +40,7 @@ pub(crate) fn lower_future_to_index<U>(
     should_have_failed_validation("use of `future`")
 }
 
-pub(crate) fn lower_stream_to_index<U>(
+pub(crate) fn lower_stream_to_index<U: Send>(
     _rep: u32,
     _cx: &mut LowerContext<'_, U>,
     _ty: InterfaceType,
@@ -48,7 +48,7 @@ pub(crate) fn lower_stream_to_index<U>(
     should_have_failed_validation("use of `stream`")
 }
 
-pub(crate) fn lower_error_context_to_index<U>(
+pub(crate) fn lower_error_context_to_index<U: Send>(
     _rep: u32,
     _cx: &mut LowerContext<'_, U>,
     _ty: InterfaceType,

@@ -18,7 +18,7 @@ impl<T: 'static> Clone for Host_Pre<T> {
         }
     }
 }
-impl<_T: 'static> Host_Pre<_T> {
+impl<_T: Send + 'static> Host_Pre<_T> {
     /// Creates a new copy of `Host_Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -99,7 +99,7 @@ pub struct Host_Indices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Host_ {}
 pub trait Host_ImportsWithStore: wasmtime::component::HasData + Send {
-    fn foo<T: 'static>(
+    fn foo<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
@@ -114,7 +114,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -139,7 +139,7 @@ const _: () = {
     impl Host_ {
         /// Convenience wrapper around [`Host_Pre::new`] and
         /// [`Host_Pre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -176,7 +176,7 @@ const _: () = {
         where
             D: Host_ImportsWithStore,
             for<'a> D::Data<'a>: Host_Imports,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             let mut linker = linker.root();
             linker
@@ -199,7 +199,7 @@ const _: () = {
         where
             D: Host_ImportsWithStore + Send,
             for<'a> D::Data<'a>: Host_Imports + Send,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             Self::add_to_linker_imports::<T, D>(linker, host_getter)?;
             Ok(())

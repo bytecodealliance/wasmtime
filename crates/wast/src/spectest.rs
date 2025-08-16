@@ -10,7 +10,7 @@ pub struct SpectestConfig {
 
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
-pub fn link_spectest<T>(
+pub fn link_spectest<T: Send>(
     linker: &mut Linker<T>,
     store: &mut Store<T>,
     config: &SpectestConfig,
@@ -88,7 +88,7 @@ pub fn link_spectest<T>(
 }
 
 #[cfg(feature = "component-model")]
-pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<()> {
+pub fn link_component_spectest<T: Send>(linker: &mut component::Linker<T>) -> Result<()> {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
     use wasmtime::component::{Resource, ResourceType};

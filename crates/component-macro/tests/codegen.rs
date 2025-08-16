@@ -628,7 +628,6 @@ mod with_and_mixing_async {
             with: {
                 "my:inline/foo": super::with_async::my::inline::foo,
             },
-            require_store_data_send: true,
         });
     }
 
@@ -656,7 +655,6 @@ mod with_and_mixing_async {
                 "my:inline/foo": super::with_async::my::inline::foo,
                 "my:inline/bar": super::without_async::my::inline::bar,
             },
-            require_store_data_send: true,
         });
     }
 }

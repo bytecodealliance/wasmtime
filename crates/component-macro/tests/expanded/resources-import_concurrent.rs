@@ -1,21 +1,21 @@
 pub enum WorldResource {}
 pub trait HostWorldResourceWithStore: wasmtime::component::HasData + Send {
-    fn drop<T: 'static>(
+    fn drop<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
         rep: wasmtime::component::Resource<WorldResource>,
     ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
     where
         Self: Sized;
-    fn new<T: 'static>(
+    fn new<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<
         Output = wasmtime::component::Resource<WorldResource>,
     > + Send;
-    fn foo<T: 'static>(
+    fn foo<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
         self_: wasmtime::component::Resource<WorldResource>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
-    fn static_foo<T: 'static>(
+    fn static_foo<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
@@ -41,7 +41,7 @@ impl<T: 'static> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T: 'static> TheWorldPre<_T> {
+impl<_T: Send + 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -128,7 +128,7 @@ pub struct TheWorld {
     some_world_func2: wasmtime::component::Func,
 }
 pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostWorldResourceWithStore + Send {
-    fn some_world_func<T: 'static>(
+    fn some_world_func<T: Send>(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<
         Output = wasmtime::component::Resource<WorldResource>,
@@ -145,7 +145,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -213,7 +213,7 @@ const _: () = {
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -250,7 +250,7 @@ const _: () = {
         where
             D: TheWorldImportsWithStore,
             for<'a> D::Data<'a>: TheWorldImports,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             let mut linker = linker.root();
             linker
@@ -347,7 +347,7 @@ const _: () = {
                 + foo::foo::long_use_chain4::Host
                 + foo::foo::transitive_interface_with_resource::Host + TheWorldImports
                 + Send,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             Self::add_to_linker_imports::<T, D>(linker, host_getter)?;
             foo::foo::resources::add_to_linker::<T, D>(linker, host_getter)?;
@@ -393,21 +393,21 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Bar {}
             pub trait HostBarWithStore: wasmtime::component::HasData + Send {
-                fn drop<T: 'static>(
+                fn drop<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     rep: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
                 where
                     Self: Sized;
-                fn new<T: 'static>(
+                fn new<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::Resource<Bar>,
                 > + Send;
-                fn static_a<T: 'static>(
+                fn static_a<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = u32> + Send;
-                fn method_a<T: 'static>(
+                fn method_a<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     self_: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = u32> + Send;
@@ -470,89 +470,89 @@ pub mod foo {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + Send {
-                fn bar_own_arg<T: 'static>(
+                fn bar_own_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn bar_borrow_arg<T: 'static>(
+                fn bar_borrow_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn bar_result<T: 'static>(
+                fn bar_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::Resource<Bar>,
                 > + Send;
-                fn tuple_own_arg<T: 'static>(
+                fn tuple_own_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: (wasmtime::component::Resource<Bar>, u32),
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn tuple_borrow_arg<T: 'static>(
+                fn tuple_borrow_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: (wasmtime::component::Resource<Bar>, u32),
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn tuple_result<T: 'static>(
+                fn tuple_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = (wasmtime::component::Resource<Bar>, u32),
                 > + Send;
-                fn option_own_arg<T: 'static>(
+                fn option_own_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Option<wasmtime::component::Resource<Bar>>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn option_borrow_arg<T: 'static>(
+                fn option_borrow_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Option<wasmtime::component::Resource<Bar>>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn option_result<T: 'static>(
+                fn option_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Option<wasmtime::component::Resource<Bar>>,
                 > + Send;
-                fn result_own_arg<T: 'static>(
+                fn result_own_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Result<wasmtime::component::Resource<Bar>, ()>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn result_borrow_arg<T: 'static>(
+                fn result_borrow_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Result<wasmtime::component::Resource<Bar>, ()>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn result_result<T: 'static>(
+                fn result_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<wasmtime::component::Resource<Bar>, ()>,
                 > + Send;
-                fn list_own_arg<T: 'static>(
+                fn list_own_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<
                         wasmtime::component::Resource<Bar>,
                     >,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_borrow_arg<T: 'static>(
+                fn list_borrow_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::Vec<
                         wasmtime::component::Resource<Bar>,
                     >,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn list_result<T: 'static>(
+                fn list_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<
                         wasmtime::component::Resource<Bar>,
                     >,
                 > + Send;
-                fn record_own_arg<T: 'static>(
+                fn record_own_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: NestedOwn,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn record_borrow_arg<T: 'static>(
+                fn record_borrow_arg<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: NestedBorrow,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn record_result<T: 'static>(
+                fn record_result<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = NestedOwn> + Send;
-                fn func_with_handle_typedef<T: 'static>(
+                fn func_with_handle_typedef<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: SomeHandle,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
@@ -566,7 +566,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/resources")?;
                 inst.resource_concurrent(
@@ -895,7 +895,7 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum A {}
             pub trait HostAWithStore: wasmtime::component::HasData {
-                fn drop<T: 'static>(
+                fn drop<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     rep: wasmtime::component::Resource<A>,
                 ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
@@ -918,7 +918,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain1")?;
                 inst.resource_concurrent(
@@ -957,7 +957,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain2")?;
                 Ok(())
@@ -982,7 +982,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain3")?;
                 Ok(())
@@ -994,7 +994,7 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain3::A;
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn foo<T: 'static>(
+                fn foo<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::Resource<A>,
@@ -1009,7 +1009,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain4")?;
                 inst.func_wrap_concurrent(
@@ -1031,7 +1031,7 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Foo {}
             pub trait HostFooWithStore: wasmtime::component::HasData {
-                fn drop<T: 'static>(
+                fn drop<T: Send>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     rep: wasmtime::component::Resource<Foo>,
                 ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
@@ -1054,7 +1054,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker
                     .instance("foo:foo/transitive-interface-with-resource")?;
@@ -1099,7 +1099,7 @@ pub mod exports {
                     ///
                     /// This constructor can be used to front-load string lookups to find exports
                     /// within a component.
-                    pub fn new<_T>(
+                    pub fn new<_T: Send>(
                         _instance_pre: &wasmtime::component::InstancePre<_T>,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance = _instance_pre

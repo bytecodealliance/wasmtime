@@ -18,7 +18,7 @@ impl<T: 'static> Clone for DPre<T> {
         }
     }
 }
-impl<_T: 'static> DPre<_T> {
+impl<_T: Send + 'static> DPre<_T> {
     /// Creates a new copy of `DPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -107,7 +107,7 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new<_T>(
+        pub fn new<_T: Send>(
             _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
@@ -132,7 +132,7 @@ const _: () = {
     impl D {
         /// Convenience wrapper around [`DPre::new`] and
         /// [`DPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -173,7 +173,7 @@ const _: () = {
                 'a,
             >: foo::foo::a::Host + foo::foo::b::Host + foo::foo::c::Host + d::Host
                 + Send,
-            T: 'static + Send,
+            T: Send + 'static,
         {
             foo::foo::a::add_to_linker::<T, D>(linker, host_getter)?;
             foo::foo::b::add_to_linker::<T, D>(linker, host_getter)?;
@@ -224,7 +224,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/a")?;
                 inst.func_wrap_async(
@@ -282,7 +282,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/b")?;
                 inst.func_wrap_async(
@@ -340,7 +340,7 @@ pub mod foo {
             where
                 D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/c")?;
                 inst.func_wrap_async(
@@ -400,7 +400,7 @@ pub mod d {
     where
         D: HostWithStore,
         for<'a> D::Data<'a>: Host,
-        T: 'static + Send,
+        T: Send + 'static,
     {
         let mut inst = linker.instance("d")?;
         inst.func_wrap_async(

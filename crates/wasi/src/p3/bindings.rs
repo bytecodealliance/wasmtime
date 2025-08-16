@@ -36,7 +36,6 @@
 //!     with: {
 //!         "wasi": wasmtime_wasi::p3::bindings,
 //!     },
-//!     require_store_data_send: true,
 //! });
 //!
 //! struct MyState {

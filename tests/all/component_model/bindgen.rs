@@ -12,7 +12,6 @@ mod results;
 
 mod no_imports {
     use super::*;
-    use std::rc::Rc;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -55,11 +54,6 @@ mod no_imports {
         no_imports.call_bar(&mut store)?;
         no_imports.foo().call_foo(&mut store)?;
 
-        let linker = Linker::new(&engine);
-        let mut non_send_store = Store::new(&engine, Rc::new(()));
-        let no_imports = NoImports::instantiate(&mut non_send_store, &component, &linker)?;
-        no_imports.call_bar(&mut non_send_store)?;
-        no_imports.foo().call_foo(&mut non_send_store)?;
         Ok(())
     }
 }
@@ -276,7 +270,7 @@ mod one_import_concurrent {
         }
 
         impl foo::HostWithStore for MyImports {
-            async fn foo<T>(accessor: &Accessor<T, Self>) {
+            async fn foo<T: Send>(accessor: &Accessor<T, Self>) {
                 accessor.with(|mut view| view.get().hit = true);
             }
         }

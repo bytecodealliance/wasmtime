@@ -378,7 +378,7 @@ impl From<wasmtime_environ::Trap> for TrapReason {
 ///
 /// This function is unsafe because during the execution of `closure` it may be
 /// longjmp'd over and none of its destructors on the stack may be run.
-pub unsafe fn catch_traps<T, F>(
+pub unsafe fn catch_traps<T: Send, F>(
     store: &mut StoreContextMut<'_, T>,
     old_state: &mut EntryStoreContext,
     mut closure: F,
