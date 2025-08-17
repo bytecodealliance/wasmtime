@@ -124,7 +124,7 @@ impl FunctionConfig {
                 rule.used = true;
                 *base |= rule.flags;
 
-                // only the first fule is used.
+                // only the first rule is used.
                 return true;
             }
 
