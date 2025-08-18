@@ -1,6 +1,6 @@
 use crate::TagType;
 use crate::prelude::*;
-use crate::runtime::vm::{Imports, ModuleRuntimeInfo, OnDemandInstanceAllocator};
+use crate::runtime::vm::{self, Imports, ModuleRuntimeInfo, OnDemandInstanceAllocator};
 use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque};
 use alloc::sync::Arc;
 use wasmtime_environ::EngineOrModuleTypeIndex;
@@ -30,12 +30,16 @@ pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
         let allocator =
             OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
         let module = Arc::new(module);
-        store.allocate_instance(
+
+        // Note that `assert_ready` should be valid here because this module
+        // doesn't allocate tables or memories meaning it shouldn't need an
+        // await point.
+        vm::assert_ready(store.allocate_instance(
             AllocateInstanceKind::Dummy {
                 allocator: &allocator,
             },
             &ModuleRuntimeInfo::bare_with_registered_type(module, Some(func_ty)),
             imports,
-        )
+        ))
     }
 }
