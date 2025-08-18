@@ -666,15 +666,17 @@ impl<T> Store<T> {
             .unwrap();
 
         unsafe {
-            let id = inner
-                .allocate_instance(
-                    AllocateInstanceKind::Dummy {
-                        allocator: &allocator,
-                    },
-                    &shim,
-                    Default::default(),
-                )
-                .expect("failed to allocate default callee");
+            // Note that this dummy instance doesn't allocate tables or memories
+            // so it won't have an async await point meaning that it should be
+            // ok to assert the future is always ready.
+            let id = vm::assert_ready(inner.allocate_instance(
+                AllocateInstanceKind::Dummy {
+                    allocator: &allocator,
+                },
+                &shim,
+                Default::default(),
+            ))
+            .expect("failed to allocate default callee");
             let default_caller_vmctx = inner.instance(id).vmctx();
             inner.default_caller_vmctx = default_caller_vmctx.into();
         }
@@ -2173,7 +2175,7 @@ at https://bytecodealliance.org/security.
     ///
     /// The `imports` provided must be correctly sized/typed for the module
     /// being allocated.
-    pub(crate) unsafe fn allocate_instance(
+    pub(crate) async unsafe fn allocate_instance(
         &mut self,
         kind: AllocateInstanceKind<'_>,
         runtime_info: &ModuleRuntimeInfo,

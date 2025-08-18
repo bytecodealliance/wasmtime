@@ -94,7 +94,8 @@ impl Table {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: TableType, init: Ref) -> Result<Table> {
-        Table::_new(store.as_context_mut().0, ty, init)
+        vm::one_poll(Table::_new(store.as_context_mut().0, ty, init))
+            .expect("must use `new_async` when async resource limiters are in use")
     }
 
     /// Async variant of [`Table::new`]. You must use this variant with
@@ -111,18 +112,11 @@ impl Table {
         ty: TableType,
         init: Ref,
     ) -> Result<Table> {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `new_async` without enabling async support on the config"
-        );
-        store
-            .on_fiber(|store| Table::_new(store.0, ty, init))
-            .await?
+        Table::_new(store.as_context_mut().0, ty, init).await
     }
 
-    fn _new(store: &mut StoreOpaque, ty: TableType, init: Ref) -> Result<Table> {
-        let table = generate_table_export(store, &ty)?;
+    async fn _new(store: &mut StoreOpaque, ty: TableType, init: Ref) -> Result<Table> {
+        let table = generate_table_export(store, &ty).await?;
         table._fill(store, 0, init, ty.minimum())?;
         Ok(table)
     }

@@ -24,7 +24,7 @@ use wasmtime_environ::{
 /// This separate instance is necessary because Wasm objects in Wasmtime must be
 /// attached to instances (versus the store, e.g.) and some objects exist
 /// outside: a host-provided memory import, shared memory.
-pub fn create_memory(
+pub async fn create_memory(
     store: &mut StoreOpaque,
     memory_ty: &MemoryType,
     preallocation: Option<&SharedMemory>,
@@ -52,13 +52,15 @@ pub fn create_memory(
         ondemand: OnDemandInstanceAllocator::default(),
     };
     unsafe {
-        store.allocate_instance(
-            AllocateInstanceKind::Dummy {
-                allocator: &allocator,
-            },
-            &ModuleRuntimeInfo::bare(Arc::new(module)),
-            Default::default(),
-        )
+        store
+            .allocate_instance(
+                AllocateInstanceKind::Dummy {
+                    allocator: &allocator,
+                },
+                &ModuleRuntimeInfo::bare(Arc::new(module)),
+                Default::default(),
+            )
+            .await
     }
 }
 

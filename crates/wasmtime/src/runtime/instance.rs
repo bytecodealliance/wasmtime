@@ -117,7 +117,8 @@ impl Instance {
         // Note that the unsafety here should be satisfied by the call to
         // `typecheck_externs` above which satisfies the condition that all
         // the imports are valid for this module.
-        unsafe { Instance::new_started(&mut store, module, imports.as_ref()) }
+        assert!(!store.0.async_support());
+        vm::assert_ready(unsafe { Instance::new_started(&mut store, module, imports.as_ref()) })
     }
 
     /// Same as [`Instance::new`], except for usage in [asynchronous stores].
@@ -200,7 +201,7 @@ impl Instance {
         let mut store = store.as_context_mut();
         let imports = Instance::typecheck_externs(store.0, module, imports)?;
         // See `new` for notes on this unsafety
-        unsafe { Instance::new_started_async(&mut store, module, imports.as_ref()).await }
+        unsafe { Instance::new_started(&mut store, module, imports.as_ref()).await }
     }
 
     fn typecheck_externs(
@@ -242,60 +243,29 @@ impl Instance {
     /// Internal function to create an instance and run the start function.
     ///
     /// This function's unsafety is the same as `Instance::new_raw`.
-    pub(crate) unsafe fn new_started<T>(
-        store: &mut StoreContextMut<'_, T>,
-        module: &Module,
-        imports: Imports<'_>,
-    ) -> Result<Instance> {
-        assert!(
-            !store.0.async_support(),
-            "must use async instantiation when async support is enabled",
-        );
-
-        // SAFETY: the safety contract of `new_started_impl` is the same as this
-        // function.
-        unsafe { Self::new_started_impl(store, module, imports) }
-    }
-
-    /// Internal function to create an instance and run the start function.
-    ///
-    /// ONLY CALL THIS IF YOU HAVE ALREADY CHECKED FOR ASYNCNESS AND HANDLED
-    /// THE FIBER NONSENSE
-    pub(crate) unsafe fn new_started_impl<T>(
+    pub(crate) async unsafe fn new_started<T>(
         store: &mut StoreContextMut<'_, T>,
         module: &Module,
         imports: Imports<'_>,
     ) -> Result<Instance> {
         // SAFETY: the safety contract of `new_raw` is the same as this
         // function.
-        let (instance, start) = unsafe { Instance::new_raw(store.0, module, imports)? };
+        let (instance, start) = unsafe { Instance::new_raw(store.0, module, imports).await? };
         if let Some(start) = start {
-            instance.start_raw(store, start)?;
+            if store.0.async_support() {
+                #[cfg(feature = "async")]
+                {
+                    store
+                        .on_fiber(|store| instance.start_raw(store, start))
+                        .await??;
+                }
+                #[cfg(not(feature = "async"))]
+                unreachable!();
+            } else {
+                instance.start_raw(store, start)?;
+            }
         }
         Ok(instance)
-    }
-
-    /// Internal function to create an instance and run the start function.
-    ///
-    /// This function's unsafety is the same as `Instance::new_raw`.
-    #[cfg(feature = "async")]
-    async unsafe fn new_started_async<T>(
-        store: &mut StoreContextMut<'_, T>,
-        module: &Module,
-        imports: Imports<'_>,
-    ) -> Result<Instance> {
-        assert!(
-            store.0.async_support(),
-            "must use sync instantiation when async support is disabled",
-        );
-
-        store
-            .on_fiber(|store| {
-                // SAFETY: the unsafe contract of `new_started_impl` is the same
-                // as this function.
-                unsafe { Self::new_started_impl(store, module, imports) }
-            })
-            .await?
     }
 
     /// Internal function to create an instance which doesn't have its `start`
@@ -313,7 +283,7 @@ impl Instance {
     /// This method is unsafe because it does not type-check the `imports`
     /// provided. The `imports` provided must be suitable for the module
     /// provided as well.
-    unsafe fn new_raw(
+    async unsafe fn new_raw(
         store: &mut StoreOpaque,
         module: &Module,
         imports: Imports<'_>,
@@ -341,11 +311,13 @@ impl Instance {
         // SAFETY: this module, by construction, was already validated within
         // the store.
         let id = unsafe {
-            store.allocate_instance(
-                AllocateInstanceKind::Module(module_id),
-                &ModuleRuntimeInfo::Module(module.clone()),
-                imports,
-            )?
+            store
+                .allocate_instance(
+                    AllocateInstanceKind::Module(module_id),
+                    &ModuleRuntimeInfo::Module(module.clone()),
+                    imports,
+                )
+                .await?
         };
 
         // Additionally, before we start doing fallible instantiation, we
@@ -888,7 +860,10 @@ impl<T: 'static> InstancePre<T> {
         // This unsafety should be handled by the type-checking performed by the
         // constructor of `InstancePre` to assert that all the imports we're passing
         // in match the module we're instantiating.
-        unsafe { Instance::new_started(&mut store, &self.module, imports.as_ref()) }
+        assert!(!store.0.async_support());
+        vm::assert_ready(unsafe {
+            Instance::new_started(&mut store, &self.module, imports.as_ref())
+        })
     }
 
     /// Creates a new instance, running the start function asynchronously
@@ -918,7 +893,7 @@ impl<T: 'static> InstancePre<T> {
         // This unsafety should be handled by the type-checking performed by the
         // constructor of `InstancePre` to assert that all the imports we're passing
         // in match the module we're instantiating.
-        unsafe { Instance::new_started_async(&mut store, &self.module, imports.as_ref()).await }
+        unsafe { Instance::new_started(&mut store, &self.module, imports.as_ref()).await }
     }
 }
 

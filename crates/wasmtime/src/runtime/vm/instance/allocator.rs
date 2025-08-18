@@ -197,7 +197,7 @@ impl GcHeapAllocationIndex {
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime
 /// internals to implement correctly.
-pub unsafe trait InstanceAllocatorImpl {
+pub unsafe trait InstanceAllocatorImpl: Send + Sync {
     /// Validate whether a component (including all of its contained core
     /// modules) is allocatable by this instance allocator.
     #[cfg(feature = "component-model")]
