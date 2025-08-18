@@ -98,7 +98,7 @@ use wasmtime_wmemcheck::AccessError::{
 /// For more information on converting from host-defined values to Cranelift ABI
 /// values see the `catch_unwind_and_record_trap` function.
 pub mod raw {
-    use crate::runtime::vm::{InstanceAndStore, VMContext, f32x4, f64x2, i8x16};
+    use crate::runtime::vm::{Instance, VMContext, f32x4, f64x2, i8x16};
     use core::ptr::NonNull;
 
     macro_rules! libcall {
@@ -121,12 +121,9 @@ pub mod raw {
                     $( $pname : libcall!(@ty $param), )*
                 ) $(-> libcall!(@ty $result))? {
                     $(#[cfg($attr)])?
-                    {
-                        crate::runtime::vm::traphandlers::catch_unwind_and_record_trap(|| unsafe {
-                            InstanceAndStore::from_vmctx(vmctx, |pair| {
-                                let (instance, store) = pair.unpack_mut();
-                                super::$name(store, instance, $($pname),*)
-                            })
+                    unsafe {
+                        Instance::enter_host_from_wasm(vmctx, |store, instance| {
+                            super::$name(store, instance, $($pname),*)
                         })
                     }
                     $(

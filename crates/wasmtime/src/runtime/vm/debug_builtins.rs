@@ -1,7 +1,6 @@
 #![doc(hidden)]
 
-use crate::runtime::vm::instance::InstanceAndStore;
-use crate::runtime::vm::vmcontext::VMContext;
+use crate::runtime::vm::{Instance, VMContext};
 use core::ptr::NonNull;
 use wasmtime_environ::{EntityRef, MemoryIndex};
 use wasmtime_versioned_export_macros::versioned_export;
@@ -19,8 +18,7 @@ pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
             VMCTX_AND_MEMORY.0 != NonNull::dangling(),
             "must call `__vmctx->set()` before resolving Wasm pointers"
         );
-        InstanceAndStore::from_vmctx(VMCTX_AND_MEMORY.0, |handle| {
-            let (handle, _) = handle.unpack_mut();
+        Instance::enter_host_from_wasm(VMCTX_AND_MEMORY.0, |_store, handle| {
             assert!(
                 VMCTX_AND_MEMORY.1 < handle.env_module().memories.len(),
                 "memory index for debugger is out of bounds"
