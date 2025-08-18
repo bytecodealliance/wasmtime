@@ -38,7 +38,7 @@ where
     F: Fn(&mut dyn VMStore, InstanceId, &mut [ValRaw]) -> Result<()> + 'static,
 {
     // SAFETY: this is an entrypoint of wasm calling a host and our parameters
-    // should reflect that making `enter_host_from_wasm` suitable. Futhter
+    // should reflect that making `enter_host_from_wasm` suitable. Further
     // unsafe operations are commented below.
     unsafe {
         Instance::enter_host_from_wasm(caller_vmctx, |store, instance| {

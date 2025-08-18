@@ -2062,8 +2062,6 @@ impl<T> Caller<'_, T> {
             (gc_lifo_scope, ret)
         };
 
-        // Safe to recreate a mutable borrow of the store because `ret`
-        // cannot be borrowing from the store.
         store.0.exit_gc_lifo_scope(gc_lifo_scope);
 
         ret
