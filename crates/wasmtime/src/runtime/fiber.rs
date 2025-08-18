@@ -732,9 +732,8 @@ fn resume_fiber<'a>(
 
     impl Drop for Restore<'_, '_> {
         fn drop(&mut self) {
-            self.fiber.state = Some(AlwaysMut::new(unsafe {
-                self.state.take().unwrap().replace(self.store)
-            }));
+            self.fiber.state =
+                Some(unsafe { self.state.take().unwrap().replace(self.store).into() });
         }
     }
     let result = unsafe {
@@ -841,19 +840,22 @@ pub(crate) fn make_fiber<'a>(
         fun(reset.0)
     })?;
     Ok(StoreFiber {
-        state: Some(AlwaysMut::new(FiberResumeState {
-            tls: crate::runtime::vm::AsyncWasmCallState::new(),
-            mpk: if track_pkey_context_switch {
-                Some(ProtectionMask::all())
-            } else {
-                None
-            },
-            stack_limit: usize::MAX,
-            executor,
-        })),
+        state: Some(
+            FiberResumeState {
+                tls: crate::runtime::vm::AsyncWasmCallState::new(),
+                mpk: if track_pkey_context_switch {
+                    Some(ProtectionMask::all())
+                } else {
+                    None
+                },
+                stack_limit: usize::MAX,
+                executor,
+            }
+            .into(),
+        ),
         engine,
         id,
-        fiber: Some(AlwaysMut::new(RawFiber(fiber))),
+        fiber: Some(RawFiber(fiber).into()),
     })
 }
 

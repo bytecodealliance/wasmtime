@@ -23,7 +23,6 @@ unsafe impl<T: Send> Sync for AlwaysMut<T> {}
 
 impl<T> AlwaysMut<T> {
     /// Creates a new [`AlwaysMut`] with the provided value.
-    #[cfg(feature = "async")]
     pub fn new(value: T) -> AlwaysMut<T> {
         AlwaysMut(value)
     }
@@ -34,9 +33,14 @@ impl<T> AlwaysMut<T> {
     }
 
     /// Consume this [`AlwaysMut`], returning the underlying data.
-    #[cfg(feature = "async")]
     pub fn into_inner(self) -> T {
         self.0
+    }
+}
+
+impl<T> From<T> for AlwaysMut<T> {
+    fn from(val: T) -> AlwaysMut<T> {
+        AlwaysMut::new(val)
     }
 }
 
