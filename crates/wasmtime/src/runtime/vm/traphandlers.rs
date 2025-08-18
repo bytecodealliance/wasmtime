@@ -990,6 +990,7 @@ pub(crate) mod tls {
         state: raw::Ptr,
     }
 
+    #[cfg(feature = "async")]
     unsafe impl Send for AsyncWasmCallState {}
 
     #[cfg(feature = "async")]
