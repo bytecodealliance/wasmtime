@@ -103,7 +103,7 @@ tempfile = { workspace = true }
 libtest-mimic = { workspace = true }
 cranelift-native = { workspace = true }
 wasmtime-test-util = { workspace = true }
-tokio = { workspace = true, features = ["macros", "sync"] }
+tokio = { workspace = true, features = ["macros", "sync", "rt-multi-thread"] }
 
 [build-dependencies]
 cc = { workspace = true, optional = true }

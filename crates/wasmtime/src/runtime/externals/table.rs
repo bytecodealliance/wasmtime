@@ -107,7 +107,7 @@ impl Table {
     /// [`Store`](`crate::Store`)
     #[cfg(feature = "async")]
     pub async fn new_async(
-        mut store: impl AsContextMut<Data: Send>,
+        mut store: impl AsContextMut,
         ty: TableType,
         init: Ref,
     ) -> Result<Table> {
@@ -350,7 +350,7 @@ impl Table {
     #[cfg(feature = "async")]
     pub async fn grow_async(
         &self,
-        mut store: impl AsContextMut<Data: Send>,
+        mut store: impl AsContextMut,
         delta: u64,
         init: Ref,
     ) -> Result<u64> {
