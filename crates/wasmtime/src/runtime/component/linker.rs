@@ -837,7 +837,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
                         );
                         let mut future = std::pin::pin!(dtor(accessor, param));
                         std::future::poll_fn(|cx| {
-                            crate::component::concurrent::tls::set(store.0.traitobj_mut(), || {
+                            crate::component::concurrent::tls::set(store.0, || {
                                 future.as_mut().poll(cx)
                             })
                         })

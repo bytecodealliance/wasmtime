@@ -114,9 +114,9 @@ mod data;
 pub use self::data::*;
 mod func_refs;
 use func_refs::FuncRefs;
-#[cfg(feature = "async")]
+#[cfg(feature = "component-model-async")]
 mod token;
-#[cfg(feature = "async")]
+#[cfg(feature = "component-model-async")]
 pub(crate) use token::StoreToken;
 #[cfg(feature = "async")]
 mod async_;
@@ -706,7 +706,7 @@ impl<T> Store<T> {
         // in their `Drop::drop` implementations, in which case they'll need to
         // be called from with in the context of a `tls::set` closure.
         #[cfg(feature = "component-model-async")]
-        ComponentStoreData::drop_fibers_and_futures(&mut self.inner);
+        ComponentStoreData::drop_fibers_and_futures(&mut **self.inner);
 
         // Ensure all fiber stacks, even cached ones, are all flushed out to the
         // instance allocator.
@@ -1910,11 +1910,6 @@ impl StoreOpaque {
         self.traitobj.as_raw().unwrap()
     }
 
-    #[inline]
-    pub fn traitobj_mut(&mut self) -> &mut dyn vm::VMStore {
-        unsafe { self.traitobj().as_mut() }
-    }
-
     /// Takes the cached `Vec<Val>` stored internally across hostcalls to get
     /// used as part of calling the host in a `Func::new` method invocation.
     #[inline]
@@ -2524,6 +2519,40 @@ impl Drop for StoreOpaque {
                 }
             }
         }
+    }
+}
+
+#[cfg_attr(
+    not(any(feature = "gc", feature = "async")),
+    // NB: Rust 1.89, current stable, does not fire this lint. Rust 1.90,
+    // however, does, so use #[allow] until our MSRV is 1.90.
+    allow(dead_code, reason = "don't want to put #[cfg] on all impls below too")
+)]
+pub(crate) trait AsStoreOpaque {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque;
+}
+
+impl AsStoreOpaque for StoreOpaque {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        self
+    }
+}
+
+impl AsStoreOpaque for dyn vm::VMStore {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        self
+    }
+}
+
+impl<T: 'static> AsStoreOpaque for StoreInner<T> {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        self
+    }
+}
+
+impl<T: AsStoreOpaque + ?Sized> AsStoreOpaque for &mut T {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        T::as_store_opaque(self)
     }
 }
 

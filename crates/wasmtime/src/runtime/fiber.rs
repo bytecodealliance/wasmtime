@@ -1,7 +1,7 @@
 use crate::prelude::*;
-use crate::store::{Executor, StoreId, StoreInner, StoreOpaque};
+use crate::store::{AsStoreOpaque, Executor, StoreId, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
-use crate::vm::{AlwaysMut, AsyncWasmCallState, VMStore};
+use crate::vm::{AlwaysMut, AsyncWasmCallState};
 use crate::{Engine, StoreContextMut};
 use anyhow::{Result, anyhow};
 use core::mem;
@@ -110,22 +110,6 @@ impl Default for AsyncState {
 impl AsyncState {
     pub(crate) fn last_fiber_stack(&mut self) -> &mut Option<wasmtime_fiber::FiberStack> {
         &mut self.last_fiber_stack
-    }
-}
-
-trait AsStoreOpaque {
-    fn as_store_opaque(&mut self) -> &mut StoreOpaque;
-}
-
-impl AsStoreOpaque for StoreOpaque {
-    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
-        self
-    }
-}
-
-impl<T: 'static> AsStoreOpaque for StoreInner<T> {
-    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
-        self
     }
 }
 
@@ -785,15 +769,19 @@ fn resume_fiber<'a>(
 }
 
 /// Create a new `StoreFiber` which runs the specified closure.
-pub(crate) fn make_fiber<'a>(
-    store: &mut dyn VMStore,
-    fun: impl FnOnce(&mut dyn VMStore) -> Result<()> + Send + Sync + 'a,
-) -> Result<StoreFiber<'a>> {
-    let engine = store.engine().clone();
+pub(crate) fn make_fiber<'a, S>(
+    store: &mut S,
+    fun: impl FnOnce(&mut S) -> Result<()> + Send + Sync + 'a,
+) -> Result<StoreFiber<'a>>
+where
+    S: AsStoreOpaque + ?Sized + 'a,
+{
+    let opaque = store.as_store_opaque();
+    let engine = opaque.engine().clone();
     let executor = Executor::new(&engine);
-    let id = store.store_opaque().id();
-    let stack = store.store_opaque_mut().allocate_fiber_stack()?;
-    let track_pkey_context_switch = store.has_pkey();
+    let id = opaque.id();
+    let stack = opaque.allocate_fiber_stack()?;
+    let track_pkey_context_switch = opaque.has_pkey();
     let store = &raw mut *store;
     let fiber = Fiber::new(stack, move |result: WasmtimeResume, suspend| {
         let future_cx = match result {
@@ -812,17 +800,22 @@ pub(crate) fn make_fiber<'a>(
         // the fiber is running and `future_cx` and `suspend` are both in scope.
         // Note that these pointers are removed when this function returns as
         // that's when they fall out of scope.
-        let async_state = store_ref.store_opaque_mut().fiber_async_state_mut();
+        let async_state = store_ref.as_store_opaque().fiber_async_state_mut();
         assert!(async_state.current_suspend.is_none());
         assert!(async_state.current_future_cx.is_none());
         async_state.current_suspend = Some(NonNull::from(suspend));
         async_state.current_future_cx = Some(future_cx);
 
-        struct ResetCurrentPointersToNull<'a>(&'a mut dyn VMStore);
+        struct ResetCurrentPointersToNull<'a, S>(&'a mut S)
+        where
+            S: AsStoreOpaque + ?Sized;
 
-        impl Drop for ResetCurrentPointersToNull<'_> {
+        impl<S> Drop for ResetCurrentPointersToNull<'_, S>
+        where
+            S: AsStoreOpaque + ?Sized,
+        {
             fn drop(&mut self) {
-                let state = self.0.fiber_async_state_mut();
+                let state = self.0.as_store_opaque().fiber_async_state_mut();
 
                 // Double-check that the current suspension isn't null (it
                 // should be what's in this closure). Note though that we
@@ -861,23 +854,28 @@ pub(crate) fn make_fiber<'a>(
 
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
-pub(crate) async fn on_fiber<R: Send + Sync>(
-    store: &mut StoreOpaque,
-    func: impl FnOnce(&mut StoreOpaque) -> R + Send + Sync,
-) -> Result<R> {
-    let config = store.engine().config();
-    debug_assert!(store.async_support());
+pub(crate) async fn on_fiber<S, R>(
+    store: &mut S,
+    func: impl FnOnce(&mut S) -> R + Send + Sync,
+) -> Result<R>
+where
+    S: AsStoreOpaque + ?Sized,
+    R: Send + Sync,
+{
+    let opaque = store.as_store_opaque();
+    let config = opaque.engine().config();
+    debug_assert!(opaque.async_support());
     debug_assert!(config.async_stack_size > 0);
 
     let mut result = None;
-    let fiber = make_fiber(store.traitobj_mut(), |store| {
+    let fiber = make_fiber(store, |store| {
         result = Some(func(store));
         Ok(())
     })?;
 
     {
         let fiber = FiberFuture {
-            store,
+            store: store.as_store_opaque(),
             fiber: Some(fiber),
             #[cfg(feature = "component-model-async")]
             on_release: OnRelease::ReturnPending,
