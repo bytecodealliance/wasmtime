@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::store::{Executor, StoreId, StoreInner, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
-use crate::vm::{AsyncWasmCallState, VMStore};
+use crate::vm::{AlwaysMut, AsyncWasmCallState, VMStore};
 use crate::{Engine, StoreContextMut};
 use anyhow::{Result, anyhow};
 use core::mem;
@@ -9,12 +9,13 @@ use core::ops::Range;
 use core::pin::Pin;
 use core::ptr::{self, NonNull};
 use core::task::{Context, Poll};
-use wasmtime_fiber::{Fiber, Suspend};
+use wasmtime_fiber::{Fiber, FiberStack, Suspend};
 
 type WasmtimeResume = Result<NonNull<Context<'static>>>;
 type WasmtimeYield = StoreFiberYield;
 type WasmtimeComplete = Result<()>;
 type WasmtimeSuspend = Suspend<WasmtimeResume, WasmtimeYield, WasmtimeComplete>;
+type WasmtimeFiber<'a> = Fiber<'a, WasmtimeResume, WasmtimeYield, WasmtimeComplete>;
 
 /// State related to asynchronous computations stored within a `Store<T>`.
 ///
@@ -434,9 +435,9 @@ pub(crate) struct StoreFiber<'a> {
     ///
     /// Note also that every `StoreFiber` is implicitly granted exclusive access
     /// to the store when it is resumed.
-    fiber: Option<Fiber<'a, WasmtimeResume, WasmtimeYield, WasmtimeComplete>>,
+    fiber: Option<AlwaysMut<RawFiber<'a>>>,
     /// See `FiberResumeState`
-    state: Option<FiberResumeState>,
+    state: Option<AlwaysMut<FiberResumeState>>,
     /// The Wasmtime `Engine` to which this fiber belongs.
     engine: Engine,
     /// The id of the store with which this fiber was created.
@@ -446,9 +447,23 @@ pub(crate) struct StoreFiber<'a> {
     id: StoreId,
 }
 
-impl StoreFiber<'_> {
+struct RawFiber<'a>(WasmtimeFiber<'a>);
+
+impl<'a> StoreFiber<'a> {
+    /// Convenience method to peel off some layers of abstraction around the raw
+    /// `wasmtime_fiber::Fiber`.
+    fn fiber(&mut self) -> Option<&mut WasmtimeFiber<'a>> {
+        Some(&mut self.fiber.as_mut()?.get_mut().0)
+    }
+
+    /// Convenience method take the internal fiber and consume it, yielding its
+    /// original stack.
+    fn take_fiber_stack(&mut self) -> Option<FiberStack> {
+        self.fiber.take().map(|f| f.into_inner().0.into_stack())
+    }
+
     pub(crate) fn dispose(&mut self, store: &mut StoreOpaque) {
-        if let Some(fiber) = &mut self.fiber {
+        if let Some(fiber) = self.fiber() {
             if !fiber.done() {
                 let result = resume_fiber(store, self, Err(anyhow!("future dropped")));
                 debug_assert!(result.is_ok());
@@ -469,16 +484,15 @@ impl Drop for StoreFiber<'_> {
         }
 
         assert!(
-            self.fiber.as_ref().unwrap().done(),
+            self.fiber().unwrap().done(),
             "attempted to drop in-progress fiber without first calling `StoreFiber::dispose`"
         );
 
-        self.state.take().unwrap().dispose();
+        self.state.take().unwrap().into_inner().dispose();
 
         unsafe {
-            self.engine
-                .allocator()
-                .deallocate_fiber_stack(self.fiber.take().unwrap().into_stack());
+            let stack = self.take_fiber_stack().unwrap();
+            self.engine.allocator().deallocate_fiber_stack(stack);
         }
     }
 }
@@ -537,11 +551,7 @@ impl Drop for StoreFiber<'_> {
 // declare the fiber as only containing Send data on its stack, despite not
 // knowing for sure at compile time that this is correct. That's what `unsafe`
 // in Rust is all about, though, right?
-unsafe impl Send for StoreFiber<'_> {}
-// See the docs about the `Send` impl above, which also apply to this `Sync`
-// impl.  `Sync` is needed since we store `StoreFiber`s and switch between them
-// when executing components that export async-lifted functions.
-unsafe impl Sync for StoreFiber<'_> {}
+unsafe impl Send for RawFiber<'_> {}
 
 /// State of the world when a fiber last suspended.
 ///
@@ -596,8 +606,7 @@ impl FiberResumeState {
         let tls = unsafe { self.tls.push() };
         let mpk = swap_mpk_states(self.mpk);
         let async_guard_range = fiber
-            .fiber
-            .as_ref()
+            .fiber()
             .unwrap()
             .stack()
             .guard_range()
@@ -723,25 +732,31 @@ fn resume_fiber<'a>(
 
     impl Drop for Restore<'_, '_> {
         fn drop(&mut self) {
-            self.fiber.state = Some(unsafe { self.state.take().unwrap().replace(self.store) });
+            self.fiber.state = Some(AlwaysMut::new(unsafe {
+                self.state.take().unwrap().replace(self.store)
+            }));
         }
     }
     let result = unsafe {
-        let prev = fiber.state.take().unwrap().replace(store, fiber);
+        let prev = fiber
+            .state
+            .take()
+            .unwrap()
+            .into_inner()
+            .replace(store, fiber);
         let restore = Restore {
             store,
             fiber,
             state: Some(prev),
         };
-        restore.fiber.fiber.as_ref().unwrap().resume(result)
+        restore.fiber.fiber().unwrap().resume(result)
     };
 
     match &result {
         // The fiber has finished, so recycle its stack by disposing of the
         // underlying fiber itself.
         Ok(_) => {
-            let stack = fiber.fiber.take().map(|f| f.into_stack());
-            if let Some(stack) = stack {
+            if let Some(stack) = fiber.take_fiber_stack() {
                 store.deallocate_fiber_stack(stack);
             }
         }
@@ -761,7 +776,7 @@ fn resume_fiber<'a>(
             // pointer Wasmtime uses is not pointing anywhere within the
             // stack. If it is then that's a bug indicating that TLS management
             // in Wasmtime is incorrect.
-            if let Some(range) = fiber.fiber.as_ref().unwrap().stack().range() {
+            if let Some(range) = fiber.fiber().unwrap().stack().range() {
                 AsyncWasmCallState::assert_current_state_not_in_range(range);
             }
         }
@@ -826,7 +841,7 @@ pub(crate) fn make_fiber<'a>(
         fun(reset.0)
     })?;
     Ok(StoreFiber {
-        state: Some(FiberResumeState {
+        state: Some(AlwaysMut::new(FiberResumeState {
             tls: crate::runtime::vm::AsyncWasmCallState::new(),
             mpk: if track_pkey_context_switch {
                 Some(ProtectionMask::all())
@@ -835,10 +850,10 @@ pub(crate) fn make_fiber<'a>(
             },
             stack_limit: usize::MAX,
             executor,
-        }),
+        })),
         engine,
         id,
-        fiber: Some(fiber),
+        fiber: Some(AlwaysMut::new(RawFiber(fiber))),
     })
 }
 

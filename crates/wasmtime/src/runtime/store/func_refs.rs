@@ -5,7 +5,7 @@ use crate::Definition;
 use crate::module::ModuleRegistry;
 use crate::prelude::*;
 use crate::runtime::HostFunc;
-use crate::runtime::vm::{SendSyncPtr, VMArrayCallHostFuncContext, VMFuncRef};
+use crate::runtime::vm::{AlwaysMut, SendSyncPtr, VMArrayCallHostFuncContext, VMFuncRef};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
 
@@ -18,7 +18,7 @@ use core::ptr::NonNull;
 pub struct FuncRefs {
     /// A bump allocation arena where we allocate `VMFuncRef`s such
     /// that they are pinned and owned.
-    bump: SendSyncBump,
+    bump: AlwaysMut<bumpalo::Bump>,
 
     /// Pointers into `self.bump` for entries that need `wasm_call` field filled
     /// in.
@@ -77,23 +77,6 @@ enum Storage {
     },
 }
 
-use send_sync_bump::SendSyncBump;
-mod send_sync_bump {
-    #[derive(Default)]
-    pub struct SendSyncBump(bumpalo::Bump);
-
-    impl SendSyncBump {
-        pub fn alloc<T>(&mut self, val: T) -> &mut T {
-            self.0.alloc(val)
-        }
-    }
-
-    // Safety: We require `&mut self` on the only public method, which means it
-    // is safe to send `&SendSyncBump` references across threads because they
-    // can't actually do anything with it.
-    unsafe impl Sync for SendSyncBump {}
-}
-
 impl FuncRefs {
     /// Push the given `VMFuncRef` into this arena, returning a
     /// pinned pointer to it.
@@ -109,7 +92,7 @@ impl FuncRefs {
         modules: &ModuleRegistry,
     ) -> NonNull<VMFuncRef> {
         debug_assert!(func_ref.wasm_call.is_none());
-        let func_ref = self.bump.alloc(func_ref);
+        let func_ref = self.bump.get_mut().alloc(func_ref);
         // SAFETY: it's a contract of this function itself that `func_ref` has a
         // valid vmctx field to read.
         let has_hole = unsafe { !try_fill(func_ref, modules) };
