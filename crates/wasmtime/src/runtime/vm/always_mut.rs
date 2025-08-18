@@ -33,6 +33,7 @@ impl<T> AlwaysMut<T> {
     }
 
     /// Consume this [`AlwaysMut`], returning the underlying data.
+    #[cfg(feature = "async")]
     pub fn into_inner(self) -> T {
         self.0
     }
