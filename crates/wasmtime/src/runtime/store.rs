@@ -2522,6 +2522,10 @@ impl Drop for StoreOpaque {
     }
 }
 
+#[cfg_attr(
+    not(any(feature = "gc", feature = "async")),
+    expect(dead_code, reason = "don't want to put #[cfg] on all impls below too")
+)]
 pub(crate) trait AsStoreOpaque {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque;
 }
