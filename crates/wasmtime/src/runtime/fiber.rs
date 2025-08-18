@@ -393,7 +393,6 @@ impl StoreOpaque {
     /// # Panics
     ///
     /// Panics if this is invoked outside the context of a fiber.
-    #[cfg(feature = "component-model-async")]
     pub(crate) fn with_blocking<R>(
         &mut self,
         f: impl FnOnce(&mut Self, &mut BlockingContext<'_, '_>) -> R,
