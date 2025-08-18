@@ -169,7 +169,7 @@ impl StoreOpaque {
     /// This function will convert the synchronous `func` into an asynchronous
     /// future. This is done by running `func` in a fiber on a separate native
     /// stack which can be suspended and resumed from.
-    #[cfg(any(feature = "component-model-async", feature = "gc"))]
+    #[cfg(feature = "gc")]
     pub(crate) async fn on_fiber<R: Send + Sync>(
         &mut self,
         func: impl FnOnce(&mut Self) -> R + Send + Sync,
