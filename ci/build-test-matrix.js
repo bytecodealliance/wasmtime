@@ -145,7 +145,6 @@ const FULL_MATRIX = [
     "gcc": "arm-linux-gnueabihf-gcc",
     "qemu": "qemu-arm -L /usr/arm-linux-gnueabihf -E LD_LIBRARY_PATH=/usr/arm-linux-gnueabihf/lib",
     "qemu_target": "arm-linux-user",
-    "isa": "armv7",
   },
 ];
 
