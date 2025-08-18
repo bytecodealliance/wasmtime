@@ -995,6 +995,15 @@ pub(crate) mod tls {
         state: raw::Ptr,
     }
 
+    // SAFETY: This is a relatively unsafe unsafe block and not really all that
+    // well audited. The general idea is that the linked list of activations
+    // owned by `self.state` are safe to send to other threads, but that relies
+    // on everything internally being safe as well as stack variables and such.
+    // This is more-or-less tied to the very large comment in `fiber.rs` about
+    // `unsafe impl Send` there.
+    #[cfg(feature = "async")]
+    unsafe impl Send for AsyncWasmCallState {}
+
     #[cfg(feature = "async")]
     impl AsyncWasmCallState {
         /// Creates new state that initially starts as null.

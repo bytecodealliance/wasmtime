@@ -51,6 +51,7 @@ use wasmtime_environ::{
 #[cfg(feature = "gc")]
 use wasmtime_environ::ModuleInternedTypeIndex;
 
+mod always_mut;
 #[cfg(feature = "component-model")]
 pub mod component;
 mod const_expr;
@@ -92,6 +93,7 @@ pub(crate) use interpreter_disabled as interpreter;
 #[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
+pub use crate::runtime::vm::always_mut::*;
 pub use crate::runtime::vm::export::*;
 pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
