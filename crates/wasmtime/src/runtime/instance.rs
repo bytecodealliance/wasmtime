@@ -853,8 +853,11 @@ impl<T: 'static> InstancePre<T> {
     #[cfg(feature = "async")]
     pub async fn instantiate_async(
         &self,
-        mut store: impl AsContextMut<Data: Send>,
-    ) -> Result<Instance> {
+        mut store: impl AsContextMut<Data = T>,
+    ) -> Result<Instance>
+    where
+        T: Send,
+    {
         let mut store = store.as_context_mut();
         let imports = pre_instantiate_raw(
             &mut store.0,
