@@ -1163,7 +1163,7 @@ impl Instance {
     /// can be made (in which case we trap with `Trap::AsyncDeadlock`).
     async fn poll_until<T, R>(
         self,
-        store: StoreContextMut<'_, T>,
+        mut store: StoreContextMut<'_, T>,
         mut future: Pin<&mut impl Future<Output = R>>,
     ) -> Result<R> {
         loop {
@@ -1312,7 +1312,7 @@ impl Instance {
                 // any work items and then loop again.
                 Either::Right(ready) => {
                     for item in ready {
-                        self.handle_work_item(store.0, item).await?;
+                        self.handle_work_item(store.as_context_mut(), item).await?;
                     }
                 }
             }
@@ -1320,11 +1320,15 @@ impl Instance {
     }
 
     /// Handle the specified work item, possibly resuming a fiber if applicable.
-    async fn handle_work_item(self, store: &mut dyn VMStore, item: WorkItem) -> Result<()> {
+    async fn handle_work_item<T>(
+        self,
+        store: StoreContextMut<'_, T>,
+        item: WorkItem,
+    ) -> Result<()> {
         log::trace!("handle work item {item:?}");
         match item {
             WorkItem::PushFuture(future) => {
-                self.concurrent_state_mut(store)
+                self.concurrent_state_mut(store.0)
                     .futures
                     .get_mut()
                     .unwrap()
@@ -1333,10 +1337,10 @@ impl Instance {
                     .push(future.into_inner().unwrap());
             }
             WorkItem::ResumeFiber(fiber) => {
-                self.resume_fiber(store, fiber).await?;
+                self.resume_fiber(store.0, fiber).await?;
             }
             WorkItem::GuestCall(call) => {
-                let state = self.concurrent_state_mut(store);
+                let state = self.concurrent_state_mut(store.0);
                 if call.is_ready(state)? {
                     self.run_on_worker(store, WorkerItem::GuestCall(call))
                         .await?;
@@ -1362,7 +1366,7 @@ impl Instance {
                 }
             }
             WorkItem::Poll(params) => {
-                let state = self.concurrent_state_mut(store);
+                let state = self.concurrent_state_mut(store.0);
                 if state.get_mut(params.task)?.event.is_some()
                     || !state.get_mut(params.set)?.ready.is_empty()
                 {
@@ -1434,11 +1438,11 @@ impl Instance {
     }
 
     /// Execute the specified guest call on a worker fiber.
-    async fn run_on_worker(self, store: &mut dyn VMStore, item: WorkerItem) -> Result<()> {
-        let worker = if let Some(fiber) = self.concurrent_state_mut(store).worker.take() {
+    async fn run_on_worker<T>(self, store: StoreContextMut<'_, T>, item: WorkerItem) -> Result<()> {
+        let worker = if let Some(fiber) = self.concurrent_state_mut(store.0).worker.take() {
             fiber
         } else {
-            fiber::make_fiber(store, move |store| {
+            fiber::make_fiber(store.0, move |store| {
                 loop {
                     match self.concurrent_state_mut(store).worker_item.take().unwrap() {
                         WorkerItem::GuestCall(call) => self.handle_guest_call(store, call)?,
@@ -1450,11 +1454,11 @@ impl Instance {
             })?
         };
 
-        let worker_item = &mut self.concurrent_state_mut(store).worker_item;
+        let worker_item = &mut self.concurrent_state_mut(store.0).worker_item;
         assert!(worker_item.is_none());
         *worker_item = Some(item);
 
-        self.resume_fiber(store, worker).await
+        self.resume_fiber(store.0, worker).await
     }
 
     /// Execute the specified guest call.
