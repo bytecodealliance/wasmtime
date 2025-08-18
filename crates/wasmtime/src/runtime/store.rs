@@ -2524,7 +2524,9 @@ impl Drop for StoreOpaque {
 
 #[cfg_attr(
     not(any(feature = "gc", feature = "async")),
-    expect(dead_code, reason = "don't want to put #[cfg] on all impls below too")
+    // NB: Rust 1.89, current stable, does not fire this lint. Rust 1.90,
+    // however, does, so use #[allow] until our MSRV is 1.90.
+    allow(dead_code, reason = "don't want to put #[cfg] on all impls below too")
 )]
 pub(crate) trait AsStoreOpaque {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque;
