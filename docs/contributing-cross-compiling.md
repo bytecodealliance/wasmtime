@@ -56,21 +56,27 @@ The final bit to get out of the way is to configure `cargo` to use the
 appropriate `gcc` and `qemu` when cross-compiling and running tests for other
 architectures.
 
-Add this to `.cargo/config.toml` in the Wasmtime repository (or create that file
-if none already exists).
+You will need to set `CARGO_TARGET_<triple>_RUNNER` and `CARGO_TARGET_<triple>_LINKER` for the target.
 
-```toml
-[target.aarch64-unknown-linux-gnu]
-linker = "aarch64-linux-gnu-gcc"
-runner = "qemu-aarch64 -L /usr/aarch64-linux-gnu -E LD_LIBRARY_PATH=/usr/aarch64-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1"
+* aarch64:
 
-[target.riscv64gc-unknown-linux-gnu]
-linker = "riscv64-linux-gnu-gcc"
-runner = "qemu-riscv64 -L /usr/riscv64-linux-gnu -E LD_LIBRARY_PATH=/usr/riscv64-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1"
+```console
+export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER='qemu-aarch64 -L /usr/aarch64-linux-gnu -E LD_LIBRARY_PATH=/usr/aarch64-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1'
+export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER='aarch64-linux-gnu-gcc'
+```
 
-[target.s390x-unknown-linux-gnu]
-linker = "s390x-linux-gnu-gcc"
-runner = "qemu-s390x -L /usr/s390x-linux-gnu -E LD_LIBRARY_PATH=/usr/s390x-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1"
+* riscv64:
+
+```console
+export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_RUNNER='qemu-riscv64 -L /usr/riscv64-linux-gnu -E LD_LIBRARY_PATH=/usr/riscv64-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1'
+export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER='riscv64-linux-gnu-gcc'
+```
+
+* s390x:
+
+```console
+export CARGO_TARGET_S390X_UNKNOWN_LINUX_GNU_RUNNER='qemu-s390x -L /usr/s390x-linux-gnu -E LD_LIBRARY_PATH=/usr/s390x-linux-gnu/lib -E WASMTIME_TEST_NO_HOG_MEMORY=1'
+export CARGO_TARGET_S390X_UNKNOWN_LINUX_GNU_LINKER='s390x-linux-gnu-gcc'
 ```
 
 ## Cross-Compile Tests and Run Them!
