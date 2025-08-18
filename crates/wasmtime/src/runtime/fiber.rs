@@ -1,7 +1,7 @@
 use crate::prelude::*;
-use crate::store::{Executor, StoreId, StoreInner, StoreOpaque};
+use crate::store::{AsStoreOpaque, Executor, StoreId, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
-use crate::vm::{AlwaysMut, AsyncWasmCallState, VMStore};
+use crate::vm::{AlwaysMut, AsyncWasmCallState};
 use crate::{Engine, StoreContextMut};
 use anyhow::{Result, anyhow};
 use core::mem;
@@ -110,28 +110,6 @@ impl Default for AsyncState {
 impl AsyncState {
     pub(crate) fn last_fiber_stack(&mut self) -> &mut Option<wasmtime_fiber::FiberStack> {
         &mut self.last_fiber_stack
-    }
-}
-
-pub(crate) trait AsStoreOpaque {
-    fn as_store_opaque(&mut self) -> &mut StoreOpaque;
-}
-
-impl AsStoreOpaque for StoreOpaque {
-    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
-        self
-    }
-}
-
-impl AsStoreOpaque for dyn VMStore {
-    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
-        self
-    }
-}
-
-impl<T: 'static> AsStoreOpaque for StoreInner<T> {
-    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
-        self
     }
 }
 

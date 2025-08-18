@@ -2522,6 +2522,34 @@ impl Drop for StoreOpaque {
     }
 }
 
+pub(crate) trait AsStoreOpaque {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque;
+}
+
+impl AsStoreOpaque for StoreOpaque {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        self
+    }
+}
+
+impl AsStoreOpaque for dyn vm::VMStore {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        self
+    }
+}
+
+impl<T: 'static> AsStoreOpaque for StoreInner<T> {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        self
+    }
+}
+
+impl<T: AsStoreOpaque + ?Sized> AsStoreOpaque for &mut T {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        T::as_store_opaque(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{get_fuel, refuel, set_fuel};
