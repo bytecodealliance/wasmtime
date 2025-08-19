@@ -175,6 +175,7 @@ fn common_struct_layout(
         size,
         align,
         fields,
+        is_exception: false,
     }
 }
 
@@ -182,23 +183,22 @@ fn common_struct_layout(
 /// size and alignment of the collector's GC header and its expected
 /// offset of the array length field.
 #[cfg(any(feature = "gc-null", feature = "gc-drc"))]
-fn common_exn_layout(ty: &WasmExnType, header_size: u32, header_align: u32) -> GcExceptionLayout {
+fn common_exn_layout(ty: &WasmExnType, header_size: u32, header_align: u32) -> GcStructLayout {
     assert!(header_size >= crate::VM_GC_HEADER_SIZE);
     assert!(header_align >= crate::VM_GC_HEADER_ALIGN);
 
     // Compute a struct layout, with extra header size for the
     // `(instance_idx, tag_idx)` fields.
-    let tag_offset = header_size;
     assert!(header_align >= 8);
     let header_size = header_size + 2 * u32::try_from(core::mem::size_of::<u32>()).unwrap();
 
     let (size, align, fields) = common_struct_or_exn_layout(&ty.fields, header_size, header_align);
 
-    GcExceptionLayout {
+    GcStructLayout {
         size,
         align,
-        tag_offset,
         fields,
+        is_exception: true,
     }
 }
 
@@ -210,6 +210,12 @@ pub trait GcTypeLayouts {
     /// This must be the same for all arrays in the heap, regardless of their
     /// element type.
     fn array_length_field_offset(&self) -> u32;
+
+    /// The offset of an exception object's tag reference.
+    ///
+    /// This msut be the same for all exception objects in the heap,
+    /// regardless of their specific signature.
+    fn exception_tag_offset(&self) -> u32;
 
     /// Get this collector's layout for the given composite type.
     ///
@@ -235,7 +241,7 @@ pub trait GcTypeLayouts {
     fn struct_layout(&self, ty: &WasmStructType) -> GcStructLayout;
 
     /// Get this collector's layout for the given exception type.
-    fn exn_layout(&self, ty: &WasmExnType) -> GcExceptionLayout;
+    fn exn_layout(&self, ty: &WasmExnType) -> GcStructLayout;
 }
 
 /// The layout of a GC-managed object.
@@ -244,11 +250,8 @@ pub enum GcLayout {
     /// The layout of a GC-managed array object.
     Array(GcArrayLayout),
 
-    /// The layout of a GC-managed struct object.
+    /// The layout of a GC-managed struct or exception object.
     Struct(GcStructLayout),
-
-    /// The layout of a GC-managed exception object.
-    Exception(GcExceptionLayout),
 }
 
 impl From<GcArrayLayout> for GcLayout {
@@ -260,12 +263,6 @@ impl From<GcArrayLayout> for GcLayout {
 impl From<GcStructLayout> for GcLayout {
     fn from(layout: GcStructLayout) -> Self {
         Self::Struct(layout)
-    }
-}
-
-impl From<GcExceptionLayout> for GcLayout {
-    fn from(layout: GcExceptionLayout) -> Self {
-        Self::Exception(layout)
     }
 }
 
@@ -285,15 +282,6 @@ impl GcLayout {
         match self {
             Self::Array(a) => a,
             _ => panic!("GcLayout::unwrap_array on non-array GC layout"),
-        }
-    }
-
-    /// Get the underlying `GcExceptionLayout`, or panic.
-    #[track_caller]
-    pub fn unwrap_exception(&self) -> &GcExceptionLayout {
-        match self {
-            Self::Exception(e) => e,
-            _ => panic!("GcLayout::unwrap_exception on a non-exception GC layout"),
         }
     }
 }
@@ -352,7 +340,7 @@ impl GcArrayLayout {
     }
 }
 
-/// The layout for a GC-managed struct type.
+/// The layout for a GC-managed struct type or exception type.
 ///
 /// This layout is only valid for use with the GC runtime that created it. It is
 /// not valid to use one GC runtime's layout with another GC runtime, doing so
@@ -361,6 +349,12 @@ impl GcArrayLayout {
 ///
 /// All offsets are from the start of the object; that is, the size of the GC
 /// header (for example) is included in the offset.
+///
+/// Note that these are reused between structs and exceptions to avoid
+/// unnecessary code duplication. In both cases, the objects are
+/// tuples of typed fields with a certain size. The only difference in
+/// practice is that an exception object also carries a tag reference
+/// (at a fixed offset as per `GcTypeLayouts::exception_tag_offset`).
 #[derive(Clone, Debug)]
 pub struct GcStructLayout {
     /// The size (in bytes) of this struct.
@@ -372,6 +366,9 @@ pub struct GcStructLayout {
     /// The fields of this struct. The `i`th entry contains information about
     /// the `i`th struct field's layout.
     pub fields: Vec<GcStructLayoutField>,
+
+    /// Whether this is an exception object layout.
+    pub is_exception: bool,
 }
 
 impl GcStructLayout {
@@ -395,41 +392,6 @@ pub struct GcStructLayoutField {
     /// Note: it is okay for this to be `false` for `i31ref`s, since they never
     /// actually reference another GC object.
     pub is_gc_ref: bool,
-}
-
-/// The layout for a GC-managed exception object.
-///
-/// This layout is only valid for use with the GC runtime that created it. It is
-/// not valid to use one GC runtime's layout with another GC runtime, doing so
-/// is memory safe but will lead to general incorrectness like panics and wrong
-/// results.
-///
-/// All offsets are from the start of the object; that is, the size of the GC
-/// header (for example) is included in the offset.
-#[derive(Clone, Debug)]
-pub struct GcExceptionLayout {
-    /// The size (in bytes) of this struct.
-    pub size: u32,
-
-    /// The alignment (in bytes) of this struct.
-    pub align: u32,
-
-    /// The offset of the VMTagImport pointer.
-    pub tag_offset: u32,
-
-    /// The fields of this exception object. The `i`th entry contains
-    /// information about the `i`th parameter in the associated tag
-    /// type.
-    pub fields: Vec<GcStructLayoutField>,
-}
-
-impl GcExceptionLayout {
-    /// Get a `core::alloc::Layout` for an exception object of this type.
-    pub fn layout(&self) -> Layout {
-        let size = usize::try_from(self.size).unwrap();
-        let align = usize::try_from(self.align).unwrap();
-        Layout::from_size_align(size, align).unwrap()
-    }
 }
 
 /// The kind of an object in a GC heap.

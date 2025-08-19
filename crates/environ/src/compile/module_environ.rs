@@ -354,7 +354,13 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         TypeRef::Tag(ty) => {
                             let index = TypeIndex::from_u32(ty.func_type_idx);
                             let signature = self.result.module.types[index];
-                            let tag = Tag { signature };
+                            let exception = self.types.define_exception_type_for_tag(
+                                signature.unwrap_module_type_index(),
+                            );
+                            let tag = Tag {
+                                signature,
+                                exception: EngineOrModuleTypeIndex::Module(exception),
+                            };
                             self.result.module.num_imported_tags += 1;
                             EntityType::Tag(tag)
                         }
@@ -426,7 +432,10 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let sigindex = entry?.func_type_idx;
                     let ty = TypeIndex::from_u32(sigindex);
                     let interned_index = self.result.module.types[ty];
-                    self.result.module.push_tag(interned_index);
+                    let exception = self
+                        .types
+                        .define_exception_type_for_tag(interned_index.unwrap_module_type_index());
+                    self.result.module.push_tag(interned_index, exception);
                 }
             }
 

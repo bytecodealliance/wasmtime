@@ -25,9 +25,7 @@ use crate::runtime::vm::{GcHeapAllocationIndex, VMMemoryDefinition};
 use core::any::Any;
 use core::mem::MaybeUninit;
 use core::{alloc::Layout, num::NonZeroU32};
-use wasmtime_environ::{
-    GcArrayLayout, GcExceptionLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex,
-};
+use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.
 ///
@@ -246,12 +244,14 @@ impl GcStore {
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
     ) -> Result<Result<VMStructRef, u64>> {
-        self.gc_heap.alloc_uninit_struct(ty, layout)
+        self.gc_heap
+            .alloc_uninit_struct_or_exn(ty, layout)
+            .map(|r| r.map(|r| r.into_structref_unchecked()))
     }
 
     /// Deallocate an uninitialized struct.
     pub fn dealloc_uninit_struct(&mut self, structref: VMStructRef) {
-        self.gc_heap.dealloc_uninit_struct(structref);
+        self.gc_heap.dealloc_uninit_struct_or_exn(structref.into())
     }
 
     /// Get the data for the given object reference.
@@ -308,13 +308,15 @@ impl GcStore {
     pub fn alloc_uninit_exn(
         &mut self,
         ty: VMSharedTypeIndex,
-        layout: &GcExceptionLayout,
+        layout: &GcStructLayout,
     ) -> Result<Result<VMExnRef, u64>> {
-        self.gc_heap.alloc_uninit_exn(ty, layout)
+        self.gc_heap
+            .alloc_uninit_struct_or_exn(ty, layout)
+            .map(|r| r.map(|r| r.into_exnref_unchecked()))
     }
 
     /// Deallocate an uninitialized exception object.
     pub fn dealloc_uninit_exn(&mut self, exnref: VMExnRef) {
-        self.gc_heap.dealloc_uninit_exn(exnref);
+        self.gc_heap.dealloc_uninit_struct_or_exn(exnref.into());
     }
 }

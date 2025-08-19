@@ -11,7 +11,7 @@ use crate::{
 use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, prelude::*};
 use core::mem;
 use core::mem::MaybeUninit;
-use wasmtime_environ::{GcExceptionLayout, GcLayout, VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// An allocator for a particular Wasm GC exception type.
 ///
@@ -81,12 +81,12 @@ impl ExnRefPre {
         ExnRefPre { store_id, ty }
     }
 
-    pub(crate) fn layout(&self) -> &GcExceptionLayout {
+    pub(crate) fn layout(&self) -> &GcStructLayout {
         self.ty
             .registered_type()
             .layout()
             .expect("exn types have a layout")
-            .unwrap_exception()
+            .unwrap_struct()
     }
 
     pub(crate) fn type_index(&self) -> VMSharedTypeIndex {
@@ -347,7 +347,7 @@ impl ExnRef {
         let mut store = AutoAssertNoGc::new(store);
         match (|| {
             let (instance, index) = tag.to_raw_indices();
-            exnref.initialize_tag(&mut store, allocator.layout(), instance, index)?;
+            exnref.initialize_tag(&mut store, instance, index)?;
             for (index, (ty, val)) in allocator.ty.fields().zip(fields).enumerate() {
                 exnref.initialize_field(
                     &mut store,
@@ -564,7 +564,7 @@ impl ExnRef {
         Ok(gc_ref.as_exnref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcExceptionLayout> {
+    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcStructLayout> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
         let layout = store
@@ -573,9 +573,8 @@ impl ExnRef {
             .layout(type_index)
             .expect("exn types should have GC layouts");
         match layout {
-            GcLayout::Struct(_) => unreachable!(),
+            GcLayout::Struct(s) => Ok(s),
             GcLayout::Array(_) => unreachable!(),
-            GcLayout::Exception(e) => Ok(e),
         }
     }
 
@@ -626,8 +625,7 @@ impl ExnRef {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         assert!(self.comes_from_same_store(&store));
         let exnref = self.exnref(&store)?.unchecked_copy();
-        let layout = self.layout(&store)?;
-        let (instance, index) = exnref.tag(&mut store, &layout)?;
+        let (instance, index) = exnref.tag(&mut store)?;
         Ok(Tag::from_raw_indices(&*store, instance, index))
     }
 }
