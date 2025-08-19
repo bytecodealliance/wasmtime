@@ -46,9 +46,6 @@
 ;;     gv8 = vmctx
 ;;     gv9 = load.i64 notrap aligned readonly gv8+8
 ;;     gv10 = load.i64 notrap aligned gv9+16
-;;     gv11 = vmctx
-;;     gv12 = load.i64 notrap aligned readonly gv11+8
-;;     gv13 = load.i64 notrap aligned gv12+16
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) -> i32 tail
 ;;     sig2 = (i64 vmctx, i64) tail
@@ -64,15 +61,9 @@
 ;;                                     jump block4
 ;;
 ;;                                 block4:
-;;                                     jump block7
-;;
-;;                                 block7:
-;;                                     jump block8
-;;
-;;                                 block8:
-;;                                     jump block9
-;;
-;;                                 block9:
+;; @00d4                               v4 = load.i64 notrap aligned readonly can_move v0+64
+;;                                     v10 = load.i64 notrap aligned readonly can_move v4+88
+;;                                     call fn2(v10, v10)
 ;;                                     jump block5
 ;;
 ;;                                 block5:
@@ -82,9 +73,9 @@
 ;;                                     jump block3
 ;;
 ;;                                 block3:
-;;                                     jump block10
+;;                                     jump block7
 ;;
-;;                                 block10:
+;;                                 block7:
 ;; @00d6                               jump block1
 ;;
 ;;                                 block1:

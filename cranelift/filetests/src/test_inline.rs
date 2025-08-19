@@ -136,12 +136,18 @@ impl<'a> Inline for Inliner<'a> {
                 .and_then(|name| self.0.get(&ir::UserFuncName::User(name.clone())))
             {
                 None => InlineCommand::KeepCall,
-                Some(f) => InlineCommand::Inline(Cow::Borrowed(f)),
+                Some(f) => InlineCommand::Inline {
+                    callee: Cow::Borrowed(f),
+                    visit_callee: true,
+                },
             },
             ir::ExternalName::TestCase(name) => {
                 match self.0.get(&ir::UserFuncName::Testcase(name.clone())) {
                     None => InlineCommand::KeepCall,
-                    Some(f) => InlineCommand::Inline(Cow::Borrowed(f)),
+                    Some(f) => InlineCommand::Inline {
+                        callee: Cow::Borrowed(f),
+                        visit_callee: true,
+                    },
                 }
             }
             ir::ExternalName::LibCall(_) | ir::ExternalName::KnownSymbol(_) => {

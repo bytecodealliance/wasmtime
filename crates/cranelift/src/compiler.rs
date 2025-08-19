@@ -845,9 +845,13 @@ impl InliningCompiler for Compiler {
                                 .code
                                 .downcast_ref::<Option<CompilerContext>>()
                                 .unwrap();
-                            InlineCommand::Inline(Cow::Borrowed(
-                                &cx.as_ref().unwrap().codegen_context.func,
-                            ))
+                            InlineCommand::Inline {
+                                callee: Cow::Borrowed(&cx.as_ref().unwrap().codegen_context.func),
+                                // We've already visited the callee for inlining
+                                // due to our bottom-up approach, no need to
+                                // visit it again.
+                                visit_callee: false,
+                            }
                         }
                     },
                     _ => InlineCommand::KeepCall,
