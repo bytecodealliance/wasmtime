@@ -681,6 +681,9 @@ impl Instance {
     ) -> Result<Option<usize>, Error> {
         let memory = &mut self.as_mut().memories_mut()[idx].1;
 
+        // SAFETY: this is the safe wrapper around `Memory::grow` because it
+        // automatically updates the `VMMemoryDefinition` in this instance after
+        // a growth operation below.
         let result = unsafe { memory.grow(delta, limiter).await };
 
         // Update the state used by a non-shared Wasm memory in case the base
