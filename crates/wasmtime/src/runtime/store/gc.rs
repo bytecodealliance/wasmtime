@@ -45,7 +45,7 @@ impl StoreOpaque {
         root: Option<VMGcRef>,
         bytes_needed: Option<u64>,
     ) -> Option<VMGcRef> {
-        // SAFETY: this isn't safe, see #11409
+        // SAFETY: this isn't sound, see #11409
         let (mut limiter, store) =
             unsafe { self.traitobj().as_mut().resource_limiter_and_store_opaque() };
         store.gc(limiter.as_mut(), root, bytes_needed).await
