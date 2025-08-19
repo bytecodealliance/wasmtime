@@ -1110,14 +1110,15 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
 }
 
 fn is_callee_save_systemv(r: RealReg, enable_pinned_reg: bool) -> bool {
-    use regs::*;
+    use asm::gpr::enc::*;
+
     match r.class() {
         RegClass::Int => match r.hw_enc() {
-            ENC_RBX | ENC_RBP | ENC_R12 | ENC_R13 | ENC_R14 => true,
+            RBX | RBP | R12 | R13 | R14 => true,
             // R15 is the pinned register; if we're using it that way,
             // it is effectively globally-allocated, and is not
             // callee-saved.
-            ENC_R15 => !enable_pinned_reg,
+            R15 => !enable_pinned_reg,
             _ => false,
         },
         RegClass::Float => false,
@@ -1126,16 +1127,18 @@ fn is_callee_save_systemv(r: RealReg, enable_pinned_reg: bool) -> bool {
 }
 
 fn is_callee_save_fastcall(r: RealReg, enable_pinned_reg: bool) -> bool {
-    use regs::*;
+    use asm::gpr::enc::*;
+    use asm::xmm::enc::*;
+
     match r.class() {
         RegClass::Int => match r.hw_enc() {
-            ENC_RBX | ENC_RBP | ENC_RSI | ENC_RDI | ENC_R12 | ENC_R13 | ENC_R14 => true,
+            RBX | RBP | RSI | RDI | R12 | R13 | R14 => true,
             // See above for SysV: we must treat the pinned reg specially.
-            ENC_R15 => !enable_pinned_reg,
+            R15 => !enable_pinned_reg,
             _ => false,
         },
         RegClass::Float => match r.hw_enc() {
-            6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 => true,
+            XMM6 | XMM7 | XMM8 | XMM9 | XMM10 | XMM11 | XMM12 | XMM13 | XMM14 | XMM15 => true,
             _ => false,
         },
         RegClass::Vector => unreachable!(),
@@ -1164,84 +1167,93 @@ const SYSV_CLOBBERS: PRegSet = sysv_clobbers();
 pub(crate) const ALL_CLOBBERS: PRegSet = all_clobbers();
 
 const fn windows_clobbers() -> PRegSet {
+    use asm::gpr::enc::*;
+    use asm::xmm::enc::*;
+
     PRegSet::empty()
-        .with(regs::gpr_preg(regs::ENC_RAX))
-        .with(regs::gpr_preg(regs::ENC_RCX))
-        .with(regs::gpr_preg(regs::ENC_RDX))
-        .with(regs::gpr_preg(regs::ENC_R8))
-        .with(regs::gpr_preg(regs::ENC_R9))
-        .with(regs::gpr_preg(regs::ENC_R10))
-        .with(regs::gpr_preg(regs::ENC_R11))
-        .with(regs::fpr_preg(0))
-        .with(regs::fpr_preg(1))
-        .with(regs::fpr_preg(2))
-        .with(regs::fpr_preg(3))
-        .with(regs::fpr_preg(4))
-        .with(regs::fpr_preg(5))
+        .with(regs::gpr_preg(RAX))
+        .with(regs::gpr_preg(RCX))
+        .with(regs::gpr_preg(RDX))
+        .with(regs::gpr_preg(R8))
+        .with(regs::gpr_preg(R9))
+        .with(regs::gpr_preg(R10))
+        .with(regs::gpr_preg(R11))
+        .with(regs::fpr_preg(XMM0))
+        .with(regs::fpr_preg(XMM1))
+        .with(regs::fpr_preg(XMM2))
+        .with(regs::fpr_preg(XMM3))
+        .with(regs::fpr_preg(XMM4))
+        .with(regs::fpr_preg(XMM5))
 }
 
 const fn sysv_clobbers() -> PRegSet {
+    use asm::gpr::enc::*;
+    use asm::xmm::enc::*;
+
     PRegSet::empty()
-        .with(regs::gpr_preg(regs::ENC_RAX))
-        .with(regs::gpr_preg(regs::ENC_RCX))
-        .with(regs::gpr_preg(regs::ENC_RDX))
-        .with(regs::gpr_preg(regs::ENC_RSI))
-        .with(regs::gpr_preg(regs::ENC_RDI))
-        .with(regs::gpr_preg(regs::ENC_R8))
-        .with(regs::gpr_preg(regs::ENC_R9))
-        .with(regs::gpr_preg(regs::ENC_R10))
-        .with(regs::gpr_preg(regs::ENC_R11))
-        .with(regs::fpr_preg(0))
-        .with(regs::fpr_preg(1))
-        .with(regs::fpr_preg(2))
-        .with(regs::fpr_preg(3))
-        .with(regs::fpr_preg(4))
-        .with(regs::fpr_preg(5))
-        .with(regs::fpr_preg(6))
-        .with(regs::fpr_preg(7))
-        .with(regs::fpr_preg(8))
-        .with(regs::fpr_preg(9))
-        .with(regs::fpr_preg(10))
-        .with(regs::fpr_preg(11))
-        .with(regs::fpr_preg(12))
-        .with(regs::fpr_preg(13))
-        .with(regs::fpr_preg(14))
-        .with(regs::fpr_preg(15))
+        .with(regs::gpr_preg(RAX))
+        .with(regs::gpr_preg(RCX))
+        .with(regs::gpr_preg(RDX))
+        .with(regs::gpr_preg(RSI))
+        .with(regs::gpr_preg(RDI))
+        .with(regs::gpr_preg(R8))
+        .with(regs::gpr_preg(R9))
+        .with(regs::gpr_preg(R10))
+        .with(regs::gpr_preg(R11))
+        .with(regs::fpr_preg(XMM0))
+        .with(regs::fpr_preg(XMM1))
+        .with(regs::fpr_preg(XMM2))
+        .with(regs::fpr_preg(XMM3))
+        .with(regs::fpr_preg(XMM4))
+        .with(regs::fpr_preg(XMM5))
+        .with(regs::fpr_preg(XMM6))
+        .with(regs::fpr_preg(XMM7))
+        .with(regs::fpr_preg(XMM8))
+        .with(regs::fpr_preg(XMM9))
+        .with(regs::fpr_preg(XMM10))
+        .with(regs::fpr_preg(XMM11))
+        .with(regs::fpr_preg(XMM12))
+        .with(regs::fpr_preg(XMM13))
+        .with(regs::fpr_preg(XMM14))
+        .with(regs::fpr_preg(XMM15))
 }
 
 /// For calling conventions that clobber all registers.
 const fn all_clobbers() -> PRegSet {
+    use asm::gpr::enc::*;
+    use asm::xmm::enc::*;
+
     PRegSet::empty()
-        .with(regs::gpr_preg(regs::ENC_RAX))
-        .with(regs::gpr_preg(regs::ENC_RCX))
-        .with(regs::gpr_preg(regs::ENC_RDX))
-        .with(regs::gpr_preg(regs::ENC_RBX))
-        .with(regs::gpr_preg(regs::ENC_RSI))
-        .with(regs::gpr_preg(regs::ENC_RDI))
-        .with(regs::gpr_preg(regs::ENC_R8))
-        .with(regs::gpr_preg(regs::ENC_R9))
-        .with(regs::gpr_preg(regs::ENC_R10))
-        .with(regs::gpr_preg(regs::ENC_R11))
-        .with(regs::gpr_preg(regs::ENC_R12))
-        .with(regs::gpr_preg(regs::ENC_R13))
-        .with(regs::gpr_preg(regs::ENC_R14))
-        .with(regs::gpr_preg(regs::ENC_R15))
-        .with(regs::fpr_preg(0))
-        .with(regs::fpr_preg(1))
-        .with(regs::fpr_preg(2))
-        .with(regs::fpr_preg(3))
-        .with(regs::fpr_preg(4))
-        .with(regs::fpr_preg(5))
-        .with(regs::fpr_preg(6))
-        .with(regs::fpr_preg(7))
-        .with(regs::fpr_preg(8))
-        .with(regs::fpr_preg(9))
-        .with(regs::fpr_preg(10))
-        .with(regs::fpr_preg(11))
-        .with(regs::fpr_preg(12))
-        .with(regs::fpr_preg(13))
-        .with(regs::fpr_preg(14))
-        .with(regs::fpr_preg(15))
+        .with(regs::gpr_preg(RAX))
+        .with(regs::gpr_preg(RCX))
+        .with(regs::gpr_preg(RDX))
+        .with(regs::gpr_preg(RBX))
+        .with(regs::gpr_preg(RSI))
+        .with(regs::gpr_preg(RDI))
+        .with(regs::gpr_preg(R8))
+        .with(regs::gpr_preg(R9))
+        .with(regs::gpr_preg(R10))
+        .with(regs::gpr_preg(R11))
+        .with(regs::gpr_preg(R12))
+        .with(regs::gpr_preg(R13))
+        .with(regs::gpr_preg(R14))
+        .with(regs::gpr_preg(R15))
+        .with(regs::fpr_preg(XMM0))
+        .with(regs::fpr_preg(XMM1))
+        .with(regs::fpr_preg(XMM2))
+        .with(regs::fpr_preg(XMM3))
+        .with(regs::fpr_preg(XMM4))
+        .with(regs::fpr_preg(XMM5))
+        .with(regs::fpr_preg(XMM6))
+        .with(regs::fpr_preg(XMM7))
+        .with(regs::fpr_preg(XMM8))
+        .with(regs::fpr_preg(XMM9))
+        .with(regs::fpr_preg(XMM10))
+        .with(regs::fpr_preg(XMM11))
+        .with(regs::fpr_preg(XMM12))
+        .with(regs::fpr_preg(XMM13))
+        .with(regs::fpr_preg(XMM14))
+        .with(regs::fpr_preg(XMM15))
 }
 
 fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
