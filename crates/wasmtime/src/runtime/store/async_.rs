@@ -2,6 +2,7 @@
 use crate::CallHook;
 use crate::fiber::{self};
 use crate::prelude::*;
+#[cfg(feature = "gc")]
 use crate::runtime::vm::VMStore;
 use crate::store::{ResourceLimiterInner, StoreInner, StoreOpaque};
 use crate::{Store, StoreContextMut, UpdateDeadline};
