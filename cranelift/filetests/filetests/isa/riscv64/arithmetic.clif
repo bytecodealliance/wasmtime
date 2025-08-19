@@ -803,3 +803,76 @@ block0(v0: i8):
 ; block0: ; offset 0x0
 ;   addiw a0, a0, -1
 ;   ret
+
+function %imul_i8_const(i8) -> i8 {
+block0(v0: i8):
+    v3 = imul_imm v0, 97
+    return v3
+}
+
+; VCode:
+; block0:
+;   li a3,97
+;   mulw a0,a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x61
+;   mulw a0, a0, a3
+;   ret
+
+function %imul_i16_const(i16) -> i16 {
+block0(v0: i16):
+    v3 = imul_imm v0, 97
+    return v3
+}
+
+; VCode:
+; block0:
+;   li a3,97
+;   mulw a0,a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x61
+;   mulw a0, a0, a3
+;   ret
+
+function %imul_i32_const(i32) -> i32 {
+block0(v0: i32):
+    v3 = imul_imm v0, 97
+    return v3
+}
+
+; VCode:
+; block0:
+;   li a3,97
+;   mulw a0,a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x61
+;   mulw a0, a0, a3
+;   ret
+
+function %imul_i64_const(i64) -> i64 {
+block0(v0: i64):
+    v3 = imul_imm v0, 97
+    return v3
+}
+
+; VCode:
+; block0:
+;   li a3,97
+;   mul a0,a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x61
+;   mul a0, a0, a3
+;   ret
+
