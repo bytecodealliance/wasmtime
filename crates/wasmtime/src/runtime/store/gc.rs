@@ -1,78 +1,77 @@
 //! GC-related methods for stores.
 
 use super::*;
-use crate::GcHeapOutOfMemory;
 use crate::runtime::vm::VMGcRef;
 
 impl StoreOpaque {
-    /// Collect garbage, potentially growing the GC heap.
-    pub(crate) fn gc(&mut self, why: Option<&GcHeapOutOfMemory<()>>) {
-        assert!(!self.async_support());
-        unsafe {
-            self.maybe_async_gc(None, why.map(|oom| oom.bytes_needed()))
-                .expect("infallible when not async");
-        }
-    }
-
     /// Attempt to grow the GC heap by `bytes_needed` or, if that fails, perform
     /// a garbage collection.
     ///
-    /// Cooperative, async-yielding (if configured) is completely transparent.
-    ///
-    /// Note that even when this function returns `Ok(())`, it is not guaranteed
+    /// Note that even when this function returns it is not guaranteed
     /// that a GC allocation of size `bytes_needed` will succeed. Growing the GC
     /// heap could fail, and then performing a collection could succeed but
     /// might not free up enough space. Therefore, callers should not assume
     /// that a retried allocation will always succeed.
     ///
-    /// # Safety
-    ///
-    /// When async is enabled, it is the caller's responsibility to ensure that
-    /// this is called on a fiber stack.
-    pub(crate) unsafe fn maybe_async_gc(
+    /// The `root` argument passed in is considered a root for this GC operation
+    /// and its new value is returned as well.
+    pub(crate) async fn gc(
         &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         root: Option<VMGcRef>,
         bytes_needed: Option<u64>,
-    ) -> Result<Option<VMGcRef>> {
+    ) -> Option<VMGcRef> {
         let mut scope = crate::OpaqueRootScope::new(self);
         let store_id = scope.id();
         let root = root.map(|r| scope.gc_roots_mut().push_lifo_root(store_id, r));
 
-        if scope.async_support() {
-            #[cfg(feature = "async")]
-            scope.block_on(|scope| Box::pin(scope.grow_or_collect_gc_heap_async(bytes_needed)))?;
-        } else {
-            scope.grow_or_collect_gc_heap(bytes_needed);
-        }
+        scope.grow_or_collect_gc_heap(limiter, bytes_needed).await;
 
-        let root = match root {
-            None => None,
-            Some(r) => {
-                let r = r
-                    .get_gc_ref(&scope)
-                    .expect("still in scope")
-                    .unchecked_copy();
-                Some(scope.clone_gc_ref(&r))
-            }
-        };
-
-        Ok(root)
+        root.map(|r| {
+            let r = r
+                .get_gc_ref(&scope)
+                .expect("still in scope")
+                .unchecked_copy();
+            scope.clone_gc_ref(&r)
+        })
     }
 
-    fn grow_or_collect_gc_heap(&mut self, bytes_needed: Option<u64>) {
-        assert!(!self.async_support());
+    /// Same as [`Self::gc`], but less safe.
+    ///
+    /// FIXME(#11409) this method should not need to exist, but performing such
+    /// a refactoring will require making memory creation async.
+    async unsafe fn gc_unsafe_get_limiter(
+        &mut self,
+        root: Option<VMGcRef>,
+        bytes_needed: Option<u64>,
+    ) -> Option<VMGcRef> {
+        // SAFETY: this isn't sound, see #11409
+        let (mut limiter, store) =
+            unsafe { self.traitobj().as_mut().resource_limiter_and_store_opaque() };
+        store.gc(limiter.as_mut(), root, bytes_needed).await
+    }
+
+    async fn grow_or_collect_gc_heap(
+        &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        bytes_needed: Option<u64>,
+    ) {
         if let Some(n) = bytes_needed {
-            if vm::assert_ready(self.grow_gc_heap(n)).is_ok() {
+            if self.grow_gc_heap(limiter, n).await.is_ok() {
                 return;
             }
         }
-        self.do_gc();
+        self.do_gc().await;
     }
 
     /// Attempt to grow the GC heap by `bytes_needed` bytes.
     ///
     /// Returns an error if growing the GC heap fails.
-    async fn grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
+    async fn grow_gc_heap(
+        &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        bytes_needed: u64,
+    ) -> Result<()> {
         log::trace!("Attempting to grow the GC heap by {bytes_needed} bytes");
         assert!(bytes_needed > 0);
 
@@ -115,14 +114,8 @@ impl StoreOpaque {
         // `VMMemoryDefinition` in the `VMStoreContext` immediately
         // afterwards.
         unsafe {
-            // FIXME(#11409) this is not sound to widen the borrow
-            let (mut limiter, _) = heap
-                .store
-                .traitobj()
-                .as_mut()
-                .resource_limiter_and_store_opaque();
             heap.memory
-                .grow(delta_pages_for_alloc, limiter.as_mut())
+                .grow(delta_pages_for_alloc, limiter)
                 .await?
                 .ok_or_else(|| anyhow!("failed to grow GC heap"))?;
         }
@@ -192,7 +185,12 @@ impl StoreOpaque {
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                 Ok(oom) => {
                     let (value, oom) = oom.take_inner();
-                    self.gc(Some(&oom));
+                    // SAFETY: FIXME(#11409)
+                    unsafe {
+                        vm::assert_ready(
+                            self.gc_unsafe_get_limiter(None, Some(oom.bytes_needed())),
+                        );
+                    }
                     alloc_func(self, value)
                 }
                 Err(e) => Err(e),
@@ -220,10 +218,25 @@ impl StoreOpaque {
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                 Ok(oom) => {
                     let (value, oom) = oom.take_inner();
-                    // SAFETY: it's the caller's responsibility to ensure that
+                    // Note it's the caller's responsibility to ensure that
                     // this is on a fiber stack if necessary.
+                    //
+                    // SAFETY: FIXME(#11409)
                     unsafe {
-                        self.maybe_async_gc(None, Some(oom.bytes_needed()))?;
+                        if self.async_support() {
+                            #[cfg(feature = "async")]
+                            self.block_on(|store| {
+                                Box::pin(
+                                    store.gc_unsafe_get_limiter(None, Some(oom.bytes_needed())),
+                                )
+                            })?;
+                            #[cfg(not(feature = "async"))]
+                            unreachable!();
+                        } else {
+                            vm::assert_ready(
+                                self.gc_unsafe_get_limiter(None, Some(oom.bytes_needed())),
+                            );
+                        }
                     }
                     alloc_func(self, value)
                 }
@@ -235,27 +248,6 @@ impl StoreOpaque {
 
 #[cfg(feature = "async")]
 impl StoreOpaque {
-    /// Asynchronously collect garbage, potentially growing the GC heap.
-    pub(crate) async fn gc_async(&mut self, why: Option<&GcHeapOutOfMemory<()>>) -> Result<()> {
-        assert!(self.async_support());
-        self.on_fiber(|store| unsafe {
-            store.maybe_async_gc(None, why.map(|oom| oom.bytes_needed()))
-        })
-        .await??;
-        Ok(())
-    }
-
-    async fn grow_or_collect_gc_heap_async(&mut self, bytes_needed: Option<u64>) {
-        assert!(self.async_support());
-        if let Some(bytes_needed) = bytes_needed {
-            if self.grow_gc_heap(bytes_needed).await.is_ok() {
-                return;
-            }
-        }
-
-        self.do_gc_async().await;
-    }
-
     /// Attempt an allocation, if it fails due to GC OOM, then do a GC and
     /// retry.
     pub(crate) async fn retry_after_gc_async<T, U>(
@@ -276,7 +268,11 @@ impl StoreOpaque {
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                 Ok(oom) => {
                     let (value, oom) = oom.take_inner();
-                    self.gc_async(Some(&oom)).await?;
+                    // SAFETY: FIXME(#11409)
+                    unsafe {
+                        self.gc_unsafe_get_limiter(None, Some(oom.bytes_needed()))
+                            .await;
+                    }
                     alloc_func(self, value)
                 }
                 Err(e) => Err(e),

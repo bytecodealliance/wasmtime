@@ -69,17 +69,10 @@ impl GcStore {
         self.gc_heap.vmmemory()
     }
 
-    /// Perform garbage collection within this heap.
-    pub fn gc(&mut self, roots: GcRootsIter<'_>) {
-        let mut collection = self.gc_heap.gc(roots, &mut self.host_data_table);
-        collection.collect();
-    }
-
     /// Asynchronously perform garbage collection within this heap.
-    #[cfg(feature = "async")]
-    pub async fn gc_async(&mut self, roots: GcRootsIter<'_>) {
+    pub async fn gc(&mut self, async_yield: bool, roots: GcRootsIter<'_>) {
         let collection = self.gc_heap.gc(roots, &mut self.host_data_table);
-        collect_async(collection).await;
+        collect_async(collection, async_yield).await;
     }
 
     /// Get the kind of the given GC reference.

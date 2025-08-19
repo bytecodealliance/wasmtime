@@ -609,12 +609,10 @@ unsafe fn grow_gc_heap(
     )
     .unwrap();
 
-    unsafe {
-        store
-            .maybe_async_gc(None, Some(bytes_needed))
-            .context("failed to grow the GC heap")
-            .context(crate::Trap::AllocationTooLarge)?;
-    }
+    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
+    block_on!(store, async |store| {
+        store.gc(limiter.as_mut(), None, Some(bytes_needed)).await;
+    })?;
 
     // JIT code relies on the memory having grown by `bytes_needed` bytes if
     // this libcall returns successfully, so trap if we didn't grow that much.

@@ -789,11 +789,18 @@ pub enum GcProgress {
 
 /// Asynchronously run the given garbage collection process to completion,
 /// cooperatively yielding back to the event loop after each increment of work.
-#[cfg(feature = "async")]
-pub async fn collect_async<'a>(mut collection: Box<dyn GarbageCollection<'a> + 'a>) {
+pub async fn collect_async<'a>(
+    mut collection: Box<dyn GarbageCollection<'a> + 'a>,
+    async_yield: bool,
+) {
     loop {
         match collection.collect_increment() {
-            GcProgress::Continue => crate::runtime::vm::Yield::new().await,
+            GcProgress::Continue => {
+                if async_yield {
+                    #[cfg(feature = "async")]
+                    crate::runtime::vm::Yield::new().await
+                }
+            }
             GcProgress::Complete => return,
         }
     }
@@ -808,7 +815,7 @@ mod collect_async_tests {
         fn _assert_send_sync<T: Send + Sync>(_: T) {}
 
         fn _foo<'a>(collection: Box<dyn GarbageCollection<'a>>) {
-            _assert_send_sync(collect_async(collection));
+            _assert_send_sync(collect_async(collection, true));
         }
     }
 }

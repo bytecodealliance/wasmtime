@@ -93,7 +93,8 @@ use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
-    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
+    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore,
+    VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
@@ -881,8 +882,7 @@ impl<T> Store<T> {
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
     pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
-        assert!(!self.inner.async_support());
-        self.inner.gc(why);
+        StoreContextMut(&mut self.inner).gc(why)
     }
 
     /// Returns the amount fuel in this [`Store`]. When fuel is enabled, it must
@@ -1101,7 +1101,9 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
     pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
-        self.0.gc(why);
+        assert!(!self.0.async_support());
+        let (mut limiter, store) = self.0.resource_limiter_and_store_opaque();
+        vm::assert_ready(store.gc(limiter.as_mut(), None, why.map(|e| e.bytes_needed())));
     }
 
     /// Returns remaining fuel in this store.
@@ -1511,7 +1513,7 @@ impl StoreOpaque {
         #[cfg(feature = "gc")]
         fn allocate_gc_store(
             engine: &Engine,
-            vmstore: NonNull<dyn vm::VMStore>,
+            vmstore: NonNull<dyn VMStore>,
             pkey: Option<ProtectionKey>,
         ) -> Result<GcStore> {
             use wasmtime_environ::packed_option::ReservedValue;
@@ -1558,7 +1560,7 @@ impl StoreOpaque {
         #[cfg(not(feature = "gc"))]
         fn allocate_gc_store(
             _engine: &Engine,
-            _vmstore: NonNull<dyn vm::VMStore>,
+            _vmstore: NonNull<dyn VMStore>,
             _pkey: Option<ProtectionKey>,
         ) -> Result<GcStore> {
             bail!("cannot allocate a GC store: the `gc` feature was disabled at compile time")
@@ -1656,12 +1658,7 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "gc")]
-    fn do_gc(&mut self) {
-        assert!(
-            !self.async_support(),
-            "must use `store.gc_async()` instead of `store.gc()` for async stores"
-        );
-
+    async fn do_gc(&mut self) {
         // If the GC heap hasn't been initialized, there is nothing to collect.
         if self.gc_store.is_none() {
             return;
@@ -1673,8 +1670,11 @@ impl StoreOpaque {
         // call mutable methods on `self`.
         let mut roots = core::mem::take(&mut self.gc_roots_list);
 
-        self.trace_roots(&mut roots);
-        self.unwrap_gc_store_mut().gc(unsafe { roots.iter() });
+        self.trace_roots(&mut roots).await;
+        let async_yield = self.async_support();
+        self.unwrap_gc_store_mut()
+            .gc(async_yield, unsafe { roots.iter() })
+            .await;
 
         // Restore the GC roots for the next GC.
         roots.clear();
@@ -1684,16 +1684,30 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "gc")]
-    fn trace_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+    async fn trace_roots(&mut self, gc_roots_list: &mut GcRootsList) {
         log::trace!("Begin trace GC roots");
 
         // We shouldn't have any leftover, stale GC roots.
         assert!(gc_roots_list.is_empty());
 
         self.trace_wasm_stack_roots(gc_roots_list);
+        #[cfg(feature = "async")]
+        if self.async_support() {
+            vm::Yield::new().await;
+        }
         #[cfg(feature = "stack-switching")]
-        self.trace_wasm_continuation_roots(gc_roots_list);
+        {
+            self.trace_wasm_continuation_roots(gc_roots_list);
+            #[cfg(feature = "async")]
+            if self.async_support() {
+                vm::Yield::new().await;
+            }
+        }
         self.trace_vmctx_roots(gc_roots_list);
+        #[cfg(feature = "async")]
+        if self.async_support() {
+            vm::Yield::new().await;
+        }
         self.trace_user_roots(gc_roots_list);
 
         log::trace!("End trace GC roots")
@@ -1927,7 +1941,7 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub fn traitobj(&self) -> NonNull<dyn vm::VMStore> {
+    pub fn traitobj(&self) -> NonNull<dyn VMStore> {
         self.traitobj.as_raw().unwrap()
     }
 
@@ -2271,7 +2285,7 @@ pub(crate) enum AllocateInstanceKind<'a> {
     },
 }
 
-unsafe impl<T> vm::VMStore for StoreInner<T> {
+unsafe impl<T> VMStore for StoreInner<T> {
     #[cfg(feature = "component-model-async")]
     fn component_async_store(
         &mut self,
@@ -2559,7 +2573,7 @@ impl AsStoreOpaque for StoreOpaque {
     }
 }
 
-impl AsStoreOpaque for dyn vm::VMStore {
+impl AsStoreOpaque for dyn VMStore {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque {
         self
     }
