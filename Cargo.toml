@@ -580,6 +580,10 @@ name = "tokio"
 required-features = ["wasi-common/tokio"]
 
 [[bench]]
+name = "compile"
+harness = false
+
+[[bench]]
 name = "instantiation"
 harness = false
 
