@@ -1,6 +1,5 @@
 use crate::p3::bindings::http::types::{Fields, Request, Response};
 use anyhow::Context as _;
-use core::ops::Deref;
 use wasmtime::component::{Resource, ResourceTable};
 
 mod handler;
