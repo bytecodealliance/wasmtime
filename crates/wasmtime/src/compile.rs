@@ -853,6 +853,18 @@ the use case.
             "we never inline recursion"
         );
 
+        // Put a limit on how large we can make a function via inlining to cap
+        // code bloat.
+        let sum_size = caller_size.saturating_add(callee_size);
+        if sum_size > tunables.inlining_sum_size_threshold {
+            log::trace!(
+                "  --> not inlining: the sum of the caller's and callee's sizes is greater than \
+                 the inlining-sum-size threshold: {callee_size} + {caller_size} > {}",
+                tunables.inlining_sum_size_threshold
+            );
+            return false;
+        }
+
         // Consider whether this is an intra-module call.
         //
         // Inlining within a single core module has most often already been done
@@ -888,18 +900,6 @@ the use case.
                 tunables.inlining_small_callee_size
             );
             return true;
-        }
-
-        // It is often not worth inlining if the sum of the caller and callee
-        // sizes is too large.
-        let sum_size = caller_size.saturating_add(callee_size);
-        if sum_size > tunables.inlining_sum_size_threshold {
-            log::trace!(
-                "  --> not inlining: the sum of the caller's and callee's sizes is greater than \
-                 the inlining-sum-size threshold: {callee_size} + {caller_size} > {}",
-                tunables.inlining_sum_size_threshold
-            );
-            return false;
         }
 
         log::trace!("  --> inlining: did not find a reason we should not");
