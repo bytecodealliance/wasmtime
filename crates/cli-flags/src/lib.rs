@@ -403,6 +403,8 @@ wasmtime_option_group! {
         pub exceptions: Option<bool>,
         /// DEPRECATED: Configure support for the legacy exceptions proposal.
         pub legacy_exceptions: Option<bool>,
+        /// Whether or not any GC infrastructure in Wasmtime is enabled or not.
+        pub gc_support: Option<bool>,
     }
 
     enum Wasm {
@@ -988,6 +990,10 @@ impl CommonOptions {
             ["cranelift" : self.wasm.wmemcheck]
             enable => config.wmemcheck(enable),
             true => err,
+        }
+
+        if let Some(enable) = self.wasm.gc_support {
+            config.gc_support(enable);
         }
 
         Ok(config)

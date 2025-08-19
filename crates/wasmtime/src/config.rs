@@ -2226,9 +2226,12 @@ impl Config {
         if self.max_wasm_stack == 0 {
             bail!("max_wasm_stack size cannot be zero");
         }
-        #[cfg(not(feature = "wmemcheck"))]
-        if self.wmemcheck {
+        if !cfg!(feature = "wmemcheck") && self.wmemcheck {
             bail!("wmemcheck (memory checker) was requested but is not enabled in this build");
+        }
+
+        if !cfg!(feature = "gc") && features.gc_types() {
+            bail!("support for GC was disabled at compile time")
         }
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
@@ -2674,6 +2677,20 @@ impl Config {
     pub fn signals_based_traps(&mut self, enable: bool) -> &mut Self {
         self.tunables.signals_based_traps = Some(enable);
         self
+    }
+
+    /// Enable/disable GC support in Wasmtime entirely.
+    ///
+    /// This flag can be used to gate whether GC infrastructure is enabled or
+    /// initialized in Wasmtime at all. Wasmtime's GC implementation is required
+    /// for the [`Self::wasm_gc`] proposal, [`Self::wasm_function_references`],
+    /// and [`Self::wasm_exceptions`] at this time. None of those proposal can
+    /// be enabled without also having this option enabled.
+    ///
+    /// This option defaults to whether the crate `gc` feature is enabled or
+    /// not.
+    pub fn gc_support(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::GC_TYPES, enable)
     }
 }
 
