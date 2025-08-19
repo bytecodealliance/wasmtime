@@ -1,6 +1,7 @@
 use crate::Trap;
 use crate::prelude::*;
-use crate::store::{StoreInstanceId, StoreOpaque};
+use crate::runtime::vm::{self, VMStore};
+use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use core::cell::UnsafeCell;
@@ -596,20 +597,9 @@ impl Memory {
     /// ```
     pub fn grow(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut().0;
-        // FIXME(#11179) shouldn't use a raw pointer to work around the borrow
-        // checker here.
-        let mem: *mut _ = self.wasmtime_memory(store);
-        unsafe {
-            match (*mem).grow(delta, Some(store))? {
-                Some(size) => {
-                    let vm = (*mem).vmmemory();
-                    store[self.instance].memory_ptr(self.index).write(vm);
-                    let page_size = (*mem).page_size();
-                    Ok(u64::try_from(size).unwrap() / page_size)
-                }
-                None => bail!("failed to grow memory by `{}`", delta),
-            }
-        }
+        let (mut limiter, store) = store.resource_limiter_and_store_opaque();
+        vm::one_poll(self._grow(store, limiter.as_mut(), delta))
+            .expect("must use `grow_async` if an async resource limiter is used")
     }
 
     /// Async variant of [`Memory::grow`]. Required when using a
@@ -621,21 +611,29 @@ impl Memory {
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
     pub async fn grow_async(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `grow_async` without enabling async support on the config"
-        );
-        store.on_fiber(|store| self.grow(store, delta)).await?
+        let store = store.as_context_mut();
+        let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
+        self._grow(store, limiter.as_mut(), delta).await
     }
 
-    fn wasmtime_memory<'a>(
+    async fn _grow(
         &self,
-        store: &'a mut StoreOpaque,
-    ) -> &'a mut crate::runtime::vm::Memory {
-        self.instance
+        store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        delta: u64,
+    ) -> Result<u64> {
+        let result = self
+            .instance
             .get_mut(store)
-            .get_defined_memory_mut(self.index)
+            .memory_grow(limiter, self.index, delta)
+            .await?;
+        match result {
+            Some(size) => {
+                let page_size = self.wasmtime_ty(store).page_size();
+                Ok(u64::try_from(size).unwrap() / page_size)
+            }
+            None => bail!("failed to grow memory by `{}`", delta),
+        }
     }
 
     pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedMemoryIndex) -> Memory {
@@ -908,7 +906,7 @@ impl SharedMemory {
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
     pub fn grow(&self, delta: u64) -> Result<u64> {
-        match self.vm.grow(delta, None)? {
+        match self.vm.grow(delta)? {
             Some((old_size, _new_size)) => {
                 // For shared memory, the `VMMemoryDefinition` is updated inside
                 // the locked region.

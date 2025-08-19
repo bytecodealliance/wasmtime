@@ -262,6 +262,27 @@ pub enum StoreResourceLimiter<'a> {
 }
 
 impl StoreResourceLimiter<'_> {
+    pub(crate) async fn memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> Result<bool, Error> {
+        match self {
+            Self::Sync(s) => s.memory_growing(current, desired, maximum),
+            #[cfg(feature = "async")]
+            Self::Async(s) => s.memory_growing(current, desired, maximum).await,
+        }
+    }
+
+    pub(crate) fn memory_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+        match self {
+            Self::Sync(s) => s.memory_grow_failed(error),
+            #[cfg(feature = "async")]
+            Self::Async(s) => s.memory_grow_failed(error),
+        }
+    }
+
     pub(crate) async fn table_growing(
         &mut self,
         current: usize,

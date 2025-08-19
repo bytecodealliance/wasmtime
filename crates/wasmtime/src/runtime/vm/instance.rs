@@ -17,7 +17,7 @@ use crate::runtime::vm::{
     GcStore, HostResult, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGlobalKind, VMStore,
     VMStoreRawPtr, VmPtr, VmSafe, WasmFault, catch_unwind_and_record_trap,
 };
-use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque};
+use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::marker;
@@ -673,15 +673,18 @@ impl Instance {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages. Returns `Some` with the old size in bytes if growth was
     /// successful.
-    pub(crate) fn memory_grow(
+    pub(crate) async fn memory_grow(
         mut self: Pin<&mut Self>,
-        store: &mut dyn VMStore,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         idx: DefinedMemoryIndex,
         delta: u64,
     ) -> Result<Option<usize>, Error> {
         let memory = &mut self.as_mut().memories_mut()[idx].1;
 
-        let result = unsafe { memory.grow(delta, Some(store)) };
+        // SAFETY: this is the safe wrapper around `Memory::grow` because it
+        // automatically updates the `VMMemoryDefinition` in this instance after
+        // a growth operation below.
+        let result = unsafe { memory.grow(delta, limiter).await };
 
         // Update the state used by a non-shared Wasm memory in case the base
         // pointer and/or the length changed.

@@ -220,12 +220,17 @@ fn memory_grow(
     let module = instance.env_module();
     let page_size_log2 = module.memories[module.memory_index(memory_index)].page_size_log2;
 
-    let result = instance
-        .as_mut()
-        .memory_grow(store, memory_index, delta)?
-        .map(|size_in_bytes| AllocationSize(size_in_bytes >> page_size_log2));
+    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
+    let limiter = limiter.as_mut();
+    block_on!(store, async |_store| {
+        let result = instance
+            .as_mut()
+            .memory_grow(limiter, memory_index, delta)
+            .await?
+            .map(|size_in_bytes| AllocationSize(size_in_bytes >> page_size_log2));
 
-    Ok(result)
+        Ok(result)
+    })?
 }
 
 /// A helper structure to represent the return value of a memory or table growth

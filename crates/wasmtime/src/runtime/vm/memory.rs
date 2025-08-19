@@ -75,6 +75,7 @@
 //! they should be merged together.
 
 use crate::prelude::*;
+use crate::runtime::store::StoreResourceLimiter;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 #[cfg(has_virtual_memory)]
 use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
@@ -394,14 +395,14 @@ impl Memory {
     ///
     /// Ensure that the provided Store is not used to get access any Memory
     /// which lives inside it.
-    pub unsafe fn grow(
+    pub async unsafe fn grow(
         &mut self,
         delta_pages: u64,
-        store: Option<&mut dyn VMStore>,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Option<usize>, Error> {
         let result = match self {
-            Memory::Local(mem) => mem.grow(delta_pages, store)?,
-            Memory::Shared(mem) => mem.grow(delta_pages, store)?,
+            Memory::Local(mem) => mem.grow(delta_pages, limiter).await?,
+            Memory::Shared(mem) => mem.grow(delta_pages)?,
         };
         match result {
             Some((old, _new)) => Ok(Some(old)),
@@ -600,10 +601,10 @@ impl LocalMemory {
     /// the underlying `grow_to` implementation.
     ///
     /// The `store` is used only for error reporting.
-    pub fn grow(
+    pub async fn grow(
         &mut self,
         delta_pages: u64,
-        mut store: Option<&mut dyn VMStore>,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Option<(usize, usize)>, Error> {
         let old_byte_size = self.alloc.byte_size();
 
@@ -634,8 +635,11 @@ impl LocalMemory {
             .and_then(|n| usize::try_from(n).ok());
 
         // Store limiter gets first chance to reject memory_growing.
-        if let Some(store) = &mut store {
-            if !store.memory_growing(old_byte_size, new_byte_size, maximum)? {
+        if let Some(limiter) = &mut limiter {
+            if !limiter
+                .memory_growing(old_byte_size, new_byte_size, maximum)
+                .await?
+            {
                 return Ok(None);
             }
         }
@@ -701,8 +705,8 @@ impl LocalMemory {
                 // report the growth failure to but the error should not be
                 // dropped
                 // (https://github.com/bytecodealliance/wasmtime/issues/4240).
-                if let Some(store) = store {
-                    store.memory_grow_failed(e)?;
+                if let Some(limiter) = limiter {
+                    limiter.memory_grow_failed(e)?;
                 }
                 Ok(None)
             }
