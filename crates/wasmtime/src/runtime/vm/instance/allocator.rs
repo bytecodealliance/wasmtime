@@ -387,28 +387,48 @@ impl dyn InstanceAllocator + '_ {
         self.increment_core_instance_count()?;
 
         let num_defined_memories = module.num_defined_memories();
-        let mut memories = PrimaryMap::with_capacity(num_defined_memories);
-
         let num_defined_tables = module.num_defined_tables();
-        let mut tables = PrimaryMap::with_capacity(num_defined_tables);
 
-        match (|| {
-            self.allocate_memories(&mut request, &mut memories)?;
-            self.allocate_tables(&mut request, &mut tables)?;
-            Ok(())
-        })() {
-            // SAFETY: memories/tables were just allocated from the store within
-            // `request` and this function's own contract requires that the
-            // imports are valid.
-            Ok(_) => unsafe { Ok(Instance::new(request, memories, tables, &module.memories)) },
-            Err(e) => {
+        let mut guard = DeallocateOnDrop {
+            run_deallocate: true,
+            memories: PrimaryMap::with_capacity(num_defined_memories),
+            tables: PrimaryMap::with_capacity(num_defined_tables),
+            allocator: self,
+        };
+
+        self.allocate_memories(&mut request, &mut guard.memories)?;
+        self.allocate_tables(&mut request, &mut guard.tables)?;
+        guard.run_deallocate = false;
+        // SAFETY: memories/tables were just allocated from the store within
+        // `request` and this function's own contract requires that the
+        // imports are valid.
+        return unsafe {
+            Ok(Instance::new(
+                request,
+                mem::take(&mut guard.memories),
+                mem::take(&mut guard.tables),
+                &module.memories,
+            ))
+        };
+
+        struct DeallocateOnDrop<'a> {
+            run_deallocate: bool,
+            memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+            tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+            allocator: &'a (dyn InstanceAllocator + 'a),
+        }
+
+        impl Drop for DeallocateOnDrop<'_> {
+            fn drop(&mut self) {
+                if !self.run_deallocate {
+                    return;
+                }
                 // SAFETY: these were previously allocated by this allocator
                 unsafe {
-                    self.deallocate_memories(&mut memories);
-                    self.deallocate_tables(&mut tables);
+                    self.allocator.deallocate_memories(&mut self.memories);
+                    self.allocator.deallocate_tables(&mut self.tables);
                 }
-                self.decrement_core_instance_count();
-                Err(e)
+                self.allocator.decrement_core_instance_count();
             }
         }
     }
