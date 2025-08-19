@@ -211,11 +211,19 @@ pub trait GcTypeLayouts {
     /// element type.
     fn array_length_field_offset(&self) -> u32;
 
-    /// The offset of an exception object's tag reference.
+    /// The offset of an exception object's tag reference: defining
+    /// instance index field.
     ///
-    /// This msut be the same for all exception objects in the heap,
+    /// This must be the same for all exception objects in the heap,
     /// regardless of their specific signature.
-    fn exception_tag_offset(&self) -> u32;
+    fn exception_tag_instance_offset(&self) -> u32;
+
+    /// The offset of an exception object's tag reference: defined tag
+    /// index field.
+    ///
+    /// This must be the same for all exception objects in the heap,
+    /// regardless of their specific signature.
+    fn exception_tag_defined_offset(&self) -> u32;
 
     /// Get this collector's layout for the given composite type.
     ///

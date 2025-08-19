@@ -1186,7 +1186,10 @@ impl Config {
         self
     }
 
-    #[doc(hidden)] // FIXME(#3427) - if/when implemented then un-hide this
+    /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
+    ///
+    /// [proposal]: https://github.com/WebAssembly/exception-handling
+    #[cfg(feature = "gc")]
     pub fn wasm_exceptions(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::EXCEPTIONS, enable);
         self
@@ -2080,6 +2083,13 @@ impl Config {
                     unsupported |= WasmFeatures::STACK_SWITCHING;
                 }
 
+                // Pulley also doesn't support exceptions, because we
+                // need to refactor the setjmp/longjmp emulation to
+                // also support resuming into Wasm.
+                if self.compiler_target().is_pulley() {
+                    unsupported |= WasmFeatures::EXCEPTIONS;
+                }
+
                 use target_lexicon::*;
                 match self.compiler_target() {
                     Triple {
@@ -2232,6 +2242,10 @@ impl Config {
 
         if !cfg!(feature = "gc") && features.gc_types() {
             bail!("support for GC was disabled at compile time")
+        }
+
+        if !cfg!(feature = "gc") && features.contains(WasmFeatures::EXCEPTIONS) {
+            bail!("exceptions support requires garbage collection (GC) to be enabled in the build");
         }
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;

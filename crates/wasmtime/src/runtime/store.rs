@@ -77,6 +77,8 @@
 //! `wasmtime`, must uphold for the public interface to be safe.
 
 use crate::RootSet;
+#[cfg(feature = "gc")]
+use crate::ThrownException;
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentStoreData;
 #[cfg(feature = "component-model-async")]
@@ -98,6 +100,8 @@ use crate::runtime::vm::{
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
+#[cfg(feature = "gc")]
+use crate::{ExnRef, Rooted};
 use crate::{Global, Instance, Memory, Table, Uninhabited};
 use alloc::sync::Arc;
 use core::fmt;
@@ -123,6 +127,9 @@ pub(crate) use token::StoreToken;
 mod async_;
 #[cfg(all(feature = "async", feature = "call-hook"))]
 pub use self::async_::CallHookHandler;
+
+#[cfg(feature = "gc")]
+use super::vm::VMExnRef;
 #[cfg(feature = "gc")]
 mod gc;
 
@@ -414,6 +421,17 @@ pub struct StoreOpaque {
     // Types for which the embedder has created an allocator for.
     #[cfg(feature = "gc")]
     gc_host_alloc_types: crate::hash_set::HashSet<crate::type_registry::RegisteredType>,
+    /// Pending exception, if any. This is also a GC root, because it
+    /// needs to be rooted somewhere between the time that a pending
+    /// exception is set and the time that the handling code takes the
+    /// exception object. We use this rooting strategy rather than a
+    /// root in an `Err` branch of a `Result` on the host side because
+    /// it is less error-prone with respect to rooting behavior. See
+    /// `throw()`, `take_pending_exception()`,
+    /// `peek_pending_exception()`, `has_pending_exception()`, and
+    /// `catch()`.
+    #[cfg(feature = "gc")]
+    pending_exception: Option<VMExnRef>,
 
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
@@ -632,6 +650,8 @@ impl<T> Store<T> {
             gc_roots_list: GcRootsList::default(),
             #[cfg(feature = "gc")]
             gc_host_alloc_types: Default::default(),
+            #[cfg(feature = "gc")]
+            pending_exception: None,
             modules: ModuleRegistry::default(),
             func_refs: FuncRefs::default(),
             host_globals: PrimaryMap::new(),
@@ -1047,6 +1067,84 @@ impl<T> Store<T> {
     ) {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
+
+    /// Set an exception as the currently pending exception, and
+    /// return an error that propagates the throw.
+    ///
+    /// This method takes an exception object and stores it in the
+    /// `Store` as the currently pending exception. This is a special
+    /// rooted slot that holds the exception as long as it is
+    /// propagating. This method then returns a `ThrownException`
+    /// error, which is a special type that indicates a pending
+    /// exception exists. When this type propagates as an error
+    /// returned from a Wasm-to-host call, the pending exception is
+    /// thrown within the Wasm context, and either caught or
+    /// propagated further to the host-to-Wasm call boundary. If an
+    /// exception is thrown out of Wasm (or across Wasm from a
+    /// hostcall) back to the host-to-Wasm call boundary, *that*
+    /// invocation returns a `ThrownException`, and the pending
+    /// exception slot is again set. In other words, the
+    /// `ThrownException` error type should propagate upward exactly
+    /// and only when a pending exception is set.
+    ///
+    /// To inspect or take the pending exception, use
+    /// [`peek_pending_exception`] and [`take_pending_exception`]. For
+    /// a convenient wrapper that invokes a closure and provides any
+    /// caught exception from the closure to a separate handler
+    /// closure, see [`StoreContextMut::catch`].
+    ///
+    /// This method is parameterized over `R` for convenience, but
+    /// will always return an `Err`.
+    ///
+    /// # Panics
+    ///
+    /// - Will panic if `exception` has been unrooted.
+    /// - Will panic if `exception` is a null reference.
+    /// - Will panic if a pending exception has already been set.
+    #[cfg(feature = "gc")]
+    pub fn throw<R>(&mut self, exception: Rooted<ExnRef>) -> Result<R, ThrownException> {
+        self.inner.throw_impl(exception);
+        Err(ThrownException)
+    }
+
+    /// Take the currently pending exception, if any, and return it,
+    /// removing it from the "pending exception" slot.
+    ///
+    /// If there is no pending exception, returns `None`.
+    ///
+    /// Note: the returned exception is a LIFO root (see
+    /// [`crate::Rooted`]), rooted in the current handle scope. Take
+    /// care to ensure that it is re-rooted or otherwise does not
+    /// escape this scope! It is usually best to allow an exception
+    /// object to be rooted in the store's "pending exception" slot
+    /// until the final consumer has taken it, rather than root it and
+    /// pass it up the callstack in some other way.
+    ///
+    /// This method is useful to implement ad-hoc exception plumbing
+    /// in various ways, but for the most idiomatic handling, see
+    /// [`StoreContextMut::catch`].
+    #[cfg(feature = "gc")]
+    pub fn take_pending_exception(&mut self) -> Option<Rooted<ExnRef>> {
+        self.inner.take_pending_exception_rooted()
+    }
+
+    /// Tests whether there is a pending exception.
+    ///
+    /// Ordinarily, a pending exception will be set on a store if and
+    /// only if a host-side callstack is propagating a
+    /// [`crate::ThrownException`] error. The final consumer that
+    /// catches the exception takes it; it may re-place it to re-throw
+    /// (using [`throw`]) if it chooses not to actually handle the
+    /// exception.
+    ///
+    /// This method is useful to tell whether a store is in this
+    /// state, but should not be used as part of the ordinary
+    /// exception-handling flow. For the most idiomatic handling, see
+    /// [`StoreContextMut::catch`].
+    #[cfg(feature = "gc")]
+    pub fn has_pending_exception(&self) -> bool {
+        self.inner.pending_exception.is_some()
+    }
 }
 
 impl<'a, T> StoreContext<'a, T> {
@@ -1141,6 +1239,34 @@ impl<'a, T> StoreContextMut<'a, T> {
     #[cfg(target_has_atomic = "64")]
     pub fn epoch_deadline_trap(&mut self) {
         self.0.epoch_deadline_trap();
+    }
+
+    /// Set an exception as the currently pending exception, and
+    /// return an error that propagates the throw.
+    ///
+    /// See [`Store::throw`] for more details.
+    #[cfg(feature = "gc")]
+    pub fn throw<R>(&mut self, exception: Rooted<ExnRef>) -> Result<R, ThrownException> {
+        self.0.inner.throw_impl(exception);
+        Err(ThrownException)
+    }
+
+    /// Take the currently pending exception, if any, and return it,
+    /// removing it from the "pending exception" slot.
+    ///
+    /// See [`Store::take_pending_exception`] for more details.
+    #[cfg(feature = "gc")]
+    pub fn take_pending_exception(&mut self) -> Option<Rooted<ExnRef>> {
+        self.0.inner.take_pending_exception_rooted()
+    }
+
+    /// Tests whether there is a pending exception.
+    ///
+    ///
+    /// See [`Store::has_pending_exception`] for more details.
+    #[cfg(feature = "gc")]
+    pub fn has_pending_exception(&self) -> bool {
+        self.0.inner.pending_exception.is_some()
     }
 }
 
@@ -1709,6 +1835,7 @@ impl StoreOpaque {
             vm::Yield::new().await;
         }
         self.trace_user_roots(gc_roots_list);
+        self.trace_pending_exception_roots(gc_roots_list);
 
         log::trace!("End trace GC roots")
     }
@@ -1828,6 +1955,18 @@ impl StoreOpaque {
         log::trace!("Begin trace GC roots :: user");
         self.gc_roots.trace_roots(gc_roots_list);
         log::trace!("End trace GC roots :: user");
+    }
+
+    #[cfg(feature = "gc")]
+    fn trace_pending_exception_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        log::trace!("Begin trace GC roots :: pending exception");
+        if let Some(pending_exception) = self.pending_exception.as_mut() {
+            unsafe {
+                let root = pending_exception.as_gc_ref_mut();
+                gc_roots_list.add_root(root.into(), "Pending exception");
+            }
+        }
+        log::trace!("End trace GC roots :: pending exception");
     }
 
     /// Insert a host-allocated GC type into this store.
@@ -2263,6 +2402,38 @@ at https://bytecodealliance.org/security.
         assert_eq!(id, actual);
 
         Ok(id)
+    }
+
+    /// Set a pending exception. The `exnref` is taken and held on
+    /// this store to be fetched later by an unwind. This method does
+    /// *not* set up an unwind request on the TLS call state; that
+    /// must be done separately.
+    #[cfg(feature = "gc")]
+    pub(crate) fn set_pending_exception(&mut self, exnref: VMExnRef) {
+        self.pending_exception = Some(exnref);
+    }
+
+    /// Take a pending exception, if any.
+    #[cfg(feature = "gc")]
+    pub(crate) fn take_pending_exception(&mut self) -> Option<VMExnRef> {
+        self.pending_exception.take()
+    }
+
+    #[cfg(feature = "gc")]
+    fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
+        let vmexnref = self.take_pending_exception()?;
+        let mut nogc = AutoAssertNoGc::new(self);
+        Some(Rooted::new(&mut nogc, vmexnref.into()))
+    }
+
+    #[cfg(feature = "gc")]
+    fn throw_impl(&mut self, exception: Rooted<ExnRef>) {
+        let mut nogc = AutoAssertNoGc::new(self);
+        let exnref = exception._to_raw(&mut nogc).unwrap();
+        let exnref = VMGcRef::from_raw_u32(exnref)
+            .expect("exception cannot be null")
+            .into_exnref_unchecked();
+        nogc.set_pending_exception(exnref);
     }
 }
 

@@ -1,4 +1,4 @@
-//! Generation of the throw-stub.
+//! Throw action computation (handler search).
 //!
 //! In order to throw exceptions from within Cranelift-compiled code,
 //! we provide a runtime function helper meant to be called by host
@@ -16,7 +16,7 @@
 //! responsibility to invoke alternative behavior (e.g., abort the
 //! program or unwind all the way to initial Cranelift-code entry).
 
-use crate::{ExceptionTable, Unwind};
+use crate::{Frame, Unwind};
 use core::ops::ControlFlow;
 
 /// Throw action to perform.
@@ -46,45 +46,43 @@ pub enum ThrowAction {
 /// The safety of this function is the same as [`crate::visit_frames`] where the
 /// values passed in configuring the frame pointer walk must be correct and
 /// Wasm-defined for this to not have UB.
-pub unsafe fn compute_throw_action<'a, F: Fn(usize) -> Option<(usize, ExceptionTable<'a>)>>(
+pub unsafe fn compute_throw_action<F: Fn(&Frame) -> Option<usize>>(
     unwind: &dyn Unwind,
-    module_lookup: F,
+    frame_handler: F,
     exit_pc: usize,
-    exit_frame: usize,
+    exit_trampoline_frame: usize,
     entry_frame: usize,
-    tag: u32,
 ) -> ThrowAction {
-    let mut last_fp = exit_frame;
-
     // SAFETY: the safety of `visit_frames` relies on the correctness of the
     // parameters passed in which is forwarded as a contract to this function
     // tiself.
     let result = unsafe {
-        crate::stackwalk::visit_frames(unwind, exit_pc, exit_frame, entry_frame, |frame| {
-            if let Some((base, table)) = module_lookup(frame.pc()) {
-                let relative_pc = u32::try_from(
-                    frame
-                        .pc()
-                        .checked_sub(base)
-                        .expect("module lookup did not return a module base below the PC"),
-                )
-                .expect("module larger than 4GiB");
+        crate::stackwalk::visit_frames(
+            unwind,
+            exit_pc,
+            exit_trampoline_frame,
+            entry_frame,
+            |frame| {
+                log::trace!("visit_frame: frame {frame:?}");
+                let Some(sp) = frame.sp() else {
+                    // Cannot possibly unwind to this frame if SP is not
+                    // known. This is only the case for the first
+                    // (trampoline) frame; after that, we know SP at the
+                    // callsite because we know the offset from the lower
+                    // FP to the next frame's SP.
+                    return ControlFlow::Continue(());
+                };
 
-                if let Some(handler) = table.lookup(relative_pc, tag) {
-                    let abs_handler_pc = base
-                        .checked_add(usize::try_from(handler).unwrap())
-                        .expect("Handler address computation overflowed");
-
+                if let Some(handler_pc) = frame_handler(&frame) {
                     return ControlFlow::Break(ThrowAction::Handler {
-                        pc: abs_handler_pc,
-                        sp: last_fp + unwind.next_older_sp_from_fp_offset(),
+                        pc: handler_pc,
+                        sp,
                         fp: frame.fp(),
                     });
                 }
-            }
-            last_fp = frame.fp();
-            ControlFlow::Continue(())
-        })
+                ControlFlow::Continue(())
+            },
+        )
     };
     match result {
         ControlFlow::Break(action) => action,

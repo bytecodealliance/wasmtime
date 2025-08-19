@@ -326,6 +326,33 @@ impl Instance {
         unsafe { Pin::new_unchecked(ptr.as_mut()) }
     }
 
+    /// Accessor from a raw `vmctx` to `&vm::Instance`, given a store.
+    ///
+    /// This is like the above `sibling_vmctx{,_mut}` accessors, but
+    /// takes the store explicitly rather than inferring it from an
+    /// existing instance in the store.
+    ///
+    /// # Safety
+    ///
+    /// The `vmctx` pointer must be a valid vmctx from an active
+    /// instance that belongs to the given `store`.
+    #[inline]
+    pub unsafe fn from_vmctx<'a>(
+        _store: &'a StoreOpaque,
+        vmctx: NonNull<VMContext>,
+    ) -> &'a Instance {
+        // SAFETY: The validity of this `byte_sub` relies on `vmctx`
+        // being a valid allocation which is itself a contract of this
+        // function. Likewise, the `.as_ref()` converts a valid `*mut
+        // Instance` to a `&Instance`.
+        unsafe {
+            vmctx
+                .byte_sub(mem::size_of::<Instance>())
+                .cast::<Instance>()
+                .as_ref()
+        }
+    }
+
     pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
         self.runtime_info.env_module()
     }

@@ -74,6 +74,7 @@
 use crate::Reachability;
 use crate::bounds_checks::{BoundsCheck, bounds_check_and_compute_addr};
 use crate::func_environ::{Extension, FuncEnvironment};
+use crate::translate::TargetEnvironment;
 use crate::translate::environ::StructFieldsVec;
 use crate::translate::stack::{ControlStackFrame, ElseData, FuncTranslationStacks};
 use crate::translate::translation_utils::{
@@ -82,7 +83,7 @@ use crate::translate::translation_utils::{
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{
-    self, AtomicRmwOp, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
+    self, AtomicRmwOp, ExceptionTag, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
 };
 use cranelift_codegen::ir::{BlockArg, types::*};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -93,8 +94,8 @@ use std::collections::{HashMap, hash_map};
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeConvert, TypeIndex,
-    WasmRefType, WasmResult, WasmValType, wasm_unsupported,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TagIndex, TypeConvert,
+    TypeIndex, WasmHeapType, WasmRefType, WasmResult, WasmValType, wasm_unsupported,
 };
 
 /// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
@@ -424,6 +425,8 @@ pub fn translate_operator(
                 builder.seal_block(header)
             }
 
+            frame.restore_catch_handlers(&mut stack.handlers, builder);
+
             frame.truncate_value_stack_to_original_size(&mut stack.stack);
             stack
                 .stack
@@ -569,18 +572,64 @@ pub fn translate_operator(
             stack.popn(return_count);
             stack.reachable = false;
         }
-        /********************************** Exception handing **********************************/
-        Operator::Try { .. }
-        | Operator::Catch { .. }
-        | Operator::Throw { .. }
+        /********************************** Exception handling **********************************/
+        Operator::Catch { .. }
         | Operator::Rethrow { .. }
         | Operator::Delegate { .. }
         | Operator::CatchAll => {
             return Err(wasm_unsupported!(
-                "proposed exception handling operator {:?}",
-                op
+                "legacy exception handling proposal is not supported"
             ));
         }
+
+        Operator::TryTable { try_table } => {
+            // First, create a block on the control stack. This also
+            // updates the handler state that is attached to all calls
+            // made within this block.
+            let body = builder.create_block();
+            let (params, results) = blocktype_params_results(validator, try_table.ty)?;
+            let next = block_with_params(builder, results.clone(), environ)?;
+            builder.ins().jump(body, []);
+            builder.seal_block(body);
+
+            // For each catch clause, create a block with the
+            // equivalent of `br` to the target (unboxing the exnref
+            // into stack values or pushing it directly, depending on
+            // the kind of clause).
+            let ckpt = stack.handlers.take_checkpoint();
+            let mut catch_blocks = vec![];
+            // Process in *reverse* order: see the comment on
+            // [`HandlerState`]. In brief, this allows us to unify the
+            // left-to-right matching semantics of a single
+            // `try_table`'s catch clauses with the inside-out
+            // (deepest scope first) semantics of nested `try_table`s.
+            for catch in try_table.catches.iter().rev() {
+                // This will register the block in `state.handlers`
+                // under the appropriate tag.
+                catch_blocks.push(create_catch_block(builder, stack, catch, environ)?);
+            }
+
+            stack.push_try_table_block(next, catch_blocks, params.len(), results.len(), ckpt);
+
+            // Continue codegen into the main body block.
+            builder.switch_to_block(body);
+        }
+
+        Operator::Throw { tag_index } => {
+            let tag_index = TagIndex::from_u32(*tag_index);
+            let arity = environ.tag_param_arity(tag_index);
+            let args = stack.peekn(arity);
+            environ.translate_exn_throw(builder, tag_index, args, stack.handlers.handlers())?;
+            stack.popn(arity);
+            stack.reachable = false;
+        }
+
+        Operator::ThrowRef => {
+            let exnref = stack.pop1();
+            environ.translate_exn_throw_ref(builder, exnref, stack.handlers.handlers())?;
+            stack.reachable = false;
+        }
+
         /************************************ Calls ****************************************
          * The call instructions pop off their arguments from the stack and append their
          * return values to it. `call_indirect` needs environment support because there is an
@@ -597,16 +646,23 @@ pub fn translate_operator(
             // Bitcast any vector arguments to their default type, I8X16, before calling.
             let args = stack.peekn_mut(num_args);
             bitcast_wasm_params(environ, sig_ref, args, builder);
+            let args = stack.peekn(num_args); // Re-borrow immutably.
 
-            let call = environ.translate_call(builder, function_index, sig_ref, args)?;
-            let inst_results = builder.inst_results(call);
+            let inst_results = environ.translate_call(
+                builder,
+                function_index,
+                sig_ref,
+                args,
+                stack.handlers.handlers(),
+            )?;
+
             debug_assert_eq!(
                 inst_results.len(),
                 builder.func.dfg.signatures[sig_ref].returns.len(),
                 "translate_call results should match the call signature"
             );
             stack.popn(num_args);
-            stack.pushn(inst_results);
+            stack.pushn(&inst_results);
         }
         Operator::CallIndirect {
             type_index,
@@ -624,7 +680,7 @@ pub fn translate_operator(
             let args = stack.peekn_mut(num_args);
             bitcast_wasm_params(environ, sigref, args, builder);
 
-            let call = environ.translate_call_indirect(
+            let inst_results = environ.translate_call_indirect(
                 builder,
                 validator.features(),
                 TableIndex::from_u32(*table_index),
@@ -632,22 +688,23 @@ pub fn translate_operator(
                 sigref,
                 callee,
                 stack.peekn(num_args),
+                stack.handlers.handlers(),
             )?;
-            let call = match call {
-                Some(call) => call,
+            let inst_results = match inst_results {
+                Some(results) => results,
                 None => {
                     stack.reachable = false;
                     return Ok(());
                 }
             };
-            let inst_results = builder.inst_results(call);
+
             debug_assert_eq!(
                 inst_results.len(),
                 builder.func.dfg.signatures[sigref].returns.len(),
                 "translate_call_indirect results should match the call signature"
             );
             stack.popn(num_args);
-            stack.pushn(inst_results);
+            stack.pushn(&inst_results);
         }
         /******************************* Tail Calls ******************************************
          * The tail call instructions pop their arguments from the stack and
@@ -2457,17 +2514,21 @@ pub fn translate_operator(
             let args = stack.peekn_mut(num_args);
             bitcast_wasm_params(environ, sigref, args, builder);
 
-            let call =
-                environ.translate_call_ref(builder, sigref, callee, stack.peekn(num_args))?;
+            let inst_results = environ.translate_call_ref(
+                builder,
+                sigref,
+                callee,
+                stack.peekn(num_args),
+                stack.handlers.handlers(),
+            )?;
 
-            let inst_results = builder.inst_results(call);
             debug_assert_eq!(
                 inst_results.len(),
                 builder.func.dfg.signatures[sigref].returns.len(),
                 "translate_call_ref results should match the call signature"
             );
             stack.popn(num_args);
-            stack.pushn(inst_results);
+            stack.pushn(&inst_results);
         }
         Operator::RefAsNonNull => {
             let r = stack.pop1();
@@ -2572,12 +2633,6 @@ pub fn translate_operator(
                 None,
             )?;
             stack.push1(val);
-        }
-
-        Operator::TryTable { .. } | Operator::ThrowRef => {
-            return Err(wasm_unsupported!(
-                "exception operators are not yet implemented"
-            ));
         }
 
         Operator::ArrayNew { array_type_index } => {
@@ -3105,6 +3160,8 @@ fn translate_unreachable_operator(
             let value_stack = &mut stack.stack;
             let control_stack = &mut stack.control_stack;
             let frame = control_stack.pop().unwrap();
+
+            frame.restore_catch_handlers(&mut stack.handlers, builder);
 
             // Pop unused parameters from stack.
             frame.truncate_value_stack_to_original_size(value_stack);
@@ -4131,4 +4188,76 @@ fn bitcast_wasm_params(
         flags.set_endianness(ir::Endianness::Little);
         *arg = builder.ins().bitcast(t, flags, *arg);
     }
+}
+
+fn create_catch_block(
+    builder: &mut FunctionBuilder,
+    stacks: &mut FuncTranslationStacks,
+    catch: &wasmparser::Catch,
+    environ: &mut FuncEnvironment<'_>,
+) -> WasmResult<ir::Block> {
+    let (is_ref, tag, label) = match catch {
+        wasmparser::Catch::One { tag, label } => (false, Some(*tag), *label),
+        wasmparser::Catch::OneRef { tag, label } => (true, Some(*tag), *label),
+        wasmparser::Catch::All { label } => (false, None, *label),
+        wasmparser::Catch::AllRef { label } => (true, None, *label),
+    };
+
+    // We always create a handler block with one blockparam for the
+    // one exception payload value that we use (`exn0` block-call
+    // argument). This one payload value is the `exnref`. Note,
+    // however, that we carry it in a native host-pointer-sized
+    // payload (because this is what the exception ABI in Cranelift
+    // requires). We then generate the args for the actual branch to
+    // the handler block: we add unboxing code to load each value in
+    // the exception signature if a specific tag is expected (hence
+    // signature is known), and then append the `exnref` itself if we
+    // are compiling a `*Ref` variant.
+
+    let (exn_ref_ty, needs_stack_map) = environ.reference_type(WasmHeapType::Exn);
+    let (exn_payload_wasm_ty, exn_payload_ty) = match environ.pointer_type().bits() {
+        32 => (wasmparser::ValType::I32, I32),
+        64 => (wasmparser::ValType::I64, I64),
+        _ => panic!("Unsupported pointer width"),
+    };
+    let block = block_with_params(builder, [exn_payload_wasm_ty], environ)?;
+    builder.switch_to_block(block);
+    let exn_ref = builder.func.dfg.block_params(block)[0];
+    debug_assert!(exn_ref_ty.bits() <= exn_payload_ty.bits());
+    let exn_ref = if exn_ref_ty.bits() < exn_payload_ty.bits() {
+        builder.ins().ireduce(exn_ref_ty, exn_ref)
+    } else {
+        exn_ref
+    };
+
+    if needs_stack_map {
+        builder.declare_value_needs_stack_map(exn_ref);
+    }
+
+    // We encode tag indices from the module directly as Cranelift
+    // `ExceptionTag`s. We will translate those to (instance,
+    // defined-tag-index) pairs during the unwind walk -- necessarily
+    // dynamic because tag imports are provided only at instantiation
+    // time.
+    let clif_tag = tag.map(|t| ExceptionTag::from_u32(t));
+
+    stacks.handlers.add_handler(clif_tag, block);
+
+    let mut params = vec![];
+
+    if let Some(tag) = tag {
+        let tag = TagIndex::from_u32(tag);
+        params.extend(environ.translate_exn_unbox(builder, tag, exn_ref)?);
+    }
+    if is_ref {
+        params.push(exn_ref);
+    }
+
+    // Generate the branch itself.
+    let i = stacks.control_stack.len() - 1 - (label as usize);
+    let frame = &mut stacks.control_stack[i];
+    frame.set_branched_to_exit();
+    canonicalise_then_jump(builder, frame.br_destination(), &params);
+
+    Ok(block)
 }

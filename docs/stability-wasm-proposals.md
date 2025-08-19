@@ -56,8 +56,8 @@ The emoji legend is:
 | [`gc`] [^6]                 | ✅      | ✅    | 🚧[^7]   | 🚧[^8] | ✅  | ❌    |
 | [`wide-arithmetic`]         | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`custom-page-sizes`]       | ❌      | ✅    | ✅       | ✅     | ✅  | ❌    |
-| [`exception-handling`] [^10]| ✅      | ❌    | 🚧       | ❌     | 🚧  | ❌    |
-| [`stack-switching`] [^11]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
+| [`exception-handling`]      | ✅      | ✅    | ✅       | ❌     | ✅  | ❌    |
+| [`stack-switching`] [^10]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
 
 [^6]: There is also a [tracking
     issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
@@ -70,9 +70,7 @@ The emoji legend is:
     whole-module fuzz targets like `differential`, but we would like to
     additionally [extend the `table_ops` fuzz target to exercise more of the GC
     proposal](https://github.com/bytecodealliance/wasmtime/issues/10327).
-[^10]: The exception-handling proposal is a work-in-progress being tracked
-    at [#3427](https://github.com/bytecodealliance/wasmtime/issues/3427)
-[^11]: The stack-switching proposal is a work-in-progress being tracked
+[^10]: The stack-switching proposal is a work-in-progress being tracked
     at [#9465](https://github.com/bytecodealliance/wasmtime/issues/9465).
     Currently the implementation is only for x86\_64 Linux.
 

@@ -10,7 +10,6 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
 
-#[cfg(feature = "cranelift")]
 extern crate alloc;
 
 mod stackwalk;

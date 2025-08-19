@@ -10,23 +10,23 @@ use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
 use cranelift_codegen::ir::pcc::Fact;
-use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, types};
+use cranelift_codegen::ir::{self, BlockArg, ExceptionTableData, ExceptionTableItem, types};
 use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
+use cranelift_codegen::ir::{Block, ExceptionTag, types::*};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_entity::packed_option::{PackedOption, ReservedValue};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::Variable;
 use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use std::mem;
 use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     FuncIndex, FuncKey, GlobalIndex, IndexType, Memory, MemoryIndex, Module,
     ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex,
-    TripleExt, Tunables, TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType,
-    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    TagIndex, TripleExt, Tunables, TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType,
+    WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 use wasmtime_math::f64_cvt_to_int_bounds;
@@ -399,7 +399,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             | Operator::Call { .. }
             | Operator::ReturnCall { .. }
             | Operator::ReturnCallRef { .. }
-            | Operator::ReturnCallIndirect { .. } => {
+            | Operator::ReturnCallIndirect { .. }
+            | Operator::Throw { .. } | Operator::ThrowRef => {
                 self.fuel_increment_var(builder);
                 self.fuel_save_from_var(builder);
             }
@@ -1612,11 +1613,71 @@ impl FuncEnvironment<'_> {
             element_size,
         }
     }
+
+    /// Get the type index associated with an exception object.
+    #[cfg(feature = "gc")]
+    pub(crate) fn exception_type_from_tag(&self, tag: TagIndex) -> EngineOrModuleTypeIndex {
+        self.module.tags[tag].exception
+    }
+
+    /// Get the parameter arity of the associated function type for the given tag.
+    pub(crate) fn tag_param_arity(&self, tag: TagIndex) -> usize {
+        let func_ty = self.module.tags[tag].signature.unwrap_module_type_index();
+        let func_ty = self
+            .types
+            .unwrap_func(func_ty)
+            .expect("already validated to refer to a function type");
+        func_ty.params().len()
+    }
+
+    /// Get the runtime instance ID and defined-tag ID in that
+    /// instance for a particular static tag ID.
+    #[cfg(feature = "gc")]
+    pub(crate) fn get_instance_and_tag(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: TagIndex,
+    ) -> (ir::Value, ir::Value) {
+        if let Some(defined_tag_index) = self.module.defined_tag_index(tag_index) {
+            // Our own tag -- we only need to get our instance ID.
+            let builtin = self.builtin_functions.get_instance_id(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(builtin, &[vmctx]);
+            let instance_id = builder.func.dfg.inst_results(call)[0];
+            let tag_id = builder
+                .ins()
+                .iconst(I32, i64::from(defined_tag_index.as_u32()));
+            (instance_id, tag_id)
+        } else {
+            // An imported tag -- we need to load the VMTagImport struct.
+            let vmctx_tag_vmctx_offset = self.offsets.vmctx_vmtag_import_vmctx(tag_index);
+            let vmctx_tag_index_offset = self.offsets.vmctx_vmtag_import_index(tag_index);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let pointer_type = self.pointer_type();
+            let from_vmctx = builder.ins().load(
+                pointer_type,
+                MemFlags::trusted().with_readonly(),
+                vmctx,
+                i32::try_from(vmctx_tag_vmctx_offset).unwrap(),
+            );
+            let index = builder.ins().load(
+                I32,
+                MemFlags::trusted().with_readonly(),
+                vmctx,
+                i32::try_from(vmctx_tag_index_offset).unwrap(),
+            );
+            let builtin = self.builtin_functions.get_instance_id(builder.func);
+            let call = builder.ins().call(builtin, &[from_vmctx]);
+            let from_instance_id = builder.func.dfg.inst_results(call)[0];
+            (from_instance_id, index)
+        }
+    }
 }
 
 struct Call<'a, 'func, 'module_env> {
     builder: &'a mut FunctionBuilder<'func>,
     env: &'a mut FuncEnvironment<'module_env>,
+    handlers: Vec<(Option<ExceptionTag>, Block)>,
     tail: bool,
 }
 
@@ -1630,15 +1691,20 @@ enum CheckIndirectCallTypeSignature {
     StaticTrap,
 }
 
+type CallRets = SmallVec<[ir::Value; 4]>;
+
 impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// Create a new `Call` site that will do regular, non-tail calls.
     pub fn new(
         builder: &'a mut FunctionBuilder<'func>,
         env: &'a mut FuncEnvironment<'module_env>,
+        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> Self {
+        let handlers = handlers.into_iter().collect();
         Call {
             builder,
             env,
+            handlers,
             tail: false,
         }
     }
@@ -1651,6 +1717,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         Call {
             builder,
             env,
+            handlers: vec![],
             tail: true,
         }
     }
@@ -1661,7 +1728,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
+    ) -> WasmResult<CallRets> {
         let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
         let caller_vmctx = self
             .builder
@@ -1745,7 +1812,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<Option<ir::Inst>> {
+    ) -> WasmResult<Option<CallRets>> {
         let (code_ptr, callee_vmctx) = match self.check_and_load_code_and_callee_vmctx(
             features,
             table_index,
@@ -1960,11 +2027,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
     /// Call a typed function reference.
     pub fn call_ref(
-        mut self,
+        self,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
+    ) -> WasmResult<CallRets> {
         // FIXME: the wasm type system tracks enough information to know whether
         // `callee` is a null reference or not. In some situations it can be
         // statically known here that `callee` cannot be null in which case this
@@ -1982,12 +2049,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// special callee/caller vmctxs. It is used by both call_indirect (which
     /// checks the signature) and call_ref (which doesn't).
     fn unchecked_call(
-        &mut self,
+        mut self,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         callee_load_trap_code: Option<ir::TrapCode>,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
+    ) -> WasmResult<CallRets> {
         let (func_addr, callee_vmctx) = self.load_code_and_vmctx(callee, callee_load_trap_code);
         self.unchecked_call_impl(sig_ref, func_addr, callee_vmctx, call_args)
     }
@@ -2031,22 +2098,25 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         (func_addr, callee_vmctx)
     }
 
+    fn caller_vmctx(&self) -> ir::Value {
+        self.builder
+            .func
+            .special_param(ArgumentPurpose::VMContext)
+            .unwrap()
+    }
+
     /// This calls a function by reference without checking the
     /// signature, given the raw code pointer to the
     /// Wasm-calling-convention entry point and the callee vmctx.
     fn unchecked_call_impl(
-        &mut self,
+        mut self,
         sig_ref: ir::SigRef,
         func_addr: ir::Value,
         callee_vmctx: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
+    ) -> WasmResult<CallRets> {
         let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
-        let caller_vmctx = self
-            .builder
-            .func
-            .special_param(ArgumentPurpose::VMContext)
-            .unwrap();
+        let caller_vmctx = self.caller_vmctx();
 
         // First append the callee and caller vmctx addresses.
         real_call_args.push(callee_vmctx);
@@ -2058,28 +2128,86 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
     }
 
-    fn direct_call_inst(&mut self, callee: ir::FuncRef, args: &[ir::Value]) -> ir::Inst {
-        if self.tail {
-            self.builder.ins().return_call(callee, args)
-        } else {
-            let inst = self.builder.ins().call(callee, args);
-            let results: SmallVec<[_; 4]> = self
+    fn exception_table(
+        &mut self,
+        sig: ir::SigRef,
+    ) -> Option<(ir::ExceptionTable, Block, CallRets)> {
+        if self.handlers.len() > 0 {
+            let continuation_block = self.builder.create_block();
+            let mut args = vec![];
+            let mut results = smallvec![];
+            for i in 0..self.builder.func.dfg.signatures[sig].returns.len() {
+                let ty = self.builder.func.dfg.signatures[sig].returns[i].value_type;
+                results.push(
+                    self.builder
+                        .func
+                        .dfg
+                        .append_block_param(continuation_block, ty),
+                );
+                args.push(BlockArg::TryCallRet(u32::try_from(i).unwrap()));
+            }
+
+            let continuation = self
                 .builder
                 .func
                 .dfg
-                .inst_results(inst)
-                .iter()
-                .copied()
-                .collect();
-            for (i, val) in results.into_iter().enumerate() {
-                if self
-                    .env
-                    .func_ref_result_needs_stack_map(&self.builder.func, callee, i)
-                {
-                    self.builder.declare_value_needs_stack_map(val);
-                }
+                .block_call(continuation_block, args.iter());
+            let mut handlers = vec![ExceptionTableItem::Context(self.caller_vmctx())];
+            for (tag, block) in &self.handlers {
+                let block_call = self
+                    .builder
+                    .func
+                    .dfg
+                    .block_call(*block, &[BlockArg::TryCallExn(0)]);
+                handlers.push(match tag {
+                    Some(tag) => ExceptionTableItem::Tag(*tag, block_call),
+                    None => ExceptionTableItem::Default(block_call),
+                });
             }
-            inst
+            let etd = ExceptionTableData::new(sig, continuation, handlers);
+            let et = self.builder.func.dfg.exception_tables.push(etd);
+            Some((et, continuation_block, results))
+        } else {
+            None
+        }
+    }
+
+    fn results_from_call_inst(&self, inst: ir::Inst) -> CallRets {
+        self.builder
+            .func
+            .dfg
+            .inst_results(inst)
+            .iter()
+            .copied()
+            .collect()
+    }
+
+    fn handle_call_result_stackmap(&mut self, results: &[ir::Value], sig_ref: ir::SigRef) {
+        for (i, &val) in results.iter().enumerate() {
+            if self.env.sig_ref_result_needs_stack_map(sig_ref, i) {
+                self.builder.declare_value_needs_stack_map(val);
+            }
+        }
+    }
+
+    fn direct_call_inst(&mut self, callee: ir::FuncRef, args: &[ir::Value]) -> CallRets {
+        let sig_ref = self.builder.func.dfg.ext_funcs[callee].signature;
+        if self.tail {
+            self.builder.ins().return_call(callee, args);
+            smallvec![]
+        } else if let Some((exception_table, continuation_block, results)) =
+            self.exception_table(sig_ref)
+        {
+            self.builder.ins().try_call(callee, args, exception_table);
+            self.handle_call_result_stackmap(&results, sig_ref);
+            self.builder.switch_to_block(continuation_block);
+            self.builder.seal_block(continuation_block);
+            results
+        } else {
+            let inst = self.builder.ins().call(callee, args);
+            let results = self.results_from_call_inst(inst);
+            self.handle_call_result_stackmap(&results, sig_ref);
+            results
         }
     }
 
@@ -2088,27 +2216,27 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         sig_ref: ir::SigRef,
         func_addr: ir::Value,
         args: &[ir::Value],
-    ) -> ir::Inst {
+    ) -> CallRets {
         if self.tail {
             self.builder
                 .ins()
-                .return_call_indirect(sig_ref, func_addr, args)
+                .return_call_indirect(sig_ref, func_addr, args);
+            smallvec![]
+        } else if let Some((exception_table, continuation_block, results)) =
+            self.exception_table(sig_ref)
+        {
+            self.builder
+                .ins()
+                .try_call_indirect(func_addr, args, exception_table);
+            self.handle_call_result_stackmap(&results, sig_ref);
+            self.builder.switch_to_block(continuation_block);
+            self.builder.seal_block(continuation_block);
+            results
         } else {
             let inst = self.builder.ins().call_indirect(sig_ref, func_addr, args);
-            let results: SmallVec<[_; 4]> = self
-                .builder
-                .func
-                .dfg
-                .inst_results(inst)
-                .iter()
-                .copied()
-                .collect();
-            for (i, val) in results.into_iter().enumerate() {
-                if self.env.sig_ref_result_needs_stack_map(sig_ref, i) {
-                    self.builder.declare_value_needs_stack_map(val);
-                }
-            }
-            inst
+            let results = self.results_from_call_inst(inst);
+            self.handle_call_result_stackmap(&results, sig_ref);
+            results
         }
     }
 }
@@ -2178,17 +2306,6 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn sig_ref_result_needs_stack_map(&self, sig_ref: ir::SigRef, index: usize) -> bool {
-        let wasm_func_ty = self.sig_ref_to_ty[sig_ref].as_ref().unwrap();
-        wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
-    }
-
-    pub fn func_ref_result_needs_stack_map(
-        &self,
-        func: &ir::Function,
-        func_ref: ir::FuncRef,
-        index: usize,
-    ) -> bool {
-        let sig_ref = func.dfg.ext_funcs[func_ref].signature;
         let wasm_func_ty = self.sig_ref_to_ty[sig_ref].as_ref().unwrap();
         wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
     }
@@ -2429,6 +2546,34 @@ impl FuncEnvironment<'_> {
             struct_ref,
             value,
         )
+    }
+
+    pub fn translate_exn_unbox(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: TagIndex,
+        exn_ref: ir::Value,
+    ) -> WasmResult<SmallVec<[ir::Value; 4]>> {
+        gc::translate_exn_unbox(self, builder, tag_index, exn_ref)
+    }
+
+    pub fn translate_exn_throw(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: TagIndex,
+        args: &[ir::Value],
+        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+    ) -> WasmResult<()> {
+        gc::translate_exn_throw(self, builder, tag_index, args, handlers)
+    }
+
+    pub fn translate_exn_throw_ref(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        exnref: ir::Value,
+        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+    ) -> WasmResult<()> {
+        gc::translate_exn_throw_ref(self, builder, exnref, handlers)
     }
 
     pub fn translate_array_new(
@@ -2781,17 +2926,18 @@ impl FuncEnvironment<'_> {
         Ok(())
     }
 
-    pub fn translate_call_indirect(
+    pub fn translate_call_indirect<'a>(
         &mut self,
-        builder: &mut FunctionBuilder,
+        builder: &'a mut FunctionBuilder,
         features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<Option<ir::Inst>> {
-        Call::new(builder, self).indirect_call(
+        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+    ) -> WasmResult<Option<CallRets>> {
+        Call::new(builder, self, handlers).indirect_call(
             features,
             table_index,
             ty_index,
@@ -2801,24 +2947,26 @@ impl FuncEnvironment<'_> {
         )
     }
 
-    pub fn translate_call(
+    pub fn translate_call<'a>(
         &mut self,
-        builder: &mut FunctionBuilder,
+        builder: &'a mut FunctionBuilder,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
-        Call::new(builder, self).direct_call(callee_index, sig_ref, call_args)
+        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+    ) -> WasmResult<CallRets> {
+        Call::new(builder, self, handlers).direct_call(callee_index, sig_ref, call_args)
     }
 
-    pub fn translate_call_ref(
+    pub fn translate_call_ref<'a>(
         &mut self,
-        builder: &mut FunctionBuilder,
+        builder: &'a mut FunctionBuilder,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
-        Call::new(builder, self).call_ref(sig_ref, callee, call_args)
+        handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+    ) -> WasmResult<CallRets> {
+        Call::new(builder, self, handlers).call_ref(sig_ref, callee, call_args)
     }
 
     pub fn translate_return_call(

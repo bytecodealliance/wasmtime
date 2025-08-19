@@ -13,7 +13,8 @@
 use object::{Bytes, LittleEndian, U32Bytes};
 
 #[cfg(feature = "cranelift")]
-use alloc::{vec, vec::Vec};
+use alloc::vec;
+use alloc::vec::Vec;
 #[cfg(feature = "cranelift")]
 use cranelift_codegen::{
     ExceptionContextLoc, FinalizedMachCallSite, FinalizedMachExceptionHandler, binemit::CodeOffset,
@@ -214,12 +215,26 @@ pub struct ExceptionTable<'a> {
     callsites: &'a [U32Bytes<LittleEndian>],
     ranges: &'a [U32Bytes<LittleEndian>],
     tags: &'a [U32Bytes<LittleEndian>],
-    #[expect(
-        dead_code,
-        reason = "Will be used in subsequent PR for Wasm exception handling"
-    )]
     contexts: &'a [U32Bytes<LittleEndian>],
     handlers: &'a [U32Bytes<LittleEndian>],
+}
+
+/// Wasmtime exception table item, after parsing.
+///
+/// Note that this is separately defined from the equivalent type in
+/// Cranelift, `cranelift_codegen::FinalizedMachExceptionHandler`,
+/// because we need this in runtime-only builds when Cranelift is not
+/// included.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExceptionHandler {
+    /// A tag (arbitrary `u32` identifier from CLIF) or `None` for catch-all.
+    pub tag: Option<u32>,
+    /// Dynamic context, if provided, with which to interpret the
+    /// tag. Context is available at the given offset from SP in this
+    /// frame.
+    pub context_sp_offset: Option<u32>,
+    /// Handler code offset.
+    pub handler_offset: u32,
 }
 
 impl<'a> ExceptionTable<'a> {
@@ -263,6 +278,26 @@ impl<'a> ExceptionTable<'a> {
         })
     }
 
+    /// Look up the set of handlers, if any, for a given return
+    /// address (as an offset into the code section).
+    ///
+    /// The handler for `None` (the catch-all/default handler), if
+    /// any, will always come last.
+    ///
+    /// Note: we use raw `u32` types for code offsets here to avoid
+    /// dependencies on `cranelift-codegen` when this crate is built
+    /// without compiler backend support (runtime-only config).
+    pub fn lookup_pc(&self, pc: u32) -> impl Iterator<Item = ExceptionHandler> + '_ {
+        let callsite_idx = self
+            .callsites
+            .binary_search_by_key(&pc, |callsite| callsite.get(LittleEndian))
+            .ok();
+
+        callsite_idx
+            .into_iter()
+            .flat_map(|callsite_idx| self.handlers_for_callsite(callsite_idx))
+    }
+
     /// Look up the handler destination, if any, for a given return
     /// address (as an offset into the code section) and exception
     /// tag.
@@ -270,26 +305,14 @@ impl<'a> ExceptionTable<'a> {
     /// Note: we use raw `u32` types for code offsets and tags here to
     /// avoid dependencies on `cranelift-codegen` when this crate is
     /// built without compiler backend support (runtime-only config).
-    pub fn lookup(&self, pc: u32, tag: u32) -> Option<u32> {
+    pub fn lookup_pc_tag(&self, pc: u32, tag: u32) -> Option<u32> {
         // First, look up the callsite in the sorted callsites list.
         let callsite_idx = self
             .callsites
             .binary_search_by_key(&pc, |callsite| callsite.get(LittleEndian))
             .ok()?;
-        // Now get the range.
-        let end_idx = self.ranges[callsite_idx].get(LittleEndian);
-        let start_idx = if callsite_idx > 0 {
-            self.ranges[callsite_idx - 1].get(LittleEndian)
-        } else {
-            0
-        };
 
-        // Take the subslices of `tags` and `handlers` corresponding
-        // to this callsite.
-        let start_idx = usize::try_from(start_idx).unwrap();
-        let end_idx = usize::try_from(end_idx).unwrap();
-        let tags = &self.tags[start_idx..end_idx];
-        let handlers = &self.handlers[start_idx..end_idx];
+        let (tags, _, handlers) = self.tags_contexts_handlers_for_callsite(callsite_idx);
 
         // Is there any handler with an exact tag match?
         if let Ok(handler_idx) = tags.binary_search_by_key(&tag, |tag| tag.get(LittleEndian)) {
@@ -304,6 +327,64 @@ impl<'a> ExceptionTable<'a> {
         }
 
         None
+    }
+
+    fn tags_contexts_handlers_for_callsite(
+        &self,
+        idx: usize,
+    ) -> (
+        &[U32Bytes<LittleEndian>],
+        &[U32Bytes<LittleEndian>],
+        &[U32Bytes<LittleEndian>],
+    ) {
+        let end_idx = self.ranges[idx].get(LittleEndian);
+        let start_idx = if idx > 0 {
+            self.ranges[idx - 1].get(LittleEndian)
+        } else {
+            0
+        };
+
+        // Take the subslices of `tags`, `contexts`, and `handlers`
+        // corresponding to this callsite.
+        let start_idx = usize::try_from(start_idx).unwrap();
+        let end_idx = usize::try_from(end_idx).unwrap();
+        let tags = &self.tags[start_idx..end_idx];
+        let contexts = &self.contexts[start_idx..end_idx];
+        let handlers = &self.handlers[start_idx..end_idx];
+        (tags, contexts, handlers)
+    }
+
+    fn handlers_for_callsite(&self, idx: usize) -> impl Iterator<Item = ExceptionHandler> {
+        let (tags, contexts, handlers) = self.tags_contexts_handlers_for_callsite(idx);
+        tags.iter()
+            .zip(contexts.iter())
+            .zip(handlers.iter())
+            .map(|((tag, context), handler)| {
+                let tag = tag.get(LittleEndian);
+                let tag = if tag == u32::MAX { None } else { Some(tag) };
+                let context = context.get(LittleEndian);
+                let context = if context == u32::MAX {
+                    None
+                } else {
+                    Some(context)
+                };
+                let handler = handler.get(LittleEndian);
+                ExceptionHandler {
+                    tag,
+                    context_sp_offset: context,
+                    handler_offset: handler,
+                }
+            })
+    }
+
+    /// Provide an iterator over callsites, and for each callsite, the
+    /// arrays of handlers.
+    pub fn into_iter(self) -> impl Iterator<Item = (u32, Vec<ExceptionHandler>)> + 'a {
+        self.callsites
+            .iter()
+            .map(|pc| pc.get(LittleEndian))
+            .enumerate()
+            .map(move |(i, pc)| (pc, self.handlers_for_callsite(i).collect()))
     }
 }
 
@@ -341,10 +422,43 @@ mod test {
 
         let deserialized = ExceptionTable::parse(&bytes).unwrap();
 
-        assert_eq!(deserialized.lookup(0x148, 1), None);
-        assert_eq!(deserialized.lookup(0x110, 1), Some(0x120));
-        assert_eq!(deserialized.lookup(0x110, 2), Some(0x130));
-        assert_eq!(deserialized.lookup(0x110, 42), Some(0x140));
-        assert_eq!(deserialized.lookup(0x150, 100), Some(0x160));
+        assert_eq!(
+            deserialized
+                .lookup_pc(0x148)
+                .collect::<Vec<ExceptionHandler>>(),
+            vec![]
+        );
+        assert_eq!(
+            deserialized
+                .lookup_pc(0x110)
+                .collect::<Vec<ExceptionHandler>>(),
+            vec![
+                ExceptionHandler {
+                    tag: Some(1),
+                    context_sp_offset: None,
+                    handler_offset: 0x120
+                },
+                ExceptionHandler {
+                    tag: Some(2),
+                    context_sp_offset: None,
+                    handler_offset: 0x130
+                },
+                ExceptionHandler {
+                    tag: None,
+                    context_sp_offset: None,
+                    handler_offset: 0x140
+                },
+            ]
+        );
+        assert_eq!(
+            deserialized
+                .lookup_pc(0x150)
+                .collect::<Vec<ExceptionHandler>>(),
+            vec![ExceptionHandler {
+                tag: None,
+                context_sp_offset: None,
+                handler_offset: 0x160
+            },]
+        );
     }
 }
