@@ -62,7 +62,7 @@ impl StoreOpaque {
     fn grow_or_collect_gc_heap(&mut self, bytes_needed: Option<u64>) {
         assert!(!self.async_support());
         if let Some(n) = bytes_needed {
-            if unsafe { self.maybe_async_grow_gc_heap(n).is_ok() } {
+            if vm::assert_ready(self.grow_gc_heap(n)).is_ok() {
                 return;
             }
         }
@@ -72,12 +72,7 @@ impl StoreOpaque {
     /// Attempt to grow the GC heap by `bytes_needed` bytes.
     ///
     /// Returns an error if growing the GC heap fails.
-    ///
-    /// # Safety
-    ///
-    /// When async is enabled, it is the caller's responsibility to ensure that
-    /// this is called on a fiber stack.
-    unsafe fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
+    async fn grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
         log::trace!("Attempting to grow the GC heap by {bytes_needed} bytes");
         assert!(bytes_needed > 0);
 
@@ -120,8 +115,15 @@ impl StoreOpaque {
         // `VMMemoryDefinition` in the `VMStoreContext` immediately
         // afterwards.
         unsafe {
+            // FIXME(#11409) this is not sound to widen the borrow
+            let (mut limiter, _) = heap
+                .store
+                .traitobj()
+                .as_mut()
+                .resource_limiter_and_store_opaque();
             heap.memory
-                .grow(delta_pages_for_alloc, Some(heap.store.traitobj().as_mut()))?
+                .grow(delta_pages_for_alloc, limiter.as_mut())
+                .await?
                 .ok_or_else(|| anyhow!("failed to grow GC heap"))?;
         }
         heap.store.vm_store_context.gc_heap = heap.memory.vmmemory();
@@ -246,7 +248,7 @@ impl StoreOpaque {
     async fn grow_or_collect_gc_heap_async(&mut self, bytes_needed: Option<u64>) {
         assert!(self.async_support());
         if let Some(bytes_needed) = bytes_needed {
-            if unsafe { self.maybe_async_grow_gc_heap(bytes_needed).is_ok() } {
+            if self.grow_gc_heap(bytes_needed).await.is_ok() {
                 return;
             }
         }
