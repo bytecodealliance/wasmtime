@@ -367,25 +367,6 @@ impl ArrayRef {
             .await
     }
 
-    /// Like `ArrayRef::new` but when async is configured must only ever be
-    /// called from on a fiber stack.
-    pub(crate) unsafe fn new_maybe_async(
-        store: &mut StoreOpaque,
-        allocator: &ArrayRefPre,
-        elem: &Val,
-        len: u32,
-    ) -> Result<Rooted<ArrayRef>> {
-        // Type check the initial element value against the element type.
-        elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
-            .context("element type mismatch")?;
-
-        unsafe {
-            store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::new_from_iter(store, allocator, RepeatN(elem, len))
-            })
-        }
-    }
-
     /// Allocate a new array of the given elements.
     ///
     /// Does not attempt a GC on OOM; leaves that to callers.
@@ -542,21 +523,6 @@ impl ArrayRef {
                 Self::new_from_iter(store, allocator, elems.iter())
             })
             .await
-    }
-
-    /// Like `ArrayRef::new_fixed[_async]` but it is the caller's responsibility
-    /// to ensure that when async is enabled, this is only called from on a
-    /// fiber stack.
-    pub(crate) unsafe fn new_fixed_maybe_async(
-        store: &mut StoreOpaque,
-        allocator: &ArrayRefPre,
-        elems: &[Val],
-    ) -> Result<Rooted<ArrayRef>> {
-        unsafe {
-            store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::new_from_iter(store, allocator, elems.iter())
-            })
-        }
     }
 
     #[inline]

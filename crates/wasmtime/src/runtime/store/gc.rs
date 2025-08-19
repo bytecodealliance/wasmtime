@@ -197,53 +197,6 @@ impl StoreOpaque {
             },
         }
     }
-
-    /// Like `retry_after_gc` but async yielding (if necessary) is transparent.
-    ///
-    /// # Safety
-    ///
-    /// When async is enabled, it is the caller's responsibility to ensure that
-    /// this is called on a fiber stack.
-    pub(crate) unsafe fn retry_after_gc_maybe_async<T, U>(
-        &mut self,
-        value: T,
-        alloc_func: impl Fn(&mut Self, T) -> Result<U>,
-    ) -> Result<U>
-    where
-        T: Send + Sync + 'static,
-    {
-        self.ensure_gc_store()?;
-        match alloc_func(self, value) {
-            Ok(x) => Ok(x),
-            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
-                Ok(oom) => {
-                    let (value, oom) = oom.take_inner();
-                    // Note it's the caller's responsibility to ensure that
-                    // this is on a fiber stack if necessary.
-                    //
-                    // SAFETY: FIXME(#11409)
-                    unsafe {
-                        if self.async_support() {
-                            #[cfg(feature = "async")]
-                            self.block_on(|store| {
-                                Box::pin(
-                                    store.gc_unsafe_get_limiter(None, Some(oom.bytes_needed())),
-                                )
-                            })?;
-                            #[cfg(not(feature = "async"))]
-                            unreachable!();
-                        } else {
-                            vm::assert_ready(
-                                self.gc_unsafe_get_limiter(None, Some(oom.bytes_needed())),
-                            );
-                        }
-                    }
-                    alloc_func(self, value)
-                }
-                Err(e) => Err(e),
-            },
-        }
-    }
 }
 
 #[cfg(feature = "async")]
@@ -258,10 +211,6 @@ impl StoreOpaque {
     where
         T: Send + Sync + 'static,
     {
-        assert!(
-            self.async_support(),
-            "you must configure async to use the `*_async` versions of methods"
-        );
         self.ensure_gc_store()?;
         match alloc_func(self, value) {
             Ok(x) => Ok(x),
