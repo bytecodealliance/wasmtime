@@ -81,72 +81,93 @@ impl StoreOpaque {
         log::trace!("Attempting to grow the GC heap by {bytes_needed} bytes");
         assert!(bytes_needed > 0);
 
+        let page_size = self.engine().tunables().gc_heap_memory_type().page_size();
+
         // Take the GC heap's underlying memory out of the GC heap, attempt to
         // grow it, then replace it.
-        let mut memory = self.unwrap_gc_store_mut().gc_heap.take_memory();
-        let mut delta_bytes_grown = 0;
-        let grow_result: Result<()> = (|| {
-            let page_size = self.engine().tunables().gc_heap_memory_type().page_size();
+        let mut heap = TakenGcHeap::new(self);
 
-            let current_size_in_bytes = u64::try_from(memory.byte_size()).unwrap();
-            let current_size_in_pages = current_size_in_bytes / page_size;
+        let current_size_in_bytes = u64::try_from(heap.memory.byte_size()).unwrap();
+        let current_size_in_pages = current_size_in_bytes / page_size;
 
-            // Aim to double the heap size, amortizing the cost of growth.
-            let doubled_size_in_pages = current_size_in_pages.saturating_mul(2);
-            assert!(doubled_size_in_pages >= current_size_in_pages);
-            let delta_pages_for_doubling = doubled_size_in_pages - current_size_in_pages;
+        // Aim to double the heap size, amortizing the cost of growth.
+        let doubled_size_in_pages = current_size_in_pages.saturating_mul(2);
+        assert!(doubled_size_in_pages >= current_size_in_pages);
+        let delta_pages_for_doubling = doubled_size_in_pages - current_size_in_pages;
 
-            // When doubling our size, saturate at the maximum memory size in pages.
-            //
-            // TODO: we should consult the instance allocator for its configured
-            // maximum memory size, if any, rather than assuming the index
-            // type's maximum size.
-            let max_size_in_bytes = 1 << 32;
-            let max_size_in_pages = max_size_in_bytes / page_size;
-            let delta_to_max_size_in_pages = max_size_in_pages - current_size_in_pages;
-            let delta_pages_for_alloc = delta_pages_for_doubling.min(delta_to_max_size_in_pages);
+        // When doubling our size, saturate at the maximum memory size in pages.
+        //
+        // TODO: we should consult the instance allocator for its configured
+        // maximum memory size, if any, rather than assuming the index
+        // type's maximum size.
+        let max_size_in_bytes = 1 << 32;
+        let max_size_in_pages = max_size_in_bytes / page_size;
+        let delta_to_max_size_in_pages = max_size_in_pages - current_size_in_pages;
+        let delta_pages_for_alloc = delta_pages_for_doubling.min(delta_to_max_size_in_pages);
 
-            // But always make sure we are attempting to grow at least as many pages
-            // as needed by the requested allocation. This must happen *after* the
-            // max-size saturation, so that if we are at the max already, we do not
-            // succeed in growing by zero delta pages, and then return successfully
-            // to our caller, who would be assuming that there is now capacity for
-            // their allocation.
-            let pages_needed = bytes_needed.div_ceil(page_size);
-            assert!(pages_needed > 0);
-            let delta_pages_for_alloc = delta_pages_for_alloc.max(pages_needed);
-            assert!(delta_pages_for_alloc > 0);
+        // But always make sure we are attempting to grow at least as many pages
+        // as needed by the requested allocation. This must happen *after* the
+        // max-size saturation, so that if we are at the max already, we do not
+        // succeed in growing by zero delta pages, and then return successfully
+        // to our caller, who would be assuming that there is now capacity for
+        // their allocation.
+        let pages_needed = bytes_needed.div_ceil(page_size);
+        assert!(pages_needed > 0);
+        let delta_pages_for_alloc = delta_pages_for_alloc.max(pages_needed);
+        assert!(delta_pages_for_alloc > 0);
 
-            // Safety: we pair growing the GC heap with updating its associated
-            // `VMMemoryDefinition` in the `VMStoreContext` immediately
-            // afterwards.
-            unsafe {
-                memory
-                    .grow(delta_pages_for_alloc, Some(self.traitobj().as_mut()))?
-                    .ok_or_else(|| anyhow!("failed to grow GC heap"))?;
-            }
-            self.vm_store_context.gc_heap = memory.vmmemory();
-
-            let new_size_in_bytes = u64::try_from(memory.byte_size()).unwrap();
-            assert!(new_size_in_bytes > current_size_in_bytes);
-            delta_bytes_grown = new_size_in_bytes - current_size_in_bytes;
-            let delta_bytes_for_alloc = delta_pages_for_alloc.checked_mul(page_size).unwrap();
-            assert!(
-                delta_bytes_grown >= delta_bytes_for_alloc,
-                "{delta_bytes_grown} should be greater than or equal to {delta_bytes_for_alloc}"
-            );
-            Ok(())
-        })();
-
-        // Regardless whether growing succeeded or failed, place the memory back
-        // inside the GC heap.
+        // Safety: we pair growing the GC heap with updating its associated
+        // `VMMemoryDefinition` in the `VMStoreContext` immediately
+        // afterwards.
         unsafe {
-            self.unwrap_gc_store_mut()
-                .gc_heap
-                .replace_memory(memory, delta_bytes_grown);
+            heap.memory
+                .grow(delta_pages_for_alloc, Some(heap.store.traitobj().as_mut()))?
+                .ok_or_else(|| anyhow!("failed to grow GC heap"))?;
+        }
+        heap.store.vm_store_context.gc_heap = heap.memory.vmmemory();
+
+        let new_size_in_bytes = u64::try_from(heap.memory.byte_size()).unwrap();
+        assert!(new_size_in_bytes > current_size_in_bytes);
+        heap.delta_bytes_grown = new_size_in_bytes - current_size_in_bytes;
+        let delta_bytes_for_alloc = delta_pages_for_alloc.checked_mul(page_size).unwrap();
+        assert!(
+            heap.delta_bytes_grown >= delta_bytes_for_alloc,
+            "{} should be greater than or equal to {delta_bytes_for_alloc}",
+            heap.delta_bytes_grown,
+        );
+        return Ok(());
+
+        struct TakenGcHeap<'a> {
+            store: &'a mut StoreOpaque,
+            memory: ManuallyDrop<vm::Memory>,
+            delta_bytes_grown: u64,
         }
 
-        grow_result
+        impl<'a> TakenGcHeap<'a> {
+            fn new(store: &'a mut StoreOpaque) -> TakenGcHeap<'a> {
+                TakenGcHeap {
+                    memory: ManuallyDrop::new(store.unwrap_gc_store_mut().gc_heap.take_memory()),
+                    store,
+                    delta_bytes_grown: 0,
+                }
+            }
+        }
+
+        impl Drop for TakenGcHeap<'_> {
+            fn drop(&mut self) {
+                // SAFETY: this `Drop` guard ensures that this has exclusive
+                // ownership of fields and is thus safe to take `self.memory`.
+                // Additionally for `replace_memory` the memory was previously
+                // taken when this was created so it should be safe to place
+                // back inside the GC heap.
+                unsafe {
+                    self.store.unwrap_gc_store_mut().gc_heap.replace_memory(
+                        ManuallyDrop::take(&mut self.memory),
+                        self.delta_bytes_grown,
+                    );
+                }
+            }
+        }
     }
 
     /// Attempt an allocation, if it fails due to GC OOM, then do a GC and
