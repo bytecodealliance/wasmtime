@@ -797,6 +797,7 @@ pub async fn collect_async<'a>(
         match collection.collect_increment() {
             GcProgress::Continue => {
                 if async_yield {
+                    #[cfg(feature = "async")]
                     crate::runtime::vm::Yield::new().await
                 }
             }

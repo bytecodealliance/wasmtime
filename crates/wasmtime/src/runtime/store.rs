@@ -1691,17 +1691,20 @@ impl StoreOpaque {
         assert!(gc_roots_list.is_empty());
 
         self.trace_wasm_stack_roots(gc_roots_list);
+        #[cfg(feature = "async")]
         if self.async_support() {
             vm::Yield::new().await;
         }
         #[cfg(feature = "stack-switching")]
         {
             self.trace_wasm_continuation_roots(gc_roots_list);
+            #[cfg(feature = "async")]
             if self.async_support() {
                 vm::Yield::new().await;
             }
         }
         self.trace_vmctx_roots(gc_roots_list);
+        #[cfg(feature = "async")]
         if self.async_support() {
             vm::Yield::new().await;
         }

@@ -224,11 +224,14 @@ impl StoreOpaque {
                     // SAFETY: FIXME(#11409)
                     unsafe {
                         if self.async_support() {
+                            #[cfg(feature = "async")]
                             self.block_on(|store| {
                                 Box::pin(
                                     store.gc_unsafe_get_limiter(None, Some(oom.bytes_needed())),
                                 )
                             })?;
+                            #[cfg(not(feature = "async"))]
+                            unreachable!();
                         } else {
                             vm::assert_ready(
                                 self.gc_unsafe_get_limiter(None, Some(oom.bytes_needed())),
