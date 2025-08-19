@@ -315,14 +315,14 @@ impl MemoryPool {
     }
 
     /// Allocate a single memory for the given instance allocation request.
-    pub fn allocate(
+    pub async fn allocate(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_>,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
-        let stripe_index = if let Some(pkey) = &request.pkey {
+        let tunables = request.store.engine().tunables();
+        let stripe_index = if let Some(pkey) = request.store.get_pkey() {
             pkey.as_stripe()
         } else {
             debug_assert!(self.stripes.len() < 2);
@@ -397,8 +397,9 @@ impl MemoryPool {
             MemoryBase::Mmap(base),
             base_capacity.byte_count(),
             slot,
-            unsafe { &mut *request.store.get().unwrap() },
-        )?;
+            request.limiter.as_deref_mut(),
+        )
+        .await?;
         guard.active = false;
         return Ok((allocation_index, memory));
 

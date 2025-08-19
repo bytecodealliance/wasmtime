@@ -93,8 +93,7 @@ use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
-    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore,
-    VMStoreContext,
+    SignalHandler, StoreBox, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
@@ -470,6 +469,20 @@ pub struct StoreOpaque {
     executor: Executor,
 }
 
+/// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
+/// used to copy into instances during instantiation.
+///
+/// FIXME: ideally this type would get deleted and Wasmtime's reliance on it
+/// would go away.
+struct StorePtr(Option<NonNull<dyn VMStore>>);
+
+// We can't make `VMStore: Send + Sync` because that requires making all of
+// Wastime's internals generic over the `Store`'s `T`. So instead, we take care
+// in the whole VM layer to only use the `VMStore` in ways that are `Send`- and
+// `Sync`-safe and we have to have these unsafe impls.
+unsafe impl Send for StorePtr {}
+unsafe impl Sync for StorePtr {}
+
 /// Executor state within `StoreOpaque`.
 ///
 /// Effectively stores Pulley interpreter state and handles conditional support
@@ -646,7 +659,7 @@ impl<T> Store<T> {
             fuel_reserve: 0,
             fuel_yield_interval: None,
             store_data,
-            traitobj: StorePtr::empty(),
+            traitobj: StorePtr(None),
             default_caller_vmctx: SendSyncPtr::new(NonNull::dangling()),
             hostcall_val_storage: Vec::new(),
             wasm_val_raw_storage: Vec::new(),
@@ -670,7 +683,7 @@ impl<T> Store<T> {
             data: ManuallyDrop::new(data),
         });
 
-        inner.traitobj = StorePtr::new(NonNull::from(&mut *inner));
+        inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
 
         // Wasmtime uses the callee argument to host functions to learn about
         // the original pointer to the `Store` itself, allowing it to
@@ -1489,15 +1502,15 @@ impl StoreOpaque {
     /// `ResourceLimiterAsync` which means that this should only be executed
     /// in a fiber context at this time.
     #[inline]
-    pub(crate) fn ensure_gc_store(&mut self) -> Result<&mut GcStore> {
+    pub(crate) async fn ensure_gc_store(&mut self) -> Result<&mut GcStore> {
         if self.gc_store.is_some() {
             return Ok(self.gc_store.as_mut().unwrap());
         }
-        self.allocate_gc_store()
+        self.allocate_gc_store().await
     }
 
     #[inline(never)]
-    fn allocate_gc_store(&mut self) -> Result<&mut GcStore> {
+    async fn allocate_gc_store(&mut self) -> Result<&mut GcStore> {
         log::trace!("allocating GC heap for store {:?}", self.id());
 
         assert!(self.gc_store.is_none());
@@ -1507,19 +1520,24 @@ impl StoreOpaque {
         );
         assert_eq!(self.vm_store_context.gc_heap.current_length(), 0);
 
-        let vmstore = self.traitobj();
-        let gc_store = allocate_gc_store(self.engine(), vmstore, self.get_pkey())?;
+        let gc_store = allocate_gc_store(self).await?;
         self.vm_store_context.gc_heap = gc_store.vmmemory_definition();
         return Ok(self.gc_store.insert(gc_store));
 
         #[cfg(feature = "gc")]
-        fn allocate_gc_store(
-            engine: &Engine,
-            vmstore: NonNull<dyn VMStore>,
-            pkey: Option<ProtectionKey>,
-        ) -> Result<GcStore> {
+        async fn allocate_gc_store(store: &mut StoreOpaque) -> Result<GcStore> {
             use wasmtime_environ::packed_option::ReservedValue;
 
+            // FIXME(#11409) this is not a sound widening borrow
+            let (mut limiter, store) = unsafe {
+                store
+                    .traitobj()
+                    .as_mut()
+                    .resource_limiter_and_store_opaque()
+            };
+
+            let engine = store.engine();
+            let mem_ty = engine.tunables().gc_heap_memory_type();
             ensure!(
                 engine.features().gc_types(),
                 "cannot allocate a GC store when GC is disabled at configuration time"
@@ -1532,19 +1550,14 @@ impl StoreOpaque {
                     wasmtime_environ::Module::default(),
                 )),
                 imports: vm::Imports::default(),
-                store: StorePtr::new(vmstore),
-                #[cfg(feature = "wmemcheck")]
-                wmemcheck: false,
-                pkey,
-                tunables: engine.tunables(),
+                store,
+                limiter: limiter.as_mut(),
             };
-            let mem_ty = engine.tunables().gc_heap_memory_type();
-            let tunables = engine.tunables();
 
-            let (mem_alloc_index, mem) =
-                engine
-                    .allocator()
-                    .allocate_memory(&mut request, &mem_ty, tunables, None)?;
+            let (mem_alloc_index, mem) = engine
+                .allocator()
+                .allocate_memory(&mut request, &mem_ty, None)
+                .await?;
 
             // Then, allocate the actual GC heap, passing in that memory
             // storage.
@@ -1560,11 +1573,7 @@ impl StoreOpaque {
         }
 
         #[cfg(not(feature = "gc"))]
-        fn allocate_gc_store(
-            _engine: &Engine,
-            _vmstore: NonNull<dyn VMStore>,
-            _pkey: Option<ProtectionKey>,
-        ) -> Result<GcStore> {
+        async fn allocate_gc_store(_: &mut StoreOpaque) -> Result<GcStore> {
             bail!("cannot allocate a GC store: the `gc` feature was disabled at compile time")
         }
     }
@@ -1944,7 +1953,7 @@ impl StoreOpaque {
 
     #[inline]
     pub fn traitobj(&self) -> NonNull<dyn VMStore> {
-        self.traitobj.as_raw().unwrap()
+        self.traitobj.0.unwrap()
     }
 
     /// Takes the cached `Vec<Val>` stored internally across hostcalls to get
@@ -2091,6 +2100,7 @@ at https://bytecodealliance.org/security.
 
     /// Retrieve the store's protection key.
     #[inline]
+    #[cfg(feature = "pooling-allocator")]
     pub(crate) fn get_pkey(&self) -> Option<ProtectionKey> {
         self.pkey
     }
@@ -2225,16 +2235,17 @@ at https://bytecodealliance.org/security.
         // SAFETY: this function's own contract is the same as
         // `allocate_module`, namely the imports provided are valid.
         let handle = unsafe {
-            allocator.allocate_module(InstanceAllocationRequest {
-                id,
-                runtime_info,
-                imports,
-                store: StorePtr::new(self.traitobj()),
-                #[cfg(feature = "wmemcheck")]
-                wmemcheck: self.engine().config().wmemcheck,
-                pkey: self.get_pkey(),
-                tunables: self.engine().tunables(),
-            })?
+            // FIXME(#11409) this is not a sound widening borrow
+            let (mut limiter, store) = self.traitobj().as_mut().resource_limiter_and_store_opaque();
+            allocator
+                .allocate_module(InstanceAllocationRequest {
+                    id,
+                    runtime_info,
+                    imports,
+                    store,
+                    limiter: limiter.as_mut(),
+                })
+                .await?
         };
 
         let actual = match kind {
@@ -2314,82 +2325,6 @@ unsafe impl<T> VMStore for StoreInner<T> {
             }),
             &mut self.inner,
         )
-    }
-
-    fn memory_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, anyhow::Error> {
-        match self.limiter {
-            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                limiter(&mut self.data).memory_growing(current, desired, maximum)
-            }
-            #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(_)) => self.block_on(|store| {
-                let limiter = match &mut store.0.limiter {
-                    Some(ResourceLimiterInner::Async(limiter)) => limiter,
-                    _ => unreachable!(),
-                };
-                limiter(&mut store.0.data).memory_growing(current, desired, maximum)
-            })?,
-            None => Ok(true),
-        }
-    }
-
-    fn memory_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
-        match self.limiter {
-            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                limiter(&mut self.data).memory_grow_failed(error)
-            }
-            #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => {
-                limiter(&mut self.data).memory_grow_failed(error)
-            }
-            None => {
-                log::debug!("ignoring memory growth failure error: {error:?}");
-                Ok(())
-            }
-        }
-    }
-
-    fn table_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, anyhow::Error> {
-        match self.limiter {
-            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                limiter(&mut self.data).table_growing(current, desired, maximum)
-            }
-            #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(_)) => self.block_on(|store| {
-                let limiter = match &mut store.0.limiter {
-                    Some(ResourceLimiterInner::Async(limiter)) => limiter,
-                    _ => unreachable!(),
-                };
-                limiter(&mut store.0.data).table_growing(current, desired, maximum)
-            })?,
-            None => Ok(true),
-        }
-    }
-
-    fn table_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
-        match self.limiter {
-            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                limiter(&mut self.data).table_grow_failed(error)
-            }
-            #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => {
-                limiter(&mut self.data).table_grow_failed(error)
-            }
-            None => {
-                log::debug!("ignoring table growth failure: {error:?}");
-                Ok(())
-            }
-        }
     }
 
     fn out_of_gas(&mut self) -> Result<()> {

@@ -6,7 +6,7 @@ use crate::prelude::*;
 use crate::runtime::store::StoreResourceLimiter;
 use crate::runtime::vm::stack_switching::VMContObj;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
-use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VMStore, VmPtr};
+use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VmPtr};
 use core::alloc::Layout;
 use core::mem;
 use core::ops::Range;
@@ -324,12 +324,12 @@ unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> 
 
 impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
-    pub fn new_dynamic(
+    pub async fn new_dynamic(
         ty: &wasmtime_environ::Table,
         tunables: &Tunables,
-        store: &mut dyn VMStore,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(ty, store)?;
+        let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         match wasm_to_table_type(ty.ref_type) {
             TableElementType::Func => Ok(Self::from(DynamicFuncTable {
                 elements: unsafe { alloc_dynamic_table_elements(minimum)? },
@@ -348,13 +348,13 @@ impl Table {
     }
 
     /// Create a new static (immovable) table instance for the specified table plan.
-    pub unsafe fn new_static(
+    pub async unsafe fn new_static(
         ty: &wasmtime_environ::Table,
         tunables: &Tunables,
         data: SendSyncPtr<[u8]>,
-        store: &mut dyn VMStore,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(ty, store)?;
+        let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         let size = minimum;
         let max = maximum.unwrap_or(usize::MAX);
 
@@ -435,9 +435,9 @@ impl Table {
     // Calls the `store`'s limiter to optionally prevent the table from being created.
     //
     // Returns the minimum and maximum size of the table if the table can be created.
-    fn limit_new(
+    async fn limit_new(
         ty: &wasmtime_environ::Table,
-        store: &mut dyn VMStore,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<(usize, Option<usize>)> {
         // No matter how the table limits are specified
         // The table size is limited by the host's pointer size
@@ -458,11 +458,16 @@ impl Table {
         };
 
         // Inform the store's limiter what's about to happen.
-        if !store.table_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
-            bail!(
-                "table minimum size of {} elements exceeds table limits",
-                ty.limits.min
-            );
+        if let Some(limiter) = limiter {
+            if !limiter
+                .table_growing(0, minimum.unwrap_or(absolute_max), maximum)
+                .await?
+            {
+                bail!(
+                    "table minimum size of {} elements exceeds table limits",
+                    ty.limits.min
+                );
+            }
         }
 
         // At this point we need to actually handle overflows, so bail out with

@@ -8,9 +8,7 @@ use crate::runtime::vm::memory::{DefaultMemoryCreator, Memory};
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use alloc::sync::Arc;
-use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, HostPtr, Module, Tunables, VMOffsets,
-};
+use wasmtime_environ::{DefinedMemoryIndex, DefinedTableIndex, HostPtr, Module, VMOffsets};
 
 #[cfg(feature = "gc")]
 use crate::runtime::vm::{GcHeap, GcHeapAllocationIndex, GcRuntime};
@@ -76,6 +74,7 @@ impl Default for OnDemandInstanceAllocator {
     }
 }
 
+#[async_trait::async_trait]
 unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     #[cfg(feature = "component-model")]
     fn validate_component<'a>(
@@ -110,11 +109,10 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
 
     fn decrement_core_instance_count(&self) {}
 
-    fn allocate_memory(
+    async fn allocate_memory(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_>,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
         let creator = self
@@ -131,16 +129,12 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         let allocation_index = MemoryAllocationIndex::default();
         let memory = Memory::new_dynamic(
             ty,
-            tunables,
+            request.store.engine().tunables(),
             creator,
-            unsafe {
-                request
-                    .store
-                    .get()
-                    .expect("if module has memory plans, store is not empty")
-            },
             image,
-        )?;
+            request.limiter.as_deref_mut(),
+        )
+        .await?;
         Ok((allocation_index, memory))
     }
 
@@ -154,20 +148,19 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         // Normal destructors do all the necessary clean up.
     }
 
-    fn allocate_table(
+    async fn allocate_table(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_>,
         ty: &wasmtime_environ::Table,
-        tunables: &Tunables,
         _table_index: DefinedTableIndex,
     ) -> Result<(TableAllocationIndex, Table)> {
         let allocation_index = TableAllocationIndex::default();
-        let table = Table::new_dynamic(ty, tunables, unsafe {
-            request
-                .store
-                .get()
-                .expect("if module has table plans, store is not empty")
-        })?;
+        let table = Table::new_dynamic(
+            ty,
+            request.store.engine().tunables(),
+            request.limiter.as_deref_mut(),
+        )
+        .await?;
         Ok((allocation_index, table))
     }
 

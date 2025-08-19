@@ -295,7 +295,7 @@ impl Instance {
 
         // Allocate the GC heap, if necessary.
         if module.env_module().needs_gc_heap {
-            store.ensure_gc_store()?;
+            store.ensure_gc_store().await?;
         }
 
         let compiled_module = module.compiled_module();
@@ -349,24 +349,7 @@ impl Instance {
             .features()
             .contains(WasmFeatures::BULK_MEMORY);
 
-        if store.async_support() {
-            #[cfg(feature = "async")]
-            store.block_on(|store| {
-                let module = compiled_module.module().clone();
-                Box::pin(
-                    async move { vm::initialize_instance(store, id, &module, bulk_memory).await },
-                )
-            })??;
-            #[cfg(not(feature = "async"))]
-            unreachable!();
-        } else {
-            vm::assert_ready(vm::initialize_instance(
-                store,
-                id,
-                compiled_module.module(),
-                bulk_memory,
-            ))?;
-        }
+        vm::initialize_instance(store, id, compiled_module.module(), bulk_memory).await?;
 
         Ok((instance, compiled_module.module().start_func))
     }

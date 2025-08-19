@@ -523,6 +523,7 @@ impl PoolingInstanceAllocator {
     }
 }
 
+#[async_trait::async_trait]
 unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     #[cfg(feature = "component-model")]
     fn validate_component<'a>(
@@ -644,14 +645,29 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         self.live_core_instances.fetch_sub(1, Ordering::AcqRel);
     }
 
-    fn allocate_memory(
+    async fn allocate_memory(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_>,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
-        self.with_flush_and_retry(|| self.memories.allocate(request, ty, tunables, memory_index))
+        // FIXME(rust-lang/rust#145127) this should ideally use a version of
+        // `with_flush_and_retry` but adapted for async closures instead of only
+        // sync closures. Right now that won't compile though so this is the
+        // manually expanded version of the method.
+        let e = match self.memories.allocate(request, ty, memory_index).await {
+            Ok(result) => return Ok(result),
+            Err(e) => e,
+        };
+
+        if e.is::<PoolConcurrencyLimitError>() {
+            let queue = self.decommit_queue.lock().unwrap();
+            if self.flush_decommit_queue(queue) {
+                return self.memories.allocate(request, ty, memory_index).await;
+            }
+        }
+
+        Err(e)
     }
 
     unsafe fn deallocate_memory(
@@ -689,14 +705,27 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         self.merge_or_flush(queue);
     }
 
-    fn allocate_table(
+    async fn allocate_table(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_>,
         ty: &wasmtime_environ::Table,
-        tunables: &Tunables,
         _table_index: DefinedTableIndex,
     ) -> Result<(super::TableAllocationIndex, Table)> {
-        self.with_flush_and_retry(|| self.tables.allocate(request, ty, tunables))
+        // FIXME: see `allocate_memory` above for comments about duplication
+        // with `with_flush_and_retry`.
+        let e = match self.tables.allocate(request, ty).await {
+            Ok(result) => return Ok(result),
+            Err(e) => e,
+        };
+
+        if e.is::<PoolConcurrencyLimitError>() {
+            let queue = self.decommit_queue.lock().unwrap();
+            if self.flush_decommit_queue(queue) {
+                return self.tables.allocate(request, ty).await;
+            }
+        }
+
+        Err(e)
     }
 
     unsafe fn deallocate_table(
