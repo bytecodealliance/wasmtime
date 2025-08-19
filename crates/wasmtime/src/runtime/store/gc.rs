@@ -197,10 +197,7 @@ impl StoreOpaque {
             },
         }
     }
-}
 
-#[cfg(feature = "async")]
-impl StoreOpaque {
     /// Attempt an allocation, if it fails due to GC OOM, then do a GC and
     /// retry.
     pub(crate) async fn retry_after_gc_async<T, U>(

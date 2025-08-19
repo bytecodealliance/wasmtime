@@ -353,7 +353,6 @@ impl ArrayRef {
         Self::_new_async(store.as_context_mut().0, allocator, elem, len).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
         allocator: &ArrayRefPre,
@@ -512,7 +511,6 @@ impl ArrayRef {
         Self::_new_fixed_async(store.as_context_mut().0, allocator, elems).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_fixed_async(
         store: &mut StoreOpaque,
         allocator: &ArrayRefPre,

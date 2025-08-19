@@ -280,7 +280,6 @@ impl StructRef {
         Self::_new_async(store.as_context_mut().0, allocator, fields).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
         allocator: &StructRefPre,

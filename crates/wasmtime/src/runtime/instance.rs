@@ -378,12 +378,15 @@ impl Instance {
             .contains(WasmFeatures::BULK_MEMORY);
 
         if store.async_support() {
+            #[cfg(feature = "async")]
             store.block_on(|store| {
                 let module = compiled_module.module().clone();
                 Box::pin(
                     async move { vm::initialize_instance(store, id, &module, bulk_memory).await },
                 )
             })??;
+            #[cfg(not(feature = "async"))]
+            unreachable!();
         } else {
             vm::assert_ready(vm::initialize_instance(
                 store,
