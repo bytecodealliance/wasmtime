@@ -1,5 +1,5 @@
 use super::{
-    InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
+    InstanceAllocationRequest, InstanceAllocator, MemoryAllocationIndex, TableAllocationIndex,
 };
 use crate::prelude::*;
 use crate::runtime::vm::CompiledModuleId;
@@ -76,9 +76,9 @@ impl Default for OnDemandInstanceAllocator {
     }
 }
 
-unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
+unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     #[cfg(feature = "component-model")]
-    fn validate_component_impl<'a>(
+    fn validate_component<'a>(
         &self,
         _component: &Component,
         _offsets: &VMComponentOffsets<HostPtr>,
@@ -87,12 +87,12 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         Ok(())
     }
 
-    fn validate_module_impl(&self, _module: &Module, _offsets: &VMOffsets<HostPtr>) -> Result<()> {
+    fn validate_module(&self, _module: &Module, _offsets: &VMOffsets<HostPtr>) -> Result<()> {
         Ok(())
     }
 
     #[cfg(feature = "gc")]
-    fn validate_memory_impl(&self, _memory: &wasmtime_environ::Memory) -> Result<()> {
+    fn validate_memory(&self, _memory: &wasmtime_environ::Memory) -> Result<()> {
         Ok(())
     }
 

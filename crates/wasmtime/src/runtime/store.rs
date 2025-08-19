@@ -2505,11 +2505,11 @@ impl Drop for StoreOpaque {
 
             for (id, instance) in self.instances.iter_mut() {
                 log::trace!("store {store_id:?} is deallocating {id:?}");
-                if let StoreInstanceKind::Dummy = instance.kind {
-                    ondemand.deallocate_module(&mut instance.handle);
-                } else {
-                    allocator.deallocate_module(&mut instance.handle);
-                }
+                let allocator = match instance.kind {
+                    StoreInstanceKind::Dummy => &ondemand,
+                    _ => allocator,
+                };
+                allocator.deallocate_module(&mut instance.handle);
             }
 
             #[cfg(feature = "component-model")]

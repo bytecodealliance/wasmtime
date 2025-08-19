@@ -197,11 +197,11 @@ impl GcHeapAllocationIndex {
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime
 /// internals to implement correctly.
-pub unsafe trait InstanceAllocatorImpl {
+pub unsafe trait InstanceAllocator: Send + Sync {
     /// Validate whether a component (including all of its contained core
     /// modules) is allocatable by this instance allocator.
     #[cfg(feature = "component-model")]
-    fn validate_component_impl<'a>(
+    fn validate_component<'a>(
         &self,
         component: &Component,
         offsets: &VMComponentOffsets<HostPtr>,
@@ -209,11 +209,11 @@ pub unsafe trait InstanceAllocatorImpl {
     ) -> Result<()>;
 
     /// Validate whether a module is allocatable by this instance allocator.
-    fn validate_module_impl(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()>;
+    fn validate_module(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()>;
 
     /// Validate whether a memory is allocatable by this instance allocator.
     #[cfg(feature = "gc")]
-    fn validate_memory_impl(&self, memory: &wasmtime_environ::Memory) -> Result<()>;
+    fn validate_memory(&self, memory: &wasmtime_environ::Memory) -> Result<()>;
 
     /// Increment the count of concurrent component instances that are currently
     /// allocated, if applicable.
@@ -230,7 +230,7 @@ pub unsafe trait InstanceAllocatorImpl {
     //    associated types are not object safe.
     //
     // 2. We would want a parameterized `Drop` implementation so that we could
-    //    pass in the `InstanceAllocatorImpl` on drop, but this doesn't exist in
+    //    pass in the `InstanceAllocator` on drop, but this doesn't exist in
     //    Rust. Therefore, we would be forced to add reference counting and
     //    stuff like that to keep a handle on the instance allocator from this
     //    theoretical type. That's a bummer.
@@ -359,36 +359,7 @@ pub unsafe trait InstanceAllocatorImpl {
     fn allow_all_pkeys(&self);
 }
 
-/// A thing that can allocate instances.
-///
-/// Don't implement this trait directly, instead implement
-/// `InstanceAllocatorImpl` and you'll get this trait for free via a blanket
-/// impl.
-pub trait InstanceAllocator: InstanceAllocatorImpl {
-    /// Validate whether a component (including all of its contained core
-    /// modules) is allocatable with this instance allocator.
-    #[cfg(feature = "component-model")]
-    fn validate_component<'a>(
-        &self,
-        component: &Component,
-        offsets: &VMComponentOffsets<HostPtr>,
-        get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
-    ) -> Result<()> {
-        InstanceAllocatorImpl::validate_component_impl(self, component, offsets, get_module)
-    }
-
-    /// Validate whether a core module is allocatable with this instance
-    /// allocator.
-    fn validate_module(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
-        InstanceAllocatorImpl::validate_module_impl(self, module, offsets)
-    }
-
-    /// Validate whether a memory is allocatable with this instance allocator.
-    #[cfg(feature = "gc")]
-    fn validate_memory(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
-        InstanceAllocatorImpl::validate_memory_impl(self, memory)
-    }
-
+impl dyn InstanceAllocator + '_ {
     /// Allocates a fresh `InstanceHandle` for the `req` given.
     ///
     /// This will allocate memories and tables internally from this allocator
@@ -402,15 +373,16 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
     ///
     /// The `request` provided must be valid, e.g. the imports within are
     /// correctly sized/typed for the instance being created.
-    unsafe fn allocate_module(
+    pub(crate) unsafe fn allocate_module(
         &self,
         mut request: InstanceAllocationRequest,
     ) -> Result<InstanceHandle> {
         let module = request.runtime_info.env_module();
 
-        #[cfg(debug_assertions)]
-        InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
-            .expect("module should have already been validated before allocation");
+        if cfg!(debug_assertions) {
+            InstanceAllocator::validate_module(self, module, request.runtime_info.offsets())
+                .expect("module should have already been validated before allocation");
+        }
 
         self.increment_core_instance_count()?;
 
@@ -449,7 +421,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
     /// # Unsafety
     ///
     /// The instance must have previously been allocated by `Self::allocate`.
-    unsafe fn deallocate_module(&self, handle: &mut InstanceHandle) {
+    pub(crate) unsafe fn deallocate_module(&self, handle: &mut InstanceHandle) {
         // SAFETY: the contract of `deallocate_*` is itself a contract of this
         // function, that the memories/tables were previously allocated from
         // here.
@@ -470,9 +442,10 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
 
-        #[cfg(debug_assertions)]
-        InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
-            .expect("module should have already been validated before allocation");
+        if cfg!(debug_assertions) {
+            InstanceAllocator::validate_module(self, module, request.runtime_info.offsets())
+                .expect("module should have already been validated before allocation");
+        }
 
         for (memory_index, ty) in module.memories.iter().skip(module.num_imported_memories) {
             let memory_index = module
@@ -520,9 +493,10 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
 
-        #[cfg(debug_assertions)]
-        InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
-            .expect("module should have already been validated before allocation");
+        if cfg!(debug_assertions) {
+            InstanceAllocator::validate_module(self, module, request.runtime_info.offsets())
+                .expect("module should have already been validated before allocation");
+        }
 
         for (index, table) in module.tables.iter().skip(module.num_imported_tables) {
             let def_index = module
@@ -555,11 +529,6 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         }
     }
 }
-
-// Every `InstanceAllocatorImpl` is an `InstanceAllocator` when used
-// correctly. Also, no one is allowed to override this trait's methods, they
-// must use the defaults. This blanket impl provides both of those things.
-impl<T: InstanceAllocatorImpl> InstanceAllocator for T {}
 
 fn check_table_init_bounds(
     store: &mut StoreOpaque,
@@ -894,7 +863,6 @@ mod tests {
 
     #[test]
     fn allocator_traits_are_object_safe() {
-        fn _instance_allocator(_: &dyn InstanceAllocatorImpl) {}
-        fn _instance_allocator_ext(_: &dyn InstanceAllocator) {}
+        fn _instance_allocator(_: &dyn InstanceAllocator) {}
     }
 }

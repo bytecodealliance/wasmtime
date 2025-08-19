@@ -3,9 +3,9 @@ use crate::memory::{LinearMemory, MemoryCreator};
 use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
-    CompiledModuleId, InstanceAllocationRequest, InstanceAllocatorImpl, Memory,
-    MemoryAllocationIndex, MemoryBase, ModuleRuntimeInfo, OnDemandInstanceAllocator,
-    RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, Table, TableAllocationIndex,
+    CompiledModuleId, InstanceAllocationRequest, InstanceAllocator, Memory, MemoryAllocationIndex,
+    MemoryBase, ModuleRuntimeInfo, OnDemandInstanceAllocator, RuntimeLinearMemory,
+    RuntimeMemoryCreator, SharedMemory, Table, TableAllocationIndex,
 };
 use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque};
 use alloc::sync::Arc;
@@ -122,9 +122,9 @@ struct SingleMemoryInstance<'a> {
     ondemand: OnDemandInstanceAllocator,
 }
 
-unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
+unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
     #[cfg(feature = "component-model")]
-    fn validate_component_impl<'a>(
+    fn validate_component<'a>(
         &self,
         _component: &Component,
         _offsets: &VMComponentOffsets<HostPtr>,
@@ -133,18 +133,18 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
         unreachable!("`SingleMemoryInstance` allocator never used with components")
     }
 
-    fn validate_module_impl(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
+    fn validate_module(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
         anyhow::ensure!(
             module.memories.len() == 1,
             "`SingleMemoryInstance` allocator can only be used for modules with a single memory"
         );
-        self.ondemand.validate_module_impl(module, offsets)?;
+        self.ondemand.validate_module(module, offsets)?;
         Ok(())
     }
 
     #[cfg(feature = "gc")]
-    fn validate_memory_impl(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
-        self.ondemand.validate_memory_impl(memory)
+    fn validate_memory(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
+        self.ondemand.validate_memory(memory)
     }
 
     #[cfg(feature = "component-model")]
@@ -172,11 +172,10 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
         tunables: &Tunables,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
-        #[cfg(debug_assertions)]
-        {
+        if cfg!(debug_assertions) {
             let module = request.runtime_info.env_module();
             let offsets = request.runtime_info.offsets();
-            self.validate_module_impl(module, offsets)
+            self.validate_module(module, offsets)
                 .expect("should have already validated the module before allocating memory");
         }
 
