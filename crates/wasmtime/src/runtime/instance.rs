@@ -178,6 +178,9 @@ impl Instance {
     ///     let engine = Engine::new(&config)?;
     ///
     ///     let module = Module::new(&engine, "(module)")?;
+    ///
+    ///     // Note that `Rc<()>` is NOT `Send`, which is what many future
+    ///     // runtimes require and below will cause a failure.
     ///     let mut store = Store::new(&engine, Rc::new(()));
     ///
     ///     // Compile failure because `Store<Rc<()>>` is not `Send`
@@ -898,10 +901,6 @@ impl<T: 'static> InstancePre<T> {
     ///
     /// Panics if any import closed over by this [`InstancePre`] isn't owned by
     /// `store`, or if `store` does not have async support enabled.
-    ///
-    /// ```compile_fail
-    /// what
-    /// ```
     #[cfg(feature = "async")]
     pub async fn instantiate_async(
         &self,
