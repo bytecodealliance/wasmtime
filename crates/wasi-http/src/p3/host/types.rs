@@ -1,41 +1,45 @@
 use super::{
     delete_fields, delete_request, delete_response, get_fields, get_fields_mut, get_request,
-    get_request_mut, get_response, get_response_mut, push_fields,
+    get_request_mut, get_response, get_response_mut, push_fields, push_request, push_response,
 };
 use crate::p3::bindings::clocks::monotonic_clock::Duration;
 use crate::p3::bindings::http::types::{
     ErrorCode, FieldName, FieldValue, Fields, HeaderError, Headers, Host, HostFields, HostRequest,
     HostRequestOptions, HostRequestWithStore, HostResponse, HostResponseWithStore, Method, Request,
-    RequestOptionsError, Response, Scheme, StatusCode, Trailers,
+    RequestOptions, RequestOptionsError, Response, Scheme, StatusCode, Trailers,
 };
-use crate::p3::{MaybeMutable, RequestOptions, WasiHttp, WasiHttpCtxView};
-use anyhow::{Context as _, bail};
+use crate::p3::body::{Body, GuestBodyContext};
+use crate::p3::{WasiHttp, WasiHttpCtxView};
+use anyhow::Context as _;
+use bytes::Bytes;
+use core::future::poll_fn;
+use core::mem;
+use core::pin::{Pin, pin};
+use core::task::Poll;
 use http::header::CONTENT_LENGTH;
+use http_body::Body as _;
+use http_body_util::combinators::BoxBody;
+use std::io::Cursor;
 use std::sync::Arc;
-use wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
+use wasmtime::component::{
+    Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureWriter, GuardedStreamWriter,
+    Resource, StreamReader, StreamWriter,
+};
 use wasmtime_wasi::ResourceTable;
 
 fn get_request_options<'a>(
     table: &'a ResourceTable,
-    opts: &Resource<MaybeMutable<RequestOptions>>,
-) -> wasmtime::Result<&'a MaybeMutable<RequestOptions>> {
+    opts: &Resource<RequestOptions>,
+) -> wasmtime::Result<&'a RequestOptions> {
     table
         .get(opts)
         .context("failed to get request options from table")
 }
 
-fn get_request_options_inner<'a>(
-    table: &'a ResourceTable,
-    opts: &Resource<MaybeMutable<RequestOptions>>,
-) -> wasmtime::Result<&'a RequestOptions> {
-    let opts = get_request_options(table, opts)?;
-    Ok(opts)
-}
-
 fn get_request_options_mut<'a>(
     table: &'a mut ResourceTable,
-    opts: &Resource<MaybeMutable<RequestOptions>>,
-) -> wasmtime::Result<&'a mut MaybeMutable<RequestOptions>> {
+    opts: &Resource<RequestOptions>,
+) -> wasmtime::Result<&'a mut RequestOptions> {
     table
         .get_mut(opts)
         .context("failed to get request options from table")
@@ -43,8 +47,8 @@ fn get_request_options_mut<'a>(
 
 fn push_request_options(
     table: &mut ResourceTable,
-    opts: MaybeMutable<RequestOptions>,
-) -> wasmtime::Result<Resource<MaybeMutable<RequestOptions>>> {
+    opts: RequestOptions,
+) -> wasmtime::Result<Resource<RequestOptions>> {
     table
         .push(opts)
         .context("failed to push request options to table")
@@ -52,8 +56,8 @@ fn push_request_options(
 
 fn delete_request_options(
     table: &mut ResourceTable,
-    opts: Resource<MaybeMutable<RequestOptions>>,
-) -> wasmtime::Result<MaybeMutable<RequestOptions>> {
+    opts: Resource<RequestOptions>,
+) -> wasmtime::Result<RequestOptions> {
     table
         .delete(opts)
         .context("failed to delete request options from table")
@@ -72,9 +76,81 @@ fn parse_header_value(
     }
 }
 
+struct HostBodyTask {
+    body: BoxBody<Bytes, ErrorCode>,
+    contents_tx: StreamWriter<u8>,
+    trailers_tx: FutureWriter<Result<Option<Resource<Trailers>>, ErrorCode>>,
+}
+
+fn handle_host_trailers<T>(
+    store: &Accessor<T, WasiHttp>,
+    trailers: http::HeaderMap,
+) -> wasmtime::Result<Resource<Trailers>> {
+    store.with(|mut store| push_fields(store.get().table, Fields::new_mutable(trailers)))
+}
+
+impl<T> AccessorTask<T, WasiHttp, wasmtime::Result<()>> for HostBodyTask {
+    async fn run(mut self, store: &Accessor<T, WasiHttp>) -> wasmtime::Result<()> {
+        let mut contents_tx = GuardedStreamWriter::new(store, self.contents_tx);
+        let mut trailers_tx = GuardedFutureWriter::new(store, self.trailers_tx);
+        let res = 'body: loop {
+            match {
+                let mut contents_rx = pin!(contents_tx.watch_reader());
+                poll_fn(|cx| match contents_rx.as_mut().poll(cx) {
+                    Poll::Ready(()) => return Poll::Ready(None),
+                    Poll::Pending => Pin::new(&mut self.body).poll_frame(cx).map(Some),
+                })
+                .await
+            } {
+                Some(Some(Ok(frame))) => {
+                    match frame.into_data().map_err(http_body::Frame::into_trailers) {
+                        Ok(buf) => {
+                            contents_tx.write_all(Cursor::new(buf)).await;
+                        }
+                        Err(Ok(trailers)) => {
+                            let trailers = handle_host_trailers(store, trailers)?;
+                            break 'body Ok(Some(trailers));
+                        }
+                        Err(Err(..)) => break 'body Err(ErrorCode::HttpProtocolError),
+                    }
+                }
+                Some(Some(Err(err))) => break 'body Err(err),
+                Some(None) => break 'body Ok(None),
+                None => {
+                    let mut trailers_rx_dropped = pin!(trailers_tx.watch_reader());
+                    match poll_fn(|cx| match trailers_rx_dropped.as_mut().poll(cx) {
+                        Poll::Ready(()) => return Poll::Ready(None),
+                        Poll::Pending => Pin::new(&mut self.body).poll_frame(cx).map(Some),
+                    })
+                    .await
+                    {
+                        Some(Some(Ok(frame))) => {
+                            match frame.into_data().map_err(http_body::Frame::into_trailers) {
+                                Ok(..) => continue,
+                                Err(Ok(trailers)) => {
+                                    let trailers = handle_host_trailers(store, trailers)?;
+                                    break 'body Ok(Some(trailers));
+                                }
+                                Err(Err(..)) => break 'body Err(ErrorCode::HttpProtocolError),
+                            }
+                        }
+                        Some(Some(Err(err))) => break 'body Err(err),
+                        Some(None) => break 'body Ok(None),
+                        None => return Ok(()),
+                    }
+                }
+            }
+        };
+        drop(self.body);
+        drop(contents_tx);
+        trailers_tx.write(res).await;
+        Ok(())
+    }
+}
+
 impl HostFields for WasiHttpCtxView<'_> {
     fn new(&mut self) -> wasmtime::Result<Resource<Fields>> {
-        push_fields(self.table, Fields::new_mutable(http::HeaderMap::default()))
+        push_fields(self.table, Fields::new_mutable_default())
     }
 
     fn from_list(
@@ -86,10 +162,9 @@ impl HostFields for WasiHttpCtxView<'_> {
             let Ok(name) = name.parse() else {
                 return Ok(Err(HeaderError::InvalidSyntax));
             };
-            // TODO: Validation
-            //if self.is_forbidden_header(&name) {
-            //    return Ok(Err(HeaderError::Forbidden));
-            //}
+            if self.ctx.is_forbidden_header(&name) {
+                return Ok(Err(HeaderError::Forbidden));
+            }
             match parse_header_value(&name, value) {
                 Ok(value) => {
                     fields.append(name, value);
@@ -128,10 +203,9 @@ impl HostFields for WasiHttpCtxView<'_> {
         let Ok(name) = name.parse() else {
             return Ok(Err(HeaderError::InvalidSyntax));
         };
-        // TODO: Validation
-        //if self.is_forbidden_header(&name) {
-        //    return Ok(Err(HeaderError::Forbidden));
-        //}
+        if self.ctx.is_forbidden_header(&name) {
+            return Ok(Err(HeaderError::Forbidden));
+        }
         let mut values = Vec::with_capacity(value.len());
         for value in value {
             match parse_header_value(&name, value) {
@@ -161,10 +235,9 @@ impl HostFields for WasiHttpCtxView<'_> {
             Ok(header) => header,
             Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
         };
-        // TODO: Validation
-        //if self.is_forbidden_header(&header) {
-        //    return Ok(Err(HeaderError::Forbidden));
-        //}
+        if self.ctx.is_forbidden_header(&header) {
+            return Ok(Err(HeaderError::Forbidden));
+        }
         let fields = get_fields_mut(self.table, &fields)?;
         let Some(fields) = fields.get_mut() else {
             return Ok(Err(HeaderError::Immutable));
@@ -181,10 +254,9 @@ impl HostFields for WasiHttpCtxView<'_> {
         let Ok(header) = http::header::HeaderName::from_bytes(name.as_bytes()) else {
             return Ok(Err(HeaderError::InvalidSyntax));
         };
-        // TODO: Validation
-        //if self.is_forbidden_header(&header) {
-        //    return Ok(Err(HeaderError::Forbidden));
-        //}
+        if self.ctx.is_forbidden_header(&header) {
+            return Ok(Err(HeaderError::Forbidden));
+        }
         let fields = get_fields_mut(self.table, &fields)?;
         let Some(fields) = fields.get_mut() else {
             return Ok(Err(HeaderError::Immutable));
@@ -205,10 +277,9 @@ impl HostFields for WasiHttpCtxView<'_> {
         let Ok(name) = name.parse() else {
             return Ok(Err(HeaderError::InvalidSyntax));
         };
-        // TODO: Validation
-        //if self.is_forbidden_header(&name) {
-        //    return Ok(Err(HeaderError::Forbidden));
-        //}
+        if self.ctx.is_forbidden_header(&name) {
+            return Ok(Err(HeaderError::Forbidden));
+        }
         let value = match parse_header_value(&name, value) {
             Ok(value) => value,
             Err(err) => return Ok(Err(err)),
@@ -235,7 +306,7 @@ impl HostFields for WasiHttpCtxView<'_> {
 
     fn clone(&mut self, fields: Resource<Fields>) -> wasmtime::Result<Resource<Fields>> {
         let fields = get_fields(self.table, &fields)?;
-        push_fields(self.table, MaybeMutable::new_mutable(Arc::clone(fields)))
+        push_fields(self.table, Fields::new_mutable(Arc::clone(fields)))
     }
 
     fn drop(&mut self, fields: Resource<Fields>) -> wasmtime::Result<()> {
@@ -245,14 +316,93 @@ impl HostFields for WasiHttpCtxView<'_> {
 }
 
 impl HostRequestWithStore for WasiHttp {
-    async fn new<U>(
-        store: &Accessor<U, Self>,
+    async fn new<T>(
+        store: &Accessor<T, Self>,
         headers: Resource<Headers>,
         contents: Option<StreamReader<u8>>,
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-        options: Option<Resource<MaybeMutable<RequestOptions>>>,
+        options: Option<Resource<RequestOptions>>,
     ) -> wasmtime::Result<(Resource<Request>, FutureReader<Result<(), ErrorCode>>)> {
-        bail!("TODO")
+        store.with(|mut store| {
+            let instance = store.instance();
+            let (result_tx, result_rx) = instance
+                .future(&mut store, || Ok(()))
+                .context("failed to create future")?;
+            let ctx = store.get();
+            let headers = delete_fields(ctx.table, headers)?;
+            let options = options
+                .map(|options| delete_request_options(ctx.table, options))
+                .transpose()?;
+            let body = Body::Guest(GuestBodyContext {
+                contents_rx: contents,
+                trailers_rx: trailers,
+                result_tx,
+            });
+            let req = Request {
+                method: http::Method::GET,
+                scheme: None,
+                authority: None,
+                path_with_query: None,
+                headers: headers.into(),
+                options: options.map(Into::into),
+                body,
+            };
+            let req = push_request(ctx.table, req)?;
+            Ok((req, result_rx))
+        })
+    }
+
+    async fn consume_body<T>(
+        store: &Accessor<T, Self>,
+        req: Resource<Request>,
+    ) -> wasmtime::Result<
+        Result<
+            (
+                StreamReader<u8>,
+                FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+            ),
+            (),
+        >,
+    > {
+        store.with(|mut store| {
+            let req = get_request_mut(store.get().table, &req)?;
+            match mem::replace(&mut req.body, Body::Consumed) {
+                Body::Guest(GuestBodyContext {
+                    contents_rx: Some(contents_rx),
+                    trailers_rx,
+                    result_tx: _result,
+                    // TODO: result
+                }) => Ok(Ok((contents_rx, trailers_rx))),
+                Body::Guest(GuestBodyContext {
+                    contents_rx: None,
+                    trailers_rx,
+                    result_tx: _result,
+                    // TODO: result
+                }) => {
+                    let instance = store.instance();
+                    let (_, contents_rx) = instance
+                        .stream(&mut store)
+                        .context("failed to create stream")?;
+                    Ok(Ok((contents_rx, trailers_rx)))
+                }
+                Body::Host(body) => {
+                    let instance = store.instance();
+                    let (contents_tx, contents_rx) = instance
+                        .stream(&mut store)
+                        .context("failed to create stream")?;
+                    let (trailers_tx, trailers_rx) = instance
+                        .future(&mut store, || Ok(None))
+                        .context("failed to create future")?;
+                    store.spawn(HostBodyTask {
+                        body,
+                        contents_tx,
+                        trailers_tx,
+                    });
+                    Ok(Ok((contents_rx, trailers_rx)))
+                }
+                Body::Consumed => Ok(Err(())),
+            }
+        })
     }
 }
 
@@ -350,11 +500,13 @@ impl HostRequest for WasiHttpCtxView<'_> {
     fn get_options(
         &mut self,
         req: Resource<Request>,
-    ) -> wasmtime::Result<Option<Resource<MaybeMutable<RequestOptions>>>> {
+    ) -> wasmtime::Result<Option<Resource<RequestOptions>>> {
         let Request { options, .. } = get_request(self.table, &req)?;
         if let Some(options) = options {
-            let options =
-                push_request_options(self.table, MaybeMutable::new_immutable(Arc::clone(options)))?;
+            let options = push_request_options(
+                self.table,
+                RequestOptions::new_immutable(Arc::clone(options)),
+            )?;
             Ok(Some(options))
         } else {
             Ok(None)
@@ -366,21 +518,6 @@ impl HostRequest for WasiHttpCtxView<'_> {
         push_fields(self.table, Fields::new_immutable(Arc::clone(headers)))
     }
 
-    fn consume_body(
-        &mut self,
-        req: Resource<Request>,
-    ) -> wasmtime::Result<
-        Result<
-            (
-                StreamReader<u8>,
-                FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-            ),
-            (),
-        >,
-    > {
-        bail!("TODO")
-    }
-
     fn drop(&mut self, req: Resource<Request>) -> wasmtime::Result<()> {
         delete_request(self.table, req)?;
         Ok(())
@@ -388,22 +525,16 @@ impl HostRequest for WasiHttpCtxView<'_> {
 }
 
 impl HostRequestOptions for WasiHttpCtxView<'_> {
-    fn new(&mut self) -> wasmtime::Result<Resource<MaybeMutable<RequestOptions>>> {
-        push_request_options(
-            self.table,
-            MaybeMutable::new_mutable(RequestOptions::default()),
-        )
+    fn new(&mut self) -> wasmtime::Result<Resource<RequestOptions>> {
+        push_request_options(self.table, RequestOptions::new_mutable_default())
     }
 
     fn get_connect_timeout(
         &mut self,
-        opts: Resource<MaybeMutable<RequestOptions>>,
+        opts: Resource<RequestOptions>,
     ) -> wasmtime::Result<Option<Duration>> {
-        let RequestOptions {
-            connect_timeout: Some(connect_timeout),
-            ..
-        } = get_request_options_inner(self.table, &opts)?
-        else {
+        let opts = get_request_options(self.table, &opts)?;
+        let Some(connect_timeout) = opts.connect_timeout else {
             return Ok(None);
         };
         let ns = connect_timeout.as_nanos();
@@ -415,7 +546,7 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
 
     fn set_connect_timeout(
         &mut self,
-        opts: Resource<MaybeMutable<RequestOptions>>,
+        opts: Resource<RequestOptions>,
         duration: Option<Duration>,
     ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
         let opts = get_request_options_mut(self.table, &opts)?;
@@ -428,13 +559,10 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
 
     fn get_first_byte_timeout(
         &mut self,
-        opts: Resource<MaybeMutable<RequestOptions>>,
+        opts: Resource<RequestOptions>,
     ) -> wasmtime::Result<Option<Duration>> {
-        let RequestOptions {
-            first_byte_timeout: Some(first_byte_timeout),
-            ..
-        } = get_request_options_inner(self.table, &opts)?
-        else {
+        let opts = get_request_options(self.table, &opts)?;
+        let Some(first_byte_timeout) = opts.first_byte_timeout else {
             return Ok(None);
         };
         let ns = first_byte_timeout.as_nanos();
@@ -446,7 +574,7 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
 
     fn set_first_byte_timeout(
         &mut self,
-        opts: Resource<MaybeMutable<RequestOptions>>,
+        opts: Resource<RequestOptions>,
         duration: Option<Duration>,
     ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
         let opts = get_request_options_mut(self.table, &opts)?;
@@ -459,13 +587,10 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
 
     fn get_between_bytes_timeout(
         &mut self,
-        opts: Resource<MaybeMutable<RequestOptions>>,
+        opts: Resource<RequestOptions>,
     ) -> wasmtime::Result<Option<Duration>> {
-        let RequestOptions {
-            between_bytes_timeout: Some(between_bytes_timeout),
-            ..
-        } = get_request_options_inner(self.table, &opts)?
-        else {
+        let opts = get_request_options(self.table, &opts)?;
+        let Some(between_bytes_timeout) = opts.between_bytes_timeout else {
             return Ok(None);
         };
         let ns = between_bytes_timeout.as_nanos();
@@ -477,7 +602,7 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
 
     fn set_between_bytes_timeout(
         &mut self,
-        opts: Resource<MaybeMutable<RequestOptions>>,
+        opts: Resource<RequestOptions>,
         duration: Option<Duration>,
     ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
         let opts = get_request_options_mut(self.table, &opts)?;
@@ -490,26 +615,98 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
 
     fn clone(
         &mut self,
-        opts: Resource<MaybeMutable<RequestOptions>>,
-    ) -> wasmtime::Result<Resource<MaybeMutable<RequestOptions>>> {
+        opts: Resource<RequestOptions>,
+    ) -> wasmtime::Result<Resource<RequestOptions>> {
         let opts = get_request_options(self.table, &opts)?;
-        push_request_options(self.table, MaybeMutable::new_mutable(Arc::clone(opts)))
+        push_request_options(self.table, RequestOptions::new_mutable(Arc::clone(opts)))
     }
 
-    fn drop(&mut self, opts: Resource<MaybeMutable<RequestOptions>>) -> wasmtime::Result<()> {
+    fn drop(&mut self, opts: Resource<RequestOptions>) -> wasmtime::Result<()> {
         delete_request_options(self.table, opts)?;
         Ok(())
     }
 }
 
 impl HostResponseWithStore for WasiHttp {
-    async fn new<U>(
-        store: &Accessor<U, Self>,
+    async fn new<T>(
+        store: &Accessor<T, Self>,
         headers: Resource<Headers>,
         contents: Option<StreamReader<u8>>,
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     ) -> wasmtime::Result<(Resource<Response>, FutureReader<Result<(), ErrorCode>>)> {
-        bail!("TODO")
+        store.with(|mut store| {
+            let instance = store.instance();
+            let (result_tx, result_rx) = instance
+                .future(&mut store, || Ok(()))
+                .context("failed to create future")?;
+            let ctx = store.get();
+            let headers = delete_fields(ctx.table, headers)?;
+            let body = Body::Guest(GuestBodyContext {
+                contents_rx: contents,
+                trailers_rx: trailers,
+                result_tx,
+            });
+            let res = Response {
+                status: http::StatusCode::OK,
+                headers: headers.into(),
+                body,
+            };
+            let req = push_response(ctx.table, res)?;
+            Ok((req, result_rx))
+        })
+    }
+
+    async fn consume_body<T>(
+        store: &Accessor<T, Self>,
+        res: Resource<Response>,
+    ) -> wasmtime::Result<
+        Result<
+            (
+                StreamReader<u8>,
+                FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+            ),
+            (),
+        >,
+    > {
+        store.with(|mut store| {
+            let res = get_response_mut(store.get().table, &res)?;
+            match mem::replace(&mut res.body, Body::Consumed) {
+                Body::Guest(GuestBodyContext {
+                    contents_rx: Some(contents_rx),
+                    trailers_rx,
+                    result_tx: _result,
+                    // TODO: result
+                }) => Ok(Ok((contents_rx, trailers_rx))),
+                Body::Guest(GuestBodyContext {
+                    contents_rx: None,
+                    trailers_rx,
+                    result_tx: _result,
+                    // TODO: result
+                }) => {
+                    let instance = store.instance();
+                    let (_, contents_rx) = instance
+                        .stream(&mut store)
+                        .context("failed to create stream")?;
+                    Ok(Ok((contents_rx, trailers_rx)))
+                }
+                Body::Host(body) => {
+                    let instance = store.instance();
+                    let (contents_tx, contents_rx) = instance
+                        .stream(&mut store)
+                        .context("failed to create stream")?;
+                    let (trailers_tx, trailers_rx) = instance
+                        .future(&mut store, || Ok(None))
+                        .context("failed to create future")?;
+                    store.spawn(HostBodyTask {
+                        body,
+                        contents_tx,
+                        trailers_tx,
+                    });
+                    Ok(Ok((contents_rx, trailers_rx)))
+                }
+                Body::Consumed => Ok(Err(())),
+            }
+        })
     }
 }
 
@@ -535,21 +732,6 @@ impl HostResponse for WasiHttpCtxView<'_> {
     fn get_headers(&mut self, res: Resource<Response>) -> wasmtime::Result<Resource<Headers>> {
         let Response { headers, .. } = get_response(self.table, &res)?;
         push_fields(self.table, Fields::new_immutable(Arc::clone(headers)))
-    }
-
-    fn consume_body(
-        &mut self,
-        res: Resource<Response>,
-    ) -> wasmtime::Result<
-        Result<
-            (
-                StreamReader<u8>,
-                FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-            ),
-            (),
-        >,
-    > {
-        bail!("TODO")
     }
 
     fn drop(&mut self, res: Resource<Response>) -> wasmtime::Result<()> {

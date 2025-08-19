@@ -1,6 +1,11 @@
+use crate::p3::bindings::http::types::ErrorCode;
+use crate::p3::body::Body;
+use bytes::Bytes;
 use core::time::Duration;
 use http::uri::{Authority, PathAndQuery, Scheme};
 use http::{HeaderMap, Method};
+use http_body_util::BodyExt as _;
+use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, Default)]
@@ -27,6 +32,41 @@ pub struct Request {
     pub headers: Arc<HeaderMap>,
     /// Request options.
     pub options: Option<Arc<RequestOptions>>,
+    /// Request body.
+    pub(crate) body: Body,
+}
+
+impl<T> From<http::Request<T>> for Request
+where
+    T: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+    T::Error: Into<ErrorCode>,
+{
+    fn from(req: http::Request<T>) -> Self {
+        let (
+            http::request::Parts {
+                method,
+                uri,
+                headers,
+                ..
+            },
+            body,
+        ) = req.into_parts();
+        let http::uri::Parts {
+            scheme,
+            authority,
+            path_and_query,
+            ..
+        } = uri.into_parts();
+        Self::new(
+            method,
+            scheme,
+            authority,
+            path_and_query,
+            headers,
+            None,
+            body.map_err(Into::into).boxed(),
+        )
+    }
 }
 
 impl Request {
@@ -37,7 +77,8 @@ impl Request {
         authority: Option<Authority>,
         path_with_query: Option<PathAndQuery>,
         headers: impl Into<Arc<HeaderMap>>,
-        options: Option<impl Into<Arc<RequestOptions>>>,
+        options: Option<Arc<RequestOptions>>,
+        body: impl Into<BoxBody<Bytes, ErrorCode>>,
     ) -> Self {
         Self {
             method,
@@ -45,7 +86,8 @@ impl Request {
             authority,
             path_with_query,
             headers: headers.into(),
-            options: options.map(Into::into),
+            options,
+            body: Body::Host(body.into()),
         }
     }
 }

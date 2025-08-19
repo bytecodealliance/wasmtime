@@ -7,6 +7,8 @@ mod generated {
         world: "wasi:http/proxy",
         imports: {
             "wasi:http/handler/[async]handle": async | store | trappable | tracing,
+            "wasi:http/types/[method]request.consume-body": async | store | trappable | tracing,
+            "wasi:http/types/[method]response.consume-body": async | store | trappable | tracing,
             "wasi:http/types/[static]request.new": async | store | trappable | tracing,
             "wasi:http/types/[static]response.new": async | store | trappable | tracing,
             default: trappable | tracing,
