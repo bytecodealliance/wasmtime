@@ -44,7 +44,7 @@ use self::decommit_queue::DecommitQueue;
 use self::memory_pool::MemoryPool;
 use self::table_pool::TablePool;
 use super::{
-    InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
+    InstanceAllocationRequest, InstanceAllocator, MemoryAllocationIndex, TableAllocationIndex,
 };
 use crate::Enabled;
 use crate::prelude::*;
@@ -523,9 +523,9 @@ impl PoolingInstanceAllocator {
     }
 }
 
-unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
+unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     #[cfg(feature = "component-model")]
-    fn validate_component_impl<'a>(
+    fn validate_component<'a>(
         &self,
         component: &Component,
         offsets: &VMComponentOffsets<HostPtr>,
@@ -549,7 +549,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
                 InstantiateModule(InstantiateModule::Static(static_module_index, _)) => {
                     let module = get_module(*static_module_index);
                     let offsets = VMOffsets::new(HostPtr, &module);
-                    self.validate_module_impl(module, &offsets)?;
+                    self.validate_module(module, &offsets)?;
                     num_core_instances += 1;
                     num_memories += module.num_defined_memories();
                     num_tables += module.num_defined_tables();
@@ -593,7 +593,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         Ok(())
     }
 
-    fn validate_module_impl(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
+    fn validate_module(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
         self.validate_memory_plans(module)
             .context("module memory does not fit in pooling allocator requirements")?;
         self.validate_table_plans(module)
@@ -604,7 +604,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
     }
 
     #[cfg(feature = "gc")]
-    fn validate_memory_impl(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
+    fn validate_memory(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
         self.memories.validate_memory(memory)
     }
 
