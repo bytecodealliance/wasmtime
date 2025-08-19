@@ -1075,7 +1075,7 @@ impl Instance {
         fun: impl AsyncFnOnce(&Accessor<T>) -> R,
     ) -> Result<R>
     where
-        T: 'static,
+        T: Send + 'static,
     {
         check_recursive_run();
         let mut store = store.as_context_mut();
@@ -1165,7 +1165,10 @@ impl Instance {
         self,
         mut store: StoreContextMut<'_, T>,
         mut future: Pin<&mut impl Future<Output = R>>,
-    ) -> Result<R> {
+    ) -> Result<R>
+    where
+        T: Send,
+    {
         loop {
             // Take `ConcurrentState::futures` out of the instance so we can
             // poll it while also safely giving any of the futures inside access
@@ -1320,7 +1323,7 @@ impl Instance {
     }
 
     /// Handle the specified work item, possibly resuming a fiber if applicable.
-    async fn handle_work_item<T>(
+    async fn handle_work_item<T: Send>(
         self,
         store: StoreContextMut<'_, T>,
         item: WorkItem,
@@ -1438,7 +1441,11 @@ impl Instance {
     }
 
     /// Execute the specified guest call on a worker fiber.
-    async fn run_on_worker<T>(self, store: StoreContextMut<'_, T>, item: WorkerItem) -> Result<()> {
+    async fn run_on_worker<T: Send>(
+        self,
+        store: StoreContextMut<'_, T>,
+        item: WorkerItem,
+    ) -> Result<()> {
         let worker = if let Some(fiber) = self.concurrent_state_mut(store.0).worker.take() {
             fiber
         } else {

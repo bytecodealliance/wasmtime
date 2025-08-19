@@ -137,9 +137,63 @@ impl Instance {
     ///
     /// This function will also panic, like [`Instance::new`], if any [`Extern`]
     /// specified does not belong to `store`.
+    ///
+    /// # Examples
+    ///
+    /// An example of using this function:
+    ///
+    /// ```
+    /// use wasmtime::{Result, Store, Engine, Config, Module, Instance};
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<()> {
+    ///     let mut config = Config::new();
+    ///     config.async_support(true);
+    ///     let engine = Engine::new(&config)?;
+    ///
+    ///     // For this example, a module with no imports is being used hence
+    ///     // the empty array to `Instance::new_async`.
+    ///     let module = Module::new(&engine, "(module)")?;
+    ///     let mut store = Store::new(&engine, ());
+    ///     let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    ///
+    ///     // ... use `instance` and exports and such ...
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// Note, though, that the future returned from this function is only
+    /// `Send` if the store's own data is `Send` meaning that this does not
+    /// compile for example:
+    ///
+    /// ```compile_fail
+    /// use wasmtime::{Result, Store, Engine, Config, Module, Instance};
+    /// use std::rc::Rc;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<()> {
+    ///     let mut config = Config::new();
+    ///     config.async_support(true);
+    ///     let engine = Engine::new(&config)?;
+    ///
+    ///     let module = Module::new(&engine, "(module)")?;
+    ///
+    ///     // Note that `Rc<()>` is NOT `Send`, which is what many future
+    ///     // runtimes require and below will cause a failure.
+    ///     let mut store = Store::new(&engine, Rc::new(()));
+    ///
+    ///     // Compile failure because `Store<Rc<()>>` is not `Send`
+    ///     assert_send(Instance::new_async(&mut store, &module, &[])).await?;
+    ///
+    ///     Ok(())
+    /// }
+    ///
+    /// fn assert_send<T: Send>(t: T) -> T { t }
+    /// ```
     #[cfg(feature = "async")]
     pub async fn new_async(
-        mut store: impl AsContextMut<Data: Send>,
+        mut store: impl AsContextMut,
         module: &Module,
         imports: &[Extern],
     ) -> Result<Instance> {
@@ -229,10 +283,7 @@ impl Instance {
         store: &mut StoreContextMut<'_, T>,
         module: &Module,
         imports: Imports<'_>,
-    ) -> Result<Instance>
-    where
-        T: Send + 'static,
-    {
+    ) -> Result<Instance> {
         assert!(
             store.0.async_support(),
             "must use sync instantiation when async support is disabled",
@@ -854,10 +905,7 @@ impl<T: 'static> InstancePre<T> {
     pub async fn instantiate_async(
         &self,
         mut store: impl AsContextMut<Data = T>,
-    ) -> Result<Instance>
-    where
-        T: Send,
-    {
+    ) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let imports = pre_instantiate_raw(
             &mut store.0,

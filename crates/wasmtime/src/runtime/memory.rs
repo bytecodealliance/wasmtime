@@ -271,10 +271,7 @@ impl Memory {
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
-    pub async fn new_async(
-        mut store: impl AsContextMut<Data: Send>,
-        ty: MemoryType,
-    ) -> Result<Memory> {
+    pub async fn new_async(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
@@ -623,11 +620,7 @@ impl Memory {
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
-    pub async fn grow_async(
-        &self,
-        mut store: impl AsContextMut<Data: Send>,
-        delta: u64,
-    ) -> Result<u64> {
+    pub async fn grow_async(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),

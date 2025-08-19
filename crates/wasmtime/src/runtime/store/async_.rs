@@ -278,10 +278,7 @@ impl<T> StoreContextMut<'_, T> {
     pub(crate) async fn on_fiber<R: Send + Sync>(
         &mut self,
         func: impl FnOnce(&mut StoreContextMut<'_, T>) -> R + Send + Sync,
-    ) -> Result<R>
-    where
-        T: Send + 'static,
-    {
+    ) -> Result<R> {
         fiber::on_fiber(self.0, |me| func(&mut StoreContextMut(me))).await
     }
 }

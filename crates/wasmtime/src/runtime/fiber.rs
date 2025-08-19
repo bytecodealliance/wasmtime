@@ -769,7 +769,13 @@ fn resume_fiber<'a>(
 }
 
 /// Create a new `StoreFiber` which runs the specified closure.
-pub(crate) fn make_fiber<'a, S>(
+///
+/// # Safety
+///
+/// The returned `StoreFiber<'a>` structure is unconditionally `Send` but the
+/// send-ness is actually a function of `S`. When `S` is statically known to be
+/// `Send` then use the safe [`make_fiber`] function.
+pub(crate) unsafe fn make_fiber_unchecked<'a, S>(
     store: &mut S,
     fun: impl FnOnce(&mut S) -> Result<()> + Send + Sync + 'a,
 ) -> Result<StoreFiber<'a>>
@@ -852,6 +858,19 @@ where
     })
 }
 
+/// Safe wrapper around [`make_fiber_unchecked`] which requires that `S` is
+/// `Send`.
+#[cfg(feature = "component-model-async")]
+pub(crate) fn make_fiber<'a, S>(
+    store: &mut S,
+    fun: impl FnOnce(&mut S) -> Result<()> + Send + Sync + 'a,
+) -> Result<StoreFiber<'a>>
+where
+    S: AsStoreOpaque + Send + ?Sized + 'a,
+{
+    unsafe { make_fiber_unchecked(store, fun) }
+}
+
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
 pub(crate) async fn on_fiber<S, R>(
@@ -868,10 +887,18 @@ where
     debug_assert!(config.async_stack_size > 0);
 
     let mut result = None;
-    let fiber = make_fiber(store, |store| {
-        result = Some(func(store));
-        Ok(())
-    })?;
+
+    // SAFETY: the `StoreFiber` returned by `make_fiber_unchecked` is `Send`
+    // despite we not actually knowing here whether `S` is `Send` or not. That
+    // is safe here, however, because this function is already conditionally
+    // `Send` based on `S`. Additionally `fiber` doesn't escape this function,
+    // so the future-of-this-function is still correctly `Send`-vs-not.
+    let fiber = unsafe {
+        make_fiber_unchecked(store, |store| {
+            result = Some(func(store));
+            Ok(())
+        })?
+    };
 
     {
         let fiber = FiberFuture {
