@@ -77,6 +77,21 @@ cargo build --release $flags --target $target -p wasmtime-cli $bin_flags --featu
 # a different project that wants to unwind.
 export RUSTFLAGS="$RUSTFLAGS -C force-unwind-tables"
 
+# Shrink the size of `*.a` artifacts without spending too much extra time in CI.
+# See #11476 for some more context. Here Windows builds achieve this with 1 CGU
+# which results in modest size gains, and other platforms use LTO to achieve
+# much more significant size gains. The reason the platforms are different is
+# that CI is extremely slow on Windows, almost 2x slower, so this is an attempt
+# to keep CI cycle time under control.
+case $build in
+  *-mingw* | *-windows*)
+    export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+    ;;
+  *)
+    export CARGO_PROFILE_RELEASE_LTO=true
+    ;;
+esac
+
 mkdir -p target/c-api-build
 cd target/c-api-build
 cmake \
