@@ -1,6 +1,6 @@
 ## 36.0.0
 
-Unreleased.
+Released 2025-08-20.
 
 ### Added
 
