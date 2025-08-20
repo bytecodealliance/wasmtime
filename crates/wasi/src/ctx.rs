@@ -533,4 +533,24 @@ impl WasiCtx {
     pub fn builder() -> WasiCtxBuilder {
         WasiCtxBuilder::new()
     }
+
+    /// Returns access to the underlying [`WasiRandomCtx`].
+    pub fn random(&mut self) -> &mut WasiRandomCtx {
+        &mut self.random
+    }
+
+    /// Returns access to the underlying [`WasiClocksCtx`].
+    pub fn clocks(&mut self) -> &mut WasiClocksCtx {
+        &mut self.clocks
+    }
+
+    /// Returns access to the underlying [`WasiCliCtx`].
+    pub fn cli(&mut self) -> &mut WasiCliCtx {
+        &mut self.cli
+    }
+
+    /// Returns access to the underlying [`WasiSocketsCtx`].
+    pub fn sockets(&mut self) -> &mut WasiSocketsCtx {
+        &mut self.sockets
+    }
 }
