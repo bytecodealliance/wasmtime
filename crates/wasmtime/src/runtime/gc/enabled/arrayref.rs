@@ -353,7 +353,6 @@ impl ArrayRef {
         Self::_new_async(store.as_context_mut().0, allocator, elem, len).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
         allocator: &ArrayRefPre,
@@ -365,25 +364,6 @@ impl ArrayRef {
                 Self::new_from_iter(store, allocator, RepeatN(elem, len))
             })
             .await
-    }
-
-    /// Like `ArrayRef::new` but when async is configured must only ever be
-    /// called from on a fiber stack.
-    pub(crate) unsafe fn new_maybe_async(
-        store: &mut StoreOpaque,
-        allocator: &ArrayRefPre,
-        elem: &Val,
-        len: u32,
-    ) -> Result<Rooted<ArrayRef>> {
-        // Type check the initial element value against the element type.
-        elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
-            .context("element type mismatch")?;
-
-        unsafe {
-            store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::new_from_iter(store, allocator, RepeatN(elem, len))
-            })
-        }
     }
 
     /// Allocate a new array of the given elements.
@@ -531,7 +511,6 @@ impl ArrayRef {
         Self::_new_fixed_async(store.as_context_mut().0, allocator, elems).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_fixed_async(
         store: &mut StoreOpaque,
         allocator: &ArrayRefPre,
@@ -542,21 +521,6 @@ impl ArrayRef {
                 Self::new_from_iter(store, allocator, elems.iter())
             })
             .await
-    }
-
-    /// Like `ArrayRef::new_fixed[_async]` but it is the caller's responsibility
-    /// to ensure that when async is enabled, this is only called from on a
-    /// fiber stack.
-    pub(crate) unsafe fn new_fixed_maybe_async(
-        store: &mut StoreOpaque,
-        allocator: &ArrayRefPre,
-        elems: &[Val],
-    ) -> Result<Rooted<ArrayRef>> {
-        unsafe {
-            store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::new_from_iter(store, allocator, elems.iter())
-            })
-        }
     }
 
     #[inline]

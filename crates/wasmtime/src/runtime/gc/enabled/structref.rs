@@ -269,10 +269,6 @@ impl StructRef {
     ///
     /// # Panics
     ///
-    /// Panics if your engine is not configured for async; use
-    /// [`StructRef::new`][crate::StructRef::new] to perform synchronous
-    /// allocation instead.
-    ///
     /// Panics if the allocator, or any of the field values, is not associated
     /// with the given store.
     #[cfg(feature = "async")]
@@ -284,37 +280,17 @@ impl StructRef {
         Self::_new_async(store.as_context_mut().0, allocator, fields).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        assert!(
-            store.async_support(),
-            "use `StructRef::new` with synchronous stores"
-        );
         Self::type_check_fields(store, allocator, fields)?;
         store
             .retry_after_gc_async((), |store, ()| {
                 Self::new_unchecked(store, allocator, fields)
             })
             .await
-    }
-
-    /// Like `Self::new` but caller's must ensure that if the store is
-    /// configured for async, this is only ever called from on a fiber stack.
-    pub(crate) unsafe fn new_maybe_async(
-        store: &mut StoreOpaque,
-        allocator: &StructRefPre,
-        fields: &[Val],
-    ) -> Result<Rooted<StructRef>> {
-        Self::type_check_fields(store, allocator, fields)?;
-        unsafe {
-            store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::new_unchecked(store, allocator, fields)
-            })
-        }
     }
 
     /// Type check the field values before allocating a new struct.

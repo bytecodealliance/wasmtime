@@ -875,7 +875,7 @@ impl Instance {
     ///
     /// Returns a `Trap` error when the range within the table is out of bounds
     /// or the range within the passive element is out of bounds.
-    pub(crate) fn table_init(
+    pub(crate) async fn table_init(
         self: Pin<&mut Self>,
         store: &mut StoreOpaque,
         table_index: TableIndex,
@@ -897,9 +897,10 @@ impl Instance {
             src,
             len,
         )
+        .await
     }
 
-    pub(crate) fn table_init_segment(
+    pub(crate) async fn table_init_segment(
         store: &mut StoreOpaque,
         elements_instance_id: InstanceId,
         const_evaluator: &mut ConstExprEvaluator,
@@ -955,11 +956,10 @@ impl Instance {
                     .ok_or(Trap::TableOutOfBounds)?;
                 let mut context = ConstEvalContext::new(elements_instance_id);
                 for (i, expr) in positions.zip(exprs) {
-                    let element = unsafe {
-                        const_evaluator
-                            .eval(&mut store, &mut context, expr)
-                            .expect("const expr should be valid")
-                    };
+                    let element = const_evaluator
+                        .eval(&mut store, &mut context, expr)
+                        .await
+                        .expect("const expr should be valid");
                     table.set_(&mut store, i, element.ref_().unwrap()).unwrap();
                 }
             }

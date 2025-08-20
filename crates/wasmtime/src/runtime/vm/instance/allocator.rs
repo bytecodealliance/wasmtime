@@ -560,11 +560,9 @@ fn check_table_init_bounds(
 
     for segment in module.table_initialization.segments.iter() {
         let mut context = ConstEvalContext::new(instance);
-        let start = unsafe {
-            const_evaluator
-                .eval(&mut store, &mut context, &segment.offset)
-                .expect("const expression should be valid")
-        };
+        let start = const_evaluator
+            .eval_int(&mut store, &mut context, &segment.offset)
+            .expect("const expression should be valid");
         let start = usize::try_from(start.unwrap_i32().cast_unsigned()).unwrap();
         let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
 
@@ -582,7 +580,7 @@ fn check_table_init_bounds(
     Ok(())
 }
 
-fn initialize_tables(
+async fn initialize_tables(
     store: &mut StoreOpaque,
     context: &mut ConstEvalContext,
     const_evaluator: &mut ConstExprEvaluator,
@@ -595,11 +593,10 @@ fn initialize_tables(
             TableInitialValue::Null { precomputed: _ } => {}
 
             TableInitialValue::Expr(expr) => {
-                let init = unsafe {
-                    const_evaluator
-                        .eval(&mut store, context, expr)
-                        .expect("const expression should be valid")
-                };
+                let init = const_evaluator
+                    .eval(&mut store, context, expr)
+                    .await
+                    .expect("const expression should be valid");
                 let idx = module.table_index(table);
                 let id = store.id();
                 let table = store
@@ -619,11 +616,9 @@ fn initialize_tables(
     // iterates over all segments (Segments mode) or leftover
     // segments (FuncTable mode) to initialize.
     for segment in module.table_initialization.segments.iter() {
-        let start = unsafe {
-            const_evaluator
-                .eval(&mut store, context, &segment.offset)
-                .expect("const expression should be valid")
-        };
+        let start = const_evaluator
+            .eval_int(&mut store, context, &segment.offset)
+            .expect("const expression should be valid");
         let start = get_index(
             start,
             store.instance(context.instance).env_module().tables[segment.table_index].idx_type,
@@ -637,7 +632,8 @@ fn initialize_tables(
             start,
             0,
             segment.elements.len(),
-        )?;
+        )
+        .await?;
     }
 
     Ok(())
@@ -658,12 +654,14 @@ fn get_memory_init_start(
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
     let mut store = OpaqueRootScope::new(store);
-    unsafe { const_evaluator.eval(&mut store, &mut context, &init.offset) }.map(|v| {
-        get_index(
-            v,
-            store.instance(instance).env_module().memories[init.memory_index].idx_type,
-        )
-    })
+    const_evaluator
+        .eval_int(&mut store, &mut context, &init.offset)
+        .map(|v| {
+            get_index(
+                v,
+                store.instance(instance).env_module().memories[init.memory_index].idx_type,
+            )
+        })
 }
 
 fn check_memory_init_bounds(
@@ -733,7 +731,9 @@ fn initialize_memories(
             expr: &wasmtime_environ::ConstExpr,
         ) -> Option<u64> {
             let mut store = OpaqueRootScope::new(&mut *self.store);
-            let val = unsafe { self.const_evaluator.eval(&mut store, self.context, expr) }
+            let val = self
+                .const_evaluator
+                .eval_int(&mut store, self.context, expr)
                 .expect("const expression should be valid");
             Some(get_index(
                 val,
@@ -803,7 +803,7 @@ fn check_init_bounds(store: &mut StoreOpaque, instance: InstanceId, module: &Mod
     Ok(())
 }
 
-fn initialize_globals(
+async fn initialize_globals(
     store: &mut StoreOpaque,
     context: &mut ConstEvalContext,
     const_evaluator: &mut ConstExprEvaluator,
@@ -817,9 +817,15 @@ fn initialize_globals(
     let mut store = OpaqueRootScope::new(store);
 
     for (index, init) in module.global_initializers.iter() {
-        let val = unsafe {
+        // Attempt a simple, synchronous evaluation before hitting the
+        // general-purpose `.await` point below. This benchmarks ~15% faster in
+        // instantiation vs just falling through to `.await` below.
+        let val = if let Some(val) = const_evaluator.try_simple(init) {
+            val
+        } else {
             const_evaluator
                 .eval(&mut store, context, init)
+                .await
                 .expect("should be a valid const expr")
         };
 
@@ -853,7 +859,7 @@ fn initialize_globals(
     Ok(())
 }
 
-pub fn initialize_instance(
+pub async fn initialize_instance(
     store: &mut StoreOpaque,
     instance: InstanceId,
     module: &Module,
@@ -870,8 +876,8 @@ pub fn initialize_instance(
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
 
-    initialize_globals(store, &mut context, &mut const_evaluator, module)?;
-    initialize_tables(store, &mut context, &mut const_evaluator, module)?;
+    initialize_globals(store, &mut context, &mut const_evaluator, module).await?;
+    initialize_tables(store, &mut context, &mut const_evaluator, module).await?;
     initialize_memories(store, &mut context, &mut const_evaluator, &module)?;
 
     Ok(())
