@@ -538,7 +538,7 @@ ignore this test in Miri with:
 
 If this is not a mistake then try to edit the `pulley_provenance_test` test
 which runs Cranelift outside of Miri. If you still feel this is a mistake then
-please open an issue or a topic on Zulip to talk about how best to accomodate
+please open an issue or a topic on Zulip to talk about how best to accommodate
 the use case.
 "
             );
@@ -629,7 +629,7 @@ the use case.
         // its index in our unlinked outputs.
         //
         // We will generally just be working with `OutputIndex`es, but
-        // occassionally we must translate from these pairs back to our index
+        // occasionally we must translate from these pairs back to our index
         // space, for example when we know that one module's function import is
         // always satisfied with a particular function defined in a particular
         // module. This map enables that translation.
