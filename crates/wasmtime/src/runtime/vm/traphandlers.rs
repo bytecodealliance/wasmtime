@@ -844,8 +844,8 @@ impl CallThreadState {
                 log::trace!("Capturing backtrace and coredump for {trap:?}");
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(trap),
-                    backtrace: self.capture_backtrace(self.vm_store_context.as_ptr(), None),
-                    coredump_stack: self.capture_coredump(self.vm_store_context.as_ptr(), None),
+                    backtrace: self.capture_backtrace(store.vm_store_context_mut(), None),
+                    coredump_stack: self.capture_coredump(store.vm_store_context_mut(), None),
                 }
             }
         };
