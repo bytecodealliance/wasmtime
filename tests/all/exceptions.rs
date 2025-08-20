@@ -1,10 +1,11 @@
 use super::exceptions_store;
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 
-#[test]
 #[cfg_attr(miri, ignore)]
-fn basic_throw() -> Result<()> {
-    let mut store = exceptions_store()?;
+#[wasmtime_test(wasm_features(exceptions))]
+fn basic_throw(config: &mut Config) -> Result<()> {
+    let mut store = exceptions_store(config)?;
     let engine = store.engine();
 
     let module = Module::new(
@@ -37,10 +38,10 @@ fn basic_throw() -> Result<()> {
     Ok(())
 }
 
-#[test]
+#[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
-fn dynamic_tags() -> Result<()> {
-    let mut store = exceptions_store()?;
+fn dynamic_tags(config: &mut Config) -> Result<()> {
+    let mut store = exceptions_store(config)?;
     let engine = store.engine();
 
     let module = Module::new(
@@ -97,10 +98,10 @@ fn dynamic_tags() -> Result<()> {
     Ok(())
 }
 
-#[test]
+#[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
-fn exception_escape_to_host() -> Result<()> {
-    let mut store = exceptions_store()?;
+fn exception_escape_to_host(config: &mut Config) -> Result<()> {
+    let mut store = exceptions_store(config)?;
     let engine = store.engine();
 
     let module = Module::new(
@@ -130,10 +131,10 @@ fn exception_escape_to_host() -> Result<()> {
     Ok(())
 }
 
-#[test]
+#[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
-fn exception_from_host() -> Result<()> {
-    let mut store = exceptions_store()?;
+fn exception_from_host(config: &mut Config) -> Result<()> {
+    let mut store = exceptions_store(config)?;
     let engine = store.engine();
 
     let module = Module::new(
@@ -181,10 +182,10 @@ fn exception_from_host() -> Result<()> {
     Ok(())
 }
 
-#[test]
+#[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
-fn exception_across_no_wasm() -> Result<()> {
-    let mut store = exceptions_store()?;
+fn exception_across_no_wasm(config: &mut Config) -> Result<()> {
+    let mut store = exceptions_store(config)?;
     let engine = store.engine();
 
     let functy = FuncType::new(&engine, [ValType::I32], []);

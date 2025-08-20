@@ -1,6 +1,6 @@
 #![cfg_attr(miri, allow(dead_code, unused_imports))]
 
-use wasmtime::Result;
+use wasmtime::{Config, Result};
 
 mod arrays;
 mod async_functions;
@@ -123,13 +123,10 @@ pub(crate) fn gc_store() -> Result<wasmtime::Store<()>> {
     Ok(wasmtime::Store::new(&engine, ()))
 }
 
-pub(crate) fn exceptions_store() -> Result<wasmtime::Store<()>> {
+pub(crate) fn exceptions_store(config: &mut Config) -> Result<wasmtime::Store<()>> {
     let _ = env_logger::try_init();
-
-    let mut config = wasmtime::Config::new();
     config.wasm_exceptions(true);
-
-    let engine = wasmtime::Engine::new(&config)?;
+    let engine = wasmtime::Engine::new(config)?;
     Ok(wasmtime::Store::new(&engine, ()))
 }
 
