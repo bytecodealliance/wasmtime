@@ -535,6 +535,10 @@ mod call_thread_state {
         /// payload word in the underlying exception ABI is used to
         /// send the raw `VMExnRef`.
         #[cfg(feature = "gc")]
+        #[cfg_attr(
+            not(has_host_compiler_backend),
+            allow(dead_code, reason = "Unwind not yet implemented for Pulley")
+        )]
         UnwindToWasm { pc: usize, fp: usize, sp: usize },
         /// Do not unwind.
         None,
