@@ -132,7 +132,7 @@ impl TablePool {
     /// Allocate a single table for the given instance allocation request.
     pub async fn allocate(
         &self,
-        request: &mut InstanceAllocationRequest<'_>,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Table,
     ) -> Result<(TableAllocationIndex, Table)> {
         let tunables = request.store.engine().tunables();

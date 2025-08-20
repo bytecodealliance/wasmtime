@@ -2,11 +2,11 @@
 
 use super::{AnyRef, RootedGcRefImpl};
 use crate::prelude::*;
-use crate::runtime::vm::{self, VMGcRef};
+use crate::runtime::vm::{self, VMGcRef, VMStore};
 use crate::{
     AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
     Result, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
-    store::{AutoAssertNoGc, StoreOpaque},
+    store::{AutoAssertNoGc, StoreOpaque, StoreResourceLimiter},
 };
 use core::any::Any;
 use core::mem;
@@ -210,13 +210,13 @@ impl ExternRef {
     /// Panics if the `context` is configured for async; use
     /// [`ExternRef::new_async`][crate::ExternRef::new_async] to perform
     /// asynchronous allocation instead.
-    pub fn new<T>(mut context: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
+    pub fn new<T>(mut store: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
     where
         T: 'static + Any + Send + Sync,
     {
-        let ctx = context.as_context_mut().0;
-        assert!(!ctx.async_support());
-        vm::assert_ready(Self::_new_async(ctx, value))
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        assert!(!store.async_support());
+        vm::assert_ready(Self::_new_async(store, limiter.as_mut(), value))
     }
 
     /// Asynchronously allocates a new `ExternRef` wrapping the given value.
@@ -295,16 +295,17 @@ impl ExternRef {
     /// [`ExternRef::new`][crate::ExternRef::new] to perform synchronous
     /// allocation instead.
     #[cfg(feature = "async")]
-    pub async fn new_async<T>(mut context: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
+    pub async fn new_async<T>(mut store: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
     where
         T: 'static + Any + Send + Sync,
     {
-        let ctx = context.as_context_mut().0;
-        Self::_new_async(ctx, value).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_async(store, limiter.as_mut(), value).await
     }
 
     pub(crate) async fn _new_async<T>(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         value: T,
     ) -> Result<Rooted<ExternRef>>
     where
@@ -315,7 +316,7 @@ impl ExternRef {
         let value: Box<dyn Any + Send + Sync> = Box::new(value);
 
         let gc_ref = store
-            .retry_after_gc_async(value, |store, value| {
+            .retry_after_gc_async(limiter, value, |store, value| {
                 store
                     .require_gc_store_mut()?
                     .alloc_externref(value)

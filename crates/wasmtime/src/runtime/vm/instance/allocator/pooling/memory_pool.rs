@@ -317,7 +317,7 @@ impl MemoryPool {
     /// Allocate a single memory for the given instance allocation request.
     pub async fn allocate(
         &self,
-        request: &mut InstanceAllocationRequest<'_>,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {

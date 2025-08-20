@@ -2,9 +2,11 @@ use crate::linker::{Definition, DefinitionType};
 use crate::prelude::*;
 use crate::runtime::vm::{
     self, Imports, ModuleRuntimeInfo, VMFuncRef, VMFunctionImport, VMGlobalImport, VMMemoryImport,
-    VMTableImport, VMTagImport,
+    VMStore, VMTableImport, VMTagImport,
 };
-use crate::store::{AllocateInstanceKind, InstanceId, StoreInstanceId, StoreOpaque};
+use crate::store::{
+    AllocateInstanceKind, InstanceId, StoreInstanceId, StoreOpaque, StoreResourceLimiter,
+};
 use crate::types::matching;
 use crate::{
     AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, ModuleExport, SharedMemory,
@@ -248,9 +250,12 @@ impl Instance {
         module: &Module,
         imports: Imports<'_>,
     ) -> Result<Instance> {
-        // SAFETY: the safety contract of `new_raw` is the same as this
-        // function.
-        let (instance, start) = unsafe { Instance::new_raw(store.0, module, imports).await? };
+        let (instance, start) = {
+            let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
+            // SAFETY: the safety contract of `new_raw` is the same as this
+            // function.
+            unsafe { Instance::new_raw(store, limiter.as_mut(), module, imports).await? }
+        };
         if let Some(start) = start {
             if store.0.async_support() {
                 #[cfg(feature = "async")]
@@ -285,6 +290,7 @@ impl Instance {
     /// provided as well.
     async unsafe fn new_raw(
         store: &mut StoreOpaque,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         module: &Module,
         imports: Imports<'_>,
     ) -> Result<(Instance, Option<FuncIndex>)> {
@@ -295,7 +301,7 @@ impl Instance {
 
         // Allocate the GC heap, if necessary.
         if module.env_module().needs_gc_heap {
-            store.ensure_gc_store().await?;
+            store.ensure_gc_store(limiter.as_deref_mut()).await?;
         }
 
         let compiled_module = module.compiled_module();
@@ -313,6 +319,7 @@ impl Instance {
         let id = unsafe {
             store
                 .allocate_instance(
+                    limiter.as_deref_mut(),
                     AllocateInstanceKind::Module(module_id),
                     &ModuleRuntimeInfo::Module(module.clone()),
                     imports,
@@ -349,7 +356,7 @@ impl Instance {
             .features()
             .contains(WasmFeatures::BULK_MEMORY);
 
-        vm::initialize_instance(store, id, compiled_module.module(), bulk_memory).await?;
+        vm::initialize_instance(store, limiter, id, compiled_module.module(), bulk_memory).await?;
 
         Ok((instance, compiled_module.module().start_func))
     }

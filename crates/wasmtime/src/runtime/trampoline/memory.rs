@@ -7,7 +7,7 @@ use crate::runtime::vm::{
     MemoryBase, ModuleRuntimeInfo, OnDemandInstanceAllocator, RuntimeLinearMemory,
     RuntimeMemoryCreator, SharedMemory, Table, TableAllocationIndex,
 };
-use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque};
+use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque, StoreResourceLimiter};
 use alloc::sync::Arc;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, Module, Tunables, VMOffsets,
@@ -26,6 +26,7 @@ use wasmtime_environ::{
 /// outside: a host-provided memory import, shared memory.
 pub async fn create_memory(
     store: &mut StoreOpaque,
+    limiter: Option<&mut StoreResourceLimiter<'_>>,
     memory_ty: &MemoryType,
     preallocation: Option<&SharedMemory>,
 ) -> Result<InstanceId> {
@@ -54,6 +55,7 @@ pub async fn create_memory(
     unsafe {
         store
             .allocate_instance(
+                limiter,
                 AllocateInstanceKind::Dummy {
                     allocator: &allocator,
                 },
@@ -170,7 +172,7 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
 
     async fn allocate_memory(
         &self,
-        request: &mut InstanceAllocationRequest<'_>,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
@@ -208,7 +210,7 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
 
     async fn allocate_table(
         &self,
-        req: &mut InstanceAllocationRequest<'_>,
+        req: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Table,
         table_index: DefinedTableIndex,
     ) -> Result<(TableAllocationIndex, Table)> {

@@ -1,7 +1,7 @@
 //! Implementation of `exnref` in Wasmtime.
 
-use crate::runtime::vm::VMGcRef;
-use crate::store::StoreId;
+use crate::runtime::vm::{VMGcRef, VMStore};
+use crate::store::{StoreId, StoreResourceLimiter};
 use crate::vm::{self, VMExnRef, VMGcHeader};
 use crate::{
     AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType, Result,
@@ -205,9 +205,15 @@ impl ExnRef {
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        let store = store.as_context_mut().0;
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
         assert!(!store.async_support());
-        vm::assert_ready(Self::_new_async(store, allocator, tag, fields))
+        vm::assert_ready(Self::_new_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            tag,
+            fields,
+        ))
     }
 
     /// Asynchronously allocate a new exception object and get a
@@ -245,18 +251,20 @@ impl ExnRef {
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        Self::_new_async(store.as_context_mut().0, allocator, tag, fields).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_async(store, limiter.as_mut(), allocator, tag, fields).await
     }
 
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &ExnRefPre,
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
         Self::type_check_tag_and_fields(store, allocator, tag, fields)?;
         store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter, (), |store, ()| {
                 Self::new_unchecked(store, allocator, tag, fields)
             })
             .await

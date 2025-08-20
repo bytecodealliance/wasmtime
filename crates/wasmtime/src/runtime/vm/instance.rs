@@ -868,6 +868,7 @@ impl Instance {
     pub(crate) async fn table_init(
         self: Pin<&mut Self>,
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         table_index: TableIndex,
         elem_index: ElemIndex,
         dst: u64,
@@ -879,6 +880,7 @@ impl Instance {
         let mut const_evaluator = ConstExprEvaluator::default();
         Self::table_init_segment(
             store,
+            limiter,
             self.id,
             &mut const_evaluator,
             table_index,
@@ -892,6 +894,7 @@ impl Instance {
 
     pub(crate) async fn table_init_segment(
         store: &mut StoreOpaque,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         elements_instance_id: InstanceId,
         const_evaluator: &mut ConstExprEvaluator,
         table_index: TableIndex,
@@ -947,7 +950,7 @@ impl Instance {
                 let mut context = ConstEvalContext::new(elements_instance_id);
                 for (i, expr) in positions.zip(exprs) {
                     let element = const_evaluator
-                        .eval(&mut store, &mut context, expr)
+                        .eval(&mut store, limiter.as_deref_mut(), &mut context, expr)
                         .await
                         .expect("const expr should be valid");
                     table.set_(&mut store, i, element.ref_().unwrap()).unwrap();

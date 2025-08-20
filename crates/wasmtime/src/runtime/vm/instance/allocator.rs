@@ -35,7 +35,7 @@ pub use self::pooling::{
 };
 
 /// Represents a request for a new runtime instance.
-pub struct InstanceAllocationRequest<'a> {
+pub struct InstanceAllocationRequest<'a, 'b> {
     /// The instance id that this will be assigned within the store once the
     /// allocation has finished.
     pub id: InstanceId,
@@ -54,7 +54,7 @@ pub struct InstanceAllocationRequest<'a> {
     pub store: &'a StoreOpaque,
 
     /// The store's resource limiter, if configured by the embedder.
-    pub limiter: Option<&'a mut StoreResourceLimiter<'a>>,
+    pub limiter: Option<&'a mut StoreResourceLimiter<'b>>,
 }
 
 /// The index of a memory allocation within an `InstanceAllocator`.
@@ -186,7 +186,7 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     /// Allocate a memory for an instance.
     async fn allocate_memory(
         &self,
-        request: &mut InstanceAllocationRequest<'_>,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)>;
@@ -208,7 +208,7 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     /// Allocate a table for an instance.
     async fn allocate_table(
         &self,
-        req: &mut InstanceAllocationRequest<'_>,
+        req: &mut InstanceAllocationRequest<'_, '_>,
         table: &wasmtime_environ::Table,
         table_index: DefinedTableIndex,
     ) -> Result<(TableAllocationIndex, Table)>;
@@ -304,7 +304,7 @@ impl dyn InstanceAllocator + '_ {
     /// correctly sized/typed for the instance being created.
     pub(crate) async unsafe fn allocate_module(
         &self,
-        mut request: InstanceAllocationRequest<'_>,
+        mut request: InstanceAllocationRequest<'_, '_>,
     ) -> Result<InstanceHandle> {
         let module = request.runtime_info.env_module();
 
@@ -388,7 +388,7 @@ impl dyn InstanceAllocator + '_ {
     /// them into `memories`.
     async fn allocate_memories(
         &self,
-        request: &mut InstanceAllocationRequest<'_>,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         memories: &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
@@ -441,7 +441,7 @@ impl dyn InstanceAllocator + '_ {
     /// into `tables`.
     async fn allocate_tables(
         &self,
-        request: &mut InstanceAllocationRequest<'_>,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         tables: &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
@@ -515,6 +515,7 @@ fn check_table_init_bounds(
 
 async fn initialize_tables(
     store: &mut StoreOpaque,
+    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     context: &mut ConstEvalContext,
     const_evaluator: &mut ConstExprEvaluator,
     module: &Module,
@@ -527,7 +528,7 @@ async fn initialize_tables(
 
             TableInitialValue::Expr(expr) => {
                 let init = const_evaluator
-                    .eval(&mut store, context, expr)
+                    .eval(&mut store, limiter.as_deref_mut(), context, expr)
                     .await
                     .expect("const expression should be valid");
                 let idx = module.table_index(table);
@@ -558,6 +559,7 @@ async fn initialize_tables(
         );
         Instance::table_init_segment(
             &mut store,
+            limiter.as_deref_mut(),
             context.instance,
             const_evaluator,
             segment.table_index,
@@ -738,6 +740,7 @@ fn check_init_bounds(store: &mut StoreOpaque, instance: InstanceId, module: &Mod
 
 async fn initialize_globals(
     store: &mut StoreOpaque,
+    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     context: &mut ConstEvalContext,
     const_evaluator: &mut ConstExprEvaluator,
     module: &Module,
@@ -757,7 +760,7 @@ async fn initialize_globals(
             val
         } else {
             const_evaluator
-                .eval(&mut store, context, init)
+                .eval(&mut store, limiter.as_deref_mut(), context, init)
                 .await
                 .expect("should be a valid const expr")
         };
@@ -794,6 +797,7 @@ async fn initialize_globals(
 
 pub async fn initialize_instance(
     store: &mut StoreOpaque,
+    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     instance: InstanceId,
     module: &Module,
     is_bulk_memory: bool,
@@ -809,8 +813,22 @@ pub async fn initialize_instance(
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
 
-    initialize_globals(store, &mut context, &mut const_evaluator, module).await?;
-    initialize_tables(store, &mut context, &mut const_evaluator, module).await?;
+    initialize_globals(
+        store,
+        limiter.as_deref_mut(),
+        &mut context,
+        &mut const_evaluator,
+        module,
+    )
+    .await?;
+    initialize_tables(
+        store,
+        limiter.as_deref_mut(),
+        &mut context,
+        &mut const_evaluator,
+        module,
+    )
+    .await?;
     initialize_memories(store, &mut context, &mut const_evaluator, &module)?;
 
     Ok(())
