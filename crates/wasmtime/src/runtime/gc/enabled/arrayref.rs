@@ -705,7 +705,6 @@ impl ArrayRef {
         match layout {
             GcLayout::Array(a) => Ok(a),
             GcLayout::Struct(_) => unreachable!(),
-            GcLayout::Exception(_) => unreachable!(),
         }
     }
 

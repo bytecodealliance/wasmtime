@@ -17,7 +17,7 @@ use crate::{
 use core::ptr::NonNull;
 use core::{alloc::Layout, any::Any, num::NonZeroU32};
 use wasmtime_environ::{
-    GcArrayLayout, GcExceptionLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
+    GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
     null::NullTypeLayouts,
 };
 
@@ -286,19 +286,20 @@ unsafe impl GcHeap for NullHeap {
         self.alloc(header, layout)
     }
 
-    fn alloc_uninit_struct(
+    fn alloc_uninit_struct_or_exn(
         &mut self,
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
-    ) -> Result<Result<VMStructRef, u64>> {
-        self.alloc(
-            VMGcHeader::from_kind_and_index(VMGcKind::StructRef, ty),
-            layout.layout(),
-        )
-        .map(|r| r.map(|r| r.into_structref_unchecked()))
+    ) -> Result<Result<VMGcRef, u64>> {
+        let kind = if layout.is_exception {
+            VMGcKind::ExnRef
+        } else {
+            VMGcKind::StructRef
+        };
+        self.alloc(VMGcHeader::from_kind_and_index(kind, ty), layout.layout())
     }
 
-    fn dealloc_uninit_struct(&mut self, _struct_ref: VMStructRef) {}
+    fn dealloc_uninit_struct_or_exn(&mut self, _struct_ref: VMGcRef) {}
 
     fn alloc_uninit_array(
         &mut self,
@@ -325,20 +326,6 @@ unsafe impl GcHeap for NullHeap {
         let arrayref = VMNullArrayHeader::typed_ref(self, arrayref);
         self.index(arrayref).length
     }
-
-    fn alloc_uninit_exn(
-        &mut self,
-        ty: VMSharedTypeIndex,
-        layout: &GcExceptionLayout,
-    ) -> Result<Result<VMExnRef, u64>> {
-        self.alloc(
-            VMGcHeader::from_kind_and_index(VMGcKind::ExnRef, ty),
-            layout.layout(),
-        )
-        .map(|r| r.map(|r| r.into_exnref_unchecked()))
-    }
-
-    fn dealloc_uninit_exn(&mut self, _exnref: VMExnRef) {}
 
     fn gc<'a>(
         &'a mut self,

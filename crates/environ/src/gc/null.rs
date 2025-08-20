@@ -11,6 +11,9 @@ pub const HEADER_ALIGN: u32 = 8;
 /// The offset of the length field in a `VMNullArrayHeader`.
 pub const ARRAY_LENGTH_OFFSET: u32 = HEADER_SIZE;
 
+/// The offset of the tag fields in an exception header.
+pub const EXCEPTION_TAG_OFFSET: u32 = HEADER_SIZE;
+
 /// The layout of Wasm GC objects in the null collector.
 #[derive(Default)]
 pub struct NullTypeLayouts;
@@ -18,6 +21,10 @@ pub struct NullTypeLayouts;
 impl GcTypeLayouts for NullTypeLayouts {
     fn array_length_field_offset(&self) -> u32 {
         ARRAY_LENGTH_OFFSET
+    }
+
+    fn exception_tag_offset(&self) -> u32 {
+        EXCEPTION_TAG_OFFSET
     }
 
     fn array_layout(&self, ty: &WasmArrayType) -> GcArrayLayout {
@@ -28,7 +35,7 @@ impl GcTypeLayouts for NullTypeLayouts {
         common_struct_layout(ty, HEADER_SIZE, HEADER_ALIGN)
     }
 
-    fn exn_layout(&self, ty: &WasmExnType) -> GcExceptionLayout {
+    fn exn_layout(&self, ty: &WasmExnType) -> GcStructLayout {
         common_exn_layout(ty, HEADER_SIZE, HEADER_ALIGN)
     }
 }
