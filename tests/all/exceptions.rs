@@ -2,6 +2,7 @@ use super::exceptions_store;
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn basic_throw() -> Result<()> {
     let mut store = exceptions_store()?;
     let engine = store.engine();
@@ -37,6 +38,7 @@ fn basic_throw() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn dynamic_tags() -> Result<()> {
     let mut store = exceptions_store()?;
     let engine = store.engine();
@@ -96,6 +98,7 @@ fn dynamic_tags() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn exception_escape_to_host() -> Result<()> {
     let mut store = exceptions_store()?;
     let engine = store.engine();
@@ -128,6 +131,7 @@ fn exception_escape_to_host() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn exception_from_host() -> Result<()> {
     let mut store = exceptions_store()?;
     let engine = store.engine();
@@ -178,6 +182,7 @@ fn exception_from_host() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn exception_across_no_wasm() -> Result<()> {
     let mut store = exceptions_store()?;
     let engine = store.engine();
@@ -210,6 +215,7 @@ fn exception_across_no_wasm() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn pulley_unsupported() -> Result<()> {
     use wasmtime_environ::TripleExt;
     let mut config = wasmtime::Config::new();
