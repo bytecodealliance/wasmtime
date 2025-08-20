@@ -1233,6 +1233,12 @@ fn new_epoch(store: &mut dyn VMStore, _instance: Pin<&mut Instance>) -> Result<N
         let delta = match update_deadline {
             UpdateDeadline::Interrupt => return Err(Trap::Interrupt.into()),
             UpdateDeadline::Continue(delta) => delta,
+
+            // Note that custom assertions for `async_support` are needed below
+            // as otherwise if these are used in an
+            // `async_support`-disabled-build it'll trip the `assert_ready` part
+            // of `block_on!` above. The assertion here provides a more direct
+            // error message as to what's going on.
             #[cfg(feature = "async")]
             UpdateDeadline::Yield(delta) => {
                 assert!(
@@ -1250,14 +1256,6 @@ fn new_epoch(store: &mut dyn VMStore, _instance: Pin<&mut Instance>) -> Result<N
                     "cannot use `UpdateDeadline::YieldCustom` without enabling \
                      async support in the config"
                 );
-
-                // When control returns, we have a `Result<()>` passed
-                // in from the host fiber. If this finished successfully then
-                // we were resumed normally via a `poll`, so keep going.  If
-                // the future was dropped while we were yielded, then we need
-                // to clean up this fiber. Do so by raising a trap which will
-                // abort all wasm and get caught on the other side to clean
-                // things up.
                 future.await;
                 delta
             }

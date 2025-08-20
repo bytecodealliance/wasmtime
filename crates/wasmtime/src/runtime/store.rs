@@ -2369,16 +2369,16 @@ unsafe impl<T> VMStore for StoreInner<T> {
 
 impl<T> StoreInner<T> {
     #[cfg(target_has_atomic = "64")]
+    fn epoch_deadline_trap(&mut self) {
+        self.epoch_deadline_behavior = None;
+    }
+
+    #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_callback(
         &mut self,
         callback: Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>,
     ) {
         self.epoch_deadline_behavior = Some(callback);
-    }
-
-    #[cfg(target_has_atomic = "64")]
-    fn epoch_deadline_trap(&mut self) {
-        self.epoch_deadline_behavior = None;
     }
 }
 
