@@ -1,3 +1,16 @@
+## 36.0.1
+
+Released 2025-08-20.
+
+### Added
+
+* Accessors for internal WASI-related contexts are added to
+  `wasmtime_wasi::WasiCtx` to account for refactorings that happened in this
+  release.
+  [#11473](https://github.com/bytecodealliance/wasmtime/pull/11473)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.0
 
 Released 2025-08-20.
