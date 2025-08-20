@@ -196,7 +196,6 @@ cache = ["dep:wasmtime-cache", "std"]
 # `async fn` and calling functions asynchronously.
 async = [
   "dep:wasmtime-fiber",
-  "dep:async-trait",
   "wasmtime-component-macro?/async",
   "runtime",
 ]
@@ -261,6 +260,7 @@ runtime = [
   "dep:windows-sys",
   "pulley-interpreter/interp",
   "dep:wasmtime-unwinder",
+  "dep:async-trait",
 ]
 
 # Enable support for garbage collection-related things.
