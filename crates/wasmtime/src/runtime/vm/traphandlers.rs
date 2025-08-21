@@ -946,8 +946,6 @@ impl CallThreadState {
                 ExecutorRef::Interpreter(r) => {
                     r.resume_to_exception_handler(pc, sp, fp, payload1, payload2)
                 }
-
-                // TODO
                 #[cfg(has_host_compiler_backend)]
                 ExecutorRef::Native => {
                     wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2)
