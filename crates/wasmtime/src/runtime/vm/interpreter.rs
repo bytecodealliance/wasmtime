@@ -254,7 +254,7 @@ impl InterpreterRef<'_> {
                 DoneReason::CallIndirectHost { id, resume } => {
                     let state = unsafe { self.call_indirect_host(id) };
 
-                    // After the host as finished take a look at what hostcall
+                    // After the host has finished take a look at what hostcall
                     // was just made. The `raise` hostcall gets special
                     // handling for its non-local transfer of control flow,
                     // notably here we see if it's a longjmp or a resume that
