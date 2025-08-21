@@ -5,10 +5,44 @@ use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::ops::RangeInclusive;
 use wasm_encoder::{
-    CodeSection, ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection,
-    GlobalSection, ImportSection, Instruction, Module, RefType, TableSection, TableType,
-    TypeSection, ValType,
+    CodeSection, CompositeInnerType, CompositeType, ConstExpr, EntityType, ExportKind,
+    ExportSection, Function, FunctionSection, GlobalSection, ImportSection, Instruction, Module,
+    RefType, StructType, SubType, TableSection, TableType, TypeSection, ValType,
 };
+
+/// RecGroup ID struct definition.
+#[derive(Debug, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize)]
+pub struct RecGroupId(u32);
+
+/// Struct types definition.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct StructTypes {
+    next_group: u32,
+    rec_groups: std::collections::BTreeSet<RecGroupId>,
+}
+
+impl StructTypes {
+    /// Create a fresh `StructTypes` allocator with no recursive groups defined yet.
+    pub fn new() -> Self {
+        Self {
+            next_group: 0,
+            rec_groups: Default::default(),
+        }
+    }
+
+    /// Allocate a new empty recursive group `(rec ...)` and return its unique `RecGroupId`.
+    pub fn alloc_empty_rec_group(&mut self) -> RecGroupId {
+        let id = RecGroupId(self.next_group);
+        self.next_group += 1;
+        self.rec_groups.insert(id.clone());
+        id
+    }
+
+    /// Iterate over all allocated recursive groups.
+    pub fn groups(&self) -> impl Iterator<Item = &RecGroupId> {
+        self.rec_groups.iter()
+    }
+}
 
 /// Limits controlling the structure of a generated Wasm module.
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -16,6 +50,17 @@ pub struct TableOpsLimits {
     pub(crate) num_params: u32,
     pub(crate) num_globals: u32,
     pub(crate) table_size: i32,
+    pub(crate) num_rec_groups: u32,
+    pub(crate) empty_structs_per_group: u32,
+}
+
+impl TableOpsLimits {
+    /// Calculates and returns the total number of struct types the configuration describes
+    #[inline]
+    pub fn total_struct_types(&self) -> u32 {
+        self.num_rec_groups
+            .saturating_mul(self.empty_structs_per_group)
+    }
 }
 
 /// A description of a Wasm module that makes a series of `externref` table
@@ -24,11 +69,16 @@ pub struct TableOpsLimits {
 pub struct TableOps {
     pub(crate) limits: TableOpsLimits,
     pub(crate) ops: Vec<TableOp>,
+    pub(crate) struct_types: StructTypes,
 }
+
+const BASE_STRUCT_TYPE_INDEX: u32 = 4;
 
 const NUM_PARAMS_RANGE: RangeInclusive<u32> = 0..=10;
 const NUM_GLOBALS_RANGE: RangeInclusive<u32> = 0..=10;
 const TABLE_SIZE_RANGE: RangeInclusive<i32> = 0..=100;
+const NUM_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
+const EMPTY_STRUCTS_PER_GROUP_RANGE: RangeInclusive<u32> = 1..=11;
 const MAX_OPS: usize = 100;
 
 impl TableOps {
@@ -49,14 +99,26 @@ impl TableOps {
             .limits
             .table_size
             .clamp(*TABLE_SIZE_RANGE.start(), *TABLE_SIZE_RANGE.end());
+
         self.limits.num_params = self
             .limits
             .num_params
             .clamp(*NUM_PARAMS_RANGE.start(), *NUM_PARAMS_RANGE.end());
+
         self.limits.num_globals = self
             .limits
             .num_globals
             .clamp(*NUM_GLOBALS_RANGE.start(), *NUM_GLOBALS_RANGE.end());
+
+        self.limits.num_rec_groups = self
+            .limits
+            .num_rec_groups
+            .clamp(*NUM_REC_GROUPS_RANGE.start(), *NUM_REC_GROUPS_RANGE.end());
+
+        self.limits.empty_structs_per_group = self.limits.empty_structs_per_group.clamp(
+            *EMPTY_STRUCTS_PER_GROUP_RANGE.start(),
+            *EMPTY_STRUCTS_PER_GROUP_RANGE.end(),
+        );
 
         let mut module = Module::new();
 
@@ -143,6 +205,24 @@ impl TableOps {
         func.instruction(&Instruction::End);
         func.instruction(&Instruction::End);
 
+        for _gid in self.struct_types.groups() {
+            let n = self.limits.empty_structs_per_group;
+            let mut subtys = Vec::with_capacity(n as usize);
+            for _ in 0..n {
+                subtys.push(SubType {
+                    is_final: true,
+                    supertype_idx: None,
+                    composite_type: CompositeType {
+                        inner: CompositeInnerType::Struct(StructType {
+                            fields: Box::new([]),
+                        }),
+                        shared: false,
+                    },
+                });
+            }
+            types.ty().rec(subtys);
+        }
+
         let mut code = CodeSection::new();
         code.function(&func);
 
@@ -217,7 +297,6 @@ pub struct TableOpsMutator;
 
 impl Mutate<TableOps> for TableOpsMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut TableOps) -> mutatis::Result<()> {
-        // Insert
         if !c.shrink() {
             c.mutation(|ctx| {
                 if let Some(idx) = ctx.rng().gen_index(ops.ops.len() + 1) {
@@ -229,8 +308,6 @@ impl Mutate<TableOps> for TableOpsMutator {
                 Ok(())
             })?;
         }
-
-        // Remove
         if !ops.ops.is_empty() {
             c.mutation(|ctx| {
                 let idx = ctx
@@ -272,11 +349,16 @@ impl Generate<TableOps> for TableOpsMutator {
         let num_globals = m::range(NUM_GLOBALS_RANGE).generate(ctx)?;
         let table_size = m::range(TABLE_SIZE_RANGE).generate(ctx)?;
 
+        let num_rec_groups = m::range(NUM_REC_GROUPS_RANGE).generate(ctx)?;
+        let empty_structs_per_group = m::range(EMPTY_STRUCTS_PER_GROUP_RANGE).generate(ctx)?;
+
         let mut ops = TableOps {
             limits: TableOpsLimits {
                 num_params,
                 num_globals,
                 table_size,
+                num_rec_groups,
+                empty_structs_per_group,
             },
             ops: vec![
                 TableOp::Null(),
@@ -287,7 +369,12 @@ impl Generate<TableOps> for TableOpsMutator {
                 TableOp::GlobalSet(0),
                 TableOp::GlobalGet(0),
             ],
+            struct_types: StructTypes::new(),
         };
+
+        for _ in 0..ops.limits.num_rec_groups {
+            ops.struct_types.alloc_empty_rec_group();
+        }
 
         let mut stack: usize = 0;
         while ops.ops.len() < MAX_OPS {
@@ -439,6 +526,8 @@ define_table_ops! {
     LocalGet(local_index: |ops| ops.num_params => u32) : 0 => 1,
     LocalSet(local_index: |ops| ops.num_params => u32) : 1 => 0,
 
+    StructNew(k: |ops| ops.total_struct_types() => u32) : 0 => 0,
+
     Drop : 1 => 0,
 
     Null : 0 => 1,
@@ -488,6 +577,11 @@ impl TableOp {
             Self::Null() => {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
+            Self::StructNew(k) => {
+                let ty = BASE_STRUCT_TYPE_INDEX + k;
+                func.instruction(&Instruction::StructNew(ty));
+                func.instruction(&Instruction::Drop);
+            }
         }
     }
 }
@@ -498,23 +592,32 @@ mod tests {
 
     /// Creates empty TableOps
     fn empty_test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
-        TableOps {
+        let mut t = TableOps {
             limits: TableOpsLimits {
                 num_params,
                 num_globals,
                 table_size,
+                num_rec_groups: 3,
+                empty_structs_per_group: 4,
             },
             ops: vec![],
+            struct_types: StructTypes::new(),
+        };
+        for _ in 0..t.limits.num_rec_groups {
+            t.struct_types.alloc_empty_rec_group();
         }
+        t
     }
 
     /// Creates TableOps with all default opcodes
     fn test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
-        TableOps {
+        let mut t = TableOps {
             limits: TableOpsLimits {
                 num_params,
                 num_globals,
                 table_size,
+                num_rec_groups: 3,
+                empty_structs_per_group: 4,
             },
             ops: vec![
                 TableOp::Null(),
@@ -524,22 +627,41 @@ mod tests {
                 TableOp::LocalGet(0),
                 TableOp::GlobalSet(0),
                 TableOp::GlobalGet(0),
+                TableOp::Null(),
+                TableOp::Drop(),
+                TableOp::Gc(),
+                TableOp::LocalSet(0),
+                TableOp::LocalGet(0),
+                TableOp::GlobalSet(0),
+                TableOp::GlobalGet(0),
+                TableOp::Null(),
+                TableOp::Drop(),
+                TableOp::StructNew(0),
             ],
+            struct_types: StructTypes::new(),
+        };
+        for _ in 0..t.limits.num_rec_groups {
+            t.struct_types.alloc_empty_rec_group();
         }
+        t
     }
 
     #[test]
     fn mutate_table_ops_with_default_mutator() -> mutatis::Result<()> {
         let _ = env_logger::try_init();
-        use mutatis::Session;
-        use wasmparser::Validator;
         let mut res = test_ops(5, 5, 5);
-        let mut session = Session::new();
+
+        let mut session = mutatis::Session::new();
 
         for _ in 0..1024 {
             session.mutate(&mut res)?;
             let wasm = res.to_wasm_binary();
-            let mut validator = Validator::new();
+
+            let feats = wasmparser::WasmFeatures::default();
+            feats.reference_types();
+            feats.gc();
+            let mut validator = wasmparser::Validator::new_with_features(feats);
+
             let wat = wasmprinter::print_bytes(&wasm).expect("[-] Failed .print_bytes(&wasm).");
             let result = validator.validate_all(&wasm);
             log::debug!("{wat}");
@@ -580,74 +702,115 @@ mod tests {
         let _ = env_logger::try_init();
 
         let mut table_ops = test_ops(2, 2, 5);
-        table_ops.ops.extend([
-            TableOp::Null(),
-            TableOp::Drop(),
-            TableOp::Gc(),
-            TableOp::LocalSet(0),
-            TableOp::LocalGet(0),
-            TableOp::GlobalSet(0),
-            TableOp::GlobalGet(0),
-            TableOp::Null(),
-            TableOp::Drop(),
-            TableOp::Gc(),
-            TableOp::LocalSet(0),
-            TableOp::LocalGet(0),
-            TableOp::GlobalSet(0),
-            TableOp::GlobalGet(0),
-            TableOp::Null(),
-            TableOp::Drop(),
-        ]);
+
         let wasm = table_ops.to_wasm_binary();
         let wat = wasmprinter::print_bytes(&wasm).expect("Failed to convert to WAT");
         let expected = r#"
-        (module
-        (type (;0;) (func (result externref externref externref)))
-        (type (;1;) (func (param externref externref)))
-        (type (;2;) (func (param externref externref externref)))
-        (type (;3;) (func (result externref externref externref)))
-        (import "" "gc" (func (;0;) (type 0)))
-        (import "" "take_refs" (func (;1;) (type 2)))
-        (import "" "make_refs" (func (;2;) (type 3)))
-        (table (;0;) 5 externref)
-        (global (;0;) (mut externref) ref.null extern)
-        (global (;1;) (mut externref) ref.null extern)
-        (export "run" (func 3))
-        (func (;3;) (type 1) (param externref externref)
-            (local externref)
-            loop ;; label = @1
-            ref.null extern
-            drop
-            call 0
-            local.set 0
-            local.get 0
-            global.set 0
-            global.get 0
-            ref.null extern
-            drop
-            call 0
-            local.set 0
-            local.get 0
-            global.set 0
-            global.get 0
-            ref.null extern
-            drop
-            call 0
-            local.set 0
-            local.get 0
-            global.set 0
-            global.get 0
-            ref.null extern
-            drop
-            br 0 (;@1;)
-            end
-        )
-        )
+            (module
+            (type (;0;) (func (result externref externref externref)))
+            (type (;1;) (func (param externref externref)))
+            (type (;2;) (func (param externref externref externref)))
+            (type (;3;) (func (result externref externref externref)))
+            (rec
+                (type (;4;) (struct))
+                (type (;5;) (struct))
+                (type (;6;) (struct))
+                (type (;7;) (struct))
+            )
+            (rec
+                (type (;8;) (struct))
+                (type (;9;) (struct))
+                (type (;10;) (struct))
+                (type (;11;) (struct))
+            )
+            (rec
+                (type (;12;) (struct))
+                (type (;13;) (struct))
+                (type (;14;) (struct))
+                (type (;15;) (struct))
+            )
+            (import "" "gc" (func (;0;) (type 0)))
+            (import "" "take_refs" (func (;1;) (type 2)))
+            (import "" "make_refs" (func (;2;) (type 3)))
+            (table (;0;) 5 externref)
+            (global (;0;) (mut externref) ref.null extern)
+            (global (;1;) (mut externref) ref.null extern)
+            (export "run" (func 3))
+            (func (;3;) (type 1) (param externref externref)
+                (local externref)
+                loop ;; label = @1
+                ref.null extern
+                drop
+                call 0
+                local.set 0
+                local.get 0
+                global.set 0
+                global.get 0
+                ref.null extern
+                drop
+                call 0
+                local.set 0
+                local.get 0
+                global.set 0
+                global.get 0
+                ref.null extern
+                drop
+                struct.new 4
+                drop
+                br 0 (;@1;)
+                end
+            )
+            )
         "#;
 
         let generated = wat.split_whitespace().collect::<Vec<_>>().join(" ");
         let expected = expected.split_whitespace().collect::<Vec<_>>().join(" ");
         assert_eq!(generated, expected, "WAT does not match expected");
+
+        Ok(())
+    }
+
+    #[test]
+    fn emits_empty_rec_groups_and_validates() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
+
+        let mut ops = TableOps {
+            limits: TableOpsLimits {
+                num_params: 2,
+                num_globals: 1,
+                table_size: 5,
+                num_rec_groups: 2,
+                empty_structs_per_group: 3,
+            },
+            ops: vec![TableOp::Null(), TableOp::Drop(), TableOp::StructNew(0)],
+            struct_types: StructTypes::new(),
+        };
+
+        for _ in 0..ops.limits.num_rec_groups {
+            ops.struct_types.alloc_empty_rec_group();
+        }
+
+        let wasm = ops.to_wasm_binary();
+
+        let feats = wasmparser::WasmFeatures::default();
+        feats.reference_types();
+        feats.gc();
+        let mut validator = wasmparser::Validator::new_with_features(feats);
+        assert!(
+            validator.validate_all(&wasm).is_ok(),
+            "GC validation failed"
+        );
+
+        let wat = wasmprinter::print_bytes(&wasm).expect("to WAT");
+        let recs = wat.matches("(rec").count();
+        let structs = wat.matches("(struct)").count();
+
+        assert_eq!(recs, 2, "expected 2 (rec) blocks, got {recs}");
+        assert_eq!(
+            structs,
+            2 * 3,
+            "expected 6 empty struct types, got {structs}"
+        );
 
         Ok(())
     }
