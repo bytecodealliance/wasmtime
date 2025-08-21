@@ -26,7 +26,7 @@ The emoji legend is:
 | [`bulk-memory`]          | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`reference-types`]      | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`simd`]                 | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`component-model`]      | ❌[^1]  | ✅    | ✅       | 🚧[^2] | ✅  | ❌[^5]|
+| [`component-model`]      | ❌[^1]  | ✅    | ✅       | 🚧[^2] | ✅  | 🚧[^5]|
 | [`relaxed-simd`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`multi-memory`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`threads`]              | ✅      | ✅    | ✅[^9]   | ❌[^3] | ✅  | ✅    |
@@ -40,13 +40,15 @@ The emoji legend is:
     lines of `wasm-smith` are not implemented for components.
 [^3]: Fuzzing with threads is an open implementation question that is expected
     to get fleshed out as the [`shared-everything-threads`] proposal advances.
-[^5]: Support for the C API for components is desired by many embedders but
-    does not currently have anyone lined up to implement it.
+[^5]: The component model is mostly supported in the C API but [gaps
+    remain][cm-capi-gaps].
 [^9]: There are [known
     issues](https://github.com/bytecodealliance/wasmtime/issues/4245) with
     shared memories and the implementation/API in Wasmtime, for example they
     aren't well integrated with resource-limiting features in `Store`.
     Additionally `shared` memories aren't supported in the pooling allocator.
+
+[cm-capi-gaps]: https://github.com/bytecodealliance/wasmtime/issues?q=is%3Aissue%20state%3Aopen%20label%3Awasm-proposal%3Acomponent-model%20label%3Awasmtime%3Ac-api
 
 ## Off-by-default proposals
 
