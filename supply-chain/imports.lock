@@ -718,20 +718,8 @@ version = "37.0.0"
 audited_as = "35.0.0"
 
 [[unpublished.wasmtime-wasi-keyvalue]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
 version = "37.0.0"
-audited_as = "35.0.0"
+audited_as = "36.0.1"
 
 [[unpublished.wasmtime-wasi-nn]]
 version = "34.0.0"
@@ -1957,8 +1945,8 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi-keyvalue]]
-version = "35.0.0"
-when = "2025-07-22"
+version = "36.0.1"
+when = "2025-08-21"
 user-id = 73222
 user-login = "wasmtime-publish"
 
