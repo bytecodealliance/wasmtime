@@ -57,7 +57,7 @@ mod untyped {
             }
         }
 
-        /// Acquires the underyling `WriteBuffer<T>` this was created with.
+        /// Acquires the underlying `WriteBuffer<T>` this was created with.
         ///
         /// # Panics
         ///

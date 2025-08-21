@@ -43,7 +43,7 @@ use wasmtime_wasi_io::{
 
 /// Unlike super::run, its nice to provide some sort of output showing what the
 /// wasi program did while it executed, so this function reports in out_buf
-/// what stdout/stderr prints occured on success (returns 0), or the error
+/// what stdout/stderr prints occurred on success (returns 0), or the error
 /// message on failure (returns != 0).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn run_wasi(

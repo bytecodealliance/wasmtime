@@ -145,7 +145,7 @@ impl MmapVec {
         Ok(result)
     }
 
-    /// Return `true` if the `MmapVec` suport virtual memory operations
+    /// Return `true` if the `MmapVec` support virtual memory operations
     ///
     /// In some cases, such as when using externally owned memory, the underlying
     /// platform may support virtual memory but it still may not be legal
