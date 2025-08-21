@@ -205,7 +205,7 @@ impl Instance {
     }
 
     /// Encapsulated entrypoint to the host from WebAssembly, converting a raw
-    /// `VMContext` pointer into a `VMStore` plus an `Instance`.
+    /// `VMContext` pointer into a `VMStore` plus an `InstanceId`.
     ///
     /// This is an entrypoint for core wasm entering back into the host. This is
     /// used for both host functions and libcalls for example. This will execute
@@ -215,14 +215,6 @@ impl Instance {
     /// The closure `f` will have its errors caught, handled, and translated to
     /// an ABI-safe return value to give back to wasm. This includes both normal
     /// errors such as traps as well as panics.
-    ///
-    /// # Known Unsoundness
-    ///
-    /// This API is known to be unsound because it's possible to alias the
-    /// returned `Instance` pointer with a pointer derived safely from the store
-    /// provided to the closure. This signature would ideally replace
-    /// `Pin<&mut Instance>` with `InstanceId`. That's not quite possible yet
-    /// and is left for a future refactoring.
     ///
     /// # Safety
     ///
@@ -234,7 +226,7 @@ impl Instance {
     #[inline]
     pub(crate) unsafe fn enter_host_from_wasm<R>(
         vmctx: NonNull<VMContext>,
-        f: impl FnOnce(&mut dyn VMStore, Pin<&mut Instance>) -> R,
+        f: impl FnOnce(&mut dyn VMStore, InstanceId) -> R,
     ) -> R::Abi
     where
         R: HostResult,
@@ -246,18 +238,13 @@ impl Instance {
         // be constrained by the closure `f` provided to this function which
         // inherently can't have the pointer escape, so the lifetime is scoped
         // here.
-        //
-        // Note that this is additionally creating both an instance and a store
-        // as safe pointers. See the documentation on this function for known
-        // unsoundness here where the store can safely derive an aliasing
-        // mutable pointer to the instance.
         let (store, instance) = unsafe {
             let instance = vmctx
                 .byte_sub(mem::size_of::<Instance>())
                 .cast::<Instance>()
                 .as_mut();
             let store = &mut *instance.store.unwrap().0.as_ptr();
-            (store, Pin::new_unchecked(instance))
+            (store, instance.id)
         };
 
         // Thread the `store` and `instance` through panic/trap infrastructure
@@ -893,9 +880,9 @@ impl Instance {
     /// Returns a `Trap` error when the range within the table is out of bounds
     /// or the range within the passive element is out of bounds.
     pub(crate) async fn table_init(
-        self: Pin<&mut Self>,
         store: &mut StoreOpaque,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
+        instance: InstanceId,
         table_index: TableIndex,
         elem_index: ElemIndex,
         dst: u64,
@@ -903,12 +890,14 @@ impl Instance {
         len: u64,
     ) -> Result<(), Trap> {
         let mut storage = None;
-        let elements = self.passive_element_segment(&mut storage, elem_index);
+        let elements = store
+            .instance(instance)
+            .passive_element_segment(&mut storage, elem_index);
         let mut const_evaluator = ConstExprEvaluator::default();
         Self::table_init_segment(
             store,
             limiter,
-            self.id,
+            instance,
             &mut const_evaluator,
             table_index,
             elements,
