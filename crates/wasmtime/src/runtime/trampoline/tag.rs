@@ -39,9 +39,11 @@ pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
         let module = Arc::new(module);
 
         // Note that `assert_ready` should be valid here because this module
-        // doesn't allocate tables or memories meaning it shouldn't need an
-        // await point.
+        // doesn't allocate tables or memories meaning it shouldn't need a
+        // resource limiter so `None` is passed. As a result no `await` points
+        // should ever be hit.
         vm::assert_ready(store.allocate_instance(
+            None,
             AllocateInstanceKind::Dummy {
                 allocator: &allocator,
             },

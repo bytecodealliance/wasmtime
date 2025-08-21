@@ -648,7 +648,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 
     async fn allocate_memory(
         &self,
-        request: &mut InstanceAllocationRequest<'_>,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
@@ -708,7 +708,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 
     async fn allocate_table(
         &self,
-        request: &mut InstanceAllocationRequest<'_>,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Table,
         _table_index: DefinedTableIndex,
     ) -> Result<(super::TableAllocationIndex, Table)> {

@@ -486,9 +486,18 @@ fn table_init(
     let table_index = TableIndex::from_u32(table_index);
     let elem_index = ElemIndex::from_u32(elem_index);
 
+    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     block_on!(store, async |store| {
         instance
-            .table_init(store, table_index, elem_index, dst, src, len)
+            .table_init(
+                store,
+                limiter.as_mut(),
+                table_index,
+                elem_index,
+                dst,
+                src,
+                len,
+            )
             .await
     })??;
     Ok(())
@@ -673,9 +682,10 @@ unsafe fn gc_alloc_raw(
         err.context(e)
     })?;
 
+    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     block_on!(store, async |store| {
         let gc_ref = store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter.as_mut(), (), |store, ()| {
                 store
                     .unwrap_gc_store_mut()
                     .alloc_raw(header, layout)?
@@ -764,6 +774,7 @@ unsafe fn array_new_data(
     use crate::ArrayType;
     use wasmtime_environ::ModuleInternedTypeIndex;
 
+    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     block_on!(store, async |store| {
         let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
         let data_index = DataIndex::from_u32(data_index);
@@ -798,7 +809,7 @@ unsafe fn array_new_data(
             .expect("array types have GC layouts");
         let array_layout = gc_layout.unwrap_array();
         let array_ref = store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter.as_mut(), (), |store, ()| {
                 store
                     .unwrap_gc_store_mut()
                     .alloc_uninit_array(shared_ty, len, &array_layout)?
@@ -932,6 +943,7 @@ unsafe fn array_new_elem(
     let array_ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
     let pre = ArrayRefPre::_new(store, array_ty);
 
+    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     block_on!(store, async |store| {
         let mut store = OpaqueRootScope::new(store);
         // Turn the elements into `Val`s.
@@ -963,7 +975,7 @@ unsafe fn array_new_elem(
 
                 for x in xs.iter() {
                     let val = *const_evaluator
-                        .eval(&mut store, &mut const_context, x)
+                        .eval(&mut store, limiter.as_mut(), &mut const_context, x)
                         .await
                         .expect("const expr should be valid");
                     vals.push(val);
@@ -971,7 +983,7 @@ unsafe fn array_new_elem(
             }
         }
 
-        let array = ArrayRef::_new_fixed_async(&mut store, &pre, &vals).await?;
+        let array = ArrayRef::_new_fixed_async(&mut store, limiter.as_mut(), &pre, &vals).await?;
 
         let mut store = AutoAssertNoGc::new(&mut store);
         let gc_ref = array.try_clone_gc_ref(&mut store)?;
@@ -998,6 +1010,7 @@ unsafe fn array_init_elem(
     };
     use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
+    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     block_on!(store, async |store| {
         let mut store = OpaqueRootScope::new(store);
 
@@ -1057,7 +1070,7 @@ unsafe fn array_init_elem(
                     .ok_or_else(|| Trap::TableOutOfBounds)?
                 {
                     let val = *const_evaluator
-                        .eval(&mut store, &mut const_context, x)
+                        .eval(&mut store, limiter.as_mut(), &mut const_context, x)
                         .await
                         .expect("const expr should be valid");
                     vals.push(val);

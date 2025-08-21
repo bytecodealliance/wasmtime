@@ -36,21 +36,6 @@ impl StoreOpaque {
         })
     }
 
-    /// Same as [`Self::gc`], but less safe.
-    ///
-    /// FIXME(#11409) this method should not need to exist, but performing such
-    /// a refactoring will require making memory creation async.
-    async unsafe fn gc_unsafe_get_limiter(
-        &mut self,
-        root: Option<VMGcRef>,
-        bytes_needed: Option<u64>,
-    ) -> Option<VMGcRef> {
-        // SAFETY: this isn't sound, see #11409
-        let (mut limiter, store) =
-            unsafe { self.traitobj().as_mut().resource_limiter_and_store_opaque() };
-        store.gc(limiter.as_mut(), root, bytes_needed).await
-    }
-
     async fn grow_or_collect_gc_heap(
         &mut self,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
@@ -169,23 +154,20 @@ impl StoreOpaque {
     /// retry.
     pub(crate) async fn retry_after_gc_async<T, U>(
         &mut self,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         value: T,
         alloc_func: impl Fn(&mut Self, T) -> Result<U>,
     ) -> Result<U>
     where
         T: Send + Sync + 'static,
     {
-        self.ensure_gc_store().await?;
+        self.ensure_gc_store(limiter.as_deref_mut()).await?;
         match alloc_func(self, value) {
             Ok(x) => Ok(x),
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                 Ok(oom) => {
                     let (value, oom) = oom.take_inner();
-                    // SAFETY: FIXME(#11409)
-                    unsafe {
-                        self.gc_unsafe_get_limiter(None, Some(oom.bytes_needed()))
-                            .await;
-                    }
+                    self.gc(limiter, None, Some(oom.bytes_needed())).await;
                     alloc_func(self, value)
                 }
                 Err(e) => Err(e),

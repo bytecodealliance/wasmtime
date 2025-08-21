@@ -705,9 +705,11 @@ impl<T> Store<T> {
 
         unsafe {
             // Note that this dummy instance doesn't allocate tables or memories
-            // so it won't have an async await point meaning that it should be
-            // ok to assert the future is always ready.
+            // (also no limiter is passed in) so it won't have an async await
+            // point meaning that it should be ok to assert the future is
+            // always ready.
             let id = vm::assert_ready(inner.allocate_instance(
+                None,
                 AllocateInstanceKind::Dummy {
                     allocator: &allocator,
                 },
@@ -1505,15 +1507,21 @@ impl StoreOpaque {
     /// `ResourceLimiterAsync` which means that this should only be executed
     /// in a fiber context at this time.
     #[inline]
-    pub(crate) async fn ensure_gc_store(&mut self) -> Result<&mut GcStore> {
+    pub(crate) async fn ensure_gc_store(
+        &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+    ) -> Result<&mut GcStore> {
         if self.gc_store.is_some() {
             return Ok(self.gc_store.as_mut().unwrap());
         }
-        self.allocate_gc_store().await
+        self.allocate_gc_store(limiter).await
     }
 
     #[inline(never)]
-    async fn allocate_gc_store(&mut self) -> Result<&mut GcStore> {
+    async fn allocate_gc_store(
+        &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+    ) -> Result<&mut GcStore> {
         log::trace!("allocating GC heap for store {:?}", self.id());
 
         assert!(self.gc_store.is_none());
@@ -1523,21 +1531,16 @@ impl StoreOpaque {
         );
         assert_eq!(self.vm_store_context.gc_heap.current_length(), 0);
 
-        let gc_store = allocate_gc_store(self).await?;
+        let gc_store = allocate_gc_store(self, limiter).await?;
         self.vm_store_context.gc_heap = gc_store.vmmemory_definition();
         return Ok(self.gc_store.insert(gc_store));
 
         #[cfg(feature = "gc")]
-        async fn allocate_gc_store(store: &mut StoreOpaque) -> Result<GcStore> {
+        async fn allocate_gc_store(
+            store: &mut StoreOpaque,
+            limiter: Option<&mut StoreResourceLimiter<'_>>,
+        ) -> Result<GcStore> {
             use wasmtime_environ::packed_option::ReservedValue;
-
-            // FIXME(#11409) this is not a sound widening borrow
-            let (mut limiter, store) = unsafe {
-                store
-                    .traitobj()
-                    .as_mut()
-                    .resource_limiter_and_store_opaque()
-            };
 
             let engine = store.engine();
             let mem_ty = engine.tunables().gc_heap_memory_type();
@@ -1554,7 +1557,7 @@ impl StoreOpaque {
                 )),
                 imports: vm::Imports::default(),
                 store,
-                limiter: limiter.as_mut(),
+                limiter,
             };
 
             let (mem_alloc_index, mem) = engine
@@ -1576,7 +1579,10 @@ impl StoreOpaque {
         }
 
         #[cfg(not(feature = "gc"))]
-        async fn allocate_gc_store(_: &mut StoreOpaque) -> Result<GcStore> {
+        async fn allocate_gc_store(
+            _: &mut StoreOpaque,
+            _: Option<&mut StoreResourceLimiter<'_>>,
+        ) -> Result<GcStore> {
             bail!("cannot allocate a GC store: the `gc` feature was disabled at compile time")
         }
     }
@@ -2225,6 +2231,7 @@ at https://bytecodealliance.org/security.
     /// being allocated.
     pub(crate) async unsafe fn allocate_instance(
         &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         kind: AllocateInstanceKind<'_>,
         runtime_info: &ModuleRuntimeInfo,
         imports: Imports<'_>,
@@ -2238,15 +2245,13 @@ at https://bytecodealliance.org/security.
         // SAFETY: this function's own contract is the same as
         // `allocate_module`, namely the imports provided are valid.
         let handle = unsafe {
-            // FIXME(#11409) this is not a sound widening borrow
-            let (mut limiter, store) = self.traitobj().as_mut().resource_limiter_and_store_opaque();
             allocator
                 .allocate_module(InstanceAllocationRequest {
                     id,
                     runtime_info,
                     imports,
-                    store,
-                    limiter: limiter.as_mut(),
+                    store: self,
+                    limiter,
                 })
                 .await?
         };

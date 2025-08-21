@@ -3,7 +3,7 @@ use crate::runtime::RootedGcRefImpl;
 use crate::runtime::vm::{
     self, GcStore, SendSyncPtr, TableElementType, VMFuncRef, VMGcRef, VMStore,
 };
-use crate::store::{AutoAssertNoGc, StoreInstanceId, StoreOpaque};
+use crate::store::{AutoAssertNoGc, StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_table_export;
 use crate::{
     AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapType, Ref, RefType,
@@ -94,7 +94,8 @@ impl Table {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: TableType, init: Ref) -> Result<Table> {
-        vm::one_poll(Table::_new(store.as_context_mut().0, ty, init))
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        vm::one_poll(Table::_new(store, limiter.as_mut(), ty, init))
             .expect("must use `new_async` when async resource limiters are in use")
     }
 
@@ -112,11 +113,17 @@ impl Table {
         ty: TableType,
         init: Ref,
     ) -> Result<Table> {
-        Table::_new(store.as_context_mut().0, ty, init).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Table::_new(store, limiter.as_mut(), ty, init).await
     }
 
-    async fn _new(store: &mut StoreOpaque, ty: TableType, init: Ref) -> Result<Table> {
-        let table = generate_table_export(store, &ty).await?;
+    async fn _new(
+        store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        ty: TableType,
+        init: Ref,
+    ) -> Result<Table> {
+        let table = generate_table_export(store, limiter, &ty).await?;
         table._fill(store, 0, init, ty.minimum())?;
         Ok(table)
     }

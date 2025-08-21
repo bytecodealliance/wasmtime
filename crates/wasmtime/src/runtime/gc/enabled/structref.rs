@@ -2,13 +2,13 @@
 
 use crate::runtime::vm::VMGcRef;
 use crate::store::StoreId;
-use crate::vm::{self, VMGcHeader, VMStructRef};
+use crate::vm::{self, VMGcHeader, VMStore, VMStructRef};
 use crate::{AnyRef, FieldType};
 use crate::{
     AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
     ManuallyRooted, RefType, Rooted, StructType, Val, ValRaw, ValType, WasmTy,
     prelude::*,
-    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
+    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque, StoreResourceLimiter},
 };
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
@@ -231,9 +231,9 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        let store = store.as_context_mut().0;
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
         assert!(!store.async_support());
-        vm::assert_ready(Self::_new_async(store, allocator, fields))
+        vm::assert_ready(Self::_new_async(store, limiter.as_mut(), allocator, fields))
     }
 
     /// Asynchronously allocate a new `struct` and get a reference to it.
@@ -264,17 +264,19 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        Self::_new_async(store.as_context_mut().0, allocator, fields).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_async(store, limiter.as_mut(), allocator, fields).await
     }
 
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
         Self::type_check_fields(store, allocator, fields)?;
         store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter, (), |store, ()| {
                 Self::new_unchecked(store, allocator, fields)
             })
             .await

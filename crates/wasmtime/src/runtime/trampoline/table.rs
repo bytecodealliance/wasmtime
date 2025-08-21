@@ -1,11 +1,15 @@
 use crate::TableType;
 use crate::prelude::*;
 use crate::runtime::vm::{Imports, ModuleRuntimeInfo, OnDemandInstanceAllocator};
-use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque};
+use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque, StoreResourceLimiter};
 use alloc::sync::Arc;
 use wasmtime_environ::{EntityIndex, Module, TypeTrace};
 
-pub async fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<InstanceId> {
+pub async fn create_table(
+    store: &mut StoreOpaque,
+    limiter: Option<&mut StoreResourceLimiter<'_>>,
+    table: &TableType,
+) -> Result<InstanceId> {
     let mut module = Module::new();
 
     let wasmtime_table = *table.wasmtime_table();
@@ -31,6 +35,7 @@ pub async fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<
         let module = Arc::new(module);
         store
             .allocate_instance(
+                limiter,
                 AllocateInstanceKind::Dummy {
                     allocator: &allocator,
                 },

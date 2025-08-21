@@ -260,7 +260,8 @@ impl Memory {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
-        vm::one_poll(Self::_new(store.as_context_mut().0, ty))
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        vm::one_poll(Self::_new(store, limiter.as_mut(), ty))
             .expect("must use `new_async` when async resource limiters are in use")
     }
 
@@ -274,12 +275,17 @@ impl Memory {
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
     pub async fn new_async(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
-        Self::_new(store.as_context_mut().0, ty).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new(store, limiter.as_mut(), ty).await
     }
 
     /// Helper function for attaching the memory to a "frankenstein" instance
-    async fn _new(store: &mut StoreOpaque, ty: MemoryType) -> Result<Memory> {
-        generate_memory_export(store, &ty, None).await
+    async fn _new(
+        store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        ty: MemoryType,
+    ) -> Result<Memory> {
+        generate_memory_export(store, limiter, &ty, None).await
     }
 
     /// Returns the underlying type of this memory.
@@ -1002,11 +1008,16 @@ impl SharedMemory {
     /// [`SharedMemory`] into other modules.
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
         // Note `vm::assert_ready` shouldn't panic here because this isn't
-        // actually allocating any new memory so resource limiting shouldn't
-        // kick in.
-        vm::assert_ready(generate_memory_export(store, &self.ty(), Some(&self.vm)))
-            .unwrap()
-            .vmimport(store)
+        // actually allocating any new memory (also no limiter), so resource
+        // limiting shouldn't kick in.
+        vm::assert_ready(generate_memory_export(
+            store,
+            None,
+            &self.ty(),
+            Some(&self.vm),
+        ))
+        .unwrap()
+        .vmimport(store)
     }
 
     /// Create a [`SharedMemory`] from an [`ExportMemory`] definition. This
