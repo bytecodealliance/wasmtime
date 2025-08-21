@@ -1,3 +1,4 @@
+use crate::module::GlobalTrapRegistryHandle;
 use crate::{code_memory::CodeMemory, type_registry::TypeCollection};
 use alloc::sync::Arc;
 use wasmtime_environ::ModuleTypes;
@@ -33,18 +34,20 @@ pub struct CodeObject {
     /// This is either a `ModuleTypes` or a `ComponentTypes` depending on the
     /// top-level creator of this code.
     types: Types,
+
+    /// Handle for dropping registration in the global trap registry.
+    #[allow(dead_code)]
+    trap_registry_handle: GlobalTrapRegistryHandle,
 }
 
 impl CodeObject {
     pub fn new(mmap: Arc<CodeMemory>, signatures: TypeCollection, types: Types) -> CodeObject {
-        // The corresponding unregister for this is below in `Drop for
-        // CodeObject`.
-        crate::module::register_code(&mmap);
-
+        let trap_registry_handle = GlobalTrapRegistryHandle::register_code(mmap.clone());
         CodeObject {
             mmap,
             signatures,
             types,
+            trap_registry_handle,
         }
     }
 
@@ -63,12 +66,6 @@ impl CodeObject {
 
     pub fn signatures(&self) -> &TypeCollection {
         &self.signatures
-    }
-}
-
-impl Drop for CodeObject {
-    fn drop(&mut self) {
-        crate::module::unregister_code(&self.mmap);
     }
 }
 
