@@ -422,19 +422,7 @@ version = "38.0.0"
 audited_as = "36.0.1"
 
 [[unpublished.pulley-macros]]
-version = "35.0.0"
-audited_as = "34.0.0"
-
-[[unpublished.pulley-macros]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.pulley-macros]]
 version = "37.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.pulley-macros]]
-version = "38.0.0"
 audited_as = "36.0.1"
 
 [[unpublished.wasi-common]]
@@ -1667,8 +1655,8 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.pulley-macros]]
-version = "35.0.0"
-when = "2025-07-22"
+version = "36.0.1"
+when = "2025-08-21"
 user-id = 73222
 user-login = "wasmtime-publish"
 
