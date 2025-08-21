@@ -22,6 +22,8 @@ use wasmtime_environ::{
     CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind, TypeTrace, VMOffsets,
     VMSharedTypeIndex,
 };
+#[cfg(feature = "gc")]
+use wasmtime_unwinder::ExceptionTable;
 mod registry;
 
 pub use registry::*;
@@ -1125,6 +1127,13 @@ impl Module {
         let text_offset = u32::try_from(pc - self.inner.module.text().as_ptr() as usize).unwrap();
         let info = self.inner.code.code_memory().stack_map_data();
         wasmtime_environ::StackMap::lookup(text_offset, info)
+    }
+
+    /// Obtain an exception-table parser on this module's exception metadata.
+    #[cfg(feature = "gc")]
+    pub(crate) fn exception_table<'a>(&'a self) -> ExceptionTable<'a> {
+        ExceptionTable::parse(self.inner.code.code_memory().exception_tables())
+            .expect("Exception tables were validated on module load")
     }
 }
 

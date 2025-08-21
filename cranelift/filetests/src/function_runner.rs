@@ -648,21 +648,32 @@ extern "C-unwind" fn __cranelift_throw(
 ) -> ! {
     let compiled_test_file = unsafe { &*COMPILED_TEST_FILE.get() };
     let unwind_host = wasmtime_unwinder::UnwindHost;
-    let module_lookup = |pc| {
-        compiled_test_file
+    let frame_handler = |frame: &wasmtime_unwinder::Frame| -> Option<usize> {
+        let (base, table) = compiled_test_file
             .module
             .as_ref()
             .unwrap()
-            .lookup_wasmtime_exception_data(pc)
+            .lookup_wasmtime_exception_data(frame.pc())?;
+        let relative_pc = u32::try_from(
+            frame
+                .pc()
+                .checked_sub(base)
+                .expect("module lookup did not return a module base below the PC"),
+        )
+        .expect("module larger than 4GiB");
+
+        table.lookup_pc_tag(relative_pc, tag).map(|handler| {
+            base.checked_add(usize::try_from(handler).unwrap())
+                .expect("Handler address computation overflowed")
+        })
     };
     unsafe {
         match wasmtime_unwinder::compute_throw_action(
             &unwind_host,
-            module_lookup,
+            frame_handler,
             exit_pc,
             exit_fp,
             entry_fp,
-            tag,
         ) {
             wasmtime_unwinder::ThrowAction::Handler { pc, sp, fp } => {
                 wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2);

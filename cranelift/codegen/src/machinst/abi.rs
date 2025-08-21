@@ -2495,7 +2495,9 @@ impl TryCallInfo {
             TryCallHandler::Default(label) => MachExceptionHandler::Default(*label),
             TryCallHandler::Context(reg) => {
                 let loc = if let Some(spillslot) = reg.to_spillslot() {
-                    let offset = layout.spillslot_offset(spillslot);
+                    // The spillslot offset is relative to the "fixed
+                    // storage area", which comes after outgoing args.
+                    let offset = layout.spillslot_offset(spillslot) + i64::from(layout.outgoing_args_size);
                     ExceptionContextLoc::SPOffset(u32::try_from(offset).expect("SP offset cannot be negative or larger than 4GiB"))
                 } else if let Some(realreg) = reg.to_real_reg() {
                     ExceptionContextLoc::GPR(realreg.hw_enc())

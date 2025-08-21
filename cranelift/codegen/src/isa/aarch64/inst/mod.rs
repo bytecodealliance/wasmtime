@@ -976,7 +976,7 @@ impl MachInst for Inst {
         //
         // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
         // more information on this ABI-implementation hack.
-        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller, is_exception);
+        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller, false);
         let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee, is_exception);
 
         let mut all_clobbers = caller_clobbers;

@@ -100,6 +100,16 @@ impl VMExnRef {
         &self.0
     }
 
+    /// Get a mutable borrow on the underlying `VMGcRef`.
+    ///
+    /// Requires that the mutation retains the reference's invariants,
+    /// namely: not null, and pointing to a valid exnref object. Doing
+    /// otherwise is memory safe, but will lead to general
+    /// incorrectness.
+    pub fn as_gc_ref_mut(&mut self) -> &mut VMGcRef {
+        &mut self.0
+    }
+
     /// Clone this `VMExnRef`, running any GC barriers as necessary.
     pub fn clone(&self, gc_store: &mut GcStore) -> Self {
         Self(gc_store.clone_gc_ref(&self.0))
@@ -178,37 +188,31 @@ impl VMExnRef {
         instance: InstanceId,
         tag: DefinedTagIndex,
     ) -> Result<()> {
-        let tag_offset = store
-            .engine()
-            .gc_runtime()
-            .unwrap()
-            .layouts()
-            .exception_tag_offset();
+        let layouts = store.engine().gc_runtime().unwrap().layouts();
+        let instance_offset = layouts.exception_tag_instance_offset();
+        let tag_offset = layouts.exception_tag_defined_offset();
         let store = store.require_gc_store_mut()?;
         store
             .gc_object_data(&self.0)
-            .write_u32(tag_offset, instance.as_u32());
+            .write_u32(instance_offset, instance.as_u32());
         store
             .gc_object_data(&self.0)
-            .write_u32(tag_offset + 4, tag.as_u32());
+            .write_u32(tag_offset, tag.as_u32());
         Ok(())
     }
 
     /// Get the tag referenced by this exception object.
     pub fn tag(&self, store: &mut AutoAssertNoGc) -> Result<(InstanceId, DefinedTagIndex)> {
-        let tag_offset = store
-            .engine()
-            .gc_runtime()
-            .unwrap()
-            .layouts()
-            .exception_tag_offset();
+        let layouts = store.engine().gc_runtime().unwrap().layouts();
+        let instance_offset = layouts.exception_tag_instance_offset();
+        let tag_offset = layouts.exception_tag_defined_offset();
         let instance = store
             .require_gc_store_mut()?
             .gc_object_data(&self.0)
-            .read_u32(tag_offset);
+            .read_u32(instance_offset);
         let instance = InstanceId::from_u32(instance);
         let store = store.require_gc_store_mut()?;
-        let tag = store.gc_object_data(&self.0).read_u32(tag_offset + 4);
+        let tag = store.gc_object_data(&self.0).read_u32(tag_offset);
         let tag = DefinedTagIndex::from_u32(tag);
         Ok((instance, tag))
     }

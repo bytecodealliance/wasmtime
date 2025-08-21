@@ -8,6 +8,7 @@ use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
+use wasmtime_environ::drc::{EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET};
 use wasmtime_environ::{
     GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind, WasmHeapTopType,
     WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType, drc::DrcTypeLayouts,
@@ -452,12 +453,9 @@ impl GcCompiler for DrcCompiler {
         struct_type_index: TypeIndex,
         field_vals: &[ir::Value],
     ) -> WasmResult<ir::Value> {
-        // First, call the `gc_alloc_raw` builtin libcall to allocate the
-        // struct.
         let interned_type_index =
             func_env.module.types[struct_type_index].unwrap_module_type_index();
-
-        let struct_layout = func_env.struct_layout(interned_type_index);
+        let struct_layout = func_env.struct_or_exn_layout(interned_type_index);
 
         // Copy some stuff out of the struct layout to avoid borrowing issues.
         let struct_size = struct_layout.size;
@@ -496,6 +494,82 @@ impl GcCompiler for DrcCompiler {
         )?;
 
         Ok(struct_ref)
+    }
+
+    fn alloc_exn(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: TagIndex,
+        field_vals: &[ir::Value],
+        instance_id: ir::Value,
+        tag: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let interned_type_index = func_env.module.tags[tag_index]
+            .exception
+            .unwrap_module_type_index();
+        let exn_layout = func_env.struct_or_exn_layout(interned_type_index);
+
+        // Copy some stuff out of the exception layout to avoid borrowing issues.
+        let exn_size = exn_layout.size;
+        let exn_align = exn_layout.align;
+        let field_offsets: SmallVec<[_; 8]> = exn_layout.fields.iter().copied().collect();
+        assert_eq!(field_vals.len(), field_offsets.len());
+
+        let exn_size_val = builder.ins().iconst(ir::types::I32, i64::from(exn_size));
+
+        let exn_ref = emit_gc_raw_alloc(
+            func_env,
+            builder,
+            VMGcKind::ExnRef,
+            interned_type_index,
+            exn_size_val,
+            exn_align,
+        );
+
+        // Second, initialize each of the newly-allocated exception
+        // object's fields.
+        //
+        // Note: we don't need to bounds-check the GC ref access here, since we
+        // trust the results of the allocation libcall.
+        let base = func_env.get_gc_heap_base(builder);
+        let extended_exn_ref =
+            uextend_i32_to_pointer_type(builder, func_env.pointer_type(), exn_ref);
+        let raw_ptr_to_exn = builder.ins().iadd(base, extended_exn_ref);
+        initialize_struct_fields(
+            func_env,
+            builder,
+            interned_type_index,
+            raw_ptr_to_exn,
+            field_vals,
+            |func_env, builder, ty, field_addr, val| {
+                self.init_field(func_env, builder, field_addr, ty, val)
+            },
+        )?;
+
+        // Finally, initialize the tag fields.
+        let instance_id_addr = builder
+            .ins()
+            .iadd_imm(raw_ptr_to_exn, i64::from(EXCEPTION_TAG_INSTANCE_OFFSET));
+        self.init_field(
+            func_env,
+            builder,
+            instance_id_addr,
+            WasmStorageType::Val(WasmValType::I32),
+            instance_id,
+        )?;
+        let tag_addr = builder
+            .ins()
+            .iadd_imm(raw_ptr_to_exn, i64::from(EXCEPTION_TAG_DEFINED_OFFSET));
+        self.init_field(
+            func_env,
+            builder,
+            tag_addr,
+            WasmStorageType::Val(WasmValType::I32),
+            tag,
+        )?;
+
+        Ok(exn_ref)
     }
 
     fn translate_read_gc_reference(

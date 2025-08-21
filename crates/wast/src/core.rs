@@ -85,13 +85,17 @@ pub fn match_val<T>(store: &mut Store<T>, actual: &Val, expected: &CoreConst) ->
         (Val::V128(a), CoreConst::V128(value)) => match_v128(a.as_u128(), value),
 
         // Null references, or blanket "any reference" assertions
-        (Val::FuncRef(None) | Val::ExternRef(None) | Val::AnyRef(None), CoreConst::RefNull)
+        (
+            Val::FuncRef(None) | Val::ExternRef(None) | Val::AnyRef(None) | Val::ExnRef(None),
+            CoreConst::RefNull,
+        )
         | (Val::FuncRef(_), CoreConst::FuncRef { value: None })
         | (Val::AnyRef(_), CoreConst::AnyRef { value: None })
         | (Val::ExternRef(_), CoreConst::ExternRef { value: None })
         | (Val::AnyRef(None), CoreConst::NullRef)
         | (Val::FuncRef(None), CoreConst::NullFuncRef)
         | (Val::ExternRef(None), CoreConst::NullExternRef)
+        | (Val::ExnRef(None), CoreConst::NullExnRef)
         | (
             Val::FuncRef(None),
             CoreConst::FuncRef {
@@ -108,6 +112,12 @@ pub fn match_val<T>(store: &mut Store<T>, actual: &Val, expected: &CoreConst) ->
             Val::ExternRef(None),
             CoreConst::ExternRef {
                 value: Some(json_from_wast::ExternRef::Null),
+            },
+        )
+        | (
+            Val::ExnRef(None),
+            CoreConst::ExnRef {
+                value: Some(json_from_wast::ExnRef::Null),
             },
         ) => Ok(()),
 

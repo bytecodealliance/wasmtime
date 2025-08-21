@@ -4,7 +4,8 @@ use super::GcCompiler;
 use crate::func_environ::{Extension, FuncEnvironment};
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::{TypeIndex, WasmRefType, WasmResult, wasm_unsupported};
+use smallvec::SmallVec;
+use wasmtime_environ::{TagIndex, TypeIndex, WasmRefType, WasmResult, wasm_unsupported};
 
 fn disabled<T>() -> WasmResult<T> {
     Err(wasm_unsupported!(
@@ -53,6 +54,34 @@ pub fn translate_struct_set(
     _field_index: u32,
     _struct_ref: ir::Value,
     _new_val: ir::Value,
+) -> WasmResult<()> {
+    disabled()
+}
+
+pub fn translate_exn_unbox(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _tag_index: TagIndex,
+    _exn_ref: ir::Value,
+) -> WasmResult<SmallVec<[ir::Value; 4]>> {
+    disabled()
+}
+
+pub fn translate_exn_throw(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _tag_index: TagIndex,
+    _args: &[ir::Value],
+    _handlers: impl IntoIterator<Item = (Option<ir::ExceptionTag>, ir::Block)>,
+) -> WasmResult<()> {
+    disabled()
+}
+
+pub fn translate_exn_throw_ref(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _exnref: ir::Value,
+    _handlers: impl IntoIterator<Item = (Option<ir::ExceptionTag>, ir::Block)>,
 ) -> WasmResult<()> {
     disabled()
 }

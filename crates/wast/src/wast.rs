@@ -479,6 +479,21 @@ where
         bail!("expected '{}', got '{}'", expected, actual)
     }
 
+    fn assert_exception(&mut self, result: Outcome) -> Result<()> {
+        match result {
+            Outcome::Ok(values) => bail!("expected exception, got {values:?}"),
+            Outcome::Trap(err) if err.is::<ThrownException>() => {
+                // Discard the thrown exception.
+                let _ = self
+                    .store
+                    .take_pending_exception()
+                    .expect("there should be a pending exception on the store");
+                Ok(())
+            }
+            Outcome::Trap(err) => bail!("expected exception, got {err:?}"),
+        }
+    }
+
     /// Run a wast script from a byte buffer.
     pub fn run_wast(&mut self, filename: &str, wast: &[u8]) -> Result<()> {
         let wast = str::from_utf8(wast)?;
@@ -676,7 +691,10 @@ where
                     bail!("assert_unlinkable: expected {text}, got {error_message}",)
                 }
             }
-            AssertException { .. } => bail!("unimplemented assert_exception"),
+            AssertException { line: _, action } => {
+                let result = self.perform_action(&action)?;
+                self.assert_exception(result)?;
+            }
 
             Thread {
                 name,
