@@ -79,7 +79,7 @@ use crate::runtime::store::StoreResourceLimiter;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 #[cfg(has_virtual_memory)]
 use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
-use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr, VMStore};
+use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr};
 use alloc::sync::Arc;
 use core::{ops::Range, ptr::NonNull};
 use wasmtime_environ::Tunables;
@@ -231,14 +231,14 @@ pub enum Memory {
 
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
-    pub fn new_dynamic(
+    pub async fn new_dynamic(
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
         creator: &dyn RuntimeMemoryCreator,
-        store: &mut dyn VMStore,
         memory_image: Option<&Arc<MemoryImage>>,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
+        let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         let allocation = creator.new_memory(ty, tunables, minimum, maximum)?;
 
         let memory = LocalMemory::new(ty, tunables, allocation, memory_image)?;
@@ -251,15 +251,15 @@ impl Memory {
 
     /// Create a new static (immovable) memory instance for the specified plan.
     #[cfg(feature = "pooling-allocator")]
-    pub fn new_static(
+    pub async fn new_static(
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
         base: MemoryBase,
         base_capacity: usize,
         memory_image: MemoryImageSlot,
-        store: &mut dyn VMStore,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
+        let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         let pooled_memory = StaticMemory::new(base, base_capacity, minimum, maximum)?;
         let allocation = Box::new(pooled_memory);
 
@@ -286,9 +286,9 @@ impl Memory {
     ///
     /// Returns a tuple of the minimum size, optional maximum size, and log(page
     /// size) of the memory, all in bytes.
-    pub(crate) fn limit_new(
+    pub(crate) async fn limit_new(
         ty: &wasmtime_environ::Memory,
-        store: Option<&mut dyn VMStore>,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<(usize, Option<usize>)> {
         let page_size = usize::try_from(ty.page_size()).unwrap();
 
@@ -331,8 +331,11 @@ impl Memory {
         // `minimum` calculation overflowed. This means that the `minimum` we're
         // informing the limiter is lossy and may not be 100% accurate, but for
         // now the expected uses of limiter means that's ok.
-        if let Some(store) = store {
-            if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
+        if let Some(limiter) = limiter {
+            if !limiter
+                .memory_growing(0, minimum.unwrap_or(absolute_max), maximum)
+                .await?
+            {
                 bail!(
                     "memory minimum size of {} pages exceeds memory limits",
                     ty.limits.min

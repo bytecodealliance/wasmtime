@@ -174,7 +174,7 @@ impl Instance {
             dropped_data,
             #[cfg(feature = "wmemcheck")]
             wmemcheck_state: {
-                if req.wmemcheck {
+                if req.store.engine().config().wmemcheck {
                     let size = memory_tys
                         .iter()
                         .next()
@@ -487,32 +487,22 @@ impl Instance {
         unsafe { self.vmctx_plus_offset_mut(offset) }
     }
 
-    pub(crate) unsafe fn set_store(mut self: Pin<&mut Self>, store: Option<NonNull<dyn VMStore>>) {
+    pub(crate) unsafe fn set_store(mut self: Pin<&mut Self>, store: &StoreOpaque) {
         // FIXME: should be more targeted ideally with the `unsafe` than just
         // throwing this entire function in a large `unsafe` block.
         unsafe {
-            *self.as_mut().store_mut() = store.map(VMStoreRawPtr);
-            if let Some(mut store) = store {
-                let store = store.as_mut();
-                self.vm_store_context()
-                    .write(Some(store.vm_store_context_ptr().into()));
-                #[cfg(target_has_atomic = "64")]
-                {
-                    *self.as_mut().epoch_ptr() =
-                        Some(NonNull::from(store.engine().epoch_counter()).into());
-                }
+            *self.as_mut().store_mut() = Some(VMStoreRawPtr(store.traitobj()));
+            self.vm_store_context()
+                .write(Some(store.vm_store_context_ptr().into()));
+            #[cfg(target_has_atomic = "64")]
+            {
+                *self.as_mut().epoch_ptr() =
+                    Some(NonNull::from(store.engine().epoch_counter()).into());
+            }
 
-                if self.env_module().needs_gc_heap {
-                    self.as_mut().set_gc_heap(Some(store.unwrap_gc_store()));
-                } else {
-                    self.as_mut().set_gc_heap(None);
-                }
+            if self.env_module().needs_gc_heap {
+                self.as_mut().set_gc_heap(Some(store.unwrap_gc_store()));
             } else {
-                self.vm_store_context().write(None);
-                #[cfg(target_has_atomic = "64")]
-                {
-                    *self.as_mut().epoch_ptr() = None;
-                }
                 self.as_mut().set_gc_heap(None);
             }
         }
@@ -1246,7 +1236,7 @@ impl Instance {
         mut self: Pin<&mut Self>,
         module: &Module,
         offsets: &VMOffsets<HostPtr>,
-        store: StorePtr,
+        store: &StoreOpaque,
         imports: Imports,
     ) {
         assert!(ptr::eq(module, self.env_module().as_ref()));
@@ -1260,7 +1250,7 @@ impl Instance {
 
         // SAFETY: it's up to the caller to provide a valid store pointer here.
         unsafe {
-            self.as_mut().set_store(store.as_raw());
+            self.as_mut().set_store(store);
         }
 
         // Initialize shared types

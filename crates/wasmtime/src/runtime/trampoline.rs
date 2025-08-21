@@ -19,21 +19,21 @@ use crate::store::StoreOpaque;
 use crate::{MemoryType, TableType, TagType};
 use wasmtime_environ::{MemoryIndex, TableIndex, TagIndex};
 
-pub fn generate_memory_export(
+pub async fn generate_memory_export(
     store: &mut StoreOpaque,
     m: &MemoryType,
     preallocation: Option<&SharedMemory>,
 ) -> Result<crate::Memory> {
     let id = store.id();
-    let instance = create_memory(store, m, preallocation)?;
+    let instance = create_memory(store, m, preallocation).await?;
     Ok(store
         .instance_mut(instance)
         .get_exported_memory(id, MemoryIndex::from_u32(0)))
 }
 
-pub fn generate_table_export(store: &mut StoreOpaque, t: &TableType) -> Result<crate::Table> {
+pub async fn generate_table_export(store: &mut StoreOpaque, t: &TableType) -> Result<crate::Table> {
     let id = store.id();
-    let instance = create_table(store, t)?;
+    let instance = create_table(store, t).await?;
     Ok(store
         .instance_mut(instance)
         .get_exported_table(id, TableIndex::from_u32(0)))

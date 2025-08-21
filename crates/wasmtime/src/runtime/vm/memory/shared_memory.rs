@@ -31,7 +31,9 @@ struct SharedMemoryInner {
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(ty: &wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
-        let (minimum_bytes, maximum_bytes) = Memory::limit_new(ty, None)?;
+        // Note that without a limiter being passed to `limit_new` this
+        // `assert_ready` should never panic.
+        let (minimum_bytes, maximum_bytes) = vm::assert_ready(Memory::limit_new(ty, None))?;
         let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes)?;
         Self::wrap(
             ty,
