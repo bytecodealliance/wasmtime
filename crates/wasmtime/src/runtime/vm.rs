@@ -105,7 +105,7 @@ pub use crate::runtime::vm::instance::{
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::instance::{
-    InstanceLimits, PoolConcurrencyLimitError, PoolingInstanceAllocator,
+    InstanceLimits, PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
     PoolingInstanceAllocatorConfig,
 };
 pub use crate::runtime::vm::interpreter::*;
