@@ -1,6 +1,6 @@
 #![cfg_attr(miri, allow(dead_code, unused_imports))]
 
-use wasmtime::{Config, Result};
+use wasmtime::Result;
 
 mod arrays;
 mod async_functions;
