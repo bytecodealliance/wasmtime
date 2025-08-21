@@ -2,7 +2,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm;
-use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque};
+use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter};
 #[cfg(feature = "gc")]
 use crate::{
     AnyRef, ArrayRef, ArrayRefPre, ArrayType, ExternRef, I31, StructRef, StructRefPre, StructType,
@@ -72,12 +72,13 @@ impl ConstEvalContext {
     async fn struct_new(
         &mut self,
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         shared_ty: VMSharedTypeIndex,
         fields: &[Val],
     ) -> Result<Val> {
         let struct_ty = StructType::from_shared_type_index(store.engine(), shared_ty);
         let allocator = StructRefPre::_new(store, struct_ty);
-        let struct_ref = StructRef::_new_async(store, &allocator, &fields).await?;
+        let struct_ref = StructRef::_new_async(store, limiter, &allocator, &fields).await?;
         Ok(Val::AnyRef(Some(struct_ref.into())))
     }
 
@@ -85,6 +86,7 @@ impl ConstEvalContext {
     async fn struct_new_default(
         &mut self,
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         shared_ty: VMSharedTypeIndex,
     ) -> Result<Val> {
         let module = store
@@ -130,7 +132,7 @@ impl ConstEvalContext {
             })
             .collect::<smallvec::SmallVec<[_; 8]>>();
 
-        self.struct_new(store, shared_ty, &fields).await
+        self.struct_new(store, limiter, shared_ty, &fields).await
     }
 }
 
@@ -157,7 +159,7 @@ impl ConstExprEvaluator {
         // Note that `assert_ready` here should be valid as production of an
         // integer cannot involve GC meaning that async operations aren't used.
         let mut scope = OpaqueRootScope::new(store);
-        vm::assert_ready(self.eval_loop(&mut scope, context, expr))
+        vm::assert_ready(self.eval_loop(&mut scope, None, context, expr))
     }
 
     /// Attempts to peek into `expr` to see if it's trivial to evaluate, e.g.
@@ -187,6 +189,7 @@ impl ConstExprEvaluator {
     pub async fn eval(
         &mut self,
         store: &mut OpaqueRootScope<&mut StoreOpaque>,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         context: &mut ConstEvalContext,
         expr: &ConstExpr,
     ) -> Result<&Val> {
@@ -195,7 +198,7 @@ impl ConstExprEvaluator {
         if self.try_simple(expr).is_some() {
             return Ok(&self.simple);
         }
-        self.eval_loop(store, context, expr).await
+        self.eval_loop(store, limiter, context, expr).await
     }
 
     #[inline]
@@ -211,12 +214,17 @@ impl ConstExprEvaluator {
     async fn eval_loop(
         &mut self,
         store: &mut OpaqueRootScope<&mut StoreOpaque>,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         context: &mut ConstEvalContext,
         expr: &ConstExpr,
     ) -> Result<&Val> {
         log::trace!("evaluating const expr: {expr:?}");
 
         self.stack.clear();
+
+        // On GC-less builds ensure that this is always considered used an
+        // needed-mutable.
+        let _ = &mut limiter;
 
         for op in expr.ops() {
             log::trace!("const-evaluating op: {op:?}");
@@ -299,7 +307,12 @@ impl ConstExprEvaluator {
 
                     let start = self.stack.len() - len;
                     let s = context
-                        .struct_new(store, interned_type_index, &self.stack[start..])
+                        .struct_new(
+                            store,
+                            limiter.as_deref_mut(),
+                            interned_type_index,
+                            &self.stack[start..],
+                        )
                         .await?;
                     self.stack.truncate(start);
                     self.stack.push(s);
@@ -310,8 +323,11 @@ impl ConstExprEvaluator {
                     let ty = store.instance(context.instance).env_module().types
                         [*struct_type_index]
                         .unwrap_engine_type_index();
-                    self.stack
-                        .push(context.struct_new_default(store, ty).await?);
+                    self.stack.push(
+                        context
+                            .struct_new_default(store, limiter.as_deref_mut(), ty)
+                            .await?,
+                    );
                 }
 
                 #[cfg(feature = "gc")]
@@ -325,7 +341,9 @@ impl ConstExprEvaluator {
                     let elem = self.pop()?;
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array = ArrayRef::_new_async(store, &pre, &elem, len).await?;
+                    let array =
+                        ArrayRef::_new_async(store, limiter.as_deref_mut(), &pre, &elem, len)
+                            .await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }
@@ -342,7 +360,9 @@ impl ConstExprEvaluator {
                         .expect("type should have a default value");
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array = ArrayRef::_new_async(store, &pre, &elem, len).await?;
+                    let array =
+                        ArrayRef::_new_async(store, limiter.as_deref_mut(), &pre, &elem, len)
+                            .await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }
@@ -372,7 +392,9 @@ impl ConstExprEvaluator {
                         .collect::<smallvec::SmallVec<[_; 8]>>();
 
                     let pre = ArrayRefPre::_new(store, ty);
-                    let array = ArrayRef::_new_fixed_async(store, &pre, &elems).await?;
+                    let array =
+                        ArrayRef::_new_fixed_async(store, limiter.as_deref_mut(), &pre, &elems)
+                            .await?;
 
                     self.stack.push(Val::AnyRef(Some(array.into())));
                 }

@@ -101,8 +101,7 @@ pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
 pub use crate::runtime::vm::instance::{
     GcHeapAllocationIndex, Instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    MemoryAllocationIndex, OnDemandInstanceAllocator, StorePtr, TableAllocationIndex,
-    initialize_instance,
+    MemoryAllocationIndex, OnDemandInstanceAllocator, TableAllocationIndex, initialize_instance,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::instance::{
@@ -213,46 +212,11 @@ pub unsafe trait VMStore: 'static {
         &mut self,
     ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque);
 
-    /// Callback invoked to allow the store's resource limiter to reject a
-    /// memory grow operation.
-    fn memory_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, Error>;
-
-    /// Callback invoked to notify the store's resource limiter that a memory
-    /// grow operation has failed.
-    ///
-    /// Note that this is not invoked if `memory_growing` returns an error.
-    fn memory_grow_failed(&mut self, error: Error) -> Result<()>;
-
-    /// Callback invoked to allow the store's resource limiter to reject a
-    /// table grow operation.
-    fn table_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, Error>;
-
-    /// Callback invoked to notify the store's resource limiter that a table
-    /// grow operation has failed.
-    ///
-    /// Note that this is not invoked if `table_growing` returns an error.
-    fn table_grow_failed(&mut self, error: Error) -> Result<()>;
-
-    /// Callback invoked whenever fuel runs out by a wasm instance. If an error
-    /// is returned that's raised as a trap. Otherwise wasm execution will
-    /// continue as normal.
-    fn out_of_gas(&mut self) -> Result<(), Error>;
-
     /// Callback invoked whenever an instance observes a new epoch
     /// number. Cannot fail; cooperative epoch-based yielding is
     /// completely semantically transparent. Returns the new deadline.
     #[cfg(target_has_atomic = "64")]
-    fn new_epoch(&mut self) -> Result<u64, Error>;
+    fn new_epoch_updated_deadline(&mut self) -> Result<crate::UpdateDeadline>;
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]

@@ -109,7 +109,7 @@ set(WASMTIME_HEADER_DST ${CMAKE_BINARY_DIR}/include)
 include(cmake/install-headers.cmake)
 
 include(GNUInstallDirs)
-install(SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake)
+install(DIRECTORY "${WASMTIME_HEADER_DST}/" TYPE INCLUDE)
 install(FILES ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES}
         DESTINATION ${CMAKE_INSTALL_LIBDIR})
 

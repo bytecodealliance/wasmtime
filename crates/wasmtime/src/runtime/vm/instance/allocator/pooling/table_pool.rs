@@ -9,7 +9,7 @@ use crate::runtime::vm::{
 };
 use crate::{prelude::*, vm::HostAlignedByteCount};
 use std::ptr::NonNull;
-use wasmtime_environ::{Module, Tunables};
+use wasmtime_environ::Module;
 
 /// Represents a pool of WebAssembly tables.
 ///
@@ -130,12 +130,12 @@ impl TablePool {
     }
 
     /// Allocate a single table for the given instance allocation request.
-    pub fn allocate(
+    pub async fn allocate(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Table,
-        tunables: &Tunables,
     ) -> Result<(TableAllocationIndex, Table)> {
+        let tunables = request.store.engine().tunables();
         let allocation_index = self
             .index_allocator
             .alloc()
@@ -161,8 +161,9 @@ impl TablePool {
                 ty,
                 tunables,
                 SendSyncPtr::new(ptr),
-                &mut *request.store.get().unwrap(),
-            )?
+                request.limiter.as_deref_mut(),
+            )
+            .await?
         };
         guard.active = false;
         return Ok((allocation_index, table));

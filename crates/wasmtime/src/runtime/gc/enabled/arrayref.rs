@@ -1,8 +1,8 @@
 //! Working with GC `array` objects.
 
-use crate::runtime::vm::VMGcRef;
-use crate::store::StoreId;
-use crate::vm::{VMArrayRef, VMGcHeader};
+use crate::runtime::vm::{VMGcRef, VMStore};
+use crate::store::{StoreId, StoreResourceLimiter};
+use crate::vm::{self, VMArrayRef, VMGcHeader};
 use crate::{AnyRef, FieldType};
 use crate::{
     ArrayType, AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
@@ -297,18 +297,15 @@ impl ArrayRef {
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
-        Self::_new(store.as_context_mut().0, allocator, elem, len)
-    }
-
-    pub(crate) fn _new(
-        store: &mut StoreOpaque,
-        allocator: &ArrayRefPre,
-        elem: &Val,
-        len: u32,
-    ) -> Result<Rooted<ArrayRef>> {
-        store.retry_after_gc((), |store, ()| {
-            Self::new_from_iter(store, allocator, RepeatN(elem, len))
-        })
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        assert!(!store.async_support());
+        vm::assert_ready(Self::_new_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            elem,
+            len,
+        ))
     }
 
     /// Asynchronously allocate a new `array` of the given length, with every
@@ -350,17 +347,19 @@ impl ArrayRef {
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
-        Self::_new_async(store.as_context_mut().0, allocator, elem, len).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_async(store, limiter.as_mut(), allocator, elem, len).await
     }
 
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &ArrayRefPre,
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
         store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter, (), |store, ()| {
                 Self::new_from_iter(store, allocator, RepeatN(elem, len))
             })
             .await
@@ -454,17 +453,14 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
-        Self::_new_fixed(store.as_context_mut().0, allocator, elems)
-    }
-
-    pub(crate) fn _new_fixed(
-        store: &mut StoreOpaque,
-        allocator: &ArrayRefPre,
-        elems: &[Val],
-    ) -> Result<Rooted<ArrayRef>> {
-        store.retry_after_gc((), |store, ()| {
-            Self::new_from_iter(store, allocator, elems.iter())
-        })
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        assert!(!store.async_support());
+        vm::assert_ready(Self::_new_fixed_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            elems,
+        ))
     }
 
     /// Asynchronously allocate a new `array` containing the given elements.
@@ -508,16 +504,18 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
-        Self::_new_fixed_async(store.as_context_mut().0, allocator, elems).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_fixed_async(store, limiter.as_mut(), allocator, elems).await
     }
 
     pub(crate) async fn _new_fixed_async(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
         store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter, (), |store, ()| {
                 Self::new_from_iter(store, allocator, elems.iter())
             })
             .await

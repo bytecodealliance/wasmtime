@@ -5,15 +5,13 @@ use crate::runtime::vm::instance::{Instance, InstanceHandle};
 use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
-use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, VMStore};
-use crate::store::{InstanceId, StoreOpaque};
+use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo};
+use crate::store::{InstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::{OpaqueRootScope, Val};
-use core::ptr::NonNull;
 use core::{mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, PrimaryMap, SizeOverflow, TableInitialValue, Trap, Tunables,
-    VMOffsets,
+    MemoryInitializer, Module, PrimaryMap, SizeOverflow, TableInitialValue, Trap, VMOffsets,
 };
 
 #[cfg(feature = "gc")]
@@ -37,7 +35,7 @@ pub use self::pooling::{
 };
 
 /// Represents a request for a new runtime instance.
-pub struct InstanceAllocationRequest<'a> {
+pub struct InstanceAllocationRequest<'a, 'b> {
     /// The instance id that this will be assigned within the store once the
     /// allocation has finished.
     pub id: InstanceId,
@@ -52,79 +50,11 @@ pub struct InstanceAllocationRequest<'a> {
     /// The imports to use for the instantiation.
     pub imports: Imports<'a>,
 
-    /// A pointer to the "store" for this instance to be allocated. The store
-    /// correlates with the `Store` in wasmtime itself, and lots of contextual
-    /// information about the execution of wasm can be learned through the
-    /// store.
-    ///
-    /// Note that this is a raw pointer and has a static lifetime, both of which
-    /// are a bit of a lie. This is done purely so a store can learn about
-    /// itself when it gets called as a host function, and additionally so this
-    /// runtime can access internals as necessary (such as the
-    /// VMExternRefActivationsTable or the resource limiter methods).
-    ///
-    /// Note that this ends up being a self-pointer to the instance when stored.
-    /// The reason is that the instance itself is then stored within the store.
-    /// We use a number of `PhantomPinned` declarations to indicate this to the
-    /// compiler. More info on this in `wasmtime/src/store.rs`
-    pub store: StorePtr,
+    /// The store that this instance is being allocated into.
+    pub store: &'a StoreOpaque,
 
-    /// Indicates '--wmemcheck' flag.
-    #[cfg(feature = "wmemcheck")]
-    pub wmemcheck: bool,
-
-    /// Request that the instance's memories be protected by a specific
-    /// protection key.
-    #[cfg_attr(
-        not(feature = "pooling-allocator"),
-        expect(
-            dead_code,
-            reason = "easier to keep this field than remove it, not perf-critical to remove"
-        )
-    )]
-    pub pkey: Option<ProtectionKey>,
-
-    /// Tunable configuration options the engine is using.
-    pub tunables: &'a Tunables,
-}
-
-/// A pointer to a Store. This Option<*mut dyn Store> is wrapped in a struct
-/// so that the function to create a &mut dyn Store is a method on a member of
-/// InstanceAllocationRequest, rather than on a &mut InstanceAllocationRequest
-/// itself, because several use-sites require a split mut borrow on the
-/// InstanceAllocationRequest.
-pub struct StorePtr(Option<NonNull<dyn VMStore>>);
-
-// We can't make `VMStore: Send + Sync` because that requires making all of
-// Wastime's internals generic over the `Store`'s `T`. So instead, we take care
-// in the whole VM layer to only use the `VMStore` in ways that are `Send`- and
-// `Sync`-safe and we have to have these unsafe impls.
-unsafe impl Send for StorePtr {}
-unsafe impl Sync for StorePtr {}
-
-impl StorePtr {
-    /// A pointer to no Store.
-    pub fn empty() -> Self {
-        Self(None)
-    }
-
-    /// A pointer to a Store.
-    pub fn new(ptr: NonNull<dyn VMStore>) -> Self {
-        Self(Some(ptr))
-    }
-
-    /// The raw contents of this struct
-    pub fn as_raw(&self) -> Option<NonNull<dyn VMStore>> {
-        self.0
-    }
-
-    /// Use the StorePtr as a mut ref to the Store.
-    ///
-    /// Safety: must not be used outside the original lifetime of the borrow.
-    pub(crate) unsafe fn get(&mut self) -> Option<&mut dyn VMStore> {
-        let ptr = unsafe { self.0?.as_mut() };
-        Some(ptr)
-    }
+    /// The store's resource limiter, if configured by the embedder.
+    pub limiter: Option<&'a mut StoreResourceLimiter<'b>>,
 }
 
 /// The index of a memory allocation within an `InstanceAllocator`.
@@ -197,6 +127,7 @@ impl GcHeapAllocationIndex {
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime
 /// internals to implement correctly.
+#[async_trait::async_trait]
 pub unsafe trait InstanceAllocator: Send + Sync {
     /// Validate whether a component (including all of its contained core
     /// modules) is allocatable by this instance allocator.
@@ -253,11 +184,10 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     fn decrement_core_instance_count(&self);
 
     /// Allocate a memory for an instance.
-    fn allocate_memory(
+    async fn allocate_memory(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)>;
 
@@ -276,11 +206,10 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     );
 
     /// Allocate a table for an instance.
-    fn allocate_table(
+    async fn allocate_table(
         &self,
-        req: &mut InstanceAllocationRequest,
+        req: &mut InstanceAllocationRequest<'_, '_>,
         table: &wasmtime_environ::Table,
-        tunables: &Tunables,
         table_index: DefinedTableIndex,
     ) -> Result<(TableAllocationIndex, Table)>;
 
@@ -373,9 +302,9 @@ impl dyn InstanceAllocator + '_ {
     ///
     /// The `request` provided must be valid, e.g. the imports within are
     /// correctly sized/typed for the instance being created.
-    pub(crate) unsafe fn allocate_module(
+    pub(crate) async unsafe fn allocate_module(
         &self,
-        mut request: InstanceAllocationRequest,
+        mut request: InstanceAllocationRequest<'_, '_>,
     ) -> Result<InstanceHandle> {
         let module = request.runtime_info.env_module();
 
@@ -396,8 +325,10 @@ impl dyn InstanceAllocator + '_ {
             allocator: self,
         };
 
-        self.allocate_memories(&mut request, &mut guard.memories)?;
-        self.allocate_tables(&mut request, &mut guard.tables)?;
+        self.allocate_memories(&mut request, &mut guard.memories)
+            .await?;
+        self.allocate_tables(&mut request, &mut guard.tables)
+            .await?;
         guard.run_deallocate = false;
         // SAFETY: memories/tables were just allocated from the store within
         // `request` and this function's own contract requires that the
@@ -455,9 +386,9 @@ impl dyn InstanceAllocator + '_ {
 
     /// Allocate the memories for the given instance allocation request, pushing
     /// them into `memories`.
-    fn allocate_memories(
+    async fn allocate_memories(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         memories: &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
@@ -472,7 +403,9 @@ impl dyn InstanceAllocator + '_ {
                 .defined_memory_index(memory_index)
                 .expect("should be a defined memory since we skipped imported ones");
 
-            let memory = self.allocate_memory(request, ty, request.tunables, Some(memory_index))?;
+            let memory = self
+                .allocate_memory(request, ty, Some(memory_index))
+                .await?;
             memories.push(memory);
         }
 
@@ -506,9 +439,9 @@ impl dyn InstanceAllocator + '_ {
 
     /// Allocate tables for the given instance allocation request, pushing them
     /// into `tables`.
-    fn allocate_tables(
+    async fn allocate_tables(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         tables: &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
@@ -523,7 +456,7 @@ impl dyn InstanceAllocator + '_ {
                 .defined_table_index(index)
                 .expect("should be a defined table since we skipped imported ones");
 
-            let table = self.allocate_table(request, table, request.tunables, def_index)?;
+            let table = self.allocate_table(request, table, def_index).await?;
             tables.push(table);
         }
 
@@ -582,6 +515,7 @@ fn check_table_init_bounds(
 
 async fn initialize_tables(
     store: &mut StoreOpaque,
+    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     context: &mut ConstEvalContext,
     const_evaluator: &mut ConstExprEvaluator,
     module: &Module,
@@ -594,7 +528,7 @@ async fn initialize_tables(
 
             TableInitialValue::Expr(expr) => {
                 let init = const_evaluator
-                    .eval(&mut store, context, expr)
+                    .eval(&mut store, limiter.as_deref_mut(), context, expr)
                     .await
                     .expect("const expression should be valid");
                 let idx = module.table_index(table);
@@ -625,6 +559,7 @@ async fn initialize_tables(
         );
         Instance::table_init_segment(
             &mut store,
+            limiter.as_deref_mut(),
             context.instance,
             const_evaluator,
             segment.table_index,
@@ -805,6 +740,7 @@ fn check_init_bounds(store: &mut StoreOpaque, instance: InstanceId, module: &Mod
 
 async fn initialize_globals(
     store: &mut StoreOpaque,
+    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     context: &mut ConstEvalContext,
     const_evaluator: &mut ConstExprEvaluator,
     module: &Module,
@@ -824,7 +760,7 @@ async fn initialize_globals(
             val
         } else {
             const_evaluator
-                .eval(&mut store, context, init)
+                .eval(&mut store, limiter.as_deref_mut(), context, init)
                 .await
                 .expect("should be a valid const expr")
         };
@@ -861,6 +797,7 @@ async fn initialize_globals(
 
 pub async fn initialize_instance(
     store: &mut StoreOpaque,
+    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     instance: InstanceId,
     module: &Module,
     is_bulk_memory: bool,
@@ -876,8 +813,22 @@ pub async fn initialize_instance(
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
 
-    initialize_globals(store, &mut context, &mut const_evaluator, module).await?;
-    initialize_tables(store, &mut context, &mut const_evaluator, module).await?;
+    initialize_globals(
+        store,
+        limiter.as_deref_mut(),
+        &mut context,
+        &mut const_evaluator,
+        module,
+    )
+    .await?;
+    initialize_tables(
+        store,
+        limiter.as_deref_mut(),
+        &mut context,
+        &mut const_evaluator,
+        module,
+    )
+    .await?;
     initialize_memories(store, &mut context, &mut const_evaluator, &module)?;
 
     Ok(())

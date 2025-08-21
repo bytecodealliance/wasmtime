@@ -938,6 +938,9 @@ async fn total_stacks_limit() -> Result<()> {
             (func (export "run")
                 call $yield
             )
+
+            (func $empty)
+            (start $empty)
         )
     "#,
     )?;

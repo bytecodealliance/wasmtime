@@ -1,8 +1,8 @@
 //! Implementation of `exnref` in Wasmtime.
 
-use crate::runtime::vm::VMGcRef;
-use crate::store::StoreId;
-use crate::vm::{VMExnRef, VMGcHeader};
+use crate::runtime::vm::{VMGcRef, VMStore};
+use crate::store::{StoreId, StoreResourceLimiter};
+use crate::vm::{self, VMExnRef, VMGcHeader};
 use crate::{
     AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType, Result,
     Rooted, Val, ValRaw, ValType, WasmTy,
@@ -205,23 +205,15 @@ impl ExnRef {
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        Self::_new(store.as_context_mut().0, allocator, tag, fields)
-    }
-
-    pub(crate) fn _new(
-        store: &mut StoreOpaque,
-        allocator: &ExnRefPre,
-        tag: &Tag,
-        fields: &[Val],
-    ) -> Result<Rooted<ExnRef>> {
-        assert!(
-            !store.async_support(),
-            "use `ExnRef::new_async` with asynchronous stores"
-        );
-        Self::type_check_tag_and_fields(store, allocator, tag, fields)?;
-        store.retry_after_gc((), |store, ()| {
-            Self::new_unchecked(store, allocator, tag, fields)
-        })
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        assert!(!store.async_support());
+        vm::assert_ready(Self::_new_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            tag,
+            fields,
+        ))
     }
 
     /// Asynchronously allocate a new exception object and get a
@@ -259,23 +251,20 @@ impl ExnRef {
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        Self::_new_async(store.as_context_mut().0, allocator, tag, fields).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_async(store, limiter.as_mut(), allocator, tag, fields).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &ExnRefPre,
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        assert!(
-            store.async_support(),
-            "use `ExnRef::new` with synchronous stores"
-        );
         Self::type_check_tag_and_fields(store, allocator, tag, fields)?;
         store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter, (), |store, ()| {
                 Self::new_unchecked(store, allocator, tag, fields)
             })
             .await

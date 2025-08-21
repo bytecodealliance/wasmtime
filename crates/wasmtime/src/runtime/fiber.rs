@@ -343,35 +343,7 @@ impl<T> StoreContextMut<'_, T> {
     }
 }
 
-impl<T> crate::store::StoreInner<T> {
-    /// Blocks on the future computed by `f`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this is invoked outside the context of a fiber.
-    pub(crate) fn block_on<R>(
-        &mut self,
-        f: impl FnOnce(StoreContextMut<'_, T>) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
-    ) -> Result<R> {
-        BlockingContext::with(self, |store, cx| {
-            cx.block_on(f(StoreContextMut(store)).as_mut())
-        })
-    }
-}
-
 impl StoreOpaque {
-    /// Blocks on the future computed by `f`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this is invoked outside the context of a fiber.
-    pub(crate) fn block_on<R>(
-        &mut self,
-        f: impl FnOnce(&mut Self) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
-    ) -> Result<R> {
-        BlockingContext::with(self, |store, cx| cx.block_on(f(store).as_mut()))
-    }
-
     /// Creates a `BlockingContext` suitable for blocking on futures or
     /// suspending the current fiber.
     ///

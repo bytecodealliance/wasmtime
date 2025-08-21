@@ -44,6 +44,7 @@ cp LICENSE README.md tmp/$bin_pkgname
 # clashes with the normal builds when the tarballs are unioned together.
 if [[ $build == *-min ]]; then
   min="-min"
+  mkdir tmp/$api_pkgname/min
   cp -r $api_install/include tmp/$api_pkgname/min
   cp -r $api_install/lib tmp/$api_pkgname/min
 else

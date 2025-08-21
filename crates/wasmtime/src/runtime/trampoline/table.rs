@@ -1,11 +1,15 @@
 use crate::TableType;
 use crate::prelude::*;
 use crate::runtime::vm::{Imports, ModuleRuntimeInfo, OnDemandInstanceAllocator};
-use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque};
+use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque, StoreResourceLimiter};
 use alloc::sync::Arc;
 use wasmtime_environ::{EntityIndex, Module, TypeTrace};
 
-pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<InstanceId> {
+pub async fn create_table(
+    store: &mut StoreOpaque,
+    limiter: Option<&mut StoreResourceLimiter<'_>>,
+    table: &TableType,
+) -> Result<InstanceId> {
     let mut module = Module::new();
 
     let wasmtime_table = *table.wasmtime_table();
@@ -29,15 +33,18 @@ pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<Instan
         let allocator =
             OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
         let module = Arc::new(module);
-        store.allocate_instance(
-            AllocateInstanceKind::Dummy {
-                allocator: &allocator,
-            },
-            &ModuleRuntimeInfo::bare_with_registered_type(
-                module,
-                table.element().clone().into_registered_type(),
-            ),
-            imports,
-        )
+        store
+            .allocate_instance(
+                limiter,
+                AllocateInstanceKind::Dummy {
+                    allocator: &allocator,
+                },
+                &ModuleRuntimeInfo::bare_with_registered_type(
+                    module,
+                    table.element().clone().into_registered_type(),
+                ),
+                imports,
+            )
+            .await
     }
 }

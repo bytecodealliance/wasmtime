@@ -95,11 +95,10 @@ use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
-    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore,
-    VMStoreContext,
+    SignalHandler, StoreBox, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
-use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
+use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 #[cfg(feature = "gc")]
 use crate::{ExnRef, Rooted};
 use crate::{Global, Instance, Memory, Table, Uninhabited};
@@ -332,6 +331,9 @@ enum CallHookInner<T: 'static> {
 /// the deadline for a Store during execution of a function using that store.
 #[non_exhaustive]
 pub enum UpdateDeadline {
+    /// Halt execution of WebAssembly, don't update the epoch deadline, and
+    /// raise a trap.
+    Interrupt,
     /// Extend the deadline by the specified number of ticks.
     Continue(u64),
     /// Extend the deadline by the specified number of ticks after yielding to
@@ -448,7 +450,7 @@ pub struct StoreOpaque {
     // together. Then when we run out of gas, we inject the yield amount from the reserve
     // until the reserve is empty.
     fuel_reserve: u64,
-    fuel_yield_interval: Option<NonZeroU64>,
+    pub(crate) fuel_yield_interval: Option<NonZeroU64>,
     /// Indexed data within this `Store`, used to store information about
     /// globals, functions, memories, etc.
     store_data: StoreData,
@@ -487,6 +489,20 @@ pub struct StoreOpaque {
     /// Pulley interpreter.
     executor: Executor,
 }
+
+/// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
+/// used to copy into instances during instantiation.
+///
+/// FIXME: ideally this type would get deleted and Wasmtime's reliance on it
+/// would go away.
+struct StorePtr(Option<NonNull<dyn VMStore>>);
+
+// We can't make `VMStore: Send + Sync` because that requires making all of
+// Wastime's internals generic over the `Store`'s `T`. So instead, we take care
+// in the whole VM layer to only use the `VMStore` in ways that are `Send`- and
+// `Sync`-safe and we have to have these unsafe impls.
+unsafe impl Send for StorePtr {}
+unsafe impl Sync for StorePtr {}
 
 /// Executor state within `StoreOpaque`.
 ///
@@ -666,7 +682,7 @@ impl<T> Store<T> {
             fuel_reserve: 0,
             fuel_yield_interval: None,
             store_data,
-            traitobj: StorePtr::empty(),
+            traitobj: StorePtr(None),
             default_caller_vmctx: SendSyncPtr::new(NonNull::dangling()),
             hostcall_val_storage: Vec::new(),
             wasm_val_raw_storage: Vec::new(),
@@ -690,7 +706,7 @@ impl<T> Store<T> {
             data: ManuallyDrop::new(data),
         });
 
-        inner.traitobj = StorePtr::new(NonNull::from(&mut *inner));
+        inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
 
         // Wasmtime uses the callee argument to host functions to learn about
         // the original pointer to the `Store` itself, allowing it to
@@ -708,15 +724,19 @@ impl<T> Store<T> {
             .unwrap();
 
         unsafe {
-            let id = inner
-                .allocate_instance(
-                    AllocateInstanceKind::Dummy {
-                        allocator: &allocator,
-                    },
-                    &shim,
-                    Default::default(),
-                )
-                .expect("failed to allocate default callee");
+            // Note that this dummy instance doesn't allocate tables or memories
+            // (also no limiter is passed in) so it won't have an async await
+            // point meaning that it should be ok to assert the future is
+            // always ready.
+            let id = vm::assert_ready(inner.allocate_instance(
+                None,
+                AllocateInstanceKind::Dummy {
+                    allocator: &allocator,
+                },
+                &shim,
+                Default::default(),
+            ))
+            .expect("failed to allocate default callee");
             let default_caller_vmctx = inner.instance(id).vmctx();
             inner.default_caller_vmctx = default_caller_vmctx.into();
         }
@@ -1613,15 +1633,21 @@ impl StoreOpaque {
     /// `ResourceLimiterAsync` which means that this should only be executed
     /// in a fiber context at this time.
     #[inline]
-    pub(crate) fn ensure_gc_store(&mut self) -> Result<&mut GcStore> {
+    pub(crate) async fn ensure_gc_store(
+        &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+    ) -> Result<&mut GcStore> {
         if self.gc_store.is_some() {
             return Ok(self.gc_store.as_mut().unwrap());
         }
-        self.allocate_gc_store()
+        self.allocate_gc_store(limiter).await
     }
 
     #[inline(never)]
-    fn allocate_gc_store(&mut self) -> Result<&mut GcStore> {
+    async fn allocate_gc_store(
+        &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+    ) -> Result<&mut GcStore> {
         log::trace!("allocating GC heap for store {:?}", self.id());
 
         assert!(self.gc_store.is_none());
@@ -1631,19 +1657,19 @@ impl StoreOpaque {
         );
         assert_eq!(self.vm_store_context.gc_heap.current_length(), 0);
 
-        let vmstore = self.traitobj();
-        let gc_store = allocate_gc_store(self.engine(), vmstore, self.get_pkey())?;
+        let gc_store = allocate_gc_store(self, limiter).await?;
         self.vm_store_context.gc_heap = gc_store.vmmemory_definition();
         return Ok(self.gc_store.insert(gc_store));
 
         #[cfg(feature = "gc")]
-        fn allocate_gc_store(
-            engine: &Engine,
-            vmstore: NonNull<dyn VMStore>,
-            pkey: Option<ProtectionKey>,
+        async fn allocate_gc_store(
+            store: &mut StoreOpaque,
+            limiter: Option<&mut StoreResourceLimiter<'_>>,
         ) -> Result<GcStore> {
             use wasmtime_environ::packed_option::ReservedValue;
 
+            let engine = store.engine();
+            let mem_ty = engine.tunables().gc_heap_memory_type();
             ensure!(
                 engine.features().gc_types(),
                 "cannot allocate a GC store when GC is disabled at configuration time"
@@ -1656,19 +1682,14 @@ impl StoreOpaque {
                     wasmtime_environ::Module::default(),
                 )),
                 imports: vm::Imports::default(),
-                store: StorePtr::new(vmstore),
-                #[cfg(feature = "wmemcheck")]
-                wmemcheck: false,
-                pkey,
-                tunables: engine.tunables(),
+                store,
+                limiter,
             };
-            let mem_ty = engine.tunables().gc_heap_memory_type();
-            let tunables = engine.tunables();
 
-            let (mem_alloc_index, mem) =
-                engine
-                    .allocator()
-                    .allocate_memory(&mut request, &mem_ty, tunables, None)?;
+            let (mem_alloc_index, mem) = engine
+                .allocator()
+                .allocate_memory(&mut request, &mem_ty, None)
+                .await?;
 
             // Then, allocate the actual GC heap, passing in that memory
             // storage.
@@ -1684,10 +1705,9 @@ impl StoreOpaque {
         }
 
         #[cfg(not(feature = "gc"))]
-        fn allocate_gc_store(
-            _engine: &Engine,
-            _vmstore: NonNull<dyn VMStore>,
-            _pkey: Option<ProtectionKey>,
+        async fn allocate_gc_store(
+            _: &mut StoreOpaque,
+            _: Option<&mut StoreResourceLimiter<'_>>,
         ) -> Result<GcStore> {
             bail!("cannot allocate a GC store: the `gc` feature was disabled at compile time")
         }
@@ -2021,7 +2041,7 @@ impl StoreOpaque {
         Ok(get_fuel(injected_fuel, self.fuel_reserve))
     }
 
-    fn refuel(&mut self) -> bool {
+    pub(crate) fn refuel(&mut self) -> bool {
         let injected_fuel = unsafe { &mut *self.vm_store_context.fuel_consumed.get() };
         refuel(
             injected_fuel,
@@ -2081,7 +2101,7 @@ impl StoreOpaque {
 
     #[inline]
     pub fn traitobj(&self) -> NonNull<dyn VMStore> {
-        self.traitobj.as_raw().unwrap()
+        self.traitobj.0.unwrap()
     }
 
     /// Takes the cached `Vec<Val>` stored internally across hostcalls to get
@@ -2228,6 +2248,7 @@ at https://bytecodealliance.org/security.
 
     /// Retrieve the store's protection key.
     #[inline]
+    #[cfg(feature = "pooling-allocator")]
     pub(crate) fn get_pkey(&self) -> Option<ProtectionKey> {
         self.pkey
     }
@@ -2347,8 +2368,9 @@ at https://bytecodealliance.org/security.
     ///
     /// The `imports` provided must be correctly sized/typed for the module
     /// being allocated.
-    pub(crate) unsafe fn allocate_instance(
+    pub(crate) async unsafe fn allocate_instance(
         &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         kind: AllocateInstanceKind<'_>,
         runtime_info: &ModuleRuntimeInfo,
         imports: Imports<'_>,
@@ -2362,16 +2384,15 @@ at https://bytecodealliance.org/security.
         // SAFETY: this function's own contract is the same as
         // `allocate_module`, namely the imports provided are valid.
         let handle = unsafe {
-            allocator.allocate_module(InstanceAllocationRequest {
-                id,
-                runtime_info,
-                imports,
-                store: StorePtr::new(self.traitobj()),
-                #[cfg(feature = "wmemcheck")]
-                wmemcheck: self.engine().config().wmemcheck,
-                pkey: self.get_pkey(),
-                tunables: self.engine().tunables(),
-            })?
+            allocator
+                .allocate_module(InstanceAllocationRequest {
+                    id,
+                    runtime_info,
+                    imports,
+                    store: self,
+                    limiter,
+                })
+                .await?
         };
 
         let actual = match kind {
@@ -2435,6 +2456,22 @@ at https://bytecodealliance.org/security.
             .into_exnref_unchecked();
         nogc.set_pending_exception(exnref);
     }
+
+    #[cfg(target_has_atomic = "64")]
+    pub(crate) fn set_epoch_deadline(&mut self, delta: u64) {
+        // Set a new deadline based on the "epoch deadline delta".
+        //
+        // Also, note that when this update is performed while Wasm is
+        // on the stack, the Wasm will reload the new value once we
+        // return into it.
+        let current_epoch = self.engine().current_epoch();
+        let epoch_deadline = self.vm_store_context.epoch_deadline.get_mut();
+        *epoch_deadline = current_epoch + delta;
+    }
+
+    pub(crate) fn get_epoch_deadline(&mut self) -> u64 {
+        *self.vm_store_context.epoch_deadline.get_mut()
+    }
 }
 
 /// Helper parameter to [`StoreOpaque::allocate_instance`].
@@ -2485,143 +2522,19 @@ unsafe impl<T> VMStore for StoreInner<T> {
         )
     }
 
-    fn memory_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, anyhow::Error> {
-        match self.limiter {
-            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                limiter(&mut self.data).memory_growing(current, desired, maximum)
-            }
-            #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(_)) => self.block_on(|store| {
-                let limiter = match &mut store.0.limiter {
-                    Some(ResourceLimiterInner::Async(limiter)) => limiter,
-                    _ => unreachable!(),
-                };
-                limiter(&mut store.0.data).memory_growing(current, desired, maximum)
-            })?,
-            None => Ok(true),
-        }
-    }
-
-    fn memory_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
-        match self.limiter {
-            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                limiter(&mut self.data).memory_grow_failed(error)
-            }
-            #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => {
-                limiter(&mut self.data).memory_grow_failed(error)
-            }
-            None => {
-                log::debug!("ignoring memory growth failure error: {error:?}");
-                Ok(())
-            }
-        }
-    }
-
-    fn table_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, anyhow::Error> {
-        match self.limiter {
-            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                limiter(&mut self.data).table_growing(current, desired, maximum)
-            }
-            #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(_)) => self.block_on(|store| {
-                let limiter = match &mut store.0.limiter {
-                    Some(ResourceLimiterInner::Async(limiter)) => limiter,
-                    _ => unreachable!(),
-                };
-                limiter(&mut store.0.data).table_growing(current, desired, maximum)
-            })?,
-            None => Ok(true),
-        }
-    }
-
-    fn table_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
-        match self.limiter {
-            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                limiter(&mut self.data).table_grow_failed(error)
-            }
-            #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => {
-                limiter(&mut self.data).table_grow_failed(error)
-            }
-            None => {
-                log::debug!("ignoring table growth failure: {error:?}");
-                Ok(())
-            }
-        }
-    }
-
-    fn out_of_gas(&mut self) -> Result<()> {
-        if !self.refuel() {
-            return Err(Trap::OutOfFuel.into());
-        }
-        #[cfg(feature = "async")]
-        if self.fuel_yield_interval.is_some() {
-            self.async_yield_impl()?;
-        }
-        Ok(())
-    }
-
     #[cfg(target_has_atomic = "64")]
-    fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
+    fn new_epoch_updated_deadline(&mut self) -> Result<UpdateDeadline> {
         // Temporarily take the configured behavior to avoid mutably borrowing
         // multiple times.
         let mut behavior = self.epoch_deadline_behavior.take();
-        let delta_result = match &mut behavior {
-            None => Err(Trap::Interrupt.into()),
-            Some(callback) => callback((&mut *self).as_context_mut()).and_then(|update| {
-                let delta = match update {
-                    UpdateDeadline::Continue(delta) => delta,
-                    #[cfg(feature = "async")]
-                    UpdateDeadline::Yield(delta) => {
-                        assert!(
-                            self.async_support(),
-                            "cannot use `UpdateDeadline::Yield` without enabling async support in the config"
-                        );
-                        // Do the async yield. May return a trap if future was
-                        // canceled while we're yielded.
-                        self.async_yield_impl()?;
-                        delta
-                    }
-                    #[cfg(feature = "async")]
-                    UpdateDeadline::YieldCustom(delta, future) => {
-                        assert!(
-                            self.async_support(),
-                            "cannot use `UpdateDeadline::YieldCustom` without enabling async support in the config"
-                        );
-
-                        // When control returns, we have a `Result<()>` passed
-                        // in from the host fiber. If this finished successfully then
-                        // we were resumed normally via a `poll`, so keep going.  If
-                        // the future was dropped while we were yielded, then we need
-                        // to clean up this fiber. Do so by raising a trap which will
-                        // abort all wasm and get caught on the other side to clean
-                        // things up.
-                        self.block_on(|_| future)?;
-                        delta
-                    }
-                };
-
-                // Set a new deadline and return the new epoch deadline so
-                // the Wasm code doesn't have to reload it.
-                self.set_epoch_deadline(delta);
-                Ok(self.get_epoch_deadline())
-            })
+        let update = match &mut behavior {
+            Some(callback) => callback((&mut *self).as_context_mut()),
+            None => Ok(UpdateDeadline::Interrupt),
         };
 
         // Put back the original behavior which was replaced by `take`.
         self.epoch_deadline_behavior = behavior;
-        delta_result
+        update
     }
 
     #[cfg(feature = "component-model")]
@@ -2631,18 +2544,6 @@ unsafe impl<T> VMStore for StoreInner<T> {
 }
 
 impl<T> StoreInner<T> {
-    #[cfg(target_has_atomic = "64")]
-    pub(crate) fn set_epoch_deadline(&mut self, delta: u64) {
-        // Set a new deadline based on the "epoch deadline delta".
-        //
-        // Also, note that when this update is performed while Wasm is
-        // on the stack, the Wasm will reload the new value once we
-        // return into it.
-        let current_epoch = self.engine().current_epoch();
-        let epoch_deadline = self.vm_store_context.epoch_deadline.get_mut();
-        *epoch_deadline = current_epoch + delta;
-    }
-
     #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_trap(&mut self) {
         self.epoch_deadline_behavior = None;
@@ -2654,10 +2555,6 @@ impl<T> StoreInner<T> {
         callback: Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>,
     ) {
         self.epoch_deadline_behavior = Some(callback);
-    }
-
-    fn get_epoch_deadline(&mut self) -> u64 {
-        *self.vm_store_context.epoch_deadline.get_mut()
     }
 }
 
