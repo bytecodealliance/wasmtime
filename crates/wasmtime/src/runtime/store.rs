@@ -96,7 +96,7 @@ use crate::runtime::vm::{
     SignalHandler, StoreBox, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
-use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
+use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Memory, Table, Uninhabited};
 use alloc::sync::Arc;
 use core::fmt;
@@ -324,6 +324,9 @@ enum CallHookInner<T: 'static> {
 /// the deadline for a Store during execution of a function using that store.
 #[non_exhaustive]
 pub enum UpdateDeadline {
+    /// Halt execution of WebAssembly, don't update the epoch deadline, and
+    /// raise a trap.
+    Interrupt,
     /// Extend the deadline by the specified number of ticks.
     Continue(u64),
     /// Extend the deadline by the specified number of ticks after yielding to
@@ -429,7 +432,7 @@ pub struct StoreOpaque {
     // together. Then when we run out of gas, we inject the yield amount from the reserve
     // until the reserve is empty.
     fuel_reserve: u64,
-    fuel_yield_interval: Option<NonZeroU64>,
+    pub(crate) fuel_yield_interval: Option<NonZeroU64>,
     /// Indexed data within this `Store`, used to store information about
     /// globals, functions, memories, etc.
     store_data: StoreData,
@@ -1893,7 +1896,7 @@ impl StoreOpaque {
         Ok(get_fuel(injected_fuel, self.fuel_reserve))
     }
 
-    fn refuel(&mut self) -> bool {
+    pub(crate) fn refuel(&mut self) -> bool {
         let injected_fuel = unsafe { &mut *self.vm_store_context.fuel_consumed.get() };
         refuel(
             injected_fuel,
@@ -2277,6 +2280,22 @@ at https://bytecodealliance.org/security.
 
         Ok(id)
     }
+
+    #[cfg(target_has_atomic = "64")]
+    pub(crate) fn set_epoch_deadline(&mut self, delta: u64) {
+        // Set a new deadline based on the "epoch deadline delta".
+        //
+        // Also, note that when this update is performed while Wasm is
+        // on the stack, the Wasm will reload the new value once we
+        // return into it.
+        let current_epoch = self.engine().current_epoch();
+        let epoch_deadline = self.vm_store_context.epoch_deadline.get_mut();
+        *epoch_deadline = current_epoch + delta;
+    }
+
+    pub(crate) fn get_epoch_deadline(&mut self) -> u64 {
+        *self.vm_store_context.epoch_deadline.get_mut()
+    }
 }
 
 /// Helper parameter to [`StoreOpaque::allocate_instance`].
@@ -2327,67 +2346,19 @@ unsafe impl<T> VMStore for StoreInner<T> {
         )
     }
 
-    fn out_of_gas(&mut self) -> Result<()> {
-        if !self.refuel() {
-            return Err(Trap::OutOfFuel.into());
-        }
-        #[cfg(feature = "async")]
-        if self.fuel_yield_interval.is_some() {
-            self.async_yield_impl()?;
-        }
-        Ok(())
-    }
-
     #[cfg(target_has_atomic = "64")]
-    fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
+    fn new_epoch_updated_deadline(&mut self) -> Result<UpdateDeadline> {
         // Temporarily take the configured behavior to avoid mutably borrowing
         // multiple times.
         let mut behavior = self.epoch_deadline_behavior.take();
-        let delta_result = match &mut behavior {
-            None => Err(Trap::Interrupt.into()),
-            Some(callback) => callback((&mut *self).as_context_mut()).and_then(|update| {
-                let delta = match update {
-                    UpdateDeadline::Continue(delta) => delta,
-                    #[cfg(feature = "async")]
-                    UpdateDeadline::Yield(delta) => {
-                        assert!(
-                            self.async_support(),
-                            "cannot use `UpdateDeadline::Yield` without enabling async support in the config"
-                        );
-                        // Do the async yield. May return a trap if future was
-                        // canceled while we're yielded.
-                        self.async_yield_impl()?;
-                        delta
-                    }
-                    #[cfg(feature = "async")]
-                    UpdateDeadline::YieldCustom(delta, future) => {
-                        assert!(
-                            self.async_support(),
-                            "cannot use `UpdateDeadline::YieldCustom` without enabling async support in the config"
-                        );
-
-                        // When control returns, we have a `Result<()>` passed
-                        // in from the host fiber. If this finished successfully then
-                        // we were resumed normally via a `poll`, so keep going.  If
-                        // the future was dropped while we were yielded, then we need
-                        // to clean up this fiber. Do so by raising a trap which will
-                        // abort all wasm and get caught on the other side to clean
-                        // things up.
-                        self.block_on(|_| future)?;
-                        delta
-                    }
-                };
-
-                // Set a new deadline and return the new epoch deadline so
-                // the Wasm code doesn't have to reload it.
-                self.set_epoch_deadline(delta);
-                Ok(self.get_epoch_deadline())
-            })
+        let update = match &mut behavior {
+            Some(callback) => callback((&mut *self).as_context_mut()),
+            None => Ok(UpdateDeadline::Interrupt),
         };
 
         // Put back the original behavior which was replaced by `take`.
         self.epoch_deadline_behavior = behavior;
-        delta_result
+        update
     }
 
     #[cfg(feature = "component-model")]
@@ -2397,18 +2368,6 @@ unsafe impl<T> VMStore for StoreInner<T> {
 }
 
 impl<T> StoreInner<T> {
-    #[cfg(target_has_atomic = "64")]
-    pub(crate) fn set_epoch_deadline(&mut self, delta: u64) {
-        // Set a new deadline based on the "epoch deadline delta".
-        //
-        // Also, note that when this update is performed while Wasm is
-        // on the stack, the Wasm will reload the new value once we
-        // return into it.
-        let current_epoch = self.engine().current_epoch();
-        let epoch_deadline = self.vm_store_context.epoch_deadline.get_mut();
-        *epoch_deadline = current_epoch + delta;
-    }
-
     #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_trap(&mut self) {
         self.epoch_deadline_behavior = None;
@@ -2420,10 +2379,6 @@ impl<T> StoreInner<T> {
         callback: Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>,
     ) {
         self.epoch_deadline_behavior = Some(callback);
-    }
-
-    fn get_epoch_deadline(&mut self) -> u64 {
-        *self.vm_store_context.epoch_deadline.get_mut()
     }
 }
 

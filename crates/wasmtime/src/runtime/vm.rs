@@ -208,16 +208,11 @@ pub unsafe trait VMStore: 'static {
         &mut self,
     ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque);
 
-    /// Callback invoked whenever fuel runs out by a wasm instance. If an error
-    /// is returned that's raised as a trap. Otherwise wasm execution will
-    /// continue as normal.
-    fn out_of_gas(&mut self) -> Result<(), Error>;
-
     /// Callback invoked whenever an instance observes a new epoch
     /// number. Cannot fail; cooperative epoch-based yielding is
     /// completely semantically transparent. Returns the new deadline.
     #[cfg(target_has_atomic = "64")]
-    fn new_epoch(&mut self) -> Result<u64, Error>;
+    fn new_epoch_updated_deadline(&mut self) -> Result<crate::UpdateDeadline>;
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]

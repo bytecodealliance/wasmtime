@@ -169,21 +169,6 @@ impl<T> StoreInner<T> {
 
 #[doc(hidden)]
 impl StoreOpaque {
-    /// Yields execution to the caller on out-of-gas or epoch interruption.
-    ///
-    /// This only works on async futures and stores, and assumes that we're
-    /// executing on a fiber. This will yield execution back to the caller once.
-    pub fn async_yield_impl(&mut self) -> Result<()> {
-        // When control returns, we have a `Result<()>` passed
-        // in from the host fiber. If this finished successfully then
-        // we were resumed normally via a `poll`, so keep going.  If
-        // the future was dropped while we were yielded, then we need
-        // to clean up this fiber. Do so by raising a trap which will
-        // abort all wasm and get caught on the other side to clean
-        // things up.
-        self.block_on(|_| Box::pin(crate::runtime::vm::Yield::new()))
-    }
-
     pub(crate) fn allocate_fiber_stack(&mut self) -> Result<wasmtime_fiber::FiberStack> {
         if let Some(stack) = self.async_state.last_fiber_stack().take() {
             return Ok(stack);
