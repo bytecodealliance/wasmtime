@@ -264,13 +264,18 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
             #(#attrs)*
             #ignore_miri
             #asyncness fn #test_name() {
+                // Skip this test completely if the compiler doesn't support
+                // this host.
+                let compiler = wasmtime_test_util::wast::Compiler::#strategy_ident;
+                if !compiler.supports_host() {
+                    return;
+                }
                 let _ = env_logger::try_init();
                 let mut config = Config::new();
                 wasmtime_test_util::wasmtime_wast::apply_test_config(
                     &mut config,
                     &#test_config,
                 );
-                let compiler = wasmtime_test_util::wast::Compiler::#strategy_ident;
                 wasmtime_test_util::wasmtime_wast::apply_wast_config(
                     &mut config,
                     &wasmtime_test_util::wast::WastConfig {
@@ -280,7 +285,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
                     },
                 );
                 let result = #func_name(&mut config) #await_;
-                if !compiler.supports_host() || compiler.should_fail(&#test_config) {
+                if compiler.should_fail(&#test_config) {
                     assert!(result.is_err());
                 } else {
                     result.unwrap();
