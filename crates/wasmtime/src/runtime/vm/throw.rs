@@ -61,13 +61,15 @@ pub unsafe fn compute_throw_action(store: &mut dyn VMStore) -> ThrowAction {
         let rel_pc = u32::try_from(frame.pc().wrapping_sub(base)).expect("Module larger than 4GiB");
         let et = module.exception_table();
         let (frame_offset, handlers) = et.lookup_pc(rel_pc);
-        let fp_to_sp = -isize::try_from(frame_offset.unwrap_or(0)).unwrap();
+        let fp_to_sp = frame_offset.map(|frame_offset| -isize::try_from(frame_offset).unwrap());
         for handler in handlers {
             log::trace!("-> checking handler: {handler:?}");
             let is_match = match handler.tag {
                 // Catch-all/default handler. Always come last in sequence.
                 None => true,
                 Some(module_local_tag_index) => {
+                    let fp_to_sp =
+                        fp_to_sp.expect("frame offset is necessary for exception unwind");
                     let fp_offset = fp_to_sp
                         + isize::try_from(
                             handler
@@ -105,6 +107,7 @@ pub unsafe fn compute_throw_action(store: &mut dyn VMStore) -> ThrowAction {
                 }
             };
             if is_match {
+                let fp_to_sp = fp_to_sp.expect("frame offset must be known if we found a handler");
                 return Some((
                     base.wrapping_add(
                         usize::try_from(handler.handler_offset).expect("Module larger than usize"),

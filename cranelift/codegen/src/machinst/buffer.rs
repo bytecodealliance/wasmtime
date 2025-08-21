@@ -2025,6 +2025,12 @@ pub struct MachCallSite {
     /// stack frame up to the saved FP slot. Useful to recover the
     /// start of the stack frame and to look up dynamic contexts
     /// stored in [`ExceptionContextLoc::SPOffset`].
+    ///
+    /// If `None`, the compiler backend did not specify a frame
+    /// offset. The runtime in use with the compiled code may require
+    /// the frame offset if exception handlers are present or dynamic
+    /// context is used, but that is not Cranelift's concern: the
+    /// frame offset is optional at this level.
     pub frame_offset: Option<u32>,
 
     /// Range in `exception_handlers` corresponding to the exception
@@ -2044,6 +2050,12 @@ pub struct FinalizedMachCallSite<'a> {
     /// stack frame up to the saved FP slot. Useful to recover the
     /// start of the stack frame and to look up dynamic contexts
     /// stored in [`ExceptionContextLoc::SPOffset`].
+    ///
+    /// If `None`, the compiler backend did not specify a frame
+    /// offset. The runtime in use with the compiled code may require
+    /// the frame offset if exception handlers are present or dynamic
+    /// context is used, but that is not Cranelift's concern: the
+    /// frame offset is optional at this level.
     pub frame_offset: Option<u32>,
 
     /// Exception handlers at this callsite, with target offsets
