@@ -244,7 +244,7 @@ impl<'data> Translator<'_, 'data> {
             // Record, for each adapter in this adapter module, the module that
             // the adapter was placed within as well as the function index of
             // the adapter in the wasm module generated. Note that adapters are
-            // paritioned in-order so we're guaranteed to push the adapters
+            // partitioned in-order so we're guaranteed to push the adapters
             // in-order here as well. (with an assert to double-check)
             for (adapter, name) in adapter_module.adapters.iter().zip(&names) {
                 let index = translation.module.exports[name];

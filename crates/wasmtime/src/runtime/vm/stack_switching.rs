@@ -302,11 +302,12 @@ unsafe impl Sync for VMContRef {}
 #[inline(always)]
 pub fn cont_new(
     store: &mut dyn crate::vm::VMStore,
-    instance: core::pin::Pin<&mut crate::vm::Instance>,
+    instance: crate::store::InstanceId,
     func: *mut u8,
     param_count: u32,
     result_count: u32,
 ) -> anyhow::Result<*mut VMContRef> {
+    let instance = store.instance_mut(instance);
     let caller_vmctx = instance.vmctx();
 
     let stack_size = store.engine().config().async_stack_size;

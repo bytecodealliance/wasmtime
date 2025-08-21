@@ -2,6 +2,7 @@ use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
 #[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
 fn basic_throw(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
@@ -37,6 +38,7 @@ fn basic_throw(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
 fn dynamic_tags(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
@@ -96,6 +98,7 @@ fn dynamic_tags(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
 fn exception_escape_to_host(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
@@ -128,6 +131,7 @@ fn exception_escape_to_host(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
 fn exception_from_host(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());

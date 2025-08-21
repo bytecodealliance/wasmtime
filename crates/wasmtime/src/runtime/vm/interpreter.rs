@@ -1,6 +1,7 @@
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
 use crate::runtime::vm::{
     StoreBox, TrapRegisters, TrapTest, VMContext, VMOpaqueContext, f32x4, f64x2, i8x16, tls,
+    traphandlers,
 };
 use crate::{Engine, ValRaw};
 use core::marker;
@@ -46,14 +47,28 @@ pub struct Interpreter {
     /// carries a borrow of this type to ensure this isn't dropped
     /// independently, and then this file never overwrites this private field to
     /// otherwise guarantee this.
-    pulley: StoreBox<Vm>,
+    pulley: StoreBox<VmState>,
+}
+
+struct VmState {
+    vm: Vm,
+    raise: Option<Raise>,
+}
+
+enum Raise {
+    Longjmp,
+    #[cfg(feature = "gc")]
+    ResumeToExceptionHandler(usize),
 }
 
 impl Interpreter {
     /// Creates a new interpreter ready to interpret code.
     pub fn new(engine: &Engine) -> Interpreter {
         let ret = Interpreter {
-            pulley: StoreBox::new(Vm::with_stack(engine.config().max_wasm_stack)),
+            pulley: StoreBox::new(VmState {
+                vm: Vm::with_stack(engine.config().max_wasm_stack),
+                raise: None,
+            }),
         };
         engine.profiler().register_interpreter(&ret);
         ret
@@ -69,7 +84,8 @@ impl Interpreter {
     }
 
     pub fn pulley(&self) -> &Vm {
-        unsafe { self.pulley.get().as_ref() }
+        let state = unsafe { self.pulley.get().as_ref() };
+        &state.vm
     }
 
     /// Get an implementation of `Unwind` used to walk the Pulley stack.
@@ -82,8 +98,8 @@ impl Interpreter {
 /// zero-sized structure when pulley is disabled at compile time.
 #[repr(transparent)]
 pub struct InterpreterRef<'a> {
-    vm: NonNull<Vm>,
-    _phantom: marker::PhantomData<&'a mut Vm>,
+    vm: NonNull<VmState>,
+    _phantom: marker::PhantomData<&'a mut VmState>,
 }
 
 /// An implementation of stack-walking details specifically designed
@@ -151,7 +167,7 @@ struct Setjmp {
 }
 
 impl InterpreterRef<'_> {
-    fn vm(&mut self) -> &mut Vm {
+    fn vm_state(&mut self) -> &mut VmState {
         // SAFETY: This is a bit of a tricky code. The safety here is isolated
         // to this file, but not isolated to just this function call.
         //
@@ -177,6 +193,10 @@ impl InterpreterRef<'_> {
         // calls the interpreter needs to be re-borrowed as the state may have
         // changed as part of the dynamic host call.
         unsafe { self.vm.as_mut() }
+    }
+
+    fn vm(&mut self) -> &mut Vm {
+        &mut self.vm_state().vm
     }
 
     /// Invokes interpreted code.
@@ -208,6 +228,7 @@ impl InterpreterRef<'_> {
         // See more comments in `trap` below about how this isn't actually
         // correct as it's not saving all callee-save state.
         let setjmp = setjmp(vm);
+        traphandlers::set_jmp_buf((&raw const setjmp).cast());
 
         let old_lr = unsafe { vm.call_start(&args) };
 
@@ -228,19 +249,39 @@ impl InterpreterRef<'_> {
                     }
                 }
                 // If the VM wants to call out to the host then dispatch that
-                // here based on `sig`. Once that returns we can resume
+                // here based on `id`. Once that returns we typically resume
                 // execution at `resume`.
-                //
-                // Note that the `raise` libcall is handled specially here since
-                // longjmp/setjmp is handled differently than on the host.
                 DoneReason::CallIndirectHost { id, resume } => {
+                    let state = unsafe { self.call_indirect_host(id) };
+
+                    // After the host has finished take a look at what hostcall
+                    // was just made. The `raise` hostcall gets special
+                    // handling for its non-local transfer of control flow,
+                    // notably here we see if it's a longjmp or a resume that
+                    // just happened. For a longjmp we exit the interpreter loop
+                    // here entirely, and for raise we update to the specified
+                    // bytecode pointer.
+                    //
+                    // Also note that for non-`raise` hostcalls the
+                    // `state.raise` value should always be `None`.
                     if u32::from(id) == HostCall::Builtin(BuiltinFunctionIndex::raise()).index() {
-                        longjmp(vm, setjmp);
-                        break false;
+                        let raise = state.raise.take().unwrap();
+                        match raise {
+                            Raise::Longjmp => {
+                                vm = &mut state.vm;
+                                break false;
+                            }
+                            #[cfg(feature = "gc")]
+                            Raise::ResumeToExceptionHandler(pc) => {
+                                let pc = core::ptr::with_exposed_provenance_mut(pc);
+                                bytecode = NonNull::new(pc).unwrap();
+                            }
+                        }
                     } else {
-                        vm = unsafe { self.call_indirect_host(id) };
+                        debug_assert!(state.raise.is_none());
                         bytecode = resume;
                     }
+                    vm = &mut state.vm;
                 }
                 // If the VM trapped then process that here and return `false`.
                 DoneReason::Trap { pc, kind } => {
@@ -260,6 +301,11 @@ impl InterpreterRef<'_> {
             assert!(vm.fp() == setjmp.fp);
             assert!(vm.lr() == setjmp.lr);
         }
+
+        // Keep `setjmp` accessible on this stack frame statically as it's
+        // handed out via `set_jmp_buf` above to `CallThreadState`.
+        let _ = &setjmp;
+
         ret
     }
 
@@ -275,7 +321,7 @@ impl InterpreterRef<'_> {
         not(feature = "component-model"),
         expect(unused_macro_rules, reason = "macro-code")
     )]
-    unsafe fn call_indirect_host(&mut self, id: u8) -> &mut Vm {
+    unsafe fn call_indirect_host(&mut self, id: u8) -> &mut VmState {
         let id = u32::from(id);
         let fnptr = self.vm()[XReg::x0].get_ptr();
         let mut arg_reg = 1;
@@ -316,17 +362,18 @@ impl InterpreterRef<'_> {
                 };
                 let _ = arg_reg; // silence last dead arg_reg increment warning
 
-                let vm = self.vm();
+                let state = self.vm_state();
+                let _vm = &mut state.vm;
 
                 // Store the return value, if one is here, in x0.
                 $(
-                    call!(@set $result ret => vm[XReg::x0]);
+                    call!(@set $result ret => _vm[XReg::x0]);
                 )?
                 let _ = ret; // silence warning if no return value
 
                 // Return from the outer `call_indirect_host` host function as
                 // it's been processed.
-                return vm;
+                return state;
             }};
 
             // Conversion from macro-defined types to Rust host types.
@@ -450,6 +497,55 @@ impl InterpreterRef<'_> {
         fn unreachable<T, U>(_: U) -> T {
             unreachable!()
         }
+    }
+
+    /// Executes a `longjmp` from the `raise` hostcall.
+    ///
+    /// Assume that `jmp_buf` is a `Setjmp` and executes a Pulley-defined
+    /// longjmp as a result.
+    ///
+    /// # Safety
+    ///
+    /// Requires that `jmp_buf` is valid, it's a `Setjmp`, and it's valid to
+    /// jump to.
+    pub(crate) unsafe fn longjmp(mut self, jmp_buf: *const u8) {
+        unsafe {
+            longjmp(self.vm(), *jmp_buf.cast::<Setjmp>());
+        }
+        let state = self.vm_state();
+        debug_assert!(state.raise.is_none());
+        self.vm_state().raise = Some(Raise::Longjmp);
+    }
+
+    /// Configures Pulley to be able to resume to the specified exception
+    /// handler.
+    ///
+    /// This is executed from a `raise` hostcall when an exception is being
+    /// raised.
+    ///
+    /// # Safety
+    ///
+    /// Requires that all the parameters here are valid and will leave Pulley
+    /// in a valid state for executing.
+    #[cfg(feature = "gc")]
+    pub(crate) unsafe fn resume_to_exception_handler(
+        mut self,
+        pc: usize,
+        sp: usize,
+        fp: usize,
+        payload1: usize,
+        payload2: usize,
+    ) {
+        unsafe {
+            let vm = self.vm();
+            vm[XReg::x0].set_u64(payload1 as u64);
+            vm[XReg::x1].set_u64(payload2 as u64);
+            vm[XReg::sp].set_ptr(core::ptr::with_exposed_provenance_mut::<u8>(sp));
+            vm.set_fp(core::ptr::with_exposed_provenance_mut(fp));
+        }
+        let state = self.vm_state();
+        debug_assert!(state.raise.is_none());
+        self.vm_state().raise = Some(Raise::ResumeToExceptionHandler(pc));
     }
 }
 
