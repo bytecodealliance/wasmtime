@@ -81,18 +81,18 @@ fn lazy_per_thread_init() {
 /// information within the `CallThreadState` and this is the low-level
 /// operation to actually perform an unwind.
 ///
-/// This function won't be used with Pulley, for example, as the interpreter
-/// halts differently than native code. Additionally one day this will ideally
-/// be implemented by Cranelift itself without need of a libcall when Cranelift
-/// implements setjmp and longjmp operators itself.
+/// Note that this function is used both for Pulley and for native execution.
+/// For Pulley this function will return and the interpreter will be
+/// responsible for handling the control-flow transfer. For native this
+/// function will not return as the control flow transfer will be handled
+/// internally.
 ///
 /// # Safety
 ///
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-#[cfg(has_host_compiler_backend)]
-pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) -> ! {
+pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
     tls::with(|info| unsafe { info.unwrap().unwind(store) })
 }
 
@@ -136,6 +136,19 @@ where
         tls::with(|info| info.unwrap().record_unwind(store, unwind));
     }
     ret
+}
+
+/// Hook used by Pulley to configure the `jmp_buf` field in `CallThreadState`
+/// once it starts executing.
+pub(super) fn set_jmp_buf(jmp_buf: *const u8) {
+    tls::with(|info| {
+        let info = info.unwrap();
+        assert_eq!(
+            info.jmp_buf.get(),
+            CallThreadState::JMP_BUF_INTERPRETER_SENTINEL
+        );
+        info.jmp_buf.set(jmp_buf);
+    });
 }
 
 /// A trait used in conjunction with `catch_unwind_and_record_trap` to convert a
@@ -433,7 +446,7 @@ where
 
     let result = CallThreadState::new(store.0, old_state).with(|cx| match store.0.executor() {
         // In interpreted mode directly invoke the host closure since we won't
-        // be using host-based `setjmp`/`longjmp` as that's not going to save
+        // be using host-based `etjmp`/`longjmp` as that's not going to save
         // the context we want.
         ExecutorRef::Interpreter(r) => {
             cx.jmp_buf
@@ -535,10 +548,6 @@ mod call_thread_state {
         /// payload word in the underlying exception ABI is used to
         /// send the raw `VMExnRef`.
         #[cfg(feature = "gc")]
-        #[cfg_attr(
-            not(has_host_compiler_backend),
-            allow(dead_code, reason = "Unwind not yet implemented for Pulley")
-        )]
         UnwindToWasm { pc: usize, fp: usize, sp: usize },
         /// Do not unwind.
         None,
@@ -864,13 +873,10 @@ impl CallThreadState {
     /// # Unsafety
     ///
     /// This function is not safe if the corresponding setjmp wasn't already
-    /// called. Additionally this isn't safe as it will skip all Rust
-    /// destructors on the stack, if there are any.
-    #[cfg(has_host_compiler_backend)]
-    unsafe fn unwind(&self, store: &mut dyn VMStore) -> ! {
-        // Ensure used even in no-GC builds.
-        let _ = store;
-
+    /// called. Additionally this isn't safe as it may skip all Rust
+    /// destructors on the stack, if there are any, for native executors as a
+    /// longjmp or equivalent will be used.
+    unsafe fn unwind(&self, store: &mut dyn VMStore) {
         let unwind = self.unwind.replace(UnwindState::None);
         match unwind {
             UnwindState::UnwindToHost { .. } => {
@@ -878,10 +884,8 @@ impl CallThreadState {
                 // when we reach the entry-from-host side after the
                 // `longjmp`.
                 self.unwind.set(unwind);
-                debug_assert!(!self.jmp_buf.get().is_null());
-                debug_assert!(self.jmp_buf.get() != CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
                 unsafe {
-                    traphandlers::wasmtime_longjmp(self.jmp_buf.get());
+                    self.longjmp(store.executor());
                 }
             }
             #[cfg(feature = "gc")]
@@ -898,11 +902,56 @@ impl CallThreadState {
                 // We only use one of the payload words.
                 let payload2 = 0;
                 unsafe {
-                    wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2);
+                    self.resume_to_exception_handler(
+                        store.executor(),
+                        pc,
+                        sp,
+                        fp,
+                        payload1,
+                        payload2,
+                    );
                 }
             }
             UnwindState::None => {
                 panic!("Attempting to unwind with no unwind state set.");
+            }
+        }
+    }
+
+    unsafe fn longjmp(&self, executor: ExecutorRef<'_>) {
+        let jmp_buf = self.jmp_buf.get();
+        debug_assert!(!jmp_buf.is_null());
+        debug_assert!(jmp_buf != CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
+
+        unsafe {
+            match executor {
+                ExecutorRef::Interpreter(r) => r.longjmp(jmp_buf),
+                #[cfg(has_host_compiler_backend)]
+                ExecutorRef::Native => traphandlers::wasmtime_longjmp(jmp_buf),
+            }
+        }
+    }
+
+    unsafe fn resume_to_exception_handler(
+        &self,
+        executor: ExecutorRef<'_>,
+        pc: usize,
+        sp: usize,
+        fp: usize,
+        payload1: usize,
+        payload2: usize,
+    ) {
+        unsafe {
+            match executor {
+                ExecutorRef::Interpreter(r) => {
+                    r.resume_to_exception_handler(pc, sp, fp, payload1, payload2)
+                }
+
+                // TODO
+                #[cfg(has_host_compiler_backend)]
+                ExecutorRef::Native => {
+                    wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2)
+                }
             }
         }
     }

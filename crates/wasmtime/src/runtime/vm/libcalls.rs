@@ -1665,18 +1665,7 @@ fn raise(store: &mut dyn VMStore, _instance: Pin<&mut Instance>) {
     // SAFETY: this is only called from compiled wasm so we know that wasm has
     // already been entered. It's a dynamic safety precondition that the trap
     // information has already been arranged to be present.
-    #[cfg(has_host_compiler_backend)]
-    unsafe {
-        crate::runtime::vm::traphandlers::raise_preexisting_trap(store)
-    }
-
-    // When Cranelift isn't in use then this is an unused libcall for Pulley, so
-    // just insert a stub to catch bugs if it's accidentally called.
-    #[cfg(not(has_host_compiler_backend))]
-    {
-        let _ = store;
-        unreachable!()
-    }
+    unsafe { crate::runtime::vm::traphandlers::raise_preexisting_trap(store) }
 }
 
 // Builtins for continuations. These are thin wrappers around the

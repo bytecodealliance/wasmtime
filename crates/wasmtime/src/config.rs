@@ -2083,13 +2083,6 @@ impl Config {
                     unsupported |= WasmFeatures::STACK_SWITCHING;
                 }
 
-                // Pulley also doesn't support exceptions, because we
-                // need to refactor the setjmp/longjmp emulation to
-                // also support resuming into Wasm.
-                if self.compiler_target().is_pulley() {
-                    unsupported |= WasmFeatures::EXCEPTIONS;
-                }
-
                 use target_lexicon::*;
                 match self.compiler_target() {
                     Triple {
