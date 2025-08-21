@@ -1308,7 +1308,8 @@ unsafe impl HostResultHasUnwindSentinel for NextEpoch {
 
 // Hook for validating malloc using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
-fn check_malloc(_store: &mut dyn VMStore, instance: InstanceId, addr: u32, len: u32) -> Result<()> {
+fn check_malloc(store: &mut dyn VMStore, instance: InstanceId, addr: u32, len: u32) -> Result<()> {
+    let instance = store.instance_mut(instance);
     if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         let result = wmemcheck_state.malloc(addr as usize, len as usize);
         wmemcheck_state.memcheck_on();
@@ -1330,7 +1331,8 @@ fn check_malloc(_store: &mut dyn VMStore, instance: InstanceId, addr: u32, len: 
 
 // Hook for validating free using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
-fn check_free(_store: &mut dyn VMStore, instance: InstanceId, addr: u32) -> Result<()> {
+fn check_free(store: &mut dyn VMStore, instance: InstanceId, addr: u32) -> Result<()> {
+    let instance = store.instance_mut(instance);
     if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         let result = wmemcheck_state.free(addr as usize);
         wmemcheck_state.memcheck_on();
@@ -1350,12 +1352,13 @@ fn check_free(_store: &mut dyn VMStore, instance: InstanceId, addr: u32) -> Resu
 // Hook for validating load using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 fn check_load(
-    _store: &mut dyn VMStore,
+    store: &mut dyn VMStore,
     instance: InstanceId,
     num_bytes: u32,
     addr: u32,
     offset: u32,
 ) -> Result<()> {
+    let instance = store.instance_mut(instance);
     if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         let result = wmemcheck_state.read(addr as usize + offset as usize, num_bytes as usize);
         match result {
@@ -1377,12 +1380,13 @@ fn check_load(
 // Hook for validating store using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 fn check_store(
-    _store: &mut dyn VMStore,
+    store: &mut dyn VMStore,
     instance: InstanceId,
     num_bytes: u32,
     addr: u32,
     offset: u32,
 ) -> Result<()> {
+    let instance = store.instance_mut(instance);
     if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         let result = wmemcheck_state.write(addr as usize + offset as usize, num_bytes as usize);
         match result {
@@ -1403,7 +1407,8 @@ fn check_store(
 
 // Hook for turning wmemcheck load/store validation off when entering a malloc function.
 #[cfg(feature = "wmemcheck")]
-fn malloc_start(_store: &mut dyn VMStore, instance: InstanceId) {
+fn malloc_start(store: &mut dyn VMStore, instance: InstanceId) {
+    let instance = store.instance_mut(instance);
     if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         wmemcheck_state.memcheck_off();
     }
@@ -1411,7 +1416,8 @@ fn malloc_start(_store: &mut dyn VMStore, instance: InstanceId) {
 
 // Hook for turning wmemcheck load/store validation off when entering a free function.
 #[cfg(feature = "wmemcheck")]
-fn free_start(_store: &mut dyn VMStore, instance: InstanceId) {
+fn free_start(store: &mut dyn VMStore, instance: InstanceId) {
+    let instance = store.instance_mut(instance);
     if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         wmemcheck_state.memcheck_off();
     }
@@ -1430,7 +1436,8 @@ fn update_stack_pointer(_store: &mut dyn VMStore, _instance: InstanceId, _value:
 
 // Hook updating wmemcheck_state memory state vector every time memory.grow is called.
 #[cfg(feature = "wmemcheck")]
-fn update_mem_size(_store: &mut dyn VMStore, instance: InstanceId, num_pages: u32) {
+fn update_mem_size(store: &mut dyn VMStore, instance: InstanceId, num_pages: u32) {
+    let instance = store.instance_mut(instance);
     if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         const KIB: usize = 1024;
         let num_bytes = num_pages as usize * 64 * KIB;
