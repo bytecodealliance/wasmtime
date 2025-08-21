@@ -322,11 +322,7 @@ impl Compiler {
             }
 
             Compiler::CraneliftPulley => {
-                config.threads()
-                    || config.legacy_exceptions()
-                    // Pulley doesn't yet support exception unwinding.
-                    || config.exceptions()
-                    || config.stack_switching()
+                config.threads() || config.legacy_exceptions() || config.stack_switching()
             }
         }
     }

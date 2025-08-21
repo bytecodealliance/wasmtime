@@ -334,7 +334,7 @@ emitting Pulley bytecode.
 | [`gc`]                                  | ✅        | ❌     |
 | [`wide-arithmetic`]                     | ✅        | ❌     |
 | [`custom-page-sizes`]                   | ✅        | ❌     |
-| [`exception-handling`]                  | 🚧        | ❌     |
+| [`exception-handling`]                  | ✅        | ❌     |
 | [`stack-switching`]                     | ❌        | ❌     |
 
 [^a]: Winch supports some features of the [`reference-types`] proposal such as
