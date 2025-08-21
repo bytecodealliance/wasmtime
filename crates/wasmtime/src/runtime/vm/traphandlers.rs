@@ -446,7 +446,7 @@ where
 
     let result = CallThreadState::new(store.0, old_state).with(|cx| match store.0.executor() {
         // In interpreted mode directly invoke the host closure since we won't
-        // be using host-based `etjmp`/`longjmp` as that's not going to save
+        // be using host-based `setjmp`/`longjmp` as that's not going to save
         // the context we want.
         ExecutorRef::Interpreter(r) => {
             cx.jmp_buf
