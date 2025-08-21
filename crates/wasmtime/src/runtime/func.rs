@@ -2403,7 +2403,7 @@ impl HostContext {
         unsafe {
             vm::Instance::enter_host_from_wasm(caller_vmctx, |store, instance| {
                 let store = store.unchecked_context_mut();
-                Caller::with(store, instance.id(), run)
+                Caller::with(store, instance, run)
             })
         }
     }
