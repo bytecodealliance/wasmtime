@@ -222,6 +222,10 @@ impl ConstExprEvaluator {
 
         self.stack.clear();
 
+        // On GC-less builds ensure that this is always considered used an
+        // needed-mutable.
+        let _ = &mut limiter;
+
         for op in expr.ops() {
             log::trace!("const-evaluating op: {op:?}");
             match op {
