@@ -123,13 +123,6 @@ pub(crate) fn gc_store() -> Result<wasmtime::Store<()>> {
     Ok(wasmtime::Store::new(&engine, ()))
 }
 
-pub(crate) fn exceptions_store(config: &mut Config) -> Result<wasmtime::Store<()>> {
-    let _ = env_logger::try_init();
-    config.wasm_exceptions(true);
-    let engine = wasmtime::Engine::new(config)?;
-    Ok(wasmtime::Store::new(&engine, ()))
-}
-
 trait ErrorExt {
     fn assert_contains(&self, msg: &str);
 }

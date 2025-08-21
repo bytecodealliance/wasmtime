@@ -270,20 +270,21 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
                     &mut config,
                     &#test_config,
                 );
+                let compiler = wasmtime_test_util::wast::Compiler::#strategy_ident;
                 wasmtime_test_util::wasmtime_wast::apply_wast_config(
                     &mut config,
                     &wasmtime_test_util::wast::WastConfig {
-                        compiler: wasmtime_test_util::wast::Compiler::#strategy_ident,
+                        compiler,
                         pooling: false,
                         collector: wasmtime_test_util::wast::Collector::Auto,
                     },
                 );
                 let result = #func_name(&mut config) #await_;
-        if wasmtime_test_util::wast::Compiler::#strategy_ident.should_fail(&#test_config) {
-            assert!(result.is_err());
-        } else {
-            result.unwrap();
-        }
+                if !compiler.supports_host() || compiler.should_fail(&#test_config) {
+                    assert!(result.is_err());
+                } else {
+                    result.unwrap();
+                }
             }
         };
 

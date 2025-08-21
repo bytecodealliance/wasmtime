@@ -1,12 +1,10 @@
-use super::exceptions_store;
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
-#[cfg_attr(miri, ignore)]
 #[wasmtime_test(wasm_features(exceptions))]
 fn basic_throw(config: &mut Config) -> Result<()> {
-    let mut store = exceptions_store(config)?;
-    let engine = store.engine();
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
 
     let module = Module::new(
         &engine,
@@ -39,10 +37,9 @@ fn basic_throw(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(exceptions))]
-#[cfg_attr(miri, ignore)]
 fn dynamic_tags(config: &mut Config) -> Result<()> {
-    let mut store = exceptions_store(config)?;
-    let engine = store.engine();
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
 
     let module = Module::new(
         &engine,
@@ -99,10 +96,9 @@ fn dynamic_tags(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(exceptions))]
-#[cfg_attr(miri, ignore)]
 fn exception_escape_to_host(config: &mut Config) -> Result<()> {
-    let mut store = exceptions_store(config)?;
-    let engine = store.engine();
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
 
     let module = Module::new(
         &engine,
@@ -132,10 +128,9 @@ fn exception_escape_to_host(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(exceptions))]
-#[cfg_attr(miri, ignore)]
 fn exception_from_host(config: &mut Config) -> Result<()> {
-    let mut store = exceptions_store(config)?;
-    let engine = store.engine();
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
 
     let module = Module::new(
         &engine,
@@ -183,10 +178,9 @@ fn exception_from_host(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(exceptions))]
-#[cfg_attr(miri, ignore)]
 fn exception_across_no_wasm(config: &mut Config) -> Result<()> {
-    let mut store = exceptions_store(config)?;
-    let engine = store.engine();
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
 
     let functy = FuncType::new(&engine, [ValType::I32], []);
     let tagty = TagType::new(functy.clone());
@@ -211,18 +205,6 @@ fn exception_across_no_wasm(config: &mut Config) -> Result<()> {
     let exntag = exn.tag(&mut store)?;
     assert!(Tag::eq(&exntag, &tag, &store));
     assert_eq!(exn.field(&mut store, 0)?.unwrap_i32(), 42);
-
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
-fn pulley_unsupported() -> Result<()> {
-    use wasmtime_environ::TripleExt;
-    let mut config = wasmtime::Config::new();
-    config.target(&target_lexicon::Triple::pulley_host().to_string())?;
-    config.wasm_exceptions(true);
-    assert!(wasmtime::Engine::new(&config).is_err());
 
     Ok(())
 }
