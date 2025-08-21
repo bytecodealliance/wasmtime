@@ -1,6 +1,6 @@
 ## 36.0.1
 
-Released 2025-08-20.
+Released 2025-08-21.
 
 ### Added
 
@@ -8,6 +8,12 @@ Released 2025-08-20.
   `wasmtime_wasi::WasiCtx` to account for refactorings that happened in this
   release.
   [#11473](https://github.com/bytecodealliance/wasmtime/pull/11473)
+
+### Changed
+
+* Release artifacts for the C API are now smaller than the previous release to
+  assist with redistribution as-is.
+  [#11483](https://github.com/bytecodealliance/wasmtime/pull/11483)
 
 --------------------------------------------------------------------------------
 
