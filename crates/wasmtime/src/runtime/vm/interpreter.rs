@@ -5,7 +5,7 @@ use crate::runtime::vm::{
 };
 use crate::{Engine, ValRaw};
 use core::marker;
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
 use pulley_interpreter::{FReg, Reg, XReg};
 use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
@@ -57,6 +57,7 @@ struct VmState {
 
 enum Raise {
     Longjmp,
+    #[cfg(feature = "gc")]
     ResumeToExceptionHandler(usize),
 }
 
@@ -270,8 +271,9 @@ impl InterpreterRef<'_> {
                                 vm = &mut state.vm;
                                 break false;
                             }
+                            #[cfg(feature = "gc")]
                             Raise::ResumeToExceptionHandler(pc) => {
-                                let pc = ptr::with_exposed_provenance_mut(pc);
+                                let pc = core::ptr::with_exposed_provenance_mut(pc);
                                 bytecode = NonNull::new(pc).unwrap();
                             }
                         }
@@ -506,7 +508,7 @@ impl InterpreterRef<'_> {
     ///
     /// Requires that `jmp_buf` is valid, it's a `Setjmp`, and it's valid to
     /// jump to.
-    pub unsafe fn longjmp(mut self, jmp_buf: *const u8) {
+    pub(crate) unsafe fn longjmp(mut self, jmp_buf: *const u8) {
         unsafe {
             longjmp(self.vm(), *jmp_buf.cast::<Setjmp>());
         }
@@ -525,7 +527,8 @@ impl InterpreterRef<'_> {
     ///
     /// Requires that all the parameters here are valid and will leave Pulley
     /// in a valid state for executing.
-    pub unsafe fn resume_to_exception_handler(
+    #[cfg(feature = "gc")]
+    pub(crate) unsafe fn resume_to_exception_handler(
         mut self,
         pc: usize,
         sp: usize,
@@ -537,8 +540,8 @@ impl InterpreterRef<'_> {
             let vm = self.vm();
             vm[XReg::x0].set_u64(payload1 as u64);
             vm[XReg::x1].set_u64(payload2 as u64);
-            vm[XReg::sp].set_ptr(ptr::with_exposed_provenance_mut::<u8>(sp));
-            vm.set_fp(ptr::with_exposed_provenance_mut(fp));
+            vm[XReg::sp].set_ptr(core::ptr::with_exposed_provenance_mut::<u8>(sp));
+            vm.set_fp(core::ptr::with_exposed_provenance_mut(fp));
         }
         let state = self.vm_state();
         debug_assert!(state.raise.is_none());

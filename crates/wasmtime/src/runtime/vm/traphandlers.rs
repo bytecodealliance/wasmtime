@@ -932,6 +932,7 @@ impl CallThreadState {
         }
     }
 
+    #[cfg(feature = "gc")]
     unsafe fn resume_to_exception_handler(
         &self,
         executor: ExecutorRef<'_>,

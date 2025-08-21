@@ -5,7 +5,7 @@
 //! having these structures plumbed around.
 
 use crate::runtime::Uninhabited;
-use crate::runtime::vm::{VMContext, VMOpaqueContext};
+use crate::runtime::vm::{VMContext, VMOpaqueContext, traphandlers};
 use crate::{Engine, ValRaw};
 use core::marker;
 use core::mem;
@@ -49,6 +49,24 @@ impl InterpreterRef<'_> {
         _caller: NonNull<VMContext>,
         _args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
+        match self.empty {}
+    }
+
+    pub(crate) unsafe fn longjmp(self, jmp_buf: *const u8) {
+        // just consider this function used
+        traphandlers::set_jmp_buf(jmp_buf);
+        match self.empty {}
+    }
+
+    #[cfg(feature = "gc")]
+    pub(crate) unsafe fn resume_to_exception_handler(
+        self,
+        _pc: usize,
+        _sp: usize,
+        _fp: usize,
+        _payload1: usize,
+        _payload2: usize,
+    ) {
         match self.empty {}
     }
 }
