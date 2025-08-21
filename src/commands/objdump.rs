@@ -526,7 +526,8 @@ struct Decorator<'a> {
     addrmap: Option<Peekable<Box<dyn Iterator<Item = (u32, FilePos)> + 'a>>>,
     traps: Option<Peekable<Box<dyn Iterator<Item = (u32, Trap)> + 'a>>>,
     stack_maps: Option<Peekable<Box<dyn Iterator<Item = (u32, StackMap<'a>)> + 'a>>>,
-    exception_tables: Option<Peekable<Box<dyn Iterator<Item = (u32, Vec<ExceptionHandler>)> + 'a>>>,
+    exception_tables:
+        Option<Peekable<Box<dyn Iterator<Item = (u32, Option<u32>, Vec<ExceptionHandler>)> + 'a>>>,
 }
 
 impl Decorator<'_> {
@@ -597,11 +598,16 @@ impl Decorator<'_> {
         let Some(exception_tables) = &mut self.exception_tables else {
             return;
         };
-        while let Some((addr, handlers)) =
-            exception_tables.next_if(|(addr, _pos)| u64::from(*addr) <= address)
+        while let Some((addr, frame_offset, handlers)) =
+            exception_tables.next_if(|(addr, _, _)| u64::from(*addr) <= address)
         {
             if u64::from(addr) != address {
                 continue;
+            }
+            if let Some(frame_offset) = frame_offset {
+                list.push(format!(
+                    "exception frame offset: SP = FP - 0x{frame_offset:x}",
+                ));
             }
             for handler in &handlers {
                 let tag = match handler.tag {

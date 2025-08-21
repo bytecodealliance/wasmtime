@@ -1115,6 +1115,11 @@ impl FrameLayout {
 
         sp_off
     }
+
+    /// Get the offset from SP up to FP.
+    pub fn sp_to_fp(&self) -> u32 {
+        self.outgoing_args_size + self.fixed_frame_storage_size + self.clobber_size
+    }
 }
 
 /// ABI object for a function body.

@@ -31,10 +31,10 @@ pub unsafe fn compute_throw_action(store: &mut dyn VMStore) -> ThrowAction {
     );
 
     // Get the state needed for a stack walk.
-    let (exit_pc, exit_trampoline_fp, entry_fp) = unsafe {
+    let (exit_pc, exit_fp, entry_fp) = unsafe {
         (
             *nogc.vm_store_context().last_wasm_exit_pc.get(),
-            *nogc.vm_store_context().last_wasm_exit_trampoline_fp.get(),
+            nogc.vm_store_context().last_wasm_exit_fp(),
             *nogc.vm_store_context().last_wasm_entry_fp.get(),
         )
     };
@@ -43,42 +43,39 @@ pub unsafe fn compute_throw_action(store: &mut dyn VMStore) -> ThrowAction {
     // func, wrapped up as a `Func`, is called directly via
     // `Func::call` -- then the only possible action we can take is
     // `None` (i.e., no handler, unwind to entry from host).
-    if exit_trampoline_fp == 0 {
+    if exit_fp == 0 {
         return ThrowAction::None;
     }
 
     // Walk the stack, looking up the module with each PC, and using
     // that module to resolve local tag indices into (instance, tag)
     // tuples.
-    let handler_lookup = |frame: &Frame| -> Option<usize> {
+    let handler_lookup = |frame: &Frame| -> Option<(usize, usize)> {
         log::trace!(
-            "exception-throw stack walk: frame at FP={:x} SP={:x} PC={:x}",
+            "exception-throw stack walk: frame at FP={:x} PC={:x}",
             frame.fp(),
-            frame.sp().unwrap(),
             frame.pc()
         );
         let module = nogc.modules().lookup_module_by_pc(frame.pc())?;
         let base = module.code_object().code_memory().text().as_ptr() as usize;
         let rel_pc = u32::try_from(frame.pc().wrapping_sub(base)).expect("Module larger than 4GiB");
         let et = module.exception_table();
-        for handler in et.lookup_pc(rel_pc) {
+        let (frame_offset, handlers) = et.lookup_pc(rel_pc);
+        let fp_to_sp = -isize::try_from(frame_offset.unwrap_or(0)).unwrap();
+        for handler in handlers {
             log::trace!("-> checking handler: {handler:?}");
             let is_match = match handler.tag {
                 // Catch-all/default handler. Always come last in sequence.
                 None => true,
                 Some(module_local_tag_index) => {
-                    let frame_vmctx = unsafe {
-                        frame
-                            .read_slot(
-                                usize::try_from(
-                                    handler
-                                        .context_sp_offset
-                                        .expect("dynamic context not present for handler record"),
-                                )
-                                .unwrap(),
-                            )
-                            .unwrap()
-                    };
+                    let fp_offset = fp_to_sp
+                        + isize::try_from(
+                            handler
+                                .context_sp_offset
+                                .expect("dynamic context not present for handler record"),
+                        )
+                        .unwrap();
+                    let frame_vmctx = unsafe { frame.read_slot_from_fp(fp_offset) };
                     log::trace!("-> read vmctx from frame: {frame_vmctx:x}");
                     let frame_vmctx =
                         NonNull::new(frame_vmctx as *mut VMContext).expect("null vmctx in frame");
@@ -108,8 +105,11 @@ pub unsafe fn compute_throw_action(store: &mut dyn VMStore) -> ThrowAction {
                 }
             };
             if is_match {
-                return Some(base.wrapping_add(
-                    usize::try_from(handler.handler_offset).expect("Module larger than usize"),
+                return Some((
+                    base.wrapping_add(
+                        usize::try_from(handler.handler_offset).expect("Module larger than usize"),
+                    ),
+                    frame.fp().wrapping_add_signed(fp_to_sp),
                 ));
             }
         }
@@ -121,7 +121,7 @@ pub unsafe fn compute_throw_action(store: &mut dyn VMStore) -> ThrowAction {
             unwinder,
             handler_lookup,
             exit_pc,
-            exit_trampoline_fp,
+            exit_fp,
             entry_fp,
         )
     };
