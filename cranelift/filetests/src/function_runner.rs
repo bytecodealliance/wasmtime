@@ -648,7 +648,7 @@ extern "C-unwind" fn __cranelift_throw(
 ) -> ! {
     let compiled_test_file = unsafe { &*COMPILED_TEST_FILE.get() };
     let unwind_host = wasmtime_unwinder::UnwindHost;
-    let frame_handler = |frame: &wasmtime_unwinder::Frame| -> Option<usize> {
+    let frame_handler = |frame: &wasmtime_unwinder::Frame| -> Option<(usize, usize)> {
         let (base, table) = compiled_test_file
             .module
             .as_ref()
@@ -662,10 +662,17 @@ extern "C-unwind" fn __cranelift_throw(
         )
         .expect("module larger than 4GiB");
 
-        table.lookup_pc_tag(relative_pc, tag).map(|handler| {
-            base.checked_add(usize::try_from(handler).unwrap())
-                .expect("Handler address computation overflowed")
-        })
+        table
+            .lookup_pc_tag(relative_pc, tag)
+            .map(|(frame_offset, handler)| {
+                let handler_sp = frame
+                    .fp()
+                    .wrapping_sub(usize::try_from(frame_offset).unwrap());
+                let handler_pc = base
+                    .checked_add(usize::try_from(handler).unwrap())
+                    .expect("Handler address computation overflowed");
+                (handler_pc, handler_sp)
+            })
     };
     unsafe {
         match wasmtime_unwinder::compute_throw_action(

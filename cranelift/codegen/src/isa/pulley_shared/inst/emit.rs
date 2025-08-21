@@ -184,7 +184,10 @@ fn pulley_emit<P>(
             }
 
             if let Some(try_call) = info.try_call_info.as_ref() {
-                sink.add_try_call_site(try_call.exception_handlers(&state.frame_layout));
+                sink.add_try_call_site(
+                    Some(state.frame_layout.sp_to_fp()),
+                    try_call.exception_handlers(&state.frame_layout),
+                );
             } else {
                 sink.add_call_site();
             }
@@ -224,7 +227,10 @@ fn pulley_emit<P>(
             }
 
             if let Some(try_call) = info.try_call_info.as_ref() {
-                sink.add_try_call_site(try_call.exception_handlers(&state.frame_layout));
+                sink.add_try_call_site(
+                    Some(state.frame_layout.sp_to_fp()),
+                    try_call.exception_handlers(&state.frame_layout),
+                );
             } else {
                 sink.add_call_site();
             }
@@ -290,7 +296,10 @@ fn pulley_emit<P>(
             }
 
             if let Some(try_call) = info.try_call_info.as_ref() {
-                sink.add_try_call_site(try_call.exception_handlers(&state.frame_layout));
+                sink.add_try_call_site(
+                    Some(state.frame_layout.sp_to_fp()),
+                    try_call.exception_handlers(&state.frame_layout),
+                );
             } else {
                 sink.add_call_site();
             }

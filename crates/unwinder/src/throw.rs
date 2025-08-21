@@ -46,7 +46,7 @@ pub enum ThrowAction {
 /// The safety of this function is the same as [`crate::visit_frames`] where the
 /// values passed in configuring the frame pointer walk must be correct and
 /// Wasm-defined for this to not have UB.
-pub unsafe fn compute_throw_action<F: Fn(&Frame) -> Option<usize>>(
+pub unsafe fn compute_throw_action<F: Fn(&Frame) -> Option<(usize, usize)>>(
     unwind: &dyn Unwind,
     frame_handler: F,
     exit_pc: usize,
@@ -64,19 +64,10 @@ pub unsafe fn compute_throw_action<F: Fn(&Frame) -> Option<usize>>(
             entry_frame,
             |frame| {
                 log::trace!("visit_frame: frame {frame:?}");
-                let Some(sp) = frame.sp() else {
-                    // Cannot possibly unwind to this frame if SP is not
-                    // known. This is only the case for the first
-                    // (trampoline) frame; after that, we know SP at the
-                    // callsite because we know the offset from the lower
-                    // FP to the next frame's SP.
-                    return ControlFlow::Continue(());
-                };
-
-                if let Some(handler_pc) = frame_handler(&frame) {
+                if let Some((handler_pc, handler_sp)) = frame_handler(&frame) {
                     return ControlFlow::Break(ThrowAction::Handler {
                         pc: handler_pc,
-                        sp,
+                        sp: handler_sp,
                         fp: frame.fp(),
                     });
                 }

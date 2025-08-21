@@ -1611,13 +1611,14 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add a call-site record at the current offset.
     pub fn add_call_site(&mut self) {
-        self.add_try_call_site(core::iter::empty());
+        self.add_try_call_site(None, core::iter::empty());
     }
 
     /// Add a call-site record at the current offset with exception
     /// handlers.
     pub fn add_try_call_site(
         &mut self,
+        frame_offset: Option<u32>,
         exception_handlers: impl Iterator<Item = MachExceptionHandler>,
     ) {
         let start = u32::try_from(self.exception_handlers.len()).unwrap();
@@ -1627,6 +1628,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         self.call_sites.push(MachCallSite {
             ret_addr: self.data.len() as CodeOffset,
+            frame_offset,
             exception_handler_range,
         });
     }
@@ -1785,6 +1787,7 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
                 ..usize::try_from(handler_range.end).unwrap();
             FinalizedMachCallSite {
                 ret_addr: call_site.ret_addr,
+                frame_offset: call_site.frame_offset,
                 exception_handlers: &self.exception_handlers[handler_range],
             }
         })
@@ -2017,6 +2020,19 @@ pub struct MachCallSite {
     /// start of the buffer*.
     pub ret_addr: CodeOffset,
 
+    /// The offset from the FP at this callsite down to the SP when
+    /// the call occurs, if known. In other words, the size of the
+    /// stack frame up to the saved FP slot. Useful to recover the
+    /// start of the stack frame and to look up dynamic contexts
+    /// stored in [`ExceptionContextLoc::SPOffset`].
+    ///
+    /// If `None`, the compiler backend did not specify a frame
+    /// offset. The runtime in use with the compiled code may require
+    /// the frame offset if exception handlers are present or dynamic
+    /// context is used, but that is not Cranelift's concern: the
+    /// frame offset is optional at this level.
+    pub frame_offset: Option<u32>,
+
     /// Range in `exception_handlers` corresponding to the exception
     /// handlers for this callsite.
     exception_handler_range: Range<u32>,
@@ -2028,6 +2044,19 @@ pub struct FinalizedMachCallSite<'a> {
     /// The offset of the call's return address, *relative to the
     /// start of the buffer*.
     pub ret_addr: CodeOffset,
+
+    /// The offset from the FP at this callsite down to the SP when
+    /// the call occurs, if known. In other words, the size of the
+    /// stack frame up to the saved FP slot. Useful to recover the
+    /// start of the stack frame and to look up dynamic contexts
+    /// stored in [`ExceptionContextLoc::SPOffset`].
+    ///
+    /// If `None`, the compiler backend did not specify a frame
+    /// offset. The runtime in use with the compiled code may require
+    /// the frame offset if exception handlers are present or dynamic
+    /// context is used, but that is not Cranelift's concern: the
+    /// frame offset is optional at this level.
+    pub frame_offset: Option<u32>,
 
     /// Exception handlers at this callsite, with target offsets
     /// *relative to the start of the buffer*.
@@ -2577,6 +2606,7 @@ mod test {
         buf.add_trap(TrapCode::INTEGER_OVERFLOW);
         buf.add_trap(TrapCode::INTEGER_DIVISION_BY_ZERO);
         buf.add_try_call_site(
+            Some(0x10),
             [
                 MachExceptionHandler::Tag(ExceptionTag::new(42), label(2)),
                 MachExceptionHandler::Default(label(1)),
@@ -2616,6 +2646,7 @@ mod test {
         );
         let call_sites: Vec<_> = buf.call_sites().collect();
         assert_eq!(call_sites[0].ret_addr, 2);
+        assert_eq!(call_sites[0].frame_offset, Some(0x10));
         assert_eq!(
             call_sites[0].exception_handlers,
             &[

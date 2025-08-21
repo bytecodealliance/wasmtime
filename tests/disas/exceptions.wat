@@ -76,6 +76,7 @@
 ;;       movq    (%rsp), %rsi
 ;;       movq    (%rsp), %rdi
 ;;       callq   0
+;;       ├─╼ exception frame offset: SP = FP - 0x40
 ;;       ╰─╼ exception handler: tag=0, context at [SP+0x0], handler=0x116
 ;;       movl    $0x2a, %eax
 ;;       movl    $0x64, %ecx

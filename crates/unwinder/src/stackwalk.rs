@@ -65,9 +65,6 @@ pub struct Frame {
     pc: usize,
     /// The frame pointer value corresponding to this frame.
     fp: usize,
-    /// The SP value at the callsite. This may not be known for the
-    /// first frame that is visited.
-    sp: Option<usize>,
 }
 
 impl Frame {
@@ -81,13 +78,8 @@ impl Frame {
         self.fp
     }
 
-    /// Get this frame's stack pointer at the callsite, if known.
-    pub fn sp(&self) -> Option<usize> {
-        self.sp
-    }
-
     /// Read out a machine-word-sized value at the given offset from
-    /// SP in this frame, if the SP is known.
+    /// FP in this frame.
     ///
     /// # Safety
     ///
@@ -98,11 +90,10 @@ impl Frame {
     /// Requires that `offset` falls within the size of this
     /// frame. This ordinarily requires knowledge passed from the
     /// compiler that produced the running function, e.g., Cranelift.
-    pub unsafe fn read_slot(&self, offset: usize) -> Option<usize> {
+    pub unsafe fn read_slot_from_fp(&self, offset: isize) -> usize {
         // SAFETY: we required that this is a valid frame, and that
         // `offset` is a valid offset within that frame.
-        self.sp
-            .map(|sp| unsafe { *(sp.wrapping_add(offset) as *mut usize) })
+        unsafe { *(self.fp.wrapping_add_signed(offset) as *mut usize) }
     }
 }
 
@@ -138,8 +129,6 @@ pub unsafe fn visit_frames<R>(
     assert_ne!(fp, 0);
     assert_ne!(trampoline_fp, 0);
 
-    let mut last_fp = None;
-
     // This loop will walk the linked list of frame pointers starting
     // at `fp` and going up until `trampoline_fp`. We know that both
     // `fp` and `trampoline_fp` are "trusted values" aka generated and
@@ -171,7 +160,7 @@ pub unsafe fn visit_frames<R>(
     //
     // The trampoline records its own frame pointer (`trampoline_fp`),
     // which is guaranteed to be above all Wasm code. To check when
-    // we've reached the trampoline frame, it is therefore sufficient
+
     // to check when the next frame pointer is equal to
     // `trampoline_fp`. Once that's hit then we know that the entire
     // linked list has been traversed.
@@ -199,8 +188,7 @@ pub unsafe fn visit_frames<R>(
         log::trace!("pc = {:p}", pc as *const ());
         log::trace!("fp = {:p}", fp as *const ());
 
-        let sp = last_fp.map(|last_fp| last_fp + unwind.next_older_sp_from_fp_offset());
-        f(Frame { pc, fp, sp })?;
+        f(Frame { pc, fp })?;
 
         // SAFETY: this unsafe traversal of the linked list on the stack is
         // reflected in the contract of this function where `pc`, `fp`,
@@ -210,7 +198,7 @@ pub unsafe fn visit_frames<R>(
 
             // We rely on this offset being zero for all supported
             // architectures in
-            // `crates/cranelift/src/component/compiler.rs` when we set
+            // `crates/cranelift/src/component/compiler.s`r when we set
             // the Wasm exit FP. If this ever changes, we will need to
             // update that code as well!
             assert_eq!(unwind.next_older_fp_from_fp_offset(), 0);
@@ -222,7 +210,6 @@ pub unsafe fn visit_frames<R>(
             // Because the stack always grows down, the older FP must be greater
             // than the current FP.
             assert!(next_older_fp > fp, "{next_older_fp:#x} > {fp:#x}");
-            last_fp = Some(fp);
             fp = next_older_fp;
         }
     }
