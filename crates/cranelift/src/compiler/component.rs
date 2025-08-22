@@ -772,7 +772,7 @@ impl<'a> TrampolineCompiler<'a> {
         )
     }
 
-    /// Translates an invokation of a host function and interpret the result.
+    /// Translates an invocation of a host function and interpret the result.
     ///
     /// This is intended to be a relatively narrow waist which most intrinsics
     /// go through. The configuration supported here is:
