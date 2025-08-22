@@ -1234,7 +1234,7 @@ pub fn translate_ref_test(
         WasmHeapType::ConcreteCont(_) => {
             // TODO(#10248) GC integration for stack switching
             return Err(wasmtime_environ::WasmError::Unsupported(
-                "Stack switching feature not compatbile with GC, yet".to_string(),
+                "Stack switching feature not compatible with GC, yet".to_string(),
             ));
         }
     };

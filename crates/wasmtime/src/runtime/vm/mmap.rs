@@ -418,7 +418,7 @@ impl MmapOffset {
     ///
     /// ## Safety
     ///
-    /// The caller must ensure that noone else has a reference to this memory.
+    /// The caller must ensure that no one else has a reference to this memory.
     pub unsafe fn map_image_at(
         &self,
         image_source: &MemoryImageSource,
