@@ -241,7 +241,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.bitmaps]]
 version = "2.1.0"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.capstone]]
 version = "0.12.0"
@@ -461,7 +461,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.petgraph]]
 version = "0.6.5"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.ppv-lite86]]
 version = "0.2.16"
@@ -469,10 +469,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.proptest]]
 version = "1.0.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.psm]]
-version = "0.1.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.quick-error]]
@@ -493,7 +489,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rand_xoshiro]]
 version = "0.6.0"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.rawpointer]]
 version = "0.2.1"
@@ -545,7 +541,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.serde_yaml]]
 version = "0.9.34+deprecated"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.shuffling-allocator]]
 version = "1.1.2"
@@ -553,7 +549,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.sized-chunks]]
 version = "0.6.5"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.smallvec]]
 version = "1.8.0"
@@ -608,18 +604,13 @@ criteria = "safe-to-deploy"
 version = "0.1.28"
 criteria = "safe-to-deploy"
 
-[[exemptions.trait-variant]]
-version = "0.1.2"
-criteria = "safe-to-deploy"
-notes = "This crate is maintained by the `rust-lang` maintainers and is [officially recommended](https://blog.rust-lang.org/2023/12/21/async-fn-rpit-in-traits.html) by the Rust project."
-
 [[exemptions.typenum]]
 version = "1.15.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.unsafe-libyaml]]
 version = "0.2.11"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.untrusted]]
 version = "0.9.0"
