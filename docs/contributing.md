@@ -68,6 +68,13 @@ Also, we encourage people to just look around and find things they're
 interested in. This a good time to get involved, as there aren't a lot of
 things set in stone yet.
 
+### Documentation typo fixes
+
+We all make typos, and in comments and documentation, rustc doesn't catch them
+for us. We appreciate recieving PRs to fix them. However, we request that new
+contributors (those who have not had any substantive code PRs merged) only
+submit one PR per week dedicated to fixing typos.
+
 [Rust's issue tags]: https://github.com/rust-lang/rust/blob/master/CONTRIBUTING.md#issue-triage
 [E-easy]: https://github.com/bytecodealliance/wasmtime/labels/cranelift%3AE-easy
 [E-rust]: https://github.com/bytecodealliance/wasmtime/labels/cranelift%3AE-rust
