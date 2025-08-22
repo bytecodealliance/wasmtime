@@ -551,29 +551,6 @@ impl LocalMemory {
 
                     let mut slot =
                         MemoryImageSlot::create(mmap_base, byte_size, alloc.byte_capacity());
-                    // On drop, we will unmap our mmap'd range that this slot
-                    // was mapped on top of, so there is no need for the slot to
-                    // wipe it with an anonymous mapping first.
-                    //
-                    // Note that this code would be incorrect if clear-on-drop
-                    // were enabled. That's because:
-                    //
-                    // * In the struct definition, `memory_image` above is listed
-                    //   after `alloc`.
-                    // * Rust drops fields in the order they're defined, so
-                    //   `memory_image` would be dropped after `alloc`.
-                    // * `alloc` can represent either owned memory (i.e. the mmap is
-                    //   freed on drop) or logically borrowed memory (something else
-                    //   manages the mmap).
-                    // * If `alloc` is borrowed memory, then this isn't an issue.
-                    // * But if `alloc` is owned memory, then it would first drop
-                    //   the mmap, and then `memory_image` would try to remap
-                    //   part of that same memory as part of clear-on-drop.
-                    //
-                    // A lot of this really suggests representing the ownership
-                    // via Rust lifetimes -- that would be a major refactor,
-                    // though.
-                    slot.no_clear_on_drop();
                     slot.instantiate(alloc.byte_size(), Some(image), ty, tunables)?;
                     Some(slot)
                 } else {

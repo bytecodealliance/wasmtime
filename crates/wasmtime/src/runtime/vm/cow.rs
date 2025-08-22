@@ -333,12 +333,6 @@ pub struct MemoryImageSlot {
     /// initial image content, as appropriate. Everything between
     /// `self.accessible` and `self.static_size` is inaccessible.
     dirty: bool,
-
-    /// Whether this MemoryImageSlot is responsible for mapping anonymous
-    /// memory (to hold the reservation while overwriting mappings
-    /// specific to this slot) in place when it is dropped. Default
-    /// on, unless the caller knows what they are doing.
-    clear_on_drop: bool,
 }
 
 impl fmt::Debug for MemoryImageSlot {
@@ -348,7 +342,6 @@ impl fmt::Debug for MemoryImageSlot {
             .field("static_size", &self.static_size)
             .field("accessible", &self.accessible)
             .field("dirty", &self.dirty)
-            .field("clear_on_drop", &self.clear_on_drop)
             .finish_non_exhaustive()
     }
 }
@@ -373,16 +366,7 @@ impl MemoryImageSlot {
             accessible,
             image: None,
             dirty: false,
-            clear_on_drop: true,
         }
-    }
-
-    /// Inform the MemoryImageSlot that it should *not* clear the underlying
-    /// address space when dropped. This should be used only when the
-    /// caller will clear or reuse the address space in some other
-    /// way.
-    pub(crate) fn no_clear_on_drop(&mut self) {
-        self.clear_on_drop = false;
     }
 
     pub(crate) fn set_heap_limit(&mut self, size_bytes: usize) -> Result<()> {
@@ -707,7 +691,7 @@ impl MemoryImageSlot {
 
     /// Map anonymous zeroed memory across the whole slot,
     /// inaccessible. Used both during instantiate and during drop.
-    fn reset_with_anon_memory(&mut self) -> Result<()> {
+    pub(crate) fn reset_with_anon_memory(&mut self) -> Result<()> {
         if self.static_size == 0 {
             assert!(self.image.is_none());
             assert_eq!(self.accessible, 0);
@@ -722,45 +706,6 @@ impl MemoryImageSlot {
         self.accessible = HostAlignedByteCount::ZERO;
 
         Ok(())
-    }
-}
-
-impl Drop for MemoryImageSlot {
-    fn drop(&mut self) {
-        // The MemoryImageSlot may be dropped if there is an error during
-        // instantiation: for example, if a memory-growth limiter
-        // disallows a guest from having a memory of a certain size,
-        // after we've already initialized the MemoryImageSlot.
-        //
-        // We need to return this region of the large pool mmap to a
-        // safe state (with no module-specific mappings). The
-        // MemoryImageSlot will not be returned to the MemoryPool, so a new
-        // MemoryImageSlot will be created and overwrite the mappings anyway
-        // on the slot's next use; but for safety and to avoid
-        // resource leaks it's better not to have stale mappings to a
-        // possibly-otherwise-dead module's image.
-        //
-        // To "wipe the slate clean", let's do a mmap of anonymous
-        // memory over the whole region, with PROT_NONE. Note that we
-        // *can't* simply munmap, because that leaves a hole in the
-        // middle of the pooling allocator's big memory area that some
-        // other random mmap may swoop in and take, to be trampled
-        // over by the next MemoryImageSlot later.
-        //
-        // Since we're in drop(), we can't sanely return an error if
-        // this mmap fails. Instead though the result is unwrapped here to
-        // trigger a panic if something goes wrong. Otherwise if this
-        // reset-the-mapping fails then on reuse it might be possible, depending
-        // on precisely where errors happened, that stale memory could get
-        // leaked through.
-        //
-        // The exception to all of this is if the `clear_on_drop` flag
-        // (which is set by default) is false. If so, the owner of
-        // this MemoryImageSlot has indicated that it will clean up in some
-        // other way.
-        if self.clear_on_drop {
-            self.reset_with_anon_memory().unwrap();
-        }
     }
 }
 
@@ -858,7 +803,6 @@ mod test {
         // Create a MemoryImageSlot on top of it
         let mut memfd =
             MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, 4 << 20);
-        memfd.no_clear_on_drop();
         assert!(!memfd.is_dirty());
         // instantiate with 64 KiB initial size
         memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
@@ -906,7 +850,6 @@ mod test {
         // Create a MemoryImageSlot on top of it
         let mut memfd =
             MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, 4 << 20);
-        memfd.no_clear_on_drop();
         // Create an image with some data.
         let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());
         // Instantiate with this image
@@ -996,7 +939,6 @@ mod test {
         let mmap = mmap_4mib_inaccessible();
         let mut memfd =
             MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, 4 << 20);
-        memfd.no_clear_on_drop();
 
         // Test basics with the image
         for image_off in [0, page_size, page_size * 2] {
@@ -1063,7 +1005,6 @@ mod test {
         let mmap = mmap_4mib_inaccessible();
         let mut memfd =
             MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, 4 << 20);
-        memfd.no_clear_on_drop();
         let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());
         let initial = 64 << 10;
 
@@ -1157,7 +1098,6 @@ mod test {
         let mmap_len = page_size * 9;
         let mut memfd =
             MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, mmap_len);
-        memfd.no_clear_on_drop();
         let pagemap = PageMap::new();
         let pagemap = pagemap.as_ref();
 

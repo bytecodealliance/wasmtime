@@ -117,6 +117,10 @@ harness = false
 name = "engine_across_forks"
 harness = false
 
+[[test]]
+name = "pooling_alloc_near_oom"
+harness = false
+
 # =============================================================================
 #
 # Features for the Wasmtime crate.
