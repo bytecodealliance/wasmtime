@@ -60,5 +60,7 @@ debug-builtins = ['wasmtime/debug-builtins']
 wat = ['dep:wat', 'wasmtime/wat']
 pooling-allocator = ["wasmtime/pooling-allocator"]
 component-model = ["wasmtime/component-model"]
+pulley = ["wasmtime/pulley"]
+all-arch = ["wasmtime/all-arch"]
 # ... if you add a line above this be sure to change the other locations
 # marked WASMTIME_FEATURE_LIST
