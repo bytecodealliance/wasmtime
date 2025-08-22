@@ -1,6 +1,6 @@
 use crate::runtime::vm::VMGcRef;
 use crate::{
-    ArrayRef, AsContext, AsContextMut, EqRef, GcRefImpl, HeapType, I31, ManuallyRooted, Result,
+    ArrayRef, AsContext, AsContextMut, EqRef, GcRefImpl, HeapType, I31, OwnedRooted, Result,
     Rooted, StructRef,
     store::{AutoAssertNoGc, StoreOpaque},
 };
@@ -16,9 +16,9 @@ impl From<Rooted<EqRef>> for Rooted<AnyRef> {
     }
 }
 
-impl From<ManuallyRooted<EqRef>> for ManuallyRooted<AnyRef> {
+impl From<OwnedRooted<EqRef>> for OwnedRooted<AnyRef> {
     #[inline]
-    fn from(s: ManuallyRooted<EqRef>) -> Self {
+    fn from(s: OwnedRooted<EqRef>) -> Self {
         match s.inner {}
     }
 }
@@ -30,9 +30,9 @@ impl From<Rooted<StructRef>> for Rooted<AnyRef> {
     }
 }
 
-impl From<ManuallyRooted<StructRef>> for ManuallyRooted<AnyRef> {
+impl From<OwnedRooted<StructRef>> for OwnedRooted<AnyRef> {
     #[inline]
-    fn from(s: ManuallyRooted<StructRef>) -> Self {
+    fn from(s: OwnedRooted<StructRef>) -> Self {
         match s.inner {}
     }
 }
@@ -44,9 +44,9 @@ impl From<Rooted<ArrayRef>> for Rooted<AnyRef> {
     }
 }
 
-impl From<ManuallyRooted<ArrayRef>> for ManuallyRooted<AnyRef> {
+impl From<OwnedRooted<ArrayRef>> for OwnedRooted<AnyRef> {
     #[inline]
-    fn from(s: ManuallyRooted<ArrayRef>) -> Self {
+    fn from(s: OwnedRooted<ArrayRef>) -> Self {
         match s.inner {}
     }
 }

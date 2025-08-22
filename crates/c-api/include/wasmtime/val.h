@@ -44,6 +44,8 @@ typedef struct wasmtime_anyref {
   uint32_t __private1;
   /// Internal to Wasmtime.
   uint32_t __private2;
+  /// Internal to Wasmtime.
+  uintptr_t __private3;
 } wasmtime_anyref_t;
 
 /// \brief Helper function to initialize the `ref` provided to a null anyref
@@ -179,6 +181,8 @@ typedef struct wasmtime_externref {
   uint32_t __private1;
   /// Internal to Wasmtime.
   uint32_t __private2;
+  /// Internal to Wasmtime.
+  uintptr_t __private3;
 } wasmtime_externref_t;
 
 /// \brief Helper function to initialize the `ref` provided to a null externref
@@ -418,7 +422,8 @@ typedef union wasmtime_val_raw {
 // Assert that the shape of this type is as expected since it needs to match
 // Rust.
 static inline void __wasmtime_val_assertions() {
-  static_assert(sizeof(wasmtime_valunion_t) == 16, "should be 16-bytes large");
+  static_assert(sizeof(wasmtime_valunion_t) == 16 + sizeof(void *),
+                "should be 16 bytes plus a pointer large");
   static_assert(__alignof(wasmtime_valunion_t) == 8,
                 "should be 8-byte aligned");
   static_assert(sizeof(wasmtime_val_raw_t) == 16, "should be 16 bytes large");

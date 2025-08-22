@@ -747,19 +747,19 @@ fn rooted_gets_collected_after_scope_exit() -> Result<()> {
 }
 
 #[test]
-fn manually_rooted_gets_collected_after_unrooting() -> Result<()> {
+fn owned_rooted_gets_collected_after_unrooting() -> Result<()> {
     let mut store = Store::<()>::default();
     let flag = Arc::new(AtomicBool::new(false));
 
     let externref = {
         let mut scope = RootScope::new(&mut store);
-        ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?.to_manually_rooted(&mut scope)?
+        ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?.to_owned_rooted(&mut scope)?
     };
 
     store.gc(None);
     assert!(!flag.load(SeqCst), "not dropped when still rooted");
 
-    externref.unroot(&mut store);
+    drop(externref);
     store.gc(None);
     assert!(flag.load(SeqCst), "dropped after being unrooted");
 
@@ -1492,6 +1492,40 @@ fn drc_gc_inbetween_host_calls() -> Result<()> {
 
     invoke_func()?;
     invoke_func()?;
+
+    Ok(())
+}
+
+#[test]
+fn owned_rooted() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, ());
+    let inner_dropped = Arc::new(AtomicBool::new(false));
+    let r = {
+        let mut scope = RootScope::new(&mut store);
+        let r = ExternRef::new(&mut scope, SetFlagOnDrop(inner_dropped.clone()))?;
+        r.to_owned_rooted(&mut scope)?
+    };
+    assert!(!inner_dropped.load(SeqCst));
+    store.gc(None);
+    assert!(!inner_dropped.load(SeqCst));
+    let r2 = r.clone();
+    store.gc(None);
+    assert!(!inner_dropped.load(SeqCst));
+    drop(r);
+    store.gc(None);
+    assert!(!inner_dropped.load(SeqCst));
+    drop(r2);
+    store.gc(None);
+    assert!(inner_dropped.load(SeqCst));
 
     Ok(())
 }
