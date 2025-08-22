@@ -568,7 +568,7 @@ pub struct WasmtimeConfig {
     regalloc_algorithm: RegallocAlgorithm,
     debug_info: bool,
     canonicalize_nans: bool,
-    interruptable: bool,
+    interruptible: bool,
     pub(crate) consume_fuel: bool,
     pub(crate) epoch_interruption: bool,
     /// The Wasmtime memory configuration to use.
