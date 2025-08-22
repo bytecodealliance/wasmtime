@@ -1417,7 +1417,8 @@ mod tests {
             | WasmFeatures::GC
             | WasmFeatures::GC_TYPES
             | WasmFeatures::CUSTOM_PAGE_SIZES
-            | WasmFeatures::EXTENDED_CONST;
+            | WasmFeatures::EXTENDED_CONST
+            | WasmFeatures::EXCEPTIONS;
 
         // All other features that wasmparser supports, which is presumably a
         // superset of the features that wasm-smith supports, are listed here as

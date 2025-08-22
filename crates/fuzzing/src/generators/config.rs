@@ -662,6 +662,7 @@ impl WasmtimeConfig {
                 config.config.gc_enabled = false;
                 config.config.tail_call_enabled = false;
                 config.config.reference_types_enabled = false;
+                config.config.exceptions_enabled = false;
                 config.function_references_enabled = false;
 
                 // Winch's SIMD implementations require AVX and AVX2.
