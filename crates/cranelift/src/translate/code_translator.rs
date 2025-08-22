@@ -3098,7 +3098,9 @@ fn translate_unreachable_operator(
                 blockty,
             );
         }
-        Operator::Loop { blockty: _ } | Operator::Block { blockty: _ } => {
+        Operator::Loop { blockty: _ }
+        | Operator::Block { blockty: _ }
+        | Operator::TryTable { try_table: _ } => {
             stack.push_block(ir::Block::reserved_value(), 0, 0);
         }
         Operator::Else => {
