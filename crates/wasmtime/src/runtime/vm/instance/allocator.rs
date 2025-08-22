@@ -30,7 +30,7 @@ pub use self::on_demand::OnDemandInstanceAllocator;
 mod pooling;
 #[cfg(feature = "pooling-allocator")]
 pub use self::pooling::{
-    InstanceLimits, PoolConcurrencyLimitError, PoolingInstanceAllocator,
+    InstanceLimits, PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
     PoolingInstanceAllocatorConfig,
 };
 
@@ -286,6 +286,12 @@ pub unsafe trait InstanceAllocator: Send + Sync {
 
     /// Allow access to memory regions protected by any protection key.
     fn allow_all_pkeys(&self);
+
+    /// Returns `Some(&PoolingInstanceAllocator)` if this is one.
+    #[cfg(feature = "pooling-allocator")]
+    fn as_pooling(&self) -> Option<&PoolingInstanceAllocator> {
+        None
+    }
 }
 
 impl dyn InstanceAllocator + '_ {

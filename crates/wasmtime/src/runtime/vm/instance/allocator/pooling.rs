@@ -21,6 +21,7 @@
 mod decommit_queue;
 mod index_allocator;
 mod memory_pool;
+mod metrics;
 mod table_pool;
 
 #[cfg(feature = "gc")]
@@ -54,6 +55,7 @@ use crate::runtime::vm::{
     mpk::{self, ProtectionKey, ProtectionMask},
     sys::vm::PageMap,
 };
+use core::sync::atomic::AtomicUsize;
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::sync::{Mutex, MutexGuard};
@@ -64,6 +66,8 @@ use std::{
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, Module, Tunables, VMOffsets,
 };
+
+pub use self::metrics::PoolingAllocatorMetrics;
 
 #[cfg(feature = "gc")]
 use super::GcHeapAllocationIndex;
@@ -305,8 +309,12 @@ pub struct PoolingInstanceAllocator {
     live_component_instances: AtomicU64,
 
     decommit_queue: Mutex<DecommitQueue>,
+
     memories: MemoryPool,
+    live_memories: AtomicUsize,
+
     tables: TablePool,
+    live_tables: AtomicUsize,
 
     #[cfg(feature = "gc")]
     gc_heaps: GcHeapPool,
@@ -335,6 +343,8 @@ impl Drop for PoolingInstanceAllocator {
 
         debug_assert_eq!(self.live_component_instances.load(Ordering::Acquire), 0);
         debug_assert_eq!(self.live_core_instances.load(Ordering::Acquire), 0);
+        debug_assert_eq!(self.live_memories.load(Ordering::Acquire), 0);
+        debug_assert_eq!(self.live_tables.load(Ordering::Acquire), 0);
 
         debug_assert!(self.memories.is_empty());
         debug_assert!(self.tables.is_empty());
@@ -357,7 +367,9 @@ impl PoolingInstanceAllocator {
             live_core_instances: AtomicU64::new(0),
             decommit_queue: Mutex::new(DecommitQueue::default()),
             memories: MemoryPool::new(config, tunables)?,
+            live_memories: AtomicUsize::new(0),
             tables: TablePool::new(config)?,
+            live_tables: AtomicUsize::new(0),
             #[cfg(feature = "gc")]
             gc_heaps: GcHeapPool::new(config)?,
             #[cfg(feature = "async")]
@@ -652,23 +664,29 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         ty: &wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
-        // FIXME(rust-lang/rust#145127) this should ideally use a version of
-        // `with_flush_and_retry` but adapted for async closures instead of only
-        // sync closures. Right now that won't compile though so this is the
-        // manually expanded version of the method.
-        let e = match self.memories.allocate(request, ty, memory_index).await {
-            Ok(result) => return Ok(result),
-            Err(e) => e,
-        };
+        async {
+            // FIXME(rust-lang/rust#145127) this should ideally use a version of
+            // `with_flush_and_retry` but adapted for async closures instead of only
+            // sync closures. Right now that won't compile though so this is the
+            // manually expanded version of the method.
+            let e = match self.memories.allocate(request, ty, memory_index).await {
+                Ok(result) => return Ok(result),
+                Err(e) => e,
+            };
 
-        if e.is::<PoolConcurrencyLimitError>() {
-            let queue = self.decommit_queue.lock().unwrap();
-            if self.flush_decommit_queue(queue) {
-                return self.memories.allocate(request, ty, memory_index).await;
+            if e.is::<PoolConcurrencyLimitError>() {
+                let queue = self.decommit_queue.lock().unwrap();
+                if self.flush_decommit_queue(queue) {
+                    return self.memories.allocate(request, ty, memory_index).await;
+                }
             }
-        }
 
-        Err(e)
+            Err(e)
+        }
+        .await
+        .inspect(|_| {
+            self.live_memories.fetch_add(1, Ordering::Relaxed);
+        })
     }
 
     unsafe fn deallocate_memory(
@@ -677,6 +695,9 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         allocation_index: MemoryAllocationIndex,
         memory: Memory,
     ) {
+        let prev = self.live_memories.fetch_sub(1, Ordering::Relaxed);
+        debug_assert!(prev > 0);
+
         // Reset the image slot. If there is any error clearing the
         // image, just drop it here, and let the drop handler for the
         // slot unmap in a way that retains the address space
@@ -712,21 +733,27 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         ty: &wasmtime_environ::Table,
         _table_index: DefinedTableIndex,
     ) -> Result<(super::TableAllocationIndex, Table)> {
-        // FIXME: see `allocate_memory` above for comments about duplication
-        // with `with_flush_and_retry`.
-        let e = match self.tables.allocate(request, ty).await {
-            Ok(result) => return Ok(result),
-            Err(e) => e,
-        };
+        async {
+            // FIXME: see `allocate_memory` above for comments about duplication
+            // with `with_flush_and_retry`.
+            let e = match self.tables.allocate(request, ty).await {
+                Ok(result) => return Ok(result),
+                Err(e) => e,
+            };
 
-        if e.is::<PoolConcurrencyLimitError>() {
-            let queue = self.decommit_queue.lock().unwrap();
-            if self.flush_decommit_queue(queue) {
-                return self.tables.allocate(request, ty).await;
+            if e.is::<PoolConcurrencyLimitError>() {
+                let queue = self.decommit_queue.lock().unwrap();
+                if self.flush_decommit_queue(queue) {
+                    return self.tables.allocate(request, ty).await;
+                }
             }
-        }
 
-        Err(e)
+            Err(e)
+        }
+        .await
+        .inspect(|_| {
+            self.live_tables.fetch_add(1, Ordering::Relaxed);
+        })
     }
 
     unsafe fn deallocate_table(
@@ -735,6 +762,9 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         allocation_index: TableAllocationIndex,
         mut table: Table,
     ) {
+        let prev = self.live_tables.fetch_sub(1, Ordering::Relaxed);
+        debug_assert!(prev > 0);
+
         let mut queue = DecommitQueue::default();
         // SAFETY: This table is no longer in use by the allocator when this
         // method is called and additionally all image ranges are pushed with
@@ -815,6 +845,10 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         gc_heap: Box<dyn GcHeap>,
     ) -> (MemoryAllocationIndex, Memory) {
         self.gc_heaps.deallocate(allocation_index, gc_heap)
+    }
+
+    fn as_pooling(&self) -> Option<&PoolingInstanceAllocator> {
+        Some(self)
     }
 }
 
