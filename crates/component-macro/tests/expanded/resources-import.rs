@@ -467,12 +467,47 @@ pub mod foo {
                     4 == < SomeHandle as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore {}
+            pub enum Fallible {}
+            pub trait HostFallibleWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostFallibleWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
+            pub trait HostFallible {
+                fn new(
+                    &mut self,
+                ) -> Result<
+                    wasmtime::component::Resource<Fallible>,
+                    wasmtime::component::__internal::String,
+                >;
+                fn drop(
+                    &mut self,
+                    rep: wasmtime::component::Resource<Fallible>,
+                ) -> wasmtime::Result<()>;
+            }
+            impl<_T: HostFallible + ?Sized> HostFallible for &mut _T {
+                fn new(
+                    &mut self,
+                ) -> Result<
+                    wasmtime::component::Resource<Fallible>,
+                    wasmtime::component::__internal::String,
+                > {
+                    HostFallible::new(*self)
+                }
+                fn drop(
+                    &mut self,
+                    rep: wasmtime::component::Resource<Fallible>,
+                ) -> wasmtime::Result<()> {
+                    HostFallible::drop(*self, rep)
+                }
+            }
+            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + HostFallibleWithStore {}
             impl<_T: ?Sized> HostWithStore for _T
             where
-                _T: wasmtime::component::HasData + HostBarWithStore,
+                _T: wasmtime::component::HasData + HostBarWithStore
+                    + HostFallibleWithStore,
             {}
-            pub trait Host: HostBar {
+            pub trait Host: HostBar + HostFallible {
                 fn bar_own_arg(&mut self, x: wasmtime::component::Resource<Bar>) -> ();
                 fn bar_borrow_arg(
                     &mut self,
@@ -645,6 +680,16 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Bar>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         HostBar::drop(
+                            &mut host_getter(store.data_mut()),
+                            wasmtime::component::Resource::new_own(rep),
+                        )
+                    },
+                )?;
+                inst.resource(
+                    "fallible",
+                    wasmtime::component::ResourceType::host::<Fallible>(),
+                    move |mut store, rep| -> wasmtime::Result<()> {
+                        HostFallible::drop(
                             &mut host_getter(store.data_mut()),
                             wasmtime::component::Resource::new_own(rep),
                         )
@@ -878,6 +923,14 @@ pub mod foo {
                         let host = &mut host_getter(caller.data_mut());
                         let r = Host::func_with_handle_typedef(host, arg0);
                         Ok(r)
+                    },
+                )?;
+                inst.func_wrap(
+                    "[constructor]fallible",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = HostFallible::new(host);
+                        Ok((r,))
                     },
                 )?;
                 Ok(())
@@ -1123,7 +1176,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
-                                                                            not have export `{name}`"
+                                                                                not have export `{name}`"
                                     )
                                 })
                         };
