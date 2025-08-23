@@ -341,34 +341,10 @@ impl CodeMemory {
                     if !self.mmap.supports_virtual_memory() {
                         bail!("this target requires virtual memory to be enabled");
                     }
-                    if !cfg!(feature = "std") {
-                        bail!(
-                            "with the `std` feature disabled at compile time \
-                             there must be a custom implementation of publishing \
-                             code memory"
-                        );
-                    }
-
-                    #[cfg(all(has_virtual_memory, feature = "std"))]
-                    {
-                        let text = self.text();
-
-                        use wasmtime_jit_icache_coherence as icache_coherence;
-
-                        // Clear the newly allocated code from cache if the processor requires it
-                        //
-                        // Do this before marking the memory as R+X, technically we should be able to do it after
-                        // but there are some CPU's that have had errata about doing this with read only memory.
-                        icache_coherence::clear_cache(text.as_ptr().cast(), text.len())
-                            .expect("Failed cache clear");
-
-                        self.mmap
-                            .make_executable(self.text.clone(), self.enable_branch_protection)
-                            .context("unable to make memory executable")?;
-
-                        // Flush any in-flight instructions from the pipeline
-                        icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
-                    }
+                    #[cfg(has_virtual_memory)]
+                    self.mmap
+                        .make_executable(self.text.clone(), self.enable_branch_protection)
+                        .context("unable to make memory executable")?;
                 }
             }
 

@@ -98,11 +98,22 @@ fn simple_host_fn(module: &[u8]) -> Result<()> {
 }
 
 fn deserialize(engine: &Engine, module: &[u8]) -> Result<Option<Module>> {
-    // NOTE: deserialize_raw avoids creating a copy of the module code.  See the
-    // safety notes before using in your embedding.
-    let memory_ptr = ptr::slice_from_raw_parts(module.as_ptr(), module.len());
-    let module_memory = ptr::NonNull::new(memory_ptr.cast_mut()).unwrap();
-    match unsafe { Module::deserialize_raw(engine, module_memory) } {
+    let result = if cfg!(feature = "custom") {
+        // If a custom virtual memory system is in use use the raw `deserialize`
+        // API to let Wasmtime handle publishing the executable and such.
+        unsafe { Module::deserialize(engine, module) }
+    } else {
+        // NOTE: deserialize_raw avoids creating a copy of the module code. See
+        // the safety notes before using in your embedding.
+        //
+        // Also note that this will only work for native code with a custom code
+        // publisher which isn't configured in this example. Such custom code
+        // publisher will need to handle making this executable for example.
+        let memory_ptr = ptr::slice_from_raw_parts(module.as_ptr(), module.len());
+        let module_memory = ptr::NonNull::new(memory_ptr.cast_mut()).unwrap();
+        unsafe { Module::deserialize_raw(engine, module_memory) }
+    };
+    match result {
         Ok(module) => Ok(Some(module)),
         Err(e) => {
             // Currently if custom signals/virtual memory are disabled then this
