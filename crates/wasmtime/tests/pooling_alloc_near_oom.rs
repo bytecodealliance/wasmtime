@@ -5,7 +5,7 @@ fn main() -> Result<()> {
     let mut trials = Vec::new();
 
     #[cfg(unix)]
-    if !cfg!(miri) && !cfg!(asan) {
+    if !cfg!(miri) && !cfg!(asan) && std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_err() {
         for (name, test) in unix::TESTS {
             trials.push(libtest_mimic::Trial::test(*name, || {
                 test().map_err(|e| format!("{e:?}").into())
