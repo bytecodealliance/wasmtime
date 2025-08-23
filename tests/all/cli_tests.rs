@@ -2159,6 +2159,20 @@ start a print 1234
             Ok(())
         }
     }
+
+    #[test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    fn cli_invoke_async() -> Result<()> {
+        let output = run_wasmtime(&[
+            "run",
+            "-Wcomponent-model-async",
+            "--invoke",
+            "echo(\"hello?\")",
+            CLI_INVOKE_ASYNC_COMPONENT,
+        ])?;
+        assert_eq!(output, "\"hello?\"\n");
+        Ok(())
+    }
 }
 
 #[test]
