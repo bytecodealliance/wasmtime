@@ -48,7 +48,6 @@ pub mod proxy {
             "wasi:clocks/monotonic-clock@0.2.6": crate::wasi::clocks::monotonic_clock,
             "wasi:clocks/wall-clock@0.2.6": crate::wasi::clocks::wall_clock,
         },
-        features: ["clocks-timezone"],
     });
 }
 

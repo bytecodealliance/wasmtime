@@ -1356,7 +1356,12 @@ mod test_programs {
 
     #[test]
     fn cli_default_clocks() -> Result<()> {
-        run_wasmtime(&["run", "-Wcomponent-model", CLI_DEFAULT_CLOCKS_COMPONENT])?;
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            "-Sclocks-timezone=y",
+            CLI_DEFAULT_CLOCKS_COMPONENT,
+        ])?;
         Ok(())
     }
 
