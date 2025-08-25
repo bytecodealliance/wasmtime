@@ -697,7 +697,7 @@ impl RefType {
 ///
 /// The top of the exception types hierarchy is `exn`; the bottom is
 /// `noexn`. At the WebAssembly level, there are no concrete types in
-/// this hierachy. However, internally we do reify a heap type for
+/// this hierarchy. However, internally we do reify a heap type for
 /// each tag, similar to how continuation objects work.
 ///
 /// ```text
