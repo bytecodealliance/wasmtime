@@ -17,6 +17,10 @@ runs:
     - name: Install Rust
       shell: bash
       id: select
+      env:
+        # This is an attempt to reduce flakiness and see what happens. If this
+        # lands it worked. Feel free to modify if this becomes flaky again.
+        RUSTUP_USE_RUSTLS: 1
       run: |
         # Determine MSRV as N in `1.N.0` by looking at the `rust-version`
         # located in the root `Cargo.toml`.
