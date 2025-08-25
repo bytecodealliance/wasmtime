@@ -469,7 +469,26 @@ pub mod foo {
                     4 == < SomeHandle as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + Send {
+            pub enum Fallible {}
+            pub trait HostFallibleWithStore: wasmtime::component::HasData + Send {
+                fn drop<T: 'static>(
+                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    rep: wasmtime::component::Resource<Fallible>,
+                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
+                where
+                    Self: Sized;
+                fn new<T: 'static>(
+                    accessor: &wasmtime::component::Accessor<T, Self>,
+                ) -> impl ::core::future::Future<
+                    Output = Result<
+                        wasmtime::component::Resource<Fallible>,
+                        wasmtime::component::__internal::String,
+                    >,
+                > + Send;
+            }
+            pub trait HostFallible: Send {}
+            impl<_T: HostFallible + ?Sized + Send> HostFallible for &mut _T {}
+            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + HostFallibleWithStore + Send {
                 fn bar_own_arg<T: 'static>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::Resource<Bar>,
@@ -557,7 +576,7 @@ pub mod foo {
                     x: SomeHandle,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
             }
-            pub trait Host: HostBar + Send {}
+            pub trait Host: HostBar + HostFallible + Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -576,6 +595,20 @@ pub mod foo {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &caller.with_data(host_getter);
                             HostBarWithStore::drop(
+                                    accessor,
+                                    wasmtime::component::Resource::new_own(rep),
+                                )
+                                .await
+                        })
+                    },
+                )?;
+                inst.resource_concurrent(
+                    "fallible",
+                    wasmtime::component::ResourceType::host::<Fallible>(),
+                    move |caller: &wasmtime::component::Accessor<T>, rep| {
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &caller.with_data(host_getter);
+                            HostFallibleWithStore::drop(
                                     accessor,
                                     wasmtime::component::Resource::new_own(rep),
                                 )
@@ -883,6 +916,16 @@ pub mod foo {
                                 )
                                 .await;
                             Ok(r)
+                        })
+                    },
+                )?;
+                inst.func_wrap_concurrent(
+                    "[constructor]fallible",
+                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &caller.with_data(host_getter);
+                            let r = <D as HostFallibleWithStore>::new(accessor).await;
+                            Ok((r,))
                         })
                     },
                 )?;

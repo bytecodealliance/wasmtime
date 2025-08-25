@@ -41,6 +41,10 @@ interface resources {
 
   type some-handle = borrow<bar>;
   func-with-handle-typedef: func(x: some-handle);
+
+  resource fallible {
+    constructor() -> result<fallible, string>;
+  }
 }
 
 world the-world {
