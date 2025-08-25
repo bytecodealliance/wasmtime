@@ -455,32 +455,32 @@ where
         })
     }
 
+    /// Returns the getter this accessor is using to project from `T` into
+    /// `D::Data`.
+    pub fn getter(&self) -> fn(&mut T) -> D::Data<'_> {
+        self.get_data
+    }
+
     /// Changes this accessor to access `D2` instead of the current type
     /// parameter `D`.
     ///
     /// This changes the underlying data access from `T` to `D2::Data<'_>`.
     ///
-    /// Note that this is not a public or recommended API because it's easy to
-    /// cause panics with this by having two `Accessor` values live at the same
-    /// time. The returned `Accessor` does not refer to this `Accessor` meaning
-    /// that both can be used. You could, for example, call `Accessor::with`
-    /// simultaneously on both. That would cause a panic though.
+    /// # Panics
     ///
-    /// In short while there's nothing unsafe about this it's a footgun. It's
-    /// here for bindings generation where the provided accessor is transformed
-    /// into a new accessor and then this returned accessor is passed to
-    /// implementations.
+    /// When using this API the returned value is disconnected from `&self` and
+    /// the lifetime binding the `self` argument. An `Accessor` only works
+    /// within the context of the closure or async closure that it was
+    /// originally given to, however. This means that due to the fact that the
+    /// returned value has no lifetime connection it's possible to use the
+    /// accessor outside of `&self`, the original accessor, and panic.
     ///
-    /// Note that one possible fix for this would be a lifetime parameter on
-    /// `Accessor` itself so the returned value could borrow from the original
-    /// value (or this could be `self`-by-value instead of `&mut self`) but in
-    /// attempting that it was found to be a bit too onerous in terms of
-    /// plumbing things around without a whole lot of benefit.
-    ///
-    /// In short, this works, but must be treated with care. The current main
-    /// user, bindings generation, treats this with care.
-    #[doc(hidden)]
-    pub fn with_data<D2: HasData>(&self, get_data: fn(&mut T) -> D2::Data<'_>) -> Accessor<T, D2> {
+    /// The returned value should only be used within the scope of the original
+    /// `Accessor` that `self` refers to.
+    pub fn with_getter<D2: HasData>(
+        &self,
+        get_data: fn(&mut T) -> D2::Data<'_>,
+    ) -> Accessor<T, D2> {
         Accessor {
             token: self.token,
             get_data,
