@@ -30,6 +30,13 @@ mod unix {
     pub const TESTS: &[(&str, fn() -> Result<()>)] = &[("exhausted_vmas", exhausted_vmas)];
 
     fn exhausted_vmas() -> Result<()> {
+        // Non-Linux environments have different behavior around OOM and
+        // overcommit it seems. For example macOS looks to wedge the CI runner
+        // if it runs this tests. For now only run on Linux.
+        if !cfg!(target_os = "linux") {
+            return Ok(());
+        }
+
         // Create a small-ish pooling allocator which can hold a number of
         // instances with memories, but we won't end up using all of them.
         let mut pooling = PoolingAllocationConfig::new();
