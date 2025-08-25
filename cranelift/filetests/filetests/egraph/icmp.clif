@@ -237,4 +237,16 @@ block0(v0: i32, v1: i32):
 ;     return v4
 ; }
 
+;; (x - y) u<= x == y u<= x
+function %ule_isub_x_y_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp ule v2, v0
+    return v3
+}
 
+; function %ule_isub_x_y_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = icmp ule v1, v0
+;     return v4
+; }

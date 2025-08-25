@@ -293,3 +293,4 @@
 
 ; (x - y) > x == y > x
 (rule (simplify (ugt cty (isub ty x y) x)) (ugt cty y x))
+(rule (simplify (ule cty (isub ty x y) x)) (ule cty y x))
