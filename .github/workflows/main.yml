@@ -91,7 +91,9 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: |
         set -e
-        curl -L https://github.com/EmbarkStudios/cargo-deny/releases/download/0.18.2/cargo-deny-0.18.2-x86_64-unknown-linux-musl.tar.gz | tar xzf -
+        curl --retry 5 --retry-all-errors -L -o cargo-deny.tar.gz https://github.com/EmbarkStudios/cargo-deny/releases/download/0.18.2/cargo-deny-0.18.2-x86_64-unknown-linux-musl.tar.gz
+        tar xzf cargo-deny.tar.gz
+        rm cargo-deny.tar.gz
         mv cargo-deny-*-x86_64-unknown-linux-musl/cargo-deny cargo-deny
         echo `pwd` >> $GITHUB_PATH
     - run: cargo deny check bans licenses
@@ -263,7 +265,10 @@ jobs:
         toolchain: wasmtime-ci-pinned-nightly
 
     # Build C API documentation
-    - run: curl -L https://github.com/doxygen/doxygen/releases/download/Release_1_9_3/doxygen-1.9.3.linux.bin.tar.gz | tar xzf -
+    - run: |
+        curl --retry 5 --retry-all-errors -o doxygen.tar.gz -L https://github.com/doxygen/doxygen/releases/download/Release_1_9_3/doxygen-1.9.3.linux.bin.tar.gz
+        tar xzf doxygen.tar.gz
+        rm doxygen.tar.gz
     - run: echo "`pwd`/doxygen-1.9.3/bin" >> $GITHUB_PATH
     - run: cmake -S crates/c-api -B target/c-api
     - run: cmake --build target/c-api --target doc
@@ -728,7 +733,9 @@ jobs:
         # way faster at arm emulation than the current version github actions'
         # ubuntu image uses. Disable as much as we can to get it to build
         # quickly.
-        curl https://download.qemu.org/qemu-$QEMU_BUILD_VERSION.tar.xz | tar xJf -
+        curl --retry 5 --retry-all-errors -o qemu.tar.xz https://download.qemu.org/qemu-$QEMU_BUILD_VERSION.tar.xz
+        tar xJf qemu.tar.xz
+        rm qemu.tar.xz
         cd qemu-$QEMU_BUILD_VERSION
         ./configure --target-list=${{ matrix.qemu_target }} --prefix=${{ runner.tool_cache}}/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
         ninja -C build install
@@ -872,7 +879,7 @@ jobs:
     - run: |
         rustup target add wasm32-wasip1 wasm32-unknown-unknown
         cd /tmp
-        curl -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-linux.tar.gz
+        curl --retry 5 --retry-all-errors -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-linux.tar.gz
         tar -xzf wasi-sdk-25.0-x86_64-linux.tar.gz
         mv wasi-sdk-25.0-x86_64-linux wasi-sdk
     - run: |
@@ -903,7 +910,9 @@ jobs:
 
     - name: Install wasm-tools
       run: |
-        curl -L https://github.com/bytecodealliance/wasm-tools/releases/download/wasm-tools-1.0.27/wasm-tools-1.0.27-x86_64-linux.tar.gz | tar xfz -
+        curl --retry 5 --retry-all-errors -o wasm-tools.tar.gz -L https://github.com/bytecodealliance/wasm-tools/releases/download/wasm-tools-1.0.27/wasm-tools-1.0.27-x86_64-linux.tar.gz
+        tar xfz wasm-tools.tar.gz
+        rm wasm-tools.tar.gz
         echo `pwd`/wasm-tools-1.0.27-x86_64-linux >> $GITHUB_PATH
 
     - run: ./ci/build-wasi-preview1-component-adapter.sh
@@ -1005,7 +1014,10 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: |
         cd ${{ runner.tool_cache }}
-        curl -L https://github.com/mozilla/sccache/releases/download/0.2.13/sccache-0.2.13-x86_64-unknown-linux-musl.tar.gz | tar xzf -
+        curl --retry 5 --retry-all-errors -L -o sccache.tar.gz \
+          https://github.com/mozilla/sccache/releases/download/0.2.13/sccache-0.2.13-x86_64-unknown-linux-musl.tar.gz
+        tar xzf sccache.tar.gz
+        rm sccache.tar.gz
         echo "`pwd`/sccache-0.2.13-x86_64-unknown-linux-musl" >> $GITHUB_PATH
         echo RUSTC_WRAPPER=sccache >> $GITHUB_ENV
     - run: rustc scripts/publish.rs

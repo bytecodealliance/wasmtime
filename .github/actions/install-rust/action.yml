@@ -37,7 +37,12 @@ runs:
       shell: bash
       run: |
         rustup set profile minimal
-        rustup update "${{ steps.select.outputs.version }}" --no-self-update
+        for attempt in 1 2 3 4 5; do
+          [ "$attempt" = "5" ] && exit 1
+          rustup update "${{ steps.select.outputs.version }}" --no-self-update \
+            && break
+          sleep 5
+        done
         rustup default "${{ steps.select.outputs.version }}"
 
         # Save disk space by avoiding incremental compilation. Also turn down
