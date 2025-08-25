@@ -1,3 +1,15 @@
+## 36.0.2
+
+Released 2025-08-26.
+
+### Fixed
+
+* Wasmtime will no longer panic in the pooling allocator when in near-OOM
+  conditions related to resetting the linear memory of a slot.
+  [#11510](https://github.com/bytecodealliance/wasmtime/pull/11510)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.1
 
 Released 2025-08-21.

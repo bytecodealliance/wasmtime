@@ -113,6 +113,10 @@ wasmtime-versioned-export-macros = { workspace = true, optional = true }
 name = "host_segfault"
 harness = false
 
+[[test]]
+name = "pooling_alloc_near_oom"
+harness = false
+
 # =============================================================================
 #
 # Features for the Wasmtime crate.
