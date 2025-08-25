@@ -391,3 +391,15 @@ block0(v0: i32, v1: i32):
     ; check: v5 = band v0, v1
     ; check: return v5
 }
+
+
+;; x * (1 << y) == x << y
+function %mul_shl(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = ishl v2, v1
+    v4 = imul v0, v3
+    return v4
+    ; check: v5 = ishl v0, v1
+    ; check: return v5
+}
