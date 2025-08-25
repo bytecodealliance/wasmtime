@@ -2239,10 +2239,14 @@ fn config_cli_flag() -> Result<()> {
         br#"
         [optimize]
         opt-level = 2
+        regalloc-algorithm = "single-pass"
         signals-based-traps = false
 
         [codegen]
         collector = "null"
+
+        [debug]
+        debug-info = true
 
         [wasm]
         max-wasm-stack = 65536
