@@ -188,6 +188,33 @@ impl Mmap {
         range: Range<usize>,
         enable_branch_protection: bool,
     ) -> Result<()> {
+        let base = self
+            .as_send_sync_ptr()
+            .as_ptr()
+            .wrapping_add(range.start)
+            .cast();
+        let len = range.end - range.start;
+
+        if !cfg!(feature = "std") {
+            bail!(
+                "with the `std` feature disabled at compile time \
+                 there must be a custom implementation of publishing \
+                 code memory, otherwise it's unknown how to do icache \
+                 management"
+            );
+        }
+
+        // Clear the newly allocated code from cache if the processor requires
+        // it
+        //
+        // Do this before marking the memory as R+X, technically we should be
+        // able to do it after but there are some CPU's that have had errata
+        // about doing this with read only memory.
+        #[cfg(feature = "std")]
+        unsafe {
+            wasmtime_jit_icache_coherence::clear_cache(base, len).context("failed cache clear")?;
+        }
+
         let flags = if enable_branch_protection {
             // TODO: We use this check to avoid an unused variable warning,
             // but some of the CFG-related flags might be applicable
@@ -197,12 +224,15 @@ impl Mmap {
         };
         let mut old = 0;
         unsafe {
-            let base = self.as_send_sync_ptr().as_ptr().add(range.start).cast();
-            let result = VirtualProtect(base, range.end - range.start, flags, &mut old);
+            let result = VirtualProtect(base, len, flags, &mut old);
             if result == 0 {
                 bail!(io::Error::last_os_error());
             }
         }
+
+        // Flush any in-flight instructions from the pipeline
+        #[cfg(feature = "std")]
+        wasmtime_jit_icache_coherence::pipeline_flush_mt().context("Failed pipeline flush")?;
         Ok(())
     }
 
