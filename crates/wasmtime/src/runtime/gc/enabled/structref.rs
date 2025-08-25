@@ -6,7 +6,7 @@ use crate::vm::{self, VMGcHeader, VMStore, VMStructRef};
 use crate::{AnyRef, FieldType};
 use crate::{
     AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
-    ManuallyRooted, RefType, Rooted, StructType, Val, ValRaw, ValType, WasmTy,
+    OwnedRooted, RefType, Rooted, StructType, Val, ValRaw, ValType, WasmTy,
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque, StoreResourceLimiter},
 };
@@ -103,7 +103,7 @@ impl StructRefPre {
 /// the host into dereferencing it and segfaulting or worse.
 ///
 /// Note that you can also use `Rooted<StructRef>` and
-/// `ManuallyRooted<StructRef>` as a type parameter with
+/// `OwnedRooted<StructRef>` as a type parameter with
 /// [`Func::typed`][crate::Func::typed]- and
 /// [`Func::wrap`][crate::Func::wrap]-style APIs.
 ///
@@ -185,16 +185,16 @@ impl Rooted<StructRef> {
     }
 }
 
-impl ManuallyRooted<StructRef> {
+impl OwnedRooted<StructRef> {
     /// Upcast this `structref` into an `anyref`.
     #[inline]
-    pub fn to_anyref(self) -> ManuallyRooted<AnyRef> {
+    pub fn to_anyref(self) -> OwnedRooted<AnyRef> {
         self.unchecked_cast()
     }
 
     /// Upcast this `structref` into an `eqref`.
     #[inline]
-    pub fn to_eqref(self) -> ManuallyRooted<EqRef> {
+    pub fn to_eqref(self) -> OwnedRooted<EqRef> {
         self.unchecked_cast()
     }
 }
@@ -723,7 +723,7 @@ unsafe impl WasmTy for Option<Rooted<StructRef>> {
     }
 }
 
-unsafe impl WasmTy for ManuallyRooted<StructRef> {
+unsafe impl WasmTy for OwnedRooted<StructRef> {
     #[inline]
     fn valtype() -> ValType {
         ValType::Ref(RefType::new(false, HeapType::Struct))
@@ -775,7 +775,7 @@ unsafe impl WasmTy for ManuallyRooted<StructRef> {
     }
 }
 
-unsafe impl WasmTy for Option<ManuallyRooted<StructRef>> {
+unsafe impl WasmTy for Option<OwnedRooted<StructRef>> {
     #[inline]
     fn valtype() -> ValType {
         ValType::STRUCTREF
@@ -796,7 +796,7 @@ unsafe impl WasmTy for Option<ManuallyRooted<StructRef>> {
     ) -> Result<()> {
         match self {
             Some(s) => {
-                ManuallyRooted::<StructRef>::dynamic_concrete_type_check(s, store, nullable, ty)
+                OwnedRooted::<StructRef>::dynamic_concrete_type_check(s, store, nullable, ty)
             }
             None => {
                 ensure!(
@@ -814,11 +814,11 @@ unsafe impl WasmTy for Option<ManuallyRooted<StructRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <ManuallyRooted<StructRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <OwnedRooted<StructRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        <ManuallyRooted<StructRef>>::wasm_ty_option_load(
+        <OwnedRooted<StructRef>>::wasm_ty_option_load(
             store,
             ptr.get_anyref(),
             StructRef::from_cloned_gc_ref,

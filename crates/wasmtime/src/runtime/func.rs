@@ -589,7 +589,7 @@ impl Func {
     /// | `Option<NoneRef>`                 | `nullref` aka `(ref null none)`           |
     /// | `NoneRef`                         | `(ref none)`                              |
     ///
-    /// Note that anywhere a `Rooted<T>` appears, a `ManuallyRooted<T>` may also
+    /// Note that anywhere a `Rooted<T>` appears, a `OwnedRooted<T>` may also
     /// be used.
     ///
     /// Any of the Rust types can be returned from the closure as well, in
@@ -1346,7 +1346,7 @@ impl Func {
     /// | `v128`                                    | `V128` on `x86-64` and `aarch64` only |
     ///
     /// (Note that this mapping is the same as that of [`Func::wrap`], and that
-    /// anywhere a `Rooted<T>` appears, a `ManuallyRooted<T>` may also appear).
+    /// anywhere a `Rooted<T>` appears, a `OwnedRooted<T>` may also appear).
     ///
     /// Note that once the [`TypedFunc`] return value is acquired you'll use either
     /// [`TypedFunc::call`] or [`TypedFunc::call_async`] as necessary to actually invoke

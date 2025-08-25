@@ -4,7 +4,7 @@ use crate::runtime::vm::{VMGcRef, VMStore};
 use crate::store::{StoreId, StoreResourceLimiter};
 use crate::vm::{self, VMExnRef, VMGcHeader};
 use crate::{
-    AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType, Result,
+    AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType, Result,
     Rooted, Val, ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque},
 };
@@ -101,7 +101,7 @@ impl ExnRefPre {
 /// thrown exception in WebAssembly with a `catch_ref` clause of a
 /// `try_table`, or by allocating via the host API.
 ///
-/// Note that you can also use `Rooted<ExnRef>` and `ManuallyRooted<ExnRef>` as
+/// Note that you can also use `Rooted<ExnRef>` and `OwnedRooted<ExnRef>` as
 /// a type parameter with [`Func::typed`][crate::Func::typed]- and
 /// [`Func::wrap`][crate::Func::wrap]-style APIs.
 #[derive(Debug)]
@@ -695,7 +695,7 @@ unsafe impl WasmTy for Option<Rooted<ExnRef>> {
     }
 }
 
-unsafe impl WasmTy for ManuallyRooted<ExnRef> {
+unsafe impl WasmTy for OwnedRooted<ExnRef> {
     #[inline]
     fn valtype() -> ValType {
         ValType::Ref(RefType::new(false, HeapType::Exn))
@@ -725,7 +725,7 @@ unsafe impl WasmTy for ManuallyRooted<ExnRef> {
     }
 }
 
-unsafe impl WasmTy for Option<ManuallyRooted<ExnRef>> {
+unsafe impl WasmTy for Option<OwnedRooted<ExnRef>> {
     #[inline]
     fn valtype() -> ValType {
         ValType::EXNREF
@@ -762,11 +762,11 @@ unsafe impl WasmTy for Option<ManuallyRooted<ExnRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <ManuallyRooted<ExnRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <OwnedRooted<ExnRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        <ManuallyRooted<ExnRef>>::wasm_ty_option_load(
+        <OwnedRooted<ExnRef>>::wasm_ty_option_load(
             store,
             ptr.get_anyref(),
             ExnRef::from_cloned_gc_ref,

@@ -22,6 +22,7 @@ impl StoreOpaque {
         bytes_needed: Option<u64>,
     ) -> Option<VMGcRef> {
         let mut scope = crate::OpaqueRootScope::new(self);
+        scope.trim_gc_liveness_flags(true);
         let store_id = scope.id();
         let root = root.map(|r| scope.gc_roots_mut().push_lifo_root(store_id, r));
 
@@ -34,6 +35,16 @@ impl StoreOpaque {
                 .unchecked_copy();
             scope.clone_gc_ref(&r)
         })
+    }
+
+    // This lives on the Store because it must simultaneously borrow
+    // `gc_store` and `gc_roots`, and is invoked from other modules to
+    // which we do not want to expose the raw fields for piecewise
+    // borrows.
+    pub(crate) fn trim_gc_liveness_flags(&mut self, eager: bool) {
+        if let Some(gc_store) = self.gc_store.as_mut() {
+            self.gc_roots.trim_liveness_flags(gc_store, eager);
+        }
     }
 
     async fn grow_or_collect_gc_heap(

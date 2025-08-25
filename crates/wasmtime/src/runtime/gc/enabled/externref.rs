@@ -4,7 +4,7 @@ use super::{AnyRef, RootedGcRefImpl};
 use crate::prelude::*;
 use crate::runtime::vm::{self, VMGcRef, VMStore};
 use crate::{
-    AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
+    AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType,
     Result, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque, StoreResourceLimiter},
 };
@@ -31,7 +31,7 @@ use core::mem::MaybeUninit;
 /// the host into dereferencing it and segfaulting or worse.
 ///
 /// Note that you can also use `Rooted<ExternRef>` and
-/// `ManuallyRooted<ExternRef>` as a type parameter with
+/// `OwnedRooted<ExternRef>` as a type parameter with
 /// [`Func::typed`][crate::Func::typed]- and
 /// [`Func::wrap`][crate::Func::wrap]-style APIs.
 ///
@@ -140,10 +140,10 @@ impl ExternRef {
     ///
     /// The resulting value is automatically unrooted when the given `context`'s
     /// scope is exited. If you need to hold the reference past the `context`'s
-    /// scope, convert the result into a
-    /// [`ManuallyRooted<T>`][crate::ManuallyRooted]. See the documentation for
+    /// scope, convert the result into an
+    /// [`OwnedRooted<T>`][crate::OwnedRooted]. See the documentation for
     /// [`Rooted<T>`][crate::Rooted] and
-    /// [`ManuallyRooted<T>`][crate::ManuallyRooted] for more details.
+    /// [`OwnedRooted<T>`][crate::OwnedRooted] for more details.
     ///
     /// # Automatic Garbage Collection
     ///
@@ -223,10 +223,10 @@ impl ExternRef {
     ///
     /// The resulting value is automatically unrooted when the given `context`'s
     /// scope is exited. If you need to hold the reference past the `context`'s
-    /// scope, convert the result into a
-    /// [`ManuallyRooted<T>`][crate::ManuallyRooted]. See the documentation for
+    /// scope, convert the result into an
+    /// [`OwnedRooted<T>`][crate::OwnedRooted]. See the documentation for
     /// [`Rooted<T>`][crate::Rooted] and
-    /// [`ManuallyRooted<T>`][crate::ManuallyRooted] for more details.
+    /// [`OwnedRooted<T>`][crate::OwnedRooted] for more details.
     ///
     /// # Automatic Garbage Collection
     ///
@@ -646,7 +646,7 @@ unsafe impl WasmTy for Option<Rooted<ExternRef>> {
     }
 }
 
-unsafe impl WasmTy for ManuallyRooted<ExternRef> {
+unsafe impl WasmTy for OwnedRooted<ExternRef> {
     #[inline]
     fn valtype() -> ValType {
         ValType::Ref(RefType::new(false, HeapType::Extern))
@@ -676,7 +676,7 @@ unsafe impl WasmTy for ManuallyRooted<ExternRef> {
     }
 }
 
-unsafe impl WasmTy for Option<ManuallyRooted<ExternRef>> {
+unsafe impl WasmTy for Option<OwnedRooted<ExternRef>> {
     #[inline]
     fn valtype() -> ValType {
         ValType::EXTERNREF
@@ -699,11 +699,11 @@ unsafe impl WasmTy for Option<ManuallyRooted<ExternRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <ManuallyRooted<ExternRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::externref)
+        <OwnedRooted<ExternRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::externref)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        <ManuallyRooted<ExternRef>>::wasm_ty_option_load(
+        <OwnedRooted<ExternRef>>::wasm_ty_option_load(
             store,
             ptr.get_externref(),
             ExternRef::from_cloned_gc_ref,

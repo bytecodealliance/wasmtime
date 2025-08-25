@@ -28,7 +28,7 @@ impl<T> GcRef for T where T: GcRefImpl {}
 /// A trait implemented for GC references that are guaranteed to be rooted:
 ///
 /// * [`Rooted<T>`][crate::Rooted]
-/// * [`ManuallyRooted<T>`][crate::ManuallyRooted]
+/// * [`OwnedRooted<T>`][crate::OwnedRooted]
 ///
 /// You can use this to abstract over the different kinds of rooted GC
 /// references. Note that `Deref<Target = T>` is a supertrait for

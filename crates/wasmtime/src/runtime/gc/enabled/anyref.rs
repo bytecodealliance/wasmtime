@@ -5,7 +5,7 @@ use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
     ArrayRef, ArrayType, AsContext, AsContextMut, EqRef, GcRefImpl, GcRootIndex, HeapType, I31,
-    ManuallyRooted, RefType, Result, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy,
+    OwnedRooted, RefType, Result, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque},
 };
 use core::mem;
@@ -23,7 +23,7 @@ use wasmtime_environ::VMGcKind;
 /// `0x12345678` into a reference, pretend it is a valid `anyref`, and trick the
 /// host into dereferencing it and segfaulting or worse.
 ///
-/// Note that you can also use `Rooted<AnyRef>` and `ManuallyRooted<AnyRef>` as
+/// Note that you can also use `Rooted<AnyRef>` and `OwnedRooted<AnyRef>` as
 /// a type parameter with [`Func::typed`][crate::Func::typed]- and
 /// [`Func::wrap`][crate::Func::wrap]-style APIs.
 ///
@@ -103,9 +103,9 @@ impl From<Rooted<EqRef>> for Rooted<AnyRef> {
     }
 }
 
-impl From<ManuallyRooted<EqRef>> for ManuallyRooted<AnyRef> {
+impl From<OwnedRooted<EqRef>> for OwnedRooted<AnyRef> {
     #[inline]
-    fn from(e: ManuallyRooted<EqRef>) -> Self {
+    fn from(e: OwnedRooted<EqRef>) -> Self {
         e.to_anyref()
     }
 }
@@ -117,9 +117,9 @@ impl From<Rooted<StructRef>> for Rooted<AnyRef> {
     }
 }
 
-impl From<ManuallyRooted<StructRef>> for ManuallyRooted<AnyRef> {
+impl From<OwnedRooted<StructRef>> for OwnedRooted<AnyRef> {
     #[inline]
-    fn from(s: ManuallyRooted<StructRef>) -> Self {
+    fn from(s: OwnedRooted<StructRef>) -> Self {
         s.to_anyref()
     }
 }
@@ -131,9 +131,9 @@ impl From<Rooted<ArrayRef>> for Rooted<AnyRef> {
     }
 }
 
-impl From<ManuallyRooted<ArrayRef>> for ManuallyRooted<AnyRef> {
+impl From<OwnedRooted<ArrayRef>> for OwnedRooted<AnyRef> {
     #[inline]
-    fn from(s: ManuallyRooted<ArrayRef>) -> Self {
+    fn from(s: OwnedRooted<ArrayRef>) -> Self {
         s.to_anyref()
     }
 }
@@ -754,7 +754,7 @@ unsafe impl WasmTy for Option<Rooted<AnyRef>> {
     }
 }
 
-unsafe impl WasmTy for ManuallyRooted<AnyRef> {
+unsafe impl WasmTy for OwnedRooted<AnyRef> {
     #[inline]
     fn valtype() -> ValType {
         ValType::Ref(RefType::new(false, HeapType::Any))
@@ -784,7 +784,7 @@ unsafe impl WasmTy for ManuallyRooted<AnyRef> {
     }
 }
 
-unsafe impl WasmTy for Option<ManuallyRooted<AnyRef>> {
+unsafe impl WasmTy for Option<OwnedRooted<AnyRef>> {
     #[inline]
     fn valtype() -> ValType {
         ValType::ANYREF
@@ -821,11 +821,11 @@ unsafe impl WasmTy for Option<ManuallyRooted<AnyRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <ManuallyRooted<AnyRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <OwnedRooted<AnyRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        <ManuallyRooted<AnyRef>>::wasm_ty_option_load(
+        <OwnedRooted<AnyRef>>::wasm_ty_option_load(
             store,
             ptr.get_anyref(),
             AnyRef::from_cloned_gc_ref,
