@@ -1478,9 +1478,19 @@ const _: () = {
     use crate::{AnyRef, ExternRef};
 
     // NB: these match the C API which should also be updated if this changes.
-    assert!(mem::size_of::<OwnedRooted<AnyRef>>() == 16 + mem::size_of::<usize>());
+    //
+    // The size is really "16 + pointer + alignment", which is either
+    // 20 bytes on some 32-bit platforms or 24 bytes on other 32-bit
+    // platforms (e.g., riscv32, which adds an extra 4 bytes of
+    // padding) and 64-bit platforms.
+    assert!(
+        mem::size_of::<OwnedRooted<AnyRef>>() >= 16 && mem::size_of::<OwnedRooted<AnyRef>>() <= 24
+    );
     assert!(mem::align_of::<OwnedRooted<AnyRef>>() == mem::align_of::<u64>());
-    assert!(mem::size_of::<OwnedRooted<ExternRef>>() == 16 + mem::size_of::<usize>());
+    assert!(
+        mem::size_of::<OwnedRooted<ExternRef>>() >= 16
+            && mem::size_of::<OwnedRooted<ExternRef>>() <= 24
+    );
     assert!(mem::align_of::<OwnedRooted<ExternRef>>() == mem::align_of::<u64>());
 };
 
