@@ -247,8 +247,11 @@ macro_rules! foreach_builtin_function {
 /// `ComponentBuiltinFunctionIndex` using the iterator macro, e.g.
 /// `foreach_builtin_function`, as the way to generate accessor methods.
 macro_rules! declare_builtin_index {
-    ($index_name:ident, $iter:ident) => {
-        /// An index type for builtin functions.
+    (
+        $(#[$attr:meta])*
+        pub struct $index_name:ident : $for_each_builtin:ident ;
+    ) => {
+        $(#[$attr])*
         #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $index_name(u32);
 
@@ -264,7 +267,7 @@ macro_rules! declare_builtin_index {
                 self.0
             }
 
-            $iter!(declare_builtin_index_constructors);
+            $for_each_builtin!(declare_builtin_index_constructors);
         }
     };
 }
@@ -332,7 +335,10 @@ macro_rules! declare_builtin_index_constructors {
 }
 
 // Define `struct BuiltinFunctionIndex`
-declare_builtin_index!(BuiltinFunctionIndex, foreach_builtin_function);
+declare_builtin_index! {
+    /// An index type for builtin functions.
+    pub struct BuiltinFunctionIndex : foreach_builtin_function;
+}
 
 /// Return value of [`BuiltinFunctionIndex::trap_sentinel`].
 pub enum TrapSentinel {
