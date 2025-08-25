@@ -61,13 +61,12 @@
 //! Here is how you build the corresponding Cranelift IR function using [`FunctionBuilderContext`]:
 //!
 //! ```rust
-//! use cranelift_codegen::entity::EntityRef;
 //! use cranelift_codegen::ir::types::*;
 //! use cranelift_codegen::ir::{AbiParam, UserFuncName, Function, InstBuilder, Signature};
 //! use cranelift_codegen::isa::CallConv;
 //! use cranelift_codegen::settings;
 //! use cranelift_codegen::verifier::verify_function;
-//! use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+//! use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 //!
 //! let mut sig = Signature::new(CallConv::SystemV);
 //! sig.returns.push(AbiParam::new(I32));
