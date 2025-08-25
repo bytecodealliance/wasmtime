@@ -250,3 +250,33 @@ block0(v0: i32, v1: i32):
 ;     v4 = icmp ule v1, v0
 ;     return v4
 ; }
+
+;; (ne cty (select ty (slt cty x y) x y) x) -> (sgt cty x y)
+function %simplify_select_slt_ne_i32(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v0, v1
+    v3 = select v2, v0, v1
+    v4 = icmp ne v3, v0
+    return v4
+}
+
+; function %simplify_select_slt_ne_i32(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v7 = icmp sgt v0, v1
+;     return v7
+; }
+
+;; (ne cty (select ty (ult cty x y) x y) x) -> (ugt cty x y)
+function %simplify_select_ult_ne_i64(i64, i64) -> i8 fast {
+block0(v0: i64, v1: i64):
+    v2 = icmp ult v0, v1
+    v3 = select v2, v0, v1
+    v4 = icmp ne v3, v0
+    return v4
+}
+
+; function %simplify_select_ult_ne_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v7 = icmp ugt v0, v1
+;     return v7
+; }
