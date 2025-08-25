@@ -196,7 +196,7 @@ macro_rules! ref_wrapper {
             store_id: u64,
             a: u32,
             b: u32,
-            c: usize,
+            c: *const (),
         }
 
         impl $c {
@@ -221,7 +221,7 @@ macro_rules! ref_wrapper {
                     store_id: 0,
                     a: 0,
                     b: 0,
-                    c: 0,
+                    c: core::ptr::null(),
                 };
                 if let Some(rooted) = rooted {
                     let (store_id, a, b, c) = rooted.into_parts_for_c_api();
@@ -233,6 +233,13 @@ macro_rules! ref_wrapper {
                 ret
             }
         }
+
+        // SAFETY: The `*const ()` comes from (and is converted back
+        // into) an `Arc<()>`, and is only accessed as such, so this
+        // type is both Send and Sync. These constraints are necessary
+        // in the async machinery in this crate.
+        unsafe impl Send for $c {}
+        unsafe impl Sync for $c {}
     };
 }
 

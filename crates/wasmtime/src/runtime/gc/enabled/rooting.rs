@@ -1782,12 +1782,12 @@ where
     }
 
     #[doc(hidden)]
-    pub fn into_parts_for_c_api(self) -> (NonZeroU64, u32, u32, usize) {
+    pub fn into_parts_for_c_api(self) -> (NonZeroU64, u32, u32, *const ()) {
         (
             self.inner.store_id.as_raw(),
             self.inner.generation,
             self.inner.index.0,
-            Arc::into_raw(self.liveness_flag).addr(),
+            Arc::into_raw(self.liveness_flag),
         )
     }
 
@@ -1796,14 +1796,14 @@ where
         a: NonZeroU64,
         b: u32,
         c: u32,
-        d: usize,
+        d: *const (),
     ) -> OwnedRooted<T> {
         // We are given a *borrow* of the Arc. This is a little
         // sketchy because `Arc::from_raw()` takes *ownership* of the
         // passed-in pointer, so we need to clone then forget that
         // original.
         let liveness_flag = {
-            let original = unsafe { Arc::from_raw(d as *const ()) };
+            let original = unsafe { Arc::from_raw(d) };
             let clone = original.clone();
             core::mem::forget(original);
             clone
@@ -1824,9 +1824,9 @@ where
         a: NonZeroU64,
         b: u32,
         c: u32,
-        d: usize,
+        d: *const (),
     ) -> OwnedRooted<T> {
-        let liveness_flag = unsafe { Arc::from_raw(d as *const ()) };
+        let liveness_flag = unsafe { Arc::from_raw(d) };
         OwnedRooted {
             inner: GcRootIndex {
                 store_id: StoreId::from_raw(a),

@@ -45,7 +45,7 @@ typedef struct wasmtime_anyref {
   /// Internal to Wasmtime.
   uint32_t __private2;
   /// Internal to Wasmtime.
-  uintptr_t __private3;
+  void *__private3;
 } wasmtime_anyref_t;
 
 /// \brief Helper function to initialize the `ref` provided to a null anyref
@@ -182,7 +182,7 @@ typedef struct wasmtime_externref {
   /// Internal to Wasmtime.
   uint32_t __private2;
   /// Internal to Wasmtime.
-  uintptr_t __private3;
+  void *__private3;
 } wasmtime_externref_t;
 
 /// \brief Helper function to initialize the `ref` provided to a null externref
