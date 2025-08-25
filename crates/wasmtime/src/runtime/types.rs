@@ -2,6 +2,7 @@ use crate::prelude::*;
 use crate::runtime::Memory as RuntimeMemory;
 use crate::runtime::externals::Global as RuntimeGlobal;
 use crate::runtime::externals::Table as RuntimeTable;
+use crate::runtime::externals::Tag as RuntimeTag;
 use crate::{AsContextMut, Extern, Func, Val};
 use crate::{Engine, type_registry::RegisteredType};
 use core::fmt::{self, Display, Write};
@@ -1519,14 +1520,14 @@ impl ExternType {
             EntityType::Tag(ty) => TagType::from_wasmtime_tag(engine, ty).into(),
         }
     }
-    /// Construct a default value, if possible for the underlying type. Tags do not have a default value.
+    /// Construct a default value, if possible, for the underlying type.
     pub fn default_value(&self, store: impl AsContextMut) -> Result<Extern> {
         match self {
             ExternType::Func(func_ty) => func_ty.default_value(store).map(Extern::Func),
             ExternType::Global(global_ty) => global_ty.default_value(store).map(Extern::Global),
             ExternType::Table(table_ty) => table_ty.default_value(store).map(Extern::Table),
             ExternType::Memory(mem_ty) => mem_ty.default_value(store).map(Extern::Memory),
-            ExternType::Tag(_) => bail!("default tags not supported yet"), // FIXME: #10252
+            ExternType::Tag(tag_ty) => tag_ty.default_value(store).map(Extern::Tag),
         }
     }
 }
@@ -3037,6 +3038,15 @@ impl TagType {
     pub(crate) fn from_wasmtime_tag(engine: &Engine, tag: &Tag) -> TagType {
         let ty = FuncType::from_shared_type_index(engine, tag.signature.unwrap_engine_type_index());
         TagType { ty }
+    }
+
+    /// Construct a new default tag with this type.
+    ///
+    /// This creates a host `Tag` in the given store. Tag instances
+    /// have no content other than their type, so this "default" value
+    /// is identical to ordinary host tag allocation.
+    pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeTag> {
+        RuntimeTag::new(store, self)
     }
 }
 
