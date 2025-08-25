@@ -1401,7 +1401,7 @@ impl HeapType {
     #[inline]
     pub(crate) fn is_vmgcref_type(&self) -> bool {
         match self.top() {
-            Self::Any | Self::Extern => true,
+            Self::Any | Self::Extern | Self::Exn => true,
             Self::Func => false,
             Self::Cont => false,
             ty => unreachable!("not a top type: {ty:?}"),
