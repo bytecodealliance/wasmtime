@@ -669,6 +669,12 @@ impl Config {
         self
     }
 
+    /// Stuff
+    pub fn epoch_interruption_via_mmu(&mut self, enable: bool) -> &mut Self {
+        self.tunables.epoch_interruption_via_mmu = Some(enable);
+        self
+    }
+
     /// Configures the maximum amount of stack space available for
     /// executing WebAssembly code.
     ///

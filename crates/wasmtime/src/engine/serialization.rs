@@ -281,6 +281,7 @@ impl Metadata<'_> {
             parse_wasm_debuginfo,
             consume_fuel,
             epoch_interruption,
+            epoch_interruption_via_mmu,
             memory_may_move,
             guard_before_linear_memory,
             table_lazy_init,
@@ -332,6 +333,11 @@ impl Metadata<'_> {
             epoch_interruption,
             other.epoch_interruption,
             "epoch interruption",
+        )?;
+        Self::check_bool(
+            epoch_interruption_via_mmu,
+            other.epoch_interruption_via_mmu,
+            "epoch interruption via MMU",
         )?;
         Self::check_bool(memory_may_move, other.memory_may_move, "memory may move")?;
         Self::check_bool(

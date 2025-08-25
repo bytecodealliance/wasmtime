@@ -86,6 +86,11 @@ define_tunables! {
         /// Whether or not we use epoch-based interruption.
         pub epoch_interruption: bool,
 
+        /// Whether or not to use MMU tricks to speed epoch deadline checks.
+        /// TODO: Consider whether this should be orthogonal to
+        /// epoch_interruption. If not, combine them into an enum or something.
+        pub epoch_interruption_via_mmu: bool,
+
         /// Whether or not linear memories are allowed to be reallocated after
         /// initial allocation at runtime.
         pub memory_may_move: bool,
@@ -197,6 +202,7 @@ impl Tunables {
             parse_wasm_debuginfo: true,
             consume_fuel: false,
             epoch_interruption: false,
+            epoch_interruption_via_mmu: false,
             memory_may_move: true,
             guard_before_linear_memory: true,
             table_lazy_init: true,

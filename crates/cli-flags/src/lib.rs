@@ -296,6 +296,10 @@ wasmtime_option_group! {
         /// Yield when a global epoch counter changes, allowing for async
         /// operation without blocking the executor.
         pub epoch_interruption: Option<bool>,
+        /// Use MMU tricks to speed epoch deadline checks.
+        /// TODO: Document whether this should be used mutually exclusively with
+        /// epoch_interruption.
+        pub epoch_interruption_via_mmu: Option<bool>,
         /// Maximum stack size, in bytes, that wasm is allowed to consume before a
         /// stack overflow is reported.
         pub max_wasm_stack: Option<usize>,
@@ -817,6 +821,9 @@ impl CommonOptions {
 
         if let Some(enable) = self.wasm.epoch_interruption {
             config.epoch_interruption(enable);
+        }
+        if let Some(enable) = self.wasm.epoch_interruption_via_mmu {
+            config.epoch_interruption_via_mmu(enable);
         }
         if let Some(enable) = self.debug.address_map {
             config.generate_address_map(enable);

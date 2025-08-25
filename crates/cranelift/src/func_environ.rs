@@ -3372,6 +3372,11 @@ impl FuncEnvironment<'_> {
             self.epoch_function_entry(builder);
         }
 
+        if self.tunables.epoch_interruption_via_mmu {
+            builder.ins().iconst(I32, 33); // a useless constant, hopefully not optimized out
+            // NEXT: Dead-load something from the vmctx instead.
+        }
+
         #[cfg(feature = "wmemcheck")]
         if self.compiler.wmemcheck {
             let func_name = self.current_func_name(builder);
