@@ -130,9 +130,9 @@
 //!    always cleaned up before a gc.
 //!
 //!    This type is roughly similar to SpiderMonkey's [`PersistentRooted<T>`],
-//!    although they use internal mutation and shared references in a slightly
-//!    different way that produces more contention, because the rooting type
-//!    eagerly unroots itself in shared data structures from its destructor.
+//!    although they register roots on a per-thread `JSContext`, avoiding
+//!    mutation costs in a way that is not viable for Wasmtime (which needs
+//!    `Store`s to be `Send`).
 //!
 //!    [`PersistentRooted<T>`]: http://devdoc.net/web/developer.mozilla.org/en-US/docs/Mozilla/Projects/SpiderMonkey/JSAPI_reference/JS::PersistentRooted.html
 //!
@@ -562,7 +562,7 @@ impl RootSet {
     /// creates and removes many roots (perhaps as it accesses the GC
     /// object graph) but ultimately is dealing with a static graph,
     /// without further allocation, may need the "root set" to be GC'd
-    /// independently from the actual heap. THus, we could trim before
+    /// independently from the actual heap. Thus, we could trim before
     /// adding a new root to ensure we don't grow that unboundedly (or
     /// force an otherwise unneeded GC).
     ///
@@ -577,17 +577,18 @@ impl RootSet {
     /// goes just over the threshold, we might scan all N liveness
     /// flags for each step, resulting in quadratic behavior overall.
     ///
-    /// This, we implement an exponentially-growing "high water mark"
+    /// Thus, we implement an exponentially-growing "high water mark"
     /// to guard against this latter case: on the add-a-new-root case,
     /// we trim only if the list is longer than the high water mark,
     /// and we grow the high water mark each time (by a geometric
     /// factor).
     ///
-    /// `eager` chooses whether we eagerly trim roots or pre-filter using the high-water mark.
+    /// `eager` chooses whether we eagerly trim roots or pre-filter
+    /// using the high-water mark.
     pub(crate) fn trim_liveness_flags(&mut self, gc_store: &mut GcStore, eager: bool) {
         if !eager {
             const DEFAULT_HIGH_WATER: usize = 8;
-            const GROWTH_FACTOR: usize = 4;
+            const GROWTH_FACTOR: usize = 2;
 
             let high_water_mark = self
                 .liveness_trim_high_water
