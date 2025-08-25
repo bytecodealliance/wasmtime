@@ -189,3 +189,5 @@
           (iconst_u ty 0xff00))
         (ushr ty x (iconst_u ty 56))))))
   (bswap ty x))
+
+(rule (simplify (bxor ty (bor ty x y) (band ty x y))) (bxor ty x y))
