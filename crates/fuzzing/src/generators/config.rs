@@ -840,13 +840,7 @@ impl RegallocAlgorithm {
     fn to_wasmtime(&self) -> wasmtime::RegallocAlgorithm {
         match self {
             RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
-            // Note: we have disabled `single_pass` for now because of
-            // its limitations w.r.t. exception handling
-            // (https://github.com/bytecodealliance/regalloc2/issues/217). To
-            // avoid breaking all existing fuzzbugs by changing the
-            // `arbitrary` mappings, we keep the `RegallocAlgorithm`
-            // enum as it is and remap here to `Backtracking`.
-            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::Backtracking,
+            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::SinglePass,
         }
     }
 }
