@@ -212,3 +212,33 @@ fn exception_across_no_wasm(config: &mut Config) -> Result<()> {
 
     Ok(())
 }
+
+#[wasmtime_test(wasm_features(gc, exceptions))]
+fn gc_with_exnref_global(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (global (export "g") (mut exnref) (ref.null exn)))
+          "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let functy = FuncType::new(&engine, [], []);
+    let tagty = TagType::new(functy.clone());
+    let exnty = ExnType::from_tag_type(&tagty).unwrap();
+    let exnpre = ExnRefPre::new(&mut store, exnty);
+    let tag = Tag::new(&mut store, &tagty)?;
+    let exn = ExnRef::new(&mut store, &exnpre, &tag, &[])?;
+
+    let global = instance.get_global(&mut store, "g").unwrap();
+    global.set(&mut store, Val::ExnRef(Some(exn)))?;
+
+    store.gc(None);
+
+    Ok(())
+}
