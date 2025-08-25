@@ -223,3 +223,18 @@ block0():
 ;     return v3
 ; }
 
+;; (x - y) u> x == y u> x
+function %ugt_isub_x_y_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp ugt v2, v0
+    return v3
+}
+
+; function %ugt_isub_x_y_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = icmp ugt v1, v0
+;     return v4
+; }
+
+
