@@ -384,6 +384,7 @@ impl RunCommon {
         let mut p2_options = wasmtime_wasi::p2::bindings::LinkOptions::default();
         p2_options.cli_exit_with_code(self.common.wasi.cli_exit_with_code.unwrap_or(false));
         p2_options.network_error_code(self.common.wasi.network_error_code.unwrap_or(false));
+        p2_options.clocks_timezone(self.common.wasi.clocks_timezone.unwrap_or(false));
         wasmtime_wasi::p2::add_to_linker_with_options_async(linker, &p2_options)?;
 
         #[cfg(feature = "component-model-async")]

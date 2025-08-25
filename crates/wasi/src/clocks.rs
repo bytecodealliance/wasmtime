@@ -1,6 +1,9 @@
+use crate::p2::bindings::clocks::timezone::TimezoneDisplay;
 use cap_std::time::{Duration, Instant, SystemClock, SystemTime};
 use cap_std::{AmbientAuthority, ambient_authority};
 use cap_time_ext::{MonotonicClockExt as _, SystemClockExt as _};
+use chrono::{DateTime, TimeZone};
+use chrono_tz::{OffsetComponents, TZ_VARIANTS, Tz};
 use wasmtime::component::{HasData, ResourceTable};
 
 pub(crate) struct WasiClocks;
@@ -12,6 +15,7 @@ impl HasData for WasiClocks {
 pub struct WasiClocksCtx {
     pub wall_clock: Box<dyn HostWallClock + Send>,
     pub monotonic_clock: Box<dyn HostMonotonicClock + Send>,
+    pub timezone: Box<dyn HostTimezone + Send>,
 }
 
 impl Default for WasiClocksCtx {
@@ -19,6 +23,7 @@ impl Default for WasiClocksCtx {
         Self {
             wall_clock: wall_clock(),
             monotonic_clock: monotonic_clock(),
+            timezone: timezone(),
         }
     }
 }
@@ -40,6 +45,11 @@ pub trait HostWallClock: Send {
 pub trait HostMonotonicClock: Send {
     fn resolution(&self) -> u64;
     fn now(&self) -> u64;
+}
+
+pub trait HostTimezone: Send {
+    fn display(&self, datetime: Duration) -> TimezoneDisplay;
+    fn utc_offset(&self, datetime: Duration) -> i32;
 }
 
 pub struct WallClock {
@@ -123,6 +133,10 @@ pub fn wall_clock() -> Box<dyn HostWallClock + Send> {
     Box::new(WallClock::default())
 }
 
+pub fn timezone() -> Box<dyn HostTimezone + Send> {
+    Box::new(Timezone::default())
+}
+
 pub(crate) struct Datetime {
     pub seconds: u64,
     pub nanoseconds: u32,
@@ -139,5 +153,58 @@ impl TryFrom<SystemTime> for Datetime {
             seconds: duration.as_secs(),
             nanoseconds: duration.subsec_nanos(),
         })
+    }
+}
+
+pub struct Timezone {
+    // The underlying system timezone.
+    timezone: cap_time_ext::Timezone,
+}
+
+impl Default for Timezone {
+    fn default() -> Self {
+        Self::new(ambient_authority())
+    }
+}
+
+impl Timezone {
+    pub fn new(ambient_authority: AmbientAuthority) -> Self {
+        Self {
+            timezone: cap_time_ext::Timezone::new(ambient_authority),
+        }
+    }
+
+    fn timezone_from_duration(&self, datetime: Duration) -> Option<TimezoneDisplay> {
+        let name = self.timezone.timezone_name().ok()?;
+        let tz: Tz = TZ_VARIANTS.into_iter().find(|tz| tz.to_string() == name)?;
+        let naive_datetime = DateTime::from_timestamp(datetime.as_secs() as i64, 0)?.naive_utc();
+        let tz_offset = tz.offset_from_local_datetime(&naive_datetime).single()?;
+        let utc_offset = tz_offset.base_utc_offset().num_hours() as i32;
+        let in_daylight_saving_time = !tz_offset.dst_offset().is_zero();
+        Some(TimezoneDisplay {
+            utc_offset,
+            name,
+            in_daylight_saving_time,
+        })
+    }
+}
+
+impl HostTimezone for Timezone {
+    fn display(&self, datetime: Duration) -> TimezoneDisplay {
+        match self.timezone_from_duration(datetime) {
+            None => TimezoneDisplay {
+                utc_offset: 0,
+                name: "UTC".to_string(),
+                in_daylight_saving_time: false,
+            },
+            Some(timezone_display) => timezone_display,
+        }
+    }
+
+    fn utc_offset(&self, datetime: Duration) -> i32 {
+        match self.timezone_from_duration(datetime) {
+            None => 0,
+            Some(timezone_display) => timezone_display.utc_offset,
+        }
     }
 }

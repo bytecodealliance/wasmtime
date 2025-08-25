@@ -2,6 +2,7 @@ use crate::clocks::WasiClocksCtxView;
 use crate::p2::DynPollable;
 use crate::p2::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
+    clocks::timezone::{self, TimezoneDisplay},
     clocks::wall_clock::{self, Datetime},
 };
 use cap_std::time::SystemTime;
@@ -124,5 +125,17 @@ impl Pollable for Deadline {
             Deadline::Instant(instant) => tokio::time::sleep_until(*instant).await,
             Deadline::Never => std::future::pending().await,
         }
+    }
+}
+
+impl timezone::Host for WasiClocksCtxView<'_> {
+    fn display(&mut self, when: Datetime) -> anyhow::Result<TimezoneDisplay> {
+        let duration = std::time::Duration::new(when.seconds, when.nanoseconds);
+        Ok(self.ctx.timezone.display(duration))
+    }
+
+    fn utc_offset(&mut self, when: Datetime) -> anyhow::Result<i32> {
+        let duration = std::time::Duration::new(when.seconds, when.nanoseconds);
+        Ok(self.ctx.timezone.utc_offset(duration))
     }
 }
