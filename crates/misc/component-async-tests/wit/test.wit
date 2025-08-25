@@ -162,6 +162,10 @@ interface intertask {
   foo: func(fut: future);
 }
 
+interface readiness {
+  start: async func(s: stream<u8>, expected: list<u8>) -> tuple<stream<u8>, list<u8>>;
+}
+
 world yield-caller {
   import continue;
   import ready;
@@ -306,4 +310,8 @@ world cancel-host {
 world intertask-communication {
   import intertask;
   export run;
+}
+
+world readiness-guest {
+  export readiness;
 }

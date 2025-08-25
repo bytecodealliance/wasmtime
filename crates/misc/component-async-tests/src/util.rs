@@ -3,7 +3,7 @@ use futures::{
     SinkExt, StreamExt,
     channel::{mpsc, oneshot},
 };
-use std::thread;
+use std::{future, thread};
 use wasmtime::component::{
     Accessor, Destination, FutureConsumer, FutureProducer, Lift, Lower, Source, StreamConsumer,
     StreamProducer, StreamState,
@@ -32,12 +32,17 @@ pub async fn sleep(duration: std::time::Duration) {
 
 pub struct MpscProducer<T> {
     rx: mpsc::Receiver<T>,
+    next: Option<T>,
     closed: bool,
 }
 
 impl<T: Send + Sync + 'static> MpscProducer<T> {
     pub fn new(rx: mpsc::Receiver<T>) -> Self {
-        Self { rx, closed: false }
+        Self {
+            rx,
+            next: None,
+            closed: false,
+        }
     }
 
     fn state(&self) -> StreamState {
@@ -55,7 +60,15 @@ impl<D, T: Send + Sync + Lower + 'static> StreamProducer<D, T> for MpscProducer<
         accessor: &Accessor<D>,
         destination: &mut Destination<T>,
     ) -> Result<StreamState> {
-        if let Some(item) = self.rx.next().await {
+        let item = if let Some(item) = self.next.take() {
+            Some(item)
+        } else if let Some(item) = self.rx.next().await {
+            Some(item)
+        } else {
+            None
+        };
+
+        if let Some(item) = item {
             let item = destination.write(accessor, Some(item)).await?;
             assert!(item.is_none());
         } else {
@@ -66,6 +79,14 @@ impl<D, T: Send + Sync + Lower + 'static> StreamProducer<D, T> for MpscProducer<
     }
 
     async fn when_ready(&mut self, _: &Accessor<D>) -> Result<StreamState> {
+        if !self.closed && self.next.is_none() {
+            if let Some(item) = self.rx.next().await {
+                self.next = Some(item);
+            } else {
+                self.closed = true;
+            }
+        }
+
         Ok(self.state())
     }
 }
@@ -101,6 +122,8 @@ impl<D, T: Lift + 'static> StreamConsumer<D, T> for MpscConsumer<T> {
     }
 
     async fn when_ready(&mut self, _: &Accessor<D>) -> Result<StreamState> {
+        future::poll_fn(|cx| self.tx.poll_ready(cx)).await?;
+
         Ok(self.state())
     }
 }

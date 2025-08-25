@@ -591,17 +591,17 @@ impl<D: 'static> GuestSource<'_, D> {
             .get_mut(self.id)
             .unwrap();
 
-        let &ReadState::GuestReady {
+        let &WriteState::GuestReady {
             address,
             count,
             options,
             ..
-        } = &transmit.read
+        } = &transmit.write
         else {
             unreachable!()
         };
 
-        let &WriteState::HostReady { guest_offset, .. } = &transmit.write else {
+        let &ReadState::HostReady { guest_offset, .. } = &transmit.read else {
             unreachable!()
         };
 
@@ -1569,30 +1569,39 @@ impl Instance {
         let state = self.concurrent_state_mut(store.0);
         let (_, read) = state.new_transmit().unwrap();
         let producer = Arc::new(Mutex::new(Some(producer)));
-        let transmit_id = state.get(read).unwrap().state;
+        let id = state.get(read).unwrap().state;
         let produce = Box::new(move || {
             let producer = producer.clone();
             async move {
+                let zero_length_read = tls::get(|store| {
+                    anyhow::Ok(matches!(
+                        self.concurrent_state_mut(store).get(id)?.read,
+                        ReadState::GuestReady { count: 0, .. }
+                    ))
+                })?;
+
                 let mut mine = producer.lock().unwrap().take().unwrap();
-                // TODO: call `StreamProducer::when_ready` instead of `consume`
-                // for zero-length reads.
-                let result = mine
-                    .produce(
-                        &Accessor::new(token, Some(self)),
+                let accessor = &Accessor::new(token, Some(self));
+                let result = if zero_length_read {
+                    mine.when_ready(accessor).await
+                } else {
+                    mine.produce(
+                        accessor,
                         &mut Destination {
                             instance: self,
-                            id: transmit_id,
+                            id,
                             kind,
                             _phantom: PhantomData,
                         },
                     )
-                    .await;
+                    .await
+                };
                 *producer.lock().unwrap() = Some(mine);
                 result
             }
             .boxed()
         });
-        state.get_mut(transmit_id).unwrap().write = WriteState::HostReady {
+        state.get_mut(id).unwrap().write = WriteState::HostReady {
             produce,
             guest_offset: 0,
             join: None,
@@ -1618,19 +1627,28 @@ impl Instance {
             Box::new(move || {
                 let consumer = consumer.clone();
                 async move {
+                    let zero_length_write = tls::get(|store| {
+                        anyhow::Ok(matches!(
+                            self.concurrent_state_mut(store).get(id)?.write,
+                            WriteState::GuestReady { count: 0, .. }
+                        ))
+                    })?;
+
                     let mut mine = consumer.lock().unwrap().take().unwrap();
-                    // TODO: call `StreamConsumer::when_ready` instead of
-                    // `consume` for zero-length writes.
-                    let result = mine
-                        .consume(
-                            &Accessor::new(token, Some(self)),
+                    let accessor = &Accessor::new(token, Some(self));
+                    let result = if zero_length_write {
+                        mine.when_ready(accessor).await
+                    } else {
+                        mine.consume(
+                            accessor,
                             &mut Source {
                                 instance: self,
                                 id,
                                 host_buffer: None,
                             },
                         )
-                        .await;
+                        .await
+                    };
                     *consumer.lock().unwrap() = Some(mine);
                     result
                 }
@@ -1638,7 +1656,7 @@ impl Instance {
             })
         };
 
-        match mem::replace(&mut transmit.write, WriteState::Open) {
+        match &transmit.write {
             WriteState::Open => {
                 transmit.read = ReadState::HostReady {
                     consume,
@@ -1655,7 +1673,13 @@ impl Instance {
                 };
                 self.pipe_from_guest(store, kind, id, future).unwrap();
             }
-            WriteState::HostReady { produce, .. } => {
+            WriteState::HostReady { .. } => {
+                let WriteState::HostReady { produce, .. } =
+                    mem::replace(&mut transmit.write, WriteState::Open)
+                else {
+                    unreachable!();
+                };
+
                 transmit.read = ReadState::HostToHost {
                     accept: Box::new(move |input| {
                         let consumer = consumer.clone();

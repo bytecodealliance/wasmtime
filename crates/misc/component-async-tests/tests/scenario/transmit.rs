@@ -1,6 +1,7 @@
-use std::future::Future;
+use std::future::{self, Future};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use super::util::{config, make_component, test_run, test_run_with_count};
 use anyhow::{Result, anyhow};
@@ -14,10 +15,178 @@ use futures::{
     stream::FuturesUnordered,
 };
 use wasmtime::component::{
-    Accessor, Component, FutureReader, HasSelf, Instance, Linker, ResourceTable, StreamReader, Val,
+    Accessor, Component, Destination, FutureReader, HasSelf, Instance, Linker, ResourceTable,
+    Source, StreamConsumer, StreamProducer, StreamReader, StreamState, Val,
 };
-use wasmtime::{AsContextMut, Engine, Store};
+use wasmtime::{AsContextMut, Engine, Store, Trap};
 use wasmtime_wasi::WasiCtxBuilder;
+
+mod readiness {
+    wasmtime::component::bindgen!({
+        path: "wit",
+        world: "readiness-guest"
+    });
+}
+
+struct ReadinessProducer {
+    buffer: Vec<u8>,
+    slept: bool,
+    closed: bool,
+}
+
+impl ReadinessProducer {
+    async fn maybe_sleep(&mut self) {
+        if !self.slept {
+            self.slept = true;
+            component_async_tests::util::sleep(Duration::from_millis(delay_millis())).await;
+        }
+    }
+
+    fn state(&self) -> StreamState {
+        if self.closed {
+            StreamState::Closed
+        } else {
+            StreamState::Open
+        }
+    }
+}
+
+impl<D> StreamProducer<D, u8> for ReadinessProducer {
+    async fn produce(
+        &mut self,
+        accessor: &Accessor<D>,
+        destination: &mut Destination<u8>,
+    ) -> Result<StreamState> {
+        self.maybe_sleep().await;
+        accessor.with(|mut access| {
+            let mut destination = destination
+                .as_guest_destination(access.as_context_mut())
+                .unwrap();
+            destination.remaining().copy_from_slice(&self.buffer);
+            destination.mark_written(self.buffer.len());
+        });
+        self.closed = true;
+        Ok(self.state())
+    }
+
+    async fn when_ready(&mut self, _: &Accessor<D>) -> Result<StreamState> {
+        self.maybe_sleep().await;
+        Ok(self.state())
+    }
+}
+
+struct ReadinessConsumer {
+    expected: Vec<u8>,
+    slept: bool,
+    closed: bool,
+}
+
+impl ReadinessConsumer {
+    async fn maybe_sleep(&mut self) {
+        if !self.slept {
+            self.slept = true;
+            component_async_tests::util::sleep(Duration::from_millis(delay_millis())).await;
+        }
+    }
+
+    fn state(&self) -> StreamState {
+        if self.closed {
+            StreamState::Closed
+        } else {
+            StreamState::Open
+        }
+    }
+}
+
+impl<D> StreamConsumer<D, u8> for ReadinessConsumer {
+    async fn consume(
+        &mut self,
+        accessor: &Accessor<D>,
+        source: &mut Source<'_, u8>,
+    ) -> Result<StreamState> {
+        self.maybe_sleep().await;
+        accessor.with(|mut access| {
+            let mut source = source.as_guest_source(access.as_context_mut()).unwrap();
+            assert_eq!(&self.expected, source.remaining());
+            source.mark_read(self.expected.len());
+        });
+        self.closed = true;
+        Ok(self.state())
+    }
+
+    async fn when_ready(&mut self, _: &Accessor<D>) -> Result<StreamState> {
+        self.maybe_sleep().await;
+        Ok(self.state())
+    }
+}
+
+#[tokio::test]
+pub async fn async_readiness() -> Result<()> {
+    let component = test_programs_artifacts::ASYNC_READINESS_COMPONENT;
+
+    let engine = Engine::new(&config())?;
+
+    let component = make_component(&engine, &[component]).await?;
+
+    let mut linker = Linker::new(&engine);
+
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            continue_: false,
+            wakers: Arc::new(Mutex::new(None)),
+        },
+    );
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let readiness_guest = readiness::ReadinessGuest::new(&mut store, &instance)?;
+    let expected = vec![2u8, 4, 6, 8, 9];
+    let rx = StreamReader::new(
+        instance,
+        &mut store,
+        ReadinessProducer {
+            buffer: expected.clone(),
+            slept: false,
+            closed: false,
+        },
+    );
+    let result = instance
+        .run_concurrent(&mut store, async move |accessor| {
+            let (rx, expected) = readiness_guest
+                .local_local_readiness()
+                .call_start(accessor, rx, expected)
+                .await?;
+
+            accessor.with(|access| {
+                rx.pipe(
+                    access,
+                    ReadinessConsumer {
+                        expected,
+                        slept: false,
+                        closed: false,
+                    },
+                )
+            });
+
+            future::pending::<Result<()>>().await
+        })
+        .await;
+
+    // As of this writing, passing a future which never resolves to
+    // `Instance::run_concurrent` and expecting a `Trap::AsyncDeadlock` is
+    // the only way to join all tasks for the `Instance`, so that's what we
+    // do:
+    assert!(matches!(
+        result.unwrap_err().downcast::<Trap>(),
+        Ok(Trap::AsyncDeadlock)
+    ));
+
+    Ok(())
+}
 
 #[tokio::test]
 pub async fn async_poll_synchronous() -> Result<()> {
@@ -29,7 +198,7 @@ pub async fn async_poll_stackless() -> Result<()> {
     test_run(&[test_programs_artifacts::ASYNC_POLL_STACKLESS_COMPONENT]).await
 }
 
-pub mod cancel {
+mod cancel {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "cancel-host",
@@ -79,7 +248,7 @@ pub async fn async_trap_cancel_host_after_return() -> Result<()> {
     test_cancel_trap(Mode::TrapCancelHostAfterReturn).await
 }
 
-fn cancel_delay() -> u64 {
+fn delay_millis() -> u64 {
     // Miri-based builds are much slower to run, so we delay longer in that case
     // to ensure that async calls which the test expects to return `BLOCKED`
     // actually do so.
@@ -132,7 +301,7 @@ async fn test_cancel(mode: Mode) -> Result<()> {
         .run_concurrent(&mut store, async move |accessor| {
             cancel_host
                 .local_local_cancel()
-                .call_run(accessor, mode, cancel_delay())
+                .call_run(accessor, mode, delay_millis())
                 .await
         })
         .await??;
