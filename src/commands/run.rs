@@ -516,7 +516,6 @@ impl RunCommand {
     ) -> Result<()> {
         use wasmtime::component::{
             Val,
-            types::ComponentItem,
             wasm_wave::{
                 untyped::UntypedFuncCall,
                 wasm::{DisplayFuncResults, WasmFunc},
@@ -533,37 +532,27 @@ impl RunCommand {
         })?;
 
         let name = untyped_call.name();
-        let matches = Self::search_component(store.engine(), component.component_type(), name);
-        match matches.len() {
-            0 => bail!("No export named `{name}` in component."),
-            1 => {}
+        let matches =
+            Self::search_component_funcs(store.engine(), component.component_type(), name);
+        let (names, func_type) = match matches.len() {
+            0 => bail!("No exported func named `{name}` in component."),
+            1 => &matches[0],
             _ => bail!(
                 "Multiple exports named `{name}`: {matches:?}. FIXME: support some way to disambiguate names"
             ),
         };
-        let (params, result_len, export) = match &matches[0] {
-            (names, ComponentItem::ComponentFunc(func)) => {
-                let param_types = WasmFunc::params(func).collect::<Vec<_>>();
-                let params = untyped_call.to_wasm_params(&param_types).with_context(|| {
-                    format!("while interpreting parameters in invoke \"{invoke}\"")
-                })?;
-                let mut export = None;
-                for name in names {
-                    let ix = component
-                        .get_export_index(export.as_ref(), name)
-                        .expect("export exists");
-                    export = Some(ix);
-                }
-                (
-                    params,
-                    func.results().len(),
-                    export.expect("export has at least one name"),
-                )
-            }
-            (names, ty) => {
-                bail!("Cannot invoke export {names:?}: expected ComponentFunc, got type {ty:?}");
-            }
-        };
+
+        let param_types = WasmFunc::params(func_type).collect::<Vec<_>>();
+        let params = untyped_call
+            .to_wasm_params(&param_types)
+            .with_context(|| format!("while interpreting parameters in invoke \"{invoke}\""))?;
+
+        let export = names
+            .iter()
+            .fold(None, |instance, name| {
+                component.get_export_index(instance.as_ref(), name)
+            })
+            .expect("export has at least one name");
 
         let instance = linker.instantiate_async(&mut *store, component).await?;
 
@@ -571,7 +560,7 @@ impl RunCommand {
             .get_func(&mut *store, export)
             .expect("found export index");
 
-        let mut results = vec![Val::Bool(false); result_len];
+        let mut results = vec![Val::Bool(false); func_type.results().len()];
         func.call_async(&mut *store, &params, &mut results).await?;
 
         println!("{}", DisplayFuncResults(&results));
@@ -630,11 +619,11 @@ impl RunCommand {
     }
 
     #[cfg(feature = "component-model")]
-    fn search_component(
+    fn search_component_funcs(
         engine: &Engine,
         component: wasmtime::component::types::Component,
         name: &str,
-    ) -> Vec<(Vec<String>, wasmtime::component::types::ComponentItem)> {
+    ) -> Vec<(Vec<String>, wasmtime::component::types::ComponentFunc)> {
         use wasmtime::component::types::ComponentItem as CItem;
         fn collect_exports(
             engine: &Engine,
@@ -664,7 +653,14 @@ impl RunCommand {
 
         collect_exports(engine, CItem::Component(component), Vec::new())
             .into_iter()
-            .filter(|(names, _item)| names.last().expect("at least one name") == name)
+            .filter_map(|(names, item)| {
+                let CItem::ComponentFunc(func) = item else {
+                    return None;
+                };
+                let func_name = names.last().expect("at least one name");
+                let base_func_name = func_name.strip_prefix("[async]").unwrap_or(func_name);
+                (base_func_name == name).then_some((names, func))
+            })
             .collect()
     }
 
