@@ -364,7 +364,7 @@ fn inline_one(
     // Prepare for translating the actual instructions by inserting the inlined
     // blocks into the caller's layout in the same order that they appear in the
     // callee.
-    let last_inlined_block = inline_block_layout(func, call_block, callee, &entity_map);
+    let mut last_inlined_block = inline_block_layout(func, call_block, callee, &entity_map);
 
     // Translate each instruction from the callee into the caller,
     // appending them to their associated block in the caller.
@@ -492,6 +492,18 @@ fn inline_one(
     // empty blocks from the caller's layout.
     for block in entity_map.iter_inlined_blocks(func) {
         if func.layout.is_block_inserted(block) && func.layout.first_inst(block).is_none() {
+            log::trace!("removing unreachable inlined block from layout: {block}");
+
+            // If the block being removed is our last-inlined block, then back
+            // it up to the previous block in the layout, which will be the new
+            // last-inlined block after this one's removal.
+            if block == last_inlined_block {
+                last_inlined_block = func.layout.prev_block(last_inlined_block).expect(
+                    "there will always at least be the block that contained the call we are \
+                     inlining",
+                );
+            }
+
             func.layout.remove_block(block);
         }
     }
@@ -517,6 +529,10 @@ fn inline_one(
         fixup_inlined_call_exception_tables(allocs, func, call_exception_table);
     }
 
+    debug_assert!(
+        func.layout.is_block_inserted(last_inlined_block),
+        "last_inlined_block={last_inlined_block} should be inserted in the layout"
+    );
     last_inlined_block
 }
 
@@ -972,11 +988,15 @@ fn inline_block_layout(
     callee: &ir::Function,
     entity_map: &EntityMap,
 ) -> ir::Block {
+    debug_assert!(func.layout.is_block_inserted(call_block));
+
     // Iterate over callee blocks in layout order, inserting their associated
     // inlined block into the caller's layout.
     let mut prev_inlined_block = call_block;
     let mut next_callee_block = callee.layout.entry_block();
     while let Some(callee_block) = next_callee_block {
+        debug_assert!(func.layout.is_block_inserted(prev_inlined_block));
+
         let inlined_block = entity_map.inlined_block(callee_block);
         func.layout
             .insert_block_after(inlined_block, prev_inlined_block);
@@ -984,6 +1004,8 @@ fn inline_block_layout(
         prev_inlined_block = inlined_block;
         next_callee_block = callee.layout.next_block(callee_block);
     }
+
+    debug_assert!(func.layout.is_block_inserted(prev_inlined_block));
     prev_inlined_block
 }
 
