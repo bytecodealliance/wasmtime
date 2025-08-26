@@ -153,7 +153,7 @@ pub union wasmtime_val_union {
 
 const _: () = {
     // This is forced to 24 or 20 bytes by `anyref` and `externref`.
-    assert!(std::mem::size_of::<wasmtime_val_union>() == 16 + std::mem::size_of::<usize>());
+    assert!(std::mem::size_of::<wasmtime_val_union>() <= 24);
     assert!(std::mem::align_of::<wasmtime_val_union>() == std::mem::align_of::<u64>());
 };
 
