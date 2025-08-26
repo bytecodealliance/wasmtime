@@ -48,7 +48,10 @@
 //! convenient to use in host functions.
 
 use crate::component::func::{self, Func, Options};
-use crate::component::{Component, ComponentInstanceId, HasData, HasSelf, Instance};
+use crate::component::{
+    Component, ComponentInstanceId, HasData, HasSelf, Instance, Resource, ResourceTable,
+    ResourceTableError,
+};
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::store::{StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{
@@ -78,7 +81,7 @@ use std::slice;
 use std::sync::Mutex;
 use std::task::{Context, Poll, Waker};
 use std::vec::Vec;
-use table::{Table, TableDebug, TableError, TableId};
+use table::{TableDebug, TableId};
 use wasmtime_environ::component::{
     CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
     OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
@@ -307,7 +310,7 @@ where
 ///
 /// * It's intentional that `Accessor` cannot be cloned, it needs to stay within
 ///   the lifetime of a single future.
-/// * A futures is expected to, however, close over an `Accessor` and keep it
+/// * A future is expected to, however, close over an `Accessor` and keep it
 ///   alive probably for the duration of the entire future.
 /// * Different host futures will be given different `Accessor`s, and that's
 ///   intentional.
@@ -979,6 +982,8 @@ impl Instance {
             .get_mut(store.as_context_mut().0)
             .concurrent_state_mut()
             .table
+            .get_mut()
+            .unwrap()
             .enable_debug(enable);
         // TODO: do the same for the tables holding guest-facing handles
     }
@@ -1003,7 +1008,11 @@ impl Instance {
                 .all(|(_, table)| table.is_empty())
         );
         let state = instance.concurrent_state_mut();
-        assert!(state.table.is_empty(), "non-empty table: {:?}", state.table);
+        assert!(
+            state.table.get_mut().unwrap().is_empty(),
+            "non-empty table: {:?}",
+            state.table
+        );
         assert!(state.high_priority.is_empty());
         assert!(state.low_priority.is_empty());
         assert!(state.guest_task.is_none());
@@ -3970,7 +3979,7 @@ pub struct ConcurrentState {
     /// out, poll it, then put it back to avoid any mutable aliasing hazards.
     futures: Mutex<Option<FuturesUnordered<HostTaskFuture>>>,
     /// The table of waitables, waitable sets, etc.
-    table: Table,
+    table: Mutex<ResourceTable>,
     /// Per (sub-)component instance states.
     ///
     /// See `InstanceState` for details and note that this map is lazily
@@ -4016,7 +4025,7 @@ impl ConcurrentState {
     pub(crate) fn new(component: &Component) -> Self {
         Self {
             guest_task: None,
-            table: Table::new(),
+            table: Mutex::new(ResourceTable::new()),
             futures: Mutex::new(Some(FuturesUnordered::new())),
             instance_states: HashMap::new(),
             high_priority: Vec::new(),
@@ -4050,7 +4059,7 @@ impl ConcurrentState {
         fibers: &mut Vec<StoreFiber<'static>>,
         futures: &mut Vec<FuturesUnordered<HostTaskFuture>>,
     ) {
-        for entry in self.table.iter_mut() {
+        for entry in self.table.get_mut().unwrap().iter_mut() {
             if let Some(set) = entry.downcast_mut::<WaitableSet>() {
                 for mode in mem::take(&mut set.waiting).into_values() {
                     if let WaitMode::Fiber(fiber) = mode {
@@ -4095,36 +4104,45 @@ impl ConcurrentState {
         self.instance_states.entry(instance).or_default()
     }
 
-    fn push<V: Send + Sync + 'static>(&mut self, value: V) -> Result<TableId<V>, TableError> {
-        self.table.push(value)
+    fn push<V: Send + Sync + 'static>(
+        &mut self,
+        value: V,
+    ) -> Result<TableId<V>, ResourceTableError> {
+        self.table.get_mut().unwrap().push(value).map(TableId::from)
     }
 
-    fn get<V: 'static>(&self, id: TableId<V>) -> Result<&V, TableError> {
-        self.table.get(id)
+    fn get<V: 'static>(&mut self, id: TableId<V>) -> Result<&V, ResourceTableError> {
+        self.table.get_mut().unwrap().get(&Resource::from(id))
     }
 
-    fn get_mut<V: 'static>(&mut self, id: TableId<V>) -> Result<&mut V, TableError> {
-        self.table.get_mut(id)
+    fn get_mut<V: 'static>(&mut self, id: TableId<V>) -> Result<&mut V, ResourceTableError> {
+        self.table.get_mut().unwrap().get_mut(&Resource::from(id))
     }
 
-    pub fn add_child<T, U>(
+    pub fn add_child<T: 'static, U: 'static>(
         &mut self,
         child: TableId<T>,
         parent: TableId<U>,
-    ) -> Result<(), TableError> {
-        self.table.add_child(child, parent)
+    ) -> Result<(), ResourceTableError> {
+        self.table
+            .get_mut()
+            .unwrap()
+            .add_child(Resource::from(child), Resource::from(parent))
     }
 
-    pub fn remove_child<T, U>(
+    pub fn remove_child<T: 'static, U: 'static>(
         &mut self,
         child: TableId<T>,
         parent: TableId<U>,
-    ) -> Result<(), TableError> {
-        self.table.remove_child(child, parent)
+    ) -> Result<(), ResourceTableError> {
+        self.table
+            .get_mut()
+            .unwrap()
+            .remove_child(Resource::from(child), Resource::from(parent))
     }
 
-    fn delete<V: 'static>(&mut self, id: TableId<V>) -> Result<V, TableError> {
-        self.table.delete(id)
+    fn delete<V: 'static>(&mut self, id: TableId<V>) -> Result<V, ResourceTableError> {
+        self.table.get_mut().unwrap().delete(Resource::from(id))
     }
 
     fn push_future(&mut self, future: HostTaskFuture) {
