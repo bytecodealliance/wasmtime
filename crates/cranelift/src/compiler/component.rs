@@ -1,6 +1,9 @@
 //! Compilation support for the component model.
 
-use crate::{TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT, compiler::Compiler};
+use crate::array_call_signature;
+use crate::{
+    TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT, compiler::Compiler, wasm_call_signature,
+};
 use anyhow::Result;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
@@ -1437,6 +1440,210 @@ impl ComponentCompiler for Compiler {
         c.builder.finalize();
         compiler.cx.abi = Some(abi);
 
+        Ok(CompiledFunctionBody {
+            code: super::box_dyn_any_compiler_context(Some(compiler.cx)),
+            needs_gc_heap: false,
+        })
+    }
+
+    fn compile_intrinsic(
+        &self,
+        tunables: &Tunables,
+        component: &ComponentTranslation,
+        intrinsic: UnsafeIntrinsic,
+        abi: Abi,
+    ) -> Result<CompiledFunctionBody> {
+        let offsets = VMComponentOffsets::new(self.isa.pointer_bytes(), &component.component);
+        let mut compiler = self.function_compiler();
+        let cx = &mut compiler.cx;
+        let ctx = &mut cx.codegen_context;
+        let mut builder = FunctionBuilder::new(&mut ctx.func, cx.func_translator.context());
+
+        // Initialize the function, its signature, and entry block.
+        let init = |builder: &mut FunctionBuilder,
+                    params: Box<[WasmValType]>,
+                    results: Box<[WasmValType]>|
+         -> Vec<ir::Value> {
+            let wasm_func_ty = WasmFuncType::new(params, results);
+            builder.func.signature = match abi {
+                Abi::Wasm => wasm_call_signature(&*self.isa, &wasm_func_ty, tunables),
+                Abi::Array => array_call_signature(&*self.isa),
+            };
+
+            assert!(builder.func.layout.entry_block().is_none());
+            let entry_block = builder.create_block();
+            builder.switch_to_block(entry_block);
+            builder.seal_block(entry_block);
+            builder.append_block_params_for_function_params(entry_block);
+
+            match abi {
+                Abi::Array => {
+                    let &[
+                        callee_vmctx,
+                        caller_vmctx,
+                        values_vec_ptr,
+                        values_vec_capacity,
+                    ] = builder.func.dfg.block_params(entry_block)
+                    else {
+                        unreachable!()
+                    };
+
+                    let wasm_args = self.load_values_from_array(
+                        wasm_func_ty.params(),
+                        builder,
+                        values_vec_ptr,
+                        values_vec_capacity,
+                    );
+
+                    let mut args = vec![callee_vmctx, caller_vmctx];
+                    args.extend(wasm_args);
+                    args
+                }
+                Abi::Wasm => builder.func.dfg.block_params(entry_block).to_vec(),
+            }
+        };
+
+        let return_ = |compiler: &Compiler,
+                       builder: &mut FunctionBuilder<'_>,
+                       wasm_tys: &[WasmValType],
+                       values: &[ir::Value]| {
+            match abi {
+                Abi::Wasm => {
+                    builder.ins().return_(values);
+                }
+                Abi::Array => {
+                    let entry_block = builder.func.layout.entry_block().unwrap();
+                    let &[_, _, values_vec_ptr, values_vec_capacity] =
+                        builder.func.dfg.block_params(entry_block)
+                    else {
+                        unreachable!()
+                    };
+                    compiler.store_values_to_array(
+                        builder,
+                        wasm_tys,
+                        values,
+                        values_vec_ptr,
+                        values_vec_capacity,
+                    );
+                    // Return zero, the sentinel for "we did not trap".
+                    let zero = builder.ins().iconst(ir::types::I8, 0);
+                    builder.ins().return_(&[zero]);
+                }
+            }
+        };
+
+        // Emit code for a native-load intrinsic.
+        let load = |builder: &mut FunctionBuilder, clif_ty: ir::Type, wasm_ty: WasmValType| {
+            let [_callee_vmctx, _caller_vmctx, pointer] =
+                *init(builder, [WasmValType::I64].into(), [wasm_ty].into())
+            else {
+                unreachable!()
+            };
+
+            // Do the load!
+            let mut value = builder
+                .ins()
+                .load(clif_ty, ir::MemFlags::trusted(), pointer, 0);
+
+            // Extend the value, if necessary.
+            let wasm_clif_ty = crate::value_type(&*self.isa, wasm_ty);
+            if clif_ty != wasm_clif_ty {
+                assert!(clif_ty.bytes() < wasm_clif_ty.bytes());
+                value = builder.ins().uextend(wasm_clif_ty, value);
+            }
+
+            return_(self, builder, &[wasm_ty], &[value]);
+        };
+
+        // Emit code for a native-store intrinsic.
+        let store = |builder: &mut FunctionBuilder, clif_ty: ir::Type, wasm_ty: WasmValType| {
+            let [_callee_vmctx, _caller_vmctx, pointer, mut value] =
+                *init(builder, [WasmValType::I64, wasm_ty].into(), [].into())
+            else {
+                unreachable!()
+            };
+
+            // Truncate the value, if necessary.
+            let wasm_ty = crate::value_type(&*self.isa, wasm_ty);
+            if clif_ty != wasm_ty {
+                assert!(clif_ty.bytes() < wasm_ty.bytes());
+                value = builder.ins().ireduce(clif_ty, value);
+            }
+
+            // Do the store!
+            builder
+                .ins()
+                .store(ir::MemFlags::trusted(), value, pointer, 0);
+
+            return_(self, builder, &[], &[]);
+        };
+
+        match intrinsic {
+            x if x == UnsafeIntrinsic::u8_native_load() => {
+                load(&mut builder, ir::types::I8, WasmValType::I32)
+            }
+            x if x == UnsafeIntrinsic::u16_native_load() => {
+                load(&mut builder, ir::types::I16, WasmValType::I32)
+            }
+            x if x == UnsafeIntrinsic::u32_native_load() => {
+                load(&mut builder, ir::types::I32, WasmValType::I32)
+            }
+            x if x == UnsafeIntrinsic::u64_native_load() => {
+                load(&mut builder, ir::types::I64, WasmValType::I64)
+            }
+            x if x == UnsafeIntrinsic::u8_native_store() => {
+                store(&mut builder, ir::types::I8, WasmValType::I32)
+            }
+            x if x == UnsafeIntrinsic::u16_native_store() => {
+                store(&mut builder, ir::types::I16, WasmValType::I32)
+            }
+            x if x == UnsafeIntrinsic::u32_native_store() => {
+                store(&mut builder, ir::types::I32, WasmValType::I32)
+            }
+            x if x == UnsafeIntrinsic::u64_native_store() => {
+                store(&mut builder, ir::types::I64, WasmValType::I64)
+            }
+            x if x == UnsafeIntrinsic::store_data_address() => {
+                let [callee_vmctx, _caller_vmctx] =
+                    *init(&mut builder, [].into(), [WasmValType::I64].into())
+                else {
+                    unreachable!()
+                };
+                let pointer_type = self.isa.pointer_type();
+
+                // Load the `*mut VMStoreContext` out of our vmctx.
+                let store_ctx = builder.ins().load(
+                    pointer_type,
+                    ir::MemFlags::trusted()
+                        .with_readonly()
+                        .with_alias_region(Some(ir::AliasRegion::Vmctx))
+                        .with_can_move(),
+                    callee_vmctx,
+                    i32::try_from(offsets.vm_store_context()).unwrap(),
+                );
+
+                // Load the `*mut T` out of the `VMStoreContext`.
+                let mut data_address = builder.ins().load(
+                    pointer_type,
+                    ir::MemFlags::trusted()
+                        .with_readonly()
+                        .with_alias_region(Some(ir::AliasRegion::Vmctx))
+                        .with_can_move(),
+                    store_ctx,
+                    i32::from(offsets.ptr.vmstore_context_store_data()),
+                );
+
+                // Zero-extend the address if we are on a 32-bit architecture.
+                if pointer_type.bytes() < ir::types::I64.bytes() {
+                    data_address = builder.ins().uextend(ir::types::I64, data_address);
+                }
+
+                return_(self, &mut builder, &[WasmValType::I64], &[data_address]);
+            }
+            otherwise => unreachable!("unknown intrinsic: {otherwise:?}"),
+        }
+
+        builder.finalize();
         Ok(CompiledFunctionBody {
             code: super::box_dyn_any_compiler_context(Some(compiler.cx)),
             needs_gc_heap: false,

@@ -47,6 +47,7 @@
 
 use crate::component::translate::*;
 use crate::{EntityType, IndexType};
+use core::str::FromStr;
 use std::borrow::Cow;
 use wasmparser::component_types::{ComponentAnyTypeId, ComponentCoreModuleTypeId};
 
@@ -302,6 +303,9 @@ enum ModuleInstanceDef<'a> {
 
 #[derive(Clone)]
 enum ComponentFuncDef<'a> {
+    /// A compile-time builtin intrinsic.
+    UnsafeIntrinsic(UnsafeIntrinsic),
+
     /// A host-imported component function.
     Import(ImportPath<'a>),
 
@@ -318,6 +322,10 @@ enum ComponentFuncDef<'a> {
 
 #[derive(Clone)]
 enum ComponentInstanceDef<'a> {
+    /// The `__wasmtime_intrinsics` instance that exports all of our
+    /// compile-time builtin intrinsics.
+    Intrinsics,
+
     /// A host-imported instance.
     ///
     /// This typically means that it's "just" a map of named values. It's not
@@ -485,6 +493,12 @@ impl<'a> Inliner<'a> {
                 frame.push_item(arg.clone());
             }
 
+            IntrinsicsImport => {
+                frame
+                    .component_instances
+                    .push(ComponentInstanceDef::Intrinsics);
+            }
+
             // Lowering a component function to a core wasm function is
             // generally what "triggers compilation". Here various metadata is
             // recorded and then the final component gets an initializer
@@ -596,6 +610,10 @@ impl<'a> Inliner<'a> {
                             func: func.clone(),
                         });
                         dfg::CoreDef::Adapter(adapter_idx)
+                    }
+
+                    ComponentFuncDef::UnsafeIntrinsic(intrinsic) => {
+                        dfg::CoreDef::UnsafeIntrinsic(options.core_type, *intrinsic)
                     }
                 };
                 frame.funcs.push((lower_core_type, func));
@@ -1319,6 +1337,12 @@ impl<'a> Inliner<'a> {
 
             AliasComponentExport(instance, name) => {
                 match &frame.component_instances[*instance] {
+                    ComponentInstanceDef::Intrinsics => {
+                        frame.push_item(ComponentItemDef::Func(ComponentFuncDef::UnsafeIntrinsic(
+                            UnsafeIntrinsic::from_str(name)?,
+                        )));
+                    }
+
                     // Aliasing an export from an imported instance means that
                     // we're extending the `ImportPath` by one name, represented
                     // with the clone + push here. Afterwards an appropriate
@@ -1581,11 +1605,23 @@ impl<'a> Inliner<'a> {
                         "component export `{name}` is a reexport of an imported function which is not implemented"
                     )
                 }
+
+                ComponentFuncDef::UnsafeIntrinsic(_) => {
+                    bail!(
+                        "component export `{name}` is a reexport of an intrinsic function which is not supported"
+                    )
+                }
             },
 
             ComponentItemDef::Instance(instance) => {
                 let mut exports = IndexMap::new();
                 match instance {
+                    ComponentInstanceDef::Intrinsics => {
+                        bail!(
+                            "component export `{name}` is a reexport of the intrinsics instance which is not supported"
+                        )
+                    }
+
                     // If this instance is one that was originally imported by
                     // the component itself then the imports are translated here
                     // by converting to a `ComponentItemDef` and then
@@ -1847,6 +1883,9 @@ impl<'a> ComponentItemDef<'a> {
                 ComponentInstanceDef::Import(path, ty) => {
                     ComponentItemDef::from_import(path.push(element), types[ty].exports[element])
                         .unwrap()
+                }
+                ComponentInstanceDef::Intrinsics => {
+                    unreachable!("intrinsics do not define resources")
                 }
             };
         }

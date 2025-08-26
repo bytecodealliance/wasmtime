@@ -260,8 +260,17 @@ macro_rules! declare_builtin_index {
         pub struct $index_name:ident : $for_each_builtin:ident ;
     ) => {
         $(#[$attr])*
-        #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $index_name(u32);
+
+        impl core::fmt::Debug for $index_name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.debug_struct(stringify!($index_name))
+                    .field("index", &self.0)
+                    .field("ctor", &self.ctor_name())
+                    .finish()
+            }
+        }
 
         impl $index_name {
             /// Create a new builtin from its raw index
@@ -275,6 +284,8 @@ macro_rules! declare_builtin_index {
                 self.0
             }
 
+            $for_each_builtin!(define_ctor_name);
+
             $for_each_builtin!(declare_builtin_index_constructors);
         }
 
@@ -285,6 +296,28 @@ macro_rules! declare_builtin_index {
             }
         }
     };
+}
+
+/// Helper macro used by the above macro.
+macro_rules! define_ctor_name {
+    (
+        $(
+            $( #[$attr:meta] )*
+                $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
+        )*
+    ) => {
+        /// Returns the name of the constructor that creates this index.
+        pub fn ctor_name(&self) -> &'static str {
+            let mut _i = self.0;
+            $(
+                if _i == 0 {
+                    return stringify!($name);
+                }
+                _i -= 1;
+            )*
+            unreachable!()
+        }
+    }
 }
 
 /// Helper macro used by the above macro.
