@@ -91,3 +91,10 @@
 (rule (simplify (select ty (sge _ x (iconst_u ty 0)) x (ineg ty x))) (subsume (iabs ty x)))
 (rule (simplify (select ty (sle _ x (iconst_u ty 0)) (ineg ty x) x)) (subsume (iabs ty x)))
 (rule (simplify (select ty (slt _ x (iconst_u ty 0)) (ineg ty x) x)) (subsume (iabs ty x)))
+
+;; fold add-select to select-add
+(rule (simplify
+        (iadd ty (select ty c (iconst_u ty x) (iconst_u ty y)) (iconst_u ty z)))
+        (select ty c
+            (iconst ty (imm64 (u64_add x z)))
+            (iconst ty (imm64 (u64_add y z)))))
