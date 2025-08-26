@@ -157,6 +157,7 @@ pub mod raw {
         (@ty f64x2) => (f64x2);
         (@ty bool) => (bool);
         (@ty pointer) => (*mut u8);
+        (@ty size) => (usize);
     }
 
     wasmtime_environ::foreach_builtin_function!(libcall);
@@ -339,7 +340,7 @@ unsafe fn table_grow_cont_obj(
     // The following two values together form the initial Option<VMContObj>.
     // A None value is indicated by the pointer being null.
     init_value_contref: *mut u8,
-    init_value_revision: u64,
+    init_value_revision: usize,
 ) -> Result<Option<AllocationSize>> {
     let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
     let element = unsafe { VMContObj::from_raw_parts(init_value_contref, init_value_revision) };
@@ -416,7 +417,7 @@ unsafe fn table_fill_cont_obj(
     table_index: u32,
     dst: u64,
     value_contref: *mut u8,
-    value_revision: u64,
+    value_revision: usize,
     len: u64,
 ) -> Result<()> {
     let instance = store.instance_mut(instance);

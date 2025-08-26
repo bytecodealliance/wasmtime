@@ -2397,7 +2397,7 @@ impl FuncEnvironment<'_> {
             WasmHeapTopType::Cont => {
                 let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
                 Ok(builder.ins().load(
-                    stack_switching::fatpointer::POINTER_TYPE,
+                    stack_switching::fatpointer::fatpointer_type(self),
                     flags,
                     elem_addr,
                     0,

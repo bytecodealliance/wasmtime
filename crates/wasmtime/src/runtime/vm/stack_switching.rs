@@ -39,15 +39,15 @@ pub use stack::*;
 /// For performance reasons, the VMContRef at the bottom of this chain
 /// (i.e., the one pointed to by the VMContObj) has a pointer to the
 /// other end of the chain (i.e., its last ancestor).
-#[repr(C, align(16))]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct VMContObj {
     pub contref: NonNull<VMContRef>,
-    pub revision: u64,
+    pub revision: usize,
 }
 
 impl VMContObj {
-    pub fn new(contref: NonNull<VMContRef>, revision: u64) -> Self {
+    pub fn new(contref: NonNull<VMContRef>, revision: usize) -> Self {
         Self { contref, revision }
     }
 
@@ -59,7 +59,7 @@ impl VMContObj {
     ///
     /// Behavior will be undefined if a pointer to data that is not a
     /// VMContRef is provided.
-    pub unsafe fn from_raw_parts(contref: *mut u8, revision: u64) -> Option<Self> {
+    pub unsafe fn from_raw_parts(contref: *mut u8, revision: usize) -> Option<Self> {
         NonNull::new(contref.cast::<VMContRef>()).map(|contref| Self::new(contref, revision))
     }
 }
@@ -204,7 +204,7 @@ pub struct VMContRef {
     pub last_ancestor: *mut VMContRef,
 
     /// Revision counter.
-    pub revision: u64,
+    pub revision: usize,
 
     /// The underlying stack.
     pub stack: VMContinuationStack,

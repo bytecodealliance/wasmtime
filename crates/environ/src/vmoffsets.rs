@@ -348,12 +348,17 @@ pub trait PtrSize {
 
     /// Return the offset of `VMContObj::revision`
     fn vmcontobj_revision(&self) -> u8 {
-        8
+        self.size()
     }
 
-    /// Return the size of `VMHostArray`.
+    /// Return the size of `VMContObj`.
     fn size_of_vmcontobj(&self) -> u8 {
-        16
+        u8::try_from(align(
+            u32::from(self.vmcontobj_revision())
+                + u32::try_from(core::mem::size_of::<usize>()).unwrap(),
+            u32::from(self.size()),
+        ))
+        .unwrap()
     }
 
     // Offsets within `VMContRef`
