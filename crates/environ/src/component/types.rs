@@ -240,6 +240,9 @@ indices! {
 
     /// An index into `Component::export_items` at the end of compilation.
     pub struct ExportIndex(u32);
+
+    /// An index into `Component::options` at the end of compilation.
+    pub struct OptionsIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the

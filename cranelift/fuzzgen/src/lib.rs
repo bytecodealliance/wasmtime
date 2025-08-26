@@ -13,6 +13,7 @@ use cranelift::prelude::settings::SettingKind;
 use cranelift::prelude::*;
 use cranelift_arbitrary::CraneliftArbitrary;
 use cranelift_native::builder_with_options;
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 use target_isa_extras::TargetIsaExtras;
 use target_lexicon::Architecture;
 
@@ -306,10 +307,15 @@ where
         // the values so that we can pass it into the builder again.
         let max_isa = max_builder.finish(Flags::new(settings::builder()))?;
 
-        // We give each of the flags a chance of being copied over. Otherwise we keep the default.
+        // We give each of the flags a chance of being copied over. Otherwise we
+        // keep the default. Note that a constant amount of data is taken from
+        // `self.u` as a seed for a `SmallRng` which is then transitively used
+        // to make decisions about what flags to include. This is done to ensure
+        // that the same test case generates similarly across different machines
+        // with different CPUs when `Host` is used above.
+        let mut rng = SmallRng::from_seed(self.u.arbitrary()?);
         for value in max_isa.isa_flags().iter() {
-            let should_copy = bool::arbitrary(self.u)?;
-            if !should_copy {
+            if rng.random() {
                 continue;
             }
             builder.set(value.name, &value.value_string())?;

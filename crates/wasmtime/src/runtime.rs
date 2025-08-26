@@ -33,6 +33,8 @@ pub(crate) mod code;
 pub(crate) mod code_memory;
 #[cfg(feature = "debug-builtins")]
 pub(crate) mod debug;
+#[cfg(feature = "gc")]
+pub(crate) mod exception;
 pub(crate) mod externals;
 #[cfg(feature = "async")]
 pub(crate) mod fiber;
@@ -72,6 +74,8 @@ cfg_if::cfg_if! {
 }
 
 pub use code_memory::CodeMemory;
+#[cfg(feature = "gc")]
+pub use exception::*;
 pub use externals::*;
 pub use func::*;
 pub use gc::*;
@@ -95,7 +99,7 @@ pub use values::*;
 pub(crate) use uninhabited::*;
 
 #[cfg(feature = "pooling-allocator")]
-pub use vm::PoolConcurrencyLimitError;
+pub use vm::{PoolConcurrencyLimitError, PoolingAllocatorMetrics};
 
 #[cfg(feature = "profiling")]
 mod profiling;

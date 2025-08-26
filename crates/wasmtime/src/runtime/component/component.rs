@@ -17,8 +17,8 @@ use core::ptr::NonNull;
 use std::path::Path;
 use wasmtime_environ::TypeTrace;
 use wasmtime_environ::component::{
-    AllCallFunc, CanonicalOptions, CompiledComponentInfo, ComponentArtifacts, ComponentTypes,
-    CoreDef, Export, ExportIndex, GlobalInitializer, InstantiateModule, NameMapNoIntern,
+    AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export,
+    ExportIndex, GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex,
     StaticModuleIndex, TrampolineIndex, TypeComponentIndex, TypeFuncIndex, VMComponentOffsets,
 };
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
@@ -223,7 +223,9 @@ impl Component {
     /// lives for as long as the module and is nevery externally modified for
     /// the lifetime of the deserialized module.
     pub unsafe fn deserialize_raw(engine: &Engine, memory: NonNull<[u8]>) -> Result<Component> {
-        let code = engine.load_code_raw(memory, ObjectKind::Component)?;
+        // SAFETY: the contract required by `load_code_raw` is the same as this
+        // function.
+        let code = unsafe { engine.load_code_raw(memory, ObjectKind::Component)? };
         Component::from_parts(engine, code, None)
     }
 
@@ -834,9 +836,10 @@ impl Component {
     pub(crate) fn export_lifted_function(
         &self,
         export: ExportIndex,
-    ) -> (TypeFuncIndex, &CoreDef, &CanonicalOptions) {
-        match &self.env_component().export_items[export] {
-            Export::LiftedFunction { ty, func, options } => (*ty, func, options),
+    ) -> (TypeFuncIndex, &CoreDef, OptionsIndex) {
+        let component = self.env_component();
+        match &component.export_items[export] {
+            Export::LiftedFunction { ty, func, options } => (*ty, func, *options),
             _ => unreachable!(),
         }
     }

@@ -26,7 +26,7 @@ wasmtime = { workspace = true, default-features = true, features = ["winch", "pu
 wasmtime-cli-flags = { workspace = true, default-features = true, features = [
     "cranelift",
 ] }
-wasi-common = { workspace = true, default-features = true }
+wasmtime-wasi = { workspace = true, features = ['p1'] }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 cap-std = { workspace = true }
 clap = { workspace = true }

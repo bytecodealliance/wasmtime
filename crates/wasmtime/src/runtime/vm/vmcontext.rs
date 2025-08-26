@@ -5,7 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
-use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
+use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
 use crate::vm::stack_switching::VMStackChain;
 use core::cell::UnsafeCell;
@@ -18,7 +18,7 @@ use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    DefinedTagIndex, Unsigned, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
+    DefinedTagIndex, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -355,6 +355,14 @@ mod test_vmtag_import {
             offset_of!(VMTagImport, from),
             usize::from(offsets.vmtag_import_from())
         );
+        assert_eq!(
+            offset_of!(VMTagImport, vmctx),
+            usize::from(offsets.vmtag_import_vmctx())
+        );
+        assert_eq!(
+            offset_of!(VMTagImport, index),
+            usize::from(offsets.vmtag_import_index())
+        );
     }
 }
 
@@ -397,7 +405,7 @@ impl VMMemoryDefinition {
     /// `current_length`; see [`VMMemoryDefinition::current_length()`].
     #[inline]
     pub unsafe fn load(ptr: *mut Self) -> Self {
-        let other = &*ptr;
+        let other = unsafe { &*ptr };
         VMMemoryDefinition {
             base: other.base,
             current_length: other.current_length().into(),
@@ -550,28 +558,30 @@ impl VMGlobalDefinition {
         raw: ValRaw,
     ) -> Result<Self> {
         let mut global = Self::new();
-        match wasm_ty {
-            WasmValType::I32 => *global.as_i32_mut() = raw.get_i32(),
-            WasmValType::I64 => *global.as_i64_mut() = raw.get_i64(),
-            WasmValType::F32 => *global.as_f32_bits_mut() = raw.get_f32(),
-            WasmValType::F64 => *global.as_f64_bits_mut() = raw.get_f64(),
-            WasmValType::V128 => global.set_u128(raw.get_v128()),
-            WasmValType::Ref(r) => match r.heap_type.top() {
-                WasmHeapTopType::Extern => {
-                    let r = VMGcRef::from_raw_u32(raw.get_externref());
-                    global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
-                }
-                WasmHeapTopType::Any => {
-                    let r = VMGcRef::from_raw_u32(raw.get_anyref());
-                    global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
-                }
-                WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
-                WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
-                WasmHeapTopType::Exn => {
-                    let r = VMGcRef::from_raw_u32(raw.get_exnref());
-                    global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
-                }
-            },
+        unsafe {
+            match wasm_ty {
+                WasmValType::I32 => *global.as_i32_mut() = raw.get_i32(),
+                WasmValType::I64 => *global.as_i64_mut() = raw.get_i64(),
+                WasmValType::F32 => *global.as_f32_bits_mut() = raw.get_f32(),
+                WasmValType::F64 => *global.as_f64_bits_mut() = raw.get_f64(),
+                WasmValType::V128 => global.set_u128(raw.get_v128()),
+                WasmValType::Ref(r) => match r.heap_type.top() {
+                    WasmHeapTopType::Extern => {
+                        let r = VMGcRef::from_raw_u32(raw.get_externref());
+                        global.init_gc_ref(store, r.as_ref())
+                    }
+                    WasmHeapTopType::Any => {
+                        let r = VMGcRef::from_raw_u32(raw.get_anyref());
+                        global.init_gc_ref(store, r.as_ref())
+                    }
+                    WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
+                    WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
+                    WasmHeapTopType::Exn => {
+                        let r = VMGcRef::from_raw_u32(raw.get_exnref());
+                        global.init_gc_ref(store, r.as_ref())
+                    }
+                },
+            }
         }
         Ok(global)
     }
@@ -586,113 +596,115 @@ impl VMGlobalDefinition {
         store: &mut StoreOpaque,
         wasm_ty: WasmValType,
     ) -> Result<ValRaw> {
-        Ok(match wasm_ty {
-            WasmValType::I32 => ValRaw::i32(*self.as_i32()),
-            WasmValType::I64 => ValRaw::i64(*self.as_i64()),
-            WasmValType::F32 => ValRaw::f32(*self.as_f32_bits()),
-            WasmValType::F64 => ValRaw::f64(*self.as_f64_bits()),
-            WasmValType::V128 => ValRaw::v128(self.get_u128()),
-            WasmValType::Ref(r) => match r.heap_type.top() {
-                WasmHeapTopType::Extern => ValRaw::externref(match self.as_gc_ref() {
-                    Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
-                    None => 0,
-                }),
-                WasmHeapTopType::Any => ValRaw::anyref({
-                    match self.as_gc_ref() {
-                        Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
+        unsafe {
+            Ok(match wasm_ty {
+                WasmValType::I32 => ValRaw::i32(*self.as_i32()),
+                WasmValType::I64 => ValRaw::i64(*self.as_i64()),
+                WasmValType::F32 => ValRaw::f32(*self.as_f32_bits()),
+                WasmValType::F64 => ValRaw::f64(*self.as_f64_bits()),
+                WasmValType::V128 => ValRaw::v128(self.get_u128()),
+                WasmValType::Ref(r) => match r.heap_type.top() {
+                    WasmHeapTopType::Extern => ValRaw::externref(match self.as_gc_ref() {
+                        Some(r) => store.clone_gc_ref(r).as_raw_u32(),
                         None => 0,
-                    }
-                }),
-                WasmHeapTopType::Exn => ValRaw::exnref({
-                    match self.as_gc_ref() {
-                        Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
-                        None => 0,
-                    }
-                }),
-                WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
-                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
-            },
-        })
+                    }),
+                    WasmHeapTopType::Any => ValRaw::anyref({
+                        match self.as_gc_ref() {
+                            Some(r) => store.clone_gc_ref(r).as_raw_u32(),
+                            None => 0,
+                        }
+                    }),
+                    WasmHeapTopType::Exn => ValRaw::exnref({
+                        match self.as_gc_ref() {
+                            Some(r) => store.clone_gc_ref(r).as_raw_u32(),
+                            None => 0,
+                        }
+                    }),
+                    WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
+                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+                },
+            })
+        }
     }
 
     /// Return a reference to the value as an i32.
     pub unsafe fn as_i32(&self) -> &i32 {
-        &*(self.storage.as_ref().as_ptr().cast::<i32>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<i32>()) }
     }
 
     /// Return a mutable reference to the value as an i32.
     pub unsafe fn as_i32_mut(&mut self) -> &mut i32 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<i32>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<i32>()) }
     }
 
     /// Return a reference to the value as a u32.
     pub unsafe fn as_u32(&self) -> &u32 {
-        &*(self.storage.as_ref().as_ptr().cast::<u32>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u32>()) }
     }
 
     /// Return a mutable reference to the value as an u32.
     pub unsafe fn as_u32_mut(&mut self) -> &mut u32 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>()) }
     }
 
     /// Return a reference to the value as an i64.
     pub unsafe fn as_i64(&self) -> &i64 {
-        &*(self.storage.as_ref().as_ptr().cast::<i64>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<i64>()) }
     }
 
     /// Return a mutable reference to the value as an i64.
     pub unsafe fn as_i64_mut(&mut self) -> &mut i64 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<i64>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<i64>()) }
     }
 
     /// Return a reference to the value as an u64.
     pub unsafe fn as_u64(&self) -> &u64 {
-        &*(self.storage.as_ref().as_ptr().cast::<u64>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u64>()) }
     }
 
     /// Return a mutable reference to the value as an u64.
     pub unsafe fn as_u64_mut(&mut self) -> &mut u64 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>()) }
     }
 
     /// Return a reference to the value as an f32.
     pub unsafe fn as_f32(&self) -> &f32 {
-        &*(self.storage.as_ref().as_ptr().cast::<f32>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<f32>()) }
     }
 
     /// Return a mutable reference to the value as an f32.
     pub unsafe fn as_f32_mut(&mut self) -> &mut f32 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<f32>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<f32>()) }
     }
 
     /// Return a reference to the value as f32 bits.
     pub unsafe fn as_f32_bits(&self) -> &u32 {
-        &*(self.storage.as_ref().as_ptr().cast::<u32>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u32>()) }
     }
 
     /// Return a mutable reference to the value as f32 bits.
     pub unsafe fn as_f32_bits_mut(&mut self) -> &mut u32 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>()) }
     }
 
     /// Return a reference to the value as an f64.
     pub unsafe fn as_f64(&self) -> &f64 {
-        &*(self.storage.as_ref().as_ptr().cast::<f64>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<f64>()) }
     }
 
     /// Return a mutable reference to the value as an f64.
     pub unsafe fn as_f64_mut(&mut self) -> &mut f64 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<f64>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<f64>()) }
     }
 
     /// Return a reference to the value as f64 bits.
     pub unsafe fn as_f64_bits(&self) -> &u64 {
-        &*(self.storage.as_ref().as_ptr().cast::<u64>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u64>()) }
     }
 
     /// Return a mutable reference to the value as f64 bits.
     pub unsafe fn as_f64_bits_mut(&mut self) -> &mut u64 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>()) }
     }
 
     /// Gets the underlying 128-bit vector value.
@@ -700,7 +712,7 @@ impl VMGlobalDefinition {
     // Note that vectors are stored in little-endian format while other types
     // are stored in native-endian format.
     pub unsafe fn get_u128(&self) -> u128 {
-        u128::from_le(*(self.storage.as_ref().as_ptr().cast::<u128>()))
+        unsafe { u128::from_le(*(self.storage.as_ref().as_ptr().cast::<u128>())) }
     }
 
     /// Sets the 128-bit vector values.
@@ -708,58 +720,56 @@ impl VMGlobalDefinition {
     // Note that vectors are stored in little-endian format while other types
     // are stored in native-endian format.
     pub unsafe fn set_u128(&mut self, val: u128) {
-        *self.storage.as_mut().as_mut_ptr().cast::<u128>() = val.to_le();
+        unsafe {
+            *self.storage.as_mut().as_mut_ptr().cast::<u128>() = val.to_le();
+        }
     }
 
     /// Return a reference to the value as u128 bits.
     pub unsafe fn as_u128_bits(&self) -> &[u8; 16] {
-        &*(self.storage.as_ref().as_ptr().cast::<[u8; 16]>())
+        unsafe { &*(self.storage.as_ref().as_ptr().cast::<[u8; 16]>()) }
     }
 
     /// Return a mutable reference to the value as u128 bits.
     pub unsafe fn as_u128_bits_mut(&mut self) -> &mut [u8; 16] {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<[u8; 16]>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<[u8; 16]>()) }
     }
 
     /// Return a reference to the global value as a borrowed GC reference.
     pub unsafe fn as_gc_ref(&self) -> Option<&VMGcRef> {
         let raw_ptr = self.storage.as_ref().as_ptr().cast::<Option<VMGcRef>>();
-        let ret = (*raw_ptr).as_ref();
+        let ret = unsafe { (*raw_ptr).as_ref() };
         assert!(cfg!(feature = "gc") || ret.is_none());
         ret
     }
 
     /// Initialize a global to the given GC reference.
-    pub unsafe fn init_gc_ref(&mut self, gc_store: &mut GcStore, gc_ref: Option<&VMGcRef>) {
-        assert!(cfg!(feature = "gc") || gc_ref.is_none());
+    pub unsafe fn init_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
+        let dest = unsafe {
+            &mut *(self
+                .storage
+                .as_mut()
+                .as_mut_ptr()
+                .cast::<MaybeUninit<Option<VMGcRef>>>())
+        };
 
-        let dest = &mut *(self
-            .storage
-            .as_mut()
-            .as_mut_ptr()
-            .cast::<MaybeUninit<Option<VMGcRef>>>());
-
-        gc_store.init_gc_ref(dest, gc_ref)
+        store.init_gc_ref(dest, gc_ref)
     }
 
     /// Write a GC reference into this global value.
-    pub unsafe fn write_gc_ref(&mut self, gc_store: &mut GcStore, gc_ref: Option<&VMGcRef>) {
-        assert!(cfg!(feature = "gc") || gc_ref.is_none());
-
-        let dest = &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>());
-        assert!(cfg!(feature = "gc") || dest.is_none());
-
-        gc_store.write_gc_ref(dest, gc_ref)
+    pub unsafe fn write_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
+        let dest = unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>()) };
+        store.write_gc_ref(dest, gc_ref)
     }
 
     /// Return a reference to the value as a `VMFuncRef`.
     pub unsafe fn as_func_ref(&self) -> *mut VMFuncRef {
-        *(self.storage.as_ref().as_ptr().cast::<*mut VMFuncRef>())
+        unsafe { *(self.storage.as_ref().as_ptr().cast::<*mut VMFuncRef>()) }
     }
 
     /// Return a mutable reference to the value as a `VMFuncRef`.
     pub unsafe fn as_func_ref_mut(&mut self) -> &mut *mut VMFuncRef {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<*mut VMFuncRef>())
+        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<*mut VMFuncRef>()) }
     }
 }
 
@@ -904,8 +914,8 @@ impl VMFuncRef {
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         match pulley {
-            Some(vm) => Self::array_call_interpreted(me, vm, caller, args_and_results),
-            None => Self::array_call_native(me, caller, args_and_results),
+            Some(vm) => unsafe { Self::array_call_interpreted(me, vm, caller, args_and_results) },
+            None => unsafe { Self::array_call_native(me, caller, args_and_results) },
         }
     }
 
@@ -918,17 +928,19 @@ impl VMFuncRef {
         // If `caller` is actually a `VMArrayCallHostFuncContext` then skip the
         // interpreter, even though it's available, as `array_call` will be
         // native code.
-        if me.as_ref().vmctx.as_non_null().as_ref().magic
-            == wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC
-        {
-            return Self::array_call_native(me, caller, args_and_results);
+        unsafe {
+            if me.as_ref().vmctx.as_non_null().as_ref().magic
+                == wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC
+            {
+                return Self::array_call_native(me, caller, args_and_results);
+            }
+            vm.call(
+                me.as_ref().array_call.as_non_null().cast(),
+                me.as_ref().vmctx.as_non_null(),
+                caller,
+                args_and_results,
+            )
         }
-        vm.call(
-            me.as_ref().array_call.as_non_null().cast(),
-            me.as_ref().vmctx.as_non_null(),
-            caller,
-            args_and_results,
-        )
     }
 
     #[inline]
@@ -937,20 +949,22 @@ impl VMFuncRef {
         caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
-        union GetNativePointer {
-            native: VMArrayCallNative,
-            ptr: NonNull<VMArrayCallFunction>,
+        unsafe {
+            union GetNativePointer {
+                native: VMArrayCallNative,
+                ptr: NonNull<VMArrayCallFunction>,
+            }
+            let native = GetNativePointer {
+                ptr: me.as_ref().array_call.as_non_null(),
+            }
+            .native;
+            native(
+                me.as_ref().vmctx.as_non_null(),
+                caller,
+                args_and_results.cast(),
+                args_and_results.len(),
+            )
         }
-        let native = GetNativePointer {
-            ptr: me.as_ref().array_call.as_non_null(),
-        }
-        .native;
-        native(
-            me.as_ref().vmctx.as_non_null(),
-            caller,
-            args_and_results.cast(),
-            args_and_results.len(),
-        )
     }
 }
 
@@ -1095,18 +1109,23 @@ pub struct VMStoreContext {
     /// The `VMMemoryDefinition` for this store's GC heap.
     pub gc_heap: VMMemoryDefinition,
 
-    /// The value of the frame pointer register when we last called from Wasm to
-    /// the host.
+    /// The value of the frame pointer register in the trampoline used
+    /// to call from Wasm to the host.
     ///
-    /// Maintained by our Wasm-to-host trampoline, and cleared just before
-    /// calling into Wasm in `catch_traps`.
+    /// Maintained by our Wasm-to-host trampoline, and cleared just
+    /// before calling into Wasm in `catch_traps`.
     ///
     /// This member is `0` when Wasm is actively running and has not called out
     /// to the host.
     ///
-    /// Used to find the start of a contiguous sequence of Wasm frames when
-    /// walking the stack.
-    pub last_wasm_exit_fp: UnsafeCell<usize>,
+    /// Used to find the start of a contiguous sequence of Wasm frames
+    /// when walking the stack. Note that we record the FP of the
+    /// *trampoline*'s frame, not the last Wasm frame, because we need
+    /// to know the SP (bottom of frame) of the last Wasm frame as
+    /// well in case we need to resume to an exception handler in that
+    /// frame. The FP of the last Wasm frame can be recovered by
+    /// loading the saved FP value at this FP address.
+    pub last_wasm_exit_trampoline_fp: UnsafeCell<usize>,
 
     /// The last Wasm program counter before we called from Wasm to the host.
     ///
@@ -1131,7 +1150,7 @@ pub struct VMStoreContext {
     /// called from the host, then this member has the sentinel value of `-1 as
     /// usize`, meaning that this contiguous sequence of Wasm frames is the
     /// empty sequence, and it is not safe to dereference the
-    /// `last_wasm_exit_fp`.
+    /// `last_wasm_exit_trampoline_fp`.
     ///
     /// Used to find the end of a contiguous sequence of Wasm frames when
     /// walking the stack.
@@ -1154,6 +1173,59 @@ pub struct VMStoreContext {
     pub async_guard_range: Range<*mut u8>,
 }
 
+impl VMStoreContext {
+    /// From the current saved trampoline FP, get the FP of the last
+    /// Wasm frame. If the current saved trampoline FP is null, return
+    /// null.
+    ///
+    /// We store only the trampoline FP, because (i) we need the
+    /// trampoline FP, so we know the size (bottom) of the last Wasm
+    /// frame; and (ii) the last Wasm frame, just above the trampoline
+    /// frame, can be recovered via the FP chain.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the `last_wasm_exit_trampoline_fp`
+    /// field either points to an active trampoline frame or is a null
+    /// pointer.
+    pub(crate) unsafe fn last_wasm_exit_fp(&self) -> usize {
+        // SAFETY: the unsafe cell is safe to load (no other threads
+        // will be writing our store when we have control), and the
+        // helper function's safety condition is the same as ours.
+        unsafe {
+            let trampoline_fp = *self.last_wasm_exit_trampoline_fp.get();
+            Self::wasm_exit_fp_from_trampoline_fp(trampoline_fp)
+        }
+    }
+
+    /// From any saved trampoline FP, get the FP of the last Wasm
+    /// frame. If the given trampoline FP is null, return null.
+    ///
+    /// This differs from `last_wasm_exit_fp()` above in that it
+    /// allows accessing activations further up the stack as well,
+    /// e.g. via `CallThreadState::old_state`.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the provided FP value is valid,
+    /// and points to an active trampoline frame, or is null.
+    ///
+    /// This function depends on the invariant that on all supported
+    /// architectures, we store the previous FP value under the
+    /// current FP. This is a property of our ABI that we control and
+    /// ensure.
+    pub(crate) unsafe fn wasm_exit_fp_from_trampoline_fp(trampoline_fp: usize) -> usize {
+        if trampoline_fp != 0 {
+            // SAFETY: We require that trampoline_fp points to a valid
+            // frame, which will (by definition) contain an old FP value
+            // that we can load.
+            unsafe { *(trampoline_fp as *const usize) }
+        } else {
+            0
+        }
+    }
+}
+
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
 // access any fields from other threads, so add in these trait impls which are
 // otherwise not available due to the `fuel_consumed` and `epoch_deadline`
@@ -1174,7 +1246,7 @@ impl Default for VMStoreContext {
                 base: NonNull::dangling().into(),
                 current_length: AtomicUsize::new(0),
             },
-            last_wasm_exit_fp: UnsafeCell::new(0),
+            last_wasm_exit_trampoline_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
@@ -1218,8 +1290,8 @@ mod test_vmstore_context {
             usize::from(offsets.ptr.vmstore_context_gc_heap_current_length())
         );
         assert_eq!(
-            offset_of!(VMStoreContext, last_wasm_exit_fp),
-            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_fp())
+            offset_of!(VMStoreContext, last_wasm_exit_trampoline_fp),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_trampoline_fp())
         );
         assert_eq!(
             offset_of!(VMStoreContext, last_wasm_exit_pc),
@@ -1269,7 +1341,9 @@ impl VMContext {
         // bugs, meaning we don't actually read the magic and act differently
         // at runtime depending what it is, so this is a debug assertion as
         // opposed to a regular assertion.
-        debug_assert_eq!(opaque.as_ref().magic, VMCONTEXT_MAGIC);
+        unsafe {
+            debug_assert_eq!(opaque.as_ref().magic, VMCONTEXT_MAGIC);
+        }
         opaque.cast()
     }
 }
@@ -1444,7 +1518,7 @@ impl ValRaw {
         // `wasmtime` crate. Otherwise though all `ValRaw` constructors are
         // otherwise constrained to guarantee that the initial 64-bits are
         // always initialized.
-        ValRaw::u64(i.unsigned().into())
+        ValRaw::u64(i.cast_unsigned().into())
     }
 
     /// Creates a WebAssembly `i64` value
@@ -1535,13 +1609,13 @@ impl ValRaw {
     /// Gets the WebAssembly `i32` value
     #[inline]
     pub fn get_u32(&self) -> u32 {
-        self.get_i32().unsigned()
+        self.get_i32().cast_unsigned()
     }
 
     /// Gets the WebAssembly `i64` value
     #[inline]
     pub fn get_u64(&self) -> u64 {
-        self.get_i64().unsigned()
+        self.get_i64().cast_unsigned()
     }
 
     /// Gets the WebAssembly `f32` value

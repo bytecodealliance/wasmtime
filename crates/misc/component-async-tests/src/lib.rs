@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::task::Waker;
 
 use wasmtime::component::{HasData, ResourceTable};
-use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
 pub mod borrowing_host;
 pub mod closed_streams;
@@ -25,15 +25,12 @@ pub struct Ctx {
     pub continue_: bool,
 }
 
-impl IoView for Ctx {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-}
-
 impl WasiView for Ctx {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 

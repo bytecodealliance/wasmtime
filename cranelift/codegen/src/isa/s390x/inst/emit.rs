@@ -3317,9 +3317,12 @@ impl Inst {
                 put(sink, enc);
 
                 if let Some(try_call) = info.try_call_info.as_ref() {
-                    sink.add_call_site(&try_call.exception_dests);
+                    sink.add_try_call_site(
+                        Some(state.frame_layout.sp_to_fp()),
+                        try_call.exception_handlers(&state.frame_layout),
+                    );
                 } else {
-                    sink.add_call_site(&[]);
+                    sink.add_call_site();
                 }
 
                 state.nominal_sp_offset -= info.callee_pop_size;
@@ -3363,7 +3366,7 @@ impl Inst {
                     }
                 };
                 put(sink, enc);
-                sink.add_call_site(&[]);
+                sink.add_call_site();
             }
             &Inst::ElfTlsGetOffset { ref symbol, .. } => {
                 let opcode = 0xc05; // BRASL
@@ -3380,7 +3383,7 @@ impl Inst {
                 }
 
                 put(sink, &enc_ril_b(opcode, gpr(14), 0));
-                sink.add_call_site(&[]);
+                sink.add_call_site();
             }
             &Inst::Args { .. } => {}
             &Inst::Rets { .. } => {}

@@ -83,25 +83,29 @@ impl Mmap {
         range: Range<usize>,
         enable_branch_protection: bool,
     ) -> Result<()> {
-        let base = self.memory.as_ptr().byte_add(range.start).cast();
-        let len = range.end - range.start;
+        unsafe {
+            let base = self.memory.as_ptr().byte_add(range.start).cast();
+            let len = range.end - range.start;
 
-        // not mapped into the C API at this time.
-        let _ = enable_branch_protection;
+            // not mapped into the C API at this time.
+            let _ = enable_branch_protection;
 
-        cvt(capi::wasmtime_mprotect(
-            base,
-            len,
-            capi::PROT_READ | capi::PROT_EXEC,
-        ))?;
+            cvt(capi::wasmtime_mprotect(
+                base,
+                len,
+                capi::PROT_READ | capi::PROT_EXEC,
+            ))?;
+        }
         Ok(())
     }
 
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
-        let base = self.memory.as_ptr().byte_add(range.start).cast();
-        let len = range.end - range.start;
+        unsafe {
+            let base = self.memory.as_ptr().byte_add(range.start).cast();
+            let len = range.end - range.start;
 
-        cvt(capi::wasmtime_mprotect(base, len, capi::PROT_READ))?;
+            cvt(capi::wasmtime_mprotect(base, len, capi::PROT_READ))?;
+        }
         Ok(())
     }
 
@@ -113,16 +117,18 @@ impl Mmap {
         memory_len: HostAlignedByteCount,
     ) -> Result<()> {
         assert_eq!(source_offset, 0);
-        let base = self
-            .memory
-            .as_ptr()
-            .byte_add(memory_offset.byte_count())
-            .cast();
-        cvt(capi::wasmtime_memory_image_map_at(
-            image_source.image_ptr().as_ptr(),
-            base,
-            memory_len.byte_count(),
-        ))
+        unsafe {
+            let base = self
+                .memory
+                .as_ptr()
+                .byte_add(memory_offset.byte_count())
+                .cast();
+            cvt(capi::wasmtime_memory_image_map_at(
+                image_source.image_ptr().as_ptr(),
+                base,
+                memory_len.byte_count(),
+            ))
+        }
     }
 }
 

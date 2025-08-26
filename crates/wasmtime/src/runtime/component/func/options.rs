@@ -3,7 +3,7 @@ use crate::component::resources::{HostResourceData, HostResourceIndex, HostResou
 use crate::component::{Instance, ResourceType};
 use crate::prelude::*;
 use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
+    CallContexts, ComponentInstance, HandleTable, InstanceFlags, ResourceTables,
 };
 use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
@@ -11,7 +11,10 @@ use crate::{FuncType, StoreContextMut};
 use alloc::sync::Arc;
 use core::pin::Pin;
 use core::ptr::NonNull;
-use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
+use wasmtime_environ::component::{
+    CanonicalOptions, CanonicalOptionsDataModel, ComponentTypes, OptionsIndex, StringEncoding,
+    TypeResourceTableIndex,
+};
 
 /// Runtime representation of canonical ABI options in the component model.
 ///
@@ -61,24 +64,33 @@ unsafe impl Sync for Options {}
 impl Options {
     // FIXME(#4311): prevent a ctor where the memory is memory64
 
-    /// Creates a new set of options with the specified components.
+    /// Creates a new [`Options`] from the given [`OptionsIndex`] belonging to
+    /// the specified [`Instance`]
     ///
-    /// # Unsafety
+    /// # Panics
     ///
-    /// This is unsafety as there is no way to statically verify the validity of
-    /// the arguments. For example pointers must be valid pointers, the
-    /// `StoreId` must be valid for the pointers, etc.
-    pub unsafe fn new(
-        store_id: StoreId,
-        memory: Option<NonNull<VMMemoryDefinition>>,
-        realloc: Option<NonNull<VMFuncRef>>,
-        string_encoding: StringEncoding,
-        async_: bool,
-        callback: Option<NonNull<VMFuncRef>>,
-    ) -> Options {
+    /// Panics if `instance` is not owned by `store` or if `index` is not valid
+    /// for `instance`'s component.
+    pub fn new_index(store: &StoreOpaque, instance: Instance, index: OptionsIndex) -> Options {
+        let instance = instance.id().get(store);
+        let CanonicalOptions {
+            string_encoding,
+            async_,
+            callback,
+            ref data_model,
+            ..
+        } = instance.component().env_component().options[index];
+        let (memory, realloc) = match data_model {
+            CanonicalOptionsDataModel::Gc { .. } => (None, None),
+            CanonicalOptionsDataModel::LinearMemory(o) => (o.memory, o.realloc),
+        };
+        let memory = memory.map(|i| NonNull::new(instance.runtime_memory(i)).unwrap());
+        let realloc = realloc.map(|i| instance.runtime_realloc(i));
+        let callback = callback.map(|i| instance.runtime_callback(i));
         let _ = callback;
+
         Options {
-            store_id,
+            store_id: store.id(),
             memory,
             realloc,
             string_encoding,
@@ -218,6 +230,9 @@ pub struct LowerContext<'a, T: 'static> {
 
     /// Index of the component instance that's being lowered into.
     instance: Instance,
+
+    /// Whether to allow `options.realloc` to be used when lowering.
+    allow_realloc: bool,
 }
 
 #[doc(hidden)]
@@ -229,11 +244,42 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         types: &'a ComponentTypes,
         instance: Instance,
     ) -> LowerContext<'a, T> {
+        #[cfg(all(debug_assertions, feature = "component-model-async"))]
+        if store.engine().config().async_support {
+            // Assert that we're running on a fiber, which is necessary in
+            // case we call the guest's realloc function.
+            store.0.with_blocking(|_, _| {});
+        }
         LowerContext {
             store,
             options,
             types,
             instance,
+            allow_realloc: true,
+        }
+    }
+
+    /// Like `new`, except disallows use of `options.realloc`.
+    ///
+    /// The returned object will panic if its `realloc` method is called.
+    ///
+    /// This is meant for use when lowering "flat" values (i.e. values which
+    /// require no allocations) into already-allocated memory or into stack
+    /// slots, in which case the lowering may safely be done outside of a fiber
+    /// since there is no need to make any guest calls.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn new_without_realloc(
+        store: StoreContextMut<'a, T>,
+        options: &'a Options,
+        types: &'a ComponentTypes,
+        instance: Instance,
+    ) -> LowerContext<'a, T> {
+        LowerContext {
+            store,
+            options,
+            types,
+            instance,
+            allow_realloc: false,
         }
     }
 
@@ -271,6 +317,8 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         old_align: u32,
         new_size: usize,
     ) -> Result<usize> {
+        assert!(self.allow_realloc);
+
         let realloc_func_ty = Arc::clone(self.instance().component().realloc_func_ty());
         self.options
             .realloc(
@@ -425,7 +473,7 @@ pub struct LiftContext<'a> {
     instance: Pin<&'a mut ComponentInstance>,
     instance_handle: Instance,
 
-    host_table: &'a mut ResourceTable,
+    host_table: &'a mut HandleTable,
     host_resource_data: &'a mut HostResourceData,
 
     calls: &'a mut CallContexts,
@@ -442,7 +490,7 @@ impl<'a> LiftContext<'a> {
     ) -> LiftContext<'a> {
         // From `&mut StoreOpaque` provided the goal here is to project out
         // three different disjoint fields owned by the store: memory,
-        // `CallContexts`, and `ResourceTable`. There's no native API for that
+        // `CallContexts`, and `HandleTable`. There's no native API for that
         // so it's hacked around a bit. This unsafe pointer cast could be fixed
         // with more methods in more places, but it doesn't seem worth doing it
         // at this time.

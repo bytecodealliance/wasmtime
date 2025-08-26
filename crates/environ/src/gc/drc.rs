@@ -11,6 +11,12 @@ pub const HEADER_ALIGN: u32 = 8;
 /// The offset of the length field in a `VMDrcArrayHeader`.
 pub const ARRAY_LENGTH_OFFSET: u32 = HEADER_SIZE;
 
+/// The offset of the tag-instance-index field in an exception header.
+pub const EXCEPTION_TAG_INSTANCE_OFFSET: u32 = HEADER_SIZE;
+
+/// The offset of the tag-defined-index field in an exception header.
+pub const EXCEPTION_TAG_DEFINED_OFFSET: u32 = HEADER_SIZE + 4;
+
 /// The bit within a `VMDrcHeader`'s reserved bits that is the mark
 /// bit. Collectively, this bit in all the heap's objects' headers implements
 /// the precise-stack-roots set.
@@ -29,6 +35,14 @@ impl GcTypeLayouts for DrcTypeLayouts {
         ARRAY_LENGTH_OFFSET
     }
 
+    fn exception_tag_instance_offset(&self) -> u32 {
+        EXCEPTION_TAG_INSTANCE_OFFSET
+    }
+
+    fn exception_tag_defined_offset(&self) -> u32 {
+        EXCEPTION_TAG_DEFINED_OFFSET
+    }
+
     fn array_layout(&self, ty: &WasmArrayType) -> GcArrayLayout {
         common_array_layout(ty, HEADER_SIZE, HEADER_ALIGN, ARRAY_LENGTH_OFFSET)
     }
@@ -37,7 +51,7 @@ impl GcTypeLayouts for DrcTypeLayouts {
         common_struct_layout(ty, HEADER_SIZE, HEADER_ALIGN)
     }
 
-    fn exn_layout(&self, ty: &WasmExnType) -> GcExceptionLayout {
+    fn exn_layout(&self, ty: &WasmExnType) -> GcStructLayout {
         common_exn_layout(ty, HEADER_SIZE, HEADER_ALIGN)
     }
 }

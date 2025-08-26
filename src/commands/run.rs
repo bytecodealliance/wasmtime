@@ -6,7 +6,6 @@
 )]
 
 use crate::common::{Profile, RunCommon, RunTarget};
-
 use anyhow::{Context as _, Error, Result, anyhow, bail};
 use clap::Parser;
 use std::ffi::OsString;
@@ -15,13 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{Dir, TcpListener, WasiCtxBuilder, ambient_authority};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
-use wasmtime_wasi::p2::{IoView, WasiView};
-
-#[cfg(feature = "wasi-nn")]
-use wasmtime_wasi_nn::wit::WasiNnView;
-
-#[cfg(feature = "wasi-threads")]
-use wasmtime_wasi_threads::WasiThreadsCtx;
+use wasmtime_wasi::{WasiCtxView, WasiView};
 
 #[cfg(feature = "wasi-config")]
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
@@ -31,7 +24,10 @@ use wasmtime_wasi_http::{
 };
 #[cfg(feature = "wasi-keyvalue")]
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
-
+#[cfg(feature = "wasi-nn")]
+use wasmtime_wasi_nn::wit::WasiNnView;
+#[cfg(feature = "wasi-threads")]
+use wasmtime_wasi_threads::WasiThreadsCtx;
 #[cfg(feature = "wasi-tls")]
 use wasmtime_wasi_tls::{WasiTls, WasiTlsCtx};
 
@@ -245,9 +241,9 @@ impl RunCommand {
                 // Exit the process if Wasmtime understands the error;
                 // otherwise, fall back on Rust's default error printing/return
                 // code.
-                if store.data().preview1_ctx.is_some() {
+                if store.data().legacy_p1_ctx.is_some() {
                     return Err(wasi_common::maybe_exit_on_error(e));
-                } else if store.data().preview2_ctx.is_some() {
+                } else if store.data().wasip1_ctx.is_some() {
                     if let Some(exit) = e.downcast_ref::<wasmtime_wasi::I32Exit>() {
                         std::process::exit(exit.0);
                     }
@@ -497,30 +493,13 @@ impl RunCommand {
             #[cfg(feature = "component-model")]
             CliLinker::Component(linker) => {
                 let component = main_target.unwrap_component();
-                if self.invoke.is_some() {
+                let result = if self.invoke.is_some() {
                     self.invoke_component(&mut *store, component, linker).await
                 } else {
-                    let command = wasmtime_wasi::p2::bindings::Command::instantiate_async(
-                        &mut *store,
-                        component,
-                        linker,
-                    )
-                    .await?;
-
-                    let result = command
-                        .wasi_cli_run()
-                        .call_run(&mut *store)
+                    self.run_command_component(&mut *store, component, linker)
                         .await
-                        .context("failed to invoke `run` function")
-                        .map_err(|e| self.handle_core_dump(&mut *store, e));
-
-                    // Translate the `Result<(),()>` produced by wasm into a feigned
-                    // explicit exit here with status 1 if `Err(())` is returned.
-                    result.and_then(|wasm_result| match wasm_result {
-                        Ok(()) => Ok(()),
-                        Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
-                    })
-                }
+                };
+                result.map_err(|e| self.handle_core_dump(&mut *store, e))
             }
         };
         finish_epoch_handler(store);
@@ -537,7 +516,6 @@ impl RunCommand {
     ) -> Result<()> {
         use wasmtime::component::{
             Val,
-            types::ComponentItem,
             wasm_wave::{
                 untyped::UntypedFuncCall,
                 wasm::{DisplayFuncResults, WasmFunc},
@@ -554,37 +532,27 @@ impl RunCommand {
         })?;
 
         let name = untyped_call.name();
-        let matches = Self::search_component(store.engine(), component.component_type(), name);
-        match matches.len() {
-            0 => bail!("No export named `{name}` in component."),
-            1 => {}
+        let matches =
+            Self::search_component_funcs(store.engine(), component.component_type(), name);
+        let (names, func_type) = match matches.len() {
+            0 => bail!("No exported func named `{name}` in component."),
+            1 => &matches[0],
             _ => bail!(
                 "Multiple exports named `{name}`: {matches:?}. FIXME: support some way to disambiguate names"
             ),
         };
-        let (params, result_len, export) = match &matches[0] {
-            (names, ComponentItem::ComponentFunc(func)) => {
-                let param_types = WasmFunc::params(func).collect::<Vec<_>>();
-                let params = untyped_call.to_wasm_params(&param_types).with_context(|| {
-                    format!("while interpreting parameters in invoke \"{invoke}\"")
-                })?;
-                let mut export = None;
-                for name in names {
-                    let ix = component
-                        .get_export_index(export.as_ref(), name)
-                        .expect("export exists");
-                    export = Some(ix);
-                }
-                (
-                    params,
-                    func.results().len(),
-                    export.expect("export has at least one name"),
-                )
-            }
-            (names, ty) => {
-                bail!("Cannot invoke export {names:?}: expected ComponentFunc, got type {ty:?}");
-            }
-        };
+
+        let param_types = WasmFunc::params(func_type).collect::<Vec<_>>();
+        let params = untyped_call
+            .to_wasm_params(&param_types)
+            .with_context(|| format!("while interpreting parameters in invoke \"{invoke}\""))?;
+
+        let export = names
+            .iter()
+            .fold(None, |instance, name| {
+                component.get_export_index(instance.as_ref(), name)
+            })
+            .expect("export has at least one name");
 
         let instance = linker.instantiate_async(&mut *store, component).await?;
 
@@ -592,7 +560,7 @@ impl RunCommand {
             .get_func(&mut *store, export)
             .expect("found export index");
 
-        let mut results = vec![Val::Bool(false); result_len];
+        let mut results = vec![Val::Bool(false); func_type.results().len()];
         func.call_async(&mut *store, &params, &mut results).await?;
 
         println!("{}", DisplayFuncResults(&results));
@@ -600,12 +568,62 @@ impl RunCommand {
         Ok(())
     }
 
+    /// Execute the default behavior for components on the CLI, looking for
+    /// `wasi:cli`-based commands and running their exported `run` function.
     #[cfg(feature = "component-model")]
-    fn search_component(
+    async fn run_command_component(
+        &self,
+        store: &mut Store<Host>,
+        component: &wasmtime::component::Component,
+        linker: &wasmtime::component::Linker<Host>,
+    ) -> Result<()> {
+        let instance = linker.instantiate_async(&mut *store, component).await?;
+
+        let mut result = None;
+        let _ = &mut result;
+
+        // If WASIp3 is enabled at compile time, enabled at runtime, and found
+        // in this component then use that to generate the result.
+        #[cfg(feature = "component-model-async")]
+        if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
+            if let Ok(command) = wasmtime_wasi::p3::bindings::Command::new(&mut *store, &instance) {
+                result = Some(
+                    instance
+                        .run_concurrent(&mut *store, async |store| {
+                            command.wasi_cli_run().call_run(store).await
+                        })
+                        .await?,
+                );
+            }
+        }
+
+        let result = match result {
+            Some(result) => result,
+            // If WASIp3 wasn't found then fall back to requiring WASIp2 and
+            // this'll report an error if the right export doesn't exist.
+            None => {
+                wasmtime_wasi::p2::bindings::Command::new(&mut *store, &instance)?
+                    .wasi_cli_run()
+                    .call_run(&mut *store)
+                    .await
+            }
+        };
+        let wasm_result = result.context("failed to invoke `run` function")?;
+
+        // Translate the `Result<(),()>` produced by wasm into a feigned
+        // explicit exit here with status 1 if `Err(())` is returned.
+        match wasm_result {
+            Ok(()) => Ok(()),
+            Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
+        }
+    }
+
+    #[cfg(feature = "component-model")]
+    fn search_component_funcs(
         engine: &Engine,
         component: wasmtime::component::types::Component,
         name: &str,
-    ) -> Vec<(Vec<String>, wasmtime::component::types::ComponentItem)> {
+    ) -> Vec<(Vec<String>, wasmtime::component::types::ComponentFunc)> {
         use wasmtime::component::types::ComponentItem as CItem;
         fn collect_exports(
             engine: &Engine,
@@ -635,7 +653,14 @@ impl RunCommand {
 
         collect_exports(engine, CItem::Component(component), Vec::new())
             .into_iter()
-            .filter(|(names, _item)| names.last().expect("at least one name") == name)
+            .filter_map(|(names, item)| {
+                let CItem::ComponentFunc(func) = item else {
+                    return None;
+                };
+                let func_name = names.last().expect("at least one name");
+                let base_func_name = func_name.strip_prefix("[async]").unwrap_or(func_name);
+                (base_func_name == name).then_some((names, func))
+            })
             .collect()
     }
 
@@ -760,20 +785,8 @@ impl RunCommand {
         store: &mut Store<Host>,
         module: &RunTarget,
     ) -> Result<()> {
-        let mut cli = self.run.common.wasi.cli;
-
-        // Accept -Scommon as a deprecated alias for -Scli.
-        if let Some(common) = self.run.common.wasi.common {
-            if cli.is_some() {
-                bail!(
-                    "The -Scommon option should not be use with -Scli as it is a deprecated alias"
-                );
-            } else {
-                // In the future, we may add a warning here to tell users to use
-                // `-S cli` instead of `-S common`.
-                cli = Some(common);
-            }
-        }
+        self.run.validate_p3_option()?;
+        let cli = self.run.validate_cli_enabled()?;
 
         if cli != Some(false) {
             match linker {
@@ -784,34 +797,29 @@ impl RunCommand {
                         // implementation.
                         (Some(false), _) | (None, Some(true)) => {
                             wasi_common::tokio::add_to_linker(linker, |host| {
-                                host.preview1_ctx.as_mut().unwrap()
+                                host.legacy_p1_ctx.as_mut().unwrap()
                             })?;
-                            self.set_preview1_ctx(store)?;
+                            self.set_legacy_p1_ctx(store)?;
                         }
                         // If preview2 was explicitly requested, always use it.
                         // Otherwise use it so long as threads are disabled.
                         //
-                        // Note that for now `preview0` is currently
+                        // Note that for now `p0` is currently
                         // default-enabled but this may turn into
                         // default-disabled in the future.
                         (Some(true), _) | (None, Some(false) | None) => {
                             if self.run.common.wasi.preview0 != Some(false) {
-                                wasmtime_wasi::preview0::add_to_linker_async(linker, |t| {
-                                    t.preview2_ctx()
-                                })?;
+                                wasmtime_wasi::p0::add_to_linker_async(linker, |t| t.wasip1_ctx())?;
                             }
-                            wasmtime_wasi::preview1::add_to_linker_async(linker, |t| {
-                                t.preview2_ctx()
-                            })?;
-                            self.set_preview2_ctx(store)?;
+                            wasmtime_wasi::p1::add_to_linker_async(linker, |t| t.wasip1_ctx())?;
+                            self.set_wasi_ctx(store)?;
                         }
                     }
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
-                    let link_options = self.run.compute_wasi_features();
-                    wasmtime_wasi::p2::add_to_linker_with_options_async(linker, &link_options)?;
-                    self.set_preview2_ctx(store)?;
+                    self.run.add_wasmtime_wasi_to_linker(linker)?;
+                    self.set_wasi_ctx(store)?;
                 }
             }
         }
@@ -837,15 +845,14 @@ impl RunCommand {
                     #[cfg(feature = "component-model")]
                     CliLinker::Component(linker) => {
                         wasmtime_wasi_nn::wit::add_to_linker(linker, |h: &mut Host| {
-                            let preview2_ctx =
-                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
-                            let preview2_ctx = Arc::get_mut(preview2_ctx)
+                            let ctx = h.wasip1_ctx.as_mut().expect("wasi is not configured");
+                            let ctx = Arc::get_mut(ctx)
                                 .expect("wasmtime_wasi is not compatible with threads")
                                 .get_mut()
                                 .unwrap();
                             let nn_ctx = Arc::get_mut(h.wasi_nn_wit.as_mut().unwrap())
                                 .expect("wasi-nn is not implemented with multi-threading support");
-                            WasiNnView::new(preview2_ctx.table(), nn_ctx)
+                            WasiNnView::new(ctx.ctx().table, nn_ctx)
                         })?;
                         store.data_mut().wasi_nn_wit = Some(Arc::new(
                             wasmtime_wasi_nn::wit::WasiNnCtx::new(backends, registry),
@@ -913,13 +920,11 @@ impl RunCommand {
                             .build();
 
                         wasmtime_wasi_keyvalue::add_to_linker(linker, |h| {
-                            let preview2_ctx =
-                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
-                            let preview2_ctx =
-                                Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
+                            let ctx = h.wasip1_ctx.as_mut().expect("wasip2 is not configured");
+                            let ctx = Arc::get_mut(ctx).unwrap().get_mut().unwrap();
                             WasiKeyValue::new(
                                 Arc::get_mut(h.wasi_keyvalue.as_mut().unwrap()).unwrap(),
-                                preview2_ctx.table(),
+                                ctx.ctx().table,
                             )
                         })?;
                         store.data_mut().wasi_keyvalue = Some(Arc::new(ctx));
@@ -991,13 +996,11 @@ impl RunCommand {
                         let mut opts = wasmtime_wasi_tls::LinkOptions::default();
                         opts.tls(true);
                         wasmtime_wasi_tls::add_to_linker(linker, &mut opts, |h| {
-                            let preview2_ctx =
-                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
-                            let preview2_ctx =
-                                Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
+                            let ctx = h.wasip1_ctx.as_mut().expect("wasi is not configured");
+                            let ctx = Arc::get_mut(ctx).unwrap().get_mut().unwrap();
                             WasiTls::new(
                                 Arc::get_mut(h.wasi_tls.as_mut().unwrap()).unwrap(),
-                                preview2_ctx.table(),
+                                ctx.ctx().table,
                             )
                         })?;
 
@@ -1011,7 +1014,7 @@ impl RunCommand {
         Ok(())
     }
 
-    fn set_preview1_ctx(&self, store: &mut Store<Host>) -> Result<()> {
+    fn set_legacy_p1_ctx(&self, store: &mut Store<Host>) -> Result<()> {
         let mut builder = WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?)?;
 
@@ -1054,16 +1057,23 @@ impl RunCommand {
             builder.preopened_dir(dir, guest)?;
         }
 
-        store.data_mut().preview1_ctx = Some(builder.build());
+        store.data_mut().legacy_p1_ctx = Some(builder.build());
         Ok(())
     }
 
-    fn set_preview2_ctx(&self, store: &mut Store<Host>) -> Result<()> {
-        let mut builder = wasmtime_wasi::p2::WasiCtxBuilder::new();
+    /// Note the naming here is subtle, but this is effectively setting up a
+    /// `wasmtime_wasi::WasiCtx` structure.
+    ///
+    /// This is stored in `Host` as `WasiP1Ctx` which internally contains the
+    /// `WasiCtx` and `ResourceTable` used for WASI implementations. Exactly
+    /// which "p" for WASIpN is more a reference to
+    /// `wasmtime-wasi`-vs-`wasi-common` here more than anything else.
+    fn set_wasi_ctx(&self, store: &mut Store<Host>) -> Result<()> {
+        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?);
         self.run.configure_wasip2(&mut builder)?;
         let ctx = builder.build_p1();
-        store.data_mut().preview2_ctx = Some(Arc::new(Mutex::new(ctx)));
+        store.data_mut().wasip1_ctx = Some(Arc::new(Mutex::new(ctx)));
         Ok(())
     }
 
@@ -1083,14 +1093,35 @@ impl RunCommand {
     }
 }
 
+/// The `T` in `Store<T>` for what the CLI is running.
+///
+/// This structures has a number of contexts used for various WASI proposals.
+/// Note that all of them are optional meaning that they're `None` by default
+/// and enabled with various CLI flags (some CLI flags are on-by-default). Note
+/// additionally that this structure is `Clone` to implement the `wasi-threads`
+/// proposal. Many WASI proposals are not compatible with `wasi-threads` so to
+/// model this `Arc` and `Arc<Mutex<T>>` is used for many configurations. If a
+/// WASI proposal is inherently threadsafe it's protected with just an `Arc` to
+/// share its configuration across many threads.
+///
+/// If mutation is required then `Mutex` is used. Note though that the mutex is
+/// not actually locked as access always goes through `Arc::get_mut` which
+/// effectively asserts that there's only one thread. In short much of this is
+/// not compatible with `wasi-threads`.
 #[derive(Default, Clone)]
 struct Host {
-    preview1_ctx: Option<wasi_common::WasiCtx>,
+    // Legacy wasip1 context using `wasi_common`, not set unless opted-in-to
+    // with the CLI.
+    legacy_p1_ctx: Option<wasi_common::WasiCtx>,
 
+    // Context for both WASIp1 and WASIp2 (and beyond) for the `wasmtime_wasi`
+    // crate. This has both `wasmtime_wasi::WasiCtx` as well as a
+    // `ResourceTable` internally to be used.
+    //
     // The Mutex is only needed to satisfy the Sync constraint but we never
     // actually perform any locking on it as we use Mutex::get_mut for every
     // access.
-    preview2_ctx: Option<Arc<Mutex<wasmtime_wasi::preview1::WasiP1Ctx>>>,
+    wasip1_ctx: Option<Arc<Mutex<wasmtime_wasi::p1::WasiP1Ctx>>>,
 
     #[cfg(feature = "wasi-nn")]
     wasi_nn_wit: Option<Arc<wasmtime_wasi_nn::wit::WasiNnCtx>>,
@@ -1118,11 +1149,8 @@ struct Host {
 }
 
 impl Host {
-    fn preview2_ctx(&mut self) -> &mut wasmtime_wasi::preview1::WasiP1Ctx {
-        let ctx = self
-            .preview2_ctx
-            .as_mut()
-            .expect("wasip2 is not configured");
+    fn wasip1_ctx(&mut self) -> &mut wasmtime_wasi::p1::WasiP1Ctx {
+        let ctx = self.wasip1_ctx.as_mut().expect("wasi is not configured");
         Arc::get_mut(ctx)
             .expect("wasmtime_wasi is not compatible with threads")
             .get_mut()
@@ -1130,14 +1158,9 @@ impl Host {
     }
 }
 
-impl IoView for Host {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        self.preview2_ctx().table()
-    }
-}
 impl WasiView for Host {
-    fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
-        self.preview2_ctx().ctx()
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiView::ctx(self.wasip1_ctx())
     }
 }
 
@@ -1146,6 +1169,10 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         let ctx = self.wasi_http.as_mut().unwrap();
         Arc::get_mut(ctx).expect("wasmtime_wasi is not compatible with threads")
+    }
+
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+        WasiView::ctx(self).table
     }
 
     fn outgoing_body_buffer_chunks(&mut self) -> usize {

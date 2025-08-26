@@ -1,26 +1,33 @@
 //! Evaluating const expressions.
 
 use crate::prelude::*;
-use crate::runtime::vm::{I31, VMGcRef, ValRaw};
-use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque};
+use crate::runtime::vm;
+use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter};
 #[cfg(feature = "gc")]
 use crate::{
-    AnyRef, ArrayRef, ArrayRefPre, ArrayType, ExternRef, StructRef, StructRefPre, StructType, Val,
+    AnyRef, ArrayRef, ArrayRefPre, ArrayType, ExternRef, I31, StructRef, StructRefPre, StructType,
 };
-use smallvec::SmallVec;
+use crate::{OpaqueRootScope, Val};
 use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex};
 #[cfg(feature = "gc")]
-use wasmtime_environ::{
-    Unsigned, VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType,
-};
+use wasmtime_environ::{VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType};
 
 /// An interpreter for const expressions.
 ///
 /// This can be reused across many const expression evaluations to reuse
 /// allocated resources, if any.
-#[derive(Default)]
 pub struct ConstExprEvaluator {
-    stack: SmallVec<[ValRaw; 2]>,
+    stack: Vec<Val>,
+    simple: Val,
+}
+
+impl Default for ConstExprEvaluator {
+    fn default() -> ConstExprEvaluator {
+        ConstExprEvaluator {
+            stack: Vec::new(),
+            simple: Val::I32(0),
+        }
+    }
 }
 
 /// The context within which a particular const expression is evaluated.
@@ -34,70 +41,54 @@ impl ConstEvalContext {
         Self { instance }
     }
 
-    fn global_get(&mut self, store: &mut AutoAssertNoGc<'_>, index: GlobalIndex) -> Result<ValRaw> {
-        unsafe {
-            let mut instance = store.instance_mut(self.instance);
-            let global = instance
-                .as_mut()
-                .defined_or_imported_global_ptr(index)
-                .as_ref();
-            let wasm_ty = instance.env_module().globals[index].wasm_ty;
-            global.to_val_raw(store, wasm_ty)
-        }
+    fn global_get(&mut self, store: &mut StoreOpaque, index: GlobalIndex) -> Result<Val> {
+        let id = store.id();
+        Ok(store
+            .instance_mut(self.instance)
+            .get_exported_global(id, index)
+            ._get(&mut AutoAssertNoGc::new(store)))
     }
 
-    fn ref_func(&mut self, store: &mut AutoAssertNoGc<'_>, index: FuncIndex) -> Result<ValRaw> {
-        Ok(ValRaw::funcref(
+    fn ref_func(&mut self, store: &mut StoreOpaque, index: FuncIndex) -> Result<Val> {
+        let id = store.id();
+        // SAFETY: `id` is the correct store-owner of the function being looked
+        // up
+        let func = unsafe {
             store
                 .instance_mut(self.instance)
-                .get_func_ref(index)
-                .unwrap()
-                .as_ptr()
-                .cast(),
-        ))
+                .get_exported_func(id, index)
+        };
+        Ok(func.into())
     }
 
     #[cfg(feature = "gc")]
-    fn struct_fields_len(
-        &self,
-        store: &mut AutoAssertNoGc<'_>,
-        shared_ty: VMSharedTypeIndex,
-    ) -> usize {
+    fn struct_fields_len(&self, store: &mut StoreOpaque, shared_ty: VMSharedTypeIndex) -> usize {
         let struct_ty = StructType::from_shared_type_index(store.engine(), shared_ty);
         let fields = struct_ty.fields();
         fields.len()
     }
 
-    /// Safety: field values must be of the correct types.
     #[cfg(feature = "gc")]
-    unsafe fn struct_new(
+    async fn struct_new(
         &mut self,
-        store: &mut AutoAssertNoGc<'_>,
+        store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         shared_ty: VMSharedTypeIndex,
-        fields: &[ValRaw],
-    ) -> Result<ValRaw> {
+        fields: &[Val],
+    ) -> Result<Val> {
         let struct_ty = StructType::from_shared_type_index(store.engine(), shared_ty);
-        let fields = fields
-            .iter()
-            .zip(struct_ty.fields())
-            .map(|(raw, ty)| {
-                let ty = ty.element_type().unpack();
-                Val::_from_raw(store, *raw, ty)
-            })
-            .collect::<Vec<_>>();
-
         let allocator = StructRefPre::_new(store, struct_ty);
-        let struct_ref = unsafe { StructRef::new_maybe_async(store, &allocator, &fields)? };
-        let raw = struct_ref.to_anyref()._to_raw(store)?;
-        Ok(ValRaw::anyref(raw))
+        let struct_ref = StructRef::_new_async(store, limiter, &allocator, &fields).await?;
+        Ok(Val::AnyRef(Some(struct_ref.into())))
     }
 
     #[cfg(feature = "gc")]
-    fn struct_new_default(
+    async fn struct_new_default(
         &mut self,
-        store: &mut AutoAssertNoGc<'_>,
+        store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         shared_ty: VMSharedTypeIndex,
-    ) -> Result<ValRaw> {
+    ) -> Result<Val> {
         let module = store
             .instance(self.instance)
             .runtime_module()
@@ -125,112 +116,165 @@ impl ConstEvalContext {
             .iter()
             .map(|ty| match &ty.element_type {
                 wasmtime_environ::WasmStorageType::I8 | wasmtime_environ::WasmStorageType::I16 => {
-                    ValRaw::i32(0)
+                    Val::I32(0)
                 }
                 wasmtime_environ::WasmStorageType::Val(v) => match v {
-                    wasmtime_environ::WasmValType::I32 => ValRaw::i32(0),
-                    wasmtime_environ::WasmValType::I64 => ValRaw::i64(0),
-                    wasmtime_environ::WasmValType::F32 => ValRaw::f32(0.0f32.to_bits()),
-                    wasmtime_environ::WasmValType::F64 => ValRaw::f64(0.0f64.to_bits()),
-                    wasmtime_environ::WasmValType::V128 => ValRaw::v128(0),
+                    wasmtime_environ::WasmValType::I32 => Val::I32(0),
+                    wasmtime_environ::WasmValType::I64 => Val::I64(0),
+                    wasmtime_environ::WasmValType::F32 => Val::F32(0.0f32.to_bits()),
+                    wasmtime_environ::WasmValType::F64 => Val::F64(0.0f64.to_bits()),
+                    wasmtime_environ::WasmValType::V128 => Val::V128(0u128.into()),
                     wasmtime_environ::WasmValType::Ref(r) => {
                         assert!(r.nullable);
-                        ValRaw::null()
+                        Val::null_top(r.heap_type.top())
                     }
                 },
             })
-            .collect::<SmallVec<[_; 8]>>();
+            .collect::<smallvec::SmallVec<[_; 8]>>();
 
-        unsafe { self.struct_new(store, shared_ty, &fields) }
+        self.struct_new(store, limiter, shared_ty, &fields).await
     }
 }
 
 impl ConstExprEvaluator {
-    /// Evaluate the given const expression in the given context.
+    /// Same as [`Self::eval`] except that this is specifically intended for
+    /// integral constant expression.
     ///
-    /// # Unsafety
+    /// # Panics
     ///
-    /// When async is enabled, this may only be executed on a fiber stack.
-    ///
-    /// The given const expression must be valid within the given context,
-    /// e.g. the const expression must be well-typed and the context must return
-    /// global values of the expected types. This evaluator operates directly on
-    /// untyped `ValRaw`s and does not and cannot check that its operands are of
-    /// the correct type.
-    ///
-    /// If given async store, then this must be called from on an async fiber
-    /// stack.
-    pub unsafe fn eval(
+    /// Panics if `ConstExpr` contains GC ops (e.g. it's not for an integral
+    /// type).
+    pub fn eval_int(
         &mut self,
         store: &mut StoreOpaque,
         context: &mut ConstEvalContext,
         expr: &ConstExpr,
-    ) -> Result<ValRaw> {
+    ) -> Result<&Val> {
+        // Try to evaluate a simple expression first before doing the more
+        // complicated eval loop below.
+        if self.try_simple(expr).is_some() {
+            return Ok(&self.simple);
+        }
+
+        // Note that `assert_ready` here should be valid as production of an
+        // integer cannot involve GC meaning that async operations aren't used.
+        let mut scope = OpaqueRootScope::new(store);
+        vm::assert_ready(self.eval_loop(&mut scope, None, context, expr))
+    }
+
+    /// Attempts to peek into `expr` to see if it's trivial to evaluate, e.g.
+    /// for `i32.const N`.
+    #[inline]
+    pub fn try_simple(&mut self, expr: &ConstExpr) -> Option<&Val> {
+        match expr.ops() {
+            [ConstOp::I32Const(i)] => Some(self.return_one(Val::I32(*i))),
+            [ConstOp::I64Const(i)] => Some(self.return_one(Val::I64(*i))),
+            [ConstOp::F32Const(f)] => Some(self.return_one(Val::F32(*f))),
+            [ConstOp::F64Const(f)] => Some(self.return_one(Val::F64(*f))),
+            _ => None,
+        }
+    }
+
+    /// Evaluate the given const expression in the given context.
+    ///
+    /// Note that the `store` argument is an `OpaqueRootScope` which is used to
+    /// require that a GC rooting scope external to evaluation of this constant
+    /// is required. Constant expression evaluation may perform GC allocations
+    /// and itself trigger a GC meaning that all references must be rooted,
+    /// hence the external requirement of a rooting scope.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if `expr` is an invalid constant expression.
+    pub async fn eval(
+        &mut self,
+        store: &mut OpaqueRootScope<&mut StoreOpaque>,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        context: &mut ConstEvalContext,
+        expr: &ConstExpr,
+    ) -> Result<&Val> {
+        // Same structure as `eval_int` above, except using `.await` and with a
+        // slightly different type signature here for this function.
+        if self.try_simple(expr).is_some() {
+            return Ok(&self.simple);
+        }
+        self.eval_loop(store, limiter, context, expr).await
+    }
+
+    #[inline]
+    fn return_one(&mut self, val: Val) -> &Val {
+        self.simple = val;
+        &self.simple
+        // self.stack.clear();
+        // self.stack.push(val);
+        // &self.stack[0]
+    }
+
+    #[cold]
+    async fn eval_loop(
+        &mut self,
+        store: &mut OpaqueRootScope<&mut StoreOpaque>,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
+        context: &mut ConstEvalContext,
+        expr: &ConstExpr,
+    ) -> Result<&Val> {
         log::trace!("evaluating const expr: {expr:?}");
 
         self.stack.clear();
 
-        // Ensure that we don't permanently root any GC references we allocate
-        // during const evaluation, keeping them alive for the duration of the
-        // store's lifetime.
-        #[cfg(feature = "gc")]
-        let mut store = crate::OpaqueRootScope::new(store);
-        #[cfg(not(feature = "gc"))]
-        let mut store = store;
-
-        // We cannot allow GC during const evaluation because the stack of
-        // `ValRaw`s are not rooted. If we had a GC reference on our stack, and
-        // then performed a collection, that on-stack reference's object could
-        // be reclaimed or relocated by the collector, and then when we use the
-        // reference again we would basically get a use-after-free bug.
-        let mut store = AutoAssertNoGc::new(&mut store);
+        // On GC-less builds ensure that this is always considered used an
+        // needed-mutable.
+        let _ = &mut limiter;
 
         for op in expr.ops() {
             log::trace!("const-evaluating op: {op:?}");
             match op {
-                ConstOp::I32Const(i) => self.stack.push(ValRaw::i32(*i)),
-                ConstOp::I64Const(i) => self.stack.push(ValRaw::i64(*i)),
-                ConstOp::F32Const(f) => self.stack.push(ValRaw::f32(*f)),
-                ConstOp::F64Const(f) => self.stack.push(ValRaw::f64(*f)),
-                ConstOp::V128Const(v) => self.stack.push(ValRaw::v128(*v)),
-                ConstOp::GlobalGet(g) => self.stack.push(context.global_get(&mut store, *g)?),
-                ConstOp::RefNull => self.stack.push(ValRaw::null()),
-                ConstOp::RefFunc(f) => self.stack.push(context.ref_func(&mut store, *f)?),
+                ConstOp::I32Const(i) => self.stack.push(Val::I32(*i)),
+                ConstOp::I64Const(i) => self.stack.push(Val::I64(*i)),
+                ConstOp::F32Const(f) => self.stack.push(Val::F32(*f)),
+                ConstOp::F64Const(f) => self.stack.push(Val::F64(*f)),
+                ConstOp::V128Const(v) => self.stack.push(Val::V128((*v).into())),
+                ConstOp::GlobalGet(g) => self.stack.push(context.global_get(store, *g)?),
+                ConstOp::RefNull(ty) => self.stack.push(Val::null_top(*ty)),
+                ConstOp::RefFunc(f) => self.stack.push(context.ref_func(store, *f)?),
+                #[cfg(feature = "gc")]
                 ConstOp::RefI31 => {
-                    let i = self.pop()?.get_i32();
+                    let i = self.pop()?.unwrap_i32();
                     let i31 = I31::wrapping_i32(i);
-                    let raw = VMGcRef::from_i31(i31).as_raw_u32();
-                    self.stack.push(ValRaw::anyref(raw));
+                    let r = AnyRef::_from_i31(&mut AutoAssertNoGc::new(store), i31);
+                    self.stack.push(Val::AnyRef(Some(r)));
                 }
+                #[cfg(not(feature = "gc"))]
+                ConstOp::RefI31 => panic!("should not have validated"),
                 ConstOp::I32Add => {
-                    let b = self.pop()?.get_i32();
-                    let a = self.pop()?.get_i32();
-                    self.stack.push(ValRaw::i32(a.wrapping_add(b)));
+                    let b = self.pop()?.unwrap_i32();
+                    let a = self.pop()?.unwrap_i32();
+                    self.stack.push(Val::I32(a.wrapping_add(b)));
                 }
                 ConstOp::I32Sub => {
-                    let b = self.pop()?.get_i32();
-                    let a = self.pop()?.get_i32();
-                    self.stack.push(ValRaw::i32(a.wrapping_sub(b)));
+                    let b = self.pop()?.unwrap_i32();
+                    let a = self.pop()?.unwrap_i32();
+                    self.stack.push(Val::I32(a.wrapping_sub(b)));
                 }
                 ConstOp::I32Mul => {
-                    let b = self.pop()?.get_i32();
-                    let a = self.pop()?.get_i32();
-                    self.stack.push(ValRaw::i32(a.wrapping_mul(b)));
+                    let b = self.pop()?.unwrap_i32();
+                    let a = self.pop()?.unwrap_i32();
+                    self.stack.push(Val::I32(a.wrapping_mul(b)));
                 }
                 ConstOp::I64Add => {
-                    let b = self.pop()?.get_i64();
-                    let a = self.pop()?.get_i64();
-                    self.stack.push(ValRaw::i64(a.wrapping_add(b)));
+                    let b = self.pop()?.unwrap_i64();
+                    let a = self.pop()?.unwrap_i64();
+                    self.stack.push(Val::I64(a.wrapping_add(b)));
                 }
                 ConstOp::I64Sub => {
-                    let b = self.pop()?.get_i64();
-                    let a = self.pop()?.get_i64();
-                    self.stack.push(ValRaw::i64(a.wrapping_sub(b)));
+                    let b = self.pop()?.unwrap_i64();
+                    let a = self.pop()?.unwrap_i64();
+                    self.stack.push(Val::I64(a.wrapping_sub(b)));
                 }
                 ConstOp::I64Mul => {
-                    let b = self.pop()?.get_i64();
-                    let a = self.pop()?.get_i64();
-                    self.stack.push(ValRaw::i64(a.wrapping_mul(b)));
+                    let b = self.pop()?.unwrap_i64();
+                    let a = self.pop()?.unwrap_i64();
+                    self.stack.push(Val::I64(a.wrapping_mul(b)));
                 }
 
                 #[cfg(not(feature = "gc"))]
@@ -252,7 +296,7 @@ impl ConstExprEvaluator {
                     let interned_type_index = store.instance(context.instance).env_module().types
                         [*struct_type_index]
                         .unwrap_engine_type_index();
-                    let len = context.struct_fields_len(&mut store, interned_type_index);
+                    let len = context.struct_fields_len(store, interned_type_index);
 
                     if self.stack.len() < len {
                         bail!(
@@ -262,11 +306,14 @@ impl ConstExprEvaluator {
                     }
 
                     let start = self.stack.len() - len;
-                    let s = context.struct_new(
-                        &mut store,
-                        interned_type_index,
-                        &self.stack[start..],
-                    )?;
+                    let s = context
+                        .struct_new(
+                            store,
+                            limiter.as_deref_mut(),
+                            interned_type_index,
+                            &self.stack[start..],
+                        )
+                        .await?;
                     self.stack.truncate(start);
                     self.stack.push(s);
                 }
@@ -276,7 +323,11 @@ impl ConstExprEvaluator {
                     let ty = store.instance(context.instance).env_module().types
                         [*struct_type_index]
                         .unwrap_engine_type_index();
-                    self.stack.push(context.struct_new_default(&mut store, ty)?);
+                    self.stack.push(
+                        context
+                            .struct_new_default(store, limiter.as_deref_mut(), ty)
+                            .await?,
+                    );
                 }
 
                 #[cfg(feature = "gc")]
@@ -285,15 +336,16 @@ impl ConstExprEvaluator {
                         .unwrap_engine_type_index();
                     let ty = ArrayType::from_shared_type_index(store.engine(), ty);
 
-                    let len = self.pop()?.get_i32().unsigned();
+                    let len = self.pop()?.unwrap_i32().cast_unsigned();
 
-                    let elem = Val::_from_raw(&mut store, self.pop()?, ty.element_type().unpack());
+                    let elem = self.pop()?;
 
-                    let pre = ArrayRefPre::_new(&mut store, ty);
-                    let array = unsafe { ArrayRef::new_maybe_async(&mut store, &pre, &elem, len)? };
+                    let pre = ArrayRefPre::_new(store, ty);
+                    let array =
+                        ArrayRef::_new_async(store, limiter.as_deref_mut(), &pre, &elem, len)
+                            .await?;
 
-                    self.stack
-                        .push(ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?));
+                    self.stack.push(Val::AnyRef(Some(array.into())));
                 }
 
                 #[cfg(feature = "gc")]
@@ -302,16 +354,17 @@ impl ConstExprEvaluator {
                         .unwrap_engine_type_index();
                     let ty = ArrayType::from_shared_type_index(store.engine(), ty);
 
-                    let len = self.pop()?.get_i32().unsigned();
+                    let len = self.pop()?.unwrap_i32().cast_unsigned();
 
                     let elem = Val::default_for_ty(ty.element_type().unpack())
                         .expect("type should have a default value");
 
-                    let pre = ArrayRefPre::_new(&mut store, ty);
-                    let array = unsafe { ArrayRef::new_maybe_async(&mut store, &pre, &elem, len)? };
+                    let pre = ArrayRefPre::_new(store, ty);
+                    let array =
+                        ArrayRef::_new_async(store, limiter.as_deref_mut(), &pre, &elem, len)
+                            .await?;
 
-                    self.stack
-                        .push(ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?));
+                    self.stack.push(Val::AnyRef(Some(array.into())));
                 }
 
                 #[cfg(feature = "gc")]
@@ -333,50 +386,44 @@ impl ConstExprEvaluator {
 
                     let start = self.stack.len() - array_size;
 
-                    let elem_ty = ty.element_type();
-                    let elem_ty = elem_ty.unpack();
-
                     let elems = self
                         .stack
                         .drain(start..)
-                        .map(|raw| Val::_from_raw(&mut store, raw, elem_ty))
-                        .collect::<SmallVec<[_; 8]>>();
+                        .collect::<smallvec::SmallVec<[_; 8]>>();
 
-                    let pre = ArrayRefPre::_new(&mut store, ty);
+                    let pre = ArrayRefPre::_new(store, ty);
                     let array =
-                        unsafe { ArrayRef::new_fixed_maybe_async(&mut store, &pre, &elems)? };
+                        ArrayRef::_new_fixed_async(store, limiter.as_deref_mut(), &pre, &elems)
+                            .await?;
 
-                    self.stack
-                        .push(ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?));
+                    self.stack.push(Val::AnyRef(Some(array.into())));
                 }
 
                 #[cfg(feature = "gc")]
                 ConstOp::ExternConvertAny => {
-                    let result = match AnyRef::_from_raw(&mut store, self.pop()?.get_anyref()) {
-                        Some(anyref) => {
-                            ExternRef::_convert_any(&mut store, anyref)?._to_raw(&mut store)?
-                        }
-                        None => 0,
+                    let mut store = AutoAssertNoGc::new(store);
+                    let result = match self.pop()?.unwrap_anyref() {
+                        Some(anyref) => Some(ExternRef::_convert_any(&mut store, *anyref)?),
+                        None => None,
                     };
-                    self.stack.push(ValRaw::externref(result));
+                    self.stack.push(Val::ExternRef(result));
                 }
 
                 #[cfg(feature = "gc")]
                 ConstOp::AnyConvertExtern => {
-                    let result =
-                        match ExternRef::_from_raw(&mut store, self.pop()?.get_externref()) {
-                            Some(externref) => AnyRef::_convert_extern(&mut store, externref)?
-                                ._to_raw(&mut store)?,
-                            None => 0,
-                        };
-                    self.stack.push(ValRaw::anyref(result));
+                    let mut store = AutoAssertNoGc::new(store);
+                    let result = match self.pop()?.unwrap_externref() {
+                        Some(externref) => Some(AnyRef::_convert_extern(&mut store, *externref)?),
+                        None => None,
+                    };
+                    self.stack.push(result.into());
                 }
             }
         }
 
         if self.stack.len() == 1 {
             log::trace!("const expr evaluated to {:?}", self.stack[0]);
-            Ok(self.stack[0])
+            Ok(&self.stack[0])
         } else {
             bail!(
                 "const expr evaluation error: expected 1 resulting value, found {}",
@@ -385,7 +432,7 @@ impl ConstExprEvaluator {
         }
     }
 
-    fn pop(&mut self) -> Result<ValRaw> {
+    fn pop(&mut self) -> Result<Val> {
         self.stack.pop().ok_or_else(|| {
             anyhow!(
                 "const expr evaluation error: attempted to pop from an empty \

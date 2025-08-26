@@ -25,8 +25,9 @@ make_vendor() {
 
     if [[ ! -d $cached_extracted_dir ]]; then
       mkdir -p $cached_extracted_dir
-      curl -sL https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz | \
-        tar xzf - --strip-components=1 -C $cached_extracted_dir
+      curl --retry 5 --retry-all-errors -sLO https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz
+      tar xzf $tag.tar.gz --strip-components=1 -C $cached_extracted_dir
+      rm $tag.tar.gz
       rm -rf $cached_extracted_dir/${subdir:-"wit"}/deps*
     fi
 
@@ -69,11 +70,20 @@ make_vendor "wasi-config" "config@f4d699b"
 make_vendor "wasi-keyvalue" "keyvalue@219ea36"
 
 make_vendor "wasi/src/p3" "
-    cli@939bd6d@wit-0.3.0-draft
-    clocks@13d1c82@wit-0.3.0-draft
-    filesystem@e2a2ddc@wit-0.3.0-draft
-    random@4e94663@wit-0.3.0-draft
-    sockets@bb247e2@wit-0.3.0-draft
+    cli@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    clocks@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    filesystem@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    random@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    sockets@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+"
+
+make_vendor "wasi-http/src/p3" "
+    cli@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    clocks@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    filesystem@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    http@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    random@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    sockets@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
 "
 
 rm -rf $cache_dir
@@ -82,5 +92,5 @@ rm -rf $cache_dir
 # slightly different than above.
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn
 revision=0.2.0-rc-2024-10-28
-curl -L $repo/$revision/wasi-nn.witx -o crates/wasi-nn/witx/wasi-nn.witx
-curl -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit
+curl --retry 5 --retry-all-errors -L $repo/$revision/wasi-nn.witx -o crates/wasi-nn/witx/wasi-nn.witx
+curl --retry 5 --retry-all-errors -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit

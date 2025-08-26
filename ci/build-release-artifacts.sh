@@ -60,7 +60,7 @@ if [[ "$build" = *-min ]]; then
 else
   # For release builds the CLI is built a bit more feature-ful than the Cargo
   # defaults to provide artifacts that can do as much as possible.
-  bin_flags="--features all-arch,component-model"
+  bin_flags="--features all-arch,component-model,component-model-async"
 fi
 
 if [[ "$target" = "x86_64-pc-windows-msvc" ]]; then
@@ -70,6 +70,27 @@ if [[ "$target" = "x86_64-pc-windows-msvc" ]]; then
 fi
 
 cargo build --release $flags --target $target -p wasmtime-cli $bin_flags --features run
+
+# For the C API force unwind tables to be emitted to make the generated objects
+# more flexible. Embedders can always build without this but this enables
+# libunwind to produce better backtraces by default when Wasmtime is linked into
+# a different project that wants to unwind.
+export RUSTFLAGS="$RUSTFLAGS -C force-unwind-tables"
+
+# Shrink the size of `*.a` artifacts without spending too much extra time in CI.
+# See #11476 for some more context. Here Windows builds achieve this with 1 CGU
+# which results in modest size gains, and other platforms use LTO to achieve
+# much more significant size gains. The reason the platforms are different is
+# that CI is extremely slow on Windows, almost 2x slower, so this is an attempt
+# to keep CI cycle time under control.
+case $build in
+  *-mingw* | *-windows*)
+    export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+    ;;
+  *)
+    export CARGO_PROFILE_RELEASE_LTO=true
+    ;;
+esac
 
 mkdir -p target/c-api-build
 cd target/c-api-build

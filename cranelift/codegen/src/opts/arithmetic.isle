@@ -325,3 +325,6 @@
               (iconst_s ty m)))
   (if-let m (i64_checked_neg n))
   (band ty x (iconst ty (imm64_masked ty (i64_cast_unsigned (i64_not n))))))
+
+;; (x + y) - (x | y) --> x & y
+(rule (simplify (isub ty (iadd ty x y) (bor ty x y))) (band ty x y))

@@ -15,7 +15,7 @@
 //! done using the `with` option to [`bindgen!`]:
 //!
 //! ```rust
-//! use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
+//! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 //! use wasmtime::{Result, Engine, Config};
 //! use wasmtime::component::{Linker, ResourceTable, HasSelf};
 //!
@@ -39,7 +39,7 @@
 //!     with: {
 //!         "wasi": wasmtime_wasi::p2::bindings,
 //!     },
-//!     async: true,
+//!     imports: { default: async },
 //! });
 //!
 //! struct MyState {
@@ -53,11 +53,10 @@
 //!     }
 //! }
 //!
-//! impl IoView for MyState {
-//!     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-//! }
 //! impl WasiView for MyState {
-//!     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+//!     fn ctx(&mut self) -> WasiCtxView<'_> {
+//!         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+//!     }
 //! }
 //!
 //! fn main() -> Result<()> {
@@ -86,7 +85,7 @@
 /// done using the `with` option to `bindgen!`:
 ///
 /// ```rust
-/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime::{Result, Engine};
 /// use wasmtime::component::{Linker, ResourceTable, HasSelf};
 ///
@@ -126,11 +125,10 @@
 ///     }
 /// }
 ///
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///     }
 /// }
 ///
 /// fn main() -> Result<()> {
@@ -152,13 +150,12 @@ pub mod sync {
         wasmtime::component::bindgen!({
             path: "src/p2/wit",
             world: "wasi:cli/command",
-            tracing: true,
             trappable_error_type: {
                 "wasi:io/streams/stream-error" => StreamError,
                 "wasi:filesystem/types/error-code" => FsError,
                 "wasi:sockets/network/error-code" => SocketError,
             },
-            trappable_imports: true,
+            imports: { default: tracing | trappable },
             with: {
                 // These interfaces contain only synchronous methods, so they
                 // can be aliased directly
@@ -171,12 +168,12 @@ pub mod sync {
                 // Configure the resource types of the bound interfaces here
                 // to be the same as the async versions of the resources, that
                 // way everything has the same type.
-                "wasi:filesystem/types/descriptor": super::super::filesystem::types::Descriptor,
+                "wasi:filesystem/types/descriptor": crate::filesystem::Descriptor,
                 "wasi:filesystem/types/directory-entry-stream": super::super::filesystem::types::DirectoryEntryStream,
                 "wasi:sockets/tcp/tcp-socket": super::super::sockets::tcp::TcpSocket,
                 "wasi:sockets/udp/incoming-datagram-stream": super::super::sockets::udp::IncomingDatagramStream,
                 "wasi:sockets/udp/outgoing-datagram-stream": super::super::sockets::udp::OutgoingDatagramStream,
-                "wasi:sockets/udp/udp-socket": super::super::sockets::udp::UdpSocket,
+                "wasi:sockets/udp/udp-socket": crate::sockets::UdpSocket,
 
                 // Error host trait from wasmtime-wasi-io is synchronous, so we can alias it
                 "wasi:io/error": wasmtime_wasi_io::bindings::wasi::io::error,
@@ -211,7 +208,7 @@ pub mod sync {
     /// ```no_run
     /// use wasmtime::{Engine, Result, Store, Config};
     /// use wasmtime::component::{ResourceTable, Linker, Component};
-    /// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+    /// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
     /// use wasmtime_wasi::p2::bindings::sync::Command;
     ///
     /// // This example is an example shim of executing a component based on the
@@ -231,7 +228,7 @@ pub mod sync {
     ///
     ///     // Configure a `WasiCtx` based on this program's environment. Then
     ///     // build a `Store` to instantiate into.
-    ///     let mut builder = WasiCtxBuilder::new();
+    ///     let mut builder = WasiCtx::builder();
     ///     builder.inherit_stdio().inherit_env().args(&args[2..]);
     ///     let mut store = Store::new(
     ///         &engine,
@@ -255,11 +252,10 @@ pub mod sync {
     ///     table: ResourceTable,
     /// }
     ///
-    /// impl IoView for MyState {
-    ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-    /// }
     /// impl WasiView for MyState {
-    ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+    ///     fn ctx(&mut self) -> WasiCtxView<'_> {
+    ///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+    ///     }
     /// }
     /// ```
     ///
@@ -276,7 +272,7 @@ pub mod sync {
     /// ```no_run
     /// use wasmtime::{Engine, Result, Store, Config};
     /// use wasmtime::component::{ResourceTable, Linker, Component};
-    /// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+    /// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
     /// use wasmtime_wasi::p2::bindings::sync::CommandPre;
     ///
     /// // This example is an example shim of executing a component based on the
@@ -297,7 +293,7 @@ pub mod sync {
     ///
     ///     // Configure a `WasiCtx` based on this program's environment. Then
     ///     // build a `Store` to instantiate into.
-    ///     let mut builder = WasiCtxBuilder::new();
+    ///     let mut builder = WasiCtx::builder();
     ///     builder.inherit_stdio().inherit_env().args(&args);
     ///     let mut store = Store::new(
     ///         &engine,
@@ -321,11 +317,10 @@ pub mod sync {
     ///     table: ResourceTable,
     /// }
     ///
-    /// impl IoView for MyState {
-    ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-    /// }
     /// impl WasiView for MyState {
-    ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+    ///     fn ctx(&mut self) -> WasiCtxView<'_> {
+    ///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+    ///     }
     /// }
     /// ```
     ///
@@ -341,9 +336,7 @@ mod async_io {
     wasmtime::component::bindgen!({
         path: "src/p2/wit",
         world: "wasi:cli/command",
-        tracing: true,
-        trappable_imports: true,
-        async: {
+        imports: {
             // Only these functions are `async` and everything else is sync
             // meaning that it basically doesn't need to block. These functions
             // are the only ones that need to block.
@@ -351,59 +344,39 @@ mod async_io {
             // Note that at this time `only_imports` works on function names
             // which in theory can be shared across interfaces, so this may
             // need fancier syntax in the future.
-            only_imports: [
-                "[method]descriptor.access-at",
-                "[method]descriptor.advise",
-                "[method]descriptor.change-directory-permissions-at",
-                "[method]descriptor.change-file-permissions-at",
-                "[method]descriptor.create-directory-at",
-                "[method]descriptor.get-flags",
-                "[method]descriptor.get-type",
-                "[method]descriptor.is-same-object",
-                "[method]descriptor.link-at",
-                "[method]descriptor.lock-exclusive",
-                "[method]descriptor.lock-shared",
-                "[method]descriptor.metadata-hash",
-                "[method]descriptor.metadata-hash-at",
-                "[method]descriptor.open-at",
-                "[method]descriptor.read",
-                "[method]descriptor.read-directory",
-                "[method]descriptor.readlink-at",
-                "[method]descriptor.remove-directory-at",
-                "[method]descriptor.rename-at",
-                "[method]descriptor.set-size",
-                "[method]descriptor.set-times",
-                "[method]descriptor.set-times-at",
-                "[method]descriptor.stat",
-                "[method]descriptor.stat-at",
-                "[method]descriptor.symlink-at",
-                "[method]descriptor.sync",
-                "[method]descriptor.sync-data",
-                "[method]descriptor.try-lock-exclusive",
-                "[method]descriptor.try-lock-shared",
-                "[method]descriptor.unlink-file-at",
-                "[method]descriptor.unlock",
-                "[method]descriptor.write",
-                "[method]input-stream.blocking-read",
-                "[method]input-stream.blocking-skip",
-                "[drop]input-stream",
-                "[method]output-stream.blocking-splice",
-                "[method]output-stream.blocking-flush",
-                "[method]output-stream.blocking-write",
-                "[method]output-stream.blocking-write-and-flush",
-                "[method]output-stream.blocking-write-zeroes-and-flush",
-                "[drop]output-stream",
-                "[method]directory-entry-stream.read-directory-entry",
-                "poll",
-                "[method]pollable.block",
-                "[method]pollable.ready",
-                "[method]tcp-socket.start-bind",
-                "[method]tcp-socket.start-connect",
-                "[method]udp-socket.start-bind",
-                "[method]udp-socket.stream",
-                "[method]outgoing-datagram-stream.send",
-            ],
+            "wasi:filesystem/types/[method]descriptor.advise": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.create-directory-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.get-flags": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.get-type": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.is-same-object": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.link-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.metadata-hash": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.metadata-hash-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.open-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.read": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.read-directory": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.readlink-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.remove-directory-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.rename-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.set-size": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.set-times": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.set-times-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.stat": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.stat-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.symlink-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.sync": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.sync-data": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.unlink-file-at": async | tracing | trappable,
+            "wasi:filesystem/types/[method]descriptor.write": async | tracing | trappable,
+            "wasi:filesystem/types/[method]directory-entry-stream.read-directory-entry": async | tracing | trappable,
+            "wasi:sockets/tcp/[method]tcp-socket.start-bind": async | tracing | trappable,
+            "wasi:sockets/tcp/[method]tcp-socket.start-connect": async | tracing | trappable,
+            "wasi:sockets/udp/[method]udp-socket.start-bind": async | tracing | trappable,
+            "wasi:sockets/udp/[method]udp-socket.stream": async | tracing | trappable,
+            "wasi:sockets/udp/[method]outgoing-datagram-stream.send": async | tracing | trappable,
+            default: tracing | trappable,
         },
+        exports: { default: async },
         trappable_error_type: {
             "wasi:io/streams/stream-error" => wasmtime_wasi_io::streams::StreamError,
             "wasi:filesystem/types/error-code" => crate::p2::FsError,
@@ -419,14 +392,14 @@ mod async_io {
 
             // Configure all other resources to be concrete types defined in
             // this crate
-            "wasi:sockets/network/network": crate::net::Network,
-            "wasi:sockets/tcp/tcp-socket": crate::p2::tcp::TcpSocket,
-            "wasi:sockets/udp/udp-socket": crate::p2::udp::UdpSocket,
+            "wasi:sockets/network/network": crate::p2::network::Network,
+            "wasi:sockets/tcp/tcp-socket": crate::sockets::TcpSocket,
+            "wasi:sockets/udp/udp-socket": crate::sockets::UdpSocket,
             "wasi:sockets/udp/incoming-datagram-stream": crate::p2::udp::IncomingDatagramStream,
             "wasi:sockets/udp/outgoing-datagram-stream": crate::p2::udp::OutgoingDatagramStream,
             "wasi:sockets/ip-name-lookup/resolve-address-stream": crate::p2::ip_name_lookup::ResolveAddressStream,
             "wasi:filesystem/types/directory-entry-stream": crate::p2::filesystem::ReaddirIterator,
-            "wasi:filesystem/types/descriptor": crate::p2::filesystem::Descriptor,
+            "wasi:filesystem/types/descriptor": crate::filesystem::Descriptor,
             "wasi:cli/terminal-input/terminal-input": crate::p2::stdio::TerminalInput,
             "wasi:cli/terminal-output/terminal-output": crate::p2::stdio::TerminalOutput,
         },
@@ -455,7 +428,7 @@ pub use self::async_io::wasi::*;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker, Component};
-/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi::p2::bindings::Command;
 ///
 /// // This example is an example shim of executing a component based on the
@@ -478,7 +451,7 @@ pub use self::async_io::wasi::*;
 ///
 ///     // Configure a `WasiCtx` based on this program's environment. Then
 ///     // build a `Store` to instantiate into.
-///     let mut builder = WasiCtxBuilder::new();
+///     let mut builder = WasiCtx::builder();
 ///     builder.inherit_stdio().inherit_env().args(&args);
 ///     let mut store = Store::new(
 ///         &engine,
@@ -502,11 +475,10 @@ pub use self::async_io::wasi::*;
 ///     table: ResourceTable,
 /// }
 ///
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///     }
 /// }
 /// ```
 ///
@@ -523,7 +495,7 @@ pub use self::async_io::Command;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker, Component};
-/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi::p2::bindings::CommandPre;
 ///
 /// // This example is an example shim of executing a component based on the
@@ -547,7 +519,7 @@ pub use self::async_io::Command;
 ///
 ///     // Configure a `WasiCtx` based on this program's environment. Then
 ///     // build a `Store` to instantiate into.
-///     let mut builder = WasiCtxBuilder::new();
+///     let mut builder = WasiCtx::builder();
 ///     builder.inherit_stdio().inherit_env().args(&args);
 ///     let mut store = Store::new(
 ///         &engine,
@@ -571,11 +543,10 @@ pub use self::async_io::Command;
 ///     table: ResourceTable,
 /// }
 ///
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///     }
 /// }
 /// ```
 ///

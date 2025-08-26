@@ -1,6 +1,8 @@
-use super::*;
+use crate::store::{Ctx, MyWasiCtx};
+use anyhow::Result;
 use std::path::Path;
 use test_programs_artifacts::*;
+use wasmtime::component::{Component, Linker};
 use wasmtime_wasi::p2::add_to_linker_async;
 use wasmtime_wasi::p2::bindings::Command;
 
@@ -13,9 +15,13 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let mut linker = Linker::new(&engine);
     add_to_linker_async(&mut linker)?;
 
-    let (mut store, _td) = store(&engine, name, |builder| {
+    let (mut store, _td) = Ctx::new(&engine, name, |builder| {
         if inherit_stdio {
             builder.inherit_stdio();
+        }
+        MyWasiCtx {
+            wasi: builder.build(),
+            table: Default::default(),
         }
     })?;
     let component = Component::from_file(&engine, path)?;

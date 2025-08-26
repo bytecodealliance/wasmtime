@@ -9,8 +9,8 @@ You can execute this example with:
 
 use anyhow::Result;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasmtime_wasi::p2::WasiCtxBuilder;
-use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+use wasmtime_wasi::WasiCtx;
+use wasmtime_wasi::p1::{self, WasiP1Ctx};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,15 +19,14 @@ async fn main() -> Result<()> {
     config.async_support(true);
     let engine = Engine::new(&config)?;
 
-    // Add the WASI preview1 API to the linker (will be implemented in terms of
-    // the preview2 API)
+    // Add the WASIp1 APIs to the linker
     let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
-    preview1::add_to_linker_async(&mut linker, |t| t)?;
+    p1::add_to_linker_async(&mut linker, |t| t)?;
 
     // Add capabilities (e.g. filesystem access) to the WASI preview2 context
-    // here. Here only stdio is inherited, but see docs of `WasiCtxBuilder` for
+    // here. Here only stdio is inherited, but see docs of `WasiCtx` for
     // more.
-    let wasi_ctx = WasiCtxBuilder::new().inherit_stdio().build_p1();
+    let wasi_ctx = WasiCtx::builder().inherit_stdio().build_p1();
 
     let mut store = Store::new(&engine, wasi_ctx);
 

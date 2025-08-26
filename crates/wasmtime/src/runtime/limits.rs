@@ -29,7 +29,7 @@ pub const DEFAULT_MEMORY_LIMIT: usize = 10000;
 /// or not and you're otherwise working in an asynchronous context the
 /// [`ResourceLimiterAsync`] trait is also provided to avoid blocking an OS
 /// thread while a limit is determined.
-pub trait ResourceLimiter {
+pub trait ResourceLimiter: Send {
     /// Notifies the resource limiter that an instance's linear memory has been
     /// requested to grow.
     ///
@@ -172,7 +172,7 @@ pub trait ResourceLimiter {
 /// answer the question whether growing a memory or table is allowed.
 #[cfg(feature = "async")]
 #[async_trait::async_trait]
-pub trait ResourceLimiterAsync {
+pub trait ResourceLimiterAsync: Send {
     /// Async version of [`ResourceLimiter::memory_growing`]
     async fn memory_growing(
         &mut self,

@@ -23,6 +23,7 @@ macro_rules! wasmtime_option_group {
         pub struct $opts:ident {
             $(
                 $(#[doc = $doc:tt])*
+                $(#[doc($doc_attr:meta)])?
                 $(#[serde($serde_attr:meta)])*
                 pub $opt:ident: $container:ident<$payload:ty>,
             )+
@@ -31,6 +32,7 @@ macro_rules! wasmtime_option_group {
                 #[prefixed = $prefix:tt]
                 $(#[serde($serde_attr2:meta)])*
                 $(#[doc = $prefixed_doc:tt])*
+                $(#[doc($prefixed_doc_attr:meta)])?
                 pub $prefixed:ident: Vec<(String, Option<String>)>,
             )?
         }
@@ -43,6 +45,7 @@ macro_rules! wasmtime_option_group {
         pub struct $opts {
             $(
                 $(#[serde($serde_attr)])*
+                $(#[doc($doc_attr)])?
                 pub $opt: $container<$payload>,
             )+
             $(
@@ -482,6 +485,7 @@ impl WasmtimeOptionValue for wasmtime::RegallocAlgorithm {
     fn parse(val: Option<&str>) -> Result<Self> {
         match String::parse(val)?.as_str() {
             "backtracking" => Ok(wasmtime::RegallocAlgorithm::Backtracking),
+            "single-pass" => Ok(wasmtime::RegallocAlgorithm::SinglePass),
             other => bail!(
                 "unknown regalloc algorithm`{}`, only backtracking,single-pass accepted",
                 other
@@ -492,6 +496,7 @@ impl WasmtimeOptionValue for wasmtime::RegallocAlgorithm {
     fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             wasmtime::RegallocAlgorithm::Backtracking => f.write_str("backtracking"),
+            wasmtime::RegallocAlgorithm::SinglePass => f.write_str("single-pass"),
             _ => unreachable!(),
         }
     }
@@ -535,22 +540,22 @@ impl WasmtimeOptionValue for wasmtime::Collector {
     }
 }
 
-impl WasmtimeOptionValue for wasmtime::MpkEnabled {
+impl WasmtimeOptionValue for wasmtime::Enabled {
     const VAL_HELP: &'static str = "[=y|n|auto]";
     fn parse(val: Option<&str>) -> Result<Self> {
         match val {
-            None | Some("y") | Some("yes") | Some("true") => Ok(wasmtime::MpkEnabled::Enable),
-            Some("n") | Some("no") | Some("false") => Ok(wasmtime::MpkEnabled::Disable),
-            Some("auto") => Ok(wasmtime::MpkEnabled::Auto),
-            Some(s) => bail!("unknown mpk flag `{s}`, only yes,no,auto,<nothing> accepted"),
+            None | Some("y") | Some("yes") | Some("true") => Ok(wasmtime::Enabled::Yes),
+            Some("n") | Some("no") | Some("false") => Ok(wasmtime::Enabled::No),
+            Some("auto") => Ok(wasmtime::Enabled::Auto),
+            Some(s) => bail!("unknown flag `{s}`, only yes,no,auto,<nothing> accepted"),
         }
     }
 
     fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            wasmtime::MpkEnabled::Enable => f.write_str("y"),
-            wasmtime::MpkEnabled::Disable => f.write_str("n"),
-            wasmtime::MpkEnabled::Auto => f.write_str("auto"),
+            wasmtime::Enabled::Yes => f.write_str("y"),
+            wasmtime::Enabled::No => f.write_str("n"),
+            wasmtime::Enabled::Auto => f.write_str("auto"),
         }
     }
 }

@@ -3,20 +3,19 @@ use crate::check::artifacts_dir;
 use anyhow::Result;
 use std::path::Path;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasmtime_wasi::p2::WasiCtxBuilder;
-use wasmtime_wasi::preview1::WasiP1Ctx;
-use wasmtime_wasi::{DirPerms, FilePerms};
+use wasmtime_wasi::p1::WasiP1Ctx;
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 use wasmtime_wasi_nn::{Backend, InMemoryRegistry, witx::WasiNnCtx};
 
 /// Run a wasi-nn test program. This is modeled after
-/// `crates/wasi/tests/all/main.rs` but still uses the older preview1 API
+/// `crates/wasi/tests/all/main.rs` but still uses the older p1 API
 /// for file reads.
 pub fn run(path: &str, backend: Backend, preload_model: bool) -> Result<()> {
     let path = Path::new(path);
     let engine = Engine::new(&Config::new())?;
     let mut linker = Linker::new(&engine);
     wasmtime_wasi_nn::witx::add_to_linker(&mut linker, |s: &mut Ctx| &mut s.wasi_nn)?;
-    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |s: &mut Ctx| &mut s.wasi)?;
+    wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s: &mut Ctx| &mut s.wasi)?;
     let module = Module::from_file(&engine, path)?;
     let mut store = Store::new(&engine, Ctx::new(&artifacts_dir(), preload_model, backend)?);
     let instance = linker.instantiate(&mut store, &module)?;

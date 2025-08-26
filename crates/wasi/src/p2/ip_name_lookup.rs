@@ -1,56 +1,49 @@
+use crate::p2::SocketError;
 use crate::p2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
-use crate::p2::host::network::util;
-use crate::p2::{IoView, SocketError, WasiImpl, WasiView};
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
+use crate::sockets::WasiSocketsCtxView;
 use anyhow::Result;
 use std::mem;
-use std::net::{Ipv6Addr, ToSocketAddrs};
+use std::net::ToSocketAddrs;
 use std::pin::Pin;
-use std::str::FromStr;
 use std::vec;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::poll::{DynPollable, Pollable, subscribe};
 
-use super::network::{from_ipv4_addr, from_ipv6_addr};
+use crate::sockets::util::{from_ipv4_addr, from_ipv6_addr, parse_host};
 
 pub enum ResolveAddressStream {
     Waiting(AbortOnDropJoinHandle<Result<Vec<IpAddress>, SocketError>>),
     Done(Result<vec::IntoIter<IpAddress>, SocketError>),
 }
 
-impl<T> Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl Host for WasiSocketsCtxView<'_> {
     fn resolve_addresses(
         &mut self,
         network: Resource<Network>,
         name: String,
     ) -> Result<Resource<ResolveAddressStream>, SocketError> {
-        let network = self.table().get(&network)?;
+        let network = self.table.get(&network)?;
 
-        let host = parse(&name)?;
+        let host = parse_host(&name)?;
 
         if !network.allow_ip_name_lookup {
             return Err(ErrorCode::PermanentResolverFailure.into());
         }
 
         let task = spawn_blocking(move || blocking_resolve(&host));
-        let resource = self.table().push(ResolveAddressStream::Waiting(task))?;
+        let resource = self.table.push(ResolveAddressStream::Waiting(task))?;
         Ok(resource)
     }
 }
 
-impl<T> HostResolveAddressStream for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl HostResolveAddressStream for WasiSocketsCtxView<'_> {
     fn resolve_next_address(
         &mut self,
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Option<IpAddress>, SocketError> {
-        let stream: &mut ResolveAddressStream = self.table().get_mut(&resource)?;
+        let stream: &mut ResolveAddressStream = self.table.get_mut(&resource)?;
         loop {
             match stream {
                 ResolveAddressStream::Waiting(future) => {
@@ -74,11 +67,11 @@ where
         &mut self,
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Resource<DynPollable>> {
-        subscribe(self.table(), resource)
+        subscribe(self.table, resource)
     }
 
     fn drop(&mut self, resource: Resource<ResolveAddressStream>) -> Result<()> {
-        self.table().delete(resource)?;
+        self.table.delete(resource)?;
         Ok(())
     }
 }
@@ -88,24 +81,6 @@ impl Pollable for ResolveAddressStream {
     async fn ready(&mut self) {
         if let ResolveAddressStream::Waiting(future) = self {
             *self = ResolveAddressStream::Done(future.await.map(|v| v.into_iter()));
-        }
-    }
-}
-
-fn parse(name: &str) -> Result<url::Host, SocketError> {
-    // `url::Host::parse` serves us two functions:
-    // 1. validate the input is a valid domain name or IP,
-    // 2. convert unicode domains to punycode.
-    match url::Host::parse(&name) {
-        Ok(host) => Ok(host),
-
-        // `url::Host::parse` doesn't understand bare IPv6 addresses without [brackets]
-        Err(_) => {
-            if let Ok(addr) = Ipv6Addr::from_str(name) {
-                Ok(url::Host::Ipv6(addr))
-            } else {
-                Err(ErrorCode::InvalidArgument.into())
-            }
         }
     }
 }
@@ -121,7 +96,7 @@ fn blocking_resolve(host: &url::Host) -> Result<Vec<IpAddress>, SocketError> {
             let addresses = (domain.as_str(), 0)
                 .to_socket_addrs()
                 .map_err(|_| ErrorCode::NameUnresolvable)? // If/when we use `getaddrinfo` directly, map the error properly.
-                .map(|addr| util::to_canonical(&addr.ip()).into())
+                .map(|addr| addr.ip().to_canonical().into())
                 .collect();
 
             Ok(addresses)

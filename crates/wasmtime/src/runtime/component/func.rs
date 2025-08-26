@@ -11,8 +11,8 @@ use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, InterfaceType, MAX_FLAT_PARAMS,
-    MAX_FLAT_RESULTS, TypeFuncIndex, TypeTuple,
+    CanonicalOptions, ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, TypeFuncIndex,
+    TypeTuple,
 };
 
 #[cfg(feature = "component-model-async")]
@@ -488,14 +488,17 @@ impl Func {
 
     pub(crate) fn post_return_core_func(&self, store: &StoreOpaque) -> Option<NonNull<VMFuncRef>> {
         let instance = self.instance.id().get(store);
-        let (_ty, _def, options) = instance.component().export_lifted_function(self.index);
-        options.post_return.map(|i| instance.runtime_post_return(i))
+        let component = instance.component();
+        let (_ty, _def, options) = component.export_lifted_function(self.index);
+        let post_return = component.env_component().options[options].post_return;
+        post_return.map(|i| instance.runtime_post_return(i))
     }
 
     pub(crate) fn abi_async(&self, store: &StoreOpaque) -> bool {
         let instance = self.instance.id().get(store);
-        let (_ty, _def, options) = instance.component().export_lifted_function(self.index);
-        options.async_
+        let component = instance.component();
+        let (_ty, _def, options) = component.export_lifted_function(self.index);
+        component.env_component().options[options].async_
     }
 
     pub(crate) fn abi_info<'a>(
@@ -503,28 +506,16 @@ impl Func {
         store: &'a StoreOpaque,
     ) -> (Options, InstanceFlags, TypeFuncIndex, &'a CanonicalOptions) {
         let vminstance = self.instance.id().get(store);
-        let (ty, _def, raw_options) = vminstance.component().export_lifted_function(self.index);
-        let mem_opts = match raw_options.data_model {
-            CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
-            CanonicalOptionsDataModel::LinearMemory(opts) => opts,
-        };
-        let memory = mem_opts
-            .memory
-            .map(|i| NonNull::new(vminstance.runtime_memory(i)).unwrap());
-        let realloc = mem_opts.realloc.map(|i| vminstance.runtime_realloc(i));
-        let flags = vminstance.instance_flags(raw_options.instance);
-        let callback = raw_options.callback.map(|i| vminstance.runtime_callback(i));
-        let options = unsafe {
-            Options::new(
-                store.id(),
-                memory,
-                realloc,
-                raw_options.string_encoding,
-                raw_options.async_,
-                callback,
-            )
-        };
-        (options, flags, ty, raw_options)
+        let component = vminstance.component();
+        let (ty, _def, options_index) = component.export_lifted_function(self.index);
+        let raw_options = &component.env_component().options[options_index];
+        let options = Options::new_index(store, self.instance, options_index);
+        (
+            options,
+            vminstance.instance_flags(raw_options.instance),
+            ty,
+            raw_options,
+        )
     }
 
     /// Invokes the underlying wasm function, lowering arguments and lifting the
@@ -700,9 +691,11 @@ impl Func {
 
         let index = self.index;
         let vminstance = self.instance.id().get(store.0);
-        let (_ty, _def, options) = vminstance.component().export_lifted_function(index);
+        let component = vminstance.component();
+        let (_ty, _def, options) = component.export_lifted_function(index);
         let post_return = self.post_return_core_func(store.0);
-        let mut flags = vminstance.instance_flags(options.instance);
+        let mut flags =
+            vminstance.instance_flags(component.env_component().options[options].instance);
         let mut instance = self.instance.id().get_mut(store.0);
         let post_return_arg = instance.as_mut().post_return_arg_take(index);
 

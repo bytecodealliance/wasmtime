@@ -1,5 +1,5 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
-use anyhow::{Result, anyhow};
+use anyhow::{Context as _, Result, anyhow};
 use core::mem;
 use cranelift::prelude::Imm64;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
@@ -64,7 +64,9 @@ struct DefinedFunction {
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
-/// let mut compiler = TestFileCompiler::with_default_host_isa().unwrap();
+/// let Ok(mut compiler) = TestFileCompiler::with_default_host_isa() else {
+///     return;
+/// };
 /// compiler.declare_function(&func).unwrap();
 /// compiler.define_function(func.clone(), ctrl_plane).unwrap();
 /// compiler.create_trampoline_for_function(&func, ctrl_plane).unwrap();
@@ -135,8 +137,9 @@ impl TestFileCompiler {
 
     /// Build a [TestFileCompiler] using the host machine's ISA and the passed flags.
     pub fn with_host_isa(flags: settings::Flags) -> Result<Self> {
-        let builder =
-            builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
+        let builder = builder_with_options(true)
+            .map_err(anyhow::Error::msg)
+            .context("Unable to build a TargetIsa for the current host")?;
         let isa = builder.finish(flags)?;
         Ok(Self::new(isa))
     }
@@ -645,21 +648,39 @@ extern "C-unwind" fn __cranelift_throw(
 ) -> ! {
     let compiled_test_file = unsafe { &*COMPILED_TEST_FILE.get() };
     let unwind_host = wasmtime_unwinder::UnwindHost;
-    let module_lookup = |pc| {
-        compiled_test_file
+    let frame_handler = |frame: &wasmtime_unwinder::Frame| -> Option<(usize, usize)> {
+        let (base, table) = compiled_test_file
             .module
             .as_ref()
             .unwrap()
-            .lookup_wasmtime_exception_data(pc)
+            .lookup_wasmtime_exception_data(frame.pc())?;
+        let relative_pc = u32::try_from(
+            frame
+                .pc()
+                .checked_sub(base)
+                .expect("module lookup did not return a module base below the PC"),
+        )
+        .expect("module larger than 4GiB");
+
+        table
+            .lookup_pc_tag(relative_pc, tag)
+            .map(|(frame_offset, handler)| {
+                let handler_sp = frame
+                    .fp()
+                    .wrapping_sub(usize::try_from(frame_offset).unwrap());
+                let handler_pc = base
+                    .checked_add(usize::try_from(handler).unwrap())
+                    .expect("Handler address computation overflowed");
+                (handler_pc, handler_sp)
+            })
     };
     unsafe {
         match wasmtime_unwinder::compute_throw_action(
             &unwind_host,
-            module_lookup,
+            frame_handler,
             exit_pc,
             exit_fp,
             entry_fp,
-            tag,
         ) {
             wasmtime_unwinder::ThrowAction::Handler { pc, sp, fp } => {
                 wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2);

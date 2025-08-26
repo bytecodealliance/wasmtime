@@ -850,7 +850,7 @@ where
                         // Similar to the dynamic heap case, even though the
                         // offset and access size are bound through the heap
                         // type, when added they can overflow, resulting in
-                        // an erroneous comparison, therfore we rely on the
+                        // an erroneous comparison, therefore we rely on the
                         // target pointer size.
                         ptr_size,
                     )?;

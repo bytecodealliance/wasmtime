@@ -292,7 +292,6 @@
 // and will prevent the doc build from failing.
 #![cfg_attr(feature = "default", warn(rustdoc::broken_intra_doc_links))]
 #![no_std]
-#![expect(unsafe_op_in_unsafe_fn, reason = "crate isn't migrated yet")]
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -352,8 +351,10 @@ macro_rules! map_maybe_uninit {
 pub trait MaybeUninitExt<T> {
     /// Maps `MaybeUninit<T>` to `MaybeUninit<U>` using the closure provided.
     ///
-    /// Note that this is `unsafe` as there is no guarantee that `U` comes from
-    /// `T`.
+    /// # Safety
+    ///
+    /// Requires that `*mut U` is a field projection from `*mut T`. Use
+    /// `map_maybe_uninit!` above instead.
     unsafe fn map<U>(&mut self, f: impl FnOnce(*mut T) -> *mut U)
     -> &mut core::mem::MaybeUninit<U>;
 }
@@ -364,7 +365,10 @@ impl<T> MaybeUninitExt<T> for core::mem::MaybeUninit<T> {
         f: impl FnOnce(*mut T) -> *mut U,
     ) -> &mut core::mem::MaybeUninit<U> {
         let new_ptr = f(self.as_mut_ptr());
-        core::mem::transmute::<*mut U, &mut core::mem::MaybeUninit<U>>(new_ptr)
+        // SAFETY: the memory layout of these two types are the same, and
+        // asserting that it's a safe reference with the same lifetime as `self`
+        // is a requirement of this function itself.
+        unsafe { core::mem::transmute::<*mut U, &mut core::mem::MaybeUninit<U>>(new_ptr) }
     }
 }
 

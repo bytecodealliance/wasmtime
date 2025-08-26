@@ -9,7 +9,7 @@ use core::str;
 use serde_derive::{Deserialize, Serialize};
 
 /// Secondary in-memory results of function compilation.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CompiledFunctionInfo {
     /// Where this function was found in the original wasm file.
     pub start_srcloc: FilePos,

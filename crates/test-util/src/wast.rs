@@ -75,11 +75,6 @@ fn spec_test_config(test: &Path) -> TestConfig {
     let mut ret = TestConfig::default();
     ret.spec_test = Some(true);
     match spec_proposal_from_path(test) {
-        Some("multi-memory") => {
-            ret.multi_memory = Some(true);
-            ret.reference_types = Some(true);
-            ret.simd = Some(true);
-        }
         Some("wide-arithmetic") => {
             ret.wide_arithmetic = Some(true);
         }
@@ -87,24 +82,8 @@ fn spec_test_config(test: &Path) -> TestConfig {
             ret.threads = Some(true);
             ret.reference_types = Some(false);
         }
-        Some("tail-call") => {
-            ret.tail_call = Some(true);
-            ret.reference_types = Some(true);
-        }
         Some("relaxed-simd") => {
             ret.relaxed_simd = Some(true);
-        }
-        Some("memory64") => {
-            ret.memory64 = Some(true);
-            ret.tail_call = Some(true);
-            ret.gc = Some(true);
-            ret.extended_const = Some(true);
-            ret.multi_memory = Some(true);
-            ret.relaxed_simd = Some(true);
-        }
-        Some("extended-const") => {
-            ret.extended_const = Some(true);
-            ret.reference_types = Some(true);
         }
         Some("custom-page-sizes") => {
             ret.custom_page_sizes = Some(true);
@@ -116,21 +95,6 @@ fn spec_test_config(test: &Path) -> TestConfig {
             if test.ends_with("memory_max.wast") || test.ends_with("memory_max_i64.wast") {
                 ret.hogs_memory = Some(true);
             }
-        }
-        Some("exception-handling") => {
-            ret.reference_types = Some(true);
-            ret.exceptions = Some(true);
-            if test.parent().unwrap().ends_with("legacy") {
-                ret.legacy_exceptions = Some(true);
-            }
-        }
-        Some("gc") => {
-            ret.gc = Some(true);
-            ret.tail_call = Some(true);
-        }
-        Some("function-references") => {
-            ret.function_references = Some(true);
-            ret.tail_call = Some(true);
         }
         Some("annotations") => {
             ret.simd = Some(true);
@@ -144,22 +108,8 @@ fn spec_test_config(test: &Path) -> TestConfig {
             ret.memory64 = Some(true);
             ret.tail_call = Some(true);
             ret.extended_const = Some(true);
+            ret.exceptions = Some(true);
 
-            // Wasmtime, at the current date, has incomplete support for the
-            // exceptions proposal. Instead of flagging the entire test suite
-            // as needing this proposal try to filter down per-test to what
-            // exactly needs this. Other tests aren't expected to need
-            // exceptions.
-            if test.ends_with("tag.wast")
-                || test.ends_with("instance.wast")
-                || test.ends_with("throw.wast")
-                || test.ends_with("throw_ref.wast")
-                || test.ends_with("try_table.wast")
-                || test.ends_with("ref_null.wast")
-                || test.ends_with("imports.wast")
-            {
-                ret.exceptions = Some(true);
-            }
             if test.parent().unwrap().ends_with("legacy") {
                 ret.legacy_exceptions = Some(true);
             }
@@ -675,22 +625,6 @@ impl WastTest {
                         return true;
                     }
                 }
-            }
-        }
-
-        // For the exceptions proposal these tests use instructions and such
-        // which aren't implemented yet so these are expected to fail.
-        if self.config.exceptions() {
-            let unsupported = [
-                "ref_null.wast",
-                "throw.wast",
-                "rethrow.wast",
-                "throw_ref.wast",
-                "try_table.wast",
-                "instance.wast",
-            ];
-            if unsupported.iter().any(|part| self.path.ends_with(part)) {
-                return true;
             }
         }
 

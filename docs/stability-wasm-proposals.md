@@ -9,6 +9,12 @@ WebAssembly proposals that want to be [tier 2 or above](./stability-tiers.md)
 are required to check all boxes in this matrix. An explanation of each matrix
 column is below.
 
+The emoji legend is:
+
+* ✅ - fully supported
+* 🚧 - work-in-progress
+* ❌ - not supported yet
+
 ## On-by-default proposals
 
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API |
@@ -20,7 +26,7 @@ column is below.
 | [`bulk-memory`]          | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`reference-types`]      | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`simd`]                 | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`component-model`]      | ❌[^1]  | ✅    | ✅       | ⚠️[^2]  | ✅  | ❌[^5]|
+| [`component-model`]      | ❌[^1]  | ✅    | ✅       | 🚧[^2] | ✅  | 🚧[^5]|
 | [`relaxed-simd`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`multi-memory`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`threads`]              | ✅      | ✅    | ✅[^9]   | ❌[^3] | ✅  | ✅    |
@@ -34,22 +40,26 @@ column is below.
     lines of `wasm-smith` are not implemented for components.
 [^3]: Fuzzing with threads is an open implementation question that is expected
     to get fleshed out as the [`shared-everything-threads`] proposal advances.
-[^5]: Support for the C API for components is desired by many embedders but
-    does not currently have anyone lined up to implement it.
+[^5]: The component model is mostly supported in the C API but [gaps
+    remain][cm-capi-gaps].
 [^9]: There are [known
     issues](https://github.com/bytecodealliance/wasmtime/issues/4245) with
     shared memories and the implementation/API in Wasmtime, for example they
     aren't well integrated with resource-limiting features in `Store`.
     Additionally `shared` memories aren't supported in the pooling allocator.
 
+[cm-capi-gaps]: https://github.com/bytecodealliance/wasmtime/issues?q=is%3Aissue%20state%3Aopen%20label%3Awasm-proposal%3Acomponent-model%20label%3Awasmtime%3Ac-api
+
 ## Off-by-default proposals
 
-|  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API |
-|--------------------------|---------|-------|----------|--------|-----|-------|
-| [`function-references`]  | ✅      | ✅    | ✅       | ⚠️      | ✅  | ❌    |
-| [`gc`] [^6]              | ✅      | ✅    | ⚠️[^7]    | ⚠️[^8]  | ✅  | ❌    |
-| [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ❌    |
+|  Proposal                   | Phase 4 | Tests | Finished | Fuzzed | API | C API |
+|-----------------------------|---------|-------|----------|--------|-----|-------|
+| [`function-references`]     | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌    |
+| [`gc`] [^6]                 | ✅      | ✅    | 🚧[^7]   | 🚧[^8] | ✅  | ❌    |
+| [`wide-arithmetic`]         | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`custom-page-sizes`]       | ❌      | ✅    | ✅       | ✅     | ✅  | ❌    |
+| [`exception-handling`]      | ✅      | ✅    | ✅       | ❌     | ✅  | ❌    |
+| [`stack-switching`] [^10]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
 
 [^6]: There is also a [tracking
     issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
@@ -62,16 +72,17 @@ column is below.
     whole-module fuzz targets like `differential`, but we would like to
     additionally [extend the `table_ops` fuzz target to exercise more of the GC
     proposal](https://github.com/bytecodealliance/wasmtime/issues/10327).
+[^10]: The stack-switching proposal is a work-in-progress being tracked
+    at [#9465](https://github.com/bytecodealliance/wasmtime/issues/9465).
+    Currently the implementation is only for x86\_64 Linux.
 
 ## Unimplemented proposals
 
 | Proposal                      | Tracking Issue |
 |-------------------------------|----------------|
 | [`branch-hinting`]            | [#9463](https://github.com/bytecodealliance/wasmtime/issues/9463) |
-| [`exception-handling`]        | [#3427](https://github.com/bytecodealliance/wasmtime/issues/3427) |
 | [`flexible-vectors`]          | [#9464](https://github.com/bytecodealliance/wasmtime/issues/9464) |
 | [`memory-control`]            | [#9467](https://github.com/bytecodealliance/wasmtime/issues/9467) |
-| [`stack-switching`]           | [#9465](https://github.com/bytecodealliance/wasmtime/issues/9465) |
 | [`shared-everything-threads`] | [#9466](https://github.com/bytecodealliance/wasmtime/issues/9466) |
 
 [`mutable-globals`]: https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md

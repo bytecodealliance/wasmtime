@@ -33,8 +33,8 @@ fn i31ref_to_raw_round_trip() -> Result<()> {
     // back again even though we have not forced the allocation of the `GcStore`
     // yet.
     let anyref = AnyRef::from_i31(&mut store, I31::wrapping_u32(42));
-    let raw = unsafe { anyref.to_raw(&mut store)? };
-    let anyref = unsafe { AnyRef::from_raw(&mut store, raw).expect("should be non-null") };
+    let raw = anyref.to_raw(&mut store)?;
+    let anyref = AnyRef::from_raw(&mut store, raw).expect("should be non-null");
     assert!(anyref.is_i31(&store)?);
     assert_eq!(anyref.as_i31(&store)?.unwrap().get_u32(), 42);
 

@@ -43,11 +43,11 @@ fn main() -> Result<()> {
     let args = Args::parse();
     info!("{args:?}");
 
-    let without_mpk = probe_engine_size(&args, MpkEnabled::Disable)?;
+    let without_mpk = probe_engine_size(&args, Enabled::No)?;
     println!("without MPK:\t{}", without_mpk.to_string());
 
     if PoolingAllocationConfig::are_memory_protection_keys_available() {
-        let with_mpk = probe_engine_size(&args, MpkEnabled::Enable)?;
+        let with_mpk = probe_engine_size(&args, Enabled::Yes)?;
         println!("with MPK:\t{}", with_mpk.to_string());
         println!(
             "\t\t{}x more slots per reserved memory",
@@ -90,7 +90,7 @@ fn parse_byte_size(value: &str) -> Result<u64> {
 
 /// Find the engine with the largest number of memories we can create on this
 /// machine.
-fn probe_engine_size(args: &Args, mpk: MpkEnabled) -> Result<Pool> {
+fn probe_engine_size(args: &Args, mpk: Enabled) -> Result<Pool> {
     let mut search = ExponentialSearch::new();
     let mut mapped_bytes = 0;
     while !search.done() {
@@ -182,7 +182,7 @@ impl ExponentialSearch {
 }
 
 /// Build a pool-allocated engine with `num_memories` slots.
-fn build_engine(args: &Args, num_memories: u32, enable_mpk: MpkEnabled) -> Result<usize> {
+fn build_engine(args: &Args, num_memories: u32, enable_mpk: Enabled) -> Result<usize> {
     // Configure the memory pool.
     let mut pool = PoolingAllocationConfig::default();
     let max_memory_size =

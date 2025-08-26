@@ -51,6 +51,12 @@ endif()
 list(TRANSFORM WASMTIME_SHARED_FILES PREPEND ${WASMTIME_TARGET_DIR}/)
 list(TRANSFORM WASMTIME_STATIC_FILES PREPEND ${WASMTIME_TARGET_DIR}/)
 
+list(APPEND WASMTIME_BUILD_ENV "${CARGO_PROFILE_PANIC}=abort")
+if (APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
+    # On macOS, we need to set the deployment target for the build
+    list(APPEND WASMTIME_BUILD_ENV "MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
+
 include(ExternalProject)
 find_program(WASMTIME_CARGO_BINARY cargo)
 if(NOT WASMTIME_CARGO_BINARY)
@@ -62,7 +68,7 @@ ExternalProject_Add(
     CONFIGURE_COMMAND ""
     INSTALL_COMMAND "${WASMTIME_INSTALL_COMMAND}"
     BUILD_COMMAND
-        ${CMAKE_COMMAND} -E env ${CARGO_PROFILE_PANIC}=abort
+        ${CMAKE_COMMAND} -E env ${WASMTIME_BUILD_ENV}
         ${WASMTIME_CARGO_BINARY} build
           --target ${WASMTIME_TARGET}
           --package wasmtime-c-api
@@ -90,7 +96,8 @@ else()
         target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
             ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
     elseif(WASMTIME_TARGET MATCHES "darwin")
-        target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES})
+        target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
+            "-framework CoreFoundation")
     else()
         target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
             pthread dl m)
@@ -102,7 +109,7 @@ set(WASMTIME_HEADER_DST ${CMAKE_BINARY_DIR}/include)
 include(cmake/install-headers.cmake)
 
 include(GNUInstallDirs)
-install(SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-headers.cmake)
+install(DIRECTORY "${WASMTIME_HEADER_DST}/" TYPE INCLUDE)
 install(FILES ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES}
         DESTINATION ${CMAKE_INSTALL_LIBDIR})
 

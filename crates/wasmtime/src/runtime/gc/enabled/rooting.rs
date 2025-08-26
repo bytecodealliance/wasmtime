@@ -103,10 +103,9 @@
 //! across the block of code that is manipulating raw GC references.
 
 use crate::runtime::vm::{GcRootsList, GcStore, VMGcRef};
-use crate::vm::VMStore;
 use crate::{
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
-    store::{AutoAssertNoGc, StoreId, StoreOpaque},
+    store::{AsStoreOpaque, AutoAssertNoGc, StoreId, StoreOpaque},
 };
 use crate::{ValRaw, prelude::*};
 use core::any;
@@ -168,14 +167,14 @@ mod sealed {
         /// Panics if this root is not associated with the given store.
         fn clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Option<VMGcRef> {
             let gc_ref = self.get_gc_ref(store)?.unchecked_copy();
-            Some(store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref))
+            Some(store.clone_gc_ref(&gc_ref))
         }
 
         /// Same as `clone_gc_ref` but returns an error instead of `None` for
         /// objects that have been unrooted.
         fn try_clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
             let gc_ref = self.try_gc_ref(store)?.unchecked_copy();
-            Ok(store.gc_store_mut()?.clone_gc_ref(&gc_ref))
+            Ok(store.clone_gc_ref(&gc_ref))
         }
     }
 }
@@ -263,14 +262,14 @@ impl GcRootIndex {
     /// particular `T: GcRef`.
     pub(crate) fn try_clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
         let gc_ref = self.try_gc_ref(store)?.unchecked_copy();
-        Ok(store.gc_store_mut()?.clone_gc_ref(&gc_ref))
+        Ok(store.clone_gc_ref(&gc_ref))
     }
 }
 
 /// This is a bit-packed version of
 ///
 /// ```ignore
-/// enema {
+/// enum {
 ///     Lifo(usize),
 ///     Manual(SlabId),
 /// }
@@ -1031,7 +1030,7 @@ impl<T: GcRef> Rooted<T> {
         from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Self,
     ) -> Option<Self> {
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(from_cloned_gc_ref(store, gc_ref))
     }
 }
@@ -1222,36 +1221,11 @@ where
     }
 }
 
-pub(crate) trait AsStoreOpaqueMut {
-    fn as_store_opaque_mut(&mut self) -> &mut StoreOpaque;
-}
-
-impl<T> AsStoreOpaqueMut for T
-where
-    T: DerefMut<Target = StoreOpaque>,
-{
-    fn as_store_opaque_mut(&mut self) -> &mut StoreOpaque {
-        &mut **self
-    }
-}
-
-impl AsStoreOpaqueMut for StoreOpaque {
-    fn as_store_opaque_mut(&mut self) -> &mut StoreOpaque {
-        self
-    }
-}
-
-impl<'a> AsStoreOpaqueMut for &'a mut dyn VMStore {
-    fn as_store_opaque_mut(&mut self) -> &mut StoreOpaque {
-        self.store_opaque_mut()
-    }
-}
-
 /// Internal version of `RootScope` that only wraps a `&mut StoreOpaque` rather
 /// than a whole `impl AsContextMut<Data = T>`.
 pub(crate) struct OpaqueRootScope<S>
 where
-    S: AsStoreOpaqueMut,
+    S: AsStoreOpaque,
 {
     store: S,
     scope: usize,
@@ -1259,18 +1233,16 @@ where
 
 impl<S> Drop for OpaqueRootScope<S>
 where
-    S: AsStoreOpaqueMut,
+    S: AsStoreOpaque,
 {
     fn drop(&mut self) {
-        self.store
-            .as_store_opaque_mut()
-            .exit_gc_lifo_scope(self.scope);
+        self.store.as_store_opaque().exit_gc_lifo_scope(self.scope);
     }
 }
 
 impl<S> Deref for OpaqueRootScope<S>
 where
-    S: AsStoreOpaqueMut,
+    S: AsStoreOpaque,
 {
     type Target = S;
 
@@ -1288,7 +1260,7 @@ where
 // publicly exported.
 impl<S> DerefMut for OpaqueRootScope<S>
 where
-    S: AsStoreOpaqueMut,
+    S: AsStoreOpaque,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.store
@@ -1297,10 +1269,10 @@ where
 
 impl<S> OpaqueRootScope<S>
 where
-    S: AsStoreOpaqueMut,
+    S: AsStoreOpaque,
 {
     pub(crate) fn new(mut store: S) -> Self {
-        let scope = store.as_store_opaque_mut().gc_roots().enter_lifo_scope();
+        let scope = store.as_store_opaque().gc_roots().enter_lifo_scope();
         OpaqueRootScope { store, scope }
     }
 }
@@ -1781,7 +1753,7 @@ where
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
         let gc_ref = self.try_clone_gc_ref(store)?;
-        let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        let raw = store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
         ptr.write(val_raw(raw.get()));
         Ok(())
     }
@@ -1795,7 +1767,7 @@ where
     ) -> Self {
         debug_assert_ne!(raw_gc_ref, 0);
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref).expect("non-null");
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        let gc_ref = store.clone_gc_ref(&gc_ref);
         RootSet::with_lifo_scope(store, |store| {
             let rooted = from_cloned_gc_ref(store, gc_ref);
             rooted
@@ -1829,7 +1801,7 @@ where
         from_cloned_gc_ref: impl Fn(&mut AutoAssertNoGc<'_>, VMGcRef) -> Rooted<T>,
     ) -> Option<Self> {
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        let gc_ref = store.clone_gc_ref(&gc_ref);
         RootSet::with_lifo_scope(store, |store| {
             let rooted = from_cloned_gc_ref(store, gc_ref);
             Some(

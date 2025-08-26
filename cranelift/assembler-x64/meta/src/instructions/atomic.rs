@@ -20,8 +20,8 @@ pub fn list() -> Vec<Inst> {
         inst("xchgl", fmt("RM", [rw(r32), rw(m32)]), rex(0x87).r(), _64b | compat).custom(Display),
         inst("xchgq", fmt("RM", [rw(r64), rw(m64)]), rex(0x87).w().r(), _64b).custom(Display),
 
-        inst("cmpxchg16b", cmpxchg16b_m.clone(), rex([0x0f, 0xc7]).digit(1).w(), _64b | cmpxchg16b),
-        inst("lock_cmpxchg16b", cmpxchg16b_m.clone(), rex([0xf0, 0x0f, 0xc7]).digit(1).w(), _64b | cmpxchg16b).custom(Mnemonic),
+        inst("cmpxchg16b", cmpxchg16b_m.clone(), rex([0x0f, 0xc7]).digit(1).w(), _64b & cmpxchg16b),
+        inst("lock_cmpxchg16b", cmpxchg16b_m.clone(), rex([0xf0, 0x0f, 0xc7]).digit(1).w(), _64b & cmpxchg16b).custom(Mnemonic),
 
         inst("cmpxchgb", fmt("MR", [rw(rm8), r(r8), rw(implicit(al))]), rex([0x0f, 0xb0]).r(), _64b | compat),
         inst("cmpxchgw", fmt("MR", [rw(rm16), r(r16), rw(implicit(ax))]), rex([0x66, 0x0f, 0xb1]).r(), _64b | compat),

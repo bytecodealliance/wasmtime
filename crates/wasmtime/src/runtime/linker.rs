@@ -416,6 +416,10 @@ impl<T> Linker<T> {
     ///
     /// Panics if the given function type is not associated with the same engine
     /// as this linker.
+    ///
+    /// # Safety
+    ///
+    /// See [`Func::new_unchecked`] for more safety information.
     pub unsafe fn func_new_unchecked(
         &mut self,
         module: &str,
@@ -427,7 +431,8 @@ impl<T> Linker<T> {
         T: 'static,
     {
         assert!(ty.comes_from_same_engine(self.engine()));
-        let func = HostFunc::new_unchecked(&self.engine, ty, func);
+        // SAFETY: the contract of this function is the same as `new_unchecked`.
+        let func = unsafe { HostFunc::new_unchecked(&self.engine, ty, func) };
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
         Ok(self)
@@ -1374,13 +1379,20 @@ impl Definition {
         }
     }
 
+    /// Inserts this definition into the `store` provided.
+    ///
+    /// # Safety
+    ///
     /// Note the unsafety here is due to calling `HostFunc::to_func`. The
     /// requirement here is that the `T` that was originally used to create the
     /// `HostFunc` matches the `T` on the store.
     pub(crate) unsafe fn to_extern(&self, store: &mut StoreOpaque) -> Extern {
         match self {
             Definition::Extern(e, _) => e.clone(),
-            Definition::HostFunc(func) => func.to_func(store).into(),
+            // SAFETY: the contract of this function is the same as what's
+            // required of `to_func`, that `T` of the store matches the `T` of
+            // this original definition.
+            Definition::HostFunc(func) => unsafe { func.to_func(store).into() },
         }
     }
 
@@ -1400,7 +1412,7 @@ impl Definition {
                 *size = m.size();
             }
             Definition::Extern(Extern::Table(m), DefinitionType::Table(_, size)) => {
-                *size = m.internal_size(store);
+                *size = m._size(store);
             }
             _ => {}
         }
@@ -1411,9 +1423,7 @@ impl DefinitionType {
     pub(crate) fn from(store: &StoreOpaque, item: &Extern) -> DefinitionType {
         match item {
             Extern::Func(f) => DefinitionType::Func(f.type_index(store)),
-            Extern::Table(t) => {
-                DefinitionType::Table(*t.wasmtime_ty(store), t.internal_size(store))
-            }
+            Extern::Table(t) => DefinitionType::Table(*t.wasmtime_ty(store), t._size(store)),
             Extern::Global(t) => DefinitionType::Global(*t.wasmtime_ty(store)),
             Extern::Memory(t) => {
                 DefinitionType::Memory(*t.wasmtime_ty(store), t.internal_size(store))

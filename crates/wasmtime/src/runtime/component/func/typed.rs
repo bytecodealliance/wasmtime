@@ -687,6 +687,16 @@ pub unsafe trait ComponentType: Send + Sync {
     #[doc(hidden)]
     const IS_RUST_UNIT_TYPE: bool = false;
 
+    /// Whether this type might require a call to the guest's realloc function
+    /// to allocate linear memory when lowering (e.g. a non-empty `string`).
+    ///
+    /// If this is `false`, Wasmtime may optimize lowering by using
+    /// `LowerContext::new_without_realloc` and lowering values outside of any
+    /// fiber.  That will panic if the lowering process ends up needing realloc
+    /// after all, so `true` is a conservative default.
+    #[doc(hidden)]
+    const MAY_REQUIRE_REALLOC: bool = true;
+
     /// Returns the number of core wasm abi values will be used to represent
     /// this type in its lowered form.
     ///
@@ -1015,6 +1025,8 @@ macro_rules! integers {
             type Lower = ValRaw;
 
             const ABI: CanonicalAbiInfo = CanonicalAbiInfo::$abi;
+
+            const MAY_REQUIRE_REALLOC: bool = false;
 
             fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
                 match ty {
@@ -2404,8 +2416,8 @@ pub unsafe fn lower_payload<P, T>(
     let typed = typed_payload(payload);
     lower(typed)?;
 
-    let typed_len = storage_as_slice(typed).len();
-    let payload = storage_as_slice_mut(payload);
+    let typed_len = unsafe { storage_as_slice(typed).len() };
+    let payload = unsafe { storage_as_slice_mut(payload) };
     for slot in payload[typed_len..].iter_mut() {
         slot.write(ValRaw::u64(0));
     }

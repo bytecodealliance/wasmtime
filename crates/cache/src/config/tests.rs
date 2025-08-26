@@ -99,7 +99,7 @@ fn test_all_settings() {
     fn check_conf(conf: &CacheConfig, cd: &PathBuf) {
         assert_eq!(
             conf.directory(),
-            &fs::canonicalize(cd).expect("canonicalize failed")
+            Some(&fs::canonicalize(cd).expect("canonicalize failed"))
         );
         assert_eq!(conf.worker_event_queue_size(), 0x10);
         assert_eq!(conf.baseline_compression_level(), 3);
@@ -536,7 +536,7 @@ fn test_builder_all_settings() {
     fn check_conf(conf: &CacheConfig, cd: &PathBuf) {
         assert_eq!(
             conf.directory(),
-            &fs::canonicalize(cd).expect("canonicalize failed")
+            Some(&fs::canonicalize(cd).expect("canonicalize failed"))
         );
         assert_eq!(conf.worker_event_queue_size(), 0x10);
         assert_eq!(conf.baseline_compression_level(), 3);

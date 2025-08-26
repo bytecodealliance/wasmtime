@@ -138,7 +138,7 @@ impl VMContinuationStack {
         len: usize,
     ) -> io::Result<Self> {
         Ok(Self {
-            top: base.add(len),
+            top: unsafe { base.add(len) },
             len,
             allocator: Allocator::Custom,
         })

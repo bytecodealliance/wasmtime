@@ -272,6 +272,7 @@ impl PartialEq for DiffValue {
             (Self::FuncRef { null: a }, Self::FuncRef { null: b }) => a == b,
             (Self::ExternRef { null: a }, Self::ExternRef { null: b }) => a == b,
             (Self::AnyRef { null: a }, Self::AnyRef { null: b }) => a == b,
+            (Self::ExnRef { null: a }, Self::ExnRef { null: b }) => a == b,
             _ => false,
         }
     }

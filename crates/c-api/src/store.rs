@@ -83,7 +83,7 @@ wasmtime_c_api_macros::declare_own!(wasmtime_store_t);
 pub struct WasmtimeStoreData {
     foreign: crate::ForeignData,
     #[cfg(feature = "wasi")]
-    pub(crate) wasi: Option<wasmtime_wasi::preview1::WasiP1Ctx>,
+    pub(crate) wasi: Option<wasmtime_wasi::p1::WasiP1Ctx>,
 
     /// Temporary storage for usage during a wasm->host call to store values
     /// in a slice we pass to the C API.
@@ -100,20 +100,16 @@ pub struct WasmtimeStoreData {
     pub(crate) resource_table: wasmtime::component::ResourceTable,
 
     #[cfg(all(feature = "component-model", feature = "wasi"))]
-    pub(crate) wasip2: Option<wasmtime_wasi::p2::WasiCtx>,
+    pub(crate) wasip2: Option<wasmtime_wasi::WasiCtx>,
 }
 
 #[cfg(all(feature = "component-model", feature = "wasi"))]
-impl wasmtime_wasi::p2::IoView for WasmtimeStoreData {
-    fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
-        &mut self.resource_table
-    }
-}
-
-#[cfg(all(feature = "component-model", feature = "wasi"))]
-impl wasmtime_wasi::p2::WasiView for WasmtimeStoreData {
-    fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
-        self.wasip2.as_mut().unwrap()
+impl wasmtime_wasi::WasiView for WasmtimeStoreData {
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
+            ctx: self.wasip2.as_mut().unwrap(),
+            table: &mut self.resource_table,
+        }
     }
 }
 

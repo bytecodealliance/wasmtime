@@ -138,6 +138,10 @@ pub struct ComponentDfg {
     /// of this component by idnicating what order operations should be
     /// performed during instantiation.
     pub side_effects: Vec<SideEffect>,
+
+    /// Interned map of id-to-`CanonicalOptions`, or all sets-of-options used by
+    /// this component.
+    pub options: Intern<OptionsId, CanonicalOptions>,
 }
 
 /// Possible side effects that are possible with instantiating this component.
@@ -211,6 +215,7 @@ id! {
     pub struct AdapterId(u32);
     pub struct PostReturnId(u32);
     pub struct AdapterModuleId(u32);
+    pub struct OptionsId(u32);
 }
 
 /// Same as `info::InstantiateModule`
@@ -229,7 +234,7 @@ pub enum Export {
     LiftedFunction {
         ty: TypeFuncIndex,
         func: CoreDef,
-        options: CanonicalOptions,
+        options: OptionsId,
     },
     ModuleStatic {
         ty: ComponentCoreModuleTypeId,
@@ -300,7 +305,7 @@ impl<T> CoreExport<T> {
 pub enum Trampoline {
     LowerImport {
         import: RuntimeImportIndex,
-        options: CanonicalOptions,
+        options: OptionsId,
         lower_ty: TypeFuncIndex,
     },
     Transcoder {
@@ -319,7 +324,7 @@ pub enum Trampoline {
     },
     TaskReturn {
         results: TypeTupleIndex,
-        options: CanonicalOptions,
+        options: OptionsId,
     },
     TaskCancel {
         instance: RuntimeComponentInstanceIndex,
@@ -328,14 +333,10 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
     },
     WaitableSetWait {
-        instance: RuntimeComponentInstanceIndex,
-        async_: bool,
-        memory: MemoryId,
+        options: OptionsId,
     },
     WaitableSetPoll {
-        instance: RuntimeComponentInstanceIndex,
-        async_: bool,
-        memory: MemoryId,
+        options: OptionsId,
     },
     WaitableSetDrop {
         instance: RuntimeComponentInstanceIndex,
@@ -358,11 +359,11 @@ pub enum Trampoline {
     },
     StreamRead {
         ty: TypeStreamTableIndex,
-        options: CanonicalOptions,
+        options: OptionsId,
     },
     StreamWrite {
         ty: TypeStreamTableIndex,
-        options: CanonicalOptions,
+        options: OptionsId,
     },
     StreamCancelRead {
         ty: TypeStreamTableIndex,
@@ -383,11 +384,11 @@ pub enum Trampoline {
     },
     FutureRead {
         ty: TypeFutureTableIndex,
-        options: CanonicalOptions,
+        options: OptionsId,
     },
     FutureWrite {
         ty: TypeFutureTableIndex,
-        options: CanonicalOptions,
+        options: OptionsId,
     },
     FutureCancelRead {
         ty: TypeFutureTableIndex,
@@ -405,11 +406,11 @@ pub enum Trampoline {
     },
     ErrorContextNew {
         ty: TypeComponentLocalErrorContextTableIndex,
-        options: CanonicalOptions,
+        options: OptionsId,
     },
     ErrorContextDebugMessage {
         ty: TypeComponentLocalErrorContextTableIndex,
-        options: CanonicalOptions,
+        options: OptionsId,
     },
     ErrorContextDrop {
         ty: TypeComponentLocalErrorContextTableIndex,
@@ -554,6 +555,8 @@ impl ComponentDfg {
             trampolines: Default::default(),
             trampoline_defs: Default::default(),
             trampoline_map: Default::default(),
+            options: Default::default(),
+            options_map: Default::default(),
         };
 
         // Handle all side effects of this component in the order that they're
@@ -585,6 +588,7 @@ impl ComponentDfg {
                 initializers: linearize.initializers,
                 trampolines: linearize.trampolines,
                 num_lowerings: linearize.num_lowerings,
+                options: linearize.options,
 
                 num_runtime_memories: linearize.runtime_memories.len() as u32,
                 num_runtime_tables: linearize.runtime_tables.len() as u32,
@@ -621,6 +625,7 @@ struct LinearizeDfg<'a> {
     initializers: Vec<GlobalInitializer>,
     trampolines: PrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
     trampoline_defs: PrimaryMap<TrampolineIndex, info::Trampoline>,
+    options: PrimaryMap<OptionsIndex, info::CanonicalOptions>,
     trampoline_map: HashMap<TrampolineIndex, TrampolineIndex>,
     runtime_memories: HashMap<MemoryId, RuntimeMemoryIndex>,
     runtime_tables: HashMap<TableId, RuntimeTableIndex>,
@@ -628,6 +633,7 @@ struct LinearizeDfg<'a> {
     runtime_callbacks: HashMap<CallbackId, RuntimeCallbackIndex>,
     runtime_post_return: HashMap<PostReturnId, RuntimePostReturnIndex>,
     runtime_instances: HashMap<RuntimeInstance, RuntimeInstanceIndex>,
+    options_map: HashMap<OptionsId, OptionsIndex>,
     num_lowerings: u32,
 }
 
@@ -699,7 +705,7 @@ impl LinearizeDfg<'_> {
         let item = match export {
             Export::LiftedFunction { ty, func, options } => {
                 let func = self.core_def(func);
-                let options = self.options(options);
+                let options = self.options(*options);
                 info::Export::LiftedFunction {
                     ty: *ty,
                     func,
@@ -731,7 +737,16 @@ impl LinearizeDfg<'_> {
         Ok(items.push(item))
     }
 
-    fn options(&mut self, options: &CanonicalOptions) -> info::CanonicalOptions {
+    fn options(&mut self, options: OptionsId) -> OptionsIndex {
+        self.intern_no_init(
+            options,
+            |me| &mut me.options_map,
+            |me, options| me.convert_options(options),
+        )
+    }
+
+    fn convert_options(&mut self, options: OptionsId) -> OptionsIndex {
+        let options = &self.dfg.options[options];
         let data_model = match options.data_model {
             CanonicalOptionsDataModel::Gc {} => info::CanonicalOptionsDataModel::Gc {},
             CanonicalOptionsDataModel::LinearMemory { memory, realloc } => {
@@ -743,7 +758,7 @@ impl LinearizeDfg<'_> {
         };
         let callback = options.callback.map(|mem| self.runtime_callback(mem));
         let post_return = options.post_return.map(|mem| self.runtime_post_return(mem));
-        info::CanonicalOptions {
+        let options = info::CanonicalOptions {
             instance: options.instance,
             string_encoding: options.string_encoding,
             callback,
@@ -751,7 +766,8 @@ impl LinearizeDfg<'_> {
             async_: options.async_,
             core_type: options.core_type,
             data_model,
-        }
+        };
+        self.options.push(options)
     }
 
     fn runtime_memory(&mut self, mem: MemoryId) -> RuntimeMemoryIndex {
@@ -818,7 +834,7 @@ impl LinearizeDfg<'_> {
                 });
                 info::Trampoline::LowerImport {
                     index,
-                    options: self.options(options),
+                    options: self.options(*options),
                     lower_ty: *lower_ty,
                 }
             }
@@ -844,7 +860,7 @@ impl LinearizeDfg<'_> {
             },
             Trampoline::TaskReturn { results, options } => info::Trampoline::TaskReturn {
                 results: *results,
-                options: self.options(options),
+                options: self.options(*options),
             },
             Trampoline::TaskCancel { instance } => info::Trampoline::TaskCancel {
                 instance: *instance,
@@ -852,23 +868,11 @@ impl LinearizeDfg<'_> {
             Trampoline::WaitableSetNew { instance } => info::Trampoline::WaitableSetNew {
                 instance: *instance,
             },
-            Trampoline::WaitableSetWait {
-                instance,
-                async_,
-                memory,
-            } => info::Trampoline::WaitableSetWait {
-                instance: *instance,
-                async_: *async_,
-                memory: self.runtime_memory(*memory),
+            Trampoline::WaitableSetWait { options } => info::Trampoline::WaitableSetWait {
+                options: self.options(*options),
             },
-            Trampoline::WaitableSetPoll {
-                instance,
-                async_,
-                memory,
-            } => info::Trampoline::WaitableSetPoll {
-                instance: *instance,
-                async_: *async_,
-                memory: self.runtime_memory(*memory),
+            Trampoline::WaitableSetPoll { options } => info::Trampoline::WaitableSetPoll {
+                options: self.options(*options),
             },
             Trampoline::WaitableSetDrop { instance } => info::Trampoline::WaitableSetDrop {
                 instance: *instance,
@@ -887,11 +891,11 @@ impl LinearizeDfg<'_> {
             Trampoline::StreamNew { ty } => info::Trampoline::StreamNew { ty: *ty },
             Trampoline::StreamRead { ty, options } => info::Trampoline::StreamRead {
                 ty: *ty,
-                options: self.options(options),
+                options: self.options(*options),
             },
             Trampoline::StreamWrite { ty, options } => info::Trampoline::StreamWrite {
                 ty: *ty,
-                options: self.options(options),
+                options: self.options(*options),
             },
             Trampoline::StreamCancelRead { ty, async_ } => info::Trampoline::StreamCancelRead {
                 ty: *ty,
@@ -910,11 +914,11 @@ impl LinearizeDfg<'_> {
             Trampoline::FutureNew { ty } => info::Trampoline::FutureNew { ty: *ty },
             Trampoline::FutureRead { ty, options } => info::Trampoline::FutureRead {
                 ty: *ty,
-                options: self.options(options),
+                options: self.options(*options),
             },
             Trampoline::FutureWrite { ty, options } => info::Trampoline::FutureWrite {
                 ty: *ty,
-                options: self.options(options),
+                options: self.options(*options),
             },
             Trampoline::FutureCancelRead { ty, async_ } => info::Trampoline::FutureCancelRead {
                 ty: *ty,
@@ -932,12 +936,12 @@ impl LinearizeDfg<'_> {
             }
             Trampoline::ErrorContextNew { ty, options } => info::Trampoline::ErrorContextNew {
                 ty: *ty,
-                options: self.options(options),
+                options: self.options(*options),
             },
             Trampoline::ErrorContextDebugMessage { ty, options } => {
                 info::Trampoline::ErrorContextDebugMessage {
                     ty: *ty,
-                    options: self.options(options),
+                    options: self.options(*options),
                 }
             }
             Trampoline::ErrorContextDrop { ty } => info::Trampoline::ErrorContextDrop { ty: *ty },
@@ -1038,12 +1042,41 @@ impl LinearizeDfg<'_> {
         K: Hash + Eq + Copy,
         V: EntityRef,
     {
+        self.intern_(key, map, generate, |me, key, val| {
+            me.initializers.push(init(key, val));
+        })
+    }
+
+    fn intern_no_init<K, V, T>(
+        &mut self,
+        key: K,
+        map: impl Fn(&mut Self) -> &mut HashMap<K, V>,
+        generate: impl FnOnce(&mut Self, K) -> T,
+    ) -> V
+    where
+        K: Hash + Eq + Copy,
+        V: EntityRef,
+    {
+        self.intern_(key, map, generate, |_me, _key, _val| {})
+    }
+
+    fn intern_<K, V, T>(
+        &mut self,
+        key: K,
+        map: impl Fn(&mut Self) -> &mut HashMap<K, V>,
+        generate: impl FnOnce(&mut Self, K) -> T,
+        init: impl FnOnce(&mut Self, V, T),
+    ) -> V
+    where
+        K: Hash + Eq + Copy,
+        V: EntityRef,
+    {
         if let Some(val) = map(self).get(&key) {
             return *val;
         }
         let tmp = generate(self, key);
         let index = V::new(map(self).len());
-        self.initializers.push(init(index, tmp));
+        init(self, index, tmp);
         let prev = map(self).insert(key, index);
         assert!(prev.is_none());
         index

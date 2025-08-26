@@ -11,10 +11,8 @@ mod generated {
             "wasi:tls/types/client-handshake": crate::HostClientHandshake,
             "wasi:tls/types/future-client-streams": crate::HostFutureClientStreams,
         },
-        trappable_imports: true,
-        async: {
-            only_imports: [],
-        }
+        imports: { default: trappable },
+        require_store_data_send: true,
     });
 }
 

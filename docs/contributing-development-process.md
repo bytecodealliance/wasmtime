@@ -10,7 +10,9 @@ reviewing code submissions. We triage new issues at each of our bi-weekly
 Consider opening an issue to talk about it. PRs without corresponding issues
 are appropriate for fairly narrow technical matters, not for fixes to
 user-facing bugs or for feature implementations, especially when those features
-might have multiple implementation strategies that usefully could be discussed.
+might have multiple implementation strategies that usefully could be
+discussed. Changes that will significantly affect stakeholders should first be
+proposed in an [RFC](./contributing-rfc-process.md).
 
 Our issue templates might help you through the process.
 

@@ -52,6 +52,17 @@ impl<_T: 'static> ImportsPre<_T> {
         self.indices.load(&mut store, &instance)
     }
 }
+impl<_T: Send + 'static> ImportsPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<Imports> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
 /// Auto-generated bindings for index of the exports of
 /// `imports`.
 ///
@@ -138,12 +149,26 @@ const _: () = {
             let indices = ImportsIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
+        /// Convenience wrapper around [`ImportsPre::new`] and
+        /// [`ImportsPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<Imports>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            ImportsPre::new(pre)?.instantiate_async(store).await
+        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: a::b::interface_with_live_type::HostWithStore
+                + a::b::interface_with_dead_type::HostWithStore,
             for<'a> D::Data<
                 'a,
             >: a::b::interface_with_live_type::Host
@@ -182,6 +207,11 @@ pub mod a {
                     4 == < LiveType as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {
                 fn f(&mut self) -> LiveType;
             }
@@ -195,7 +225,7 @@ pub mod a {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -265,6 +295,11 @@ pub mod a {
                 assert!(8 == < V as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < V as wasmtime::component::ComponentType >::ALIGN32);
             };
+            pub trait HostWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -272,7 +307,7 @@ pub mod a {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {

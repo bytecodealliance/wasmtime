@@ -93,7 +93,7 @@ impl Vm {
         }
     }
 
-    /// Peforms the initial part of [`Vm::call`] in setting up the `args`
+    /// Performs the initial part of [`Vm::call`] in setting up the `args`
     /// provided in registers according to Pulley's ABI.
     ///
     /// # Return
@@ -103,7 +103,7 @@ impl Vm {
     ///
     /// # Unsafety
     ///
-    /// All the same unsafety as `call` and additiionally, you must
+    /// All the same unsafety as `call` and additionally, you must
     /// invoke `call_run` and then `call_end` after calling `call_start`.
     /// If you don't want to wrangle these invocations, use `call` instead
     /// of `call_{start,run,end}`.

@@ -734,8 +734,8 @@ fn parse_dwarf_info() -> Result<()> {
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wasm)?;
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |t| t)?;
-    let mut store = Store::new(&engine, wasmtime_wasi::p2::WasiCtxBuilder::new().build_p1());
+    wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |t| t)?;
+    let mut store = Store::new(&engine, wasmtime_wasi::WasiCtxBuilder::new().build_p1());
     linker.module(&mut store, "", &module)?;
     let run = linker.get_default(&mut store, "")?;
     let trap = run.call(&mut store, &[], &mut []).unwrap_err();
@@ -1345,7 +1345,7 @@ fn wasm_fault_address_reported_from_mpk_protected_memory() -> Result<()> {
     // this calculation for MPK-protected, causing an abort.
     let mut pool = crate::small_pool_config();
     pool.total_memories(16);
-    pool.memory_protection_keys(MpkEnabled::Auto);
+    pool.memory_protection_keys(Enabled::Auto);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config)?;

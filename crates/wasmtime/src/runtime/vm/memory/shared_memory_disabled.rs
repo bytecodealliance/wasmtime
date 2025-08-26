@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use crate::runtime::vm::memory::LocalMemory;
-use crate::runtime::vm::{VMMemoryDefinition, VMStore, WaitResult};
+use crate::runtime::vm::{VMMemoryDefinition, WaitResult};
 use core::ops::Range;
 use core::ptr::NonNull;
 use core::time::Duration;
@@ -26,11 +26,7 @@ impl SharedMemory {
         match *self {}
     }
 
-    pub fn grow(
-        &self,
-        _delta_pages: u64,
-        _store: Option<&mut dyn VMStore>,
-    ) -> Result<Option<(usize, usize)>> {
+    pub fn grow(&self, _delta_pages: u64) -> Result<Option<(usize, usize)>> {
         match *self {}
     }
 

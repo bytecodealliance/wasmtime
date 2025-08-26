@@ -54,7 +54,7 @@ use wasmtime::{Engine, OptLevel, Strategy};
 use wasmtime_cli_flags::CommonOptions;
 
 fn main() -> Result<()> {
-    if cfg!(miri) {
+    if cfg!(miri) || cfg!(asan) {
         return Ok(());
     }
 

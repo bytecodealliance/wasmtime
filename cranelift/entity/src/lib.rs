@@ -277,9 +277,7 @@ mod list;
 mod map;
 mod primary;
 mod set;
-mod signed;
 mod sparse;
-mod unsigned;
 
 pub use self::boxed_slice::BoxedSlice;
 pub use self::iter::{Iter, IterMut};
@@ -288,9 +286,7 @@ pub use self::list::{EntityList, ListPool};
 pub use self::map::SecondaryMap;
 pub use self::primary::PrimaryMap;
 pub use self::set::{EntitySet, SetIter};
-pub use self::signed::Signed;
 pub use self::sparse::{SparseMap, SparseMapValue, SparseSet};
-pub use self::unsigned::Unsigned;
 
 /// A collection of tests to ensure that use of the different `entity_impl!` forms will generate
 /// `EntityRef` implementations that behave the same way.

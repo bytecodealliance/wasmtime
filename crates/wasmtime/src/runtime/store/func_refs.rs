@@ -5,7 +5,7 @@ use crate::Definition;
 use crate::module::ModuleRegistry;
 use crate::prelude::*;
 use crate::runtime::HostFunc;
-use crate::runtime::vm::{SendSyncPtr, VMArrayCallHostFuncContext, VMFuncRef};
+use crate::runtime::vm::{AlwaysMut, SendSyncPtr, VMArrayCallHostFuncContext, VMFuncRef};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
 
@@ -18,7 +18,7 @@ use core::ptr::NonNull;
 pub struct FuncRefs {
     /// A bump allocation arena where we allocate `VMFuncRef`s such
     /// that they are pinned and owned.
-    bump: SendSyncBump,
+    bump: AlwaysMut<bumpalo::Bump>,
 
     /// Pointers into `self.bump` for entries that need `wasm_call` field filled
     /// in.
@@ -77,23 +77,6 @@ enum Storage {
     },
 }
 
-use send_sync_bump::SendSyncBump;
-mod send_sync_bump {
-    #[derive(Default)]
-    pub struct SendSyncBump(bumpalo::Bump);
-
-    impl SendSyncBump {
-        pub fn alloc<T>(&mut self, val: T) -> &mut T {
-            self.0.alloc(val)
-        }
-    }
-
-    // Safety: We require `&mut self` on the only public method, which means it
-    // is safe to send `&SendSyncBump` references across threads because they
-    // can't actually do anything with it.
-    unsafe impl Sync for SendSyncBump {}
-}
-
 impl FuncRefs {
     /// Push the given `VMFuncRef` into this arena, returning a
     /// pinned pointer to it.
@@ -102,14 +85,17 @@ impl FuncRefs {
     ///
     /// You may only access the return value on the same thread as this
     /// `FuncRefs` and only while the store holding this `FuncRefs` exists.
+    /// Additionally the `vmctx` field of `func_ref` must be valid to read.
     pub unsafe fn push(
         &mut self,
         func_ref: VMFuncRef,
         modules: &ModuleRegistry,
     ) -> NonNull<VMFuncRef> {
         debug_assert!(func_ref.wasm_call.is_none());
-        let func_ref = self.bump.alloc(func_ref);
-        let has_hole = !try_fill(func_ref, modules);
+        let func_ref = self.bump.get_mut().alloc(func_ref);
+        // SAFETY: it's a contract of this function itself that `func_ref` has a
+        // valid vmctx field to read.
+        let has_hole = unsafe { !try_fill(func_ref, modules) };
         let unpatched = SendSyncPtr::from(func_ref);
         if has_hole {
             self.with_holes.push(unpatched);
@@ -157,25 +143,27 @@ impl FuncRefs {
     ///
     /// You may only access the return value on the same thread as this
     /// `FuncRefs` and only while the store holding this `FuncRefs` exists.
-    pub unsafe fn push_arc_host(
+    pub fn push_arc_host(
         &mut self,
         func: Arc<HostFunc>,
         modules: &ModuleRegistry,
     ) -> NonNull<VMFuncRef> {
         debug_assert!(func.func_ref().wasm_call.is_none());
-        let ret = self.push(func.func_ref().clone(), modules);
+        // SAFETY: the vmctx field in the funcref of `HostFunc` is safe to read.
+        let ret = unsafe { self.push(func.func_ref().clone(), modules) };
         self.storage.push(Storage::ArcHost { func });
         ret
     }
 
     /// Same as `push_arc_host`, but for owned host functions.
-    pub unsafe fn push_box_host(
+    pub fn push_box_host(
         &mut self,
         func: Box<HostFunc>,
         modules: &ModuleRegistry,
     ) -> NonNull<VMFuncRef> {
         debug_assert!(func.func_ref().wasm_call.is_none());
-        let ret = self.push(func.func_ref().clone(), modules);
+        // SAFETY: the vmctx field in the funcref of `HostFunc` is safe to read.
+        let ret = unsafe { self.push(func.func_ref().clone(), modules) };
         self.storage.push(Storage::BoxHost { func });
         ret
     }

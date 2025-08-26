@@ -342,6 +342,9 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 }
             }
             collector.reg_clobbers(info.clobbers);
+            if let Some(try_call_info) = &mut info.try_call_info {
+                try_call_info.collect_operands(collector);
+            }
         }
         Inst::CallInd { info } => {
             let CallInfo {
@@ -358,6 +361,9 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 }
             }
             collector.reg_clobbers(info.clobbers);
+            if let Some(try_call_info) = &mut info.try_call_info {
+                try_call_info.collect_operands(collector);
+            }
         }
         Inst::ReturnCall { info } => {
             for CallArgPair { vreg, preg } in &mut info.uses {
@@ -879,13 +885,11 @@ pub fn reg_name(reg: Reg) -> String {
 }
 
 fn pretty_print_try_call(info: &TryCallInfo) -> String {
-    let dests = info
-        .exception_dests
-        .iter()
-        .map(|(tag, label)| format!("{tag:?}: {label:?}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("; j {:?}; catch [{dests}]", info.continuation)
+    format!(
+        "; j {:?}; catch [{}]",
+        info.continuation,
+        info.pretty_print_dests()
+    )
 }
 
 impl Inst {

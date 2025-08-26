@@ -36,9 +36,13 @@ curl https://wasmtime.dev/install.sh -sSf | bash
 ```
 This script installs into `$WASMTIME_HOME` (defaults to `$HOME/.wasmtime`), and executable is placed in `$WASMTIME_HOME/bin`.
 
+After running the install script above, follow the on-screen instructions.
+
 Windows or otherwise interested users can download installers and
 binaries directly from the [GitHub
 Releases](https://github.com/bytecodealliance/wasmtime/releases) page.
+
+For additional installation options, refer to the [online book CLI installation page](https://docs.wasmtime.dev/cli-install.html).
 
 Documentation on Wasmtime's currently supported versions can be found [in the
 online book
@@ -63,7 +67,7 @@ rustup target add wasm32-wasip2
 rustc hello.rs --target wasm32-wasip2
 ```
 
-Once compiled, you can can run your component:
+Once compiled, you can run your component:
 
 ```console
 wasmtime hello.wasm

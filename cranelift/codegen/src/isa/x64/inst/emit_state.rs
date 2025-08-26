@@ -14,8 +14,8 @@ pub struct EmitState {
     ctrl_plane: ControlPlane,
 
     /// A copy of the frame layout, used during the emission of `Inst::ReturnCallKnown` and
-    /// `Inst::ReturnCallUnknown` instructions.
-    frame_layout: FrameLayout,
+    /// `Inst::ReturnCallUnknown` instructions and exception callsites.
+    pub frame_layout: FrameLayout,
 }
 
 impl MachInstEmitState<Inst> for EmitState {

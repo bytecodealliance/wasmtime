@@ -7,10 +7,9 @@ use crate::runtime::component::concurrent::ResourcePair;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::{HostResultHasUnwindSentinel, VMStore, VmSafe};
 use core::cell::Cell;
-use core::convert::Infallible;
 use core::ptr::NonNull;
 use core::slice;
-use wasmtime_environ::component::TypeResourceTableIndex;
+use wasmtime_environ::component::*;
 
 const UTF16_TAG: usize = 1 << 31;
 
@@ -100,11 +99,11 @@ mod trampolines {
                     {
                         $(shims!(@validate_param $pname $param);)*
 
-                        let ret = crate::runtime::vm::traphandlers::catch_unwind_and_record_trap(|| {
-                            ComponentInstance::from_vmctx(vmctx, |store, instance| {
+                        let ret = unsafe {
+                            ComponentInstance::enter_host_from_wasm(vmctx, |store, instance| {
                                 shims!(@invoke $name(store, instance,) $($pname)*)
                             })
-                        });
+                        };
                         shims!(@convert_ret ret $($pname: $param)*)
                     }
                     $(
@@ -123,7 +122,9 @@ mod trampolines {
         (@convert_ret $ret:ident) => ($ret);
         (@convert_ret $ret:ident $retptr:ident: ptr_size) => ({
             let (a, b) = $ret;
-            *$retptr = b;
+            unsafe {
+                *$retptr = b;
+            }
             a
         });
         (@convert_ret $ret:ident $name:ident: $ty:ident $($rest:tt)*) => (
@@ -184,8 +185,8 @@ unsafe fn utf8_to_utf8(
     len: usize,
     dst: *mut u8,
 ) -> Result<()> {
-    let src = slice::from_raw_parts(src, len);
-    let dst = slice::from_raw_parts_mut(dst, len);
+    let src = unsafe { slice::from_raw_parts(src, len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
     assert_no_overlap(src, dst);
     log::trace!("utf8-to-utf8 {len}");
     let src = core::str::from_utf8(src).map_err(|_| anyhow!("invalid utf8 encoding"))?;
@@ -205,8 +206,8 @@ unsafe fn utf16_to_utf16(
     len: usize,
     dst: *mut u16,
 ) -> Result<()> {
-    let src = slice::from_raw_parts(src, len);
-    let dst = slice::from_raw_parts_mut(dst, len);
+    let src = unsafe { slice::from_raw_parts(src, len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
     assert_no_overlap(src, dst);
     log::trace!("utf16-to-utf16 {len}");
     run_utf16_to_utf16(src, dst)?;
@@ -241,8 +242,8 @@ unsafe fn latin1_to_latin1(
     len: usize,
     dst: *mut u8,
 ) -> Result<()> {
-    let src = slice::from_raw_parts(src, len);
-    let dst = slice::from_raw_parts_mut(dst, len);
+    let src = unsafe { slice::from_raw_parts(src, len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
     assert_no_overlap(src, dst);
     log::trace!("latin1-to-latin1 {len}");
     dst.copy_from_slice(src);
@@ -260,8 +261,8 @@ unsafe fn latin1_to_utf16(
     len: usize,
     dst: *mut u16,
 ) -> Result<()> {
-    let src = slice::from_raw_parts(src, len);
-    let dst = slice::from_raw_parts_mut(dst, len);
+    let src = unsafe { slice::from_raw_parts(src, len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
     assert_no_overlap(src, dst);
     for (src, dst) in src.iter().zip(dst) {
         *dst = u16::from(*src).to_le();
@@ -291,8 +292,8 @@ unsafe fn utf8_to_utf16(
     len: usize,
     dst: *mut u16,
 ) -> Result<CopySizeReturn> {
-    let src = slice::from_raw_parts(src, len);
-    let dst = slice::from_raw_parts_mut(dst, len);
+    let src = unsafe { slice::from_raw_parts(src, len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
     assert_no_overlap(src, dst);
 
     let result = run_utf8_to_utf16(src, dst)?;
@@ -337,8 +338,8 @@ unsafe fn utf16_to_utf8(
     dst: *mut u8,
     dst_len: usize,
 ) -> Result<SizePair> {
-    let src = slice::from_raw_parts(src, src_len);
-    let mut dst = slice::from_raw_parts_mut(dst, dst_len);
+    let src = unsafe { slice::from_raw_parts(src, src_len) };
+    let mut dst = unsafe { slice::from_raw_parts_mut(dst, dst_len) };
     assert_no_overlap(src, dst);
 
     // This iterator will convert to native endianness and additionally count
@@ -392,8 +393,8 @@ unsafe fn latin1_to_utf8(
     dst: *mut u8,
     dst_len: usize,
 ) -> Result<SizePair> {
-    let src = slice::from_raw_parts(src, src_len);
-    let dst = slice::from_raw_parts_mut(dst, dst_len);
+    let src = unsafe { slice::from_raw_parts(src, src_len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, dst_len) };
     assert_no_overlap(src, dst);
     let (read, written) = encoding_rs::mem::convert_latin1_to_utf8_partial(src, dst);
     log::trace!("latin1-to-utf8 {src_len}/{dst_len} => ({read}, {written})");
@@ -417,12 +418,12 @@ unsafe fn utf16_to_compact_probably_utf16(
     len: usize,
     dst: *mut u16,
 ) -> Result<CopySizeReturn> {
-    let src = slice::from_raw_parts(src, len);
-    let dst = slice::from_raw_parts_mut(dst, len);
+    let src = unsafe { slice::from_raw_parts(src, len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
     assert_no_overlap(src, dst);
     let all_latin1 = run_utf16_to_utf16(src, dst)?;
     if all_latin1 {
-        let (left, dst, right) = dst.align_to_mut::<u8>();
+        let (left, dst, right) = unsafe { dst.align_to_mut::<u8>() };
         assert!(left.is_empty());
         assert!(right.is_empty());
         for i in 0..len {
@@ -453,8 +454,8 @@ unsafe fn utf8_to_latin1(
     len: usize,
     dst: *mut u8,
 ) -> Result<SizePair> {
-    let src = slice::from_raw_parts(src, len);
-    let dst = slice::from_raw_parts_mut(dst, len);
+    let src = unsafe { slice::from_raw_parts(src, len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
     assert_no_overlap(src, dst);
     let read = encoding_rs::mem::utf8_latin1_up_to(src);
     let written = encoding_rs::mem::convert_utf8_to_latin1_lossy(&src[..read], dst);
@@ -475,8 +476,8 @@ unsafe fn utf16_to_latin1(
     len: usize,
     dst: *mut u8,
 ) -> Result<SizePair> {
-    let src = slice::from_raw_parts(src, len);
-    let dst = slice::from_raw_parts_mut(dst, len);
+    let src = unsafe { slice::from_raw_parts(src, len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
     assert_no_overlap(src, dst);
 
     let mut size = 0;
@@ -519,8 +520,8 @@ unsafe fn utf8_to_compact_utf16(
     dst_len: usize,
     latin1_bytes_so_far: usize,
 ) -> Result<CopySizeReturn> {
-    let src = slice::from_raw_parts(src, src_len);
-    let dst = slice::from_raw_parts_mut(dst, dst_len);
+    let src = unsafe { slice::from_raw_parts(src, src_len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, dst_len) };
     assert_no_overlap(src, dst);
 
     let dst = inflate_latin1_bytes(dst, latin1_bytes_so_far);
@@ -539,8 +540,8 @@ unsafe fn utf16_to_compact_utf16(
     dst_len: usize,
     latin1_bytes_so_far: usize,
 ) -> Result<CopySizeReturn> {
-    let src = slice::from_raw_parts(src, src_len);
-    let dst = slice::from_raw_parts_mut(dst, dst_len);
+    let src = unsafe { slice::from_raw_parts(src, src_len) };
+    let dst = unsafe { slice::from_raw_parts_mut(dst, dst_len) };
     assert_no_overlap(src, dst);
 
     let dst = inflate_latin1_bytes(dst, latin1_bytes_so_far);
@@ -652,7 +653,7 @@ fn resource_exit_call(store: &mut dyn VMStore, instance: Instance) -> Result<()>
     instance.resource_exit_call(store)
 }
 
-fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u8) -> Result<Infallible> {
+fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u8) -> Result<()> {
     Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
 }
 
@@ -664,7 +665,7 @@ fn backpressure_set(
     enabled: u32,
 ) -> Result<()> {
     instance.concurrent_state_mut(store).backpressure_set(
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
         enabled,
     )
 }
@@ -674,18 +675,15 @@ unsafe fn task_return(
     store: &mut dyn VMStore,
     instance: Instance,
     ty: u32,
-    memory: *mut u8,
-    string_encoding: u8,
+    options: u32,
     storage: *mut u8,
     storage_len: usize,
 ) -> Result<()> {
     instance.task_return(
         store,
-        wasmtime_environ::component::TypeTupleIndex::from_u32(ty),
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        string_encoding,
-        storage.cast::<crate::ValRaw>(),
-        storage_len,
+        TypeTupleIndex::from_u32(ty),
+        OptionsIndex::from_u32(options),
+        unsafe { core::slice::from_raw_parts(storage.cast(), storage_len) },
     )
 }
 
@@ -693,7 +691,7 @@ unsafe fn task_return(
 fn task_cancel(store: &mut dyn VMStore, instance: Instance, caller_instance: u32) -> Result<()> {
     instance.task_cancel(
         store,
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
     )
 }
 
@@ -703,49 +701,32 @@ fn waitable_set_new(
     instance: Instance,
     caller_instance: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).waitable_set_new(
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
-    )
+    instance
+        .id()
+        .get_mut(store)
+        .waitable_set_new(RuntimeComponentInstanceIndex::from_u32(caller_instance))
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn waitable_set_wait(
+fn waitable_set_wait(
     store: &mut dyn VMStore,
     instance: Instance,
-    caller_instance: u32,
-    async_: u8,
-    memory: *mut u8,
+    options: u32,
     set: u32,
     payload: u32,
 ) -> Result<u32> {
-    instance.waitable_set_wait(
-        store,
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        async_ != 0,
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        set,
-        payload,
-    )
+    instance.waitable_set_wait(store, OptionsIndex::from_u32(options), set, payload)
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn waitable_set_poll(
+fn waitable_set_poll(
     store: &mut dyn VMStore,
     instance: Instance,
-    caller_instance: u32,
-    async_: u8,
-    memory: *mut u8,
+    options: u32,
     set: u32,
     payload: u32,
 ) -> Result<u32> {
-    instance.waitable_set_poll(
-        store,
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        async_ != 0,
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        set,
-        payload,
-    )
+    instance.waitable_set_poll(store, OptionsIndex::from_u32(options), set, payload)
 }
 
 #[cfg(feature = "component-model-async")]
@@ -755,8 +736,8 @@ fn waitable_set_drop(
     caller_instance: u32,
     set: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).waitable_set_drop(
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+    instance.id().get_mut(store).waitable_set_drop(
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
         set,
     )
 }
@@ -769,8 +750,8 @@ fn waitable_join(
     waitable: u32,
     set: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).waitable_join(
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+    instance.id().get_mut(store).waitable_join(
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
         waitable,
         set,
     )
@@ -788,8 +769,8 @@ fn subtask_drop(
     caller_instance: u32,
     task_id: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).subtask_drop(
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+    instance.id().get_mut(store).subtask_drop(
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
         task_id,
     )
 }
@@ -804,7 +785,7 @@ fn subtask_cancel(
 ) -> Result<u32> {
     instance.subtask_cancel(
         store,
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
         async_ != 0,
         task_id,
     )
@@ -825,19 +806,21 @@ unsafe fn prepare_call(
     storage: *mut u8,
     storage_len: usize,
 ) -> Result<()> {
-    store.component_async_store().prepare_call(
-        instance,
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        start.cast::<crate::vm::VMFuncRef>(),
-        return_.cast::<crate::vm::VMFuncRef>(),
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(callee_instance),
-        wasmtime_environ::component::TypeTupleIndex::from_u32(task_return_type),
-        u8::try_from(string_encoding).unwrap(),
-        result_count_or_max_if_async,
-        storage.cast::<crate::ValRaw>(),
-        storage_len,
-    )
+    unsafe {
+        store.component_async_store().prepare_call(
+            instance,
+            memory.cast::<crate::vm::VMMemoryDefinition>(),
+            start.cast::<crate::vm::VMFuncRef>(),
+            return_.cast::<crate::vm::VMFuncRef>(),
+            RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            RuntimeComponentInstanceIndex::from_u32(callee_instance),
+            TypeTupleIndex::from_u32(task_return_type),
+            u8::try_from(string_encoding).unwrap(),
+            result_count_or_max_if_async,
+            storage.cast::<crate::ValRaw>(),
+            storage_len,
+        )
+    }
 }
 
 #[cfg(feature = "component-model-async")]
@@ -845,19 +828,21 @@ unsafe fn sync_start(
     store: &mut dyn VMStore,
     instance: Instance,
     callback: *mut u8,
-    callee: *mut u8,
-    param_count: u32,
     storage: *mut u8,
     storage_len: usize,
+    callee: *mut u8,
+    param_count: u32,
 ) -> Result<()> {
-    store.component_async_store().sync_start(
-        instance,
-        callback.cast::<crate::vm::VMFuncRef>(),
-        callee.cast::<crate::vm::VMFuncRef>(),
-        param_count,
-        storage.cast::<std::mem::MaybeUninit<crate::ValRaw>>(),
-        storage_len,
-    )
+    unsafe {
+        store.component_async_store().sync_start(
+            instance,
+            callback.cast::<crate::vm::VMFuncRef>(),
+            callee.cast::<crate::vm::VMFuncRef>(),
+            param_count,
+            storage.cast::<std::mem::MaybeUninit<crate::ValRaw>>(),
+            storage_len,
+        )
+    }
 }
 
 #[cfg(feature = "component-model-async")]
@@ -871,15 +856,17 @@ unsafe fn async_start(
     result_count: u32,
     flags: u32,
 ) -> Result<u32> {
-    store.component_async_store().async_start(
-        instance,
-        callback.cast::<crate::vm::VMFuncRef>(),
-        post_return.cast::<crate::vm::VMFuncRef>(),
-        callee.cast::<crate::vm::VMFuncRef>(),
-        param_count,
-        result_count,
-        flags,
-    )
+    unsafe {
+        store.component_async_store().async_start(
+            instance,
+            callback.cast::<crate::vm::VMFuncRef>(),
+            post_return.cast::<crate::vm::VMFuncRef>(),
+            callee.cast::<crate::vm::VMFuncRef>(),
+            param_count,
+            result_count,
+            flags,
+        )
+    }
 }
 
 #[cfg(feature = "component-model-async")]
@@ -890,10 +877,10 @@ fn future_transfer(
     src_table: u32,
     dst_table: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).future_transfer(
+    instance.id().get_mut(store).future_transfer(
         src_idx,
-        wasmtime_environ::component::TypeFutureTableIndex::from_u32(src_table),
-        wasmtime_environ::component::TypeFutureTableIndex::from_u32(dst_table),
+        TypeFutureTableIndex::from_u32(src_table),
+        TypeFutureTableIndex::from_u32(dst_table),
     )
 }
 
@@ -905,10 +892,10 @@ fn stream_transfer(
     src_table: u32,
     dst_table: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).stream_transfer(
+    instance.id().get_mut(store).stream_transfer(
         src_idx,
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(src_table),
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(dst_table),
+        TypeStreamTableIndex::from_u32(src_table),
+        TypeStreamTableIndex::from_u32(dst_table),
     )
 }
 
@@ -920,12 +907,11 @@ fn error_context_transfer(
     src_table: u32,
     dst_table: u32,
 ) -> Result<u32> {
-    let src_table =
-        wasmtime_environ::component::TypeComponentLocalErrorContextTableIndex::from_u32(src_table);
-    let dst_table =
-        wasmtime_environ::component::TypeComponentLocalErrorContextTableIndex::from_u32(dst_table);
+    let src_table = TypeComponentLocalErrorContextTableIndex::from_u32(src_table);
+    let dst_table = TypeComponentLocalErrorContextTableIndex::from_u32(dst_table);
     instance
-        .concurrent_state_mut(store)
+        .id()
+        .get_mut(store)
         .error_context_transfer(src_idx, src_table, dst_table)
 }
 
@@ -942,54 +928,43 @@ unsafe impl HostResultHasUnwindSentinel for ResourcePair {
 
 #[cfg(feature = "component-model-async")]
 fn future_new(store: &mut dyn VMStore, instance: Instance, ty: u32) -> Result<ResourcePair> {
-    instance.concurrent_state_mut(store).future_new(
-        wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
-    )
+    instance
+        .id()
+        .get_mut(store)
+        .future_new(TypeFutureTableIndex::from_u32(ty))
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn future_write(
+fn future_write(
     store: &mut dyn VMStore,
     instance: Instance,
-    memory: *mut u8,
-    realloc: *mut u8,
-    string_encoding: u8,
-    async_: u8,
     ty: u32,
+    options: u32,
     future: u32,
     address: u32,
 ) -> Result<u32> {
     store.component_async_store().future_write(
         instance,
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        realloc.cast::<crate::vm::VMFuncRef>(),
-        string_encoding,
-        async_ != 0,
-        wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+        TypeFutureTableIndex::from_u32(ty),
+        OptionsIndex::from_u32(options),
         future,
         address,
     )
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn future_read(
+fn future_read(
     store: &mut dyn VMStore,
     instance: Instance,
-    memory: *mut u8,
-    realloc: *mut u8,
-    string_encoding: u8,
-    async_: u8,
     ty: u32,
+    options: u32,
     future: u32,
     address: u32,
 ) -> Result<u32> {
     store.component_async_store().future_read(
         instance,
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        realloc.cast::<crate::vm::VMFuncRef>(),
-        string_encoding,
-        async_ != 0,
-        wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+        TypeFutureTableIndex::from_u32(ty),
+        OptionsIndex::from_u32(options),
         future,
         address,
     )
@@ -1003,8 +978,8 @@ fn future_cancel_write(
     async_: u8,
     writer: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).future_cancel_write(
-        wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+    instance.id().get_mut(store).future_cancel_write(
+        TypeFutureTableIndex::from_u32(ty),
         async_ != 0,
         writer,
     )
@@ -1018,8 +993,8 @@ fn future_cancel_read(
     async_: u8,
     reader: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).future_cancel_read(
-        wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+    instance.id().get_mut(store).future_cancel_read(
+        TypeFutureTableIndex::from_u32(ty),
         async_ != 0,
         reader,
     )
@@ -1032,8 +1007,9 @@ fn future_drop_writable(
     ty: u32,
     writer: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).future_drop_writable(
-        wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+    store.component_async_store().future_drop_writable(
+        instance,
+        TypeFutureTableIndex::from_u32(ty),
         writer,
     )
 }
@@ -1045,40 +1021,31 @@ fn future_drop_readable(
     ty: u32,
     reader: u32,
 ) -> Result<()> {
-    instance.future_drop_readable(
-        store,
-        wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
-        reader,
-    )
+    instance.future_drop_readable(store, TypeFutureTableIndex::from_u32(ty), reader)
 }
 
 #[cfg(feature = "component-model-async")]
 fn stream_new(store: &mut dyn VMStore, instance: Instance, ty: u32) -> Result<ResourcePair> {
-    instance.concurrent_state_mut(store).stream_new(
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
-    )
+    instance
+        .id()
+        .get_mut(store)
+        .stream_new(TypeStreamTableIndex::from_u32(ty))
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn stream_write(
+fn stream_write(
     store: &mut dyn VMStore,
     instance: Instance,
-    memory: *mut u8,
-    realloc: *mut u8,
-    string_encoding: u8,
-    async_: u8,
     ty: u32,
+    options: u32,
     stream: u32,
     address: u32,
     count: u32,
 ) -> Result<u32> {
     store.component_async_store().stream_write(
         instance,
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        realloc.cast::<crate::vm::VMFuncRef>(),
-        string_encoding,
-        async_ != 0,
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+        TypeStreamTableIndex::from_u32(ty),
+        OptionsIndex::from_u32(options),
         stream,
         address,
         count,
@@ -1086,25 +1053,19 @@ unsafe fn stream_write(
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn stream_read(
+fn stream_read(
     store: &mut dyn VMStore,
     instance: Instance,
-    memory: *mut u8,
-    realloc: *mut u8,
-    string_encoding: u8,
-    async_: u8,
     ty: u32,
+    options: u32,
     stream: u32,
     address: u32,
     count: u32,
 ) -> Result<u32> {
     store.component_async_store().stream_read(
         instance,
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        realloc.cast::<crate::vm::VMFuncRef>(),
-        string_encoding,
-        async_ != 0,
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+        TypeStreamTableIndex::from_u32(ty),
+        OptionsIndex::from_u32(options),
         stream,
         address,
         count,
@@ -1119,8 +1080,8 @@ fn stream_cancel_write(
     async_: u8,
     writer: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).stream_cancel_write(
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+    instance.id().get_mut(store).stream_cancel_write(
+        TypeStreamTableIndex::from_u32(ty),
         async_ != 0,
         writer,
     )
@@ -1134,8 +1095,8 @@ fn stream_cancel_read(
     async_: u8,
     reader: u32,
 ) -> Result<u32> {
-    instance.concurrent_state_mut(store).stream_cancel_read(
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+    instance.id().get_mut(store).stream_cancel_read(
+        TypeStreamTableIndex::from_u32(ty),
         async_ != 0,
         reader,
     )
@@ -1148,8 +1109,9 @@ fn stream_drop_writable(
     ty: u32,
     writer: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).stream_drop_writable(
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+    store.component_async_store().stream_drop_writable(
+        instance,
+        TypeStreamTableIndex::from_u32(ty),
         writer,
     )
 }
@@ -1161,21 +1123,15 @@ fn stream_drop_readable(
     ty: u32,
     reader: u32,
 ) -> Result<()> {
-    instance.stream_drop_readable(
-        store,
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
-        reader,
-    )
+    instance.stream_drop_readable(store, TypeStreamTableIndex::from_u32(ty), reader)
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn flat_stream_write(
+fn flat_stream_write(
     store: &mut dyn VMStore,
     instance: Instance,
-    memory: *mut u8,
-    realloc: *mut u8,
-    async_: u8,
     ty: u32,
+    options: u32,
     payload_size: u32,
     payload_align: u32,
     stream: u32,
@@ -1184,10 +1140,8 @@ unsafe fn flat_stream_write(
 ) -> Result<u32> {
     store.component_async_store().flat_stream_write(
         instance,
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        realloc.cast::<crate::vm::VMFuncRef>(),
-        async_ != 0,
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+        TypeStreamTableIndex::from_u32(ty),
+        OptionsIndex::from_u32(options),
         payload_size,
         payload_align,
         stream,
@@ -1197,13 +1151,11 @@ unsafe fn flat_stream_write(
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn flat_stream_read(
+fn flat_stream_read(
     store: &mut dyn VMStore,
     instance: Instance,
-    memory: *mut u8,
-    realloc: *mut u8,
-    async_: u8,
     ty: u32,
+    options: u32,
     payload_size: u32,
     payload_align: u32,
     stream: u32,
@@ -1212,10 +1164,8 @@ unsafe fn flat_stream_read(
 ) -> Result<u32> {
     store.component_async_store().flat_stream_read(
         instance,
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        realloc.cast::<crate::vm::VMFuncRef>(),
-        async_ != 0,
-        wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+        TypeStreamTableIndex::from_u32(ty),
+        OptionsIndex::from_u32(options),
         payload_size,
         payload_align,
         stream,
@@ -1225,44 +1175,36 @@ unsafe fn flat_stream_read(
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn error_context_new(
+fn error_context_new(
     store: &mut dyn VMStore,
     instance: Instance,
-    memory: *mut u8,
-    realloc: *mut u8,
-    string_encoding: u8,
     ty: u32,
+    options: u32,
     debug_msg_address: u32,
     debug_msg_len: u32,
 ) -> Result<u32> {
     instance.error_context_new(
         store.store_opaque_mut(),
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        realloc.cast::<crate::vm::VMFuncRef>(),
-        string_encoding,
-        wasmtime_environ::component::TypeComponentLocalErrorContextTableIndex::from_u32(ty),
+        TypeComponentLocalErrorContextTableIndex::from_u32(ty),
+        OptionsIndex::from_u32(options),
         debug_msg_address,
         debug_msg_len,
     )
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn error_context_debug_message(
+fn error_context_debug_message(
     store: &mut dyn VMStore,
     instance: Instance,
-    memory: *mut u8,
-    realloc: *mut u8,
-    string_encoding: u8,
     ty: u32,
+    options: u32,
     err_ctx_handle: u32,
     debug_msg_address: u32,
 ) -> Result<()> {
     store.component_async_store().error_context_debug_message(
         instance,
-        memory.cast::<crate::vm::VMMemoryDefinition>(),
-        realloc.cast::<crate::vm::VMFuncRef>(),
-        string_encoding,
-        wasmtime_environ::component::TypeComponentLocalErrorContextTableIndex::from_u32(ty),
+        TypeComponentLocalErrorContextTableIndex::from_u32(ty),
+        OptionsIndex::from_u32(options),
         err_ctx_handle,
         debug_msg_address,
     )
@@ -1275,8 +1217,8 @@ fn error_context_drop(
     ty: u32,
     err_ctx_handle: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).error_context_drop(
-        wasmtime_environ::component::TypeComponentLocalErrorContextTableIndex::from_u32(ty),
+    instance.id().get_mut(store).error_context_drop(
+        TypeComponentLocalErrorContextTableIndex::from_u32(ty),
         err_ctx_handle,
     )
 }

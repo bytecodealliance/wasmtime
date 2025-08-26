@@ -1,4 +1,4 @@
-use crate::runtime::vm::{self, VMStore};
+use crate::runtime::vm::{self, GcStore, VMStore};
 use crate::store::StoreOpaque;
 use crate::{StoreContext, StoreContextMut};
 use core::num::NonZeroU64;
@@ -251,6 +251,16 @@ impl StoreInstanceId {
     pub(crate) fn get_mut<'a>(&self, store: &'a mut StoreOpaque) -> Pin<&'a mut vm::Instance> {
         self.assert_belongs_to(store.id());
         store.instance_mut(self.instance)
+    }
+
+    /// Same as [`Self::get_mut`], but also returns the `GcStore`.
+    #[inline]
+    pub(crate) fn get_with_gc_store_mut<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> (Option<&'a mut GcStore>, Pin<&'a mut vm::Instance>) {
+        self.assert_belongs_to(store.id());
+        store.optional_gc_store_and_instance_mut(self.instance)
     }
 }
 

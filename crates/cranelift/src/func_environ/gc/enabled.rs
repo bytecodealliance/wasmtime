@@ -4,17 +4,20 @@ use crate::func_environ::{Extension, FuncEnvironment};
 use crate::translate::{Heap, HeapData, StructFieldsVec, TargetEnvironment};
 use crate::{Reachability, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::immediates::Offset32;
+use cranelift_codegen::ir::{
+    Block, BlockArg, ExceptionTableData, ExceptionTableItem, ExceptionTag,
+};
 use cranelift_codegen::{
     cursor::FuncCursor,
     ir::{self, InstBuilder, condcodes::IntCC},
 };
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use wasmtime_environ::{
     Collector, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT, ModuleInternedTypeIndex,
-    PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmStorageType, WasmValType, wasm_unsupported,
+    PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType, WasmHeapTopType, WasmHeapType,
+    WasmRefType, WasmResult, WasmStorageType, WasmValType, wasm_unsupported,
 };
 
 #[cfg(feature = "gc-drc")]
@@ -58,7 +61,10 @@ pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcC
     }
 }
 
-#[cfg_attr(not(feature = "gc-drc"), allow(dead_code))]
+#[cfg_attr(
+    not(feature = "gc-drc"),
+    expect(dead_code, reason = "easier to define")
+)]
 fn unbarriered_load_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
@@ -73,7 +79,10 @@ fn unbarriered_load_gc_ref(
     Ok(gc_ref)
 }
 
-#[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+#[cfg_attr(
+    not(any(feature = "gc-drc", feature = "gc-null")),
+    expect(dead_code, reason = "easier to define")
+)]
 fn unbarriered_store_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
@@ -158,7 +167,7 @@ fn read_field_at_addr(
                 WasmHeapTopType::Cont => {
                     // TODO(#10248) GC integration for stack switching
                     return Err(wasmtime_environ::WasmError::Unsupported(
-                        "Stack switching feature not compatbile with GC, yet".to_string(),
+                        "Stack switching feature not compatible with GC, yet".to_string(),
                     ));
                 }
             },
@@ -326,7 +335,7 @@ pub fn translate_struct_get(
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
 
-    let struct_layout = func_env.struct_layout(interned_type_index);
+    let struct_layout = func_env.struct_or_exn_layout(interned_type_index);
     let struct_size = struct_layout.size;
 
     let field_offset = struct_layout.fields[field_index].offset;
@@ -373,7 +382,7 @@ pub fn translate_struct_set(
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
 
-    let struct_layout = func_env.struct_layout(interned_type_index);
+    let struct_layout = func_env.struct_or_exn_layout(interned_type_index);
     let struct_size = struct_layout.size;
 
     let field_offset = struct_layout.fields[field_index].offset;
@@ -400,6 +409,119 @@ pub fn translate_struct_set(
     )?;
 
     log::trace!("translate_struct_set: finished");
+    Ok(())
+}
+
+pub fn translate_exn_unbox(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    tag_index: TagIndex,
+    exn_ref: ir::Value,
+) -> WasmResult<SmallVec<[ir::Value; 4]>> {
+    log::trace!("translate_exn_unbox({tag_index:?}, {exn_ref:?})");
+
+    // We know that the `exn_ref` is not null because we reach this
+    // operation only in catch blocks, and throws are initiated from
+    // runtime code that checks for nulls first.
+
+    // Get the GcExceptionLayout associated with this tag's
+    // function type, and generate loads for each field.
+    let exception_ty_idx = func_env
+        .exception_type_from_tag(tag_index)
+        .unwrap_module_type_index();
+    let exception_ty = func_env.types.unwrap_exn(exception_ty_idx)?;
+    let exn_layout = func_env.struct_or_exn_layout(exception_ty_idx);
+    let exn_size = exn_layout.size;
+
+    // Gather accesses first because these require a borrow on
+    // `func_env`, which we later mutate below via
+    // `prepare_gc_ref_access()`.
+    let mut accesses: SmallVec<[_; 4]> = smallvec![];
+    for (field_ty, field_layout) in exception_ty.fields.iter().zip(exn_layout.fields.iter()) {
+        accesses.push((field_layout.offset, field_ty.element_type));
+    }
+
+    let mut result = smallvec![];
+    for (field_offset, field_ty) in accesses {
+        let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty);
+        assert!(field_offset + field_size <= exn_size);
+        let field_addr = func_env.prepare_gc_ref_access(
+            builder,
+            exn_ref,
+            BoundsCheck::StaticObjectField {
+                offset: field_offset,
+                access_size: u8::try_from(field_size).unwrap(),
+                object_size: exn_size,
+            },
+        );
+
+        let value = read_field_at_addr(func_env, builder, field_ty, field_addr, None)?;
+        result.push(value);
+    }
+
+    log::trace!("translate_exn_unbox(..) -> {result:?}");
+    Ok(result)
+}
+
+pub fn translate_exn_throw(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    tag_index: TagIndex,
+    args: &[ir::Value],
+    handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+) -> WasmResult<()> {
+    let (instance_id, defined_tag_id) = func_env.get_instance_and_tag(builder, tag_index);
+    let exnref = gc_compiler(func_env)?.alloc_exn(
+        func_env,
+        builder,
+        tag_index,
+        args,
+        instance_id,
+        defined_tag_id,
+    )?;
+    translate_exn_throw_ref(func_env, builder, exnref, handlers)
+}
+
+pub fn translate_exn_throw_ref(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    exnref: ir::Value,
+    handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
+) -> WasmResult<()> {
+    let builtin = func_env.builtin_functions.throw_ref(builder.func);
+    let sig = builder.func.dfg.ext_funcs[builtin].signature;
+    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+
+    // Generate a `try_call` with handlers from the current
+    // stack. This libcall is unique among libcall implementations of
+    // opcodes: we know the others will not throw, but `throw_ref`'s
+    // entire purpose is to throw. So if there are any handlers in the
+    // local function body, we need to attach them to this callsite
+    // like any other.
+    let continuation = builder.create_block();
+    let current_block = builder.current_block().unwrap();
+    builder.insert_block_after(continuation, current_block);
+    let continuation_call = builder.func.dfg.block_call(continuation, &[]);
+    let mut table_items = vec![ExceptionTableItem::Context(vmctx)];
+    for (tag, block) in handlers {
+        let block_call = builder
+            .func
+            .dfg
+            .block_call(block, &[BlockArg::TryCallExn(0)]);
+        table_items.push(match tag {
+            Some(tag) => ExceptionTableItem::Tag(tag, block_call),
+            None => ExceptionTableItem::Default(block_call),
+        });
+    }
+    let etd = ExceptionTableData::new(sig, continuation_call, table_items);
+    let et = builder.func.dfg.exception_tables.push(etd);
+
+    builder.ins().try_call(builtin, &[vmctx, exnref], et);
+
+    builder.switch_to_block(continuation);
+    builder.seal_block(continuation);
+    func_env.trap(builder, crate::TRAP_UNREACHABLE);
+
     Ok(())
 }
 
@@ -461,7 +583,10 @@ pub fn translate_array_new_fixed(
 
 impl ArrayInit<'_> {
     /// Get the length (as an `i32`-typed `ir::Value`) of these array elements.
-    #[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+    #[cfg_attr(
+        not(any(feature = "gc-drc", feature = "gc-null")),
+        expect(dead_code, reason = "easier to define")
+    )]
     fn len(self, pos: &mut FuncCursor) -> ir::Value {
         match self {
             ArrayInit::Fill { len, .. } => len,
@@ -473,7 +598,10 @@ impl ArrayInit<'_> {
     }
 
     /// Initialize a newly-allocated array's elements.
-    #[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+    #[cfg_attr(
+        not(any(feature = "gc-drc", feature = "gc-null")),
+        expect(dead_code, reason = "easier to define")
+    )]
     fn initialize(
         self,
         func_env: &mut FuncEnvironment<'_>,
@@ -595,6 +723,7 @@ fn emit_array_fill_impl(
     builder.switch_to_block(loop_header_block);
     builder.append_block_param(loop_header_block, pointer_ty);
     log::trace!("emit_array_fill_impl: loop header");
+    func_env.translate_loop_header(builder)?;
     let elem_addr = builder.block_params(loop_header_block)[0];
     let done = builder.ins().icmp(IntCC::Equal, elem_addr, fill_end);
     builder
@@ -1105,7 +1234,7 @@ pub fn translate_ref_test(
         WasmHeapType::ConcreteCont(_) => {
             // TODO(#10248) GC integration for stack switching
             return Err(wasmtime_environ::WasmError::Unsupported(
-                "Stack switching feature not compatbile with GC, yet".to_string(),
+                "Stack switching feature not compatible with GC, yet".to_string(),
             ));
         }
     };
@@ -1140,7 +1269,10 @@ fn uextend_i32_to_pointer_type(
 /// in its initialization.
 ///
 /// Traps if the size overflows.
-#[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+#[cfg_attr(
+    not(any(feature = "gc-drc", feature = "gc-null")),
+    expect(dead_code, reason = "easier to define")
+)]
 fn emit_array_size(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
@@ -1185,7 +1317,10 @@ fn emit_array_size(
 
 /// Common helper for struct-field initialization that can be reused across
 /// collectors.
-#[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+#[cfg_attr(
+    not(any(feature = "gc-drc", feature = "gc-null")),
+    expect(dead_code, reason = "easier to define")
+)]
 fn initialize_struct_fields(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
@@ -1200,17 +1335,19 @@ fn initialize_struct_fields(
         ir::Value,
     ) -> WasmResult<()>,
 ) -> WasmResult<()> {
-    let struct_layout = func_env.struct_layout(struct_ty);
+    let struct_layout = func_env.struct_or_exn_layout(struct_ty);
     let struct_size = struct_layout.size;
     let field_offsets: SmallVec<[_; 8]> = struct_layout.fields.iter().map(|f| f.offset).collect();
     assert_eq!(field_offsets.len(), field_values.len());
 
     assert!(!func_env.types[struct_ty].composite_type.shared);
-    let struct_ty = func_env.types[struct_ty]
-        .composite_type
-        .inner
-        .unwrap_struct();
-    let field_types: SmallVec<[_; 8]> = struct_ty.fields.iter().cloned().collect();
+    let fields = match &func_env.types[struct_ty].composite_type.inner {
+        WasmCompositeInnerType::Struct(s) => &s.fields,
+        WasmCompositeInnerType::Exn(e) => &e.fields,
+        _ => panic!("Not a struct or exception type"),
+    };
+
+    let field_types: SmallVec<[_; 8]> = fields.iter().cloned().collect();
     assert_eq!(field_types.len(), field_values.len());
 
     for ((ty, val), offset) in field_types.into_iter().zip(field_values).zip(field_offsets) {
@@ -1244,9 +1381,10 @@ impl FuncEnvironment<'_> {
         self.gc_layout(type_index).unwrap_array()
     }
 
-    /// Get the `GcStructLayout` for the struct type at the given `type_index`.
-    fn struct_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcStructLayout {
-        self.gc_layout(type_index).unwrap_struct()
+    /// Get the `GcStructLayout` for the struct or exception type at the given `type_index`.
+    fn struct_or_exn_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcStructLayout {
+        let result = self.gc_layout(type_index).unwrap_struct();
+        result
     }
 
     /// Get or create the global for our GC heap's base pointer.
@@ -1386,7 +1524,10 @@ impl FuncEnvironment<'_> {
     /// reference is null or is an `i31ref`; otherwise, it will be zero.
     ///
     /// This method is collector-agnostic.
-    #[cfg_attr(not(feature = "gc-drc"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "gc-drc"),
+        expect(dead_code, reason = "easier to define")
+    )]
     fn gc_ref_is_null_or_i31(
         &mut self,
         builder: &mut FunctionBuilder,

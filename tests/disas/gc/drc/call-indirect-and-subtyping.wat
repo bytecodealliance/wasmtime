@@ -16,7 +16,7 @@
     (call_indirect (type $t1) (local.get 0))
   )
 )
-;; function u0:2(i64 vmctx, i64, i32) tail {
+;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
@@ -25,8 +25,8 @@
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     sig2 = (i64 vmctx, i32, i32) -> i32 tail
-;;     fn0 = colocated u1:9 sig1
-;;     fn1 = colocated u1:35 sig2
+;;     fn0 = colocated u1610612736:9 sig1
+;;     fn1 = colocated u1610612736:35 sig2
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):

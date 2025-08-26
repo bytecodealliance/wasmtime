@@ -41,3 +41,9 @@ interface export-using-export2 {
     constructor(a: a);
   }
 }
+
+interface export-fallible-constructor {
+  resource a {
+    constructor() -> result<a, string>;
+  }
+}

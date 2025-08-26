@@ -1,5 +1,5 @@
-use crate::component::{AllCallFunc, ComponentTranslation, ComponentTypesBuilder, TrampolineIndex};
-use crate::{CompiledFunctionBody, Tunables};
+use crate::component::{AllCallFunc, ComponentTranslation, ComponentTypesBuilder};
+use crate::{CompiledFunctionBody, FuncKey, Tunables};
 use anyhow::Result;
 
 /// Compilation support necessary for components.
@@ -14,7 +14,7 @@ pub trait ComponentCompiler: Send + Sync {
         &self,
         component: &ComponentTranslation,
         types: &ComponentTypesBuilder,
-        trampoline: TrampolineIndex,
+        key: FuncKey,
         tunables: &Tunables,
         symbol: &str,
     ) -> Result<AllCallFunc<CompiledFunctionBody>>;

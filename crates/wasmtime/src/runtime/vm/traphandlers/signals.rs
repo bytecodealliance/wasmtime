@@ -3,7 +3,7 @@
 //! This module is conditionally included in the above `traphandlers` module and
 //! contains support and shared routines for working with signals-based traps.
 //! Each platform will have its own `signals-based-traps` configuration and
-//! thise module serves as a shared entrypoint for initialization entrypoints
+//! this module serves as a shared entrypoint for initialization entrypoints
 //! (`init_traps`) and testing if a trapping opcode is wasm (`test_if_trap`).
 
 use crate::sync::RwLock;

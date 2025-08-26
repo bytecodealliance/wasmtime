@@ -1,10 +1,10 @@
-use crate::runtime::vm::TableElement;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapType, RefType, Rooted,
-    RootedGcRefImpl, StructRef, V128, ValType, prelude::*,
+    StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
+use wasmtime_environ::WasmHeapTopType;
 
 pub use crate::runtime::vm::ValRaw;
 
@@ -110,6 +110,16 @@ impl Val {
     #[inline]
     pub const fn null_any_ref() -> Val {
         Val::AnyRef(None)
+    }
+
+    pub(crate) const fn null_top(top: WasmHeapTopType) -> Val {
+        match top {
+            WasmHeapTopType::Func => Val::FuncRef(None),
+            WasmHeapTopType::Extern => Val::ExternRef(None),
+            WasmHeapTopType::Any => Val::AnyRef(None),
+            WasmHeapTopType::Exn => Val::ExnRef(None),
+            WasmHeapTopType::Cont => todo!(), // FIXME(#10248)
+        }
     }
 
     /// Returns the default value for the given type, if any exists.
@@ -230,11 +240,12 @@ impl Val {
     /// Returns an error if this value is a GC reference and the GC reference
     /// has been unrooted.
     ///
-    /// # Unsafety
+    /// # Safety
     ///
-    /// This method is unsafe for the reasons that [`ExternRef::to_raw`] and
-    /// [`Func::to_raw`] are unsafe.
-    pub unsafe fn to_raw(&self, store: impl AsContextMut) -> Result<ValRaw> {
+    /// The returned [`ValRaw`] does not carry type information and is only safe
+    /// to use within the context of this store itself. For more information see
+    /// [`ExternRef::to_raw`] and [`Func::to_raw`].
+    pub fn to_raw(&self, store: impl AsContextMut) -> Result<ValRaw> {
         match self {
             Val::I32(i) => Ok(ValRaw::i32(*i)),
             Val::I64(i) => Ok(ValRaw::i64(*i)),
@@ -269,9 +280,11 @@ impl Val {
     /// otherwise that `raw` should have the type `ty` specified.
     pub unsafe fn from_raw(mut store: impl AsContextMut, raw: ValRaw, ty: ValType) -> Val {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        Self::_from_raw(&mut store, raw, &ty)
+        // SAFETY: `_from_raw` has the same contract as this function.
+        unsafe { Self::_from_raw(&mut store, raw, &ty) }
     }
 
+    /// Same as [`Self::from_raw`], but with a monomorphic store.
     pub(crate) unsafe fn _from_raw(
         store: &mut AutoAssertNoGc<'_>,
         raw: ValRaw,
@@ -285,9 +298,11 @@ impl Val {
             ValType::V128 => Val::V128(raw.get_v128().into()),
             ValType::Ref(ref_ty) => {
                 let ref_ = match ref_ty.heap_type() {
-                    HeapType::Func | HeapType::ConcreteFunc(_) => {
+                    // SAFETY: it's a safety contract of this function that the
+                    // funcref is valid and owned by the provided store.
+                    HeapType::Func | HeapType::ConcreteFunc(_) => unsafe {
                         Func::_from_raw(store, raw.get_funcref()).into()
-                    }
+                    },
 
                     HeapType::NoFunc => Ref::Func(None),
 
@@ -822,6 +837,7 @@ impl Ref {
             HeapType::Any => Ref::Any(None),
             HeapType::Extern => Ref::Extern(None),
             HeapType::Func => Ref::Func(None),
+            HeapType::Exn => Ref::Exn(None),
             ty => unreachable!("not a heap type: {ty:?}"),
         }
     }
@@ -1099,65 +1115,6 @@ impl Ref {
             Ref::Any(None) => true,
             Ref::Exn(Some(e)) => e.comes_from_same_store(store),
             Ref::Exn(None) => true,
-        }
-    }
-
-    pub(crate) fn into_table_element(
-        self,
-        store: &mut StoreOpaque,
-        ty: &RefType,
-    ) -> Result<TableElement> {
-        let mut store = AutoAssertNoGc::new(store);
-        self.ensure_matches_ty(&store, &ty)
-            .context("type mismatch: value does not match table element type")?;
-
-        match (self, ty.heap_type().top()) {
-            (Ref::Func(None), HeapType::Func) => {
-                assert!(ty.is_nullable());
-                Ok(TableElement::FuncRef(None))
-            }
-            (Ref::Func(Some(f)), HeapType::Func) => {
-                debug_assert!(
-                    f.comes_from_same_store(&store),
-                    "checked in `ensure_matches_ty`"
-                );
-                Ok(TableElement::FuncRef(Some(f.vm_func_ref(&store))))
-            }
-
-            (Ref::Extern(e), HeapType::Extern) => match e {
-                None => {
-                    assert!(ty.is_nullable());
-                    Ok(TableElement::GcRef(None))
-                }
-                Some(e) => {
-                    let gc_ref = e.try_clone_gc_ref(&mut store)?;
-                    Ok(TableElement::GcRef(Some(gc_ref)))
-                }
-            },
-
-            (Ref::Any(a), HeapType::Any) => match a {
-                None => {
-                    assert!(ty.is_nullable());
-                    Ok(TableElement::GcRef(None))
-                }
-                Some(a) => {
-                    let gc_ref = a.try_clone_gc_ref(&mut store)?;
-                    Ok(TableElement::GcRef(Some(gc_ref)))
-                }
-            },
-
-            (Ref::Exn(e), HeapType::Exn) => match e {
-                None => {
-                    assert!(ty.is_nullable());
-                    Ok(TableElement::GcRef(None))
-                }
-                Some(e) => {
-                    let gc_ref = e.try_clone_gc_ref(&mut store)?;
-                    Ok(TableElement::GcRef(Some(gc_ref)))
-                }
-            },
-
-            _ => unreachable!("checked that the value matches the type above"),
         }
     }
 }

@@ -1,12 +1,9 @@
 //! Implements the base structure (i.e. [WasiHttpCtx]) that will provide the
 //! implementation of the wasi-http API.
 
-use crate::io::TokioIo;
 use crate::{
     bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
-    error::dns_error,
-    hyper_request_error,
 };
 use anyhow::bail;
 use bytes::Bytes;
@@ -15,11 +12,17 @@ use hyper::body::Body;
 use hyper::header::HeaderName;
 use std::any::Any;
 use std::time::Duration;
-use tokio::net::TcpStream;
-use tokio::time::timeout;
 use wasmtime::component::{Resource, ResourceTable};
-use wasmtime_wasi::p2::{IoImpl, IoView, Pollable};
+use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
+
+#[cfg(feature = "default-send-request")]
+use {
+    crate::io::TokioIo,
+    crate::{error::dns_error, hyper_request_error},
+    tokio::net::TcpStream,
+    tokio::time::timeout,
+};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 #[derive(Debug)]
@@ -40,7 +43,7 @@ impl WasiHttpCtx {
 ///
 /// ```
 /// use wasmtime::component::ResourceTable;
-/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 /// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 ///
 /// struct MyState {
@@ -49,20 +52,20 @@ impl WasiHttpCtx {
 ///     table: ResourceTable,
 /// }
 ///
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
 /// impl WasiHttpView for MyState {
 ///     fn ctx(&mut self) -> &mut WasiHttpCtx { &mut self.http_ctx }
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 ///
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///     }
 /// }
 ///
 /// impl MyState {
 ///     fn new() -> MyState {
-///         let mut wasi = WasiCtxBuilder::new();
+///         let mut wasi = WasiCtx::builder();
 ///         wasi.arg("./foo.wasm");
 ///         wasi.arg("--help");
 ///         wasi.env("FOO", "bar");
@@ -75,9 +78,12 @@ impl WasiHttpCtx {
 ///     }
 /// }
 /// ```
-pub trait WasiHttpView: IoView {
+pub trait WasiHttpView {
     /// Returns a mutable reference to the WASI HTTP context.
     fn ctx(&mut self) -> &mut WasiHttpCtx;
+
+    /// Returns the table used to manage resources.
+    fn table(&mut self) -> &mut ResourceTable;
 
     /// Create a new incoming request resource.
     fn new_incoming_request<B>(
@@ -112,6 +118,7 @@ pub trait WasiHttpView: IoView {
     }
 
     /// Send an outgoing request.
+    #[cfg(feature = "default-send-request")]
     fn send_request(
         &mut self,
         request: hyper::Request<HyperOutgoingBody>,
@@ -120,9 +127,17 @@ pub trait WasiHttpView: IoView {
         Ok(default_send_request(request, config))
     }
 
+    /// Send an outgoing request.
+    #[cfg(not(feature = "default-send-request"))]
+    fn send_request(
+        &mut self,
+        request: hyper::Request<HyperOutgoingBody>,
+        config: OutgoingRequestConfig,
+    ) -> crate::HttpResult<HostFutureIncomingResponse>;
+
     /// Whether a given header should be considered forbidden and not allowed.
-    fn is_forbidden_header(&mut self, _name: &HeaderName) -> bool {
-        false
+    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
+        DEFAULT_FORBIDDEN_HEADERS.contains(name)
     }
 
     /// Number of distinct write calls to the outgoing body's output-stream
@@ -147,6 +162,10 @@ pub const DEFAULT_OUTGOING_BODY_CHUNK_SIZE: usize = 1024 * 1024;
 impl<T: ?Sized + WasiHttpView> WasiHttpView for &mut T {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         T::ctx(self)
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        T::table(self)
     }
 
     fn new_response_outparam(
@@ -182,6 +201,10 @@ impl<T: ?Sized + WasiHttpView> WasiHttpView for &mut T {
 impl<T: ?Sized + WasiHttpView> WasiHttpView for Box<T> {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         T::ctx(self)
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        T::table(self)
     }
 
     fn new_response_outparam(
@@ -227,16 +250,15 @@ impl<T: ?Sized + WasiHttpView> WasiHttpView for Box<T> {
 /// [`add_to_linker_sync`](crate::add_to_linker_sync)
 /// and doesn't need to be manually configured.
 #[repr(transparent)]
-pub struct WasiHttpImpl<T>(pub IoImpl<T>);
+pub struct WasiHttpImpl<T>(pub T);
 
-impl<T: IoView> IoView for WasiHttpImpl<T> {
-    fn table(&mut self) -> &mut ResourceTable {
-        T::table(&mut self.0.0)
-    }
-}
 impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
-        self.0.0.ctx()
+        self.0.ctx()
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        self.0.table()
     }
 
     fn new_response_outparam(
@@ -245,7 +267,7 @@ impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
             Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>,
         >,
     ) -> wasmtime::Result<Resource<HostResponseOutparam>> {
-        self.0.0.new_response_outparam(result)
+        self.0.new_response_outparam(result)
     }
 
     fn send_request(
@@ -253,38 +275,35 @@ impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
         request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
     ) -> crate::HttpResult<HostFutureIncomingResponse> {
-        self.0.0.send_request(request, config)
+        self.0.send_request(request, config)
     }
 
     fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
-        self.0.0.is_forbidden_header(name)
+        self.0.is_forbidden_header(name)
     }
 
     fn outgoing_body_buffer_chunks(&mut self) -> usize {
-        self.0.0.outgoing_body_buffer_chunks()
+        self.0.outgoing_body_buffer_chunks()
     }
 
     fn outgoing_body_chunk_size(&mut self) -> usize {
-        self.0.0.outgoing_body_chunk_size()
+        self.0.outgoing_body_chunk_size()
     }
 }
 
-/// Returns `true` when the header is forbidden according to this [`WasiHttpView`] implementation.
-pub(crate) fn is_forbidden_header(view: &mut dyn WasiHttpView, name: &HeaderName) -> bool {
-    static FORBIDDEN_HEADERS: [HeaderName; 9] = [
-        hyper::header::CONNECTION,
-        HeaderName::from_static("keep-alive"),
-        hyper::header::PROXY_AUTHENTICATE,
-        hyper::header::PROXY_AUTHORIZATION,
-        HeaderName::from_static("proxy-connection"),
-        hyper::header::TRANSFER_ENCODING,
-        hyper::header::UPGRADE,
-        hyper::header::HOST,
-        HeaderName::from_static("http2-settings"),
-    ];
-
-    FORBIDDEN_HEADERS.contains(name) || view.is_forbidden_header(name)
-}
+/// Set of [http::header::HeaderName], that are forbidden by default
+/// for requests and responses originating in the guest.
+pub const DEFAULT_FORBIDDEN_HEADERS: [http::header::HeaderName; 9] = [
+    hyper::header::CONNECTION,
+    HeaderName::from_static("keep-alive"),
+    hyper::header::PROXY_AUTHENTICATE,
+    hyper::header::PROXY_AUTHORIZATION,
+    HeaderName::from_static("proxy-connection"),
+    hyper::header::TRANSFER_ENCODING,
+    hyper::header::UPGRADE,
+    hyper::header::HOST,
+    HeaderName::from_static("http2-settings"),
+];
 
 /// Removes forbidden headers from a [`hyper::HeaderMap`].
 pub(crate) fn remove_forbidden_headers(
@@ -292,7 +311,7 @@ pub(crate) fn remove_forbidden_headers(
     headers: &mut hyper::HeaderMap,
 ) {
     let forbidden_keys = Vec::from_iter(headers.keys().filter_map(|name| {
-        if is_forbidden_header(view, name) {
+        if view.is_forbidden_header(name) {
             Some(name.clone())
         } else {
             None
@@ -320,6 +339,7 @@ pub struct OutgoingRequestConfig {
 ///
 /// This implementation is used by the `wasi:http/outgoing-handler` interface
 /// default implementation.
+#[cfg(feature = "default-send-request")]
 pub fn default_send_request(
     request: hyper::Request<HyperOutgoingBody>,
     config: OutgoingRequestConfig,
@@ -334,6 +354,7 @@ pub fn default_send_request(
 /// in a task.
 ///
 /// This is called from [default_send_request] to actually send the request.
+#[cfg(feature = "default-send-request")]
 pub async fn default_send_request_handler(
     mut request: hyper::Request<HyperOutgoingBody>,
     OutgoingRequestConfig {

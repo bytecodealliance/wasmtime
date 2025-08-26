@@ -1,6 +1,7 @@
 use crate::Trap;
 use crate::prelude::*;
-use crate::store::{StoreInstanceId, StoreOpaque};
+use crate::runtime::vm::{self, VMStore};
+use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use core::cell::UnsafeCell;
@@ -259,7 +260,9 @@ impl Memory {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
-        Self::_new(store.as_context_mut().0, ty)
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        vm::one_poll(Self::_new(store, limiter.as_mut(), ty))
+            .expect("must use `new_async` when async resource limiters are in use")
     }
 
     /// Async variant of [`Memory::new`]. You must use this variant with
@@ -271,21 +274,18 @@ impl Memory {
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
-    pub async fn new_async(
-        mut store: impl AsContextMut<Data: Send>,
-        ty: MemoryType,
-    ) -> Result<Memory> {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `new_async` without enabling async support on the config"
-        );
-        store.on_fiber(|store| Self::_new(store.0, ty)).await?
+    pub async fn new_async(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new(store, limiter.as_mut(), ty).await
     }
 
     /// Helper function for attaching the memory to a "frankenstein" instance
-    fn _new(store: &mut StoreOpaque, ty: MemoryType) -> Result<Memory> {
-        generate_memory_export(store, &ty, None)
+    async fn _new(
+        store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        ty: MemoryType,
+    ) -> Result<Memory> {
+        generate_memory_export(store, limiter, &ty, None).await
     }
 
     /// Returns the underlying type of this memory.
@@ -599,20 +599,9 @@ impl Memory {
     /// ```
     pub fn grow(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut().0;
-        // FIXME(#11179) shouldn't use a raw pointer to work around the borrow
-        // checker here.
-        let mem: *mut _ = self.wasmtime_memory(store);
-        unsafe {
-            match (*mem).grow(delta, Some(store))? {
-                Some(size) => {
-                    let vm = (*mem).vmmemory();
-                    store[self.instance].memory_ptr(self.index).write(vm);
-                    let page_size = (*mem).page_size();
-                    Ok(u64::try_from(size).unwrap() / page_size)
-                }
-                None => bail!("failed to grow memory by `{}`", delta),
-            }
-        }
+        let (mut limiter, store) = store.resource_limiter_and_store_opaque();
+        vm::one_poll(self._grow(store, limiter.as_mut(), delta))
+            .expect("must use `grow_async` if an async resource limiter is used")
     }
 
     /// Async variant of [`Memory::grow`]. Required when using a
@@ -623,26 +612,30 @@ impl Memory {
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
-    pub async fn grow_async(
-        &self,
-        mut store: impl AsContextMut<Data: Send>,
-        delta: u64,
-    ) -> Result<u64> {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `grow_async` without enabling async support on the config"
-        );
-        store.on_fiber(|store| self.grow(store, delta)).await?
+    pub async fn grow_async(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
+        let store = store.as_context_mut();
+        let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
+        self._grow(store, limiter.as_mut(), delta).await
     }
 
-    fn wasmtime_memory<'a>(
+    async fn _grow(
         &self,
-        store: &'a mut StoreOpaque,
-    ) -> &'a mut crate::runtime::vm::Memory {
-        self.instance
+        store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        delta: u64,
+    ) -> Result<u64> {
+        let result = self
+            .instance
             .get_mut(store)
-            .get_defined_memory_mut(self.index)
+            .memory_grow(limiter, self.index, delta)
+            .await?;
+        match result {
+            Some(size) => {
+                let page_size = self.wasmtime_ty(store).page_size();
+                Ok(u64::try_from(size).unwrap() / page_size)
+            }
+            None => bail!("failed to grow memory by `{}`", delta),
+        }
     }
 
     pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedMemoryIndex) -> Memory {
@@ -796,6 +789,7 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// # fn main() -> anyhow::Result<()> {
 /// let mut config = Config::new();
 /// config.wasm_threads(true);
+/// # if Engine::new(&config).is_err() { return Ok(()); }
 /// let engine = Engine::new(&config)?;
 /// let mut store = Store::new(&engine, ());
 ///
@@ -914,7 +908,7 @@ impl SharedMemory {
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
     pub fn grow(&self, delta: u64) -> Result<u64> {
-        match self.vm.grow(delta, None)? {
+        match self.vm.grow(delta)? {
             Some((old_size, _new_size)) => {
                 // For shared memory, the `VMMemoryDefinition` is updated inside
                 // the locked region.
@@ -1013,9 +1007,17 @@ impl SharedMemory {
     /// Construct a single-memory instance to provide a way to import
     /// [`SharedMemory`] into other modules.
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
-        generate_memory_export(store, &self.ty(), Some(&self.vm))
-            .unwrap()
-            .vmimport(store)
+        // Note `vm::assert_ready` shouldn't panic here because this isn't
+        // actually allocating any new memory (also no limiter), so resource
+        // limiting shouldn't kick in.
+        vm::assert_ready(generate_memory_export(
+            store,
+            None,
+            &self.ty(),
+            Some(&self.vm),
+        ))
+        .unwrap()
+        .vmimport(store)
     }
 
     /// Create a [`SharedMemory`] from an [`ExportMemory`] definition. This

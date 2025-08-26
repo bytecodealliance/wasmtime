@@ -36,10 +36,10 @@
 //! * [`wasi:sockets/udp-create-socket`]
 //! * [`wasi:sockets/udp`]
 //!
-//! All traits are implemented in terms of a [`WasiView`] trait which provides
-//! access to [`WasiCtx`], which defines the configuration for WASI.
-//! The [`WasiView`] trait imples [`IoView`], which provides access to a common
-//! [`ResourceTable`], which owns all host-defined component model resources.
+//! Most traits are implemented for [`WasiCtxView`] trait which provides
+//! access to [`WasiCtx`] and [`ResourceTable`], which defines the configuration
+//! for WASI and handle state. The [`WasiView`] trait is used to acquire and
+//! construct a [`WasiCtxView`].
 //!
 //! The [`wasmtime-wasi-io`] crate contains implementations of the
 //! following interfaces, and this module reuses those implementations:
@@ -48,8 +48,7 @@
 //! * [`wasi:io/poll`]
 //! * [`wasi:io/streams`]
 //!
-//! These traits are implemented in terms of a [`IoView`] trait, which only
-//! provides access to a common [`ResourceTable`]. All aspects of
+//! These traits are implemented directly for [`ResourceTable`]. All aspects of
 //! `wasmtime-wasi-io` that are used by this module are re-exported. Unless you
 //! are implementing other host functionality that needs to interact with the
 //! WASI scheduler and don't want to use other functionality provided by
@@ -68,52 +67,48 @@
 //!
 //! This module's implementation of WASI is done in terms of an implementation of
 //! [`WasiView`]. This trait provides a "view" into WASI-related state that is
-//! contained within a [`Store<T>`](wasmtime::Store). [`WasiView`] implies the
-//! [`IoView`] trait, which provides access to common [`ResourceTable`] which
-//! owns all host-implemented component model resources.
+//! contained within a [`Store<T>`](wasmtime::Store).
 //!
 //! For all of the generated bindings in this module (Host traits),
 //! implementations are provided looking like:
 //!
 //! ```
-//! # use wasmtime_wasi::p2::WasiImpl;
+//! # use wasmtime_wasi::WasiCtxView;
 //! # trait WasiView {}
 //! # mod bindings { pub mod wasi { pub trait Host {} } }
-//! impl<T: WasiView> bindings::wasi::Host for WasiImpl<T> {
+//! impl bindings::wasi::Host for WasiCtxView<'_> {
 //!     // ...
 //! }
 //! ```
 //!
-//! The [`add_to_linker_sync`] and [`add_to_linker_async`] function then require
-//! that `T: WasiView` with [`Linker<T>`](wasmtime::component::Linker).
+//! where the [`WasiCtxView`] type comes from [`WasiView::ctx`] for the type
+//! contained within the `Store<T>`. The [`add_to_linker_sync`] and
+//! [`add_to_linker_async`] function then require that `T: WasiView` with
+//! [`Linker<T>`](wasmtime::component::Linker).
 //!
-//! To implement the [`WasiView`] and [`IoView`] trait you will first select a
+//! To implement the [`WasiView`] trait you will first select a
 //! `T` to put in `Store<T>` (typically, by defining your own struct).
 //! Somewhere within `T` you'll store:
 //!
 //! * [`ResourceTable`] - created through default constructors.
 //! * [`WasiCtx`] - created through [`WasiCtxBuilder`].
 //!
-//! You'll then write implementations of the [`IoView`] and [`WasiView`]
-//! traits to access those items in your `T`. For example:
+//! You'll then write an implementation of the [`WasiView`]
+//! trait to access those items in your `T`. For example:
 //! ```
 //! use wasmtime::component::ResourceTable;
-//! use wasmtime_wasi::p2::{WasiCtx, IoView, WasiView};
+//! use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
+//!
 //! struct MyCtx {
 //!     table: ResourceTable,
 //!     wasi: WasiCtx,
 //! }
-//! impl IoView for MyCtx {
-//!     fn table(&mut self) -> &mut ResourceTable {
-//!         &mut self.table
-//!     }
-//! }
-//! impl WasiView for MyCtx {
-//!     fn ctx(&mut self) -> &mut WasiCtx {
-//!         &mut self.wasi
-//!     }
-//! }
 //!
+//! impl WasiView for MyCtx {
+//!     fn ctx(&mut self) -> WasiCtxView<'_> {
+//!         WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
+//!     }
+//! }
 //! ```
 //!
 //! # Async and Sync
@@ -177,7 +172,7 @@
 //!
 //! Usage of this module is done through a few steps to get everything hooked up:
 //!
-//! 1. First implement [`IoView`] and [`WasiView`] for your type which is the
+//! 1. First implement [`WasiView`] for your type which is the
 //!    `T` in `Store<T>`.
 //! 2. Add WASI interfaces to a `wasmtime::component::Linker<T>`. This is either
 //!    done through top-level functions like [`add_to_linker_sync`] or through
@@ -226,10 +221,15 @@
 //! [async]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
 
-use wasmtime::component::{HasData, Linker};
+use crate::WasiView;
+use crate::cli::{WasiCli, WasiCliView as _};
+use crate::clocks::{WasiClocks, WasiClocksView as _};
+use crate::filesystem::{WasiFilesystem, WasiFilesystemView as _};
+use crate::random::WasiRandom;
+use crate::sockets::{WasiSockets, WasiSocketsView as _};
+use wasmtime::component::{HasData, Linker, ResourceTable};
 
 pub mod bindings;
-mod ctx;
 pub(crate) mod filesystem;
 mod host;
 mod ip_name_lookup;
@@ -239,17 +239,12 @@ mod poll;
 mod stdio;
 mod tcp;
 mod udp;
-mod view;
 mod write_stream;
 
-pub use self::ctx::{WasiCtx, WasiCtxBuilder};
 pub use self::filesystem::{FsError, FsResult};
-pub use self::network::{SocketError, SocketResult};
-pub use self::stdio::{
-    AsyncStdinStream, AsyncStdoutStream, InputFile, IsATTY, OutputFile, Stderr, Stdin, StdinStream,
-    Stdout, StdoutStream, stderr, stdin, stdout,
-};
-pub use self::view::{WasiImpl, WasiView};
+pub use self::network::{Network, SocketError, SocketResult};
+pub use self::stdio::IsATTY;
+pub(crate) use tcp::P2TcpStreamingState;
 // These contents of wasmtime-wasi-io are re-exported by this module for compatibility:
 // they were originally defined in this module before being factored out, and many
 // users of this module depend on them at these names.
@@ -258,7 +253,6 @@ pub use wasmtime_wasi_io::streams::{
     DynInputStream, DynOutputStream, Error as IoError, InputStream, OutputStream, StreamError,
     StreamResult,
 };
-pub use wasmtime_wasi_io::{IoImpl, IoView};
 
 /// Add all WASI interfaces from this crate into the `linker` provided.
 ///
@@ -278,7 +272,7 @@ pub use wasmtime_wasi_io::{IoImpl, IoView};
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -289,7 +283,7 @@ pub use wasmtime_wasi_io::{IoImpl, IoView};
 ///     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 ///     // ... add any further functionality to `linker` if desired ...
 ///
-///     let mut builder = WasiCtxBuilder::new();
+///     let mut builder = WasiCtx::builder();
 ///
 ///     // ... configure `builder` more to add env vars, args, etc ...
 ///
@@ -311,36 +305,34 @@ pub use wasmtime_wasi_io::{IoImpl, IoView};
 ///     table: ResourceTable,
 /// }
 ///
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///     }
 /// }
 /// ```
-pub fn add_to_linker_async<T: WasiView + 'static>(linker: &mut Linker<T>) -> anyhow::Result<()> {
+pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
     let options = bindings::LinkOptions::default();
     add_to_linker_with_options_async(linker, &options)
 }
 
 /// Similar to [`add_to_linker_async`], but with the ability to enable unstable features.
-pub fn add_to_linker_with_options_async<T: WasiView + 'static>(
+pub fn add_to_linker_with_options_async<T: WasiView>(
     linker: &mut Linker<T>,
     options: &bindings::LinkOptions,
 ) -> anyhow::Result<()> {
-    wasmtime_wasi_io::add_to_linker_async(linker)?;
+    add_async_io_to_linker(linker)?;
     add_nonblocking_to_linker(linker, options)?;
 
     let l = linker;
-    let f: fn(&mut T) -> WasiImpl<&mut T> = |t| WasiImpl(IoImpl(t));
-    bindings::filesystem::types::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    bindings::sockets::tcp::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    bindings::sockets::udp::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    bindings::filesystem::types::add_to_linker::<T, WasiFilesystem>(l, T::filesystem)?;
+    bindings::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    bindings::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 
 /// Shared functionality for [`add_to_linker_async`] and [`add_to_linker_sync`].
-fn add_nonblocking_to_linker<'a, T: WasiView + 'static, O>(
+fn add_nonblocking_to_linker<'a, T: WasiView, O>(
     linker: &mut Linker<T>,
     options: &'a O,
 ) -> anyhow::Result<()>
@@ -351,63 +343,59 @@ where
     use crate::p2::bindings::{cli, clocks, filesystem, random, sockets};
 
     let l = linker;
-    let f: fn(&mut T) -> WasiImpl<&mut T> = |t| WasiImpl(IoImpl(t));
-    clocks::wall_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    clocks::monotonic_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    filesystem::preopens::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    random::random::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    random::insecure::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    random::insecure_seed::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::exit::add_to_linker::<T, HasWasi<T>>(l, &options.into(), f)?;
-    cli::environment::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::stdin::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::stdout::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::stderr::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::terminal_input::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::terminal_output::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::terminal_stdin::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::terminal_stdout::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::terminal_stderr::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    sockets::tcp_create_socket::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    sockets::udp_create_socket::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    sockets::instance_network::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    sockets::network::add_to_linker::<T, HasWasi<T>>(l, &options.into(), f)?;
-    sockets::ip_name_lookup::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    clocks::wall_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
+    clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
+    filesystem::preopens::add_to_linker::<T, WasiFilesystem>(l, T::filesystem)?;
+    random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
+    random::insecure::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
+    random::insecure_seed::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
+    cli::exit::add_to_linker::<T, WasiCli>(l, &options.into(), T::cli)?;
+    cli::environment::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::stdin::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::stderr::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::terminal_input::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::terminal_output::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::terminal_stdin::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::terminal_stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::terminal_stderr::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    sockets::tcp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    sockets::instance_network::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    sockets::network::add_to_linker::<T, WasiSockets>(l, &options.into(), T::sockets)?;
+    sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 
 /// Same as [`add_to_linker_async`] except that this only adds interfaces
 /// present in the `wasi:http/proxy` world.
-pub fn add_to_linker_proxy_interfaces_async<T: WasiView + 'static>(
+pub fn add_to_linker_proxy_interfaces_async<T: WasiView>(
     linker: &mut Linker<T>,
 ) -> anyhow::Result<()> {
-    wasmtime_wasi_io::add_to_linker_async(linker)?;
+    add_async_io_to_linker(linker)?;
     add_proxy_interfaces_nonblocking(linker)
 }
 
 /// Same as [`add_to_linker_sync`] except that this only adds interfaces
 /// present in the `wasi:http/proxy` world.
 #[doc(hidden)]
-pub fn add_to_linker_proxy_interfaces_sync<T: WasiView + 'static>(
+pub fn add_to_linker_proxy_interfaces_sync<T: WasiView>(
     linker: &mut Linker<T>,
 ) -> anyhow::Result<()> {
     add_sync_wasi_io(linker)?;
     add_proxy_interfaces_nonblocking(linker)
 }
 
-fn add_proxy_interfaces_nonblocking<T: WasiView + 'static>(
-    linker: &mut Linker<T>,
-) -> anyhow::Result<()> {
+fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
     use crate::p2::bindings::{cli, clocks, random};
 
     let l = linker;
-    let f: fn(&mut T) -> WasiImpl<&mut T> = |t| WasiImpl(IoImpl(t));
-    clocks::wall_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    clocks::monotonic_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    random::random::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::stdin::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::stdout::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    cli::stderr::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    clocks::wall_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
+    clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
+    random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
+    cli::stdin::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
+    cli::stderr::add_to_linker::<T, WasiCli>(l, T::cli)?;
     Ok(())
 }
 
@@ -429,7 +417,7 @@ fn add_proxy_interfaces_nonblocking<T: WasiView + 'static>(
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 ///
 /// fn main() -> Result<()> {
 ///     let engine = Engine::default();
@@ -438,7 +426,7 @@ fn add_proxy_interfaces_nonblocking<T: WasiView + 'static>(
 ///     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
 ///     // ... add any further functionality to `linker` if desired ...
 ///
-///     let mut builder = WasiCtxBuilder::new();
+///     let mut builder = WasiCtx::builder();
 ///
 ///     // ... configure `builder` more to add env vars, args, etc ...
 ///
@@ -459,14 +447,13 @@ fn add_proxy_interfaces_nonblocking<T: WasiView + 'static>(
 ///     ctx: WasiCtx,
 ///     table: ResourceTable,
 /// }
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     fn ctx(&mut self) -> WasiCtxView<'_> {
+///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///     }
 /// }
 /// ```
-pub fn add_to_linker_sync<T: WasiView + 'static>(
+pub fn add_to_linker_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
 ) -> anyhow::Result<()> {
     let options = bindings::sync::LinkOptions::default();
@@ -474,7 +461,7 @@ pub fn add_to_linker_sync<T: WasiView + 'static>(
 }
 
 /// Similar to [`add_to_linker_sync`], but with the ability to enable unstable features.
-pub fn add_to_linker_with_options_sync<T: WasiView + 'static>(
+pub fn add_to_linker_with_options_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
     options: &bindings::sync::LinkOptions,
 ) -> anyhow::Result<()> {
@@ -482,34 +469,39 @@ pub fn add_to_linker_with_options_sync<T: WasiView + 'static>(
     add_sync_wasi_io(linker)?;
 
     let l = linker;
-    let f: fn(&mut T) -> WasiImpl<&mut T> = |t| WasiImpl(IoImpl(t));
-    bindings::sync::filesystem::types::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    bindings::sync::sockets::tcp::add_to_linker::<T, HasWasi<T>>(l, f)?;
-    bindings::sync::sockets::udp::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    bindings::sync::filesystem::types::add_to_linker::<T, WasiFilesystem>(l, T::filesystem)?;
+    bindings::sync::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    bindings::sync::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 
 /// Shared functionality of [`add_to_linker_sync`]` and
 /// [`add_to_linker_proxy_interfaces_sync`].
-fn add_sync_wasi_io<T: WasiView + 'static>(
+fn add_sync_wasi_io<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
 ) -> anyhow::Result<()> {
     let l = linker;
-    let f: fn(&mut T) -> IoImpl<&mut T> = |t| IoImpl(t);
-    wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo<T>>(l, f)?;
-    bindings::sync::io::poll::add_to_linker::<T, HasIo<T>>(l, f)?;
-    bindings::sync::io::streams::add_to_linker::<T, HasIo<T>>(l, f)?;
+    wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
+    bindings::sync::io::poll::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
+    bindings::sync::io::streams::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
     Ok(())
 }
 
-struct HasIo<T>(T);
+struct HasIo;
 
-impl<T: 'static> HasData for HasIo<T> {
-    type Data<'a> = IoImpl<&'a mut T>;
+impl HasData for HasIo {
+    type Data<'a> = &'a mut ResourceTable;
 }
 
-struct HasWasi<T>(T);
-
-impl<T: 'static> HasData for HasWasi<T> {
-    type Data<'a> = WasiImpl<&'a mut T>;
+// FIXME: it's a bit unfortunate that this can't use
+// `wasmtime_wasi_io::add_to_linker` and that's because `T: WasiView`, here,
+// not `T: IoView`. Ideally we'd have `impl<T: WasiView> IoView for T` but
+// that's not possible with these two traits in separate crates. For now this
+// is some small duplication but if this gets worse over time then we'll want
+// to massage this.
+fn add_async_io_to_linker<T: WasiView>(l: &mut Linker<T>) -> anyhow::Result<()> {
+    wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
+    wasmtime_wasi_io::bindings::wasi::io::poll::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
+    wasmtime_wasi_io::bindings::wasi::io::streams::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
+    Ok(())
 }

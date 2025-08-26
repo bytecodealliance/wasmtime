@@ -83,6 +83,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`gc`]                     | production quality          |
 | WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
 | WebAssembly Proposal | [`custom-page-sizes`]      | Unstable wasm proposal      |
+| WebAssembly Proposal | [`exception-handling`]     | fuzzing, dependence on GC   |
 | Execution Backend    | Pulley                     | More time fuzzing/baking    |
 
 [`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
@@ -93,6 +94,8 @@ For explanations of what each tier means see below.
 [`relaxed-simd`]: https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
 [`function-references`]: https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md
 [`wide-arithmetic`]: https://github.com/WebAssembly/wide-arithmetic/blob/main/proposals/wide-arithmetic/Overview.md
+[`exception-handling`]: https://github.com/WebAssembly/exception-handling
+[`stack-switching`]: https://github.com/WebAssembly/stack-switching
 
 #### Tier 3
 
@@ -226,6 +229,8 @@ here is:
 | [`gc`]                                  | ✅        | ❌     |
 | [`wide-arithmetic`]                     | ✅        | ✅     |
 | [`custom-page-sizes`]                   | ✅        | ✅     |
+| [`exception-handling`]                  | ✅        | ❌     |
+| [`stack-switching`]                     | 🚧        | ❌     |
 
 ##### aarch64
 
@@ -249,6 +254,8 @@ here is:
 | [`gc`]                                  | ✅        | ❌        |
 | [`wide-arithmetic`]                     | ✅        | ❌        |
 | [`custom-page-sizes`]                   | ✅        | ✅        |
+| [`exception-handling`]                  | ✅        | ❌        |
+| [`stack-switching`]                     | ❌        | ❌        |
 
 ##### s390x
 
@@ -272,6 +279,8 @@ here is:
 | [`gc`]                                  | ✅        | ❌     |
 | [`wide-arithmetic`]                     | ✅        | ❌     |
 | [`custom-page-sizes`]                   | ✅        | ❌     |
+| [`exception-handling`]                  | ✅        | ❌     |
+| [`stack-switching`]                     | ❌        | ❌     |
 
 ##### riscv64
 
@@ -295,6 +304,8 @@ here is:
 | [`gc`]                                  | ✅        | ❌     |
 | [`wide-arithmetic`]                     | ✅        | ❌     |
 | [`custom-page-sizes`]                   | ✅        | ❌     |
+| [`exception-handling`]                  | ✅        | ❌     |
+| [`stack-switching`]                     | ❌        | ❌     |
 
 ##### Pulley
 
@@ -323,6 +334,8 @@ emitting Pulley bytecode.
 | [`gc`]                                  | ✅        | ❌     |
 | [`wide-arithmetic`]                     | ✅        | ❌     |
 | [`custom-page-sizes`]                   | ✅        | ❌     |
+| [`exception-handling`]                  | ✅        | ❌     |
+| [`stack-switching`]                     | ❌        | ❌     |
 
 [^a]: Winch supports some features of the [`reference-types`] proposal such as
   the change to support multiple tables and LEB-encoding table indices in

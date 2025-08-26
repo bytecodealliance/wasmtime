@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use wasm_compose::composer::ComponentComposer;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::p2::WasiCtxBuilder;
+use wasmtime_wasi::WasiCtxBuilder;
 
 pub fn init_logger() {
     static ONCE: Once = Once::new();

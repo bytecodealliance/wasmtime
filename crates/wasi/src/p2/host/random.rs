@@ -1,45 +1,36 @@
 use crate::p2::bindings::random::{insecure, insecure_seed, random};
-use crate::p2::{WasiImpl, WasiView};
+use crate::random::WasiRandomCtx;
 use cap_rand::{Rng, distributions::Standard};
 
-impl<T> random::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl random::Host for WasiRandomCtx {
     fn get_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
-        Ok((&mut self.ctx().random)
+        Ok((&mut self.random)
             .sample_iter(Standard)
             .take(len as usize)
             .collect())
     }
 
     fn get_random_u64(&mut self) -> anyhow::Result<u64> {
-        Ok(self.ctx().random.sample(Standard))
+        Ok(self.random.sample(Standard))
     }
 }
 
-impl<T> insecure::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl insecure::Host for WasiRandomCtx {
     fn get_insecure_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
-        Ok((&mut self.ctx().insecure_random)
+        Ok((&mut self.insecure_random)
             .sample_iter(Standard)
             .take(len as usize)
             .collect())
     }
 
     fn get_insecure_random_u64(&mut self) -> anyhow::Result<u64> {
-        Ok(self.ctx().insecure_random.sample(Standard))
+        Ok(self.insecure_random.sample(Standard))
     }
 }
 
-impl<T> insecure_seed::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl insecure_seed::Host for WasiRandomCtx {
     fn insecure_seed(&mut self) -> anyhow::Result<(u64, u64)> {
-        let seed: u128 = self.ctx().insecure_random_seed;
+        let seed: u128 = self.insecure_random_seed;
         Ok((seed as u64, (seed >> 64) as u64))
     }
 }

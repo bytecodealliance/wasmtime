@@ -65,6 +65,8 @@ impl dsl::Inst {
             f.empty_line();
             self.generate_visit_function(f);
             f.empty_line();
+            self.generate_is_available_function(f);
+            f.empty_line();
             self.generate_features_function(f);
         });
     }
@@ -222,16 +224,23 @@ impl dsl::Inst {
         });
     }
 
-    /// `fn features(&self) -> Vec<Flag> { ... }`
+    /// `fn is_available(&self, ...) -> bool { ... }`
+    fn generate_is_available_function(&self, f: &mut Formatter) {
+        fmtln!(f, "#[must_use]");
+        f.add_block(
+            "pub fn is_available(&self, features: &impl AvailableFeatures) -> bool",
+            |f| {
+                let expr = self.features.generate_boolean_expr("features");
+                fmtln!(f, "{expr}");
+            },
+        );
+    }
+
+    /// `fn features(&self) -> Features { ... }`
     fn generate_features_function(&self, f: &mut Formatter) {
         fmtln!(f, "#[must_use]");
-        f.add_block("pub fn features(&self) -> Vec<Feature>", |f| {
-            let flags = self
-                .features
-                .iter()
-                .map(|f| format!("Feature::{f}"))
-                .collect::<Vec<_>>();
-            fmtln!(f, "vec![{}]", flags.join(", "));
+        f.add_block("pub fn features(&self) -> &'static Features", |f| {
+            self.features.generate_constructor_expr(f);
         });
     }
 

@@ -2,13 +2,13 @@
 
 use crate::runtime::vm::VMGcRef;
 use crate::store::StoreId;
-use crate::vm::{VMGcHeader, VMStructRef};
+use crate::vm::{self, VMGcHeader, VMStore, VMStructRef};
 use crate::{AnyRef, FieldType};
 use crate::{
     AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
     ManuallyRooted, RefType, Rooted, StructType, Val, ValRaw, ValType, WasmTy,
     prelude::*,
-    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
+    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque, StoreResourceLimiter},
 };
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
@@ -231,22 +231,9 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        Self::_new(store.as_context_mut().0, allocator, fields)
-    }
-
-    pub(crate) fn _new(
-        store: &mut StoreOpaque,
-        allocator: &StructRefPre,
-        fields: &[Val],
-    ) -> Result<Rooted<StructRef>> {
-        assert!(
-            !store.async_support(),
-            "use `StructRef::new_async` with asynchronous stores"
-        );
-        Self::type_check_fields(store, allocator, fields)?;
-        store.retry_after_gc((), |store, ()| {
-            Self::new_unchecked(store, allocator, fields)
-        })
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        assert!(!store.async_support());
+        vm::assert_ready(Self::_new_async(store, limiter.as_mut(), allocator, fields))
     }
 
     /// Asynchronously allocate a new `struct` and get a reference to it.
@@ -269,10 +256,6 @@ impl StructRef {
     ///
     /// # Panics
     ///
-    /// Panics if your engine is not configured for async; use
-    /// [`StructRef::new`][crate::StructRef::new] to perform synchronous
-    /// allocation instead.
-    ///
     /// Panics if the allocator, or any of the field values, is not associated
     /// with the given store.
     #[cfg(feature = "async")]
@@ -281,40 +264,22 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        Self::_new_async(store.as_context_mut().0, allocator, fields).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_async(store, limiter.as_mut(), allocator, fields).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        assert!(
-            store.async_support(),
-            "use `StructRef::new` with synchronous stores"
-        );
         Self::type_check_fields(store, allocator, fields)?;
         store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter, (), |store, ()| {
                 Self::new_unchecked(store, allocator, fields)
             })
             .await
-    }
-
-    /// Like `Self::new` but caller's must ensure that if the store is
-    /// configured for async, this is only ever called from on a fiber stack.
-    pub(crate) unsafe fn new_maybe_async(
-        store: &mut StoreOpaque,
-        allocator: &StructRefPre,
-        fields: &[Val],
-    ) -> Result<Rooted<StructRef>> {
-        Self::type_check_fields(store, allocator, fields)?;
-        unsafe {
-            store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::new_unchecked(store, allocator, fields)
-            })
-        }
     }
 
     /// Type check the field values before allocating a new struct.
@@ -359,7 +324,7 @@ impl StructRef {
         // Allocate the struct and write each field value into the appropriate
         // offset.
         let structref = store
-            .gc_store_mut()?
+            .require_gc_store_mut()?
             .alloc_uninit_struct(allocator.type_index(), &allocator.layout())
             .context("unrecoverable error when allocating new `structref`")?
             .map_err(|n| GcHeapOutOfMemory::new((), n))?;
@@ -383,7 +348,9 @@ impl StructRef {
         })() {
             Ok(()) => Ok(Rooted::new(&mut store, structref.into())),
             Err(e) => {
-                store.gc_store_mut()?.dealloc_uninit_struct(structref);
+                store
+                    .require_gc_store_mut()?
+                    .dealloc_uninit_struct(structref);
                 Err(e)
             }
         }
@@ -473,7 +440,7 @@ impl StructRef {
         let store = AutoAssertNoGc::new(store);
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
-        let header = store.gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref);
         debug_assert!(header.kind().matches(VMGcKind::StructRef));
 
         let index = header.ty().expect("structrefs should have concrete types");
@@ -526,7 +493,7 @@ impl StructRef {
     fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(store.gc_store()?.header(gc_ref))
+        Ok(store.require_gc_store()?.header(gc_ref))
     }
 
     fn structref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMStructRef> {
@@ -547,7 +514,6 @@ impl StructRef {
         match layout {
             GcLayout::Struct(s) => Ok(s),
             GcLayout::Array(_) => unreachable!(),
-            GcLayout::Exception(_) => unreachable!(),
         }
     }
 
@@ -638,7 +604,7 @@ impl StructRef {
 
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        let header = store.gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref);
         debug_assert!(header.kind().matches(VMGcKind::StructRef));
         Ok(header.ty().expect("structrefs should have concrete types"))
     }

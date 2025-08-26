@@ -561,9 +561,9 @@ block0(v0: i64, v1: i64):
 ;   movq %rcx, 0x10(%rsi)
 ;   jmpq *%rax
 ;   cmpq $0, %rdi
-;   jl 0x131
+;   jl 0x135
 ;   cvtsi2sdq %rdi, %xmm0
-;   jmp 0x14b
+;   jmp 0x14f
 ;   movq %rdi, %rcx
 ;   shrq $1, %rcx
 ;   movq %rdi, %rdx

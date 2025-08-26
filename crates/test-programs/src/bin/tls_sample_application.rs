@@ -34,10 +34,11 @@ fn test_tls_sample_application(domain: &str, ip: IpAddress) -> Result<()> {
         .context("closing tls connection failed")?;
     socket.shutdown(ShutdownType::Both)?;
 
-    if String::from_utf8(response)?.contains("HTTP/1.1 200 OK") {
+    let response = String::from_utf8(response)?;
+    if response.contains("HTTP/1.1 200 OK") {
         Ok(())
     } else {
-        Err(anyhow!("server did not respond with 200 OK"))
+        Err(anyhow!("server did not respond with 200 OK: {response}"))
     }
 }
 

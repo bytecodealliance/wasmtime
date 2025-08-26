@@ -24,7 +24,7 @@
 ;;       cmpq    $0, %rcx
 ;;       jl      0x5e
 ;;   51: movq    %r14, %rdi
-;;       callq   0x137
+;;       callq   0x133
 ;;       movq    8(%rsp), %r14
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp

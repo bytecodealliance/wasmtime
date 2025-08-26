@@ -60,26 +60,6 @@
        ;; =========================================
        ;; Floating-point operations.
 
-       ;; XMM (scalar or vector) binary op that relies on the EVEX
-       ;; prefix. Takes two inputs.
-       (XmmRmREvex (op Avx512Opcode)
-                   (src1 Xmm)
-                   (src2 XmmMem)
-                   (dst WritableXmm))
-
-       ;; XMM (scalar or vector) binary op that relies on the EVEX
-       ;; prefix. Takes three inputs.
-       (XmmRmREvex3 (op Avx512Opcode)
-                    (src1 Xmm)
-                    (src2 Xmm)
-                    (src3 XmmMem)
-                    (dst WritableXmm))
-
-       ;; XMM (scalar or vector) unary op that relies on the EVEX prefix.
-       (XmmUnaryRmREvex (op Avx512Opcode)
-                        (src XmmMem)
-                        (dst WritableXmm))
-
        ;; Converts an unsigned int64 to a float32/float64.
        (CvtUint64ToFloatSeq (dst_size OperandSize) ;; 4 or 8
                             (src Gpr)
@@ -655,13 +635,6 @@
 (decl cc_nz_or_z (CC) CC)
 (extern extractor cc_nz_or_z cc_nz_or_z)
 
-(type Avx512Opcode
-      (enum Vcvtudq2ps
-            Vpabsq
-            Vpermi2b
-            Vpmullq
-            Vpopcntb))
-
 (type FcmpImm extern
       (enum Equal
             LessThan
@@ -1124,23 +1097,6 @@
 (rule (load_ext_name extname offset distance)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))
-        dst))
-
-;; Helper for creating `MInst.XmmUnaryRmREvex` instructions.
-(decl xmm_unary_rm_r_evex (Avx512Opcode XmmMem) Xmm)
-(rule (xmm_unary_rm_r_evex op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmREvex op src dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmREvex` instructions.
-(decl xmm_rm_r_evex (Avx512Opcode Xmm XmmMem) Xmm)
-(rule (xmm_rm_r_evex op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmREvex op
-                                            src1
-                                            src2
-                                            dst))))
         dst))
 
 ;; Helper for creating `xmm_min_max_seq` pseudo-instructions.
@@ -2674,40 +2630,27 @@
 
 ;; Helper for creating `vcvtudq2ps` instructions.
 (decl x64_vcvtudq2ps (XmmMem) Xmm)
-(rule (x64_vcvtudq2ps src)
-      (xmm_unary_rm_r_evex (Avx512Opcode.Vcvtudq2ps) src))
+(rule (x64_vcvtudq2ps src) (x64_vcvtudq2ps_a src))
 
 ;; Helper for creating `vpabsq` instructions.
 (decl x64_vpabsq (XmmMem) Xmm)
-(rule (x64_vpabsq src)
-      (xmm_unary_rm_r_evex (Avx512Opcode.Vpabsq) src))
+(rule (x64_vpabsq src) (x64_vpabsq_c src))
 
 ;; Helper for creating `vpopcntb` instructions.
 (decl x64_vpopcntb (XmmMem) Xmm)
-(rule (x64_vpopcntb src)
-      (xmm_unary_rm_r_evex (Avx512Opcode.Vpopcntb) src))
+(rule (x64_vpopcntb src) (x64_vpopcntb_a src))
 
 ;; Helper for creating `vpmullq` instructions.
 ;;
 ;; Requires AVX-512 vl and dq.
 (decl x64_vpmullq (Xmm XmmMem) Xmm)
-(rule (x64_vpmullq src1 src2)
-      (xmm_rm_r_evex (Avx512Opcode.Vpmullq)
-                     src1
-                     src2))
+(rule (x64_vpmullq src1 src2) (x64_vpmullq_c src1 src2))
 
 ;; Helper for creating `vpermi2b` instructions.
 ;;
 ;; Requires AVX-512 vl and vbmi extensions.
 (decl x64_vpermi2b (Xmm Xmm XmmMem) Xmm)
-(rule (x64_vpermi2b src1 src2 src3)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmREvex3 (Avx512Opcode.Vpermi2b)
-                                             src1
-                                             src2
-                                             src3
-                                             dst))))
-        dst))
+(rule (x64_vpermi2b src1 src2 src3) (x64_vpermi2b_a src1 src2 src3))
 
 ;; Helpers for creating vector `shift` instructions.
 (decl x64_psllw (Xmm XmmMemImm) Xmm)

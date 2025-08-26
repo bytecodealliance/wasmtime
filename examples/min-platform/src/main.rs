@@ -8,10 +8,9 @@ fn main() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 fn main() -> Result<()> {
-    use anyhow::{Context, anyhow};
+    use anyhow::{Context, anyhow, bail};
     use libloading::os::unix::{Library, RTLD_GLOBAL, RTLD_NOW, Symbol};
     use object::{Object, ObjectSymbol};
-    use std::io::Write;
     use wasmtime::{Config, Engine};
 
     let mut args = std::env::args();
@@ -153,7 +152,9 @@ fn main() -> Result<()> {
         );
         error_buf.set_len(len);
 
-        std::io::stderr().write_all(&error_buf).unwrap();
+        if len > 0 {
+            bail!("{}", String::from_utf8_lossy(&error_buf));
+        }
 
         #[cfg(feature = "wasi")]
         {
@@ -177,11 +178,12 @@ fn main() -> Result<()> {
                 wasi_component.len(),
             );
             print_buf.set_len(print_len);
+            let print_buf = String::from_utf8_lossy(&print_buf);
 
             if status > 0 {
-                std::io::stderr().write_all(&print_buf).unwrap();
+                bail!("{print_buf}");
             } else {
-                std::io::stdout().write_all(&print_buf).unwrap();
+                println!("{print_buf}");
             }
         }
     }

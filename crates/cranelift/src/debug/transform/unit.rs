@@ -245,15 +245,6 @@ fn replace_pointer_type(
     Ok(wrapper_die_id)
 }
 
-fn is_dead_code(entry: &DebuggingInformationEntry<Reader<'_>>) -> bool {
-    const TOMBSTONE: u64 = u32::MAX as u64;
-
-    match entry.attr_value(gimli::DW_AT_low_pc) {
-        Ok(Some(AttributeValue::Addr(addr))) => addr == TOMBSTONE,
-        _ => false,
-    }
-}
-
 pub(crate) fn clone_unit(
     compilation: &mut Compilation<'_>,
     module: StaticModuleIndex,
@@ -387,7 +378,6 @@ pub(crate) fn clone_unit(
         if !context
             .reachable
             .contains(&entry.offset().to_unit_section_offset(&unit))
-            || is_dead_code(&entry)
         {
             // entry is not reachable: discarding all its info.
             // Here B = C so `depth` is 0. A is the previous node so `cached` =

@@ -43,13 +43,21 @@ impl<_T: 'static> TheWorldPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<TheWorld> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> TheWorldPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<TheWorld>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<TheWorld> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -73,13 +81,13 @@ pub struct TheWorldIndices {
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`TheWorld::instantiate_async`] which only needs a
+///   [`TheWorld::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`TheWorldPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`TheWorldPre::instantiate_async`] to
+///   method then uses [`TheWorldPre::instantiate`] to
 ///   create a [`TheWorld`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -131,6 +139,25 @@ const _: () = {
     }
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
+        /// [`TheWorldPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<TheWorld> {
+            let pre = linker.instantiate_pre(component)?;
+            TheWorldPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`TheWorldIndices::new`] and
+        /// [`TheWorldIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<TheWorld> {
+            let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -143,21 +170,12 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             TheWorldPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`TheWorldIndices::new`] and
-        /// [`TheWorldIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<TheWorld> {
-            let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
-        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::conventions::HostWithStore + Send,
             for<'a> D::Data<'a>: foo::foo::conventions::Host + Send,
             T: 'static + Send,
         {
@@ -207,69 +225,107 @@ pub mod foo {
                     >::ALIGN32
                 );
             };
-            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait HostWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
             pub trait Host: Send {
-                async fn kebab_case(&mut self) -> ();
-                async fn foo(&mut self, x: LudicrousSpeed) -> ();
-                async fn function_with_dashes(&mut self) -> ();
-                async fn function_with_no_weird_characters(&mut self) -> ();
-                async fn apple(&mut self) -> ();
-                async fn apple_pear(&mut self) -> ();
-                async fn apple_pear_grape(&mut self) -> ();
-                async fn a0(&mut self) -> ();
+                fn kebab_case(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn foo(
+                    &mut self,
+                    x: LudicrousSpeed,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn function_with_dashes(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn function_with_no_weird_characters(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn apple(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
+                fn apple_pear(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn apple_pear_grape(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn a0(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
                 /// Comment out identifiers that collide when mapped to snake_case, for now; see
                 ///  https://github.com/WebAssembly/component-model/issues/118
                 /// APPLE: func()
                 /// APPLE-pear-GRAPE: func()
                 /// apple-PEAR-grape: func()
-                async fn is_xml(&mut self) -> ();
-                async fn explicit(&mut self) -> ();
-                async fn explicit_kebab(&mut self) -> ();
+                fn is_xml(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
+                fn explicit(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
+                fn explicit_kebab(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send;
                 /// Identifiers with the same name as keywords are quoted.
-                async fn bool(&mut self) -> ();
+                fn bool(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn kebab_case(&mut self) -> () {
-                    Host::kebab_case(*self).await
+                fn kebab_case(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::kebab_case(*self).await }
                 }
-                async fn foo(&mut self, x: LudicrousSpeed) -> () {
-                    Host::foo(*self, x).await
+                fn foo(
+                    &mut self,
+                    x: LudicrousSpeed,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::foo(*self, x).await }
                 }
-                async fn function_with_dashes(&mut self) -> () {
-                    Host::function_with_dashes(*self).await
+                fn function_with_dashes(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::function_with_dashes(*self).await }
                 }
-                async fn function_with_no_weird_characters(&mut self) -> () {
-                    Host::function_with_no_weird_characters(*self).await
+                fn function_with_no_weird_characters(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::function_with_no_weird_characters(*self).await }
                 }
-                async fn apple(&mut self) -> () {
-                    Host::apple(*self).await
+                fn apple(&mut self) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::apple(*self).await }
                 }
-                async fn apple_pear(&mut self) -> () {
-                    Host::apple_pear(*self).await
+                fn apple_pear(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::apple_pear(*self).await }
                 }
-                async fn apple_pear_grape(&mut self) -> () {
-                    Host::apple_pear_grape(*self).await
+                fn apple_pear_grape(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::apple_pear_grape(*self).await }
                 }
-                async fn a0(&mut self) -> () {
-                    Host::a0(*self).await
+                fn a0(&mut self) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::a0(*self).await }
                 }
                 /// Comment out identifiers that collide when mapped to snake_case, for now; see
                 ///  https://github.com/WebAssembly/component-model/issues/118
                 /// APPLE: func()
                 /// APPLE-pear-GRAPE: func()
                 /// apple-PEAR-grape: func()
-                async fn is_xml(&mut self) -> () {
-                    Host::is_xml(*self).await
+                fn is_xml(&mut self) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::is_xml(*self).await }
                 }
-                async fn explicit(&mut self) -> () {
-                    Host::explicit(*self).await
+                fn explicit(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::explicit(*self).await }
                 }
-                async fn explicit_kebab(&mut self) -> () {
-                    Host::explicit_kebab(*self).await
+                fn explicit_kebab(
+                    &mut self,
+                ) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::explicit_kebab(*self).await }
                 }
                 /// Identifiers with the same name as keywords are quoted.
-                async fn bool(&mut self) -> () {
-                    Host::bool(*self).await
+                fn bool(&mut self) -> impl ::core::future::Future<Output = ()> + Send {
+                    async move { Host::bool(*self).await }
                 }
             }
             pub fn add_to_linker<T, D>(
@@ -277,7 +333,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -509,7 +565,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/conventions` does \
-                not have export `{name}`"
+                                        not have export `{name}`"
                                     )
                                 })
                         };

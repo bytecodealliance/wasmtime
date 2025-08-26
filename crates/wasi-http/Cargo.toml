@@ -11,6 +11,11 @@ description = "Experimental HTTP library for WebAssembly in Wasmtime"
 [lints]
 workspace = true
 
+[features]
+default = ["default-send-request"]
+default-send-request = ["dep:tokio-rustls", "dep:rustls", "dep:webpki-roots"]
+p3 = ["wasmtime-wasi/p3"]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -29,16 +34,19 @@ tracing = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-io = { workspace = true }
 wasmtime = { workspace = true, features = ['component-model'] }
-tokio-rustls = { workspace = true }
-rustls = { workspace = true }
-webpki-roots = { workspace = true }
+tokio-rustls = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+webpki-roots = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-programs-artifacts = { workspace = true }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
 wasmtime = { workspace = true, features = ['cranelift'] }
-tokio = { workspace = true, features = ['macros'] }
-futures = { workspace = true, default-features = false, features = ['alloc'] }
+tokio = { workspace = true, features = ['fs', 'macros'] }
+futures = { workspace = true, default-features = false, features = ['alloc', 'async-await'] }
 sha2 = "0.10.2"
 base64 = { workspace = true }
+flate2 = { workspace = true }
+wasm-compose = { workspace = true }
+tempfile = { workspace = true }

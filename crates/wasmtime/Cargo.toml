@@ -19,7 +19,7 @@ all-features = true
 [dependencies]
 wasmtime-asm-macros = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
-wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int", "perf_jitdump"], optional = true }
+wasmtime-jit-debug = { workspace = true, optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
@@ -49,9 +49,8 @@ postcard = { workspace = true }
 indexmap = { workspace = true }
 once_cell = { version = "1.12.0", optional = true }
 rayon = { version = "1.0", optional = true }
-object = { workspace = true }
+object = { workspace = true, features = ['unaligned'] }
 async-trait = { workspace = true, optional = true }
-trait-variant = { workspace = true, optional = true }
 encoding_rs = { version = "0.8.31", optional = true }
 bumpalo = "3.11.0"
 fxprof-processed-profile = { version = "0.6.0", optional = true }
@@ -101,10 +100,10 @@ env_logger = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
-wasi-common = { path = "../wasi-common", default-features = true }
 libtest-mimic = { workspace = true }
 cranelift-native = { workspace = true }
 wasmtime-test-util = { workspace = true }
+tokio = { workspace = true, features = ["macros", "sync", "rt-multi-thread"] }
 
 [build-dependencies]
 cc = { workspace = true, optional = true }
@@ -112,6 +111,14 @@ wasmtime-versioned-export-macros = { workspace = true, optional = true }
 
 [[test]]
 name = "host_segfault"
+harness = false
+
+[[test]]
+name = "engine_across_forks"
+harness = false
+
+[[test]]
+name = "pooling_alloc_near_oom"
 harness = false
 
 # =============================================================================
@@ -175,12 +182,12 @@ incremental-cache = ["wasmtime-cranelift?/incremental-cache", "std"]
 # Enables support for profiling guest modules.
 profiling = [
   "dep:fxprof-processed-profile",
-  "dep:wasmtime-jit-debug",
   "dep:ittapi",
   "dep:rustix",
   "rustix/thread",
   "dep:serde_json",
   "std",
+  "wasmtime-jit-debug/perf_jitdump",
 ]
 
 # Enables parallel compilation of WebAssembly code.
@@ -193,8 +200,6 @@ cache = ["dep:wasmtime-cache", "std"]
 # `async fn` and calling functions asynchronously.
 async = [
   "dep:wasmtime-fiber",
-  "dep:async-trait",
-  "dep:trait-variant",
   "wasmtime-component-macro?/async",
   "runtime",
 ]
@@ -243,7 +248,9 @@ coredump = ["dep:wasm-encoder", "runtime", "std"]
 
 # Export some symbols from the final binary to assist in debugging
 # Cranelift-generated code with native debuggers like GDB and LLDB.
-debug-builtins = ["dep:wasmtime-jit-debug", "std"]
+debug-builtins = [
+  "wasmtime-jit-debug/gdb_jit_int",
+]
 
 # Enable support for executing compiled Wasm modules.
 runtime = [
@@ -257,6 +264,7 @@ runtime = [
   "dep:windows-sys",
   "pulley-interpreter/interp",
   "dep:wasmtime-unwinder",
+  "dep:async-trait",
 ]
 
 # Enable support for garbage collection-related things.
@@ -334,6 +342,7 @@ std = [
   'addr2line?/std',
   "dep:rustix",
   "wasmtime-jit-icache-coherence",
+  "wasmtime-jit-debug?/std",
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom

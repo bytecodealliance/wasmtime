@@ -10,7 +10,6 @@ use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use crate::{CodegenError, CodegenResult, settings};
 use crate::{machinst::*, trace};
 use alloc::string::{String, ToString};
-use alloc::vec::Vec;
 use regalloc2::RegClass;
 use smallvec::SmallVec;
 
@@ -155,7 +154,12 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::Call { info } => {
             let CallInfo {
-                uses, defs, dest, ..
+                uses,
+                defs,
+                dest,
+                try_call_info,
+                clobbers,
+                ..
             } = &mut **info;
 
             // Pulley supports having the first few integer arguments in any
@@ -176,10 +180,19 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                     RetLocation::Stack(..) => collector.any_def(vreg),
                 }
             }
-            collector.reg_clobbers(info.clobbers);
+            collector.reg_clobbers(*clobbers);
+            if let Some(try_call_info) = try_call_info {
+                try_call_info.collect_operands(collector);
+            }
         }
         Inst::IndirectCallHost { info } => {
-            let CallInfo { uses, defs, .. } = &mut **info;
+            let CallInfo {
+                uses,
+                defs,
+                try_call_info,
+                clobbers,
+                ..
+            } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
@@ -189,11 +202,20 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                     RetLocation::Stack(..) => collector.any_def(vreg),
                 }
             }
-            collector.reg_clobbers(info.clobbers);
+            collector.reg_clobbers(*clobbers);
+            if let Some(try_call_info) = try_call_info {
+                try_call_info.collect_operands(collector);
+            }
         }
         Inst::IndirectCall { info } => {
             collector.reg_use(&mut info.dest);
-            let CallInfo { uses, defs, .. } = &mut **info;
+            let CallInfo {
+                uses,
+                defs,
+                try_call_info,
+                clobbers,
+                ..
+            } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
@@ -203,7 +225,10 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                     RetLocation::Stack(..) => collector.any_def(vreg),
                 }
             }
-            collector.reg_clobbers(info.clobbers);
+            collector.reg_clobbers(*clobbers);
+            if let Some(try_call_info) = try_call_info {
+                try_call_info.collect_operands(collector);
+            }
         }
         Inst::ReturnCall { info } => {
             for CallArgPair { vreg, preg } in &mut info.uses {
@@ -458,6 +483,9 @@ where
             Inst::ReturnCall { .. } | Inst::ReturnIndirectCall { .. } => MachTerminator::RetCall,
             Inst::Call { info } if info.try_call_info.is_some() => MachTerminator::Branch,
             Inst::IndirectCall { info } if info.try_call_info.is_some() => MachTerminator::Branch,
+            Inst::IndirectCallHost { info } if info.try_call_info.is_some() => {
+                MachTerminator::Branch
+            }
             _ => MachTerminator::None,
         }
     }
@@ -588,13 +616,11 @@ pub fn reg_name(reg: Reg) -> String {
 }
 
 fn pretty_print_try_call(info: &TryCallInfo) -> String {
-    let dests = info
-        .exception_dests
-        .iter()
-        .map(|(tag, label)| format!("{tag:?}: {label:?}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("; jump {:?}; catch [{dests}]", info.continuation)
+    format!(
+        "; jump {:?}; catch [{}]",
+        info.continuation,
+        info.pretty_print_dests()
+    )
 }
 
 impl Inst {
@@ -677,7 +703,12 @@ impl Inst {
             }
 
             Inst::IndirectCallHost { info } => {
-                format!("indirect_call_host {info:?}")
+                let try_call = info
+                    .try_call_info
+                    .as_ref()
+                    .map(|tci| pretty_print_try_call(tci))
+                    .unwrap_or_default();
+                format!("indirect_call_host {info:?}{try_call}")
             }
 
             Inst::Jump { label } => format!("jump {}", label.to_string()),

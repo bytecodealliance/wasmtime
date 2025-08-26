@@ -31,7 +31,7 @@
                   (with "f" (func $i1 "f"))))
 )
 
-;; function u0:1(i64 vmctx, i64) -> i32 tail {
+;; function u2:0(i64 vmctx, i64) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16

@@ -5,15 +5,13 @@ use crate::runtime::vm::instance::{Instance, InstanceHandle};
 use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
-use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, VMFuncRef, VMGcRef, VMStore};
-use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque};
-use crate::vm::VMGlobalDefinition;
-use core::ptr::NonNull;
+use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo};
+use crate::store::{InstanceId, StoreOpaque, StoreResourceLimiter};
+use crate::{OpaqueRootScope, Val};
 use core::{mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, PrimaryMap, SizeOverflow, TableInitialValue, Trap, Tunables,
-    VMOffsets, WasmHeapTopType,
+    MemoryInitializer, Module, PrimaryMap, SizeOverflow, TableInitialValue, Trap, VMOffsets,
 };
 
 #[cfg(feature = "gc")]
@@ -32,12 +30,12 @@ pub use self::on_demand::OnDemandInstanceAllocator;
 mod pooling;
 #[cfg(feature = "pooling-allocator")]
 pub use self::pooling::{
-    InstanceLimits, PoolConcurrencyLimitError, PoolingInstanceAllocator,
+    InstanceLimits, PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
     PoolingInstanceAllocatorConfig,
 };
 
 /// Represents a request for a new runtime instance.
-pub struct InstanceAllocationRequest<'a> {
+pub struct InstanceAllocationRequest<'a, 'b> {
     /// The instance id that this will be assigned within the store once the
     /// allocation has finished.
     pub id: InstanceId,
@@ -52,79 +50,11 @@ pub struct InstanceAllocationRequest<'a> {
     /// The imports to use for the instantiation.
     pub imports: Imports<'a>,
 
-    /// A pointer to the "store" for this instance to be allocated. The store
-    /// correlates with the `Store` in wasmtime itself, and lots of contextual
-    /// information about the execution of wasm can be learned through the
-    /// store.
-    ///
-    /// Note that this is a raw pointer and has a static lifetime, both of which
-    /// are a bit of a lie. This is done purely so a store can learn about
-    /// itself when it gets called as a host function, and additionally so this
-    /// runtime can access internals as necessary (such as the
-    /// VMExternRefActivationsTable or the resource limiter methods).
-    ///
-    /// Note that this ends up being a self-pointer to the instance when stored.
-    /// The reason is that the instance itself is then stored within the store.
-    /// We use a number of `PhantomPinned` declarations to indicate this to the
-    /// compiler. More info on this in `wasmtime/src/store.rs`
-    pub store: StorePtr,
+    /// The store that this instance is being allocated into.
+    pub store: &'a StoreOpaque,
 
-    /// Indicates '--wmemcheck' flag.
-    #[cfg(feature = "wmemcheck")]
-    pub wmemcheck: bool,
-
-    /// Request that the instance's memories be protected by a specific
-    /// protection key.
-    #[cfg_attr(
-        not(feature = "pooling-allocator"),
-        expect(
-            dead_code,
-            reason = "easier to keep this field than remove it, not perf-critical to remove"
-        )
-    )]
-    pub pkey: Option<ProtectionKey>,
-
-    /// Tunable configuration options the engine is using.
-    pub tunables: &'a Tunables,
-}
-
-/// A pointer to a Store. This Option<*mut dyn Store> is wrapped in a struct
-/// so that the function to create a &mut dyn Store is a method on a member of
-/// InstanceAllocationRequest, rather than on a &mut InstanceAllocationRequest
-/// itself, because several use-sites require a split mut borrow on the
-/// InstanceAllocationRequest.
-pub struct StorePtr(Option<NonNull<dyn VMStore>>);
-
-// We can't make `VMStore: Send + Sync` because that requires making all of
-// Wastime's internals generic over the `Store`'s `T`. So instead, we take care
-// in the whole VM layer to only use the `VMStore` in ways that are `Send`- and
-// `Sync`-safe and we have to have these unsafe impls.
-unsafe impl Send for StorePtr {}
-unsafe impl Sync for StorePtr {}
-
-impl StorePtr {
-    /// A pointer to no Store.
-    pub fn empty() -> Self {
-        Self(None)
-    }
-
-    /// A pointer to a Store.
-    pub fn new(ptr: NonNull<dyn VMStore>) -> Self {
-        Self(Some(ptr))
-    }
-
-    /// The raw contents of this struct
-    pub fn as_raw(&self) -> Option<NonNull<dyn VMStore>> {
-        self.0
-    }
-
-    /// Use the StorePtr as a mut ref to the Store.
-    ///
-    /// Safety: must not be used outside the original lifetime of the borrow.
-    pub(crate) unsafe fn get(&mut self) -> Option<&mut dyn VMStore> {
-        let ptr = unsafe { self.0?.as_mut() };
-        Some(ptr)
-    }
+    /// The store's resource limiter, if configured by the embedder.
+    pub limiter: Option<&'a mut StoreResourceLimiter<'b>>,
 }
 
 /// The index of a memory allocation within an `InstanceAllocator`.
@@ -197,11 +127,12 @@ impl GcHeapAllocationIndex {
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime
 /// internals to implement correctly.
-pub unsafe trait InstanceAllocatorImpl {
+#[async_trait::async_trait]
+pub unsafe trait InstanceAllocator: Send + Sync {
     /// Validate whether a component (including all of its contained core
     /// modules) is allocatable by this instance allocator.
     #[cfg(feature = "component-model")]
-    fn validate_component_impl<'a>(
+    fn validate_component<'a>(
         &self,
         component: &Component,
         offsets: &VMComponentOffsets<HostPtr>,
@@ -209,11 +140,11 @@ pub unsafe trait InstanceAllocatorImpl {
     ) -> Result<()>;
 
     /// Validate whether a module is allocatable by this instance allocator.
-    fn validate_module_impl(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()>;
+    fn validate_module(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()>;
 
     /// Validate whether a memory is allocatable by this instance allocator.
     #[cfg(feature = "gc")]
-    fn validate_memory_impl(&self, memory: &wasmtime_environ::Memory) -> Result<()>;
+    fn validate_memory(&self, memory: &wasmtime_environ::Memory) -> Result<()>;
 
     /// Increment the count of concurrent component instances that are currently
     /// allocated, if applicable.
@@ -230,7 +161,7 @@ pub unsafe trait InstanceAllocatorImpl {
     //    associated types are not object safe.
     //
     // 2. We would want a parameterized `Drop` implementation so that we could
-    //    pass in the `InstanceAllocatorImpl` on drop, but this doesn't exist in
+    //    pass in the `InstanceAllocator` on drop, but this doesn't exist in
     //    Rust. Therefore, we would be forced to add reference counting and
     //    stuff like that to keep a handle on the instance allocator from this
     //    theoretical type. That's a bummer.
@@ -253,17 +184,10 @@ pub unsafe trait InstanceAllocatorImpl {
     fn decrement_core_instance_count(&self);
 
     /// Allocate a memory for an instance.
-    ///
-    /// # Unsafety
-    ///
-    /// The memory and its associated module must have already been validated by
-    /// `Self::validate_memory` (or transtively via
-    /// `Self::validate_{module,component}`) and passed that validation.
-    unsafe fn allocate_memory(
+    async fn allocate_memory(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)>;
 
@@ -282,16 +206,10 @@ pub unsafe trait InstanceAllocatorImpl {
     );
 
     /// Allocate a table for an instance.
-    ///
-    /// # Unsafety
-    ///
-    /// The table and its associated module must have already been validated by
-    /// `Self::validate_module` and passed that validation.
-    unsafe fn allocate_table(
+    async fn allocate_table(
         &self,
-        req: &mut InstanceAllocationRequest,
+        req: &mut InstanceAllocationRequest<'_, '_>,
         table: &wasmtime_environ::Table,
-        tunables: &Tunables,
         table_index: DefinedTableIndex,
     ) -> Result<(TableAllocationIndex, Table)>;
 
@@ -368,38 +286,15 @@ pub unsafe trait InstanceAllocatorImpl {
 
     /// Allow access to memory regions protected by any protection key.
     fn allow_all_pkeys(&self);
+
+    /// Returns `Some(&PoolingInstanceAllocator)` if this is one.
+    #[cfg(feature = "pooling-allocator")]
+    fn as_pooling(&self) -> Option<&PoolingInstanceAllocator> {
+        None
+    }
 }
 
-/// A thing that can allocate instances.
-///
-/// Don't implement this trait directly, instead implement
-/// `InstanceAllocatorImpl` and you'll get this trait for free via a blanket
-/// impl.
-pub trait InstanceAllocator: InstanceAllocatorImpl {
-    /// Validate whether a component (including all of its contained core
-    /// modules) is allocatable with this instance allocator.
-    #[cfg(feature = "component-model")]
-    fn validate_component<'a>(
-        &self,
-        component: &Component,
-        offsets: &VMComponentOffsets<HostPtr>,
-        get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
-    ) -> Result<()> {
-        InstanceAllocatorImpl::validate_component_impl(self, component, offsets, get_module)
-    }
-
-    /// Validate whether a core module is allocatable with this instance
-    /// allocator.
-    fn validate_module(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
-        InstanceAllocatorImpl::validate_module_impl(self, module, offsets)
-    }
-
-    /// Validate whether a memory is allocatable with this instance allocator.
-    #[cfg(feature = "gc")]
-    fn validate_memory(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
-        InstanceAllocatorImpl::validate_memory_impl(self, memory)
-    }
-
+impl dyn InstanceAllocator + '_ {
     /// Allocates a fresh `InstanceHandle` for the `req` given.
     ///
     /// This will allocate memories and tables internally from this allocator
@@ -409,46 +304,68 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
     /// Note that the returned instance must still have `.initialize(..)` called
     /// on it to complete the instantiation process.
     ///
-    /// # Unsafety
+    /// # Safety
     ///
-    /// The request's associated module, memories, tables, and vmctx must have
-    /// already have been validated by `Self::validate_module`.
-    unsafe fn allocate_module(
+    /// The `request` provided must be valid, e.g. the imports within are
+    /// correctly sized/typed for the instance being created.
+    pub(crate) async unsafe fn allocate_module(
         &self,
-        mut request: InstanceAllocationRequest,
+        mut request: InstanceAllocationRequest<'_, '_>,
     ) -> Result<InstanceHandle> {
         let module = request.runtime_info.env_module();
 
-        #[cfg(debug_assertions)]
-        InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
-            .expect("module should have already been validated before allocation");
+        if cfg!(debug_assertions) {
+            InstanceAllocator::validate_module(self, module, request.runtime_info.offsets())
+                .expect("module should have already been validated before allocation");
+        }
 
         self.increment_core_instance_count()?;
 
         let num_defined_memories = module.num_defined_memories();
-        let mut memories = PrimaryMap::with_capacity(num_defined_memories);
-
         let num_defined_tables = module.num_defined_tables();
-        let mut tables = PrimaryMap::with_capacity(num_defined_tables);
 
-        match (|| {
-            // SAFETY: validation of tables/memories is a contract of this
-            // function.
-            unsafe {
-                self.allocate_memories(&mut request, &mut memories)?;
-                self.allocate_tables(&mut request, &mut tables)?;
-            }
-            Ok(())
-        })() {
-            Ok(_) => Ok(Instance::new(request, memories, tables, &module.memories)),
-            Err(e) => {
+        let mut guard = DeallocateOnDrop {
+            run_deallocate: true,
+            memories: PrimaryMap::with_capacity(num_defined_memories),
+            tables: PrimaryMap::with_capacity(num_defined_tables),
+            allocator: self,
+        };
+
+        self.allocate_memories(&mut request, &mut guard.memories)
+            .await?;
+        self.allocate_tables(&mut request, &mut guard.tables)
+            .await?;
+        guard.run_deallocate = false;
+        // SAFETY: memories/tables were just allocated from the store within
+        // `request` and this function's own contract requires that the
+        // imports are valid.
+        return unsafe {
+            Ok(Instance::new(
+                request,
+                mem::take(&mut guard.memories),
+                mem::take(&mut guard.tables),
+                &module.memories,
+            ))
+        };
+
+        struct DeallocateOnDrop<'a> {
+            run_deallocate: bool,
+            memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+            tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+            allocator: &'a (dyn InstanceAllocator + 'a),
+        }
+
+        impl Drop for DeallocateOnDrop<'_> {
+            fn drop(&mut self) {
+                if !self.run_deallocate {
+                    return;
+                }
                 // SAFETY: these were previously allocated by this allocator
                 unsafe {
-                    self.deallocate_memories(&mut memories);
-                    self.deallocate_tables(&mut tables);
+                    self.allocator.deallocate_memories(&mut self.memories);
+                    self.allocator.deallocate_tables(&mut self.tables);
                 }
-                self.decrement_core_instance_count();
-                Err(e)
+                self.allocator.decrement_core_instance_count();
             }
         }
     }
@@ -461,7 +378,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
     /// # Unsafety
     ///
     /// The instance must have previously been allocated by `Self::allocate`.
-    unsafe fn deallocate_module(&self, handle: &mut InstanceHandle) {
+    pub(crate) unsafe fn deallocate_module(&self, handle: &mut InstanceHandle) {
         // SAFETY: the contract of `deallocate_*` is itself a contract of this
         // function, that the memories/tables were previously allocated from
         // here.
@@ -475,31 +392,26 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
 
     /// Allocate the memories for the given instance allocation request, pushing
     /// them into `memories`.
-    ///
-    /// # Unsafety
-    ///
-    /// The request's associated module and memories must have previously been
-    /// validated by `Self::validate_module`.
-    unsafe fn allocate_memories(
+    async fn allocate_memories(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         memories: &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
 
-        #[cfg(debug_assertions)]
-        InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
-            .expect("module should have already been validated before allocation");
+        if cfg!(debug_assertions) {
+            InstanceAllocator::validate_module(self, module, request.runtime_info.offsets())
+                .expect("module should have already been validated before allocation");
+        }
 
         for (memory_index, ty) in module.memories.iter().skip(module.num_imported_memories) {
             let memory_index = module
                 .defined_memory_index(memory_index)
                 .expect("should be a defined memory since we skipped imported ones");
 
-            // SAFETY: validation of the memory from this allocator is itself a
-            // contract of this function.
-            let memory =
-                unsafe { self.allocate_memory(request, ty, request.tunables, Some(memory_index))? };
+            let memory = self
+                .allocate_memory(request, ty, Some(memory_index))
+                .await?;
             memories.push(memory);
         }
 
@@ -533,31 +445,24 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
 
     /// Allocate tables for the given instance allocation request, pushing them
     /// into `tables`.
-    ///
-    /// # Unsafety
-    ///
-    /// The request's associated module and tables must have previously been
-    /// validated by `Self::validate_module`.
-    unsafe fn allocate_tables(
+    async fn allocate_tables(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         tables: &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
 
-        #[cfg(debug_assertions)]
-        InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
-            .expect("module should have already been validated before allocation");
+        if cfg!(debug_assertions) {
+            InstanceAllocator::validate_module(self, module, request.runtime_info.offsets())
+                .expect("module should have already been validated before allocation");
+        }
 
         for (index, table) in module.tables.iter().skip(module.num_imported_tables) {
             let def_index = module
                 .defined_table_index(index)
                 .expect("should be a defined table since we skipped imported ones");
 
-            // SAFETY: the contract here is that the table has been validated by
-            // this allocator which is a contract of this function itself.
-            let table =
-                unsafe { self.allocate_table(request, table, request.tunables, def_index)? };
+            let table = self.allocate_table(request, table, def_index).await?;
             tables.push(table);
         }
 
@@ -584,26 +489,20 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
     }
 }
 
-// Every `InstanceAllocatorImpl` is an `InstanceAllocator` when used
-// correctly. Also, no one is allowed to override this trait's methods, they
-// must use the defaults. This blanket impl provides both of those things.
-impl<T: InstanceAllocatorImpl> InstanceAllocator for T {}
-
 fn check_table_init_bounds(
     store: &mut StoreOpaque,
     instance: InstanceId,
     module: &Module,
 ) -> Result<()> {
     let mut const_evaluator = ConstExprEvaluator::default();
+    let mut store = OpaqueRootScope::new(store);
 
     for segment in module.table_initialization.segments.iter() {
         let mut context = ConstEvalContext::new(instance);
-        let start = unsafe {
-            const_evaluator
-                .eval(store, &mut context, &segment.offset)
-                .expect("const expression should be valid")
-        };
-        let start = usize::try_from(start.get_u32()).unwrap();
+        let start = const_evaluator
+            .eval_int(&mut store, &mut context, &segment.offset)
+            .expect("const expression should be valid");
+        let start = usize::try_from(start.unwrap_i32().cast_unsigned()).unwrap();
         let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
 
         let table = store.instance_mut(instance).get_table(segment.table_index);
@@ -620,72 +519,31 @@ fn check_table_init_bounds(
     Ok(())
 }
 
-fn initialize_tables(
+async fn initialize_tables(
     store: &mut StoreOpaque,
+    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     context: &mut ConstEvalContext,
     const_evaluator: &mut ConstExprEvaluator,
     module: &Module,
 ) -> Result<()> {
+    let mut store = OpaqueRootScope::new(store);
     for (table, init) in module.table_initialization.initial_values.iter() {
         match init {
             // Tables are always initially null-initialized at this time
             TableInitialValue::Null { precomputed: _ } => {}
 
             TableInitialValue::Expr(expr) => {
-                let raw = unsafe {
-                    const_evaluator
-                        .eval(store, context, expr)
-                        .expect("const expression should be valid")
-                };
+                let init = const_evaluator
+                    .eval(&mut store, limiter.as_deref_mut(), context, expr)
+                    .await
+                    .expect("const expression should be valid");
                 let idx = module.table_index(table);
-                match module.tables[idx].ref_type.heap_type.top() {
-                    WasmHeapTopType::Extern => {
-                        store.gc_store_mut()?;
-                        let (gc_store, instance) =
-                            store.optional_gc_store_and_instance_mut(context.instance);
-                        let gc_store = gc_store.unwrap();
-                        let table = instance.get_defined_table(table);
-                        let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
-                        let items = (0..table.size())
-                            .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
-                        table.init_gc_refs(0, items)?;
-                    }
-
-                    WasmHeapTopType::Any => {
-                        store.gc_store_mut()?;
-                        let (gc_store, instance) =
-                            store.optional_gc_store_and_instance_mut(context.instance);
-                        let gc_store = gc_store.unwrap();
-                        let table = instance.get_defined_table(table);
-                        let gc_ref = VMGcRef::from_raw_u32(raw.get_anyref());
-                        let items = (0..table.size())
-                            .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
-                        table.init_gc_refs(0, items)?;
-                    }
-
-                    WasmHeapTopType::Exn => {
-                        store.gc_store_mut()?;
-                        let (gc_store, instance) =
-                            store.optional_gc_store_and_instance_mut(context.instance);
-                        let gc_store = gc_store.unwrap();
-                        let table = instance.get_defined_table(table);
-                        let gc_ref = VMGcRef::from_raw_u32(raw.get_exnref());
-                        let items = (0..table.size())
-                            .map(|_| gc_ref.as_ref().map(|r| gc_store.clone_gc_ref(r)));
-                        table.init_gc_refs(0, items)?;
-                    }
-
-                    WasmHeapTopType::Func => {
-                        let table = store
-                            .instance_mut(context.instance)
-                            .get_defined_table(table);
-                        let funcref = NonNull::new(raw.get_funcref().cast::<VMFuncRef>());
-                        let items = (0..table.size()).map(|_| funcref);
-                        table.init_func(0, items)?;
-                    }
-
-                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
-                }
+                let id = store.id();
+                let table = store
+                    .instance_mut(context.instance)
+                    .get_exported_table(id, idx);
+                let size = table._size(&store);
+                table._fill(&mut store, 0, init.ref_().unwrap(), size)?;
             }
         }
     }
@@ -698,24 +556,35 @@ fn initialize_tables(
     // iterates over all segments (Segments mode) or leftover
     // segments (FuncTable mode) to initialize.
     for segment in module.table_initialization.segments.iter() {
-        let start = unsafe {
-            const_evaluator
-                .eval(store, context, &segment.offset)
-                .expect("const expression should be valid")
-        };
+        let start = const_evaluator
+            .eval_int(&mut store, context, &segment.offset)
+            .expect("const expression should be valid");
+        let start = get_index(
+            start,
+            store.instance(context.instance).env_module().tables[segment.table_index].idx_type,
+        );
         Instance::table_init_segment(
-            store,
+            &mut store,
+            limiter.as_deref_mut(),
             context.instance,
             const_evaluator,
             segment.table_index,
             &segment.elements,
-            start.get_u64(),
+            start,
             0,
             segment.elements.len(),
-        )?;
+        )
+        .await?;
     }
 
     Ok(())
+}
+
+fn get_index(val: &Val, ty: wasmtime_environ::IndexType) -> u64 {
+    match ty {
+        wasmtime_environ::IndexType::I32 => val.unwrap_i32().cast_unsigned().into(),
+        wasmtime_environ::IndexType::I64 => val.unwrap_i64().cast_unsigned(),
+    }
 }
 
 fn get_memory_init_start(
@@ -725,12 +594,15 @@ fn get_memory_init_start(
 ) -> Result<u64> {
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
-    unsafe { const_evaluator.eval(store, &mut context, &init.offset) }.map(|v| {
-        match store.instance(instance).env_module().memories[init.memory_index].idx_type {
-            wasmtime_environ::IndexType::I32 => v.get_u32().into(),
-            wasmtime_environ::IndexType::I64 => v.get_u64(),
-        }
-    })
+    let mut store = OpaqueRootScope::new(store);
+    const_evaluator
+        .eval_int(&mut store, &mut context, &init.offset)
+        .map(|v| {
+            get_index(
+                v,
+                store.instance(instance).env_module().memories[init.memory_index].idx_type,
+            )
+        })
 }
 
 fn check_memory_init_bounds(
@@ -799,20 +671,15 @@ fn initialize_memories(
             memory: wasmtime_environ::MemoryIndex,
             expr: &wasmtime_environ::ConstExpr,
         ) -> Option<u64> {
-            let val = unsafe { self.const_evaluator.eval(self.store, self.context, expr) }
+            let mut store = OpaqueRootScope::new(&mut *self.store);
+            let val = self
+                .const_evaluator
+                .eval_int(&mut store, self.context, expr)
                 .expect("const expression should be valid");
-            Some(
-                match self
-                    .store
-                    .instance(self.context.instance)
-                    .env_module()
-                    .memories[memory]
-                    .idx_type
-                {
-                    wasmtime_environ::IndexType::I32 => val.get_u32().into(),
-                    wasmtime_environ::IndexType::I64 => val.get_u64(),
-                },
-            )
+            Some(get_index(
+                val,
+                store.instance(self.context.instance).env_module().memories[memory].idx_type,
+            ))
         }
 
         fn write(
@@ -877,8 +744,9 @@ fn check_init_bounds(store: &mut StoreOpaque, instance: InstanceId, module: &Mod
     Ok(())
 }
 
-fn initialize_globals(
+async fn initialize_globals(
     store: &mut StoreOpaque,
+    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     context: &mut ConstEvalContext,
     const_evaluator: &mut ConstExprEvaluator,
     module: &Module,
@@ -888,38 +756,54 @@ fn initialize_globals(
         module
     ));
 
-    let mut store = AutoAssertNoGc::new(store);
+    let mut store = OpaqueRootScope::new(store);
 
     for (index, init) in module.global_initializers.iter() {
-        let raw = unsafe {
+        // Attempt a simple, synchronous evaluation before hitting the
+        // general-purpose `.await` point below. This benchmarks ~15% faster in
+        // instantiation vs just falling through to `.await` below.
+        let val = if let Some(val) = const_evaluator.try_simple(init) {
+            val
+        } else {
             const_evaluator
-                .eval(&mut store, context, init)
+                .eval(&mut store, limiter.as_deref_mut(), context, init)
+                .await
                 .expect("should be a valid const expr")
         };
 
-        let instance = store.instance_mut(context.instance);
-        let to = instance.global_ptr(index);
-        let wasm_ty = module.globals[module.global_index(index)].wasm_ty;
+        let id = store.id();
+        let index = module.global_index(index);
+        let mut instance = store.instance_mut(context.instance);
 
         #[cfg(feature = "wmemcheck")]
-        if index.as_u32() == 0 && wasm_ty == wasmtime_environ::WasmValType::I32 {
-            if let Some(wmemcheck) = instance.wmemcheck_state_mut() {
-                let size = usize::try_from(raw.get_i32()).unwrap();
+        if index.as_u32() == 0
+            && module.globals[index].wasm_ty == wasmtime_environ::WasmValType::I32
+        {
+            if let Some(wmemcheck) = instance.as_mut().wmemcheck_state_mut() {
+                let size = usize::try_from(val.unwrap_i32()).unwrap();
                 wmemcheck.set_stack_size(size);
             }
         }
 
-        // This write is safe because we know we have the correct module for
-        // this instance and its vmctx due to the assert above.
+        let global = instance.as_mut().get_exported_global(id, index);
+
+        // Note that mutability is bypassed here because this is, by definition,
+        // initialization of globals meaning that if it's an immutable global
+        // this is the one and only write.
+        //
+        // SAFETY: this is a valid module so `val` should have the correct type
+        // for this global, and it's safe to write to a global for the first
+        // time as-is happening here.
         unsafe {
-            to.write(VMGlobalDefinition::from_val_raw(&mut store, wasm_ty, raw)?);
-        };
+            global.set_unchecked(&mut store, &val)?;
+        }
     }
     Ok(())
 }
 
-pub fn initialize_instance(
+pub async fn initialize_instance(
     store: &mut StoreOpaque,
+    mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     instance: InstanceId,
     module: &Module,
     is_bulk_memory: bool,
@@ -935,8 +819,22 @@ pub fn initialize_instance(
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
 
-    initialize_globals(store, &mut context, &mut const_evaluator, module)?;
-    initialize_tables(store, &mut context, &mut const_evaluator, module)?;
+    initialize_globals(
+        store,
+        limiter.as_deref_mut(),
+        &mut context,
+        &mut const_evaluator,
+        module,
+    )
+    .await?;
+    initialize_tables(
+        store,
+        limiter.as_deref_mut(),
+        &mut context,
+        &mut const_evaluator,
+        module,
+    )
+    .await?;
     initialize_memories(store, &mut context, &mut const_evaluator, &module)?;
 
     Ok(())
@@ -948,7 +846,6 @@ mod tests {
 
     #[test]
     fn allocator_traits_are_object_safe() {
-        fn _instance_allocator(_: &dyn InstanceAllocatorImpl) {}
-        fn _instance_allocator_ext(_: &dyn InstanceAllocator) {}
+        fn _instance_allocator(_: &dyn InstanceAllocator) {}
     }
 }

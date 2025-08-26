@@ -20,7 +20,7 @@
 //! Cranelift the body of the callee that is to be inlined.
 
 use crate::cursor::{Cursor as _, FuncCursor};
-use crate::ir::{self, InstBuilder as _};
+use crate::ir::{self, ExceptionTableData, ExceptionTableItem, InstBuilder as _};
 use crate::result::CodegenResult;
 use crate::trace;
 use crate::traversals::Dfs;
@@ -37,12 +37,19 @@ type SmallBlockCallVec = SmallVec<[ir::BlockCall; 8]>;
 pub enum InlineCommand<'a> {
     /// Keep the call as-is, out-of-line, and do not inline the callee.
     KeepCall,
+
     /// Inline the call, using this function as the body of the callee.
     ///
     /// It is the `Inline` implementor's responsibility to ensure that this
     /// function is the correct callee. Providing the wrong function may result
     /// in panics during compilation or incorrect runtime behavior.
-    Inline(Cow<'a, ir::Function>),
+    Inline {
+        /// The callee function's body.
+        callee: Cow<'a, ir::Function>,
+        /// Whether to visit any function calls within the callee body after
+        /// inlining and consider them for further inlining.
+        visit_callee: bool,
+    },
 }
 
 /// A trait for directing Cranelift whether to inline a particular call or not.
@@ -73,7 +80,7 @@ pub trait Inline {
     /// Failure to uphold these invariants may result in panics during
     /// compilation or incorrect runtime behavior in the generated code.
     fn inline(
-        &self,
+        &mut self,
         caller: &ir::Function,
         call_inst: ir::Inst,
         call_opcode: ir::Opcode,
@@ -82,12 +89,12 @@ pub trait Inline {
     ) -> InlineCommand<'_>;
 }
 
-impl<'a, T> Inline for &'a T
+impl<'a, T> Inline for &'a mut T
 where
     T: Inline,
 {
     fn inline(
-        &self,
+        &mut self,
         caller: &ir::Function,
         inst: ir::Inst,
         opcode: ir::Opcode,
@@ -102,35 +109,55 @@ where
 /// instruction, and inline the callee when directed to do so.
 ///
 /// Returns whether any call was inlined.
-pub(crate) fn do_inlining(func: &mut ir::Function, inliner: impl Inline) -> CodegenResult<bool> {
+pub(crate) fn do_inlining(
+    func: &mut ir::Function,
+    mut inliner: impl Inline,
+) -> CodegenResult<bool> {
+    trace!("function {} before inlining: {}", func.name, func);
+
     let mut inlined_any = false;
     let mut allocs = InliningAllocs::default();
 
     let mut cursor = FuncCursor::new(func);
-    while let Some(block) = cursor.next_block() {
-        // Always keep track of our previous cursor position. After we inline a
-        // call, replacing the current position with an arbitrary sub-CFG, we
-        // back up to this previous position. This makes sure our cursor is
-        // always at a position that is inserted in the layout and also enables
-        // multi-level inlining, if desired by the user, where we consider any
-        // newly-inlined call instructions for further inlining.
+    'block_loop: while let Some(block) = cursor.next_block() {
+        // Always keep track of our previous cursor position. Assuming that the
+        // current position is a function call that we will inline, then the
+        // previous position is just before the inlined callee function. After
+        // inlining a call, the Cranelift user can decide whether to consider
+        // any function calls in the inlined callee for further inlining or
+        // not. When they do, then we back up to this previous cursor position
+        // so that our traversal will then continue over the inlined body.
         let mut prev_pos;
 
         while let Some(inst) = {
             prev_pos = cursor.position();
             cursor.next_inst()
         } {
+            // Make sure that `block` is always `inst`'s block, even with all of
+            // our cursor-position-updating and block-splitting-during-inlining
+            // shenanigans below.
+            debug_assert_eq!(Some(block), cursor.func.layout.inst_block(inst));
+
             match cursor.func.dfg.insts[inst] {
                 ir::InstructionData::Call {
                     opcode: opcode @ ir::Opcode::Call | opcode @ ir::Opcode::ReturnCall,
                     args: _,
                     func_ref,
                 } => {
+                    trace!(
+                        "considering call site for inlining: {inst}: {}",
+                        cursor.func.dfg.display_inst(inst),
+                    );
                     let args = cursor.func.dfg.inst_args(inst);
                     match inliner.inline(&cursor.func, inst, opcode, func_ref, args) {
-                        InlineCommand::KeepCall => continue,
-                        InlineCommand::Inline(callee) => {
-                            inline_one(
+                        InlineCommand::KeepCall => {
+                            trace!("  --> keeping call");
+                        }
+                        InlineCommand::Inline {
+                            callee,
+                            visit_callee,
+                        } => {
+                            let last_inlined_block = inline_one(
                                 &mut allocs,
                                 cursor.func,
                                 func_ref,
@@ -141,7 +168,15 @@ pub(crate) fn do_inlining(func: &mut ir::Function, inliner: impl Inline) -> Code
                                 None,
                             );
                             inlined_any = true;
-                            cursor.set_position(prev_pos);
+                            if visit_callee {
+                                cursor.set_position(prev_pos);
+                            } else {
+                                // Arrange it so that the `next_block()` loop
+                                // will continue to the next block that is not
+                                // associated with the just-inlined callee.
+                                cursor.goto_bottom(last_inlined_block);
+                                continue 'block_loop;
+                            }
                         }
                     }
                 }
@@ -151,11 +186,20 @@ pub(crate) fn do_inlining(func: &mut ir::Function, inliner: impl Inline) -> Code
                     func_ref,
                     exception,
                 } => {
+                    trace!(
+                        "considering call site for inlining: {inst}: {}",
+                        cursor.func.dfg.display_inst(inst),
+                    );
                     let args = cursor.func.dfg.inst_args(inst);
                     match inliner.inline(&cursor.func, inst, opcode, func_ref, args) {
-                        InlineCommand::KeepCall => continue,
-                        InlineCommand::Inline(callee) => {
-                            inline_one(
+                        InlineCommand::KeepCall => {
+                            trace!("  --> keeping call");
+                        }
+                        InlineCommand::Inline {
+                            callee,
+                            visit_callee,
+                        } => {
+                            let last_inlined_block = inline_one(
                                 &mut allocs,
                                 cursor.func,
                                 func_ref,
@@ -166,13 +210,38 @@ pub(crate) fn do_inlining(func: &mut ir::Function, inliner: impl Inline) -> Code
                                 Some(exception),
                             );
                             inlined_any = true;
-                            cursor.set_position(prev_pos);
+                            if visit_callee {
+                                cursor.set_position(prev_pos);
+                            } else {
+                                // Arrange it so that the `next_block()` loop
+                                // will continue to the next block that is not
+                                // associated with the just-inlined callee.
+                                cursor.goto_bottom(last_inlined_block);
+                                continue 'block_loop;
+                            }
                         }
                     }
                 }
-                _ => continue,
+                ir::InstructionData::CallIndirect { .. }
+                | ir::InstructionData::TryCallIndirect { .. } => {
+                    // Can't inline indirect calls; need to have some earlier
+                    // pass rewrite them into direct calls first, when possible.
+                }
+                _ => {
+                    debug_assert!(
+                        !cursor.func.dfg.insts[inst].opcode().is_call(),
+                        "should have matched all call instructions, but found: {inst}: {}",
+                        cursor.func.dfg.display_inst(inst),
+                    );
+                }
             }
         }
+    }
+
+    if inlined_any {
+        trace!("function {} after inlining: {}", func.name, func);
+    } else {
+        trace!("function {} did not have any callees inlined", func.name);
     }
 
     Ok(inlined_any)
@@ -184,7 +253,17 @@ struct InliningAllocs {
     values: SecondaryMap<ir::Value, PackedOption<ir::Value>>,
 
     /// Map from callee constant to inlined caller constant.
+    ///
+    /// Not in `EntityMap` because these are hash-consed inside the
+    /// `ir::Function`.
     constants: SecondaryMap<ir::Constant, PackedOption<ir::Constant>>,
+
+    /// Map from callee to inlined caller external name refs.
+    ///
+    /// Not in `EntityMap` because these are hash-consed inside the
+    /// `ir::Function`.
+    user_external_name_refs:
+        SecondaryMap<ir::UserExternalNameRef, PackedOption<ir::UserExternalNameRef>>,
 
     /// The set of _caller_ inlined call instructions that need exception table
     /// fixups at the end of inlining.
@@ -202,15 +281,6 @@ struct InliningAllocs {
     /// do not require set-membership testing, so a hash set is not a good
     /// choice either.
     calls_needing_exception_table_fixup: Vec<ir::Inst>,
-
-    /// The set of existing tags already caught by an inlined `try_call`
-    /// instruction's exception table, for filtering out duplicate tags when
-    /// merging exception tables.
-    ///
-    /// Note: this is a `HashSet`, and not an `EntitySet`, because tags indices
-    /// are completely arbitrary and there is no guarantee that they start from
-    /// zero or are contiguous.
-    existing_exception_tags: crate::HashSet<Option<ir::ExceptionTag>>,
 }
 
 impl InliningAllocs {
@@ -218,8 +288,8 @@ impl InliningAllocs {
         let InliningAllocs {
             values,
             constants,
+            user_external_name_refs,
             calls_needing_exception_table_fixup,
-            existing_exception_tags,
         } = self;
 
         values.clear();
@@ -228,15 +298,13 @@ impl InliningAllocs {
         constants.clear();
         constants.resize(callee.dfg.constants.len());
 
+        user_external_name_refs.clear();
+        user_external_name_refs.resize(callee.params.user_named_funcs().len());
+
         // Note: We do not reserve capacity for
         // `calls_needing_exception_table_fixup` because it is a sparse set and
         // we don't know how large it needs to be ahead of time.
         calls_needing_exception_table_fixup.clear();
-
-        // Note: We do not reserve capacity for `existing_exception_tags`
-        // because it is a sparse set and we don't know how large it needs to be
-        // ahead of time.
-        existing_exception_tags.clear();
     }
 
     fn set_inlined_value(
@@ -259,6 +327,8 @@ impl InliningAllocs {
 }
 
 /// Inline one particular function call.
+///
+/// Returns the last inlined block in the layout.
 fn inline_one(
     allocs: &mut InliningAllocs,
     func: &mut ir::Function,
@@ -268,7 +338,7 @@ fn inline_one(
     call_opcode: ir::Opcode,
     callee: &ir::Function,
     call_exception_table: Option<ir::ExceptionTable>,
-) {
+) -> ir::Block {
     trace!(
         "Inlining call {call_inst:?}: {}\n\
          with callee = {callee:?}",
@@ -294,7 +364,7 @@ fn inline_one(
     // Prepare for translating the actual instructions by inserting the inlined
     // blocks into the caller's layout in the same order that they appear in the
     // callee.
-    inline_block_layout(func, call_block, callee, &entity_map);
+    let mut last_inlined_block = inline_block_layout(func, call_block, callee, &entity_map);
 
     // Translate each instruction from the callee into the caller,
     // appending them to their associated block in the caller.
@@ -414,6 +484,30 @@ fn inline_one(
         }
     }
 
+    // We copied *all* callee blocks into the caller's layout, but only copied
+    // the callee instructions in *reachable* callee blocks into the caller's
+    // associated blocks. Therefore, any *unreachable* blocks are empty in the
+    // caller, which is invalid CLIF because all blocks must end in a
+    // terminator, so do a quick pass over the inlined blocks and remove any
+    // empty blocks from the caller's layout.
+    for block in entity_map.iter_inlined_blocks(func) {
+        if func.layout.is_block_inserted(block) && func.layout.first_inst(block).is_none() {
+            log::trace!("removing unreachable inlined block from layout: {block}");
+
+            // If the block being removed is our last-inlined block, then back
+            // it up to the previous block in the layout, which will be the new
+            // last-inlined block after this one's removal.
+            if block == last_inlined_block {
+                last_inlined_block = func.layout.prev_block(last_inlined_block).expect(
+                    "there will always at least be the block that contained the call we are \
+                     inlining",
+                );
+            }
+
+            func.layout.remove_block(block);
+        }
+    }
+
     // Final step: fixup the exception tables of any inlined calls when we are
     // inlining a `try_call` site.
     //
@@ -434,6 +528,12 @@ fn inline_one(
     if let Some(call_exception_table) = call_exception_table {
         fixup_inlined_call_exception_tables(allocs, func, call_exception_table);
     }
+
+    debug_assert!(
+        func.layout.is_block_inserted(last_inlined_block),
+        "last_inlined_block={last_inlined_block} should be inserted in the layout"
+    );
+    last_inlined_block
 }
 
 /// Append stack map entries from the caller and callee to the given inlined
@@ -604,31 +704,24 @@ fn fixup_inlined_call_exception_tables(
                 exception,
                 ..
             } => {
-                // Gather the set of tags that this instruction's exception
-                // table already has entries for.
-                allocs.existing_exception_tags.clear();
-                allocs.existing_exception_tags.extend(
+                // Construct a new exception table that consists of
+                // the inlined instruction's exception table match
+                // sequence, with the inlining site's exception table
+                // appended. This will ensure that the first-match
+                // semantics emulates the original behavior of
+                // matching in the inner frame first.
+                let sig = func.dfg.exception_tables[exception].signature();
+                let normal_return = *func.dfg.exception_tables[exception].normal_return();
+                let exception_data = ExceptionTableData::new(
+                    sig,
+                    normal_return,
                     func.dfg.exception_tables[exception]
-                        .catches()
-                        .map(|(c, _)| c),
-                );
+                        .items()
+                        .chain(func.dfg.exception_tables[call_exception_table].items()),
+                )
+                .deep_clone(&mut func.dfg.value_lists);
 
-                // Add only the catch edges from our original `try_call`'s
-                // exception table that are not already handled by this
-                // instruction.
-                for i in 0..func.dfg.exception_tables[call_exception_table].len_catches() {
-                    let exception_tables = &mut func.stencil.dfg.exception_tables;
-                    let value_lists = &mut func.stencil.dfg.value_lists;
-
-                    let (tag, block_call) =
-                        exception_tables[call_exception_table].get_catch(i).unwrap();
-                    if allocs.existing_exception_tags.contains(&tag) {
-                        continue;
-                    }
-
-                    let block_call = block_call.deep_clone(value_lists);
-                    exception_tables[exception].push_catch(tag, block_call);
-                }
+                func.dfg.exception_tables[exception] = exception_data;
             }
 
             otherwise => unreachable!("unknown non-return call instruction: {otherwise:?}"),
@@ -817,8 +910,18 @@ impl<'a> ir::instructions::InstructionMapper for InliningInstRemapper<'a> {
         let inlined_sig_ref = self.map_sig_ref(exception_table.signature());
         let inlined_normal_return = self.map_block_call(*exception_table.normal_return());
         let inlined_table = exception_table
-            .catches()
-            .map(|(tag, callee_block_call)| (tag, self.map_block_call(*callee_block_call)))
+            .items()
+            .map(|item| match item {
+                ExceptionTableItem::Tag(tag, block_call) => {
+                    ExceptionTableItem::Tag(tag, self.map_block_call(block_call))
+                }
+                ExceptionTableItem::Default(block_call) => {
+                    ExceptionTableItem::Default(self.map_block_call(block_call))
+                }
+                ExceptionTableItem::Context(value) => {
+                    ExceptionTableItem::Context(self.map_value(value))
+                }
+            })
             .collect::<SmallVec<[_; 8]>>();
         self.func
             .dfg
@@ -877,17 +980,23 @@ impl<'a> ir::instructions::InstructionMapper for InliningInstRemapper<'a> {
 }
 
 /// Inline the callee's layout into the caller's layout.
+///
+/// Returns the last inlined block in the layout.
 fn inline_block_layout(
     func: &mut ir::Function,
     call_block: ir::Block,
     callee: &ir::Function,
     entity_map: &EntityMap,
-) {
+) -> ir::Block {
+    debug_assert!(func.layout.is_block_inserted(call_block));
+
     // Iterate over callee blocks in layout order, inserting their associated
     // inlined block into the caller's layout.
     let mut prev_inlined_block = call_block;
     let mut next_callee_block = callee.layout.entry_block();
     while let Some(callee_block) = next_callee_block {
+        debug_assert!(func.layout.is_block_inserted(prev_inlined_block));
+
         let inlined_block = entity_map.inlined_block(callee_block);
         func.layout
             .insert_block_after(inlined_block, prev_inlined_block);
@@ -895,6 +1004,9 @@ fn inline_block_layout(
         prev_inlined_block = inlined_block;
         next_callee_block = callee.layout.next_block(callee_block);
     }
+
+    debug_assert!(func.layout.is_block_inserted(prev_inlined_block));
+    prev_inlined_block
 }
 
 /// Split the call instruction's block just after the call instruction to create
@@ -1117,6 +1229,17 @@ impl EntityMap {
         ir::Block::from_u32(offset + callee_block.as_u32())
     }
 
+    fn iter_inlined_blocks(&self, func: &ir::Function) -> impl Iterator<Item = ir::Block> + use<> {
+        let start = self.block_offset.expect(
+            "must create inlined `ir::Block`s before calling `EntityMap::iter_inlined_blocks`",
+        );
+
+        let end = func.dfg.blocks.len();
+        let end = u32::try_from(end).unwrap();
+
+        (start..end).map(|i| ir::Block::from_u32(i))
+    }
+
     fn inlined_global_value(&self, callee_global_value: ir::GlobalValue) -> ir::GlobalValue {
         let offset = self
             .global_value_offset
@@ -1183,7 +1306,8 @@ fn create_entities(
     entity_map.block_offset = Some(create_blocks(allocs, func, callee));
     entity_map.global_value_offset = Some(create_global_values(func, callee));
     entity_map.sig_ref_offset = Some(create_sig_refs(func, callee));
-    entity_map.func_ref_offset = Some(create_func_refs(func, callee, &entity_map));
+    create_user_external_name_refs(allocs, func, callee);
+    entity_map.func_ref_offset = Some(create_func_refs(allocs, func, callee, &entity_map));
     entity_map.stack_slot_offset = Some(create_stack_slots(func, callee));
     entity_map.dynamic_type_offset = Some(create_dynamic_types(func, callee, &entity_map));
     entity_map.dynamic_stack_slot_offset =
@@ -1287,8 +1411,24 @@ fn create_sig_refs(func: &mut ir::Function, callee: &ir::Function) -> u32 {
     offset
 }
 
+fn create_user_external_name_refs(
+    allocs: &mut InliningAllocs,
+    func: &mut ir::Function,
+    callee: &ir::Function,
+) {
+    for (callee_named_func_ref, name) in callee.params.user_named_funcs().iter() {
+        let caller_named_func_ref = func.declare_imported_user_function(name.clone());
+        allocs.user_external_name_refs[callee_named_func_ref] = Some(caller_named_func_ref).into();
+    }
+}
+
 /// Translate `ir::FuncRef`s from the callee into the caller.
-fn create_func_refs(func: &mut ir::Function, callee: &ir::Function, entity_map: &EntityMap) -> u32 {
+fn create_func_refs(
+    allocs: &InliningAllocs,
+    func: &mut ir::Function,
+    callee: &ir::Function,
+    entity_map: &EntityMap,
+) -> u32 {
     let offset = func.dfg.ext_funcs.len();
     let offset = u32::try_from(offset).unwrap();
 
@@ -1300,7 +1440,17 @@ fn create_func_refs(func: &mut ir::Function, callee: &ir::Function, entity_map: 
     } in callee.dfg.ext_funcs.values()
     {
         func.dfg.ext_funcs.push(ir::ExtFuncData {
-            name: name.clone(),
+            name: match name {
+                ir::ExternalName::User(name_ref) => {
+                    ir::ExternalName::User(allocs.user_external_name_refs[*name_ref].expect(
+                        "should have translated all `ir::UserExternalNameRef`s before translating \
+                         `ir::FuncRef`s",
+                    ))
+                }
+                ir::ExternalName::TestCase(_)
+                | ir::ExternalName::LibCall(_)
+                | ir::ExternalName::KnownSymbol(_) => name.clone(),
+            },
             signature: entity_map.inlined_sig_ref(*signature),
             colocated: *colocated,
         });

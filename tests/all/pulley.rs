@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::ptr::NonNull;
 use wasmtime::component::{self, Component};
 use wasmtime::{
     Caller, Config, Engine, Func, FuncType, Instance, Module, Store, Trap, Val, ValType,
@@ -523,5 +524,24 @@ fn enabling_debug_info_doesnt_break_anything() -> Result<()> {
     config.debug_info(true);
     let engine = Engine::new(&config)?;
     assert!(Module::from_file(&engine, "./tests/all/cli_tests/greeter_command.wat").is_err());
+    Ok(())
+}
+
+// Ensure that Pulley doesn't require that the input image is aligned at any
+// particular boundary, namely for now this double-checks that the `unaligned`
+// feature of the `object` crate is enabled.
+#[test]
+fn decode_unaligned() -> Result<()> {
+    let engine = Engine::new(&pulley_config())?;
+    let mut bytes = Module::new(&engine, "(module)")?.serialize()?;
+
+    for i in 0..10 {
+        let serialized = &bytes[i..];
+        unsafe {
+            Module::deserialize_raw(&engine, NonNull::from(serialized))?;
+        }
+        bytes.insert(0, 0);
+    }
+
     Ok(())
 }

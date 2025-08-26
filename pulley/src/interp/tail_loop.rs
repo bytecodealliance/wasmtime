@@ -7,9 +7,9 @@
 //! tail-calls.
 //!
 //! At this time this module is more performant but disabled by default. Rust
-//! does not have guaranteed tail call elimination at this time so this is not
-//! a suitable means of writing an interpreter loop. That being said this is
-//! included nonetheless for us to experiment and analyze with.
+//! does not have guaranteed tail call elimination on stable at this time so
+//! this is not a suitable means of writing an interpreter loop. That being said
+//! this is included nonetheless for us to experiment and analyze with.
 //!
 //! There are two methods of using this module:
 //!
@@ -23,8 +23,8 @@
 //! * `RUSTFLAGS=--cfg=pulley_tail_calls` - this compilation flag indicates that
 //!   Rust's nightly-only support for guaranteed tail calls should be used. This
 //!   uses the `become` keyword, for example. At this time this feature of Rust
-//!   is highly experimental and not even complete. It only passes `cargo check`
-//!   at this time but doesn't actually run anywhere.
+//!   is highly experimental and may not be complete. This is only lightly
+//!   tested in CI.
 
 use super::*;
 use crate::ExtendedOpcode;

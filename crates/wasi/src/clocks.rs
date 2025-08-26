@@ -1,27 +1,12 @@
-use cap_std::time::{Duration, Instant, SystemClock};
+use cap_std::time::{Duration, Instant, SystemClock, SystemTime};
 use cap_std::{AmbientAuthority, ambient_authority};
 use cap_time_ext::{MonotonicClockExt as _, SystemClockExt as _};
+use wasmtime::component::{HasData, ResourceTable};
 
-impl<T: WasiClocksView> WasiClocksView for &mut T {
-    fn clocks(&mut self) -> &mut WasiClocksCtx {
-        T::clocks(self)
-    }
-}
+pub(crate) struct WasiClocks;
 
-impl<T: WasiClocksView> WasiClocksView for Box<T> {
-    fn clocks(&mut self) -> &mut WasiClocksCtx {
-        T::clocks(self)
-    }
-}
-
-impl WasiClocksView for WasiClocksCtx {
-    fn clocks(&mut self) -> &mut WasiClocksCtx {
-        self
-    }
-}
-
-pub trait WasiClocksView: Send {
-    fn clocks(&mut self) -> &mut WasiClocksCtx;
+impl HasData for WasiClocks {
+    type Data<'a> = WasiClocksCtxView<'a>;
 }
 
 pub struct WasiClocksCtx {
@@ -36,6 +21,15 @@ impl Default for WasiClocksCtx {
             monotonic_clock: monotonic_clock(),
         }
     }
+}
+
+pub trait WasiClocksView: Send {
+    fn clocks(&mut self) -> WasiClocksCtxView<'_>;
+}
+
+pub struct WasiClocksCtxView<'a> {
+    pub ctx: &'a mut WasiClocksCtx,
+    pub table: &'a mut ResourceTable,
 }
 
 pub trait HostWallClock: Send {
@@ -127,4 +121,23 @@ pub fn monotonic_clock() -> Box<dyn HostMonotonicClock + Send> {
 
 pub fn wall_clock() -> Box<dyn HostWallClock + Send> {
     Box::new(WallClock::default())
+}
+
+pub(crate) struct Datetime {
+    pub seconds: u64,
+    pub nanoseconds: u32,
+}
+
+impl TryFrom<SystemTime> for Datetime {
+    type Error = wasmtime::Error;
+
+    fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
+        let duration =
+            time.duration_since(SystemTime::from_std(std::time::SystemTime::UNIX_EPOCH))?;
+
+        Ok(Self {
+            seconds: duration.as_secs(),
+            nanoseconds: duration.subsec_nanos(),
+        })
+    }
 }

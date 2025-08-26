@@ -75,10 +75,11 @@
 //! they should be merged together.
 
 use crate::prelude::*;
+use crate::runtime::store::StoreResourceLimiter;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 #[cfg(has_virtual_memory)]
 use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
-use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr, VMStore};
+use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr};
 use alloc::sync::Arc;
 use core::{ops::Range, ptr::NonNull};
 use wasmtime_environ::Tunables;
@@ -230,14 +231,14 @@ pub enum Memory {
 
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
-    pub fn new_dynamic(
+    pub async fn new_dynamic(
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
         creator: &dyn RuntimeMemoryCreator,
-        store: &mut dyn VMStore,
         memory_image: Option<&Arc<MemoryImage>>,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
+        let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         let allocation = creator.new_memory(ty, tunables, minimum, maximum)?;
 
         let memory = LocalMemory::new(ty, tunables, allocation, memory_image)?;
@@ -250,15 +251,15 @@ impl Memory {
 
     /// Create a new static (immovable) memory instance for the specified plan.
     #[cfg(feature = "pooling-allocator")]
-    pub fn new_static(
+    pub async fn new_static(
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
         base: MemoryBase,
         base_capacity: usize,
         memory_image: MemoryImageSlot,
-        store: &mut dyn VMStore,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
+        let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         let pooled_memory = StaticMemory::new(base, base_capacity, minimum, maximum)?;
         let allocation = Box::new(pooled_memory);
 
@@ -285,9 +286,9 @@ impl Memory {
     ///
     /// Returns a tuple of the minimum size, optional maximum size, and log(page
     /// size) of the memory, all in bytes.
-    pub(crate) fn limit_new(
+    pub(crate) async fn limit_new(
         ty: &wasmtime_environ::Memory,
-        store: Option<&mut dyn VMStore>,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<(usize, Option<usize>)> {
         let page_size = usize::try_from(ty.page_size()).unwrap();
 
@@ -330,8 +331,11 @@ impl Memory {
         // `minimum` calculation overflowed. This means that the `minimum` we're
         // informing the limiter is lossy and may not be 100% accurate, but for
         // now the expected uses of limiter means that's ok.
-        if let Some(store) = store {
-            if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
+        if let Some(limiter) = limiter {
+            if !limiter
+                .memory_growing(0, minimum.unwrap_or(absolute_max), maximum)
+                .await?
+            {
                 bail!(
                     "memory minimum size of {} pages exceeds memory limits",
                     ty.limits.min
@@ -394,14 +398,14 @@ impl Memory {
     ///
     /// Ensure that the provided Store is not used to get access any Memory
     /// which lives inside it.
-    pub unsafe fn grow(
+    pub async unsafe fn grow(
         &mut self,
         delta_pages: u64,
-        store: Option<&mut dyn VMStore>,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Option<usize>, Error> {
         let result = match self {
-            Memory::Local(mem) => mem.grow(delta_pages, store)?,
-            Memory::Shared(mem) => mem.grow(delta_pages, store)?,
+            Memory::Local(mem) => mem.grow(delta_pages, limiter).await?,
+            Memory::Shared(mem) => mem.grow(delta_pages)?,
         };
         match result {
             Some((old, _new)) => Ok(Some(old)),
@@ -547,29 +551,6 @@ impl LocalMemory {
 
                     let mut slot =
                         MemoryImageSlot::create(mmap_base, byte_size, alloc.byte_capacity());
-                    // On drop, we will unmap our mmap'd range that this slot
-                    // was mapped on top of, so there is no need for the slot to
-                    // wipe it with an anonymous mapping first.
-                    //
-                    // Note that this code would be incorrect if clear-on-drop
-                    // were enabled. That's because:
-                    //
-                    // * In the struct definition, `memory_image` above is listed
-                    //   after `alloc`.
-                    // * Rust drops fields in the order they're defined, so
-                    //   `memory_image` would be dropped after `alloc`.
-                    // * `alloc` can represent either owned memory (i.e. the mmap is
-                    //   freed on drop) or logically borrowed memory (something else
-                    //   manages the mmap).
-                    // * If `alloc` is borrowed memory, then this isn't an issue.
-                    // * But if `alloc` is owned memory, then it would first drop
-                    //   the mmap, and then `memory_image` would try to remap
-                    //   part of that same memory as part of clear-on-drop.
-                    //
-                    // A lot of this really suggests representing the ownership
-                    // via Rust lifetimes -- that would be a major refactor,
-                    // though.
-                    slot.no_clear_on_drop();
                     slot.instantiate(alloc.byte_size(), Some(image), ty, tunables)?;
                     Some(slot)
                 } else {
@@ -600,10 +581,10 @@ impl LocalMemory {
     /// the underlying `grow_to` implementation.
     ///
     /// The `store` is used only for error reporting.
-    pub fn grow(
+    pub async fn grow(
         &mut self,
         delta_pages: u64,
-        mut store: Option<&mut dyn VMStore>,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Option<(usize, usize)>, Error> {
         let old_byte_size = self.alloc.byte_size();
 
@@ -634,8 +615,11 @@ impl LocalMemory {
             .and_then(|n| usize::try_from(n).ok());
 
         // Store limiter gets first chance to reject memory_growing.
-        if let Some(store) = &mut store {
-            if !store.memory_growing(old_byte_size, new_byte_size, maximum)? {
+        if let Some(limiter) = &mut limiter {
+            if !limiter
+                .memory_growing(old_byte_size, new_byte_size, maximum)
+                .await?
+            {
                 return Ok(None);
             }
         }
@@ -701,8 +685,8 @@ impl LocalMemory {
                 // report the growth failure to but the error should not be
                 // dropped
                 // (https://github.com/bytecodealliance/wasmtime/issues/4240).
-                if let Some(store) = store {
-                    store.memory_grow_failed(e)?;
+                if let Some(limiter) = limiter {
+                    limiter.memory_grow_failed(e)?;
                 }
                 Ok(None)
             }

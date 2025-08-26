@@ -2123,6 +2123,23 @@ start a print 1234
         cli_serve_guest_never_invoked_set(CLI_SERVE_TRAP_BEFORE_SET_COMPONENT).await
     }
 
+    #[test]
+    fn cli_p3_hello_stdout() -> Result<()> {
+        let output = run_wasmtime(&[
+            "run",
+            "-Wcomponent-model-async",
+            "-Sp3",
+            CLI_P3_HELLO_STDOUT_COMPONENT,
+        ]);
+        if cfg!(feature = "component-model-async") {
+            let output = output?;
+            assert_eq!(output, "hello, world\n");
+        } else {
+            assert!(output.is_err());
+        }
+        Ok(())
+    }
+
     mod invoke {
         use super::*;
 
@@ -2141,6 +2158,20 @@ start a print 1234
             assert_eq!(output, "hello, world\nok\n");
             Ok(())
         }
+    }
+
+    #[test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    fn cli_invoke_async() -> Result<()> {
+        let output = run_wasmtime(&[
+            "run",
+            "-Wcomponent-model-async",
+            "--invoke",
+            "echo(\"hello?\")",
+            CLI_INVOKE_ASYNC_COMPONENT,
+        ])?;
+        assert_eq!(output, "\"hello?\"\n");
+        Ok(())
     }
 }
 
@@ -2222,10 +2253,14 @@ fn config_cli_flag() -> Result<()> {
         br#"
         [optimize]
         opt-level = 2
+        regalloc-algorithm = "single-pass"
         signals-based-traps = false
 
         [codegen]
         collector = "null"
+
+        [debug]
+        debug-info = true
 
         [wasm]
         max-wasm-stack = 65536

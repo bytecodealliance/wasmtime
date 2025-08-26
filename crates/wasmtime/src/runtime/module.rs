@@ -1,7 +1,7 @@
 use crate::prelude::*;
 #[cfg(feature = "std")]
 use crate::runtime::vm::open_file_for_mmap;
-use crate::runtime::vm::{CompiledModuleId, ModuleMemoryImages, VMWasmCallFunction};
+use crate::runtime::vm::{CompiledModuleId, MmapVec, ModuleMemoryImages, VMWasmCallFunction};
 use crate::sync::OnceLock;
 use crate::{
     Engine,
@@ -22,6 +22,8 @@ use wasmtime_environ::{
     CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind, TypeTrace, VMOffsets,
     VMSharedTypeIndex,
 };
+#[cfg(feature = "gc")]
+use wasmtime_unwinder::ExceptionTable;
 mod registry;
 
 pub use registry::*;
@@ -416,7 +418,9 @@ impl Module {
     /// lives for as long as the module and is nevery externally modified for
     /// the lifetime of the deserialized module.
     pub unsafe fn deserialize_raw(engine: &Engine, memory: NonNull<[u8]>) -> Result<Module> {
-        let code = engine.load_code_raw(memory, ObjectKind::Module)?;
+        // SAFETY: the contract required by `load_code_raw` is the same as this
+        // function.
+        let code = unsafe { engine.load_code_raw(memory, ObjectKind::Module)? };
         Module::from_parts(engine, code, None)
     }
 
@@ -446,8 +450,12 @@ impl Module {
     #[cfg(feature = "std")]
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
         let file = open_file_for_mmap(path.as_ref())?;
-        Self::deserialize_open_file(engine, file)
-            .with_context(|| format!("failed deserialization for: {}", path.as_ref().display()))
+        // SAFETY: the contract of `deserialize_open_file` is the samea s this
+        // function.
+        unsafe {
+            Self::deserialize_open_file(engine, file)
+                .with_context(|| format!("failed deserialization for: {}", path.as_ref().display()))
+        }
     }
 
     /// Same as [`deserialize_file`], except that it takes an open `File`
@@ -1108,7 +1116,7 @@ impl Module {
         let images = self
             .inner
             .memory_images
-            .get_or_try_init(|| memory_images(&self.inner.engine, &self.inner.module))?
+            .get_or_try_init(|| memory_images(&self.inner))?
             .as_ref();
         Ok(images)
     }
@@ -1119,6 +1127,13 @@ impl Module {
         let text_offset = u32::try_from(pc - self.inner.module.text().as_ptr() as usize).unwrap();
         let info = self.inner.code.code_memory().stack_map_data();
         wasmtime_environ::StackMap::lookup(text_offset, info)
+    }
+
+    /// Obtain an exception-table parser on this module's exception metadata.
+    #[cfg(feature = "gc")]
+    pub(crate) fn exception_table<'a>(&'a self) -> ExceptionTable<'a> {
+        ExceptionTable::parse(self.inner.code.code_memory().exception_tables())
+            .expect("Exception tables were validated on module load")
     }
 }
 
@@ -1158,21 +1173,30 @@ fn _assert_send_sync() {
 
 /// Helper method to construct a `ModuleMemoryImages` for an associated
 /// `CompiledModule`.
-fn memory_images(engine: &Engine, module: &CompiledModule) -> Result<Option<ModuleMemoryImages>> {
+fn memory_images(inner: &Arc<ModuleInner>) -> Result<Option<ModuleMemoryImages>> {
     // If initialization via copy-on-write is explicitly disabled in
     // configuration then this path is skipped entirely.
-    if !engine.tunables().memory_init_cow {
+    if !inner.engine.tunables().memory_init_cow {
         return Ok(None);
     }
 
     // ... otherwise logic is delegated to the `ModuleMemoryImages::new`
     // constructor.
-    let mmap = if engine.config().force_memory_init_memfd {
-        None
-    } else {
-        Some(module.mmap())
-    };
-    ModuleMemoryImages::new(module.module(), module.code_memory().wasm_data(), mmap)
+    ModuleMemoryImages::new(
+        &inner.engine,
+        inner.module.module(),
+        inner.code.code_memory(),
+    )
+}
+
+impl crate::vm::ModuleMemoryImageSource for CodeMemory {
+    fn wasm_data(&self) -> &[u8] {
+        <Self>::wasm_data(self)
+    }
+
+    fn mmap(&self) -> Option<&MmapVec> {
+        Some(<Self>::mmap(self))
+    }
 }
 
 #[cfg(test)]

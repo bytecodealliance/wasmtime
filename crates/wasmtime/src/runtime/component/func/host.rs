@@ -6,11 +6,9 @@ use crate::component::storage::slice_to_storage_mut;
 use crate::component::{ComponentNamedList, ComponentType, Instance, Lift, Lower, Val};
 use crate::prelude::*;
 use crate::runtime::vm::component::{
-    ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
+    ComponentInstance, VMComponentContext, VMLowering, VMLoweringCallee,
 };
-use crate::runtime::vm::{
-    SendSyncPtr, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext, VMStore,
-};
+use crate::runtime::vm::{SendSyncPtr, VMOpaqueContext, VMStore};
 use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
@@ -20,7 +18,7 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS,
-    MAX_FLAT_RESULTS, RuntimeComponentInstanceIndex, StringEncoding, TypeFuncIndex, TypeTuple,
+    MAX_FLAT_RESULTS, OptionsIndex, TypeFuncIndex, TypeTuple,
 };
 
 pub struct HostFunc {
@@ -42,7 +40,7 @@ enum HostResult<T> {
 }
 
 impl HostFunc {
-    fn from_canonical<T: 'static, F, P, R>(func: F) -> Arc<HostFunc>
+    fn from_canonical<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
         F: Fn(StoreContextMut<'_, T>, Instance, P) -> HostResult<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
@@ -57,8 +55,9 @@ impl HostFunc {
         })
     }
 
-    pub(crate) fn from_closure<T: 'static, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn from_closure<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
+        T: 'static,
         F: Fn(StoreContextMut<T>, P) -> Result<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
@@ -69,7 +68,7 @@ impl HostFunc {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn from_concurrent<T: 'static, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn from_concurrent<T, F, P, R>(func: F) -> Arc<HostFunc>
     where
         T: 'static,
         F: Fn(&Accessor<T>, P) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
@@ -88,16 +87,11 @@ impl HostFunc {
         })
     }
 
-    extern "C" fn entrypoint<T: 'static, F, P, R>(
+    extern "C" fn entrypoint<T, F, P, R>(
         cx: NonNull<VMOpaqueContext>,
         data: NonNull<u8>,
         ty: u32,
-        caller_instance: u32,
-        flags: NonNull<VMGlobalDefinition>,
-        memory: *mut VMMemoryDefinition,
-        realloc: *mut VMFuncRef,
-        string_encoding: u8,
-        async_: u8,
+        options: u32,
         storage: NonNull<MaybeUninit<ValRaw>>,
         storage_len: usize,
     ) -> bool
@@ -114,12 +108,7 @@ impl HostFunc {
                     store,
                     instance,
                     TypeFuncIndex::from_u32(ty),
-                    RuntimeComponentInstanceIndex::from_u32(caller_instance),
-                    InstanceFlags::from_raw(flags),
-                    memory,
-                    realloc,
-                    StringEncoding::from_u8(string_encoding).unwrap(),
-                    async_ != 0,
+                    OptionsIndex::from_u32(options),
                     NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                     move |store, instance, args| (*data.as_ptr())(store, instance, args),
                 )
@@ -127,7 +116,7 @@ impl HostFunc {
         }
     }
 
-    fn new_dynamic_canonical<T: 'static, F>(func: F) -> Arc<HostFunc>
+    fn new_dynamic_canonical<T, F>(func: F) -> Arc<HostFunc>
     where
         F: Fn(
                 StoreContextMut<'_, T>,
@@ -164,7 +153,7 @@ impl HostFunc {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn new_dynamic_concurrent<T: 'static, F>(func: F) -> Arc<HostFunc>
+    pub(crate) fn new_dynamic_concurrent<T, F>(func: F) -> Arc<HostFunc>
     where
         T: 'static,
         F: for<'a> Fn(
@@ -241,12 +230,7 @@ unsafe fn call_host<T, Params, Return, F>(
     mut store: StoreContextMut<'_, T>,
     instance: Instance,
     ty: TypeFuncIndex,
-    caller_instance: RuntimeComponentInstanceIndex,
-    mut flags: InstanceFlags,
-    memory: *mut VMMemoryDefinition,
-    realloc: *mut VMFuncRef,
-    string_encoding: StringEncoding,
-    async_: bool,
+    options_idx: OptionsIndex,
     storage: &mut [MaybeUninit<ValRaw>],
     closure: F,
 ) -> Result<()>
@@ -255,23 +239,21 @@ where
     Params: Lift,
     Return: Lower + 'static,
 {
-    let options = Options::new(
-        store.0.store_opaque().id(),
-        NonNull::new(memory),
-        NonNull::new(realloc),
-        string_encoding,
-        async_,
-        None,
-    );
+    let options = Options::new_index(store.0, instance, options_idx);
+    let vminstance = instance.id().get(store.0);
+    let opts = &vminstance.component().env_component().options[options_idx];
+    let async_ = opts.async_;
+    let caller_instance = opts.instance;
+    let mut flags = vminstance.instance_flags(caller_instance);
 
     // Perform a dynamic check that this instance can indeed be left. Exiting
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
-    if !flags.may_leave() {
+    if unsafe { !flags.may_leave() } {
         bail!("cannot leave component instance");
     }
 
-    let types = instance.id().get(store.0).component().types().clone();
+    let types = vminstance.component().types().clone();
     let ty = &types[ty];
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
@@ -279,7 +261,7 @@ where
     if async_ {
         #[cfg(feature = "component-model-async")]
         {
-            let mut storage = Storage::<'_, Params, u32>::new_async::<Return>(storage);
+            let mut storage = unsafe { Storage::<'_, Params, u32>::new_async::<Return>(storage) };
 
             // Lift the parameters, either from flat storage or from linear
             // memory.
@@ -309,10 +291,14 @@ where
             let mut lower_result = {
                 let types = types.clone();
                 move |store: StoreContextMut<T>, instance: Instance, ret: Return| {
-                    flags.set_may_leave(false);
+                    unsafe {
+                        flags.set_may_leave(false);
+                    }
                     let mut lower = LowerContext::new(store, &options, &types, instance);
                     ret.linear_lower_to_memory(&mut lower, result_tys, retptr)?;
-                    flags.set_may_leave(true);
+                    unsafe {
+                        flags.set_may_leave(true);
+                    }
                     lower.exit_call()?;
                     Ok(())
                 }
@@ -349,7 +335,7 @@ where
             );
         }
     } else {
-        let mut storage = Storage::<'_, Params, Return>::new_sync(storage);
+        let mut storage = unsafe { Storage::<'_, Params, Return>::new_sync(storage) };
         let mut lift = LiftContext::new(store.0.store_opaque_mut(), &options, instance);
         lift.enter_call();
         let params = storage.lift_params(&mut lift, param_tys)?;
@@ -358,14 +344,18 @@ where
             HostResult::Done(result) => result?,
             #[cfg(feature = "component-model-async")]
             HostResult::Future(future) => {
-                instance.poll_and_block(store.0.traitobj_mut(), future, caller_instance)?
+                instance.poll_and_block(store.0, future, caller_instance)?
             }
         };
 
-        flags.set_may_leave(false);
+        unsafe {
+            flags.set_may_leave(false);
+        }
         let mut lower = LowerContext::new(store, &options, &types, instance);
         storage.lower_results(&mut lower, result_tys, ret)?;
-        flags.set_may_leave(true);
+        unsafe {
+            flags.set_may_leave(true);
+        }
         lower.exit_call()?;
     }
 
@@ -691,29 +681,23 @@ unsafe fn call_host_and_handle_result<T>(
 where
     T: 'static,
 {
-    let cx = VMComponentContext::from_opaque(cx);
-    ComponentInstance::from_vmctx(cx, |store, instance| {
-        let mut store = store.unchecked_context_mut();
-
-        crate::runtime::vm::catch_unwind_and_record_trap(|| {
+    let cx = unsafe { VMComponentContext::from_opaque(cx) };
+    unsafe {
+        ComponentInstance::enter_host_from_wasm(cx, |store, instance| {
+            let mut store = store.unchecked_context_mut();
             store.0.call_hook(CallHook::CallingHost)?;
             let res = func(store.as_context_mut(), instance);
             store.0.call_hook(CallHook::ReturningFromHost)?;
             res
         })
-    })
+    }
 }
 
 unsafe fn call_host_dynamic<T, F>(
     mut store: StoreContextMut<'_, T>,
     instance: Instance,
     ty: TypeFuncIndex,
-    caller_instance: RuntimeComponentInstanceIndex,
-    mut flags: InstanceFlags,
-    memory: *mut VMMemoryDefinition,
-    realloc: *mut VMFuncRef,
-    string_encoding: StringEncoding,
-    async_: bool,
+    options_idx: OptionsIndex,
     storage: &mut [MaybeUninit<ValRaw>],
     closure: F,
 ) -> Result<()>
@@ -729,19 +713,17 @@ where
         + 'static,
     T: 'static,
 {
-    let options = Options::new(
-        store.0.store_opaque().id(),
-        NonNull::new(memory),
-        NonNull::new(realloc),
-        string_encoding,
-        async_,
-        None,
-    );
+    let options = Options::new_index(store.0, instance, options_idx);
+    let vminstance = instance.id().get(store.0);
+    let opts = &vminstance.component().env_component().options[options_idx];
+    let async_ = opts.async_;
+    let caller_instance = opts.instance;
+    let mut flags = vminstance.instance_flags(caller_instance);
 
     // Perform a dynamic check that this instance can indeed be left. Exiting
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
-    if !flags.may_leave() {
+    if unsafe { !flags.may_leave() } {
         bail!("cannot leave component instance");
     }
 
@@ -759,14 +741,16 @@ where
         MAX_FLAT_PARAMS
     };
 
-    let ret_index = dynamic_params_load(
-        &mut lift,
-        &types,
-        storage,
-        param_tys,
-        &mut params_and_results,
-        max_flat,
-    )?;
+    let ret_index = unsafe {
+        dynamic_params_load(
+            &mut lift,
+            &types,
+            storage,
+            param_tys,
+            &mut params_and_results,
+            max_flat,
+        )?
+    };
     let result_start = params_and_results.len();
     for _ in 0..result_tys.types.len() {
         params_and_results.push(Val::Bool(false));
@@ -778,7 +762,7 @@ where
             let retptr = if result_tys.types.len() == 0 {
                 0
             } else {
-                let retptr = storage[ret_index].assume_init();
+                let retptr = unsafe { storage[ret_index].assume_init() };
                 let mut lower =
                     LowerContext::new(store.as_context_mut(), &options, &types, instance);
                 validate_inbounds_dynamic(&result_tys.abi, lower.as_slice_mut(), &retptr)?
@@ -799,7 +783,9 @@ where
                     let result_vals = &result_vals[result_start..];
                     assert_eq!(result_vals.len(), result_tys.types.len());
 
-                    flags.set_may_leave(false);
+                    unsafe {
+                        flags.set_may_leave(false);
+                    }
 
                     let mut lower = LowerContext::new(store, &options, &types, instance);
                     let mut ptr = retptr;
@@ -808,7 +794,9 @@ where
                         val.store(&mut lower, *ty, offset)?;
                     }
 
-                    flags.set_may_leave(true);
+                    unsafe {
+                        flags.set_may_leave(true);
+                    }
 
                     lower.exit_call()?;
 
@@ -838,11 +826,12 @@ where
             params_and_results,
             result_start,
         );
-        let result_vals =
-            instance.poll_and_block(store.0.traitobj_mut(), future, caller_instance)?;
+        let result_vals = instance.poll_and_block(store.0, future, caller_instance)?;
         let result_vals = &result_vals[result_start..];
 
-        flags.set_may_leave(false);
+        unsafe {
+            flags.set_may_leave(false);
+        }
 
         let mut cx = LowerContext::new(store, &options, &types, instance);
         if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
@@ -852,7 +841,7 @@ where
             }
             assert!(dst.next().is_none());
         } else {
-            let ret_ptr = storage[ret_index].assume_init_ref();
+            let ret_ptr = unsafe { storage[ret_index].assume_init_ref() };
             let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice_mut(), ret_ptr)?;
             for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
                 let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
@@ -860,7 +849,9 @@ where
             }
         }
 
-        flags.set_may_leave(true);
+        unsafe {
+            flags.set_may_leave(true);
+        }
 
         cx.exit_call()?;
     }
@@ -928,16 +919,11 @@ pub(crate) fn validate_inbounds_dynamic(
     Ok(ptr)
 }
 
-extern "C" fn dynamic_entrypoint<T: 'static, F>(
+extern "C" fn dynamic_entrypoint<T, F>(
     cx: NonNull<VMOpaqueContext>,
     data: NonNull<u8>,
     ty: u32,
-    caller_instance: u32,
-    flags: NonNull<VMGlobalDefinition>,
-    memory: *mut VMMemoryDefinition,
-    realloc: *mut VMFuncRef,
-    string_encoding: u8,
-    async_: u8,
+    options: u32,
     storage: NonNull<MaybeUninit<ValRaw>>,
     storage_len: usize,
 ) -> bool
@@ -960,12 +946,7 @@ where
                 store,
                 instance,
                 TypeFuncIndex::from_u32(ty),
-                RuntimeComponentInstanceIndex::from_u32(caller_instance),
-                InstanceFlags::from_raw(flags),
-                memory,
-                realloc,
-                StringEncoding::from_u8(string_encoding).unwrap(),
-                async_ != 0,
+                OptionsIndex::from_u32(options),
                 NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                 move |store, instance, params, results| {
                     (*data.as_ptr())(store, instance, params, results)

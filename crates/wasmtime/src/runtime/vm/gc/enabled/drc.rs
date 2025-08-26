@@ -44,8 +44,8 @@
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
+use super::VMArrayRef;
 use super::free_list::FreeList;
-use super::{VMArrayRef, VMExnRef, VMStructRef};
 use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::runtime::vm::{
@@ -64,8 +64,7 @@ use core::{
 };
 use wasmtime_environ::drc::{ARRAY_LENGTH_OFFSET, DrcTypeLayouts};
 use wasmtime_environ::{
-    GcArrayLayout, GcExceptionLayout, GcLayout, GcStructLayout, GcTypeLayouts, VMGcKind,
-    VMSharedTypeIndex,
+    GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
 };
 
 #[expect(clippy::cast_possible_truncation, reason = "known to not overflow")]
@@ -292,13 +291,6 @@ impl DrcHeap {
             }
             GcLayout::Struct(l) => TraceInfo::Struct {
                 gc_ref_offsets: l
-                    .fields
-                    .iter()
-                    .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
-                    .collect(),
-            },
-            GcLayout::Exception(e) => TraceInfo::Struct {
-                gc_ref_offsets: e
                     .fields
                     .iter()
                     .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
@@ -846,24 +838,27 @@ unsafe impl GcHeap for DrcHeap {
         Ok(Ok(gc_ref))
     }
 
-    fn alloc_uninit_struct(
+    fn alloc_uninit_struct_or_exn(
         &mut self,
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
-    ) -> Result<Result<VMStructRef, u64>> {
-        let gc_ref = match self.alloc_raw(
-            VMGcHeader::from_kind_and_index(VMGcKind::StructRef, ty),
-            layout.layout(),
-        )? {
-            Err(n) => return Ok(Err(n)),
-            Ok(gc_ref) => gc_ref,
+    ) -> Result<Result<VMGcRef, u64>> {
+        let kind = if layout.is_exception {
+            VMGcKind::ExnRef
+        } else {
+            VMGcKind::StructRef
         };
+        let gc_ref =
+            match self.alloc_raw(VMGcHeader::from_kind_and_index(kind, ty), layout.layout())? {
+                Err(n) => return Ok(Err(n)),
+                Ok(gc_ref) => gc_ref,
+            };
 
-        Ok(Ok(gc_ref.into_structref_unchecked()))
+        Ok(Ok(gc_ref))
     }
 
-    fn dealloc_uninit_struct(&mut self, structref: VMStructRef) {
-        self.dealloc(structref.into());
+    fn dealloc_uninit_struct_or_exn(&mut self, gcref: VMGcRef) {
+        self.dealloc(gcref);
     }
 
     fn alloc_uninit_array(
@@ -896,26 +891,6 @@ unsafe impl GcHeap for DrcHeap {
             .length
     }
 
-    fn alloc_uninit_exn(
-        &mut self,
-        ty: VMSharedTypeIndex,
-        layout: &GcExceptionLayout,
-    ) -> Result<Result<VMExnRef, u64>> {
-        let gc_ref = match self.alloc_raw(
-            VMGcHeader::from_kind_and_index(VMGcKind::ExnRef, ty),
-            layout.layout(),
-        )? {
-            Err(n) => return Ok(Err(n)),
-            Ok(gc_ref) => gc_ref,
-        };
-
-        Ok(Ok(gc_ref.into_exnref_unchecked()))
-    }
-
-    fn dealloc_uninit_exn(&mut self, exnref: VMExnRef) {
-        self.dealloc(exnref.into());
-    }
-
     fn gc<'a>(
         &'a mut self,
         roots: GcRootsIter<'a>,
@@ -935,7 +910,7 @@ unsafe impl GcHeap for DrcHeap {
         ptr.cast()
     }
 
-    unsafe fn take_memory(&mut self) -> crate::vm::Memory {
+    fn take_memory(&mut self) -> crate::vm::Memory {
         debug_assert!(self.is_attached());
         self.vmmemory.take();
         self.memory.take().unwrap()

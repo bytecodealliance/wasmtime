@@ -739,7 +739,7 @@ fn store_with_context() -> Result<()> {
 fn wasi_imports() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |t| t)?;
+    wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |t| t)?;
 
     let wasm = wat::parse_str(
         r#"
@@ -752,7 +752,7 @@ fn wasi_imports() -> Result<()> {
     )?;
 
     let module = Module::new(&engine, wasm)?;
-    let mut store = Store::new(&engine, wasmtime_wasi::p2::WasiCtxBuilder::new().build_p1());
+    let mut store = Store::new(&engine, wasmtime_wasi::WasiCtxBuilder::new().build_p1());
     let instance = linker.instantiate(&mut store, &module)?;
 
     let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;

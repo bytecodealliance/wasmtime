@@ -60,6 +60,26 @@ executed normally as the CLI would.
 [`wasmtime-dev-x86_64-macos.tar.xz`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-macos.tar.xz
 [`wasmtime-dev-x86_64-windows.zip`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-windows.zip
 
+## Install via Cargo
+
+If you have [Rust and Cargo](https://www.rust-lang.org/tools/install) available in your system, you can build and install an official `wasmtime` release from its [crates.io](https://crates.io/crates/wasmtime-cli) source:
+
+```console
+cargo install wasmtime-cli
+```
+
+This compiles and installs `wasmtime` into your Cargo bin directory (typically `$HOME/.cargo/bin`). Make sure that directory is in your `PATH` before running `wasmtime`. For example, add the following line to `~/.bashrc` or `~/.zshrc`:
+
+```console
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+You can also use [`binstall`](https://github.com/cargo-bins/cargo-binstall) to automatically find and install the correct `wasmtime` binary for your system, matching a candidate from [GitHub Releases](https://github.com/bytecodealliance/wasmtime/releases):  
+
+```console
+cargo binstall wasmtime-cli
+```
+
 ## Compiling from Source
 
 If you'd prefer to compile the `wasmtime` CLI from source, you'll want to

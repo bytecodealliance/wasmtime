@@ -5,16 +5,14 @@ pub use emit_state::EmitState;
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::{ExternalName, LibCall, TrapCode, Type, types};
 use crate::isa::x64::abi::X64ABIMachineSpec;
-use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
+use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::{CodegenError, CodegenResult, settings};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 use core::slice;
 use cranelift_assembler_x64 as asm;
-use cranelift_entity::{Signed, Unsigned};
 use smallvec::{SmallVec, smallvec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -64,14 +62,16 @@ fn inst_size_test() {
 }
 
 impl Inst {
-    /// Retrieve a list of ISA feature sets in which the instruction is available. An empty list
-    /// indicates that the instruction is available in the baseline feature set (i.e. SSE2 and
-    /// below); more than one `InstructionSet` in the list indicates that the instruction is present
-    /// *any* of the included ISA feature sets.
-    fn available_in_any_isa(&self) -> SmallVec<[InstructionSet; 2]> {
+    /// Check if the instruction (or pseudo-instruction) can be emitted given
+    /// the current target architecture given by `emit_info`. For non-assembler
+    /// instructions, this assumes a baseline feature set (i.e., 64-bit AND SSE2
+    /// and below).
+    fn is_available(&self, emit_info: &EmitInfo) -> bool {
+        use asm::AvailableFeatures;
+
         match self {
-            // These instructions are part of SSE2, which is a basic requirement in Cranelift, and
-            // don't have to be checked.
+            // These instructions are part of SSE2, which is a basic requirement
+            // in Cranelift, and don't have to be checked.
             Inst::AtomicRmwSeq { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
@@ -105,42 +105,11 @@ impl Inst {
             | Inst::MachOTlsGetAddr { .. }
             | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
-            | Inst::DummyUse { .. } => smallvec![],
+            | Inst::DummyUse { .. } => true,
 
-            Inst::Atomic128RmwSeq { .. } | Inst::Atomic128XchgSeq { .. } => {
-                smallvec![InstructionSet::CMPXCHG16b]
-            }
+            Inst::Atomic128RmwSeq { .. } | Inst::Atomic128XchgSeq { .. } => emit_info.cmpxchg16b(),
 
-            Inst::XmmUnaryRmREvex { op, .. }
-            | Inst::XmmRmREvex { op, .. }
-            | Inst::XmmRmREvex3 { op, .. } => op.available_from(),
-
-            Inst::External { inst } => {
-                use cranelift_assembler_x64::Feature::*;
-                let mut features = smallvec![];
-                for f in inst.features() {
-                    match f {
-                        _64b | compat => {}
-                        sse => features.push(InstructionSet::SSE),
-                        sse2 => features.push(InstructionSet::SSE2),
-                        sse3 => features.push(InstructionSet::SSE3),
-                        ssse3 => features.push(InstructionSet::SSSE3),
-                        sse41 => features.push(InstructionSet::SSE41),
-                        sse42 => features.push(InstructionSet::SSE42),
-                        bmi1 => features.push(InstructionSet::BMI1),
-                        bmi2 => features.push(InstructionSet::BMI2),
-                        lzcnt => features.push(InstructionSet::Lzcnt),
-                        popcnt => features.push(InstructionSet::Popcnt),
-                        avx => features.push(InstructionSet::AVX),
-                        avx2 => features.push(InstructionSet::AVX2),
-                        avx512f => features.push(InstructionSet::AVX512F),
-                        avx512vl => features.push(InstructionSet::AVX512VL),
-                        cmpxchg16b => features.push(InstructionSet::CMPXCHG16b),
-                        fma => features.push(InstructionSet::FMA),
-                    }
-                }
-                features
-            }
+            Inst::External { inst } => inst.is_available(&emit_info),
         }
     }
 }
@@ -196,7 +165,7 @@ impl Inst {
                 // If `simm64` is zero-extended use `movl` which zeros the
                 // upper bits.
                 Ok(imm32) => asm::inst::movl_oi::new(dst, imm32).into(),
-                _ => match i32::try_from(simm64.signed()) {
+                _ => match i32::try_from(simm64.cast_signed()) {
                     // If `simm64` is sign-extended use `movq` which sign the
                     // upper bits.
                     Ok(simm32) => asm::inst::movq_mi_sxl::new(dst, simm32).into(),
@@ -265,7 +234,7 @@ impl Inst {
     /// Compares `src1` against `src2`
     pub(crate) fn cmp_mi_sxb(size: OperandSize, src1: Gpr, src2: i8) -> Inst {
         let inst = match size {
-            OperandSize::Size8 => asm::inst::cmpb_mi::new(src1, src2.unsigned()).into(),
+            OperandSize::Size8 => asm::inst::cmpb_mi::new(src1, src2.cast_unsigned()).into(),
             OperandSize::Size16 => asm::inst::cmpw_mi_sxb::new(src1, src2).into(),
             OperandSize::Size32 => asm::inst::cmpl_mi_sxb::new(src1, src2).into(),
             OperandSize::Size64 => asm::inst::cmpq_mi_sxb::new(src1, src2).into(),
@@ -449,43 +418,6 @@ impl PrettyPrint for Inst {
                 format!("checked_srem_seq {dividend}, {divisor}, {dst}")
             }
 
-            Inst::XmmUnaryRmREvex { op, src, dst, .. } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src = src.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
-            }
-
-            Inst::XmmRmREvex {
-                op,
-                src1,
-                src2,
-                dst,
-                ..
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let src2 = src2.pretty_print(8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src2}, {src1}, {dst}")
-            }
-
-            Inst::XmmRmREvex3 {
-                op,
-                src1,
-                src2,
-                src3,
-                dst,
-                ..
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let src2 = pretty_print_reg(src2.to_reg(), 8);
-                let src3 = src3.pretty_print(8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src3}, {src2}, {src1}, {dst}")
-            }
-
             Inst::XmmMinMaxSeq {
                 lhs,
                 rhs,
@@ -590,7 +522,7 @@ impl PrettyPrint for Inst {
 
             Inst::MovFromPReg { src, dst } => {
                 let src: Reg = (*src).into();
-                let src = regs::show_ireg_sized(src, 8);
+                let src = pretty_print_reg(src, 8);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
                 let op = ljustify("movq".to_string());
                 format!("{op} {src}, {dst}")
@@ -599,7 +531,7 @@ impl PrettyPrint for Inst {
             Inst::MovToPReg { src, dst } => {
                 let src = pretty_print_reg(src.to_reg(), 8);
                 let dst: Reg = (*dst).into();
-                let dst = regs::show_ireg_sized(dst, 8);
+                let dst = pretty_print_reg(dst, 8);
                 let op = ljustify("movq".to_string());
                 format!("{op} {src}, {dst}")
             }
@@ -674,7 +606,7 @@ impl PrettyPrint for Inst {
                 let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8);
                 let mut s = format!("return_call_known {dest:?} ({new_stack_arg_size}) tmp={tmp}");
                 for ret in uses {
-                    let preg = regs::show_reg(ret.preg);
+                    let preg = pretty_print_reg(ret.preg, 8);
                     let vreg = pretty_print_reg(ret.vreg, 8);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
@@ -693,7 +625,7 @@ impl PrettyPrint for Inst {
                 let mut s =
                     format!("return_call_unknown {callee} ({new_stack_arg_size}) tmp={tmp}");
                 for ret in uses {
-                    let preg = regs::show_reg(ret.preg);
+                    let preg = pretty_print_reg(ret.preg, 8);
                     let vreg = pretty_print_reg(ret.vreg, 8);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
@@ -703,7 +635,7 @@ impl PrettyPrint for Inst {
             Inst::Args { args } => {
                 let mut s = "args".to_string();
                 for arg in args {
-                    let preg = regs::show_reg(arg.preg);
+                    let preg = pretty_print_reg(arg.preg, 8);
                     let def = pretty_print_reg(arg.vreg.to_reg(), 8);
                     write!(&mut s, " {def}={preg}").unwrap();
                 }
@@ -713,7 +645,7 @@ impl PrettyPrint for Inst {
             Inst::Rets { rets } => {
                 let mut s = "rets".to_string();
                 for ret in rets {
-                    let preg = regs::show_reg(ret.preg);
+                    let preg = pretty_print_reg(ret.preg, 8);
                     let vreg = pretty_print_reg(ret.vreg, 8);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
@@ -876,7 +808,7 @@ impl PrettyPrint for Inst {
 
                 let mut s = format!("{dst} = coff_tls_get_addr {symbol:?}");
                 if tmp.is_virtual() {
-                    let tmp = show_ireg_sized(tmp, 8);
+                    let tmp = pretty_print_reg(tmp, 8);
                     write!(&mut s, ", {tmp}").unwrap();
                 };
 
@@ -898,13 +830,11 @@ impl PrettyPrint for Inst {
 }
 
 fn pretty_print_try_call(info: &TryCallInfo) -> String {
-    let dests = info
-        .exception_dests
-        .iter()
-        .map(|(tag, label)| format!("{tag:?}: {label:?}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("; jmp {:?}; catch [{dests}]", info.continuation)
+    format!(
+        "; jmp {:?}; catch [{}]",
+        info.continuation,
+        info.pretty_print_dests()
+    )
 }
 
 impl fmt::Debug for Inst {
@@ -947,36 +877,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(divisor);
             collector.reg_fixed_use(dividend, regs::rax());
             collector.reg_fixed_def(dst, regs::rax());
-        }
-        Inst::XmmUnaryRmREvex { src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
-        }
-        Inst::XmmRmREvex {
-            op,
-            src1,
-            src2,
-            dst,
-            ..
-        } => {
-            assert_ne!(*op, Avx512Opcode::Vpermi2b);
-            collector.reg_use(src1);
-            src2.get_operands(collector);
-            collector.reg_def(dst);
-        }
-        Inst::XmmRmREvex3 {
-            op,
-            src1,
-            src2,
-            src3,
-            dst,
-            ..
-        } => {
-            assert_eq!(*op, Avx512Opcode::Vpermi2b);
-            collector.reg_use(src1);
-            collector.reg_use(src2);
-            src3.get_operands(collector);
-            collector.reg_reuse_def(dst, 0); // Reuse `src1`.
         }
         Inst::XmmUninitializedValue { dst } => collector.reg_def(dst),
         Inst::GprUninitializedValue { dst } => collector.reg_def(dst),
@@ -1058,6 +958,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 defs,
                 clobbers,
                 dest,
+                try_call_info,
                 ..
             } = &mut **info;
             debug_assert_ne!(*dest, ExternalName::LibCall(LibCall::Probestack));
@@ -1071,6 +972,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 }
             }
             collector.reg_clobbers(*clobbers);
+            if let Some(try_call_info) = try_call_info {
+                try_call_info.collect_operands(collector);
+            }
         }
 
         Inst::CallUnknown { info } => {
@@ -1080,6 +984,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 clobbers,
                 callee_conv,
                 dest,
+                try_call_info,
                 ..
             } = &mut **info;
             match dest {
@@ -1101,6 +1006,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 }
             }
             collector.reg_clobbers(*clobbers);
+            if let Some(try_call_info) = try_call_info {
+                try_call_info.collect_operands(collector);
+            }
         }
         Inst::StackSwitchBasic {
             store_context_ptr,
@@ -1254,7 +1162,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             // Windows) use different TLS strategies.
             let mut clobbers =
                 X64ABIMachineSpec::get_regs_clobbered_by_call(CallConv::SystemV, false);
-            clobbers.remove(regs::gpr_preg(regs::ENC_RAX));
+            clobbers.remove(regs::gpr_preg(asm::gpr::enc::RAX));
             collector.reg_clobbers(clobbers);
         }
 
@@ -1541,6 +1449,97 @@ impl EmitInfo {
     }
 }
 
+impl asm::AvailableFeatures for &EmitInfo {
+    fn _64b(&self) -> bool {
+        // Currently, this x64 backend always assumes 64-bit mode.
+        true
+    }
+
+    fn compat(&self) -> bool {
+        // For 32-bit compatibility mode, see
+        // https://github.com/bytecodealliance/wasmtime/issues/1980 (TODO).
+        false
+    }
+
+    fn sse(&self) -> bool {
+        // Currently, this x64 backend always assumes SSE.
+        true
+    }
+
+    fn sse2(&self) -> bool {
+        // Currently, this x64 backend always assumes SSE2.
+        true
+    }
+
+    fn sse3(&self) -> bool {
+        self.isa_flags.has_sse3()
+    }
+
+    fn ssse3(&self) -> bool {
+        self.isa_flags.has_ssse3()
+    }
+
+    fn sse41(&self) -> bool {
+        self.isa_flags.has_sse41()
+    }
+
+    fn sse42(&self) -> bool {
+        self.isa_flags.has_sse42()
+    }
+
+    fn bmi1(&self) -> bool {
+        self.isa_flags.has_bmi1()
+    }
+
+    fn bmi2(&self) -> bool {
+        self.isa_flags.has_bmi2()
+    }
+
+    fn lzcnt(&self) -> bool {
+        self.isa_flags.has_lzcnt()
+    }
+
+    fn popcnt(&self) -> bool {
+        self.isa_flags.has_popcnt()
+    }
+
+    fn avx(&self) -> bool {
+        self.isa_flags.has_avx()
+    }
+
+    fn avx2(&self) -> bool {
+        self.isa_flags.has_avx2()
+    }
+
+    fn avx512f(&self) -> bool {
+        self.isa_flags.has_avx512f()
+    }
+
+    fn avx512vl(&self) -> bool {
+        self.isa_flags.has_avx512vl()
+    }
+
+    fn cmpxchg16b(&self) -> bool {
+        self.isa_flags.has_cmpxchg16b()
+    }
+
+    fn fma(&self) -> bool {
+        self.isa_flags.has_fma()
+    }
+
+    fn avx512dq(&self) -> bool {
+        self.isa_flags.has_avx512dq()
+    }
+
+    fn avx512bitalg(&self) -> bool {
+        self.isa_flags.has_avx512bitalg()
+    }
+
+    fn avx512vbmi(&self) -> bool {
+        self.isa_flags.has_avx512vbmi()
+    }
+}
+
 impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
@@ -1562,14 +1561,6 @@ pub enum LabelUse {
     /// next instruction (so the size of the payload -- 4 bytes -- is subtracted from the payload).
     JmpRel32,
 
-    /// An 8-bit offset from location of relocation itself, added to the
-    /// existing value at that location.
-    ///
-    /// Used for control flow instructions which consider an offset from the
-    /// start of the next instruction (so the size of the payload -- 1 byte --
-    /// is subtracted from the payload).
-    JmpRel8,
-
     /// A 32-bit offset from location of relocation itself, added to the existing value at that
     /// location.
     PCRel32,
@@ -1581,21 +1572,18 @@ impl MachInstLabelUse for LabelUse {
     fn max_pos_range(self) -> CodeOffset {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => 0x7fff_ffff,
-            LabelUse::JmpRel8 => 0x7f,
         }
     }
 
     fn max_neg_range(self) -> CodeOffset {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => 0x8000_0000,
-            LabelUse::JmpRel8 => 0x80,
         }
     }
 
     fn patch_size(self) -> CodeOffset {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => 4,
-            LabelUse::JmpRel8 => 1,
         }
     }
 
@@ -1610,9 +1598,6 @@ impl MachInstLabelUse for LabelUse {
                 let value = pc_rel.wrapping_add(addend).wrapping_sub(4);
                 buffer.copy_from_slice(&value.to_le_bytes()[..]);
             }
-            LabelUse::JmpRel8 => {
-                buffer[0] = buffer[0].wrapping_add(pc_rel as u8).wrapping_sub(1);
-            }
             LabelUse::PCRel32 => {
                 let addend = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
                 let value = pc_rel.wrapping_add(addend);
@@ -1624,21 +1609,12 @@ impl MachInstLabelUse for LabelUse {
     fn supports_veneer(self) -> bool {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => false,
-
-            // Technically this is possible to have a veneer because it can jump
-            // to a 32-bit jump which keeps going. That being said at this time
-            // this variant is only used in `emit.rs` for jumps that are already
-            // known to be short so it's a bug if we jump to a jump that's too
-            // far away. In the future if general-purpose basic-block
-            // terminators are switched to using short jumps to get promoted to
-            // a long jump then this may wish to change.
-            LabelUse::JmpRel8 => false,
         }
     }
 
     fn veneer_size(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::JmpRel8 => 0,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0,
         }
     }
 
@@ -1648,7 +1624,7 @@ impl MachInstLabelUse for LabelUse {
 
     fn generate_veneer(self, _: &mut [u8], _: CodeOffset) -> (CodeOffset, LabelUse) {
         match self {
-            LabelUse::JmpRel32 | LabelUse::PCRel32 | LabelUse::JmpRel8 => {
+            LabelUse::JmpRel32 | LabelUse::PCRel32 => {
                 panic!("Veneer not supported for JumpRel32 label-use.");
             }
         }

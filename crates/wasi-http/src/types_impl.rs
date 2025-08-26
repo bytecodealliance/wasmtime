@@ -7,14 +7,14 @@ use crate::{
     types::{
         FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
         HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
-        is_forbidden_header, remove_forbidden_headers,
+        remove_forbidden_headers,
     },
 };
 use anyhow::{Context, anyhow};
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
-use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable, IoView};
+use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
 
 impl<T> crate::bindings::http::types::Host for WasiHttpImpl<T>
 where
@@ -125,7 +125,7 @@ where
                 Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
             };
 
-            if is_forbidden_header(self, &header) {
+            if self.is_forbidden_header(&header) {
                 return Ok(Err(types::HeaderError::Forbidden));
             }
 
@@ -196,7 +196,7 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        if is_forbidden_header(self, &header) {
+        if self.is_forbidden_header(&header) {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
@@ -228,7 +228,7 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        if is_forbidden_header(self, &header) {
+        if self.is_forbidden_header(&header) {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
@@ -248,7 +248,7 @@ where
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        if is_forbidden_header(self, &header) {
+        if self.is_forbidden_header(&header) {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 

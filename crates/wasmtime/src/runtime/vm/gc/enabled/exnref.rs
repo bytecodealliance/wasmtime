@@ -6,7 +6,7 @@ use crate::{
     store::{AutoAssertNoGc, InstanceId},
 };
 use core::fmt;
-use wasmtime_environ::{DefinedTagIndex, GcExceptionLayout, VMGcKind};
+use wasmtime_environ::{DefinedTagIndex, GcStructLayout, VMGcKind};
 
 /// A `VMGcRef` that we know points to an `exn`.
 ///
@@ -49,7 +49,7 @@ impl VMGcRef {
     ///
     /// If this is not a GC reference to an `exnref`, `Err(self)` is
     /// returned.
-    pub fn into_exnref(self, gc_heap: &impl GcHeap) -> Result<VMExnRef, VMGcRef> {
+    pub fn into_exnref(self, gc_heap: &(impl GcHeap + ?Sized)) -> Result<VMExnRef, VMGcRef> {
         if self.is_exnref(gc_heap) {
             Ok(self.into_exnref_unchecked())
         } else {
@@ -100,6 +100,16 @@ impl VMExnRef {
         &self.0
     }
 
+    /// Get a mutable borrow on the underlying `VMGcRef`.
+    ///
+    /// Requires that the mutation retains the reference's invariants,
+    /// namely: not null, and pointing to a valid exnref object. Doing
+    /// otherwise is memory safe, but will lead to general
+    /// incorrectness.
+    pub fn as_gc_ref_mut(&mut self) -> &mut VMGcRef {
+        &mut self.0
+    }
+
     /// Clone this `VMExnRef`, running any GC barriers as necessary.
     pub fn clone(&self, gc_store: &mut GcStore) -> Self {
         Self(gc_store.clone_gc_ref(&self.0))
@@ -134,7 +144,7 @@ impl VMExnRef {
     pub fn read_field(
         &self,
         store: &mut AutoAssertNoGc,
-        layout: &GcExceptionLayout,
+        layout: &GcStructLayout,
         ty: &StorageType,
         field: usize,
     ) -> Val {
@@ -161,7 +171,7 @@ impl VMExnRef {
     pub fn initialize_field(
         &self,
         store: &mut AutoAssertNoGc,
-        layout: &GcExceptionLayout,
+        layout: &GcStructLayout,
         ty: &StorageType,
         field: usize,
         val: Val,
@@ -175,36 +185,34 @@ impl VMExnRef {
     pub fn initialize_tag(
         &self,
         store: &mut AutoAssertNoGc,
-        layout: &GcExceptionLayout,
         instance: InstanceId,
         tag: DefinedTagIndex,
     ) -> Result<()> {
+        let layouts = store.engine().gc_runtime().unwrap().layouts();
+        let instance_offset = layouts.exception_tag_instance_offset();
+        let tag_offset = layouts.exception_tag_defined_offset();
+        let store = store.require_gc_store_mut()?;
         store
-            .gc_store_mut()?
             .gc_object_data(&self.0)
-            .write_u32(layout.tag_offset, instance.as_u32());
+            .write_u32(instance_offset, instance.as_u32());
         store
-            .gc_store_mut()?
             .gc_object_data(&self.0)
-            .write_u32(layout.tag_offset + 4, tag.as_u32());
+            .write_u32(tag_offset, tag.as_u32());
         Ok(())
     }
 
     /// Get the tag referenced by this exception object.
-    pub fn tag(
-        &self,
-        store: &mut AutoAssertNoGc,
-        layout: &GcExceptionLayout,
-    ) -> Result<(InstanceId, DefinedTagIndex)> {
+    pub fn tag(&self, store: &mut AutoAssertNoGc) -> Result<(InstanceId, DefinedTagIndex)> {
+        let layouts = store.engine().gc_runtime().unwrap().layouts();
+        let instance_offset = layouts.exception_tag_instance_offset();
+        let tag_offset = layouts.exception_tag_defined_offset();
         let instance = store
-            .gc_store_mut()?
+            .require_gc_store_mut()?
             .gc_object_data(&self.0)
-            .read_u32(layout.tag_offset);
+            .read_u32(instance_offset);
         let instance = InstanceId::from_u32(instance);
-        let tag = store
-            .gc_store_mut()?
-            .gc_object_data(&self.0)
-            .read_u32(layout.tag_offset + 4);
+        let store = store.require_gc_store_mut()?;
+        let tag = store.gc_object_data(&self.0).read_u32(tag_offset);
         let tag = DefinedTagIndex::from_u32(tag);
         Ok((instance, tag))
     }

@@ -9,7 +9,10 @@
 //!
 use anyhow::anyhow;
 use bytes::Bytes;
+use std::pin::{Pin, pin};
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
+use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
 use wasmtime_wasi_io::{
     poll::Pollable,
@@ -52,6 +55,20 @@ impl InputStream for MemoryInputPipe {
 #[async_trait::async_trait]
 impl Pollable for MemoryInputPipe {
     async fn ready(&mut self) {}
+}
+
+impl AsyncRead for MemoryInputPipe {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &mut io::ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let mut buffer = self.buffer.lock().unwrap();
+        let size = buf.remaining().min(buffer.len());
+        let read = buffer.split_to(size);
+        buf.put_slice(&read);
+        Poll::Ready(Ok(()))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +127,25 @@ impl Pollable for MemoryOutputPipe {
     async fn ready(&mut self) {}
 }
 
+impl AsyncWrite for MemoryOutputPipe {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        let mut buffer = self.buffer.lock().unwrap();
+        let amt = buf.len().min(self.capacity - buffer.len());
+        buffer.extend_from_slice(&buf[..amt]);
+        Poll::Ready(Ok(amt))
+    }
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
 /// Provides a [`InputStream`] impl from a [`tokio::io::AsyncRead`] impl
 pub struct AsyncReadStream {
     closed: bool,
@@ -121,9 +157,10 @@ pub struct AsyncReadStream {
 impl AsyncReadStream {
     /// Create a [`AsyncReadStream`]. In order to use the [`InputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
-    pub fn new<T: tokio::io::AsyncRead + Send + Unpin + 'static>(mut reader: T) -> Self {
+    pub fn new<T: AsyncRead + Send + 'static>(reader: T) -> Self {
         let (sender, receiver) = mpsc::channel(1);
         let join_handle = crate::runtime::spawn(async move {
+            let mut reader = pin!(reader);
             loop {
                 use tokio::io::AsyncReadExt;
                 let mut buf = bytes::BytesMut::with_capacity(4096);
@@ -147,6 +184,21 @@ impl AsyncReadStream {
             buffer: None,
             receiver,
             join_handle: Some(join_handle),
+        }
+    }
+    pub(crate) fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        if self.buffer.is_some() || self.closed {
+            return Poll::Ready(());
+        }
+        match self.receiver.poll_recv(cx) {
+            Poll::Ready(Some(res)) => {
+                self.buffer = Some(res);
+                Poll::Ready(())
+            }
+            Poll::Ready(None) => {
+                panic!("no more sender for an open AsyncReadStream - should be impossible")
+            }
+            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -201,18 +253,11 @@ impl InputStream for AsyncReadStream {
         }
     }
 }
+
 #[async_trait::async_trait]
 impl Pollable for AsyncReadStream {
     async fn ready(&mut self) {
-        if self.buffer.is_some() || self.closed {
-            return;
-        }
-        match self.receiver.recv().await {
-            Some(res) => self.buffer = Some(res),
-            None => {
-                panic!("no more sender for an open AsyncReadStream - should be impossible")
-            }
-        }
+        std::future::poll_fn(|cx| self.poll_ready(cx)).await
     }
 }
 

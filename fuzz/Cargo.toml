@@ -12,6 +12,9 @@ workspace = true
 cargo-fuzz = true
 
 [dependencies]
+mutatis = { workspace = true }
+rand = { workspace = true }
+postcard = { workspace = true }
 anyhow = { workspace = true }
 env_logger = { workspace = true }
 cranelift-assembler-x64 = { workspace = true, features = ["fuzz"] }
@@ -102,6 +105,13 @@ doc = false
 [[bin]]
 name = "misc"
 path = "fuzz_targets/misc.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "table_ops"
+path = "fuzz_targets/table_ops.rs"
 test = false
 doc = false
 bench = false

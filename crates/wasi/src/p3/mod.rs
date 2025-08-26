@@ -11,18 +11,16 @@
 pub mod bindings;
 pub mod cli;
 pub mod clocks;
-mod ctx;
 pub mod filesystem;
 pub mod random;
-mod view;
+pub mod sockets;
 
+use crate::WasiView;
+use crate::p3::bindings::LinkOptions;
 use wasmtime::component::Linker;
 
-use crate::p3::bindings::LinkOptions;
-use crate::p3::cli::WasiCliCtxView;
-
-pub use self::ctx::{WasiCtx, WasiCtxBuilder};
-pub use self::view::{WasiCtxView, WasiView};
+// Default buffer capacity to use for reads of byte-sized values.
+const DEFAULT_BUFFER_CAPACITY: usize = 8192;
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///
@@ -35,7 +33,7 @@ pub use self::view::{WasiCtxView, WasiView};
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime_wasi::p3::{WasiCtx, WasiCtxView, WasiView};
+/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -84,18 +82,14 @@ where
 pub fn add_to_linker_with_options<T>(
     linker: &mut Linker<T>,
     options: &LinkOptions,
-) -> anyhow::Result<()>
+) -> wasmtime::Result<()>
 where
     T: WasiView + 'static,
 {
-    clocks::add_to_linker_impl(linker, |x| &mut x.ctx().ctx.clocks)?;
-    random::add_to_linker_impl(linker, |x| &mut x.ctx().ctx.random)?;
-    cli::add_to_linker_impl(linker, &options.into(), |x| {
-        let WasiCtxView { ctx, table } = x.ctx();
-        WasiCliCtxView {
-            ctx: &mut ctx.cli,
-            table,
-        }
-    })?;
+    cli::add_to_linker_with_options(linker, &options.into())?;
+    clocks::add_to_linker(linker)?;
+    filesystem::add_to_linker(linker)?;
+    random::add_to_linker(linker)?;
+    sockets::add_to_linker(linker)?;
     Ok(())
 }

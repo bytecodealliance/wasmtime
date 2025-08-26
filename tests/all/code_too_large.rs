@@ -5,6 +5,11 @@ use wasmtime::*;
 
 #[test]
 fn code_too_large_without_panic() -> Result<()> {
+    // This takes 1m+ in ASAN and isn't too useful to test in ASAN.
+    if cfg!(asan) {
+        return Ok(());
+    }
+
     const N: usize = 80000;
 
     // Build a module with a function whose body will allocate too many

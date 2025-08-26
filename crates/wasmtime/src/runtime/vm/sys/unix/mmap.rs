@@ -141,8 +141,28 @@ impl Mmap {
         range: Range<usize>,
         enable_branch_protection: bool,
     ) -> Result<()> {
-        let base = self.memory.as_ptr().byte_add(range.start).cast();
+        let base = unsafe { self.memory.as_ptr().byte_add(range.start).cast() };
         let len = range.end - range.start;
+
+        if !cfg!(feature = "std") {
+            bail!(
+                "with the `std` feature disabled at compile time \
+                 there must be a custom implementation of publishing \
+                 code memory, otherwise it's unknown how to do icache \
+                 management"
+            );
+        }
+
+        // Clear the newly allocated code from cache if the processor requires
+        // it
+        //
+        // Do this before marking the memory as R+X, technically we should be
+        // able to do it after but there are some CPU's that have had errata
+        // about doing this with read only memory.
+        #[cfg(feature = "std")]
+        unsafe {
+            wasmtime_jit_icache_coherence::clear_cache(base, len).context("failed cache clear")?;
+        }
 
         let flags = MprotectFlags::READ | MprotectFlags::EXEC;
         let flags = if enable_branch_protection {
@@ -159,16 +179,24 @@ impl Mmap {
             flags
         };
 
-        mprotect(base, len, flags)?;
+        unsafe {
+            mprotect(base, len, flags)?;
+        }
+
+        // Flush any in-flight instructions from the pipeline
+        #[cfg(feature = "std")]
+        wasmtime_jit_icache_coherence::pipeline_flush_mt().context("Failed pipeline flush")?;
 
         Ok(())
     }
 
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
-        let base = self.memory.as_ptr().byte_add(range.start).cast();
+        let base = unsafe { self.memory.as_ptr().byte_add(range.start).cast() };
         let len = range.end - range.start;
 
-        mprotect(base, len, MprotectFlags::READ)?;
+        unsafe {
+            mprotect(base, len, MprotectFlags::READ)?;
+        }
 
         Ok(())
     }

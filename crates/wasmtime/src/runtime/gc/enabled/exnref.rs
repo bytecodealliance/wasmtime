@@ -1,8 +1,8 @@
 //! Implementation of `exnref` in Wasmtime.
 
-use crate::runtime::vm::VMGcRef;
-use crate::store::StoreId;
-use crate::vm::{VMExnRef, VMGcHeader};
+use crate::runtime::vm::{VMGcRef, VMStore};
+use crate::store::{StoreId, StoreResourceLimiter};
+use crate::vm::{self, VMExnRef, VMGcHeader};
 use crate::{
     AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType, Result,
     Rooted, Val, ValRaw, ValType, WasmTy,
@@ -11,7 +11,7 @@ use crate::{
 use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, prelude::*};
 use core::mem;
 use core::mem::MaybeUninit;
-use wasmtime_environ::{GcExceptionLayout, GcLayout, VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// An allocator for a particular Wasm GC exception type.
 ///
@@ -81,12 +81,12 @@ impl ExnRefPre {
         ExnRefPre { store_id, ty }
     }
 
-    pub(crate) fn layout(&self) -> &GcExceptionLayout {
+    pub(crate) fn layout(&self) -> &GcStructLayout {
         self.ty
             .registered_type()
             .layout()
             .expect("exn types have a layout")
-            .unwrap_exception()
+            .unwrap_struct()
     }
 
     pub(crate) fn type_index(&self) -> VMSharedTypeIndex {
@@ -136,27 +136,29 @@ impl ExnRef {
     /// This function assumes that `raw` is an `exnref` value which is currently
     /// rooted within the [`Store`].
     ///
-    /// # Unsafety
+    /// # Correctness
     ///
-    /// This function is particularly `unsafe` because `raw` not only must be a
+    /// This function is tricky to get right because `raw` not only must be a
     /// valid `exnref` value produced prior by [`ExnRef::to_raw`] but it must
     /// also be correctly rooted within the store. When arguments are provided
     /// to a callback with [`Func::new_unchecked`], for example, or returned via
     /// [`Func::call_unchecked`], if a GC is performed within the store then
     /// floating `exnref` values are not rooted and will be GC'd, meaning that
-    /// this function will no longer be safe to call with the values cleaned up.
-    /// This function must be invoked *before* possible GC operations can happen
-    /// (such as calling Wasm).
+    /// this function will no longer be correct to call with the values cleaned
+    /// up. This function must be invoked *before* possible GC operations can
+    /// happen (such as calling Wasm).
     ///
-    /// When in doubt try to not use this. Instead use the safe Rust APIs of
-    /// [`TypedFunc`] and friends.
+    /// When in doubt try to not use this. Instead use the Rust APIs of
+    /// [`TypedFunc`] and friends. Note though that this function is not
+    /// `unsafe` as any value can be passed in. Incorrect values can result in
+    /// runtime panics, however, so care must still be taken with this method.
     ///
     /// [`Func::call_unchecked`]: crate::Func::call_unchecked
     /// [`Func::new_unchecked`]: crate::Func::new_unchecked
     /// [`Store`]: crate::Store
     /// [`TypedFunc`]: crate::TypedFunc
     /// [`ValRaw`]: crate::ValRaw
-    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<Self>> {
+    pub fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<Self>> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         Self::_from_raw(&mut store, raw)
     }
@@ -164,7 +166,7 @@ impl ExnRef {
     // (Not actually memory unsafe since we have indexed GC heaps.)
     pub(crate) fn _from_raw(store: &mut AutoAssertNoGc, raw: u32) -> Option<Rooted<Self>> {
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(Self::from_cloned_gc_ref(store, gc_ref))
     }
 
@@ -203,23 +205,15 @@ impl ExnRef {
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        Self::_new(store.as_context_mut().0, allocator, tag, fields)
-    }
-
-    pub(crate) fn _new(
-        store: &mut StoreOpaque,
-        allocator: &ExnRefPre,
-        tag: &Tag,
-        fields: &[Val],
-    ) -> Result<Rooted<ExnRef>> {
-        assert!(
-            !store.async_support(),
-            "use `ExnRef::new_async` with asynchronous stores"
-        );
-        Self::type_check_tag_and_fields(store, allocator, tag, fields)?;
-        store.retry_after_gc((), |store, ()| {
-            Self::new_unchecked(store, allocator, tag, fields)
-        })
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        assert!(!store.async_support());
+        vm::assert_ready(Self::_new_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            tag,
+            fields,
+        ))
     }
 
     /// Asynchronously allocate a new exception object and get a
@@ -257,23 +251,20 @@ impl ExnRef {
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        Self::_new_async(store.as_context_mut().0, allocator, tag, fields).await
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_async(store, limiter.as_mut(), allocator, tag, fields).await
     }
 
-    #[cfg(feature = "async")]
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &ExnRefPre,
         tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        assert!(
-            store.async_support(),
-            "use `ExnRef::new` with synchronous stores"
-        );
         Self::type_check_tag_and_fields(store, allocator, tag, fields)?;
         store
-            .retry_after_gc_async((), |store, ()| {
+            .retry_after_gc_async(limiter, (), |store, ()| {
                 Self::new_unchecked(store, allocator, tag, fields)
             })
             .await
@@ -333,7 +324,7 @@ impl ExnRef {
         // Allocate the exn and write each field value into the appropriate
         // offset.
         let exnref = store
-            .gc_store_mut()?
+            .require_gc_store_mut()?
             .alloc_uninit_exn(allocator.type_index(), &allocator.layout())
             .context("unrecoverable error when allocating new `exnref`")?
             .map_err(|n| GcHeapOutOfMemory::new((), n))?;
@@ -345,7 +336,7 @@ impl ExnRef {
         let mut store = AutoAssertNoGc::new(store);
         match (|| {
             let (instance, index) = tag.to_raw_indices();
-            exnref.initialize_tag(&mut store, allocator.layout(), instance, index)?;
+            exnref.initialize_tag(&mut store, instance, index)?;
             for (index, (ty, val)) in allocator.ty.fields().zip(fields).enumerate() {
                 exnref.initialize_field(
                     &mut store,
@@ -359,7 +350,7 @@ impl ExnRef {
         })() {
             Ok(()) => Ok(Rooted::new(&mut store, exnref.into())),
             Err(e) => {
-                store.gc_store_mut()?.dealloc_uninit_exn(exnref);
+                store.require_gc_store_mut()?.dealloc_uninit_exn(exnref);
                 Err(e)
             }
         }
@@ -367,7 +358,7 @@ impl ExnRef {
 
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        let header = store.gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref);
         debug_assert!(header.kind().matches(VMGcKind::ExnRef));
         Ok(header.ty().expect("exnrefs should have concrete types"))
     }
@@ -402,24 +393,24 @@ impl ExnRef {
     ///
     /// Returns an error if this `exnref` has been unrooted.
     ///
-    /// # Unsafety
+    /// # Correctness
     ///
-    /// Produces a raw value which is only safe to pass into a store if a GC
+    /// Produces a raw value which is only valid to pass into a store if a GC
     /// doesn't happen between when the value is produce and when it's passed
     /// into the store.
     ///
     /// [`ValRaw`]: crate::ValRaw
-    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
+    pub fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         self._to_raw(&mut store)
     }
 
-    pub(crate) unsafe fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
+    pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
         let raw = if gc_ref.is_i31() {
             gc_ref.as_raw_non_zero_u32()
         } else {
-            store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
+            store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
         };
         Ok(raw.get())
     }
@@ -499,7 +490,7 @@ impl ExnRef {
         let store = AutoAssertNoGc::new(store);
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
-        let header = store.gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref);
         debug_assert!(header.kind().matches(VMGcKind::ExnRef));
 
         let index = header.ty().expect("exnrefs should have concrete types");
@@ -552,7 +543,7 @@ impl ExnRef {
     fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(store.gc_store()?.header(gc_ref))
+        Ok(store.require_gc_store()?.header(gc_ref))
     }
 
     fn exnref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMExnRef> {
@@ -562,7 +553,7 @@ impl ExnRef {
         Ok(gc_ref.as_exnref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcExceptionLayout> {
+    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcStructLayout> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
         let layout = store
@@ -571,9 +562,8 @@ impl ExnRef {
             .layout(type_index)
             .expect("exn types should have GC layouts");
         match layout {
-            GcLayout::Struct(_) => unreachable!(),
+            GcLayout::Struct(s) => Ok(s),
             GcLayout::Array(_) => unreachable!(),
-            GcLayout::Exception(e) => Ok(e),
         }
     }
 
@@ -624,8 +614,7 @@ impl ExnRef {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         assert!(self.comes_from_same_store(&store));
         let exnref = self.exnref(&store)?.unchecked_copy();
-        let layout = self.layout(&store)?;
-        let (instance, index) = exnref.tag(&mut store, &layout)?;
+        let (instance, index) = exnref.tag(&mut store)?;
         Ok(Tag::from_raw_indices(&*store, instance, index))
     }
 }

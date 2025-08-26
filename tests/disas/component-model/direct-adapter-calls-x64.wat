@@ -1,6 +1,7 @@
 ;;! target = "x86_64"
 ;;! test = 'compile'
 ;;! filter = "function"
+;;! flags = "-C inlining=n"
 
 ;; Same as `direct-adapter-calls.wat` but shows full compilation down to x86_64
 ;; so that we can exercise our linker's ability to resolve relocations for

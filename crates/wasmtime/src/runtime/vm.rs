@@ -35,15 +35,15 @@ pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
 
 use crate::StoreContextMut;
 use crate::prelude::*;
-use crate::store::StoreInner;
-use crate::store::StoreOpaque;
+use crate::store::{StoreInner, StoreOpaque, StoreResourceLimiter};
 use crate::type_registry::RegisteredType;
 use alloc::sync::Arc;
 use core::fmt;
-use core::ops::Deref;
-use core::ops::DerefMut;
+use core::ops::{Deref, DerefMut};
+use core::pin::pin;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
+use core::task::{Context, Poll, Waker};
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex,
 };
@@ -51,6 +51,7 @@ use wasmtime_environ::{
 #[cfg(feature = "gc")]
 use wasmtime_environ::ModuleInternedTypeIndex;
 
+mod always_mut;
 #[cfg(feature = "component-model")]
 pub mod component;
 mod const_expr;
@@ -60,12 +61,16 @@ mod imports;
 mod instance;
 mod memory;
 mod mmap_vec;
+#[cfg(has_virtual_memory)]
+mod pagemap_disabled;
 mod provenance;
 mod send_sync_ptr;
 mod stack_switching;
 mod store_box;
 mod sys;
 mod table;
+#[cfg(feature = "gc")]
+mod throw;
 mod traphandlers;
 mod vmcontext;
 
@@ -90,17 +95,17 @@ pub(crate) use interpreter_disabled as interpreter;
 #[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
+pub use crate::runtime::vm::always_mut::*;
 pub use crate::runtime::vm::export::*;
 pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
 pub use crate::runtime::vm::instance::{
-    GcHeapAllocationIndex, Instance, InstanceAllocationRequest, InstanceAllocator,
-    InstanceAllocatorImpl, InstanceAndStore, InstanceHandle, MemoryAllocationIndex,
-    OnDemandInstanceAllocator, StorePtr, TableAllocationIndex, initialize_instance,
+    GcHeapAllocationIndex, Instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    MemoryAllocationIndex, OnDemandInstanceAllocator, TableAllocationIndex, initialize_instance,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::instance::{
-    InstanceLimits, PoolConcurrencyLimitError, PoolingInstanceAllocator,
+    InstanceLimits, PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
     PoolingInstanceAllocatorConfig,
 };
 pub use crate::runtime::vm::interpreter::*;
@@ -115,7 +120,9 @@ pub use crate::runtime::vm::store_box::*;
 pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
 #[cfg(has_host_compiler_backend)]
 pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
-pub use crate::runtime::vm::table::{Table, TableElement};
+pub use crate::runtime::vm::table::{Table, TableElementType};
+#[cfg(feature = "gc")]
+pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,
@@ -161,6 +168,17 @@ cfg_if::cfg_if! {
     }
 }
 
+/// Source of data used for [`MemoryImage`]
+pub trait ModuleMemoryImageSource: Send + Sync + 'static {
+    /// Returns this image's slice of all wasm data for a module which is then
+    /// further sub-sliced for a particular initialization segment.
+    fn wasm_data(&self) -> &[u8];
+
+    /// Optionally returns the backing mmap. Used for using the backing mmap's
+    /// file to perform other mmaps, for example.
+    fn mmap(&self) -> Option<&MmapVec>;
+}
+
 /// Dynamic runtime functionality needed by this crate throughout the execution
 /// of a wasm instance.
 ///
@@ -188,66 +206,17 @@ pub unsafe trait VMStore: 'static {
     /// Get an exclusive borrow of this store's `StoreOpaque`.
     fn store_opaque_mut(&mut self) -> &mut StoreOpaque;
 
-    /// Callback invoked to allow the store's resource limiter to reject a
-    /// memory grow operation.
-    fn memory_growing(
+    /// Returns a split borrow to the limiter plus `StoreOpaque` at the same
+    /// time.
+    fn resource_limiter_and_store_opaque(
         &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, Error>;
-
-    /// Callback invoked to notify the store's resource limiter that a memory
-    /// grow operation has failed.
-    ///
-    /// Note that this is not invoked if `memory_growing` returns an error.
-    fn memory_grow_failed(&mut self, error: Error) -> Result<()>;
-
-    /// Callback invoked to allow the store's resource limiter to reject a
-    /// table grow operation.
-    fn table_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, Error>;
-
-    /// Callback invoked to notify the store's resource limiter that a table
-    /// grow operation has failed.
-    ///
-    /// Note that this is not invoked if `table_growing` returns an error.
-    fn table_grow_failed(&mut self, error: Error) -> Result<()>;
-
-    /// Callback invoked whenever fuel runs out by a wasm instance. If an error
-    /// is returned that's raised as a trap. Otherwise wasm execution will
-    /// continue as normal.
-    fn out_of_gas(&mut self) -> Result<(), Error>;
+    ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque);
 
     /// Callback invoked whenever an instance observes a new epoch
     /// number. Cannot fail; cooperative epoch-based yielding is
     /// completely semantically transparent. Returns the new deadline.
     #[cfg(target_has_atomic = "64")]
-    fn new_epoch(&mut self) -> Result<u64, Error>;
-
-    /// Callback invoked whenever an instance needs to grow-or-collect the GC
-    /// heap.
-    ///
-    /// Optionally given a GC reference that is rooted for the collection, and
-    /// then whose updated GC reference is returned.
-    ///
-    /// Optionally given a number of bytes that are needed for an upcoming
-    /// allocation.
-    ///
-    /// Cooperative, async-yielding (if configured) is completely transparent,
-    /// but must be called from a fiber stack in that case.
-    ///
-    /// If the async GC was cancelled, returns an error. This should be raised
-    /// as a trap to clean up Wasm execution.
-    unsafe fn maybe_async_grow_or_collect_gc_heap(
-        &mut self,
-        root: Option<VMGcRef>,
-        bytes_needed: Option<u64>,
-    ) -> Result<Option<VMGcRef>>;
+    fn new_epoch_updated_deadline(&mut self) -> Result<crate::UpdateDeadline>;
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]
@@ -282,7 +251,7 @@ impl dyn VMStore + '_ {
     /// This method is not safe as there's no static guarantee that `T` is
     /// correct for this store.
     pub(crate) unsafe fn unchecked_context_mut<T>(&mut self) -> StoreContextMut<'_, T> {
-        StoreContextMut(&mut *(self as *mut dyn VMStore as *mut StoreInner<T>))
+        unsafe { StoreContextMut(&mut *(self as *mut dyn VMStore as *mut StoreInner<T>)) }
     }
 }
 
@@ -514,5 +483,40 @@ impl fmt::Display for WasmFault {
             "memory fault at wasm address 0x{:x} in linear memory of size 0x{:x}",
             self.wasm_address, self.memory_size,
         )
+    }
+}
+
+/// Asserts that the future `f` is ready and returns its output.
+///
+/// This function is intended to be used when `async_support` is verified as
+/// disabled. Internals of Wasmtime are generally `async` when they optionally
+/// can be, meaning that synchronous entrypoints will invoke this function
+/// after invoking the asynchronous internals. Due to `async_support` being
+/// disabled there should be no way to introduce a yield point meaning that all
+/// futures built from internal functions should always be ready.
+///
+/// # Panics
+///
+/// Panics if `f` is not yet ready.
+pub fn assert_ready<F: Future>(f: F) -> F::Output {
+    one_poll(f).unwrap()
+}
+
+/// Attempts one poll of `f` to see if its output is available.
+///
+/// This function is intended for a few minor entrypoints into the Wasmtime API
+/// where a synchronous function is documented to work even when `async_support`
+/// is enabled. For example growing a `Memory` can be done with a synchronous
+/// function, but it's documented to panic with an async resource limiter.
+///
+/// This function provides the opportunity to poll `f` once to see if its output
+/// is available. If it isn't then `None` is returned and an appropriate panic
+/// message should be generated recommending to use an async function (e.g.
+/// `grow_async` instead of `grow`).
+pub fn one_poll<F: Future>(f: F) -> Option<F::Output> {
+    let mut context = Context::from_waker(&Waker::noop());
+    match pin!(f).poll(&mut context) {
+        Poll::Ready(output) => Some(output),
+        Poll::Pending => None,
     }
 }

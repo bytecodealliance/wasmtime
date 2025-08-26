@@ -52,6 +52,17 @@ impl<_T: 'static> WPre<_T> {
         self.indices.load(&mut store, &instance)
     }
 }
+impl<_T: Send + 'static> WPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<W> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
+        self.indices.load(&mut store, &instance)
+    }
+}
 /// Auto-generated bindings for index of the exports of
 /// `w`.
 ///
@@ -174,12 +185,25 @@ const _: () = {
             let indices = WIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
+        /// Convenience wrapper around [`WPre::new`] and
+        /// [`WPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<W>
+        where
+            _T: Send,
+        {
+            let pre = linker.instantiate_pre(component)?;
+            WPre::new(pre)?.instantiate_async(store).await
+        }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: foo::foo::transitive_import::HostWithStore,
             for<'a> D::Data<'a>: foo::foo::transitive_import::Host,
             T: 'static,
         {
@@ -213,6 +237,11 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Y {}
+            pub trait HostYWithStore: wasmtime::component::HasData {}
+            impl<_T: ?Sized> HostYWithStore for _T
+            where
+                _T: wasmtime::component::HasData,
+            {}
             pub trait HostY {
                 fn drop(
                     &mut self,
@@ -227,6 +256,11 @@ pub mod foo {
                     HostY::drop(*self, rep)
                 }
             }
+            pub trait HostWithStore: wasmtime::component::HasData + HostYWithStore {}
+            impl<_T: ?Sized> HostWithStore for _T
+            where
+                _T: wasmtime::component::HasData + HostYWithStore,
+            {}
             pub trait Host: HostY {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
@@ -234,7 +268,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostWithStore,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {

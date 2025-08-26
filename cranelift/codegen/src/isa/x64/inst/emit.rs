@@ -1,7 +1,5 @@
 use crate::ir::KnownSymbol;
 use crate::ir::immediates::{Ieee32, Ieee64};
-use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength, RegisterOrAmode};
-use crate::isa::x64::encoding::rex::{LegacyPrefixes, OpcodeMap};
 use crate::isa::x64::external::{AsmInst, CraneliftRegisters, PairedGpr};
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -37,15 +35,6 @@ fn one_way_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
     sink.use_label_at_offset(cond_disp_off, label, LabelUse::JmpRel32);
     emit_jcc_no_offset(sink, cc);
     debug_assert_eq!(sink.cur_offset(), cond_disp_off + 4);
-}
-
-/// Like `one_way_jmp` but only used if the destination is <=127 bytes away.
-fn short_one_way_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
-    let cond_start = sink.cur_offset();
-    let cond_disp_off = cond_start + 1;
-    sink.use_label_at_offset(cond_disp_off, label, LabelUse::JmpRel8);
-    emit_short_jcc_no_offset(sink, cc);
-    debug_assert_eq!(sink.cur_offset(), cond_disp_off + 1);
 }
 
 /// Like `one_way_jmp` above emitting a conditional jump, but also using
@@ -87,34 +76,6 @@ fn emit_jcc_no_offset(sink: &mut MachBuffer<Inst>, cc: CC) {
         CC::NP => asm::inst::jnp_d32::new(0).into(),
         CC::S => asm::inst::js_d32::new(0).into(),
         CC::NS => asm::inst::jns_d32::new(0).into(),
-    };
-    inst.encode(&mut external::AsmCodeSink {
-        sink,
-        incoming_arg_offset: 0,
-        slot_offset: 0,
-    });
-}
-
-fn emit_short_jcc_no_offset(sink: &mut MachBuffer<Inst>, cc: CC) {
-    // See `emit_jcc_no_offset` above for comments about subtle mismatches in
-    // `CC` and `jcc` naming.
-    let inst: AsmInst = match cc {
-        CC::Z => asm::inst::je_d8::new(0).into(),
-        CC::NZ => asm::inst::jne_d8::new(0).into(),
-        CC::B => asm::inst::jb_d8::new(0).into(),
-        CC::NB => asm::inst::jae_d8::new(0).into(),
-        CC::BE => asm::inst::jbe_d8::new(0).into(),
-        CC::NBE => asm::inst::ja_d8::new(0).into(),
-        CC::L => asm::inst::jl_d8::new(0).into(),
-        CC::LE => asm::inst::jle_d8::new(0).into(),
-        CC::NL => asm::inst::jge_d8::new(0).into(),
-        CC::NLE => asm::inst::jg_d8::new(0).into(),
-        CC::O => asm::inst::jo_d8::new(0).into(),
-        CC::NO => asm::inst::jno_d8::new(0).into(),
-        CC::P => asm::inst::jp_d8::new(0).into(),
-        CC::NP => asm::inst::jnp_d8::new(0).into(),
-        CC::S => asm::inst::js_d8::new(0).into(),
-        CC::NS => asm::inst::jns_d8::new(0).into(),
     };
     inst.encode(&mut external::AsmCodeSink {
         sink,
@@ -204,38 +165,17 @@ pub(crate) fn emit(
     info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    let matches_isa_flags = |iset_requirement: &InstructionSet| -> bool {
-        match iset_requirement {
-            // Cranelift assumes SSE2 at least.
-            InstructionSet::SSE | InstructionSet::SSE2 => true,
-            InstructionSet::CMPXCHG16b => info.isa_flags.use_cmpxchg16b(),
-            InstructionSet::SSE3 => info.isa_flags.use_sse3(),
-            InstructionSet::SSSE3 => info.isa_flags.use_ssse3(),
-            InstructionSet::SSE41 => info.isa_flags.use_sse41(),
-            InstructionSet::SSE42 => info.isa_flags.use_sse42(),
-            InstructionSet::Popcnt => info.isa_flags.use_popcnt(),
-            InstructionSet::Lzcnt => info.isa_flags.use_lzcnt(),
-            InstructionSet::BMI1 => info.isa_flags.use_bmi1(),
-            InstructionSet::BMI2 => info.isa_flags.has_bmi2(),
-            InstructionSet::FMA => info.isa_flags.has_fma(),
-            InstructionSet::AVX => info.isa_flags.has_avx(),
-            InstructionSet::AVX2 => info.isa_flags.has_avx2(),
-            InstructionSet::AVX512BITALG => info.isa_flags.has_avx512bitalg(),
-            InstructionSet::AVX512DQ => info.isa_flags.has_avx512dq(),
-            InstructionSet::AVX512F => info.isa_flags.has_avx512f(),
-            InstructionSet::AVX512VBMI => info.isa_flags.has_avx512vbmi(),
-            InstructionSet::AVX512VL => info.isa_flags.has_avx512vl(),
-        }
-    };
-
-    // Certain instructions may be present in more than one ISA feature set; we must at least match
-    // one of them in the target CPU.
-    let isa_requirements = inst.available_in_any_isa();
-    if !isa_requirements.is_empty() && !isa_requirements.iter().all(matches_isa_flags) {
+    if !inst.is_available(&info) {
+        let features = if let Inst::External { inst } = inst {
+            inst.features().to_string()
+        } else {
+            "see `is_available` source for feature term".to_string()
+        };
         panic!(
-            "Cannot emit inst '{inst:?}' for target; failed to match ISA requirements: {isa_requirements:?}"
-        )
+            "Cannot emit inst '{inst:?}' for target; failed to match ISA requirements: {features}"
+        );
     }
+
     match inst {
         Inst::CheckedSRemSeq { divisor, .. } | Inst::CheckedSRemSeq8 { divisor, .. } => {
             // Validate that the register constraints of the dividend and the
@@ -290,7 +230,7 @@ pub(crate) fn emit(
             // go to the `idiv`.
             let inst = Inst::cmp_mi_sxb(size, *divisor, -1);
             inst.emit(sink, info, state);
-            short_one_way_jmp(sink, CC::NZ, do_op);
+            one_way_jmp(sink, CC::NZ, do_op);
 
             // ... otherwise the divisor is -1 and the result is always 0. This
             // is written to the destination register which will be %rax for
@@ -380,7 +320,7 @@ pub(crate) fn emit(
             let next = sink.get_label();
 
             // Jump if cc is *not* set.
-            short_one_way_jmp(sink, cc.invert(), next);
+            one_way_jmp(sink, cc.invert(), next);
             Inst::gen_move(dst.map(|r| r.to_reg()), consequent.to_reg(), *ty)
                 .emit(sink, info, state);
 
@@ -458,7 +398,7 @@ pub(crate) fn emit(
             // jne  .loop_start
             // TODO: Encoding the conditional jump as a short jump
             // could save us us 4 bytes here.
-            short_one_way_jmp(sink, CC::NZ, loop_start);
+            one_way_jmp(sink, CC::NZ, loop_start);
 
             // The regular prologue code is going to emit a `sub` after this, so we need to
             // reset the stack pointer
@@ -488,9 +428,12 @@ pub(crate) fn emit(
             }
 
             if let Some(try_call) = call_info.try_call_info.as_ref() {
-                sink.add_call_site(&try_call.exception_dests);
+                sink.add_try_call_site(
+                    Some(state.frame_layout().sp_to_fp()),
+                    try_call.exception_handlers(&state.frame_layout()),
+                );
             } else {
-                sink.add_call_site(&[]);
+                sink.add_call_site();
             }
 
             // Reclaim the outgoing argument area that was released by the
@@ -533,7 +476,7 @@ pub(crate) fn emit(
             // The addend adjusts for the difference between the end of the instruction and the
             // beginning of the immediate field.
             sink.add_reloc_at_offset(offset - 4, Reloc::X86CallPCRel4, &call_info.dest, -4);
-            sink.add_call_site(&[]);
+            sink.add_call_site();
         }
 
         Inst::ReturnCallUnknown { info: call_info } => {
@@ -542,7 +485,7 @@ pub(crate) fn emit(
             emit_return_call_common_sequence(sink, info, state, &call_info);
 
             asm::inst::jmpq_m::new(callee).emit(sink, info, state);
-            sink.add_call_site(&[]);
+            sink.add_call_site();
         }
 
         Inst::CallUnknown {
@@ -563,9 +506,12 @@ pub(crate) fn emit(
             }
 
             if let Some(try_call) = call_info.try_call_info.as_ref() {
-                sink.add_call_site(&try_call.exception_dests);
+                sink.add_try_call_site(
+                    Some(state.frame_layout().sp_to_fp()),
+                    try_call.exception_handlers(&state.frame_layout()),
+                );
             } else {
-                sink.add_call_site(&[]);
+                sink.add_call_site();
             }
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
@@ -831,84 +777,6 @@ pub(crate) fn emit(
             one_way_jmp(sink, *cc2, trap_label);
         }
 
-        Inst::XmmUnaryRmREvex { op, src, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let src = match src.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let (prefix, map, w, opcode) = match op {
-                Avx512Opcode::Vcvtudq2ps => (LegacyPrefixes::_F2, OpcodeMap::_0F, false, 0x7a),
-                Avx512Opcode::Vpabsq => (LegacyPrefixes::_66, OpcodeMap::_0F38, true, 0x1f),
-                Avx512Opcode::Vpopcntb => (LegacyPrefixes::_66, OpcodeMap::_0F38, false, 0x54),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            EvexInstruction::new()
-                .length(EvexVectorLength::V128)
-                .prefix(prefix)
-                .map(map)
-                .w(w)
-                .opcode(opcode)
-                .tuple_type(op.tuple_type())
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .rm(src)
-                .encode(sink);
-        }
-
-        Inst::XmmRmREvex {
-            op,
-            src1,
-            src2,
-            dst,
-        }
-        | Inst::XmmRmREvex3 {
-            op,
-            src1: _, // `dst` reuses `src1`.
-            src2: src1,
-            src3: src2,
-            dst,
-        } => {
-            let reused_src = match inst {
-                Inst::XmmRmREvex3 { src1, .. } => Some(src1.to_reg()),
-                _ => None,
-            };
-            let src1 = src1.to_reg();
-            let src2 = match src2.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-            let dst = dst.to_reg().to_reg();
-            if let Some(src1) = reused_src {
-                debug_assert_eq!(src1, dst);
-            }
-
-            let (w, opcode, map) = match op {
-                Avx512Opcode::Vpermi2b => (false, 0x75, OpcodeMap::_0F38),
-                Avx512Opcode::Vpmullq => (true, 0x40, OpcodeMap::_0F38),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            EvexInstruction::new()
-                .length(EvexVectorLength::V128)
-                .prefix(LegacyPrefixes::_66)
-                .map(map)
-                .w(w)
-                .opcode(opcode)
-                .tuple_type(op.tuple_type())
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .vvvvv(src1.to_real_reg().unwrap().hw_enc())
-                .rm(src2)
-                .encode(sink);
-        }
-
         Inst::XmmMinMaxSeq {
             size,
             is_min,
@@ -976,8 +844,8 @@ pub(crate) fn emit(
 
             cmp_op.emit(sink, info, state);
 
-            short_one_way_jmp(sink, CC::NZ, do_min_max);
-            short_one_way_jmp(sink, CC::P, propagate_nan);
+            one_way_jmp(sink, CC::NZ, do_min_max);
+            one_way_jmp(sink, CC::P, propagate_nan);
 
             // Ordered and equal. The operands are bit-identical unless they are zero
             // and negative zero. These instructions merge the sign bits in that
@@ -994,7 +862,7 @@ pub(crate) fn emit(
             sink.bind_label(propagate_nan, state.ctrl_plane_mut());
             add_op.emit(sink, info, state);
 
-            short_one_way_jmp(sink, CC::P, done);
+            one_way_jmp(sink, CC::P, done);
 
             sink.bind_label(do_min_max, state.ctrl_plane_mut());
             min_max_op.emit(sink, info, state);
@@ -1057,7 +925,7 @@ pub(crate) fn emit(
             // TODO use tst src, src here.
             asm::inst::cmpq_mi_sxb::new(src, 0).emit(sink, info, state);
 
-            short_one_way_jmp(sink, CC::L, handle_negative);
+            one_way_jmp(sink, CC::L, handle_negative);
 
             // Handle a positive int64, which is the "easy" case: a signed conversion will do the
             // right thing.
@@ -1196,14 +1064,14 @@ pub(crate) fn emit(
             let inst = Inst::cmp_mi_sxb(*dst_size, Gpr::unwrap_new(dst.to_reg()), 1);
             inst.emit(sink, info, state);
 
-            short_one_way_jmp(sink, CC::NO, done); // no overflow => done
+            one_way_jmp(sink, CC::NO, done); // no overflow => done
 
             // Check for NaN.
             cmp_op.emit(sink, info, state);
 
             if *is_saturating {
                 let not_nan = sink.get_label();
-                short_one_way_jmp(sink, CC::NP, not_nan); // go to not_nan if not a NaN
+                one_way_jmp(sink, CC::NP, not_nan); // go to not_nan if not a NaN
 
                 // For NaN, emit 0.
                 let inst: AsmInst = match *dst_size {
@@ -1231,7 +1099,7 @@ pub(crate) fn emit(
                 inst.emit(sink, info, state);
 
                 // Jump if >= to done.
-                short_one_way_jmp(sink, CC::NB, done);
+                one_way_jmp(sink, CC::NB, done);
 
                 // Otherwise, put INT_MAX.
                 if *dst_size == OperandSize::Size64 {
@@ -1424,12 +1292,12 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             let handle_large = sink.get_label();
-            short_one_way_jmp(sink, CC::NB, handle_large); // jump to handle_large if src >= large_threshold
+            one_way_jmp(sink, CC::NB, handle_large); // jump to handle_large if src >= large_threshold
 
             if *is_saturating {
                 // If not NaN jump over this 0-return, otherwise return 0
                 let not_nan = sink.get_label();
-                short_one_way_jmp(sink, CC::NP, not_nan);
+                one_way_jmp(sink, CC::NP, not_nan);
 
                 xor_op(dst, dst).emit(sink, info, state);
 
@@ -1450,7 +1318,7 @@ pub(crate) fn emit(
             let inst = Inst::cmp_mi_sxb(*dst_size, Gpr::unwrap_new(dst.to_reg()), 0);
             inst.emit(sink, info, state);
 
-            short_one_way_jmp(sink, CC::NL, done); // if dst >= 0, jump to done
+            one_way_jmp(sink, CC::NL, done); // if dst >= 0, jump to done
 
             if *is_saturating {
                 // The input was "small" (< 2**(width -1)), so the only way to get an integer
@@ -1485,7 +1353,7 @@ pub(crate) fn emit(
 
             if *is_saturating {
                 let next_is_large = sink.get_label();
-                short_one_way_jmp(sink, CC::NL, next_is_large); // if dst >= 0, jump to next_is_large
+                one_way_jmp(sink, CC::NL, next_is_large); // if dst >= 0, jump to next_is_large
 
                 // The input was "large" (>= 2**(width -1)), so the only way to get an integer
                 // overflow is because the input was too large: saturate to the max value.
@@ -1670,7 +1538,7 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             // jnz again
-            short_one_way_jmp(sink, CC::NZ, again_label);
+            one_way_jmp(sink, CC::NZ, again_label);
         }
 
         Inst::Atomic128RmwSeq {
@@ -1790,7 +1658,7 @@ pub(crate) fn emit(
             .emit(sink, info, state);
 
             // jnz again
-            short_one_way_jmp(sink, CC::NZ, again_label);
+            one_way_jmp(sink, CC::NZ, again_label);
         }
 
         Inst::Atomic128XchgSeq {
@@ -1830,7 +1698,7 @@ pub(crate) fn emit(
             .emit(sink, info, state);
 
             // jnz again
-            short_one_way_jmp(sink, CC::NZ, again_label);
+            one_way_jmp(sink, CC::NZ, again_label);
         }
 
         Inst::ElfTlsGetAddr { symbol, dst } => {
@@ -2213,7 +2081,7 @@ fn emit_maybe_shrink(inst: &AsmInst, sink: &mut impl asm::CodeSink) {
             m32,
             sink,
             |dst, amode, s| leal_rm::<R>::new(dst, amode).encode(s),
-            |dst, simm32, s| addl_mi::<R>::new(dst, simm32.unsigned()).encode(s),
+            |dst, simm32, s| addl_mi::<R>::new(dst, simm32.cast_unsigned()).encode(s),
             |dst, reg, s| addl_rm::<R>::new(dst, reg).encode(s),
         ),
         Inst::leaq_rm(leaq_rm { r64, m64 }) => emit_lea(

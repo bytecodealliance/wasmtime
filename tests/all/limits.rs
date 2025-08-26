@@ -355,7 +355,7 @@ fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
     pool.total_memories(2)
         .max_memories_per_module(2)
         .max_memory_size(5 << 16)
-        .memory_protection_keys(MpkEnabled::Disable);
+        .memory_protection_keys(Enabled::No);
     let mut config = Config::new();
     config.wasm_multi_memory(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));

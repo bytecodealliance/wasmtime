@@ -57,6 +57,7 @@ const _MODE_TRAP_CANCEL_GUEST_AFTER_RETURN_CANCELLED: u8 = 2;
 const _MODE_TRAP_CANCEL_GUEST_AFTER_RETURN: u8 = 3;
 const MODE_TRAP_CANCEL_HOST_AFTER_RETURN_CANCELLED: u8 = 4;
 const MODE_TRAP_CANCEL_HOST_AFTER_RETURN: u8 = 5;
+const MODE_LEAK_TASK_AFTER_CANCEL: u8 = 6;
 
 #[derive(Clone, Copy)]
 struct SleepParams {
@@ -166,7 +167,10 @@ unsafe extern "C" fn callback_sleep_with_options_sleep_millis(
                 }
 
                 waitable_join(*waitable, 0);
-                subtask_drop(*waitable);
+
+                if params.mode != MODE_LEAK_TASK_AFTER_CANCEL {
+                    subtask_drop(*waitable);
+                }
 
                 if params.on_cancel_delay_millis == 0 {
                     match params.on_cancel {

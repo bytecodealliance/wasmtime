@@ -8,7 +8,7 @@
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::{GcTypeLayouts, TypeIndex, WasmRefType, WasmResult};
+use wasmtime_environ::{GcTypeLayouts, TagIndex, TypeIndex, WasmRefType, WasmResult};
 
 #[cfg(feature = "gc")]
 mod enabled;
@@ -26,7 +26,7 @@ pub use imp::*;
 
 /// How to initialize a newly-allocated array's elements.
 #[derive(Clone, Copy)]
-#[cfg_attr(not(any(feature = "gc-null", feature = "gc-drc")), allow(dead_code))]
+#[cfg_attr(not(feature = "gc"), expect(dead_code))]
 pub enum ArrayInit<'a> {
     /// Initialize the array's elements with the given values.
     Elems(&'a [ir::Value]),
@@ -65,6 +65,24 @@ pub trait GcCompiler {
         builder: &mut FunctionBuilder<'_>,
         struct_type_index: TypeIndex,
         fields: &[ir::Value],
+    ) -> WasmResult<ir::Value>;
+
+    /// Emit code to allocate a new exception object.
+    ///
+    /// The exception object should be of the given type and its
+    /// fields initialized to the given values. The tag field is left
+    /// uninitialized; that is the responsibility of generated code to
+    /// fill in. `tag_index` is used only to look up the appropriate
+    /// exception object type.
+    #[cfg_attr(not(feature = "gc"), allow(dead_code))]
+    fn alloc_exn(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        tag_index: TagIndex,
+        fields: &[ir::Value],
+        instance_id: ir::Value,
+        tag: ir::Value,
     ) -> WasmResult<ir::Value>;
 
     /// Emit a read barrier for when we are cloning a GC reference onto the Wasm

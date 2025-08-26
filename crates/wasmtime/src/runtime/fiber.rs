@@ -1,9 +1,7 @@
-#![deny(unsafe_op_in_unsafe_fn)]
-
 use crate::prelude::*;
-use crate::store::{Executor, StoreId, StoreInner, StoreOpaque};
+use crate::store::{AsStoreOpaque, Executor, StoreId, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
-use crate::vm::{AsyncWasmCallState, VMStore};
+use crate::vm::{AlwaysMut, AsyncWasmCallState};
 use crate::{Engine, StoreContextMut};
 use anyhow::{Result, anyhow};
 use core::mem;
@@ -11,12 +9,13 @@ use core::ops::Range;
 use core::pin::Pin;
 use core::ptr::{self, NonNull};
 use core::task::{Context, Poll};
-use wasmtime_fiber::{Fiber, Suspend};
+use wasmtime_fiber::{Fiber, FiberStack, Suspend};
 
 type WasmtimeResume = Result<NonNull<Context<'static>>>;
 type WasmtimeYield = StoreFiberYield;
 type WasmtimeComplete = Result<()>;
 type WasmtimeSuspend = Suspend<WasmtimeResume, WasmtimeYield, WasmtimeComplete>;
+type WasmtimeFiber<'a> = Fiber<'a, WasmtimeResume, WasmtimeYield, WasmtimeComplete>;
 
 /// State related to asynchronous computations stored within a `Store<T>`.
 ///
@@ -111,22 +110,6 @@ impl Default for AsyncState {
 impl AsyncState {
     pub(crate) fn last_fiber_stack(&mut self) -> &mut Option<wasmtime_fiber::FiberStack> {
         &mut self.last_fiber_stack
-    }
-}
-
-trait AsStoreOpaque {
-    fn as_store_opaque(&mut self) -> &mut StoreOpaque;
-}
-
-impl AsStoreOpaque for StoreOpaque {
-    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
-        self
-    }
-}
-
-impl<T: 'static> AsStoreOpaque for StoreInner<T> {
-    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
-        self
     }
 }
 
@@ -360,42 +343,13 @@ impl<T> StoreContextMut<'_, T> {
     }
 }
 
-impl<T> crate::store::StoreInner<T> {
-    /// Blocks on the future computed by `f`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this is invoked outside the context of a fiber.
-    pub(crate) fn block_on<R>(
-        &mut self,
-        f: impl FnOnce(StoreContextMut<'_, T>) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
-    ) -> Result<R> {
-        BlockingContext::with(self, |store, cx| {
-            cx.block_on(f(StoreContextMut(store)).as_mut())
-        })
-    }
-}
-
 impl StoreOpaque {
-    /// Blocks on the future computed by `f`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this is invoked outside the context of a fiber.
-    pub(crate) fn block_on<R>(
-        &mut self,
-        f: impl FnOnce(&mut Self) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
-    ) -> Result<R> {
-        BlockingContext::with(self, |store, cx| cx.block_on(f(store).as_mut()))
-    }
-
     /// Creates a `BlockingContext` suitable for blocking on futures or
     /// suspending the current fiber.
     ///
     /// # Panics
     ///
     /// Panics if this is invoked outside the context of a fiber.
-    #[cfg(feature = "component-model-async")]
     pub(crate) fn with_blocking<R>(
         &mut self,
         f: impl FnOnce(&mut Self, &mut BlockingContext<'_, '_>) -> R,
@@ -437,9 +391,9 @@ pub(crate) struct StoreFiber<'a> {
     ///
     /// Note also that every `StoreFiber` is implicitly granted exclusive access
     /// to the store when it is resumed.
-    fiber: Option<Fiber<'a, WasmtimeResume, WasmtimeYield, WasmtimeComplete>>,
+    fiber: Option<AlwaysMut<RawFiber<'a>>>,
     /// See `FiberResumeState`
-    state: Option<FiberResumeState>,
+    state: Option<AlwaysMut<FiberResumeState>>,
     /// The Wasmtime `Engine` to which this fiber belongs.
     engine: Engine,
     /// The id of the store with which this fiber was created.
@@ -449,9 +403,23 @@ pub(crate) struct StoreFiber<'a> {
     id: StoreId,
 }
 
-impl StoreFiber<'_> {
+struct RawFiber<'a>(WasmtimeFiber<'a>);
+
+impl<'a> StoreFiber<'a> {
+    /// Convenience method to peel off some layers of abstraction around the raw
+    /// `wasmtime_fiber::Fiber`.
+    fn fiber(&mut self) -> Option<&mut WasmtimeFiber<'a>> {
+        Some(&mut self.fiber.as_mut()?.get_mut().0)
+    }
+
+    /// Convenience method take the internal fiber and consume it, yielding its
+    /// original stack.
+    fn take_fiber_stack(&mut self) -> Option<FiberStack> {
+        self.fiber.take().map(|f| f.into_inner().0.into_stack())
+    }
+
     pub(crate) fn dispose(&mut self, store: &mut StoreOpaque) {
-        if let Some(fiber) = &mut self.fiber {
+        if let Some(fiber) = self.fiber() {
             if !fiber.done() {
                 let result = resume_fiber(store, self, Err(anyhow!("future dropped")));
                 debug_assert!(result.is_ok());
@@ -472,16 +440,15 @@ impl Drop for StoreFiber<'_> {
         }
 
         assert!(
-            self.fiber.as_ref().unwrap().done(),
+            self.fiber().unwrap().done(),
             "attempted to drop in-progress fiber without first calling `StoreFiber::dispose`"
         );
 
-        self.state.take().unwrap().dispose();
+        self.state.take().unwrap().into_inner().dispose();
 
         unsafe {
-            self.engine
-                .allocator()
-                .deallocate_fiber_stack(self.fiber.take().unwrap().into_stack());
+            let stack = self.take_fiber_stack().unwrap();
+            self.engine.allocator().deallocate_fiber_stack(stack);
         }
     }
 }
@@ -540,11 +507,7 @@ impl Drop for StoreFiber<'_> {
 // declare the fiber as only containing Send data on its stack, despite not
 // knowing for sure at compile time that this is correct. That's what `unsafe`
 // in Rust is all about, though, right?
-unsafe impl Send for StoreFiber<'_> {}
-// See the docs about the `Send` impl above, which also apply to this `Sync`
-// impl.  `Sync` is needed since we store `StoreFiber`s and switch between them
-// when executing components that export async-lifted functions.
-unsafe impl Sync for StoreFiber<'_> {}
+unsafe impl Send for RawFiber<'_> {}
 
 /// State of the world when a fiber last suspended.
 ///
@@ -599,8 +562,7 @@ impl FiberResumeState {
         let tls = unsafe { self.tls.push() };
         let mpk = swap_mpk_states(self.mpk);
         let async_guard_range = fiber
-            .fiber
-            .as_ref()
+            .fiber()
             .unwrap()
             .stack()
             .guard_range()
@@ -726,25 +688,30 @@ fn resume_fiber<'a>(
 
     impl Drop for Restore<'_, '_> {
         fn drop(&mut self) {
-            self.fiber.state = Some(unsafe { self.state.take().unwrap().replace(self.store) });
+            self.fiber.state =
+                Some(unsafe { self.state.take().unwrap().replace(self.store).into() });
         }
     }
     let result = unsafe {
-        let prev = fiber.state.take().unwrap().replace(store, fiber);
+        let prev = fiber
+            .state
+            .take()
+            .unwrap()
+            .into_inner()
+            .replace(store, fiber);
         let restore = Restore {
             store,
             fiber,
             state: Some(prev),
         };
-        restore.fiber.fiber.as_ref().unwrap().resume(result)
+        restore.fiber.fiber().unwrap().resume(result)
     };
 
     match &result {
         // The fiber has finished, so recycle its stack by disposing of the
         // underlying fiber itself.
         Ok(_) => {
-            let stack = fiber.fiber.take().map(|f| f.into_stack());
-            if let Some(stack) = stack {
+            if let Some(stack) = fiber.take_fiber_stack() {
                 store.deallocate_fiber_stack(stack);
             }
         }
@@ -764,7 +731,7 @@ fn resume_fiber<'a>(
             // pointer Wasmtime uses is not pointing anywhere within the
             // stack. If it is then that's a bug indicating that TLS management
             // in Wasmtime is incorrect.
-            if let Some(range) = fiber.fiber.as_ref().unwrap().stack().range() {
+            if let Some(range) = fiber.fiber().unwrap().stack().range() {
                 AsyncWasmCallState::assert_current_state_not_in_range(range);
             }
         }
@@ -774,15 +741,25 @@ fn resume_fiber<'a>(
 }
 
 /// Create a new `StoreFiber` which runs the specified closure.
-pub(crate) fn make_fiber<'a>(
-    store: &mut dyn VMStore,
-    fun: impl FnOnce(&mut dyn VMStore) -> Result<()> + Send + Sync + 'a,
-) -> Result<StoreFiber<'a>> {
-    let engine = store.engine().clone();
+///
+/// # Safety
+///
+/// The returned `StoreFiber<'a>` structure is unconditionally `Send` but the
+/// send-ness is actually a function of `S`. When `S` is statically known to be
+/// `Send` then use the safe [`make_fiber`] function.
+pub(crate) unsafe fn make_fiber_unchecked<'a, S>(
+    store: &mut S,
+    fun: impl FnOnce(&mut S) -> Result<()> + Send + Sync + 'a,
+) -> Result<StoreFiber<'a>>
+where
+    S: AsStoreOpaque + ?Sized + 'a,
+{
+    let opaque = store.as_store_opaque();
+    let engine = opaque.engine().clone();
     let executor = Executor::new(&engine);
-    let id = store.store_opaque().id();
-    let stack = store.store_opaque_mut().allocate_fiber_stack()?;
-    let track_pkey_context_switch = store.has_pkey();
+    let id = opaque.id();
+    let stack = opaque.allocate_fiber_stack()?;
+    let track_pkey_context_switch = opaque.has_pkey();
     let store = &raw mut *store;
     let fiber = Fiber::new(stack, move |result: WasmtimeResume, suspend| {
         let future_cx = match result {
@@ -801,17 +778,22 @@ pub(crate) fn make_fiber<'a>(
         // the fiber is running and `future_cx` and `suspend` are both in scope.
         // Note that these pointers are removed when this function returns as
         // that's when they fall out of scope.
-        let async_state = store_ref.store_opaque_mut().fiber_async_state_mut();
+        let async_state = store_ref.as_store_opaque().fiber_async_state_mut();
         assert!(async_state.current_suspend.is_none());
         assert!(async_state.current_future_cx.is_none());
         async_state.current_suspend = Some(NonNull::from(suspend));
         async_state.current_future_cx = Some(future_cx);
 
-        struct ResetCurrentPointersToNull<'a>(&'a mut dyn VMStore);
+        struct ResetCurrentPointersToNull<'a, S>(&'a mut S)
+        where
+            S: AsStoreOpaque + ?Sized;
 
-        impl Drop for ResetCurrentPointersToNull<'_> {
+        impl<S> Drop for ResetCurrentPointersToNull<'_, S>
+        where
+            S: AsStoreOpaque + ?Sized,
+        {
             fn drop(&mut self) {
-                let state = self.0.fiber_async_state_mut();
+                let state = self.0.as_store_opaque().fiber_async_state_mut();
 
                 // Double-check that the current suspension isn't null (it
                 // should be what's in this closure). Note though that we
@@ -829,41 +811,70 @@ pub(crate) fn make_fiber<'a>(
         fun(reset.0)
     })?;
     Ok(StoreFiber {
-        state: Some(FiberResumeState {
-            tls: crate::runtime::vm::AsyncWasmCallState::new(),
-            mpk: if track_pkey_context_switch {
-                Some(ProtectionMask::all())
-            } else {
-                None
-            },
-            stack_limit: usize::MAX,
-            executor,
-        }),
+        state: Some(
+            FiberResumeState {
+                tls: crate::runtime::vm::AsyncWasmCallState::new(),
+                mpk: if track_pkey_context_switch {
+                    Some(ProtectionMask::all())
+                } else {
+                    None
+                },
+                stack_limit: usize::MAX,
+                executor,
+            }
+            .into(),
+        ),
         engine,
         id,
-        fiber: Some(fiber),
+        fiber: Some(RawFiber(fiber).into()),
     })
+}
+
+/// Safe wrapper around [`make_fiber_unchecked`] which requires that `S` is
+/// `Send`.
+#[cfg(feature = "component-model-async")]
+pub(crate) fn make_fiber<'a, S>(
+    store: &mut S,
+    fun: impl FnOnce(&mut S) -> Result<()> + Send + Sync + 'a,
+) -> Result<StoreFiber<'a>>
+where
+    S: AsStoreOpaque + Send + ?Sized + 'a,
+{
+    unsafe { make_fiber_unchecked(store, fun) }
 }
 
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
-pub(crate) async fn on_fiber<R: Send + Sync>(
-    store: &mut StoreOpaque,
-    func: impl FnOnce(&mut StoreOpaque) -> R + Send + Sync,
-) -> Result<R> {
-    let config = store.engine().config();
-    debug_assert!(store.async_support());
+pub(crate) async fn on_fiber<S, R>(
+    store: &mut S,
+    func: impl FnOnce(&mut S) -> R + Send + Sync,
+) -> Result<R>
+where
+    S: AsStoreOpaque + ?Sized,
+    R: Send + Sync,
+{
+    let opaque = store.as_store_opaque();
+    let config = opaque.engine().config();
+    debug_assert!(opaque.async_support());
     debug_assert!(config.async_stack_size > 0);
 
     let mut result = None;
-    let fiber = make_fiber(store.traitobj_mut(), |store| {
-        result = Some(func(store));
-        Ok(())
-    })?;
+
+    // SAFETY: the `StoreFiber` returned by `make_fiber_unchecked` is `Send`
+    // despite we not actually knowing here whether `S` is `Send` or not. That
+    // is safe here, however, because this function is already conditionally
+    // `Send` based on `S`. Additionally `fiber` doesn't escape this function,
+    // so the future-of-this-function is still correctly `Send`-vs-not.
+    let fiber = unsafe {
+        make_fiber_unchecked(store, |store| {
+            result = Some(func(store));
+            Ok(())
+        })?
+    };
 
     {
         let fiber = FiberFuture {
-            store,
+            store: store.as_store_opaque(),
             fiber: Some(fiber),
             #[cfg(feature = "component-model-async")]
             on_release: OnRelease::ReturnPending,

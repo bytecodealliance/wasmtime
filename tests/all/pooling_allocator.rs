@@ -938,6 +938,9 @@ async fn total_stacks_limit() -> Result<()> {
             (func (export "run")
                 call $yield
             )
+
+            (func $empty)
+            (start $empty)
         )
     "#,
     )?;
@@ -1126,7 +1129,7 @@ fn total_memories_limit() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.total_memories(TOTAL_MEMORIES)
         .total_core_instances(TOTAL_MEMORIES + 1)
-        .memory_protection_keys(MpkEnabled::Disable);
+        .memory_protection_keys(Enabled::No);
     let mut config = Config::new();
     config.allocation_strategy(pool);
 
@@ -1170,7 +1173,7 @@ fn decommit_batching() -> Result<()> {
         pool.total_memories(capacity)
             .total_core_instances(capacity)
             .decommit_batch_size(batch_size)
-            .memory_protection_keys(MpkEnabled::Disable);
+            .memory_protection_keys(Enabled::No);
         let mut config = Config::new();
         config.allocation_strategy(pool);
 
@@ -1331,5 +1334,80 @@ fn instantiate_non_page_aligned_sizes() -> Result<()> {
     )?;
     let mut store = Store::new(&engine, ());
     Instance::new(&mut store, &module, &[])?;
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn pagemap_scan_enabled_or_disabled() -> Result<()> {
+    let mut config = Config::new();
+    let mut cfg = crate::small_pool_config();
+    cfg.total_memories(1);
+    cfg.pagemap_scan(Enabled::Yes);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(cfg));
+    let result = Engine::new(&config);
+
+    if PoolingAllocationConfig::is_pagemap_scan_available() {
+        assert!(result.is_ok());
+    } else {
+        assert!(result.is_err());
+    }
+    Ok(())
+}
+
+// This test instantiates a memory with an image into a slot in the pooling
+// allocator in a way that maps the image into the allocator but fails
+// instantiation. Failure here is injected with `ResourceLimiter`. Afterwards
+// instantiation is allowed to succeed with a memory that has no image, and this
+// asserts that the previous image is indeed not available any more as that
+// would otherwise mean data was leaked between modules.
+#[test]
+fn memory_reset_if_instantiation_fails() -> Result<()> {
+    struct Limiter;
+
+    impl ResourceLimiter for Limiter {
+        fn memory_growing(&mut self, _: usize, _: usize, _: Option<usize>) -> Result<bool> {
+            Ok(false)
+        }
+
+        fn table_growing(&mut self, _: usize, _: usize, _: Option<usize>) -> Result<bool> {
+            Ok(false)
+        }
+    }
+
+    let pool = crate::small_pool_config();
+    let mut config = Config::new();
+    config.allocation_strategy(pool);
+    let engine = Engine::new(&config)?;
+
+    let module_with_image = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 1)
+                (data (i32.const 0) "\aa")
+            )
+        "#,
+    )?;
+    let module_without_image = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory (export "m") 1)
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, Limiter);
+    store.limiter(|s| s);
+    assert!(Instance::new(&mut store, &module_with_image, &[]).is_err());
+    drop(store);
+
+    let mut store = Store::new(&engine, Limiter);
+    let instance = Instance::new(&mut store, &module_without_image, &[])?;
+    let mem = instance.get_memory(&mut store, "m").unwrap();
+    let data = mem.data(&store);
+    assert_eq!(data[0], 0);
+
     Ok(())
 }

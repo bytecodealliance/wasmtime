@@ -4,26 +4,24 @@ use std::sync::Mutex;
 use std::time::Duration;
 use wasmtime::Store;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime_wasi::p2::bindings::Command;
-use wasmtime_wasi::p2::{
-    IoView, WasiCtx, WasiCtxBuilder, WasiView, add_to_linker_async,
-    bindings::{clocks::wall_clock, filesystem::types as filesystem},
+use wasmtime_wasi::p2::add_to_linker_async;
+use wasmtime_wasi::p2::bindings::{Command, clocks::wall_clock, filesystem::types as filesystem};
+use wasmtime_wasi::{
+    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiCtxView,
+    WasiView,
 };
-use wasmtime_wasi::{DirPerms, FilePerms, HostMonotonicClock, HostWallClock};
 
 struct CommandCtx {
     table: ResourceTable,
     wasi: WasiCtx,
 }
 
-impl IoView for CommandCtx {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-}
 impl WasiView for CommandCtx {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 
@@ -133,7 +131,9 @@ fn api_proxy_forward_request() {}
 wasmtime::component::bindgen!({
     path: "src/p2/wit",
     world: "test-reactor",
-    async: true,
+    imports: { default: async },
+    exports: { default: async },
+    require_store_data_send: true,
     with: { "wasi": wasmtime_wasi::p2::bindings },
     ownership: Borrowing {
         duplicate_if_necessary: false
@@ -170,7 +170,7 @@ async fn api_reactor() -> Result<()> {
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
     let writepipe = wasmtime_wasi::p2::pipe::MemoryOutputPipe::new(4096);
     let stream: wasmtime_wasi::p2::DynOutputStream = Box::new(writepipe.clone());
-    let table_ix = store.data_mut().table().push(stream)?;
+    let table_ix = store.data_mut().table.push(stream)?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 

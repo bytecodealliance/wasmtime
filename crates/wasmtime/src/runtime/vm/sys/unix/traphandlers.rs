@@ -44,11 +44,13 @@ cfg_if::cfg_if! {
 
         impl TrapHandler {
             pub unsafe fn new(macos_use_mach_ports: bool) -> TrapHandler {
-                USE_MACH_PORTS = macos_use_mach_ports;
-                if macos_use_mach_ports {
-                    TrapHandler::MachPorts(super::machports::TrapHandler::new())
-                } else {
-                    TrapHandler::Signals(super::signals::TrapHandler::new(false))
+                unsafe {
+                    USE_MACH_PORTS = macos_use_mach_ports;
+                    if macos_use_mach_ports {
+                        TrapHandler::MachPorts(super::machports::TrapHandler::new())
+                    } else {
+                        TrapHandler::Signals(super::signals::TrapHandler::new(false))
+                    }
                 }
             }
 

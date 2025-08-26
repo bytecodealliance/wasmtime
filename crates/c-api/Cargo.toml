@@ -33,7 +33,7 @@ wat = { workspace = true, optional = true }
 # Optional dependencies for the `wasi` feature
 cap-std = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["fs"] }
-wasmtime-wasi = { workspace = true, optional = true, features = ["preview1"] }
+wasmtime-wasi = { workspace = true, optional = true, features = ["p1"] }
 
 # Optional dependencies for the `async` feature
 futures = { workspace = true, optional = true }
@@ -60,5 +60,7 @@ debug-builtins = ['wasmtime/debug-builtins']
 wat = ['dep:wat', 'wasmtime/wat']
 pooling-allocator = ["wasmtime/pooling-allocator"]
 component-model = ["wasmtime/component-model"]
+pulley = ["wasmtime/pulley"]
+all-arch = ["wasmtime/all-arch"]
 # ... if you add a line above this be sure to change the other locations
 # marked WASMTIME_FEATURE_LIST

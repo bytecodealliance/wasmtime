@@ -16,35 +16,51 @@
 //! small, the exception table also contains the signature ID of the
 //! called function.
 
-use crate::ir::BlockCall;
 use crate::ir::entities::{ExceptionTag, SigRef};
 use crate::ir::instructions::ValueListPool;
+use crate::ir::{BlockCall, Value};
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
-use cranelift_entity::packed_option::PackedOption;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
 /// Contents of an exception table.
 ///
-/// The "no exception" target for is stored as the last element of the
-/// underlying vector.  It can be accessed through the `normal_return`
-/// and `normal_return_mut` functions. Exceptional catch clauses may
-/// be iterated using the `catches` and `catches_mut` functions.  All
-/// targets may be iterated over using the `all_targets` and
-/// `all_targets_mut` functions.
+/// An exception table consists of a "no exception" ("normal")
+/// destination block-call, and a series of exceptional destination
+/// block-calls associated with tags.
+///
+/// The exceptional tags can also be interspersed with "dynamic
+/// context" entries, which result in a particular value being stored
+/// in the stack frame and accessible at an offset given in the
+/// compiled exception-table metadata. This is needed for some kinds
+/// of tag-matching where different dynamic instances of tags may
+/// exist (e.g., in the WebAssembly exception-handling proposal).
+///
+/// The sequence of targets is semantically a list of
+/// context-or-tagged-blockcall; e.g., `[context v0, tag1: block1(v1,
+/// v2), context v2, tag2: block2(), tag3: block3()]`.
+///
+/// The "no exception" target can be accessed through the
+/// `normal_return` and `normal_return_mut` functions. Exceptional
+/// catch clauses may be iterated using the `catches` and
+/// `catches_mut` functions.  All targets may be iterated over using
+/// the `all_targets` and `all_targets_mut` functions.
 #[derive(Debug, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ExceptionTableData {
     /// All BlockCalls packed together. This is necessary because the
     /// rest of the compiler expects to be able to grab a slice of
     /// branch targets for any branch instruction. The last BlockCall
-    /// is the normal-return destination, and the rest correspond to
-    /// the tags in `tags` below. Thus, we have the invariant that
-    /// `targets.len() == tags.len() + 1`.
+    /// is the normal-return destination, and the rest are referred to
+    /// by index by the `items` below.
     targets: Vec<BlockCall>,
 
-    /// Tags corresponding to targets other than the first one.
+    /// Exception-table items.
+    ///
+    /// This internal representation for items is like
+    /// `ExceptionTableItem` except that it has indices that refer to
+    /// `targets` above.
     ///
     /// A tag value of `None` indicates a catch-all handler. The
     /// catch-all handler matches only if no other handler matches,
@@ -53,11 +69,42 @@ pub struct ExceptionTableData {
     /// `tags[i]` corresponds to `targets[i]`. Note that there will be
     /// one more `targets` element than `tags` because the last
     /// element in `targets` is the normal-return path.
-    tags: Vec<PackedOption<ExceptionTag>>,
+    items: Vec<InternalExceptionTableItem>,
 
     /// The signature of the function whose invocation is associated
     /// with this handler table.
     sig: SigRef,
+}
+
+/// A single item in the match-list of an exception table.
+#[derive(Clone, Debug)]
+pub enum ExceptionTableItem {
+    /// A tag match, taking the specified block-call destination if
+    /// the tag matches the one in the thrown exception. (The match
+    /// predicate is up to the runtime; Cranelift only emits metadata
+    /// containing this tag.)
+    Tag(ExceptionTag, BlockCall),
+    /// A default match, always taking the specified block-call
+    /// destination.
+    Default(BlockCall),
+    /// A dynamic context update, applying to all tags until the next
+    /// update. (Cranelift does not interpret this context, but only
+    /// provides information to the runtime regarding where to find
+    /// it.)
+    Context(Value),
+}
+
+/// Our internal representation of exception-table items.
+///
+/// This is a version of `ExceptionTableItem` with block-calls
+/// out-of-lined so that we can provide the slice externally. Each
+/// block-call is referenced via an index.
+#[derive(Clone, Debug, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+enum InternalExceptionTableItem {
+    Tag(ExceptionTag, u32),
+    Default(u32),
+    Context(Value),
 }
 
 impl ExceptionTableData {
@@ -87,17 +134,33 @@ impl ExceptionTableData {
     pub fn new(
         sig: SigRef,
         normal_return: BlockCall,
-        tags_and_targets: impl IntoIterator<Item = (Option<ExceptionTag>, BlockCall)>,
+        matches: impl IntoIterator<Item = ExceptionTableItem>,
     ) -> Self {
         let mut targets = vec![];
-        let mut tags = vec![];
-        for (tag, target) in tags_and_targets {
-            tags.push(tag.into());
-            targets.push(target);
+        let mut items = vec![];
+        for item in matches {
+            let target_idx = u32::try_from(targets.len()).unwrap();
+            match item {
+                ExceptionTableItem::Tag(tag, target) => {
+                    items.push(InternalExceptionTableItem::Tag(tag, target_idx));
+                    targets.push(target);
+                }
+                ExceptionTableItem::Default(target) => {
+                    items.push(InternalExceptionTableItem::Default(target_idx));
+                    targets.push(target);
+                }
+                ExceptionTableItem::Context(ctx) => {
+                    items.push(InternalExceptionTableItem::Context(ctx));
+                }
+            }
         }
         targets.push(normal_return);
 
-        ExceptionTableData { targets, tags, sig }
+        ExceptionTableData {
+            targets,
+            items,
+            sig,
+        }
     }
 
     /// Return a value that can display the contents of this exception
@@ -110,7 +173,7 @@ impl ExceptionTableData {
     pub fn deep_clone(&self, pool: &mut ValueListPool) -> Self {
         Self {
             targets: self.targets.iter().map(|b| b.deep_clone(pool)).collect(),
-            tags: self.tags.clone(),
+            items: self.items.clone(),
             sig: self.sig,
         }
     }
@@ -125,40 +188,19 @@ impl ExceptionTableData {
         self.targets.last_mut().unwrap()
     }
 
-    /// Get the targets for exceptional return cases, together with
-    /// their tags.
-    pub fn catches(&self) -> impl Iterator<Item = (Option<ExceptionTag>, &BlockCall)> + '_ {
-        self.tags
-            .iter()
-            .map(|tag| tag.expand())
-            // Skips the last entry of `targets` (the normal return)
-            // because `tags` is one element shorter.
-            .zip(self.targets.iter())
-    }
-
-    /// Get the targets for exceptional return cases, together with
-    /// their tags.
-    pub fn catches_mut(
-        &mut self,
-    ) -> impl Iterator<Item = (Option<ExceptionTag>, &mut BlockCall)> + '_ {
-        self.tags
-            .iter()
-            .map(|tag| tag.expand())
-            // Skips the last entry of `targets` (the normal return)
-            // because `tags` is one element shorter.
-            .zip(self.targets.iter_mut())
-    }
-
-    /// The number of catch edges in this exception table.
-    pub fn len_catches(&self) -> usize {
-        self.tags.len()
-    }
-
-    /// Get the `index`th catch edge from this table.
-    pub fn get_catch(&self, index: usize) -> Option<(Option<ExceptionTag>, &BlockCall)> {
-        let tag = self.tags.get(index)?.expand();
-        let target = &self.targets[index];
-        Some((tag, target))
+    /// Get the exception-catch items: dynamic context updates for
+    /// interpreting tags, tag-associated targets, and catch-all
+    /// targets.
+    pub fn items(&self) -> impl Iterator<Item = ExceptionTableItem> + '_ {
+        self.items.iter().map(|item| match item {
+            InternalExceptionTableItem::Tag(tag, target_idx) => {
+                ExceptionTableItem::Tag(*tag, self.targets[usize::try_from(*target_idx).unwrap()])
+            }
+            InternalExceptionTableItem::Default(target_idx) => {
+                ExceptionTableItem::Default(self.targets[usize::try_from(*target_idx).unwrap()])
+            }
+            InternalExceptionTableItem::Context(ctx) => ExceptionTableItem::Context(*ctx),
+        })
     }
 
     /// Get all branch targets.
@@ -182,28 +224,26 @@ impl ExceptionTableData {
         &mut self.sig
     }
 
-    /// Clears all entries in this exception table, but leaves the function signature.
-    pub fn clear(&mut self) {
-        self.tags.clear();
-        self.targets.clear();
+    /// Get an iterator over context values.
+    pub(crate) fn contexts(&self) -> impl DoubleEndedIterator<Item = Value> {
+        self.items.iter().filter_map(|item| match item {
+            InternalExceptionTableItem::Context(ctx) => Some(*ctx),
+            _ => None,
+        })
     }
 
-    /// Push a catch target onto this exception table.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this exception table has been cleared.
-    pub fn push_catch(&mut self, tag: Option<ExceptionTag>, block_call: BlockCall) {
-        assert_eq!(
-            self.tags.len() + 1,
-            self.targets.len(),
-            "cannot push onto an exception table that has been cleared"
-        );
+    /// Get a mutable iterator over context values.
+    pub(crate) fn contexts_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut Value> {
+        self.items.iter_mut().filter_map(|item| match item {
+            InternalExceptionTableItem::Context(ctx) => Some(ctx),
+            _ => None,
+        })
+    }
 
-        self.tags.push(tag.into());
-
-        let target_index = self.targets.len() - 1;
-        self.targets.insert(target_index, block_call);
+    /// Clears all entries in this exception table, but leaves the function signature.
+    pub fn clear(&mut self) {
+        self.items.clear();
+        self.targets.clear();
     }
 }
 
@@ -223,17 +263,23 @@ impl<'a> Display for DisplayExceptionTable<'a> {
             self.table.normal_return().display(self.pool)
         )?;
         let mut first = true;
-        for (tag, block_call) in self.table.catches() {
+        for item in self.table.items() {
             if first {
                 write!(fmt, " ")?;
                 first = false;
             } else {
                 write!(fmt, ", ")?;
             }
-            if let Some(tag) = tag {
-                write!(fmt, "{}: {}", tag, block_call.display(self.pool))?;
-            } else {
-                write!(fmt, "default: {}", block_call.display(self.pool))?;
+            match item {
+                ExceptionTableItem::Tag(tag, block_call) => {
+                    write!(fmt, "{}: {}", tag, block_call.display(self.pool))?;
+                }
+                ExceptionTableItem::Default(block_call) => {
+                    write!(fmt, "default: {}", block_call.display(self.pool))?;
+                }
+                ExceptionTableItem::Context(ctx) => {
+                    write!(fmt, "context {ctx}")?;
+                }
             }
         }
         let space = if first { "" } else { " " };

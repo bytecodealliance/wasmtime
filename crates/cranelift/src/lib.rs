@@ -25,8 +25,8 @@ use cranelift_entity::PrimaryMap;
 
 use target_lexicon::Architecture;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, FlagValue, FuncIndex, RelocationTarget, Trap, TrapInformation, Tunables,
-    WasmFuncType, WasmHeapTopType, WasmHeapType, WasmValType,
+    BuiltinFunctionIndex, FlagValue, FuncKey, Trap, TrapInformation, Tunables, WasmFuncType,
+    WasmHeapTopType, WasmHeapType, WasmValType,
 };
 
 pub use builder::builder;
@@ -219,29 +219,13 @@ fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
 
 // List of namespaces which are processed in `mach_reloc_to_reloc` below.
 
-/// Namespace corresponding to wasm functions, the index is the index of the
-/// defined function that's being referenced.
-pub const NS_WASM_FUNC: u32 = 0;
-
-/// Namespace for builtin function trampolines. The index is the index of the
-/// builtin that's being referenced. These trampolines invoke the real host
-/// function through an indirect function call loaded by the `VMContext`.
-pub const NS_WASMTIME_BUILTIN: u32 = 1;
-
-/// Namespace used to when a call from Pulley to the host is being made. This is
-/// used with a `colocated: false` name to trigger codegen for a special opcode
-/// for pulley-to-host communication. The index of the functions used in this
-/// namespace correspond to the function signature of `for_each_host_signature!`
-/// in the pulley_interpreter crate.
-pub const NS_PULLEY_HOSTCALL: u32 = 2;
-
 /// A record of a relocation to perform.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Relocation {
     /// The relocation code.
     pub reloc: binemit::Reloc,
     /// Relocation target.
-    pub reloc_target: RelocationTarget,
+    pub reloc_target: FuncKey,
     /// The offset where to apply the relocation.
     pub offset: binemit::CodeOffset,
     /// The addend to add to the relocation value.
@@ -308,14 +292,7 @@ fn mach_reloc_to_reloc(
     let reloc_target = match *target {
         FinalizedRelocTarget::ExternalName(ExternalName::User(user_func_ref)) => {
             let name = &name_map[user_func_ref];
-            match name.namespace {
-                NS_WASM_FUNC => RelocationTarget::Wasm(FuncIndex::from_u32(name.index)),
-                NS_WASMTIME_BUILTIN => {
-                    RelocationTarget::Builtin(BuiltinFunctionIndex::from_u32(name.index))
-                }
-                NS_PULLEY_HOSTCALL => RelocationTarget::PulleyHostcall(name.index),
-                _ => panic!("unknown namespace {}", name.namespace),
-            }
+            FuncKey::from_raw_parts(name.namespace, name.index)
         }
         FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
             // We should have avoided any code that needs this style of libcalls
@@ -451,7 +428,7 @@ const I31_REF_DISCRIMINANT: u32 = 1;
 /// from reachable to unreachable state and the like from callees to callers.
 ///
 /// Marked `must_use` to force callers to update
-/// `FuncTranslationState::reachable` as necessary.
+/// `FuncTranslationStacks::reachable` as necessary.
 #[derive(PartialEq, Eq)]
 #[must_use]
 enum Reachability<T> {
@@ -459,6 +436,6 @@ enum Reachability<T> {
     Reachable(T),
     /// The Wasm execution state has been determined to be statically
     /// unreachable. It is the receiver of this value's responsibility to update
-    /// `FuncTranslationState::reachable` as necessary.
+    /// `FuncTranslationStacks::reachable` as necessary.
     Unreachable,
 }

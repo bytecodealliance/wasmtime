@@ -333,6 +333,16 @@ impl<'a> Iterator for Values<'a> {
             .find(|kv| valid_valuedata(*kv.1))
             .map(|kv| kv.0)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl ExactSizeIterator for Values<'_> {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
 }
 
 /// Handling values.
@@ -888,16 +898,25 @@ impl DataFlowGraph {
         &'dfg self,
         inst: Inst,
     ) -> impl DoubleEndedIterator<Item = Value> + 'dfg {
-        self.inst_args(inst).iter().copied().chain(
-            self.insts[inst]
-                .branch_destination(&self.jump_tables, &self.exception_tables)
-                .into_iter()
-                .flat_map(|branch| {
-                    branch
-                        .args(&self.value_lists)
-                        .filter_map(|arg| arg.as_value())
-                }),
-        )
+        self.inst_args(inst)
+            .iter()
+            .copied()
+            .chain(
+                self.insts[inst]
+                    .branch_destination(&self.jump_tables, &self.exception_tables)
+                    .into_iter()
+                    .flat_map(|branch| {
+                        branch
+                            .args(&self.value_lists)
+                            .filter_map(|arg| arg.as_value())
+                    }),
+            )
+            .chain(
+                self.insts[inst]
+                    .exception_table()
+                    .into_iter()
+                    .flat_map(|et| self.exception_tables[et].contexts()),
+            )
     }
 
     /// Map a function over the values of the instruction.

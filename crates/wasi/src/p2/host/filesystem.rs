@@ -1,42 +1,24 @@
+use crate::filesystem::{Descriptor, WasiFilesystemCtxView};
 use crate::p2::bindings::clocks::wall_clock;
 use crate::p2::bindings::filesystem::preopens;
 use crate::p2::bindings::filesystem::types::{
     self, ErrorCode, HostDescriptor, HostDirectoryEntryStream,
 };
-use crate::p2::filesystem::{
-    Descriptor, Dir, File, FileInputStream, FileOutputStream, ReaddirIterator,
-};
-use crate::p2::{FsError, FsResult, IoView, WasiImpl, WasiView};
-use crate::{DirPerms, FilePerms, OpenMode};
-use anyhow::Context;
+use crate::p2::filesystem::{FileInputStream, FileOutputStream, ReaddirIterator};
+use crate::p2::{FsError, FsResult};
+use crate::{DirPerms, FilePerms};
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::streams::{DynInputStream, DynOutputStream};
 
 mod sync;
 
-impl<T> preopens::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
-    fn get_directories(
-        &mut self,
-    ) -> Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error> {
-        let mut results = Vec::new();
-        for (dir, name) in self.ctx().preopens.clone() {
-            let fd = self
-                .table()
-                .push(Descriptor::Dir(dir))
-                .with_context(|| format!("failed to push preopen {name}"))?;
-            results.push((fd, name));
-        }
-        Ok(results)
+impl preopens::Host for WasiFilesystemCtxView<'_> {
+    fn get_directories(&mut self) -> wasmtime::Result<Vec<(Resource<Descriptor>, String)>> {
+        self.get_directories()
     }
 }
 
-impl<T> types::Host for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl types::Host for WasiFilesystemCtxView<'_> {
     fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<ErrorCode> {
         err.downcast()
     }
@@ -45,7 +27,7 @@ where
         &mut self,
         err: Resource<anyhow::Error>,
     ) -> anyhow::Result<Option<ErrorCode>> {
-        let err = self.table().get(&err)?;
+        let err = self.table.get(&err)?;
 
         // Currently `err` always comes from the stream implementation which
         // uses standard reads/writes so only check for `std::io::Error` here.
@@ -57,10 +39,7 @@ where
     }
 }
 
-impl<T> HostDescriptor for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl HostDescriptor for WasiFilesystemCtxView<'_> {
     async fn advise(
         &mut self,
         fd: Resource<types::Descriptor>,
@@ -68,112 +47,33 @@ where
         len: types::Filesize,
         advice: types::Advice,
     ) -> FsResult<()> {
-        use system_interface::fs::{Advice as A, FileIoExt};
-        use types::Advice;
-
-        let advice = match advice {
-            Advice::Normal => A::Normal,
-            Advice::Sequential => A::Sequential,
-            Advice::Random => A::Random,
-            Advice::WillNeed => A::WillNeed,
-            Advice::DontNeed => A::DontNeed,
-            Advice::NoReuse => A::NoReuse,
-        };
-
-        let f = self.table().get(&fd)?.file()?;
-        f.run_blocking(move |f| f.advise(offset, len, advice))
-            .await?;
+        let f = self.table.get(&fd)?.file()?;
+        f.advise(offset, len, advice.into()).await?;
         Ok(())
     }
 
     async fn sync_data(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
-        let descriptor = self.table().get(&fd)?;
-
-        match descriptor {
-            Descriptor::File(f) => {
-                match f.run_blocking(|f| f.sync_data()).await {
-                    Ok(()) => Ok(()),
-                    // On windows, `sync_data` uses `FileFlushBuffers` which fails with
-                    // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
-                    // this error, for POSIX compatibility.
-                    #[cfg(windows)]
-                    Err(e)
-                        if e.raw_os_error()
-                            == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as _) =>
-                    {
-                        Ok(())
-                    }
-                    Err(e) => Err(e.into()),
-                }
-            }
-            Descriptor::Dir(d) => {
-                d.run_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_data()?))
-                    .await
-            }
-        }
+        let descriptor = self.table.get(&fd)?;
+        descriptor.sync_data().await?;
+        Ok(())
     }
 
     async fn get_flags(
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::DescriptorFlags> {
-        use system_interface::fs::{FdFlags, GetSetFdFlags};
-        use types::DescriptorFlags;
-
-        fn get_from_fdflags(flags: FdFlags) -> DescriptorFlags {
-            let mut out = DescriptorFlags::empty();
-            if flags.contains(FdFlags::DSYNC) {
-                out |= DescriptorFlags::REQUESTED_WRITE_SYNC;
-            }
-            if flags.contains(FdFlags::RSYNC) {
-                out |= DescriptorFlags::DATA_INTEGRITY_SYNC;
-            }
-            if flags.contains(FdFlags::SYNC) {
-                out |= DescriptorFlags::FILE_INTEGRITY_SYNC;
-            }
-            out
-        }
-
-        let descriptor = self.table().get(&fd)?;
-        match descriptor {
-            Descriptor::File(f) => {
-                let flags = f.run_blocking(|f| f.get_fd_flags()).await?;
-                let mut flags = get_from_fdflags(flags);
-                if f.open_mode.contains(OpenMode::READ) {
-                    flags |= DescriptorFlags::READ;
-                }
-                if f.open_mode.contains(OpenMode::WRITE) {
-                    flags |= DescriptorFlags::WRITE;
-                }
-                Ok(flags)
-            }
-            Descriptor::Dir(d) => {
-                let flags = d.run_blocking(|d| d.get_fd_flags()).await?;
-                let mut flags = get_from_fdflags(flags);
-                if d.open_mode.contains(OpenMode::READ) {
-                    flags |= DescriptorFlags::READ;
-                }
-                if d.open_mode.contains(OpenMode::WRITE) {
-                    flags |= DescriptorFlags::MUTATE_DIRECTORY;
-                }
-                Ok(flags)
-            }
-        }
+        let descriptor = self.table.get(&fd)?;
+        let flags = descriptor.get_flags().await?;
+        Ok(flags.into())
     }
 
     async fn get_type(
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::DescriptorType> {
-        let descriptor = self.table().get(&fd)?;
-
-        match descriptor {
-            Descriptor::File(f) => {
-                let meta = f.run_blocking(|f| f.metadata()).await?;
-                Ok(descriptortype_from(meta.file_type()))
-            }
-            Descriptor::Dir(_) => Ok(types::DescriptorType::Directory),
-        }
+        let descriptor = self.table.get(&fd)?;
+        let ty = descriptor.get_type().await?;
+        Ok(ty.into())
     }
 
     async fn set_size(
@@ -181,11 +81,8 @@ where
         fd: Resource<types::Descriptor>,
         size: types::Filesize,
     ) -> FsResult<()> {
-        let f = self.table().get(&fd)?.file()?;
-        if !f.perms.contains(FilePerms::WRITE) {
-            Err(ErrorCode::NotPermitted)?;
-        }
-        f.run_blocking(move |f| f.set_len(size)).await?;
+        let f = self.table.get(&fd)?.file()?;
+        f.set_size(size).await?;
         Ok(())
     }
 
@@ -195,29 +92,11 @@ where
         atim: types::NewTimestamp,
         mtim: types::NewTimestamp,
     ) -> FsResult<()> {
-        use fs_set_times::SetTimes;
-
-        let descriptor = self.table().get(&fd)?;
-        match descriptor {
-            Descriptor::File(f) => {
-                if !f.perms.contains(FilePerms::WRITE) {
-                    return Err(ErrorCode::NotPermitted.into());
-                }
-                let atim = systemtimespec_from(atim)?;
-                let mtim = systemtimespec_from(mtim)?;
-                f.run_blocking(|f| f.set_times(atim, mtim)).await?;
-                Ok(())
-            }
-            Descriptor::Dir(d) => {
-                if !d.perms.contains(DirPerms::MUTATE) {
-                    return Err(ErrorCode::NotPermitted.into());
-                }
-                let atim = systemtimespec_from(atim)?;
-                let mtim = systemtimespec_from(mtim)?;
-                d.run_blocking(|d| d.set_times(atim, mtim)).await?;
-                Ok(())
-            }
-        }
+        let descriptor = self.table.get(&fd)?;
+        let atim = systemtimespec_from(atim)?;
+        let mtim = systemtimespec_from(mtim)?;
+        descriptor.set_times(atim, mtim).await?;
+        Ok(())
     }
 
     async fn read(
@@ -229,9 +108,7 @@ where
         use std::io::IoSliceMut;
         use system_interface::fs::FileIoExt;
 
-        let table = self.table();
-
-        let f = table.get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
         if !f.perms.contains(FilePerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -263,8 +140,7 @@ where
         use std::io::IoSlice;
         use system_interface::fs::FileIoExt;
 
-        let table = self.table();
-        let f = table.get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
         if !f.perms.contains(FilePerms::WRITE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -280,8 +156,7 @@ where
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<Resource<types::DirectoryEntryStream>> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
+        let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -338,34 +213,13 @@ where
             Err(ReaddirError::Io(e)) => Err(e.into()),
             Err(ReaddirError::IllegalSequence) => Err(ErrorCode::IllegalByteSequence.into()),
         });
-        Ok(table.push(ReaddirIterator::new(entries))?)
+        Ok(self.table.push(ReaddirIterator::new(entries))?)
     }
 
     async fn sync(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
-        let descriptor = self.table().get(&fd)?;
-
-        match descriptor {
-            Descriptor::File(f) => {
-                match f.run_blocking(|f| f.sync_all()).await {
-                    Ok(()) => Ok(()),
-                    // On windows, `sync_data` uses `FileFlushBuffers` which fails with
-                    // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
-                    // this error, for POSIX compatibility.
-                    #[cfg(windows)]
-                    Err(e)
-                        if e.raw_os_error()
-                            == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as _) =>
-                    {
-                        Ok(())
-                    }
-                    Err(e) => Err(e.into()),
-                }
-            }
-            Descriptor::Dir(d) => {
-                d.run_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_all()?))
-                    .await
-            }
-        }
+        let descriptor = self.table.get(&fd)?;
+        descriptor.sync().await?;
+        Ok(())
     }
 
     async fn create_directory_at(
@@ -373,29 +227,15 @@ where
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<()> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
-        if !d.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
-        d.run_blocking(move |d| d.create_dir(&path)).await?;
+        let d = self.table.get(&fd)?.dir()?;
+        d.create_directory_at(path).await?;
         Ok(())
     }
 
     async fn stat(&mut self, fd: Resource<types::Descriptor>) -> FsResult<types::DescriptorStat> {
-        let descriptor = self.table().get(&fd)?;
-        match descriptor {
-            Descriptor::File(f) => {
-                // No permissions check on stat: if opened, allowed to stat it
-                let meta = f.run_blocking(|f| f.metadata()).await?;
-                Ok(descriptorstat_from(meta))
-            }
-            Descriptor::Dir(d) => {
-                // No permissions check on stat: if opened, allowed to stat it
-                let meta = d.run_blocking(|d| d.dir_metadata()).await?;
-                Ok(descriptorstat_from(meta))
-            }
-        }
+        let descriptor = self.table.get(&fd)?;
+        let stat = descriptor.stat().await?;
+        Ok(stat.into())
     }
 
     async fn stat_at(
@@ -404,18 +244,9 @@ where
         path_flags: types::PathFlags,
         path: String,
     ) -> FsResult<types::DescriptorStat> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
-        if !d.perms.contains(DirPerms::READ) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
-
-        let meta = if symlink_follow(path_flags) {
-            d.run_blocking(move |d| d.metadata(&path)).await?
-        } else {
-            d.run_blocking(move |d| d.symlink_metadata(&path)).await?
-        };
-        Ok(descriptorstat_from(meta))
+        let d = self.table.get(&fd)?.dir()?;
+        let stat = d.stat_at(path_flags.into(), path).await?;
+        Ok(stat.into())
     }
 
     async fn set_times_at(
@@ -426,34 +257,10 @@ where
         atim: types::NewTimestamp,
         mtim: types::NewTimestamp,
     ) -> FsResult<()> {
-        use cap_fs_ext::DirExt;
-
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
-        if !d.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
+        let d = self.table.get(&fd)?.dir()?;
         let atim = systemtimespec_from(atim)?;
         let mtim = systemtimespec_from(mtim)?;
-        if symlink_follow(path_flags) {
-            d.run_blocking(move |d| {
-                d.set_times(
-                    &path,
-                    atim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                    mtim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                )
-            })
-            .await?;
-        } else {
-            d.run_blocking(move |d| {
-                d.set_symlink_times(
-                    &path,
-                    atim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                    mtim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                )
-            })
-            .await?;
-        }
+        d.set_times_at(path_flags.into(), path, atim, mtim).await?;
         Ok(())
     }
 
@@ -466,21 +273,10 @@ where
         new_descriptor: Resource<types::Descriptor>,
         new_path: String,
     ) -> FsResult<()> {
-        let table = self.table();
-        let old_dir = table.get(&fd)?.dir()?;
-        if !old_dir.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
-        let new_dir = table.get(&new_descriptor)?.dir()?;
-        if !new_dir.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
-        if symlink_follow(old_path_flags) {
-            return Err(ErrorCode::Invalid.into());
-        }
-        let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
+        let old_dir = self.table.get(&fd)?.dir()?;
+        let new_dir = self.table.get(&new_descriptor)?.dir()?;
         old_dir
-            .run_blocking(move |d| d.hard_link(&old_path, &new_dir_handle, &new_path))
+            .link_at(old_path_flags.into(), old_path, new_dir, new_path)
             .await?;
         Ok(())
     }
@@ -493,150 +289,27 @@ where
         oflags: types::OpenFlags,
         flags: types::DescriptorFlags,
     ) -> FsResult<Resource<types::Descriptor>> {
-        use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt, OpenOptionsMaybeDirExt};
-        use system_interface::fs::{FdFlags, GetSetFdFlags};
-        use types::{DescriptorFlags, OpenFlags};
-
-        let allow_blocking_current_thread = self.ctx().allow_blocking_current_thread;
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
-        if !d.perms.contains(DirPerms::READ) {
-            Err(ErrorCode::NotPermitted)?;
-        }
-
-        if !d.perms.contains(DirPerms::MUTATE) {
-            if oflags.contains(OpenFlags::CREATE) || oflags.contains(OpenFlags::TRUNCATE) {
-                Err(ErrorCode::NotPermitted)?;
-            }
-            if flags.contains(DescriptorFlags::WRITE) {
-                Err(ErrorCode::NotPermitted)?;
-            }
-        }
-
-        // Track whether we are creating file, for permission check:
-        let mut create = false;
-        // Track open mode, for permission check and recording in created descriptor:
-        let mut open_mode = OpenMode::empty();
-        // Construct the OpenOptions to give the OS:
-        let mut opts = cap_std::fs::OpenOptions::new();
-        opts.maybe_dir(true);
-
-        if oflags.contains(OpenFlags::CREATE) {
-            if oflags.contains(OpenFlags::EXCLUSIVE) {
-                opts.create_new(true);
-            } else {
-                opts.create(true);
-            }
-            create = true;
-            opts.write(true);
-            open_mode |= OpenMode::WRITE;
-        }
-
-        if oflags.contains(OpenFlags::TRUNCATE) {
-            opts.truncate(true).write(true);
-        }
-        if flags.contains(DescriptorFlags::READ) {
-            opts.read(true);
-            open_mode |= OpenMode::READ;
-        }
-        if flags.contains(DescriptorFlags::WRITE) {
-            opts.write(true);
-            open_mode |= OpenMode::WRITE;
-        } else {
-            // If not opened write, open read. This way the OS lets us open
-            // the file, but we can use perms to reject use of the file later.
-            opts.read(true);
-            open_mode |= OpenMode::READ;
-        }
-        if symlink_follow(path_flags) {
-            opts.follow(FollowSymlinks::Yes);
-        } else {
-            opts.follow(FollowSymlinks::No);
-        }
-
-        // These flags are not yet supported in cap-std:
-        if flags.contains(DescriptorFlags::FILE_INTEGRITY_SYNC)
-            || flags.contains(DescriptorFlags::DATA_INTEGRITY_SYNC)
-            || flags.contains(DescriptorFlags::REQUESTED_WRITE_SYNC)
-        {
-            Err(ErrorCode::Unsupported)?;
-        }
-
-        if oflags.contains(OpenFlags::DIRECTORY) {
-            if oflags.contains(OpenFlags::CREATE)
-                || oflags.contains(OpenFlags::EXCLUSIVE)
-                || oflags.contains(OpenFlags::TRUNCATE)
-            {
-                Err(ErrorCode::Invalid)?;
-            }
-        }
-
-        // Now enforce this WasiCtx's permissions before letting the OS have
-        // its shot:
-        if !d.perms.contains(DirPerms::MUTATE) && create {
-            Err(ErrorCode::NotPermitted)?;
-        }
-        if !d.file_perms.contains(FilePerms::WRITE) && open_mode.contains(OpenMode::WRITE) {
-            Err(ErrorCode::NotPermitted)?;
-        }
-
-        // Represents each possible outcome from the spawn_blocking operation.
-        // This makes sure we don't have to give spawn_blocking any way to
-        // manipulate the table.
-        enum OpenResult {
-            Dir(cap_std::fs::Dir),
-            File(cap_std::fs::File),
-            NotDir,
-        }
-
-        let opened = d
-            .run_blocking::<_, std::io::Result<OpenResult>>(move |d| {
-                let mut opened = d.open_with(&path, &opts)?;
-                if opened.metadata()?.is_dir() {
-                    Ok(OpenResult::Dir(cap_std::fs::Dir::from_std_file(
-                        opened.into_std(),
-                    )))
-                } else if oflags.contains(OpenFlags::DIRECTORY) {
-                    Ok(OpenResult::NotDir)
-                } else {
-                    // FIXME cap-std needs a nonblocking open option so that files reads and writes
-                    // are nonblocking. Instead we set it after opening here:
-                    let set_fd_flags = opened.new_set_fd_flags(FdFlags::NONBLOCK)?;
-                    opened.set_fd_flags(set_fd_flags)?;
-                    Ok(OpenResult::File(opened))
-                }
-            })
+        let d = self.table.get(&fd)?.dir()?;
+        let fd = d
+            .open_at(
+                path_flags.into(),
+                path,
+                oflags.into(),
+                flags.into(),
+                self.ctx.allow_blocking_current_thread,
+            )
             .await?;
-
-        match opened {
-            OpenResult::Dir(dir) => Ok(table.push(Descriptor::Dir(Dir::new(
-                dir,
-                d.perms,
-                d.file_perms,
-                open_mode,
-                allow_blocking_current_thread,
-            )))?),
-
-            OpenResult::File(file) => Ok(table.push(Descriptor::File(File::new(
-                file,
-                d.file_perms,
-                open_mode,
-                allow_blocking_current_thread,
-            )))?),
-
-            OpenResult::NotDir => Err(ErrorCode::NotDirectory.into()),
-        }
+        let fd = self.table.push(fd)?;
+        Ok(fd)
     }
 
     fn drop(&mut self, fd: Resource<types::Descriptor>) -> anyhow::Result<()> {
-        let table = self.table();
-
         // The Drop will close the file/dir, but if the close syscall
         // blocks the thread, I will face god and walk backwards into hell.
         // tokio::fs::File just uses std::fs::File's Drop impl to close, so
         // it doesn't appear anyone else has found this to be a problem.
         // (Not that they could solve it without async drop...)
-        table.delete(fd)?;
+        self.table.delete(fd)?;
 
         Ok(())
     }
@@ -646,16 +319,9 @@ where
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<String> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
-        if !d.perms.contains(DirPerms::READ) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
-        let link = d.run_blocking(move |d| d.read_link(&path)).await?;
-        Ok(link
-            .into_os_string()
-            .into_string()
-            .map_err(|_| ErrorCode::IllegalByteSequence)?)
+        let d = self.table.get(&fd)?.dir()?;
+        let path = d.readlink_at(path).await?;
+        Ok(path)
     }
 
     async fn remove_directory_at(
@@ -663,12 +329,9 @@ where
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<()> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
-        if !d.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
-        Ok(d.run_blocking(move |d| d.remove_dir(&path)).await?)
+        let d = self.table.get(&fd)?.dir()?;
+        d.remove_directory_at(path).await?;
+        Ok(())
     }
 
     async fn rename_at(
@@ -678,19 +341,10 @@ where
         new_fd: Resource<types::Descriptor>,
         new_path: String,
     ) -> FsResult<()> {
-        let table = self.table();
-        let old_dir = table.get(&fd)?.dir()?;
-        if !old_dir.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
-        let new_dir = table.get(&new_fd)?.dir()?;
-        if !new_dir.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
-        let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
-        Ok(old_dir
-            .run_blocking(move |d| d.rename(&old_path, &new_dir_handle, &new_path))
-            .await?)
+        let old_dir = self.table.get(&fd)?.dir()?;
+        let new_dir = self.table.get(&new_fd)?.dir()?;
+        old_dir.rename_at(old_path, new_dir, new_path).await?;
+        Ok(())
     }
 
     async fn symlink_at(
@@ -699,17 +353,9 @@ where
         src_path: String,
         dest_path: String,
     ) -> FsResult<()> {
-        // On windows, Dir.symlink is provided by DirExt
-        #[cfg(windows)]
-        use cap_fs_ext::DirExt;
-
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
-        if !d.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
-        Ok(d.run_blocking(move |d| d.symlink(&src_path, &dest_path))
-            .await?)
+        let d = self.table.get(&fd)?.dir()?;
+        d.symlink_at(src_path, dest_path).await?;
+        Ok(())
     }
 
     async fn unlink_file_at(
@@ -717,15 +363,9 @@ where
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<()> {
-        use cap_fs_ext::DirExt;
-
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
-        if !d.perms.contains(DirPerms::MUTATE) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
-        Ok(d.run_blocking(move |d| d.remove_file_or_symlink(&path))
-            .await?)
+        let d = self.table.get(&fd)?.dir()?;
+        d.unlink_file_at(path).await?;
+        Ok(())
     }
 
     fn read_via_stream(
@@ -734,7 +374,7 @@ where
         offset: types::Filesize,
     ) -> FsResult<Resource<DynInputStream>> {
         // Trap if fd lookup fails:
-        let f = self.table().get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::READ) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -744,7 +384,7 @@ where
         let reader: DynInputStream = Box::new(FileInputStream::new(f, offset));
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table().push(reader)?;
+        let index = self.table.push(reader)?;
 
         Ok(index)
     }
@@ -755,7 +395,7 @@ where
         offset: types::Filesize,
     ) -> FsResult<Resource<DynOutputStream>> {
         // Trap if fd lookup fails:
-        let f = self.table().get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::WRITE) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -766,7 +406,7 @@ where
         let writer: DynOutputStream = Box::new(writer);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table().push(writer)?;
+        let index = self.table.push(writer)?;
 
         Ok(index)
     }
@@ -776,7 +416,7 @@ where
         fd: Resource<types::Descriptor>,
     ) -> FsResult<Resource<DynOutputStream>> {
         // Trap if fd lookup fails:
-        let f = self.table().get(&fd)?.file()?;
+        let f = self.table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::WRITE) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -787,7 +427,7 @@ where
         let appender: DynOutputStream = Box::new(appender);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table().push(appender)?;
+        let index = self.table.push(appender)?;
 
         Ok(index)
     }
@@ -797,35 +437,17 @@ where
         a: Resource<types::Descriptor>,
         b: Resource<types::Descriptor>,
     ) -> anyhow::Result<bool> {
-        use cap_fs_ext::MetadataExt;
-        let descriptor_a = self.table().get(&a)?;
-        let meta_a = get_descriptor_metadata(descriptor_a).await?;
-        let descriptor_b = self.table().get(&b)?;
-        let meta_b = get_descriptor_metadata(descriptor_b).await?;
-        if meta_a.dev() == meta_b.dev() && meta_a.ino() == meta_b.ino() {
-            // MetadataHashValue does not derive eq, so use a pair of
-            // comparisons to check equality:
-            debug_assert_eq!(
-                calculate_metadata_hash(&meta_a).upper,
-                calculate_metadata_hash(&meta_b).upper
-            );
-            debug_assert_eq!(
-                calculate_metadata_hash(&meta_a).lower,
-                calculate_metadata_hash(&meta_b).lower
-            );
-            Ok(true)
-        } else {
-            // Hash collisions are possible, so don't assert the negative here
-            Ok(false)
-        }
+        let descriptor_a = self.table.get(&a)?;
+        let descriptor_b = self.table.get(&b)?;
+        descriptor_a.is_same_object(descriptor_b).await
     }
     async fn metadata_hash(
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::MetadataHashValue> {
-        let descriptor_a = self.table().get(&fd)?;
-        let meta = get_descriptor_metadata(descriptor_a).await?;
-        Ok(calculate_metadata_hash(&meta))
+        let fd = self.table.get(&fd)?;
+        let meta = fd.metadata_hash().await?;
+        Ok(meta.into())
     }
     async fn metadata_hash_at(
         &mut self,
@@ -833,76 +455,160 @@ where
         path_flags: types::PathFlags,
         path: String,
     ) -> FsResult<types::MetadataHashValue> {
-        let table = self.table();
-        let d = table.get(&fd)?.dir()?;
-        // No permissions check on metadata: if dir opened, allowed to stat it
-        let meta = d
-            .run_blocking(move |d| {
-                if symlink_follow(path_flags) {
-                    d.metadata(path)
-                } else {
-                    d.symlink_metadata(path)
-                }
-            })
-            .await?;
-        Ok(calculate_metadata_hash(&meta))
+        let d = self.table.get(&fd)?.dir()?;
+        let meta = d.metadata_hash_at(path_flags.into(), path).await?;
+        Ok(meta.into())
     }
 }
 
-impl<T> HostDirectoryEntryStream for WasiImpl<T>
-where
-    T: WasiView,
-{
+impl HostDirectoryEntryStream for WasiFilesystemCtxView<'_> {
     async fn read_directory_entry(
         &mut self,
         stream: Resource<types::DirectoryEntryStream>,
     ) -> FsResult<Option<types::DirectoryEntry>> {
-        let table = self.table();
-        let readdir = table.get(&stream)?;
+        let readdir = self.table.get(&stream)?;
         readdir.next()
     }
 
     fn drop(&mut self, stream: Resource<types::DirectoryEntryStream>) -> anyhow::Result<()> {
-        self.table().delete(stream)?;
+        self.table.delete(stream)?;
         Ok(())
     }
 }
 
-async fn get_descriptor_metadata(fd: &types::Descriptor) -> FsResult<cap_std::fs::Metadata> {
-    match fd {
-        Descriptor::File(f) => {
-            // No permissions check on metadata: if opened, allowed to stat it
-            Ok(f.run_blocking(|f| f.metadata()).await?)
-        }
-        Descriptor::Dir(d) => {
-            // No permissions check on metadata: if opened, allowed to stat it
-            Ok(d.run_blocking(|d| d.dir_metadata()).await?)
+impl From<types::Advice> for system_interface::fs::Advice {
+    fn from(advice: types::Advice) -> Self {
+        match advice {
+            types::Advice::Normal => Self::Normal,
+            types::Advice::Sequential => Self::Sequential,
+            types::Advice::Random => Self::Random,
+            types::Advice::WillNeed => Self::WillNeed,
+            types::Advice::DontNeed => Self::DontNeed,
+            types::Advice::NoReuse => Self::NoReuse,
         }
     }
 }
 
-fn calculate_metadata_hash(meta: &cap_std::fs::Metadata) -> types::MetadataHashValue {
-    use cap_fs_ext::MetadataExt;
-    // Without incurring any deps, std provides us with a 64 bit hash
-    // function:
-    use std::hash::Hasher;
-    // Note that this means that the metadata hash (which becomes a preview1 ino) may
-    // change when a different rustc release is used to build this host implementation:
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    hasher.write_u64(meta.dev());
-    hasher.write_u64(meta.ino());
-    let lower = hasher.finish();
-    // MetadataHashValue has a pair of 64-bit members for representing a
-    // single 128-bit number. However, we only have 64 bits of entropy. To
-    // synthesize the upper 64 bits, lets xor the lower half with an arbitrary
-    // constant, in this case the 64 bit integer corresponding to the IEEE
-    // double representation of (a number as close as possible to) pi.
-    // This seems better than just repeating the same bits in the upper and
-    // lower parts outright, which could make folks wonder if the struct was
-    // mangled in the ABI, or worse yet, lead to consumers of this interface
-    // expecting them to be equal.
-    let upper = lower ^ 4614256656552045848u64;
-    types::MetadataHashValue { lower, upper }
+impl From<types::OpenFlags> for crate::filesystem::OpenFlags {
+    fn from(flags: types::OpenFlags) -> Self {
+        let mut out = Self::empty();
+        if flags.contains(types::OpenFlags::CREATE) {
+            out |= Self::CREATE;
+        }
+        if flags.contains(types::OpenFlags::DIRECTORY) {
+            out |= Self::DIRECTORY;
+        }
+        if flags.contains(types::OpenFlags::EXCLUSIVE) {
+            out |= Self::EXCLUSIVE;
+        }
+        if flags.contains(types::OpenFlags::TRUNCATE) {
+            out |= Self::TRUNCATE;
+        }
+        out
+    }
+}
+
+impl From<types::PathFlags> for crate::filesystem::PathFlags {
+    fn from(flags: types::PathFlags) -> Self {
+        let mut out = Self::empty();
+        if flags.contains(types::PathFlags::SYMLINK_FOLLOW) {
+            out |= Self::SYMLINK_FOLLOW;
+        }
+        out
+    }
+}
+
+impl From<crate::filesystem::DescriptorFlags> for types::DescriptorFlags {
+    fn from(flags: crate::filesystem::DescriptorFlags) -> Self {
+        let mut out = Self::empty();
+        if flags.contains(crate::filesystem::DescriptorFlags::READ) {
+            out |= Self::READ;
+        }
+        if flags.contains(crate::filesystem::DescriptorFlags::WRITE) {
+            out |= Self::WRITE;
+        }
+        if flags.contains(crate::filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
+            out |= Self::FILE_INTEGRITY_SYNC;
+        }
+        if flags.contains(crate::filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
+            out |= Self::DATA_INTEGRITY_SYNC;
+        }
+        if flags.contains(crate::filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
+            out |= Self::REQUESTED_WRITE_SYNC;
+        }
+        if flags.contains(crate::filesystem::DescriptorFlags::MUTATE_DIRECTORY) {
+            out |= Self::MUTATE_DIRECTORY;
+        }
+        out
+    }
+}
+
+impl From<types::DescriptorFlags> for crate::filesystem::DescriptorFlags {
+    fn from(flags: types::DescriptorFlags) -> Self {
+        let mut out = Self::empty();
+        if flags.contains(types::DescriptorFlags::READ) {
+            out |= Self::READ;
+        }
+        if flags.contains(types::DescriptorFlags::WRITE) {
+            out |= Self::WRITE;
+        }
+        if flags.contains(types::DescriptorFlags::FILE_INTEGRITY_SYNC) {
+            out |= Self::FILE_INTEGRITY_SYNC;
+        }
+        if flags.contains(types::DescriptorFlags::DATA_INTEGRITY_SYNC) {
+            out |= Self::DATA_INTEGRITY_SYNC;
+        }
+        if flags.contains(types::DescriptorFlags::REQUESTED_WRITE_SYNC) {
+            out |= Self::REQUESTED_WRITE_SYNC;
+        }
+        if flags.contains(types::DescriptorFlags::MUTATE_DIRECTORY) {
+            out |= Self::MUTATE_DIRECTORY;
+        }
+        out
+    }
+}
+
+impl From<crate::filesystem::MetadataHashValue> for types::MetadataHashValue {
+    fn from(
+        crate::filesystem::MetadataHashValue { lower, upper }: crate::filesystem::MetadataHashValue,
+    ) -> Self {
+        Self { lower, upper }
+    }
+}
+
+impl From<crate::filesystem::DescriptorStat> for types::DescriptorStat {
+    fn from(
+        crate::filesystem::DescriptorStat {
+            type_,
+            link_count,
+            size,
+            data_access_timestamp,
+            data_modification_timestamp,
+            status_change_timestamp,
+        }: crate::filesystem::DescriptorStat,
+    ) -> Self {
+        Self {
+            type_: type_.into(),
+            link_count,
+            size,
+            data_access_timestamp: data_access_timestamp.map(Into::into),
+            data_modification_timestamp: data_modification_timestamp.map(Into::into),
+            status_change_timestamp: status_change_timestamp.map(Into::into),
+        }
+    }
+}
+
+impl From<crate::filesystem::DescriptorType> for types::DescriptorType {
+    fn from(ty: crate::filesystem::DescriptorType) -> Self {
+        match ty {
+            crate::filesystem::DescriptorType::Unknown => Self::Unknown,
+            crate::filesystem::DescriptorType::BlockDevice => Self::BlockDevice,
+            crate::filesystem::DescriptorType::CharacterDevice => Self::CharacterDevice,
+            crate::filesystem::DescriptorType::Directory => Self::Directory,
+            crate::filesystem::DescriptorType::SymbolicLink => Self::SymbolicLink,
+            crate::filesystem::DescriptorType::RegularFile => Self::RegularFile,
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -1032,42 +738,24 @@ fn descriptortype_from(ft: cap_std::fs::FileType) -> types::DescriptorType {
     }
 }
 
-fn systemtimespec_from(t: types::NewTimestamp) -> FsResult<Option<fs_set_times::SystemTimeSpec>> {
+fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, ErrorCode> {
+    std::time::SystemTime::UNIX_EPOCH
+        .checked_add(core::time::Duration::new(t.seconds, t.nanoseconds))
+        .ok_or(ErrorCode::Overflow)
+}
+
+fn systemtimespec_from(
+    t: types::NewTimestamp,
+) -> Result<Option<fs_set_times::SystemTimeSpec>, ErrorCode> {
     use fs_set_times::SystemTimeSpec;
-    use types::NewTimestamp;
     match t {
-        NewTimestamp::NoChange => Ok(None),
-        NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
-        NewTimestamp::Timestamp(st) => Ok(Some(SystemTimeSpec::Absolute(systemtime_from(st)?))),
+        types::NewTimestamp::NoChange => Ok(None),
+        types::NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
+        types::NewTimestamp::Timestamp(st) => {
+            let st = systemtime_from(st)?;
+            Ok(Some(SystemTimeSpec::Absolute(st)))
+        }
     }
-}
-
-fn systemtime_from(t: wall_clock::Datetime) -> FsResult<std::time::SystemTime> {
-    use std::time::{Duration, SystemTime};
-    SystemTime::UNIX_EPOCH
-        .checked_add(Duration::new(t.seconds, t.nanoseconds))
-        .ok_or_else(|| ErrorCode::Overflow.into())
-}
-
-fn datetime_from(t: std::time::SystemTime) -> wall_clock::Datetime {
-    // FIXME make this infallible or handle errors properly
-    wall_clock::Datetime::try_from(cap_std::time::SystemTime::from_std(t)).unwrap()
-}
-
-fn descriptorstat_from(meta: cap_std::fs::Metadata) -> types::DescriptorStat {
-    use cap_fs_ext::MetadataExt;
-    types::DescriptorStat {
-        type_: descriptortype_from(meta.file_type()),
-        link_count: meta.nlink(),
-        size: meta.len(),
-        data_access_timestamp: meta.accessed().map(|t| datetime_from(t.into_std())).ok(),
-        data_modification_timestamp: meta.modified().map(|t| datetime_from(t.into_std())).ok(),
-        status_change_timestamp: meta.created().map(|t| datetime_from(t.into_std())).ok(),
-    }
-}
-
-fn symlink_follow(path_flags: types::PathFlags) -> bool {
-    path_flags.contains(types::PathFlags::SYMLINK_FOLLOW)
 }
 
 #[cfg(test)]

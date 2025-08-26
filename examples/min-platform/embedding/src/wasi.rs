@@ -43,7 +43,7 @@ use wasmtime_wasi_io::{
 
 /// Unlike super::run, its nice to provide some sort of output showing what the
 /// wasi program did while it executed, so this function reports in out_buf
-/// what stdout/stderr prints occured on success (returns 0), or the error
+/// what stdout/stderr prints occurred on success (returns 0), or the error
 /// message on failure (returns != 0).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn run_wasi(
@@ -152,8 +152,9 @@ fn deserialize(engine: &Engine, component: &[u8]) -> Result<Option<Component>> {
 wasmtime::component::bindgen!({
     path: "../../../crates/wasi/src/p2/wit",
     world: "wasi:cli/command",
-    async: { only_imports: [] },
-    trappable_imports: true,
+    imports: { default: trappable },
+    exports: { default: async },
+    require_store_data_send: true,
     // Important: tell bindgen that anywhere it encounters the wasi:io
     // package, refer to the bindings generated in the wasmtime_wasi_io crate.
     // This way, all uses of the streams and pollable in the bindings in this

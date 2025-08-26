@@ -5,7 +5,7 @@ use crate::oracles::{StoreLimits, Timeout};
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use std::time::Duration;
-use wasmtime::{Engine, Module, MpkEnabled, Store};
+use wasmtime::{Enabled, Engine, Module, Store};
 use wasmtime_test_util::wast::{WastConfig, WastTest, limits};
 
 /// Configuration for `wasmtime::Config` and generated modules for a session of
@@ -75,7 +75,7 @@ impl Config {
             pooling.total_memories = config.max_memories as u32;
             pooling.max_memory_size = 10 << 16;
             pooling.max_memories_per_module = config.max_memories as u32;
-            if pooling.memory_protection_keys == MpkEnabled::Auto
+            if pooling.memory_protection_keys == Enabled::Auto
                 && pooling.max_memory_protection_keys > 1
             {
                 pooling.total_memories =
@@ -141,7 +141,7 @@ impl Config {
             component_model_gc,
             simd,
             exceptions,
-            legacy_exceptions,
+            legacy_exceptions: _,
 
             hogs_memory: _,
             nan_canonicalization: _,
@@ -161,7 +161,6 @@ impl Config {
             component_model_async_stackful.unwrap_or(false);
         self.module_config.component_model_error_context =
             component_model_error_context.unwrap_or(false);
-        self.module_config.legacy_exceptions = legacy_exceptions.unwrap_or(false);
         self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
@@ -266,6 +265,7 @@ impl Config {
         cfg.codegen.native_unwind_info =
             Some(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info);
         cfg.codegen.parallel_compilation = Some(false);
+
         cfg.debug.address_map = Some(self.wasmtime.generate_address_map);
         cfg.opts.opt_level = Some(self.wasmtime.opt_level.to_wasmtime());
         cfg.opts.regalloc_algorithm = Some(self.wasmtime.regalloc_algorithm.to_wasmtime());
@@ -304,7 +304,6 @@ impl Config {
             Some(self.module_config.config.shared_everything_threads_enabled);
         cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
         cfg.wasm.exceptions = Some(self.module_config.config.exceptions_enabled);
-        cfg.wasm.legacy_exceptions = Some(self.module_config.legacy_exceptions);
         if !self.module_config.config.simd_enabled {
             cfg.wasm.relaxed_simd = Some(false);
         }
@@ -326,9 +325,32 @@ impl Config {
             && self.wasmtime.pcc
             && !self.module_config.config.memory64_enabled;
 
+        cfg.codegen.inlining = self.wasmtime.inlining;
+
         // Only set cranelift specific flags when the Cranelift strategy is
         // chosen.
         if cranelift_strategy {
+            if let Some(option) = self.wasmtime.inlining_intra_module {
+                cfg.codegen.cranelift.push((
+                    "wasmtime_inlining_intra_module".to_string(),
+                    Some(option.to_string()),
+                ));
+            }
+            if let Some(size) = self.wasmtime.inlining_small_callee_size {
+                cfg.codegen.cranelift.push((
+                    "wasmtime_inlining_small_callee_size".to_string(),
+                    // Clamp to avoid extreme code size blow up.
+                    Some(std::cmp::min(1000, size).to_string()),
+                ));
+            }
+            if let Some(size) = self.wasmtime.inlining_sum_size_threshold {
+                cfg.codegen.cranelift.push((
+                    "wasmtime_inlining_sum_size_threshold".to_string(),
+                    // Clamp to avoid extreme code size blow up.
+                    Some(std::cmp::min(1000, size).to_string()),
+                ));
+            }
+
             // If the wasm-smith-generated module use nan canonicalization then we
             // don't need to enable it, but if it doesn't enable it already then we
             // enable this codegen option.
@@ -554,6 +576,10 @@ pub struct WasmtimeConfig {
     force_jump_veneers: bool,
     memory_init_cow: bool,
     memory_guaranteed_dense_image_size: u64,
+    inlining: Option<bool>,
+    inlining_intra_module: Option<IntraModuleInlining>,
+    inlining_small_callee_size: Option<u32>,
+    inlining_sum_size_threshold: Option<u32>,
     use_precompiled_cwasm: bool,
     async_stack_zeroing: bool,
     /// Configuration for the instance allocation strategy to use.
@@ -636,6 +662,7 @@ impl WasmtimeConfig {
                 config.config.gc_enabled = false;
                 config.config.tail_call_enabled = false;
                 config.config.reference_types_enabled = false;
+                config.config.exceptions_enabled = false;
                 config.function_references_enabled = false;
 
                 // Winch's SIMD implementations require AVX and AVX2.
@@ -813,13 +840,24 @@ impl RegallocAlgorithm {
     fn to_wasmtime(&self) -> wasmtime::RegallocAlgorithm {
         match self {
             RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
-            // Note: we have disabled `single_pass` for now because of
-            // its limitations w.r.t. exception handling
-            // (https://github.com/bytecodealliance/regalloc2/issues/217). To
-            // avoid breaking all existing fuzzbugs by changing the
-            // `arbitrary` mappings, we keep the `RegallocAlgorithm`
-            // enum as it is and remap here to `Backtracking`.
-            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::Backtracking,
+            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::SinglePass,
+        }
+    }
+}
+
+#[derive(Arbitrary, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum IntraModuleInlining {
+    Yes,
+    No,
+    WhenUsingGc,
+}
+
+impl std::fmt::Display for IntraModuleInlining {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IntraModuleInlining::Yes => write!(f, "yes"),
+            IntraModuleInlining::No => write!(f, "no"),
+            IntraModuleInlining::WhenUsingGc => write!(f, "gc"),
         }
     }
 }

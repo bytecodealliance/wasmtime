@@ -1069,7 +1069,7 @@ impl Masm for MacroAssembler {
         match &(lhs, rhs) {
             (rlhs, RegImm::Reg(rrhs)) => {
                 // If the comparison kind is zero or not zero and both operands
-                // are the same register, emit a ands instruction. Else we emit
+                // are the same register, emit an ands instruction. Else we emit
                 // a normal comparison.
                 if (kind == Eq || kind == Ne) && (rlhs == rrhs) {
                     self.asm.ands_rr(*rlhs, *rrhs, size);

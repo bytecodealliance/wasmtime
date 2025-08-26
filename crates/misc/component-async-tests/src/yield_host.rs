@@ -8,13 +8,6 @@ pub mod bindings {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "yield-host",
-        concurrent_imports: true,
-        concurrent_exports: true,
-        async: {
-            only_imports: [
-                "local:local/ready#[async]when-ready",
-            ]
-        },
     });
 }
 
@@ -43,7 +36,7 @@ impl bindings::local::local::ready::Host for Ctx {
     }
 }
 
-impl bindings::local::local::ready::HostConcurrent for Ctx {
+impl bindings::local::local::ready::HostWithStore for Ctx {
     async fn when_ready<T>(accessor: &Accessor<T, Self>) {
         let wakers = accessor.with(|mut view| view.get().wakers.clone());
         future::poll_fn(move |cx| {

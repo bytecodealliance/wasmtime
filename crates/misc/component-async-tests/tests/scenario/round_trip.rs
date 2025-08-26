@@ -15,7 +15,7 @@ use futures::{
 };
 use wasmtime::component::{Accessor, AccessorTask, HasSelf, Instance, Linker, ResourceTable, Val};
 use wasmtime::{Engine, Store};
-use wasmtime_wasi::p2::WasiCtxBuilder;
+use wasmtime_wasi::WasiCtxBuilder;
 
 #[tokio::test]
 pub async fn async_round_trip_stackful() -> Result<()> {
@@ -341,7 +341,7 @@ pub async fn test_round_trip(
                     *expected,
                     &round_trip
                         .local_local_baz()
-                        .call_foo(&mut store, (*input).to_owned())
+                        .call_foo(&mut store, input)
                         .await?
                 );
             }

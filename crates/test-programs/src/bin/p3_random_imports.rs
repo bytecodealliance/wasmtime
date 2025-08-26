@@ -20,8 +20,8 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         }
 
         // The `insecure_seed` API should return the same result each time.
-        let (a1, b1) = random::insecure_seed::insecure_seed();
-        let (a2, b2) = random::insecure_seed::insecure_seed();
+        let (a1, b1) = random::insecure_seed::get_insecure_seed();
+        let (a2, b2) = random::insecure_seed::get_insecure_seed();
         assert_eq!(a1, a2);
         assert_eq!(b1, b2);
 

@@ -10,7 +10,7 @@ You can execute this example with:
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::*;
 use wasmtime_wasi::p2::bindings::Command;
-use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
 pub struct ComponentRunStates {
     // These two are required basically as a standard way to enable the impl of IoView and
@@ -21,14 +21,12 @@ pub struct ComponentRunStates {
     // You can add other custom host states if needed
 }
 
-impl IoView for ComponentRunStates {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.resource_table
-    }
-}
 impl WasiView for ComponentRunStates {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi_ctx
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi_ctx,
+            table: &mut self.resource_table,
+        }
     }
 }
 
@@ -42,9 +40,9 @@ async fn main() -> Result<()> {
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 
     // Create a WASI context and put it in a Store; all instances in the store
-    // share this context. `WasiCtxBuilder` provides a number of ways to
+    // share this context. `WasiCtx` provides a number of ways to
     // configure what the target program will have access to.
-    let wasi = WasiCtxBuilder::new().inherit_stdio().inherit_args().build();
+    let wasi = WasiCtx::builder().inherit_stdio().inherit_args().build();
     let state = ComponentRunStates {
         wasi_ctx: wasi,
         resource_table: ResourceTable::new(),

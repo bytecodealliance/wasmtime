@@ -16,7 +16,7 @@ include = ["src/**/*", "README.md", "LICENSE", "witx/*", "wit/**/*", "tests/*"]
 workspace = true
 
 [dependencies]
-wasmtime = { workspace = true, features = ["component-model", "async", "runtime", "std"] }
+wasmtime = { workspace = true, features = ["runtime", "std"] }
 wasmtime-wasi-io = { workspace = true, features = ["std"] }
 anyhow = { workspace = true }
 wiggle = { workspace = true, optional = true, features = ["wasmtime"] }
@@ -45,6 +45,7 @@ test-programs-artifacts = { workspace = true }
 tempfile = { workspace = true }
 wasmtime = { workspace = true, features = ['cranelift', 'incremental-cache'] }
 wasmtime-test-util = { workspace = true }
+env_logger = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["event", "fs", "net"] }
@@ -55,10 +56,10 @@ windows-sys = { workspace = true }
 rustix = { workspace = true, features = ["event", "net"] }
 
 [features]
-default = ["preview1"]
-preview1 = [
-    "dep:wiggle",
-]
+default = ["p1", "p2"]
+p0 = ["p1"]
+p1 = ["dep:wiggle", "p2"]
+p2 = ["wasmtime/component-model", "wasmtime/async"]
 p3 = [
     "wasmtime/component-model-async",
     "wasmtime/component-model-async-bytes",
@@ -67,4 +68,3 @@ p3 = [
 [[test]]
 name = "process_stdin"
 harness = false
-

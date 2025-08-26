@@ -279,9 +279,10 @@ impl Config {
 
             // When running under MIRI try to optimize for compile time of wasm
             // code itself as much as possible. Disable optimizations by
-            // default.
+            // default and use the fastest regalloc available to us.
             if cfg!(miri) {
                 ret.cranelift_opt_level(OptLevel::None);
+                ret.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
             }
         }
 
@@ -1186,7 +1187,10 @@ impl Config {
         self
     }
 
-    #[doc(hidden)] // FIXME(#3427) - if/when implemented then un-hide this
+    /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
+    ///
+    /// [proposal]: https://github.com/WebAssembly/exception-handling
+    #[cfg(feature = "gc")]
     pub fn wasm_exceptions(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::EXCEPTIONS, enable);
         self
@@ -1296,6 +1300,7 @@ impl Config {
     pub fn cranelift_regalloc_algorithm(&mut self, algo: RegallocAlgorithm) -> &mut Self {
         let val = match algo {
             RegallocAlgorithm::Backtracking => "backtracking",
+            RegallocAlgorithm::SinglePass => "single_pass",
         };
         self.compiler_config
             .settings
@@ -1398,8 +1403,8 @@ impl Config {
 
     /// Set a custom [`Cache`].
     ///
-    /// To load a cache from a file, use [`Cache::from_file`]. Otherwise, you can create a new
-    /// cache config using [`CacheConfig::new`] and passing that to [`Cache::new`].
+    /// To load a cache configuration from a file, use [`Cache::from_file`]. Otherwise, you can
+    /// create a new cache config using [`CacheConfig::new`] and passing that to [`Cache::new`].
     ///
     /// If you want to disable the cache, you can call this method with `None`.
     ///
@@ -2027,6 +2032,25 @@ impl Config {
         self
     }
 
+    /// Whether to enable function inlining during compilation or not.
+    ///
+    /// This may result in faster execution at runtime, but adds additional
+    /// compilation time. Inlining may also enlarge the size of compiled
+    /// artifacts (for example, the size of the result of
+    /// [`Engine::precompile_component`]).
+    ///
+    /// Inlining is not supported by all of Wasmtime's compilation strategies;
+    /// currently, it only Cranelift supports it. This setting will be ignored
+    /// when using a compilation strategy that does not support inlining, like
+    /// Winch.
+    ///
+    /// Note that inlining is still somewhat experimental at the moment (as of
+    /// the Wasmtime version 36).
+    pub fn compiler_inlining(&mut self, inlining: bool) -> &mut Self {
+        self.tunables.inlining = Some(inlining);
+        self
+    }
+
     /// Returns the set of features that the currently selected compiler backend
     /// does not support at all and may panic on.
     ///
@@ -2207,9 +2231,16 @@ impl Config {
         if self.max_wasm_stack == 0 {
             bail!("max_wasm_stack size cannot be zero");
         }
-        #[cfg(not(feature = "wmemcheck"))]
-        if self.wmemcheck {
+        if !cfg!(feature = "wmemcheck") && self.wmemcheck {
             bail!("wmemcheck (memory checker) was requested but is not enabled in this build");
+        }
+
+        if !cfg!(feature = "gc") && features.gc_types() {
+            bail!("support for GC was disabled at compile time")
+        }
+
+        if !cfg!(feature = "gc") && features.contains(WasmFeatures::EXCEPTIONS) {
+            bail!("exceptions support requires garbage collection (GC) to be enabled in the build");
         }
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
@@ -2497,6 +2528,7 @@ impl Config {
         }
 
         // Apply compiler settings and flags
+        compiler.set_tunables(tunables.clone())?;
         for (k, v) in self.compiler_config.settings.iter() {
             compiler.set(k, v)?;
         }
@@ -2509,7 +2541,6 @@ impl Config {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }
 
-        compiler.set_tunables(tunables.clone())?;
         compiler.wmemcheck(self.compiler_config.wmemcheck);
 
         Ok((self, compiler.build()?))
@@ -2603,40 +2634,72 @@ impl Config {
     /// Configures Wasmtime to not use signals-based trap handlers, for example
     /// disables `SIGILL` and `SIGSEGV` handler registration on Unix platforms.
     ///
+    /// > **Note:** this option has important performance ramifications, be sure
+    /// > to understand the implications. Wasm programs have been measured to
+    /// > run up to 2x slower when signals-based traps are disabled.
+    ///
     /// Wasmtime will by default leverage signals-based trap handlers (or the
     /// platform equivalent, for example "vectored exception handlers" on
-    /// Windows) to make generated code more efficient. For example an
-    /// out-of-bounds load in WebAssembly will result in a `SIGSEGV` on Unix
-    /// that is caught by a signal handler in Wasmtime by default. Another
-    /// example is divide-by-zero is reported by hardware rather than
-    /// explicitly checked and Wasmtime turns that into a trap.
+    /// Windows) to make generated code more efficient. For example, when
+    /// Wasmtime can use signals-based traps, it can elide explicit bounds
+    /// checks for Wasm linear memory accesses, instead relying on virtual
+    /// memory guard pages to raise a `SIGSEGV` (on Unix) for out-of-bounds
+    /// accesses, which Wasmtime's runtime then catches and handles. Another
+    /// example is divide-by-zero: with signals-based traps, Wasmtime can let
+    /// the hardware raise a trap when the divisor is zero. Without
+    /// signals-based traps, Wasmtime must explicitly emit additional
+    /// instructions to check for zero and conditionally branch to a trapping
+    /// code path.
     ///
-    /// Some environments however may not have easy access to signal handlers.
-    /// For example embedded scenarios may not support virtual memory. Other
+    /// Some environments however may not have access to signal handlers. For
+    /// example embedded scenarios may not support virtual memory. Other
     /// environments where Wasmtime is embedded within the surrounding
     /// environment may require that new signal handlers aren't registered due
     /// to the global nature of signal handlers. This option exists to disable
-    /// the signal handler registration when required.
+    /// the signal handler registration when required for these scenarios.
     ///
-    /// When signals-based trap handlers are disabled then generated code will
-    /// never rely on segfaults or other signals. Generated code will be slower
-    /// because bounds checks must be explicit along with other operations like
-    /// integer division which must check for zero.
+    /// When signals-based trap handlers are disabled, then Wasmtime and its
+    /// generated code will *never* rely on segfaults or other
+    /// signals. Generated code will be slower because bounds must be explicitly
+    /// checked along with other conditions like division by zero.
     ///
-    /// When this option is disable it additionally requires that the
+    /// The following additional factors can also affect Wasmtime's ability to
+    /// elide explicit bounds checks and leverage signals-based traps:
+    ///
+    /// * The [`Config::memory_reservation`] and [`Config::memory_guard_size`]
+    ///   settings
+    /// * The index type of the linear memory (e.g. 32-bit or 64-bit)
+    /// * The page size of the linear memory
+    ///
+    /// When this option is disabled, the
     /// `enable_heap_access_spectre_mitigation` and
-    /// `enable_table_access_spectre_mitigation` Cranelift settings are
+    /// `enable_table_access_spectre_mitigation` Cranelift settings must also be
     /// disabled. This means that generated code must have spectre mitigations
     /// disabled. This is because spectre mitigations rely on faults from
     /// loading from the null address to implement bounds checks.
     ///
-    /// This option defaults to `true` meaning that signals-based trap handlers
-    /// are enabled by default.
+    /// This option defaults to `true`: signals-based trap handlers are enabled
+    /// by default.
     ///
-    /// **Note** Disabling this option is not compatible with the Winch compiler.
+    /// > **Note:** Disabling this option is not compatible with the Winch
+    /// > compiler.
     pub fn signals_based_traps(&mut self, enable: bool) -> &mut Self {
         self.tunables.signals_based_traps = Some(enable);
         self
+    }
+
+    /// Enable/disable GC support in Wasmtime entirely.
+    ///
+    /// This flag can be used to gate whether GC infrastructure is enabled or
+    /// initialized in Wasmtime at all. Wasmtime's GC implementation is required
+    /// for the [`Self::wasm_gc`] proposal, [`Self::wasm_function_references`],
+    /// and [`Self::wasm_exceptions`] at this time. None of those proposal can
+    /// be enabled without also having this option enabled.
+    ///
+    /// This option defaults to whether the crate `gc` feature is enabled or
+    /// not.
+    pub fn gc_support(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::GC_TYPES, enable)
     }
 }
 
@@ -2873,6 +2936,16 @@ pub enum RegallocAlgorithm {
     /// results in better register utilization, producing fewer spills
     /// and moves, but can cause super-linear compile runtime.
     Backtracking,
+    /// Generates acceptable code very quickly.
+    ///
+    /// This algorithm performs a single pass through the code,
+    /// guaranteed to work in linear time.  (Note that the rest of
+    /// Cranelift is not necessarily guaranteed to run in linear time,
+    /// however.) It cannot undo earlier decisions, however, and it
+    /// cannot foresee constraints or issues that may occur further
+    /// ahead in the code, so the code may have more spills and moves as
+    /// a result.
+    SinglePass,
 }
 
 /// Select which profiling technique to support.
@@ -2913,16 +2986,17 @@ pub enum WasmBacktraceDetails {
     Environment,
 }
 
-/// Describe the tri-state configuration of memory protection keys (MPK).
+/// Describe the tri-state configuration of keys such as MPK or PAGEMAP_SCAN.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum MpkEnabled {
-    /// Use MPK if supported by the current system; fall back to guard regions
-    /// otherwise.
+pub enum Enabled {
+    /// Enable this feature if it's detected on the host system, otherwise leave
+    /// it disabled.
     Auto,
-    /// Use MPK or fail if not supported.
-    Enable,
-    /// Do not use MPK.
-    Disable,
+    /// Enable this feature and fail configuration if the feature is not
+    /// detected on the host system.
+    Yes,
+    /// Do not enable this feature, even if the host system supports it.
+    No,
 }
 
 /// Configuration options used with [`InstanceAllocationStrategy::Pooling`] to
@@ -3445,11 +3519,11 @@ impl PoolingAllocationConfig {
     ///
     /// - `auto`: if MPK support is available the guard regions are removed; if
     ///   not, the guard regions remain
-    /// - `enable`: use MPK to eliminate guard regions; fail if MPK is not
+    /// - `yes`: use MPK to eliminate guard regions; fail if MPK is not
     ///   supported
-    /// - `disable`: never use MPK
+    /// - `no`: never use MPK
     ///
-    /// By default this value is `disabled`, but may become `auto` in future
+    /// By default this value is `no`, but may become `auto` in future
     /// releases.
     ///
     /// __WARNING__: this configuration options is still experimental--use at
@@ -3457,7 +3531,7 @@ impl PoolingAllocationConfig {
     /// regions; you may observe segmentation faults if anything is
     /// misconfigured.
     #[cfg(feature = "memory-protection-keys")]
-    pub fn memory_protection_keys(&mut self, enable: MpkEnabled) -> &mut Self {
+    pub fn memory_protection_keys(&mut self, enable: Enabled) -> &mut Self {
         self.config.memory_protection_keys = enable;
         self
     }
@@ -3483,7 +3557,7 @@ impl PoolingAllocationConfig {
     /// Check if memory protection keys (MPK) are available on the current host.
     ///
     /// This is a convenience method for determining MPK availability using the
-    /// same method that [`MpkEnabled::Auto`] does. See
+    /// same method that [`Enabled::Auto`] does. See
     /// [`PoolingAllocationConfig::memory_protection_keys`] for more
     /// information.
     #[cfg(feature = "memory-protection-keys")]
@@ -3503,6 +3577,45 @@ impl PoolingAllocationConfig {
     pub fn total_gc_heaps(&mut self, count: u32) -> &mut Self {
         self.config.limits.total_gc_heaps = count;
         self
+    }
+
+    /// Configures whether the Linux-specific [`PAGEMAP_SCAN` ioctl][ioctl] is
+    /// used to help reset linear memory.
+    ///
+    /// When [`Self::linear_memory_keep_resident`] or
+    /// [`Self::table_keep_resident`] options are configured to nonzero values
+    /// the default behavior is to `memset` the lowest addresses of a table or
+    /// memory back to their original contents. With the `PAGEMAP_SCAN` ioctl on
+    /// Linux this can be done to more intelligently scan for resident pages in
+    /// the region and only reset those pages back to their original contents
+    /// with `memset` rather than assuming the low addresses are all resident.
+    ///
+    /// This ioctl has the potential to provide a number of performance benefits
+    /// in high-reuse and high concurrency scenarios. Notably this enables
+    /// Wasmtime to scan the entire region of WebAssembly linear memory and
+    /// manually reset memory back to its original contents, up to
+    /// [`Self::linear_memory_keep_resident`] bytes, possibly skipping an
+    /// `madvise` entirely. This can be more efficient by avoiding removing
+    /// pages from the address space entirely and additionally ensuring that
+    /// future use of the linear memory doesn't incur page faults as the pages
+    /// remain resident.
+    ///
+    /// At this time this configuration option is still being evaluated as to
+    /// how appropriate it is for all use cases. It currently defaults to
+    /// `no` or disabled but may change to `auto`, enable if supported, in the
+    /// future. This option is only supported on Linux and requires a kernel
+    /// version of 6.7 or higher.
+    ///
+    /// [ioctl]: https://www.man7.org/linux/man-pages/man2/PAGEMAP_SCAN.2const.html
+    pub fn pagemap_scan(&mut self, enable: Enabled) -> &mut Self {
+        self.config.pagemap_scan = enable;
+        self
+    }
+
+    /// Tests whether [`Self::pagemap_scan`] is available or not on the host
+    /// system.
+    pub fn is_pagemap_scan_available() -> bool {
+        crate::runtime::vm::PoolingInstanceAllocatorConfig::is_pagemap_scan_available()
     }
 }
 

@@ -77,6 +77,24 @@ impl Frame {
     pub fn fp(&self) -> usize {
         self.fp
     }
+
+    /// Read out a machine-word-sized value at the given offset from
+    /// FP in this frame.
+    ///
+    /// # Safety
+    ///
+    /// Requires that this frame is a valid, active frame. A `Frame`
+    /// provided by `visit_frames()` will be valid for the duration of
+    /// the invoked closure.
+    ///
+    /// Requires that `offset` falls within the size of this
+    /// frame. This ordinarily requires knowledge passed from the
+    /// compiler that produced the running function, e.g., Cranelift.
+    pub unsafe fn read_slot_from_fp(&self, offset: isize) -> usize {
+        // SAFETY: we required that this is a valid frame, and that
+        // `offset` is a valid offset within that frame.
+        unsafe { *(self.fp.wrapping_add_signed(offset) as *mut usize) }
+    }
 }
 
 /// Walk through a contiguous sequence of Wasm frames starting with
@@ -142,7 +160,7 @@ pub unsafe fn visit_frames<R>(
     //
     // The trampoline records its own frame pointer (`trampoline_fp`),
     // which is guaranteed to be above all Wasm code. To check when
-    // we've reached the trampoline frame, it is therefore sufficient
+
     // to check when the next frame pointer is equal to
     // `trampoline_fp`. Once that's hit then we know that the entire
     // linked list has been traversed.
@@ -180,7 +198,7 @@ pub unsafe fn visit_frames<R>(
 
             // We rely on this offset being zero for all supported
             // architectures in
-            // `crates/cranelift/src/component/compiler.rs` when we set
+            // `crates/cranelift/src/component/compiler.s`r when we set
             // the Wasm exit FP. If this ever changes, we will need to
             // update that code as well!
             assert_eq!(unwind.next_older_fp_from_fp_offset(), 0);

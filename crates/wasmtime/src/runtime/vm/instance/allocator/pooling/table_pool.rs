@@ -2,14 +2,14 @@ use super::{
     TableAllocationIndex,
     index_allocator::{SimpleIndexAllocator, SlotId},
 };
-use crate::runtime::vm::sys::vm::commit_pages;
+use crate::runtime::vm::sys::vm::{PageMap, commit_pages, reset_with_pagemap};
 use crate::runtime::vm::{
     InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig, SendSyncPtr, Table,
     mmap::AlignedLength,
 };
 use crate::{prelude::*, vm::HostAlignedByteCount};
 use std::ptr::NonNull;
-use wasmtime_environ::{Module, Tunables};
+use wasmtime_environ::Module;
 
 /// Represents a pool of WebAssembly tables.
 ///
@@ -130,12 +130,12 @@ impl TablePool {
     }
 
     /// Allocate a single table for the given instance allocation request.
-    pub fn allocate(
+    pub async fn allocate(
         &self,
-        request: &mut InstanceAllocationRequest,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         ty: &wasmtime_environ::Table,
-        tunables: &Tunables,
     ) -> Result<(TableAllocationIndex, Table)> {
+        let tunables = request.store.engine().tunables();
         let allocation_index = self
             .index_allocator
             .alloc()
@@ -143,29 +143,45 @@ impl TablePool {
             .ok_or_else(|| {
                 super::PoolConcurrencyLimitError::new(self.max_total_tables, "tables")
             })?;
+        let mut guard = DeallocateIndexGuard {
+            pool: self,
+            allocation_index,
+            active: true,
+        };
 
-        match (|| {
-            let base = self.get(allocation_index);
-            let data_size = self.data_size(crate::vm::table::wasm_to_table_type(ty.ref_type));
-            unsafe {
-                commit_pages(base, data_size)?;
-            }
+        let base = self.get(allocation_index);
+        let data_size = self.data_size(crate::vm::table::wasm_to_table_type(ty.ref_type));
+        unsafe {
+            commit_pages(base, data_size)?;
+        }
 
-            let ptr =
-                NonNull::new(std::ptr::slice_from_raw_parts_mut(base.cast(), data_size)).unwrap();
-            unsafe {
-                Table::new_static(
-                    ty,
-                    tunables,
-                    SendSyncPtr::new(ptr),
-                    &mut *request.store.get().unwrap(),
-                )
-            }
-        })() {
-            Ok(table) => Ok((allocation_index, table)),
-            Err(e) => {
-                self.index_allocator.free(SlotId(allocation_index.0));
-                Err(e)
+        let ptr = NonNull::new(std::ptr::slice_from_raw_parts_mut(base.cast(), data_size)).unwrap();
+        let table = unsafe {
+            Table::new_static(
+                ty,
+                tunables,
+                SendSyncPtr::new(ptr),
+                request.limiter.as_deref_mut(),
+            )
+            .await?
+        };
+        guard.active = false;
+        return Ok((allocation_index, table));
+
+        struct DeallocateIndexGuard<'a> {
+            pool: &'a TablePool,
+            allocation_index: TableAllocationIndex,
+            active: bool,
+        }
+
+        impl Drop for DeallocateIndexGuard<'_> {
+            fn drop(&mut self) {
+                if !self.active {
+                    return;
+                }
+                self.pool
+                    .index_allocator
+                    .free(SlotId(self.allocation_index.0));
             }
         }
     }
@@ -198,34 +214,29 @@ impl TablePool {
     /// table pool once it is zeroed and decommitted.
     pub unsafe fn reset_table_pages_to_zero(
         &self,
+        pagemap: Option<&PageMap>,
         allocation_index: TableAllocationIndex,
         table: &mut Table,
-        mut decommit: impl FnMut(*mut u8, usize),
+        decommit: impl FnMut(*mut u8, usize),
     ) {
         assert!(table.is_static());
         let base = self.get(allocation_index);
-        let size = HostAlignedByteCount::new_rounded_up(self.data_size(table.element_type()))
+        let table_byte_size = table.size() * table.element_type().element_size();
+        let table_byte_size_page_aligned = HostAlignedByteCount::new_rounded_up(table_byte_size)
             .expect("table entry size doesn't overflow");
 
-        // `memset` the first `keep_resident` bytes.
-        let size_to_memset = size.min(self.keep_resident);
-
-        // SAFETY: the contract of this function requires that the table is not
-        // actively in use so it's safe to pave over its allocation with zero
-        // bytes.
+        // SAFETY: The `base` pointer is valid for `size` bytes and is safe to
+        // mutate here given the contract of our own function.
         unsafe {
-            std::ptr::write_bytes(base, 0, size_to_memset.byte_count());
+            reset_with_pagemap(
+                pagemap,
+                base,
+                table_byte_size_page_aligned,
+                self.keep_resident,
+                |slice| slice.fill(0),
+                decommit,
+            )
         }
-
-        // And decommit the rest of it.
-        decommit(
-            // SAFETY: `size_to_memset` is less than the size of the allocation,
-            // so it's safe to use the `add` intrinsic.
-            unsafe { base.add(size_to_memset.byte_count()) },
-            size.checked_sub(size_to_memset)
-                .expect("size_to_memset <= size")
-                .byte_count(),
-        );
     }
 }
 

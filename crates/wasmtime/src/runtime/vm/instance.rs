@@ -2,26 +2,22 @@
 //! wasm module (except its callstack and register state). An
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
-#![warn(
-    unsafe_op_in_unsafe_fn,
-    reason = "opt-in until the crate opts-in as a whole -- #11180"
-)]
-
+use crate::OpaqueRootScope;
 use crate::prelude::*;
 use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::runtime::vm::export::Export;
 use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
-use crate::runtime::vm::table::{Table, TableElement, TableElementType};
+use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStoreContext,
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    GcStore, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMGlobalKind, VMStore,
-    VMStoreRawPtr, VmPtr, VmSafe, WasmFault,
+    GcStore, HostResult, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGlobalKind, VMStore,
+    VMStoreRawPtr, VmPtr, VmSafe, WasmFault, catch_unwind_and_record_trap,
 };
-use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque};
+use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::marker;
@@ -37,138 +33,13 @@ use wasmtime_environ::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex,
     ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex, HostPtr, MemoryIndex,
     Module, PrimaryMap, PtrSize, TableIndex, TableInitialValue, TableSegmentElements, TagIndex,
-    Trap, VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
-    packed_option::ReservedValue,
+    Trap, VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex, packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
 
 mod allocator;
 pub use allocator::*;
-
-/// The pair of an instance and a raw pointer its associated store.
-///
-/// ### Safety
-///
-/// > **Note**: it's known that the documentation below is documenting an
-/// > unsound pattern and we're in the process of fixing it, but it'll take
-/// > some time to refactor. Notably `unpack_mut` is not sound because the
-/// > returned store pointer can be used to accidentally alias the instance
-/// > pointer returned as well.
-///
-/// Getting a borrow of a vmctx's store is one of the fundamental bits of unsafe
-/// code in Wasmtime. No matter how we architect the runtime, some kind of
-/// unsafe conversion from a raw vmctx pointer that Wasm is using into a Rust
-/// struct must happen.
-///
-/// It is our responsibility to ensure that multiple (exclusive) borrows of the
-/// vmctx's store never exist at the same time. The distinction between the
-/// `Instance` type (which doesn't expose its underlying vmctx pointer or a way
-/// to get a borrow of its associated store) and this type (which does) is
-/// designed to help with that.
-///
-/// Going from a `*mut VMContext` to a `&mut StoreInner<T>` is naturally unsafe
-/// due to the raw pointer usage, but additionally the `T` type parameter needs
-/// to be the same `T` that was used to define the `dyn VMStore` trait object
-/// that was stuffed into the vmctx.
-///
-/// ### Usage
-///
-/// Usage generally looks like:
-///
-/// 1. You get a raw `*mut VMContext` from Wasm
-///
-/// 2. You call `InstanceAndStore::from_vmctx` on that raw pointer
-///
-/// 3. You then call `InstanceAndStore::unpack_mut` (or another helper) to get
-///    the underlying `Pin<&mut Instance>` and `&mut dyn VMStore` (or `&mut
-///    StoreInner<T>`).
-///
-/// 4. You then use whatever `Instance` methods you need to, each of which take
-///    a store argument as necessary.
-///
-/// In step (4) you no longer need to worry about double exclusive borrows of
-/// the store, so long as you don't do (1-2) again. Note also that the borrow
-/// checker prevents repeating step (3) if you never repeat (1-2). In general,
-/// steps (1-3) should be done in a single, common, internally-unsafe,
-/// plumbing-code bottleneck and the raw pointer should never be exposed to Rust
-/// code that does (4) after the `InstanceAndStore` is created. Follow this
-/// pattern, and everything using the resulting `Instance` and `Store` can be
-/// safe code (at least, with regards to accessing the store itself).
-///
-/// As an illustrative example, the common plumbing code for our various
-/// libcalls performs steps (1-3) before calling into each actual libcall
-/// implementation function that does (4). The plumbing code hides the raw vmctx
-/// pointer and never gives out access to it to the libcall implementation
-/// functions, nor does an `Instance` expose its internal vmctx pointer, which
-/// would allow unsafely repeating steps (1-2).
-#[repr(transparent)]
-pub struct InstanceAndStore {
-    instance: Instance,
-}
-
-impl InstanceAndStore {
-    /// Converts the provided `*mut VMContext` to an `InstanceAndStore`
-    /// reference and calls the provided closure with it.
-    ///
-    /// This method will move the `vmctx` pointer backwards to point to the
-    /// original `Instance` that precedes it. The closure is provided a
-    /// temporary reference to the `InstanceAndStore` with a constrained
-    /// lifetime to ensure that it doesn't accidentally escape.
-    ///
-    /// # Safety
-    ///
-    /// Callers must validate that the `vmctx` pointer is a valid allocation and
-    /// that it's valid to acquire `&mut InstanceAndStore` at this time. For
-    /// example this can't be called twice on the same `VMContext` to get two
-    /// active mutable borrows to the same `InstanceAndStore`.
-    ///
-    /// See also the safety discussion in this type's documentation.
-    #[inline]
-    pub(crate) unsafe fn from_vmctx<R>(
-        vmctx: NonNull<VMContext>,
-        f: impl for<'a> FnOnce(&'a mut Self) -> R,
-    ) -> R {
-        const _: () = assert!(mem::size_of::<InstanceAndStore>() == mem::size_of::<Instance>());
-        // SAFETY: The validity of this `byte_sub` relies on `vmctx` being a
-        // valid allocation which is itself a contract of this function.
-        let mut ptr = unsafe {
-            vmctx
-                .byte_sub(mem::size_of::<Instance>())
-                .cast::<InstanceAndStore>()
-        };
-
-        // SAFETY: the ability to interpret `vmctx` as a safe pointer and
-        // continue on is a contract of this function itself, so the safety here
-        // is effectively up to callers.
-        unsafe { f(ptr.as_mut()) }
-    }
-
-    /// Unpacks this `InstanceAndStore` into its underlying `Instance` and `dyn
-    /// VMStore`.
-    #[inline]
-    pub(crate) fn unpack_mut(&mut self) -> (Pin<&mut Instance>, &mut dyn VMStore) {
-        unsafe {
-            let store = &mut *self.store_ptr();
-            (Pin::new_unchecked(&mut self.instance), store)
-        }
-    }
-
-    /// Gets a pointer to this instance's `Store` which was originally
-    /// configured on creation.
-    ///
-    /// # Panics
-    ///
-    /// May panic if the originally configured store was `None`. That can happen
-    /// for host functions so host functions can't be queried what their
-    /// original `Store` was since it's just retained as null (since host
-    /// functions are shared amongst threads and don't all share the same
-    /// store).
-    #[inline]
-    fn store_ptr(&self) -> *mut dyn VMStore {
-        self.instance.store.unwrap().0.as_ptr()
-    }
-}
 
 /// A type that roughly corresponds to a WebAssembly instance, but is also used
 /// for host-defined objects.
@@ -275,7 +146,13 @@ impl Instance {
     ///
     /// It is assumed the memory was properly aligned and the
     /// allocation was `alloc_size` in bytes.
-    fn new(
+    ///
+    /// # Safety
+    ///
+    /// The `req.imports` field must be appropriately sized/typed for the module
+    /// being allocated according to `req.runtime_info`. Additionally `memories`
+    /// and `tables` must have been allocated for `req.store`.
+    unsafe fn new(
         req: InstanceAllocationRequest,
         memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
         tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
@@ -297,7 +174,7 @@ impl Instance {
             dropped_data,
             #[cfg(feature = "wmemcheck")]
             wmemcheck_state: {
-                if req.wmemcheck {
+                if req.store.engine().config().wmemcheck {
                     let size = memory_tys
                         .iter()
                         .next()
@@ -325,6 +202,54 @@ impl Instance {
             );
         }
         ret
+    }
+
+    /// Encapsulated entrypoint to the host from WebAssembly, converting a raw
+    /// `VMContext` pointer into a `VMStore` plus an `InstanceId`.
+    ///
+    /// This is an entrypoint for core wasm entering back into the host. This is
+    /// used for both host functions and libcalls for example. This will execute
+    /// the closure `f` with safer Internal types than a raw `VMContext`
+    /// pointer.
+    ///
+    /// The closure `f` will have its errors caught, handled, and translated to
+    /// an ABI-safe return value to give back to wasm. This includes both normal
+    /// errors such as traps as well as panics.
+    ///
+    /// # Safety
+    ///
+    /// Callers must ensure that `vmctx` is a valid allocation and is safe to
+    /// dereference at this time. That's generally only true when it's a
+    /// wasm-provided value and this is the first function called after entering
+    /// the host. Otherwise this could unsafely alias the store with a mutable
+    /// pointer, for example.
+    #[inline]
+    pub(crate) unsafe fn enter_host_from_wasm<R>(
+        vmctx: NonNull<VMContext>,
+        f: impl FnOnce(&mut dyn VMStore, InstanceId) -> R,
+    ) -> R::Abi
+    where
+        R: HostResult,
+    {
+        // SAFETY: The validity of this `byte_sub` relies on `vmctx` being a
+        // valid allocation which is itself a contract of this function.
+        // Additionally `as_mut` requires that the pointer is valid, which is
+        // also a contract of this function. The lifetime of the reference will
+        // be constrained by the closure `f` provided to this function which
+        // inherently can't have the pointer escape, so the lifetime is scoped
+        // here.
+        let (store, instance) = unsafe {
+            let instance = vmctx
+                .byte_sub(mem::size_of::<Instance>())
+                .cast::<Instance>()
+                .as_mut();
+            let store = &mut *instance.store.unwrap().0.as_ptr();
+            (store, instance.id)
+        };
+
+        // Thread the `store` and `instance` through panic/trap infrastructure
+        // back into `f`.
+        catch_unwind_and_record_trap(store, |store| f(store, instance))
     }
 
     /// Converts the provided `*mut VMContext` to an `Instance` pointer and
@@ -359,6 +284,14 @@ impl Instance {
     ///
     /// This function requires that the `vmctx` pointer is indeed valid and
     /// from the store that `self` belongs to.
+    ///
+    /// (Note that it is *NOT* required that `vmctx` be distinct from this
+    /// instance's `vmctx`, or that usage of the resulting instance is limited
+    /// to its defined items! The returned borrow has the same lifetime as
+    /// `self`, which means that this instance cannot be used while the
+    /// resulting instance is in use, and we therefore do not need to worry
+    /// about mutable aliasing between this instance and the resulting
+    /// instance.)
     #[inline]
     unsafe fn sibling_vmctx_mut<'a>(
         self: Pin<&'a mut Self>,
@@ -378,6 +311,33 @@ impl Instance {
         // too-long lifetime. Finally mutable references to an instance are
         // always through `Pin`, so it's safe to create a pin-pointer here.
         unsafe { Pin::new_unchecked(ptr.as_mut()) }
+    }
+
+    /// Accessor from a raw `vmctx` to `&vm::Instance`, given a store.
+    ///
+    /// This is like the above `sibling_vmctx{,_mut}` accessors, but
+    /// takes the store explicitly rather than inferring it from an
+    /// existing instance in the store.
+    ///
+    /// # Safety
+    ///
+    /// The `vmctx` pointer must be a valid vmctx from an active
+    /// instance that belongs to the given `store`.
+    #[inline]
+    pub unsafe fn from_vmctx<'a>(
+        _store: &'a StoreOpaque,
+        vmctx: NonNull<VMContext>,
+    ) -> &'a Instance {
+        // SAFETY: The validity of this `byte_sub` relies on `vmctx`
+        // being a valid allocation which is itself a contract of this
+        // function. Likewise, the `.as_ref()` converts a valid `*mut
+        // Instance` to a `&Instance`.
+        unsafe {
+            vmctx
+                .byte_sub(mem::size_of::<Instance>())
+                .cast::<Instance>()
+                .as_ref()
+        }
     }
 
     pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
@@ -493,21 +453,6 @@ impl Instance {
         unsafe { self.vmctx_plus_offset_raw(self.offsets().vmctx_vmglobal_definition(index)) }
     }
 
-    /// Get a raw pointer to the global at the given index regardless whether it
-    /// is defined locally or imported from another module.
-    ///
-    /// Panics if the index is out of bound or is the reserved value.
-    pub(crate) fn defined_or_imported_global_ptr(
-        self: Pin<&mut Self>,
-        index: GlobalIndex,
-    ) -> NonNull<VMGlobalDefinition> {
-        if let Some(index) = self.env_module().defined_global_index(index) {
-            self.global_ptr(index)
-        } else {
-            self.imported_global(index).from.as_non_null()
-        }
-    }
-
     /// Get all globals within this instance.
     ///
     /// Returns both import and defined globals.
@@ -556,35 +501,22 @@ impl Instance {
         unsafe { self.vmctx_plus_offset_mut(offset) }
     }
 
-    pub(crate) unsafe fn set_store(mut self: Pin<&mut Self>, store: Option<NonNull<dyn VMStore>>) {
+    pub(crate) unsafe fn set_store(mut self: Pin<&mut Self>, store: &StoreOpaque) {
         // FIXME: should be more targeted ideally with the `unsafe` than just
         // throwing this entire function in a large `unsafe` block.
         unsafe {
-            *self.as_mut().store_mut() = store.map(VMStoreRawPtr);
-            if let Some(mut store) = store {
-                let store = store.as_mut();
-                self.vm_store_context()
-                    .write(Some(store.vm_store_context_ptr().into()));
-                #[cfg(target_has_atomic = "64")]
-                {
-                    *self.as_mut().epoch_ptr() =
-                        Some(NonNull::from(store.engine().epoch_counter()).into());
-                }
+            *self.as_mut().store_mut() = Some(VMStoreRawPtr(store.traitobj()));
+            self.vm_store_context()
+                .write(Some(store.vm_store_context_ptr().into()));
+            #[cfg(target_has_atomic = "64")]
+            {
+                *self.as_mut().epoch_ptr() =
+                    Some(NonNull::from(store.engine().epoch_counter()).into());
+            }
 
-                if self.env_module().needs_gc_heap {
-                    self.as_mut().set_gc_heap(Some(store.gc_store().expect(
-                        "if we need a GC heap, then `Instance::new_raw` should have already \
-                     allocated it for us",
-                    )));
-                } else {
-                    self.as_mut().set_gc_heap(None);
-                }
+            if self.env_module().needs_gc_heap {
+                self.as_mut().set_gc_heap(Some(store.unwrap_gc_store()));
             } else {
-                self.vm_store_context().write(None);
-                #[cfg(target_has_atomic = "64")]
-                {
-                    *self.as_mut().epoch_ptr() = None;
-                }
                 self.as_mut().set_gc_heap(None);
             }
         }
@@ -667,7 +599,12 @@ impl Instance {
         crate::Memory::from_raw(StoreInstanceId::new(store, id), def_index)
     }
 
-    fn get_exported_global(&self, store: StoreId, index: GlobalIndex) -> crate::Global {
+    /// Lookup a global by index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out-of-bounds for this instance.
+    pub(crate) fn get_exported_global(&self, store: StoreId, index: GlobalIndex) -> crate::Global {
         // If this global is defined within this instance, then that's easy to
         // calculate the `Global`.
         if let Some(def_index) = self.env_module().defined_global_index(index) {
@@ -740,15 +677,18 @@ impl Instance {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages. Returns `Some` with the old size in bytes if growth was
     /// successful.
-    pub(crate) fn memory_grow(
+    pub(crate) async fn memory_grow(
         mut self: Pin<&mut Self>,
-        store: &mut dyn VMStore,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
         idx: DefinedMemoryIndex,
         delta: u64,
     ) -> Result<Option<usize>, Error> {
         let memory = &mut self.as_mut().memories_mut()[idx].1;
 
-        let result = unsafe { memory.grow(delta, Some(store)) };
+        // SAFETY: this is the safe wrapper around `Memory::grow` because it
+        // automatically updates the `VMMemoryDefinition` in this instance after
+        // a growth operation below.
+        let result = unsafe { memory.grow(delta, limiter).await };
 
         // Update the state used by a non-shared Wasm memory in case the base
         // pointer and/or the length changed.
@@ -767,32 +707,18 @@ impl Instance {
         self.get_table(table_index).element_type()
     }
 
-    /// Grow table by the specified amount of elements, filling them with
-    /// `init_value`.
+    /// Performs a grow operation on the `table_index` specified using `grow`.
     ///
-    /// Returns `None` if table can't be grown by the specified amount of
-    /// elements, or if `init_value` is the wrong type of table element.
-    pub(crate) fn defined_table_grow(
+    /// This will handle updating the VMTableDefinition internally as necessary.
+    pub(crate) async fn defined_table_grow(
         mut self: Pin<&mut Self>,
-        store: &mut dyn VMStore,
         table_index: DefinedTableIndex,
-        delta: u64,
-        init_value: TableElement,
-    ) -> Result<Option<usize>, Error> {
-        let table = &mut self
-            .as_mut()
-            .tables_mut()
-            .get_mut(table_index)
-            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
-            .1;
-
-        let result = unsafe { table.grow(delta, init_value, store) };
-
-        // Keep the `VMContext` pointers used by compiled Wasm code up to
-        // date.
+        grow: impl AsyncFnOnce(&mut Table) -> Result<Option<usize>>,
+    ) -> Result<Option<usize>> {
+        let table = self.as_mut().get_defined_table(table_index);
+        let result = grow(table).await;
         let element = table.vmtable();
         self.set_table(table_index, element);
-
         result
     }
 
@@ -953,9 +879,10 @@ impl Instance {
     ///
     /// Returns a `Trap` error when the range within the table is out of bounds
     /// or the range within the passive element is out of bounds.
-    pub(crate) fn table_init(
-        self: Pin<&mut Self>,
+    pub(crate) async fn table_init(
         store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        instance: InstanceId,
         table_index: TableIndex,
         elem_index: ElemIndex,
         dst: u64,
@@ -963,11 +890,14 @@ impl Instance {
         len: u64,
     ) -> Result<(), Trap> {
         let mut storage = None;
-        let elements = self.passive_element_segment(&mut storage, elem_index);
+        let elements = store
+            .instance(instance)
+            .passive_element_segment(&mut storage, elem_index);
         let mut const_evaluator = ConstExprEvaluator::default();
         Self::table_init_segment(
             store,
-            self.id,
+            limiter,
+            instance,
             &mut const_evaluator,
             table_index,
             elements,
@@ -975,10 +905,12 @@ impl Instance {
             src,
             len,
         )
+        .await
     }
 
-    pub(crate) fn table_init_segment(
+    pub(crate) async fn table_init_segment(
         store: &mut StoreOpaque,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         elements_instance_id: InstanceId,
         const_evaluator: &mut ConstExprEvaluator,
         table_index: TableIndex,
@@ -989,105 +921,55 @@ impl Instance {
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
+        let store_id = store.id();
         let elements_instance = store.instance_mut(elements_instance_id);
-        let elements_module = elements_instance.env_module();
-        let top = elements_module.tables[table_index].ref_type.heap_type.top();
-        let (defined_table_index, mut table_instance) =
-            elements_instance.defined_table_index_and_instance(table_index);
-        let table_instance_id = table_instance.id;
+        let table = elements_instance.get_exported_table(store_id, table_index);
+        let table_size = table._size(store);
+
+        // Perform a bounds check on the table being written to. This is done by
+        // ensuring that `dst + len <= table.size()` via checked arithmetic.
+        //
+        // Note that the bounds check for the element segment happens below when
+        // the original segment is sliced via `src` and `len`.
+        table_size
+            .checked_sub(dst)
+            .and_then(|i| i.checked_sub(len))
+            .ok_or(Trap::TableOutOfBounds)?;
 
         let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
         let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
 
-        // In the initialization below we need to simultaneously have a mutable
-        // borrow on the `Table` that we're initializing and the `StoreOpaque`
-        // that it comes from. To solve this the tables are temporarily removed
-        // from the instance at `id` to be re-inserted at the end of this
-        // function via a `Drop` helper. The table and the store are then
-        // accessed through the drop helper below.
-        //
-        // This will cause a runtime panic if the table is actually accessed
-        // during the lifetime of the functions below, but that's a bug if that
-        // happens which needs to be fixed anyway.
-        let tables = mem::replace(table_instance.as_mut().tables_mut(), PrimaryMap::new());
-        let mut replace = ReplaceTables {
-            tables,
-            id: table_instance_id,
-            store,
-        };
-
-        struct ReplaceTables<'a> {
-            tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
-            id: InstanceId,
-            store: &'a mut StoreOpaque,
-        }
-
-        impl Drop for ReplaceTables<'_> {
-            fn drop(&mut self) {
-                mem::swap(
-                    self.store.instance_mut(self.id).tables_mut(),
-                    &mut self.tables,
-                );
-                debug_assert!(self.tables.is_empty());
-            }
-        }
-
-        // Reborrow the table/store from `replace` for the below code.
-        let table = &mut replace.tables[defined_table_index].1;
-        let store = &mut *replace.store;
-
+        let positions = dst..dst + u64::try_from(len).unwrap();
         match elements {
             TableSegmentElements::Functions(funcs) => {
-                let mut instance = store.instance_mut(elements_instance_id);
                 let elements = funcs
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                table.init_func(
-                    dst,
-                    elements
-                        .iter()
-                        .map(|idx| instance.as_mut().get_func_ref(*idx)),
-                )?;
+                for (i, func_idx) in positions.zip(elements) {
+                    // SAFETY: the `store_id` passed to `get_exported_func` is
+                    // indeed the store that owns the function.
+                    let func = unsafe {
+                        store
+                            .instance_mut(elements_instance_id)
+                            .get_exported_func(store_id, *func_idx)
+                    };
+                    table.set_(store, i, func.into()).unwrap();
+                }
             }
             TableSegmentElements::Expressions(exprs) => {
+                let mut store = OpaqueRootScope::new(store);
                 let exprs = exprs
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
                 let mut context = ConstEvalContext::new(elements_instance_id);
-                match top {
-                    WasmHeapTopType::Extern => table.init_gc_refs(
-                        dst,
-                        exprs.iter().map(|expr| unsafe {
-                            let raw = const_evaluator
-                                .eval(store, &mut context, expr)
-                                .expect("const expr should be valid");
-                            VMGcRef::from_raw_u32(raw.get_externref())
-                        }),
-                    )?,
-                    WasmHeapTopType::Any | WasmHeapTopType::Exn => table.init_gc_refs(
-                        dst,
-                        exprs.iter().map(|expr| unsafe {
-                            let raw = const_evaluator
-                                .eval(store, &mut context, expr)
-                                .expect("const expr should be valid");
-                            VMGcRef::from_raw_u32(raw.get_anyref())
-                        }),
-                    )?,
-                    WasmHeapTopType::Func => table.init_func(
-                        dst,
-                        exprs.iter().map(|expr| unsafe {
-                            NonNull::new(
-                                const_evaluator
-                                    .eval(store, &mut context, expr)
-                                    .expect("const expr should be valid")
-                                    .get_funcref()
-                                    .cast(),
-                            )
-                        }),
-                    )?,
-                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+                for (i, expr) in positions.zip(exprs) {
+                    let element = const_evaluator
+                        .eval(&mut store, limiter.as_deref_mut(), &mut context, expr)
+                        .await
+                        .expect("const expr should be valid");
+                    table.set_(&mut store, i, element.ref_().unwrap()).unwrap();
                 }
             }
         }
@@ -1290,25 +1172,22 @@ impl Instance {
     pub fn get_defined_table_with_lazy_init(
         mut self: Pin<&mut Self>,
         idx: DefinedTableIndex,
-        range: impl Iterator<Item = u64>,
+        range: impl IntoIterator<Item = u64>,
     ) -> &mut Table {
         let elt_ty = self.tables[idx].1.element_type();
 
         if elt_ty == TableElementType::Func {
             for i in range {
-                let value = match self.tables[idx].1.get(None, i) {
-                    Some(value) => value,
-                    None => {
-                        // Out-of-bounds; caller will handle by likely
-                        // throwing a trap. No work to do to lazy-init
-                        // beyond the end.
-                        break;
-                    }
+                match self.tables[idx].1.get_func_maybe_init(i) {
+                    // Uninitialized table element.
+                    Ok(None) => {}
+                    // Initialized table element, move on to the next.
+                    Ok(Some(_)) => continue,
+                    // Out-of-bounds; caller will handle by likely
+                    // throwing a trap. No work to do to lazy-init
+                    // beyond the end.
+                    Err(_) => break,
                 };
-
-                if !value.is_uninit() {
-                    continue;
-                }
 
                 // The table element `i` is uninitialized and is now being
                 // initialized. This must imply that a `precompiled` list of
@@ -1328,7 +1207,7 @@ impl Instance {
                     func_index.and_then(|func_index| self.as_mut().get_func_ref(func_index));
                 self.as_mut().tables_mut()[idx]
                     .1
-                    .set(i, TableElement::FuncRef(func_ref))
+                    .set_func(i, func_ref)
                     .expect("Table type should match and index should be in-bounds");
             }
         }
@@ -1376,7 +1255,7 @@ impl Instance {
         mut self: Pin<&mut Self>,
         module: &Module,
         offsets: &VMOffsets<HostPtr>,
-        store: StorePtr,
+        store: &StoreOpaque,
         imports: Imports,
     ) {
         assert!(ptr::eq(module, self.env_module().as_ref()));
@@ -1390,7 +1269,7 @@ impl Instance {
 
         // SAFETY: it's up to the caller to provide a valid store pointer here.
         unsafe {
-            self.as_mut().set_store(store.as_raw());
+            self.as_mut().set_store(store);
         }
 
         // Initialize shared types

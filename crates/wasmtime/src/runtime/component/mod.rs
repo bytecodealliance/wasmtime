@@ -119,9 +119,9 @@ mod values;
 pub use self::component::{Component, ComponentExportIndex};
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
-    AbortHandle, Access, Accessor, AccessorTask, AsAccessor, ErrorContext, FutureReader,
-    FutureWriter, HostFuture, HostStream, ReadBuffer, StreamReader, StreamWriter,
-    VMComponentAsyncStore, VecBuffer, Watch, WriteBuffer,
+    Access, Accessor, AccessorTask, AsAccessor, ErrorContext, FutureReader, FutureWriter,
+    GuardedFutureReader, GuardedFutureWriter, GuardedStreamReader, GuardedStreamWriter, JoinHandle,
+    ReadBuffer, StreamReader, StreamWriter, VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
@@ -162,8 +162,6 @@ pub mod __internal {
     pub use core::cell::RefCell;
     pub use core::future::Future;
     pub use core::mem::transmute;
-    #[cfg(feature = "async")]
-    pub use trait_variant::make as trait_variant_make;
     pub use wasmtime_environ;
     pub use wasmtime_environ::component::{CanonicalAbiInfo, ComponentTypes, InterfaceType};
 }
@@ -260,60 +258,113 @@ pub(crate) use self::store::ComponentStoreData;
 ///         }
 ///     ",
 ///
-///     // Add calls to `tracing::span!` before each import or export is called
-///     // to log most arguments and return values. By default values
-///     // containing lists are excluded; enable `verbose_tracing` to include
-///     // them.
+///     // Further configuration of imported functions. This can be used to add
+///     // functionality per-function or by default for all imports. Note that
+///     // exports are also supported via the `exports` key below.
 ///     //
-///     // This option defaults to `false`.
-///     tracing: true,
+///     // Functions in this list are specified as their interface first then
+///     // the raw wasm name of the function. Interface versions can be
+///     // optionally omitted and prefixes are also supported to configure
+///     // entire interfaces at once for example. Only the first matching item
+///     // in this list is used to configure a function.
+///     //
+///     // Configuration for a function is a set of flags which can be added
+///     // per-function. Each flag's meaning is documented below and the final
+///     // set of flags for a function are calculated by the first matching
+///     // rule below unioned with the default flags inferred from the WIT
+///     // signature itself (unless below configures the `ignore_wit` flag).
+///     //
+///     // Specifically the defaults for a normal WIT function are empty,
+///     // meaning all flags below are disabled. For a WIT `async` function the
+///     // `async | store` flags are enabled by default, but all others are
+///     // still disabled.
+///     //
+///     // Note that unused keys in this map are a compile-time error. All
+///     // keys are required to be used and consulted.
+///     imports: {
+///         // The `async` flag is used to indicate that a Rust-level `async`
+///         // function is used on the host. This means that the host is allowed
+///         // to do async I/O. Note though that to WebAssembly itself the
+///         // function will still be blocking. This requires
+///         // `Config::async_support` to be `true` as well.
+///         "wasi:io/poll/poll": async,
 ///
-///     // Include all arguments and return values in the tracing output,
-///     // including values containing lists, which may be very large.
-///     //
-///     // This option defaults to `false`.
-///     verbose_tracing: false,
-///
-///     // Imports will be async functions and exports
-///     // are also invoked as async functions. Requires `Config::async_support`
-///     // to be `true`.
-///     //
-///     // Note that this is only async for the host as the guest will still
-///     // appear as if it's invoking blocking functions.
-///     //
-///     // This option defaults to `false`.
-///     async: true,
-///
-///     // Alternative mode of async configuration where this still implies
-///     // async instantiation happens, for example, but more control is
-///     // provided over which imports are async and which aren't.
-///     //
-///     // Note that in this mode all exports are still async.
-///     async: {
-///         // All imports are async except for functions with these names
-///         except_imports: ["foo", "bar"],
-///
-///         // All imports are synchronous except for functions with these names
+///         // The `store` flag means that the host function will have access
+///         // to the store during its execution. By default host functions take
+///         // `&mut self` which only has access to the data in question
+///         // implementing the generated traits from `bindgen!`. This
+///         // configuration means that in addition to `Self` the entire store
+///         // will be accessible if necessary.
 ///         //
-///         // Note that this key cannot be specified with `except_imports`,
-///         // only one or the other is accepted.
-///         only_imports: ["foo", "bar"],
+///         // Functions that have access to a `store` are generated in a
+///         // `HostWithStore` trait. Functions without a `store` are generated
+///         // in a `Host` trait.
+///         //
+///         // > Note: this is not yet implemented for non-async functions. This
+///         // > will result in bindgen errors right now and is intended to be
+///         // > implemented in the near future.
+///         "wasi:clocks/monotonic-clock/now": store,
+///
+///         // This is an example of combining flags where the `async` and
+///         // `store` flags are combined. This means that the generated
+///         // host function is both `async` and additionally has access to
+///         // the `store`. Note though that this configuration is not necessary
+///         // as the WIT function is itself already marked as `async`. That
+///         // means that this is the default already applied meaning that
+///         // specifying it here would be redundant.
+///         //
+///         // "wasi:clocks/monotonic-clock/[async]wait-until": async | store,
+///
+///         // The `tracing` flag indicates that `tracing!` will be used to log
+///         // entries and exits into this host API. This can assist with
+///         // debugging or just generally be used to provide logs for the host.
+///         //
+///         // By default values are traced unless they contain lists, but
+///         // tracing of lists can be enabled with `verbose_tracing` below.
+///         "my:local/api/foo": tracing,
+///
+///         // The `verbose_tracing` flag indicates that when combined with
+///         // `tracing` the values of parameters/results are added to logs.
+///         // This may include lists which may be very large.
+///         "my:local/api/other-function": tracing | verbose_tracing,
+///
+///         // The `trappable` flag indicates that this import is allowed to
+///         // generate a trap.
+///         //
+///         // Imports that may trap have their return types wrapped in
+///         // `wasmtime::Result<T>` where the `Err` variant indicates that a
+///         // trap will be raised in the guest.
+///         //
+///         // By default imports cannot trap and the return value is the return
+///         // value from the WIT bindings itself.
+///         //
+///         // Note that the `trappable` configuration can be combined with the
+///         // `trappable_error_type` configuration below to avoid having a
+///         // host function return `wasmtime::Result<Result<WitOk, WitErr>>`
+///         // for example and instead return `Result<WitOk, RustErrorType>`.
+///         "my:local/api/fallible": trappable,
+///
+///         // The `ignore_wit` flag discards the WIT-level defaults of a
+///         // function. For example this `async` WIT function will be ignored
+///         // and a synchronous function will be generated on the host.
+///         "my:local/api/[async]wait": ignore_wit,
+///
+///         // The `exact` flag ensures that the filter, here "f", only matches
+///         // functions exactly. For example "f" here would only refer to
+///         // `import f: func()` in a world. Without this flag then "f"
+///         // would also configure any package `f:*/*/*` for example.
+///         "f": exact,
+///
+///         // This is used to configure the defaults of all functions if no
+///         // other key above matches a function. Note that if specific
+///         // functions mentioned above want these flags too then the flags
+///         // must be added there too because only one matching rule in this
+///         // map is used per-function.
+///         default: async | trappable,
 ///     },
 ///
-///     // This option is used to indicate whether imports can trap.
-///     //
-///     // Imports that may trap have their return types wrapped in
-///     // `wasmtime::Result<T>` where the `Err` variant indicates that a
-///     // trap will be raised in the guest.
-///     //
-///     // By default imports cannot trap and the return value is the return
-///     // value from the WIT bindings itself. This value can be set to `true`
-///     // to indicate that any import can trap. This value can also be set to
-///     // an array-of-strings to indicate that only a set list of imports
-///     // can trap.
-///     trappable_imports: false,             // no imports can trap (default)
-///     // trappable_imports: true,           // all imports can trap
-///     // trappable_imports: ["foo", "bar"], // only these can trap
+///     // Same as `imports` above, but applies to exported functions.
+///     exports: { /* ... */ },
 ///
 ///     // This can be used to translate WIT return values of the form
 ///     // `result<T, error-type>` into `Result<T, RustErrorType>` in Rust.

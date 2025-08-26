@@ -1,10 +1,10 @@
 use crate::p2::{
-    IoImpl, IoView, StreamError, StreamResult,
+    StreamError, StreamResult,
     bindings::sync::io::poll::Pollable,
     bindings::sync::io::streams::{self, InputStream, OutputStream},
 };
 use crate::runtime::in_tokio;
-use wasmtime::component::Resource;
+use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi_io::bindings::wasi::io::streams::{
     self as async_streams, Host as AsyncHost, HostInputStream as AsyncHostInputStream,
     HostOutputStream as AsyncHostOutputStream,
@@ -19,19 +19,13 @@ impl From<async_streams::StreamError> for streams::StreamError {
     }
 }
 
-impl<T> streams::Host for IoImpl<T>
-where
-    T: IoView,
-{
+impl streams::Host for ResourceTable {
     fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
         Ok(AsyncHost::convert_stream_error(self, err)?.into())
     }
 }
 
-impl<T> streams::HostOutputStream for IoImpl<T>
-where
-    T: IoView,
-{
+impl streams::HostOutputStream for ResourceTable {
     fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
         in_tokio(async { AsyncHostOutputStream::drop(self, stream).await })
     }
@@ -104,10 +98,7 @@ where
     }
 }
 
-impl<T> streams::HostInputStream for IoImpl<T>
-where
-    T: IoView,
-{
+impl streams::HostInputStream for ResourceTable {
     fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
         in_tokio(async { AsyncHostInputStream::drop(self, stream).await })
     }

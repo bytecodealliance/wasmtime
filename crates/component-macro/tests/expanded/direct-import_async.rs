@@ -43,13 +43,21 @@ impl<_T: 'static> FooPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
+    pub fn instantiate(
+        &self,
+        mut store: impl wasmtime::AsContextMut<Data = _T>,
+    ) -> wasmtime::Result<Foo> {
+        let mut store = store.as_context_mut();
+        let instance = self.instance_pre.instantiate(&mut store)?;
+        self.indices.load(&mut store, &instance)
+    }
+}
+impl<_T: Send + 'static> FooPre<_T> {
+    /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Foo>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<Foo> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -71,13 +79,13 @@ pub struct FooIndices {}
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`Foo::instantiate_async`] which only needs a
+///   [`Foo::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`FooPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`FooPre::instantiate_async`] to
+///   method then uses [`FooPre::instantiate`] to
 ///   create a [`Foo`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -90,13 +98,17 @@ pub struct FooIndices {}
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Foo {}
-#[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+pub trait FooImportsWithStore: wasmtime::component::HasData + Send {}
+impl<_T: ?Sized> FooImportsWithStore for _T
+where
+    _T: wasmtime::component::HasData + Send,
+{}
 pub trait FooImports: Send {
-    async fn foo(&mut self) -> ();
+    fn foo(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
 }
 impl<_T: FooImports + ?Sized + Send> FooImports for &mut _T {
-    async fn foo(&mut self) -> () {
-        FooImports::foo(*self).await
+    fn foo(&mut self) -> impl ::core::future::Future<Output = ()> + Send {
+        async move { FooImports::foo(*self).await }
     }
 }
 const _: () = {
@@ -132,6 +144,25 @@ const _: () = {
     }
     impl Foo {
         /// Convenience wrapper around [`FooPre::new`] and
+        /// [`FooPre::instantiate`].
+        pub fn instantiate<_T>(
+            store: impl wasmtime::AsContextMut<Data = _T>,
+            component: &wasmtime::component::Component,
+            linker: &wasmtime::component::Linker<_T>,
+        ) -> wasmtime::Result<Foo> {
+            let pre = linker.instantiate_pre(component)?;
+            FooPre::new(pre)?.instantiate(store)
+        }
+        /// Convenience wrapper around [`FooIndices::new`] and
+        /// [`FooIndices::load`].
+        pub fn new(
+            mut store: impl wasmtime::AsContextMut,
+            instance: &wasmtime::component::Instance,
+        ) -> wasmtime::Result<Foo> {
+            let indices = FooIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
+        }
+        /// Convenience wrapper around [`FooPre::new`] and
         /// [`FooPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
@@ -144,21 +175,12 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             FooPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`FooIndices::new`] and
-        /// [`FooIndices::load`].
-        pub fn new(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Foo> {
-            let indices = FooIndices::new(&instance.instance_pre(&store))?;
-            indices.load(&mut store, instance)
-        }
         pub fn add_to_linker_imports<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: FooImportsWithStore,
             for<'a> D::Data<'a>: FooImports,
             T: 'static + Send,
         {
@@ -181,7 +203,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
+            D: FooImportsWithStore + Send,
             for<'a> D::Data<'a>: FooImports + Send,
             T: 'static + Send,
         {

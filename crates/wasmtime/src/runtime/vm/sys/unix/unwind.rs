@@ -79,36 +79,38 @@ impl UnwindRegistration {
         );
 
         let mut registrations = Vec::new();
-        if using_libunwind() {
-            // For libunwind, `__register_frame` takes a pointer to a single
-            // FDE. Note that we subtract 4 from the length of unwind info since
-            // wasmtime-encode .eh_frame sections always have a trailing 32-bit
-            // zero for the platforms above.
-            let start = unwind_info;
-            let end = start.add(unwind_len - 4);
-            let mut current = start;
+        unsafe {
+            if using_libunwind() {
+                // For libunwind, `__register_frame` takes a pointer to a single
+                // FDE. Note that we subtract 4 from the length of unwind info since
+                // wasmtime-encode .eh_frame sections always have a trailing 32-bit
+                // zero for the platforms above.
+                let start = unwind_info;
+                let end = start.add(unwind_len - 4);
+                let mut current = start;
 
-            // Walk all of the entries in the frame table and register them
-            while current < end {
-                let len = current.cast::<u32>().read_unaligned() as usize;
+                // Walk all of the entries in the frame table and register them
+                while current < end {
+                    let len = current.cast::<u32>().read_unaligned() as usize;
 
-                // Skip over the CIE
-                if current != start {
-                    __register_frame(current);
-                    let cur = NonNull::new(current.cast_mut()).unwrap();
-                    registrations.push(SendSyncPtr::new(cur));
+                    // Skip over the CIE
+                    if current != start {
+                        __register_frame(current);
+                        let cur = NonNull::new(current.cast_mut()).unwrap();
+                        registrations.push(SendSyncPtr::new(cur));
+                    }
+
+                    // Move to the next table entry (+4 because the length itself is
+                    // not inclusive)
+                    current = current.add(len + 4);
                 }
-
-                // Move to the next table entry (+4 because the length itself is
-                // not inclusive)
-                current = current.add(len + 4);
+            } else {
+                // On gnu (libgcc), `__register_frame` will walk the FDEs until an
+                // entry of length 0
+                __register_frame(unwind_info);
+                let info = NonNull::new(unwind_info.cast_mut()).unwrap();
+                registrations.push(SendSyncPtr::new(info));
             }
-        } else {
-            // On gnu (libgcc), `__register_frame` will walk the FDEs until an
-            // entry of length 0
-            __register_frame(unwind_info);
-            let info = NonNull::new(unwind_info.cast_mut()).unwrap();
-            registrations.push(SendSyncPtr::new(info));
         }
 
         Ok(UnwindRegistration { registrations })

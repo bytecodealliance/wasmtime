@@ -8,6 +8,7 @@ use crate::component::ComponentBuiltinFunctionIndex;
 /// This type is intended to be serialized into a 32-bit index (or smaller) and
 /// is used by Pulley for example to identify how transitions from the guest to
 /// the host are performed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum HostCall {
     /// An "array call" is being done which means that the wasm is calling the
     /// host using the array calling convention (e.g. `VMArrayCallNative`).
@@ -42,6 +43,28 @@ impl HostCall {
             #[cfg(feature = "component-model")]
             HostCall::ComponentBuiltin(i) => 2 + BuiltinFunctionIndex::len() + i.index(),
         }
+    }
+
+    /// Create a `HostCall` from the result of an earlier call to
+    /// `HostCall::index`.
+    pub fn from_index(index: u32) -> Self {
+        let host_call = match index {
+            0 => Self::ArrayCall,
+            _ if index < 1 + BuiltinFunctionIndex::len() => {
+                Self::Builtin(BuiltinFunctionIndex::from_u32(index - 1))
+            }
+            #[cfg(feature = "component-model")]
+            _ if index == 1 + BuiltinFunctionIndex::len() => Self::ComponentLowerImport,
+            #[cfg(feature = "component-model")]
+            _ if index < 2 + BuiltinFunctionIndex::len() + ComponentBuiltinFunctionIndex::len() => {
+                Self::ComponentBuiltin(ComponentBuiltinFunctionIndex::from_u32(
+                    index - 2 - BuiltinFunctionIndex::len(),
+                ))
+            }
+            _ => panic!("bad host call index: {index}"),
+        };
+        debug_assert_eq!(index, host_call.index());
+        host_call
     }
 }
 
