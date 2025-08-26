@@ -176,12 +176,12 @@ pub struct FuncEnvironment<'module_environment> {
     /// Used by the stack switching feature. If set, we have a allocated a
     /// slot on this function's stack to be used for the
     /// current stack's `handler_list` field.
-    pub(crate) stack_switching_handler_list_buffer: Option<ir::StackSlot>,
+    stack_switching_handler_list_buffer: Option<ir::StackSlot>,
 
     /// Used by the stack switching feature. If set, we have a allocated a
     /// slot on this function's stack to be used for the
     /// current continuation's `values` field.
-    pub stack_switching_values_buffer: Option<ir::StackSlot>,
+    stack_switching_values_buffer: Option<ir::StackSlot>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
