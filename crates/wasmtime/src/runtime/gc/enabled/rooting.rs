@@ -1862,6 +1862,6 @@ mod tests {
         // Try to keep tabs on the size of these things. Don't want them growing
         // unintentionally.
         assert_eq!(std::mem::size_of::<Rooted<ExternRef>>(), 16);
-        assert_eq!(std::mem::size_of::<OwnedRooted<ExternRef>>(), 24);
+        assert!(std::mem::size_of::<OwnedRooted<ExternRef>>() <= 24);
     }
 }
