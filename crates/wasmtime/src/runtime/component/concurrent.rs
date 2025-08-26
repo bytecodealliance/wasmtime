@@ -2744,10 +2744,15 @@ impl Instance {
     /// Implements the `yield` intrinsic.
     pub(crate) fn yield_(self, store: &mut dyn VMStore, async_: bool) -> Result<bool> {
         self.waitable_check(store, async_, WaitableCheck::Yield)
-            .map(|_code| {
-                // TODO: plumb cancellation to here:
-                // https://github.com/bytecodealliance/wasmtime/issues/11191
-                false
+            .map(|_| {
+                let state = self.concurrent_state_mut(store);
+                let task = state.guest_task.unwrap();
+                if let Some(event) = state.get_mut(task).unwrap().event.take() {
+                    assert!(matches!(event, Event::Cancelled));
+                    true
+                } else {
+                    false
+                }
             })
     }
 
@@ -2843,10 +2848,6 @@ impl Instance {
                 options.memory_mut(store)[ptr + 4..][..4].copy_from_slice(&result.to_le_bytes());
                 Ok(ordinal)
             }
-            // TODO: Check `GuestTask::event` in case it contains
-            // `Event::Cancelled`, in which case we'll need to return that to
-            // the guest:
-            // https://github.com/bytecodealliance/wasmtime/issues/11191
             WaitableCheck::Yield => Ok(0),
         };
 

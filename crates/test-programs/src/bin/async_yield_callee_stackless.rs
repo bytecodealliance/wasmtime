@@ -9,7 +9,7 @@ mod bindings {
 
 use {
     bindings::local::local::continue_,
-    test_programs::async_::{CALLBACK_CODE_EXIT, CALLBACK_CODE_YIELD, EVENT_NONE},
+    test_programs::async_::{CALLBACK_CODE_EXIT, CALLBACK_CODE_YIELD, EVENT_CANCELLED, EVENT_NONE},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -30,9 +30,9 @@ unsafe extern "C" fn export_run() -> u32 {
 
 #[unsafe(export_name = "[callback][async-lift]local:local/run#[async]run")]
 unsafe extern "C" fn callback_run(event0: u32, _event1: u32, _event2: u32) -> u32 {
-    assert_eq!(event0, EVENT_NONE);
+    assert!(event0 == EVENT_NONE || event0 == EVENT_CANCELLED);
 
-    if continue_::get_continue() {
+    if continue_::get_continue() && event0 == EVENT_NONE {
         CALLBACK_CODE_YIELD
     } else {
         task_return_run();
