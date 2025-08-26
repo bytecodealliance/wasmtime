@@ -290,3 +290,7 @@
 
 (rule (simplify (eq cty x (bxor (ty_int bty) x y))) (subsume (eq cty y (iconst_u bty 0))))
 (rule (simplify (ne cty x (bxor (ty_int bty) x y))) (subsume (ne cty y (iconst_u bty 0))))
+
+; (x - y) > x == y > x
+(rule (simplify (ugt cty (isub ty x y) x)) (ugt cty y x))
+(rule (simplify (ule cty (isub ty x y) x)) (ule cty y x))
