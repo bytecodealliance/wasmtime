@@ -71,7 +71,7 @@ things set in stone yet.
 ### Documentation typo fixes
 
 We all make typos, and in comments and documentation, rustc doesn't catch them
-for us. We appreciate recieving PRs to fix them. However, we request that new
+for us. We appreciate receiving PRs to fix them. However, we request that new
 contributors (those who have not had any substantive code PRs merged) only
 submit one PR per week dedicated to fixing typos.
 
