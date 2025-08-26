@@ -59,6 +59,10 @@ impl<D> StreamProducer<D, u8> for ReadinessProducer {
     ) -> Result<StreamState> {
         self.maybe_sleep().await;
         accessor.with(|mut access| {
+            assert_eq!(
+                destination.remaining(access.as_context_mut()),
+                Some(self.buffer.len())
+            );
             let mut destination = destination
                 .as_guest_destination(access.as_context_mut())
                 .unwrap();
@@ -106,6 +110,10 @@ impl<D> StreamConsumer<D, u8> for ReadinessConsumer {
     ) -> Result<StreamState> {
         self.maybe_sleep().await;
         accessor.with(|mut access| {
+            assert_eq!(
+                source.remaining(access.as_context_mut()),
+                self.expected.len()
+            );
             let mut source = source.as_guest_source(access.as_context_mut()).unwrap();
             assert_eq!(&self.expected, source.remaining());
             source.mark_read(self.expected.len());

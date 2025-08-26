@@ -356,6 +356,29 @@ impl<T> Destination<T> {
             _ => unreachable!(),
         }
     }
+
+    /// Return the remaining number of items the current read has capacity to
+    /// accept, if known.
+    ///
+    /// This will return `Some(_)` if the reader is a guest; it will return
+    /// `None` if the reader is the host.
+    pub fn remaining(&self, mut store: impl AsContextMut) -> Option<usize> {
+        let transmit = self
+            .instance
+            .concurrent_state_mut(store.as_context_mut().0)
+            .get(self.id)
+            .unwrap();
+
+        if let &ReadState::GuestReady { count, .. } = &transmit.read {
+            let &WriteState::HostReady { guest_offset, .. } = &transmit.write else {
+                unreachable!()
+            };
+
+            Some(count - guest_offset)
+        } else {
+            None
+        }
+    }
 }
 
 impl Destination<u8> {
@@ -546,6 +569,31 @@ impl<T> Source<'_, T> {
         }
 
         Ok(())
+    }
+
+    /// Return the number of items remaining to be read from the current write
+    /// operation.
+    pub fn remaining(&self, mut store: impl AsContextMut) -> usize
+    where
+        T: 'static,
+    {
+        let transmit = self
+            .instance
+            .concurrent_state_mut(store.as_context_mut().0)
+            .get(self.id)
+            .unwrap();
+
+        if let &WriteState::GuestReady { count, .. } = &transmit.write {
+            let &ReadState::HostReady { guest_offset, .. } = &transmit.read else {
+                unreachable!()
+            };
+
+            count - guest_offset
+        } else if let Some(host_buffer) = &self.host_buffer {
+            host_buffer.remaining().len()
+        } else {
+            unreachable!()
+        }
     }
 }
 
