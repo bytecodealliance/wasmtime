@@ -577,28 +577,117 @@ impl RootSet {
     /// goes just over the threshold, we might scan all N liveness
     /// flags for each step, resulting in quadratic behavior overall.
     ///
-    /// Thus, we implement an exponentially-growing "high water mark"
-    /// to guard against this latter case: on the add-a-new-root case,
-    /// we trim only if the list is longer than the high water mark,
-    /// and we grow the high water mark each time (by a geometric
-    /// factor).
+    /// Thus, we implement a "high water mark" algorithm to guard
+    /// against this latter case: on the add-a-new-root case, we trim
+    /// only if the list is longer than the high water mark, and we
+    /// set the high water mark each time based on the after-trim
+    /// size. See below for details on this algorithm.
     ///
     /// `eager` chooses whether we eagerly trim roots or pre-filter
     /// using the high-water mark.
+    ///
+    /// # Growth Algorithm
+    ///
+    /// We want to balance two factors: we must ensure that the
+    /// algorithmic complexity of creating a new root is amortized
+    /// O(1), and we must ensure that repeated creation and deletion
+    /// of roots without any GC must result in a root-set that has a
+    /// size linear in the actual live-root-set size. Stated formally:
+    ///
+    /// 1. Root creation must be O(1), amortized
+    /// 2. liveness_flags.len() must be O(|max live owned roots|),
+    ///    i.e., must not grow to larger than a constant multiple of
+    ///    the maximum working-root-set size of the program.
+    ///
+    /// Note that a naive exponential-growth-of-threshold algorithm,
+    /// where we trim when the root set reaches 1, 2, 4, 8, 16, 32,
+    /// ... elements, provides the first but *not* the second
+    /// property. A workload that has a constant live root set but
+    /// creates and drops roots constantly (say, as it's traversing a
+    /// static graph and moving "fingers" through it) will cause the
+    /// `liveness_flags` array to grow unboundedly.
+    ///
+    /// Instead, it turns out that we can achieve both of these goals
+    /// with a simple rule: we trim when the root list length reaches
+    /// a high-water mark; and then *after* trimming, we set the
+    /// high-water mark equal to the resulting live-root count
+    /// multiplied by a factor (e.g., 2).
+    ///
+    /// ## Proof
+    ///
+    /// - Root creation is O(1)
+    ///
+    ///   Assume a sequence of root creation and drop events (and no
+    ///   GCs, with a static GC graph, in the worst case -- only roots
+    ///   are changing). We want to show that after N root creations,
+    ///   we have incurred only only O(N) cost scanning the
+    ///   `liveness_flags` list over the whole sequence.
+    ///
+    ///   Assume a default high-water mark of D (e.g., 8) at
+    ///   initialization with an empty root list.
+    ///
+    ///   Consider "epochs" in the sequence split by trim events where
+    ///   we scan the root list. Proceed by induction over epochs to
+    ///   show: after each epoch, we will have scanned at most 2N
+    ///   roots after N root creations.
+    ///
+    ///   (These epochs don't exist in the algorithm: this is just a
+    ///   mechanism to analyze the behavior.)
+    ///
+    ///   Base case: after the first epoch, with D root creations, we
+    ///   will scan D roots.
+    ///
+    ///   Induction step: we have created N roots and scanned at most
+    ///   2N roots. After previous scan, L roots are still live; then
+    ///   we set the high-water mark for next scan at 2L. The list
+    ///   already has L, so after another L root creations, the epoch
+    ///   ends. We will then incur a scan cost of 2L (the full
+    ///   list). At that point we have thus seen N + L root creations,
+    ///   with 2N + 2L scan cost; the invariant holds.
+    ///
+    ///   (It's counter-intuitive that *not* raising the high-water
+    ///   mark exponentially can still result in a constant amortized
+    ///   cost! One intuition to understand this is that each root
+    ///   that remains alive after a scan pushes the next high-water
+    ///   mark up by one, so requires a new root creation to "pay for"
+    ///   its next scan. So any given root may be scanned many times,
+    ///   but each such root ensures other root creations happen to
+    ///   maintain the amortized cost.)
+    ///
+    /// - `liveness_flags.len()` is always O(|max live roots|)
+    ///
+    ///   Before the first trim, we have between 0 and D live roots,
+    ///   which is O(1) (`D` is a compile-time constant).
+    ///
+    ///   Just after a trim, the `liveness_flags` list has only live
+    ///   roots, and the max live-root count is at least the count at
+    ///   this time, so the property holds.
+    ///
+    ///   The instantaneous maximum number of live roots is greater
+    ///   than or equal to the maximum number of live roots observed
+    ///   during a trim. (The trim is just some point in time, and the
+    ///   max at some point in time is at most the overall max.)
+    ///
+    ///   The high-water mark is set at 2 * `liveness_flags.len()`
+    ///   after a trim, i.e., the number of live roots at that
+    ///   time. We trim when we reach the high-water mark. So the
+    ///   length of the array cannot exceed 2 *
+    ///   `liveness_flags.len()`, which is less than or equal to the
+    ///   overall max. So transitively, the list length at any time is
+    ///   always O(|max live roots|).
+    ///
+    /// We thus have tight bounds (deterministic, not randomized) for
+    /// all possible sequences of root creation/dropping, ensuring
+    /// robustness.
     pub(crate) fn trim_liveness_flags(&mut self, gc_store: &mut GcStore, eager: bool) {
-        if !eager {
-            const DEFAULT_HIGH_WATER: usize = 8;
-            const GROWTH_FACTOR: usize = 2;
-
-            let high_water_mark = self
-                .liveness_trim_high_water
-                .map(|x| x.get())
-                .unwrap_or(DEFAULT_HIGH_WATER);
-            if self.liveness_flags.len() < high_water_mark {
-                return;
-            }
-            self.liveness_trim_high_water =
-                Some(NonZeroUsize::new(high_water_mark.saturating_mul(GROWTH_FACTOR)).unwrap());
+        const DEFAULT_HIGH_WATER: usize = 8;
+        const GROWTH_FACTOR: usize = 2;
+        let high_water_mark = self
+            .liveness_trim_high_water
+            .map(|x| x.get())
+            .unwrap_or(DEFAULT_HIGH_WATER);
+        if !eager && self.liveness_flags.len() < high_water_mark {
+            return;
         }
 
         self.liveness_flags.retain(|(flag, index)| {
@@ -614,6 +703,15 @@ impl RootSet {
                 true
             }
         });
+
+        if !eager {
+            let post_trim_len = self.liveness_flags.len();
+            let high_water_mark = std::cmp::max(
+                DEFAULT_HIGH_WATER,
+                post_trim_len.saturating_mul(GROWTH_FACTOR),
+            );
+            self.liveness_trim_high_water = Some(NonZeroUsize::new(high_water_mark).unwrap());
+        }
     }
 }
 

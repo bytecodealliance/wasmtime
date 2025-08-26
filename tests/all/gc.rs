@@ -1529,3 +1529,41 @@ fn owned_rooted() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn owned_rooted_lots_of_root_creation() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, ());
+    let inner_dropped = Arc::new(AtomicBool::new(false));
+    let r = {
+        let mut scope = RootScope::new(&mut store);
+        let r = ExternRef::new(&mut scope, SetFlagOnDrop(inner_dropped.clone()))?;
+        r.to_owned_rooted(&mut scope)?
+    };
+    assert!(!inner_dropped.load(SeqCst));
+    store.gc(None);
+
+    for _ in 0..100_000 {
+        let mut scope = RootScope::new(&mut store);
+        // Go through a LIFO root then back to an owned root to create
+        // a distinct root.
+        let r2 = r.to_rooted(&mut scope);
+        let r3 = r2.to_owned_rooted(&mut scope);
+        drop(r3);
+    }
+
+    store.gc(None);
+    assert!(!inner_dropped.load(SeqCst));
+
+    drop(r);
+    store.gc(None);
+    assert!(inner_dropped.load(SeqCst));
+
+    Ok(())
+}
