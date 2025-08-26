@@ -1316,9 +1316,21 @@ impl FuncEnvironment<'_> {
             .unwrap_module_type_index();
         let signature = self.get_or_create_interned_sig_ref(func, ty);
 
-        let (module, def_func_index) =
-            self.translation.known_imported_functions[func_index].unwrap();
-        let key = FuncKey::DefinedWasmFunction(module, def_func_index);
+        let key = match self.translation.known_imported_functions[func_index] {
+            Some(key @ FuncKey::DefinedWasmFunction(..)) => key,
+
+            #[cfg(feature = "component-model")]
+            Some(key @ FuncKey::UnsafeIntrinsic(..)) => key,
+
+            Some(key) => {
+                panic!("unexpected kind of known-import function: {key:?}")
+            }
+
+            None => panic!(
+                "cannot make an `ir::FuncRef` for a function import that is not statically known"
+            ),
+        };
+
         let (namespace, index) = key.into_raw_parts();
         let name = ir::ExternalName::User(
             func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
@@ -1741,9 +1753,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         mut self,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
-        call_args: &[ir::Value],
+        wasm_call_args: &[ir::Value],
     ) -> WasmResult<CallRets> {
-        let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
+        let mut real_call_args = Vec::with_capacity(wasm_call_args.len() + 2);
         let caller_vmctx = self
             .builder
             .func
@@ -1760,7 +1772,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             real_call_args.push(caller_vmctx);
 
             // Then append the regular call arguments.
-            real_call_args.extend_from_slice(call_args);
+            real_call_args.extend_from_slice(wasm_call_args);
 
             // Finally, make the direct call!
             let callee = self
@@ -1795,25 +1807,47 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         real_call_args.push(callee_vmctx);
         real_call_args.push(caller_vmctx);
 
-        // Then append the regular call arguments.
-        real_call_args.extend_from_slice(call_args);
+        // Then append the Wasm call arguments.
+        real_call_args.extend_from_slice(wasm_call_args);
 
         // If we statically know the imported function (e.g. this is a
         // component-to-component call where we statically know both components)
-        // then we can actually still make a direct call (although we do have to
-        // pass the callee's vmctx that we just loaded, not our own). Otherwise,
-        // we really do an indirect call.
-        if self.env.translation.known_imported_functions[callee_index].is_some() {
-            let callee = self
-                .env
-                .get_or_create_imported_func_ref(self.builder.func, callee_index);
-            Ok(self.direct_call_inst(callee, &real_call_args))
-        } else {
-            let func_addr = self
-                .builder
-                .ins()
-                .load(pointer_type, mem_flags, base, body_offset);
-            Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+        // then we can avoid doing an indirect call.
+        match self.env.translation.known_imported_functions[callee_index].as_ref() {
+            // The import is always a compile-time builtin intrinsic. Make a
+            // direct call to that function (presumably it will eventually be
+            // inlined).
+            #[cfg(feature = "component-model")]
+            Some(FuncKey::UnsafeIntrinsic(..)) => {
+                let callee = self
+                    .env
+                    .get_or_create_imported_func_ref(self.builder.func, callee_index);
+                Ok(self.direct_call_inst(callee, &real_call_args))
+            }
+
+            // The import is always satisfied with the given defined Wasm
+            // function, so do a direct call to that function! (Although we take
+            // care to still pass its `funcref`'s `vmctx` as the callee `vmctx`
+            // in `real_call_args` and not the caller's.)
+            Some(FuncKey::DefinedWasmFunction(..)) => {
+                let callee = self
+                    .env
+                    .get_or_create_imported_func_ref(self.builder.func, callee_index);
+                Ok(self.direct_call_inst(callee, &real_call_args))
+            }
+
+            Some(key) => panic!("unexpected kind of known-import function: {key:?}"),
+
+            // Unknown import function or this module is instantiated many times
+            // and with different functions. Either way, we have to do the
+            // indirect call.
+            None => {
+                let func_addr = self
+                    .builder
+                    .ins()
+                    .load(pointer_type, mem_flags, base, body_offset);
+                Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+            }
         }
     }
 

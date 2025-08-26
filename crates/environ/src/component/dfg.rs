@@ -31,6 +31,7 @@ use crate::component::*;
 use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
 use anyhow::Result;
+use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
 use info::LinearMemoryOptions;
 use std::collections::HashMap;
@@ -53,6 +54,10 @@ pub struct ComponentDfg {
     /// All trampolines and their type signature which will need to get
     /// compiled by Cranelift.
     pub trampolines: Intern<TrampolineIndex, (ModuleInternedTypeIndex, Trampoline)>,
+
+    /// A map from `UnsafeIntrinsic::index()` to that intrinsic's
+    /// module-interned type.
+    pub unsafe_intrinsics: [PackedOption<ModuleInternedTypeIndex>; UnsafeIntrinsic::len() as usize],
 
     /// Know reallocation functions which are used by `lowerings` (e.g. will be
     /// used by the host)
@@ -258,6 +263,8 @@ pub enum CoreDef {
     Export(CoreExport<EntityIndex>),
     InstanceFlags(RuntimeComponentInstanceIndex),
     Trampoline(TrampolineIndex),
+    UnsafeIntrinsic(ModuleInternedTypeIndex, UnsafeIntrinsic),
+
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
     /// adapter is fully processed after the initial translation and
@@ -595,6 +602,7 @@ impl ComponentDfg {
             runtime_callbacks: Default::default(),
             runtime_instances: Default::default(),
             num_lowerings: 0,
+            unsafe_intrinsics: Default::default(),
             trampolines: Default::default(),
             trampoline_defs: Default::default(),
             trampoline_map: Default::default(),
@@ -629,6 +637,7 @@ impl ComponentDfg {
                 exports,
                 export_items,
                 initializers: linearize.initializers,
+                unsafe_intrinsics: linearize.unsafe_intrinsics,
                 trampolines: linearize.trampolines,
                 num_lowerings: linearize.num_lowerings,
                 options: linearize.options,
@@ -666,6 +675,7 @@ impl ComponentDfg {
 struct LinearizeDfg<'a> {
     dfg: &'a ComponentDfg,
     initializers: Vec<GlobalInitializer>,
+    unsafe_intrinsics: [PackedOption<ModuleInternedTypeIndex>; UnsafeIntrinsic::len() as usize],
     trampolines: PrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
     trampoline_defs: PrimaryMap<TrampolineIndex, info::Trampoline>,
     options: PrimaryMap<OptionsIndex, info::CanonicalOptions>,
@@ -856,6 +866,13 @@ impl LinearizeDfg<'_> {
             CoreDef::InstanceFlags(i) => info::CoreDef::InstanceFlags(*i),
             CoreDef::Adapter(id) => info::CoreDef::Export(self.adapter(*id)),
             CoreDef::Trampoline(index) => info::CoreDef::Trampoline(self.trampoline(*index)),
+            CoreDef::UnsafeIntrinsic(ty, i) => {
+                let index = usize::try_from(i.index()).unwrap();
+                if self.unsafe_intrinsics[index].is_none() {
+                    self.unsafe_intrinsics[index] = Some(*ty).into();
+                }
+                info::CoreDef::UnsafeIntrinsic(*i)
+            }
         }
     }
 

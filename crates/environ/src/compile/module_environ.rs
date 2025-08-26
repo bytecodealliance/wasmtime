@@ -2,14 +2,15 @@ use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, Module, TableSegment,
     TableSegmentElements,
 };
+use crate::prelude::*;
 use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, IndexType, InitMemory, MemoryIndex,
+    EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType, InitMemory, MemoryIndex,
     ModuleInternedTypeIndex, ModuleTypesBuilder, PrimaryMap, SizeOverflow, StaticMemoryInitializer,
-    TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert, TypeIndex, WasmError,
-    WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
+    StaticModuleIndex, TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert,
+    TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType,
+    WasmparserTypeConverter,
 };
-use crate::{StaticModuleIndex, prelude::*};
 use anyhow::{Result, bail};
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
@@ -55,12 +56,15 @@ pub struct ModuleTranslation<'data> {
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
 
-    /// For each imported function, the single statically-known defined function
-    /// that satisfies that import, if any. This is used to turn what would
-    /// otherwise be indirect calls through the imports table into direct calls,
-    /// when possible.
-    pub known_imported_functions:
-        SecondaryMap<FuncIndex, Option<(StaticModuleIndex, DefinedFuncIndex)>>,
+    /// For each imported function, the single statically-known function that
+    /// always satisfies that import, if any.
+    ///
+    /// This is used to turn what would otherwise be indirect calls through the
+    /// imports table into direct calls, when possible.
+    ///
+    /// When filled in, this only ever contains
+    /// `FuncKey::DefinedWasmFunction(..)`s and `FuncKey::Intrinsic(..)`s.
+    pub known_imported_functions: SecondaryMap<FuncIndex, Option<FuncKey>>,
 
     /// A list of type signatures which are considered exported from this
     /// module, or those that can possibly be called. This list is sorted, and

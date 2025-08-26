@@ -14,12 +14,14 @@ impl<'a> CodeBuilder<'a> {
             &Engine,
             &[u8],
             Option<&[u8]>,
+            Option<&str>,
             &S,
         ) -> Result<(MmapVecWrapper, Option<T>)>,
         state: &S,
     ) -> Result<(Arc<CodeMemory>, Option<T>)> {
         let wasm = self.get_wasm()?;
         let dwarf_package = self.get_dwarf_package();
+        let unsafe_intrinsics_import = self.get_unsafe_intrinsics_import();
 
         self.engine
             .check_compatible_with_native_host()
@@ -31,6 +33,7 @@ impl<'a> CodeBuilder<'a> {
                 crate::compile::HashedEngineCompileEnv(self.engine),
                 &wasm,
                 &dwarf_package,
+                &unsafe_intrinsics_import,
                 // Don't hash this as it's just its own "pure" function pointer.
                 NotHashed(build_artifacts),
                 // Don't hash the FinishedObject state: this contains
@@ -43,22 +46,31 @@ impl<'a> CodeBuilder<'a> {
                     .get_data_raw(
                         &state,
                         // Cache miss, compute the actual artifacts
-                        |(engine, wasm, dwarf_package, build_artifacts, state)| -> Result<_> {
+                        |(
+                            engine,
+                            wasm,
+                            dwarf_package,
+                            unsafe_intrinsics_import,
+                            build_artifacts,
+                            state,
+                        )|
+                         -> Result<_> {
                             let (mmap, info) = (build_artifacts.0)(
                                 engine.0,
                                 wasm,
                                 dwarf_package.as_deref(),
+                                **unsafe_intrinsics_import,
                                 state.0,
                             )?;
                             let code = publish_mmap(engine.0, mmap.0)?;
                             Ok((code, info))
                         },
                         // Implementation of how to serialize artifacts
-                        |(_engine, _wasm, _, _, _), (code, _info_and_types)| {
+                        |(_engine, _wasm, _, _, _, _), (code, _info_and_types)| {
                             Some(code.mmap().to_vec())
                         },
                         // Cache hit, deserialize the provided artifacts
-                        |(engine, wasm, _, _, _), serialized_bytes| {
+                        |(engine, wasm, _, _, _, _), serialized_bytes| {
                             let kind = if wasmparser::Parser::is_component(&wasm) {
                                 wasmtime_environ::ObjectKind::Component
                             } else {
@@ -92,9 +104,18 @@ impl<'a> CodeBuilder<'a> {
     /// Note that this method will cache compilations if the `cache` feature is
     /// enabled and turned on in [`Config`](crate::Config).
     pub fn compile_module(&self) -> Result<Module> {
+        ensure!(
+            self.get_unsafe_intrinsics_import().is_none(),
+            "`CodeBuilder::expose_unsafe_intrinsics` can only be used with components"
+        );
         let custom_alignment = self.custom_alignment();
-        let (code, info_and_types) =
-            self.compile_cached(super::build_artifacts, &custom_alignment)?;
+        let (code, info_and_types) = self.compile_cached(
+            |engine, wasm, dwarf, unsafe_intrinsics_import, state| {
+                assert!(unsafe_intrinsics_import.is_none());
+                super::build_module_artifacts(engine, wasm, dwarf, state)
+            },
+            &custom_alignment,
+        )?;
         Module::from_parts(self.engine, code, info_and_types)
     }
 
@@ -103,8 +124,18 @@ impl<'a> CodeBuilder<'a> {
     #[cfg(feature = "component-model")]
     pub fn compile_component(&self) -> Result<Component> {
         let custom_alignment = self.custom_alignment();
-        let (code, artifacts) =
-            self.compile_cached(super::build_component_artifacts, &custom_alignment)?;
+        let (code, artifacts) = self.compile_cached(
+            |engine, wasm, dwarf, unsafe_intrinsics_import, state| {
+                super::build_component_artifacts(
+                    engine,
+                    wasm,
+                    dwarf,
+                    unsafe_intrinsics_import,
+                    state,
+                )
+            },
+            &custom_alignment,
+        )?;
         Component::from_parts(self.engine, code, artifacts)
     }
 

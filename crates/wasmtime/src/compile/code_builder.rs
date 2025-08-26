@@ -40,6 +40,7 @@ pub struct CodeBuilder<'a> {
     wasm_path: Option<Cow<'a, Path>>,
     dwarf_package: Option<Cow<'a, [u8]>>,
     dwarf_package_path: Option<Cow<'a, Path>>,
+    unsafe_intrinsics_import: Option<String>,
 }
 
 /// Return value of [`CodeBuilder::hint`]
@@ -60,6 +61,7 @@ impl<'a> CodeBuilder<'a> {
             wasm_path: None,
             dwarf_package: None,
             dwarf_package_path: None,
+            unsafe_intrinsics_import: None,
         }
     }
 
@@ -181,6 +183,85 @@ impl<'a> CodeBuilder<'a> {
             .ok_or_else(|| anyhow!("no wasm bytes have been configured"))
     }
 
+    /// Expose Wasmtime's unsafe intrinsics under the given import name.
+    ///
+    /// These intrinsics provide native memory loads and stores to Wasm; they
+    /// are *extremely* unsafe! If you are not absolutely sure that you need
+    /// these unsafe intrinsics, *do not use them!* See the safety section below
+    /// for details.
+    ///
+    /// This functionality is intended to be used when implementing
+    /// "compile-time builtins"; that is, satisfying a Wasm import via
+    /// special-cased, embedder-specific code at compile time. You should never
+    /// use these intrinsics to intentionally subvert the Wasm sandbox. You
+    /// should strive to implement safe functions on top of these intrinsics
+    /// that, regardless of any value given as arguments, your functions
+    /// *cannot* result in loading from or storing to invalid pointers, or any
+    /// other kind of unsafety. See below for an example of the intended use
+    /// cases.
+    ///
+    /// Wasmtime's unsafe intrinsics can only be exposed to Wasm components, not
+    /// core modules, currently.
+    ///
+    /// # Safety
+    ///
+    /// TODO FITZGEN
+    ///
+    /// * non-null
+    /// * aligned
+    /// * sized
+    /// * provenance
+    /// * data races
+    ///
+    /// * `T` in `Store<T>` must be as expected
+    /// * `T` must be `repr(C)`
+    ///
+    /// # Intrinsics
+    ///
+    /// | Name                 | Parameters   | Results |
+    /// |----------------------|--------------|---------|
+    /// | `u8-native-load`     | `u64`        | `u8`    |
+    /// | `u16-native-load`    | `u64`        | `u16`   |
+    /// | `u32-native-load`    | `u64`        | `u32`   |
+    /// | `u64-native-load`    | `u64`        | `u64`   |
+    /// | `u8-native-store`    | `u64`, `u8`  | -       |
+    /// | `u16-native-load`    | `u64`, `u16` | -       |
+    /// | `u32-native-load`    | `u64`, `u32` | -       |
+    /// | `u64-native-load`    | `u64`, `u64` | -       |
+    /// | `store-data-address` | -            | `u64`   |
+    ///
+    /// ## `*-native-load`
+    ///
+    /// These intrinsics perform an unsandboxed load from native memory.
+    ///
+    /// ## `*-native-store`
+    ///
+    /// These intrinsics perform an unsandboxed store to native memory.
+    ///
+    /// ## `store-data-address`
+    ///
+    /// This intrinsic function returns the pointer to the embedder's `T` data
+    /// inside a `Store<T>`.
+    ///
+    /// All native load and store intinsics should operate on memory addresses
+    /// that are derived from a call to this intrinsic. If you want to expose
+    /// data for raw memory access by Wasm, put it inside the `T` in your
+    /// `Store<T>` and Wasm's access to that data should derive from this
+    /// intrinsic.
+    ///
+    /// # Portability
+    ///
+    /// Loads and stores are always performed using the architecture's native
+    /// endianness.
+    ///
+    /// # Example
+    ///
+    /// TODO FITZGEN
+    pub unsafe fn expose_unsafe_intrinsics(&mut self, import_name: impl Into<String>) -> &mut Self {
+        self.unsafe_intrinsics_import = Some(import_name.into());
+        self
+    }
+
     /// Explicitly specify DWARF `.dwp` path.
     ///
     /// # Errors
@@ -274,7 +355,12 @@ impl<'a> CodeBuilder<'a> {
     pub fn compile_module_serialized(&self) -> Result<Vec<u8>> {
         let wasm = self.get_wasm()?;
         let dwarf_package = self.get_dwarf_package();
-        let (v, _) = super::build_artifacts(self.engine, &wasm, dwarf_package.as_deref(), &())?;
+        ensure!(
+            self.unsafe_intrinsics_import.is_none(),
+            "`CodeBuilder::expose_unsafe_intrinsics` can only be used with components"
+        );
+        let (v, _) =
+            super::build_module_artifacts(self.engine, &wasm, dwarf_package.as_deref(), &())?;
         Ok(v)
     }
 
@@ -284,8 +370,18 @@ impl<'a> CodeBuilder<'a> {
     #[cfg(feature = "component-model")]
     pub fn compile_component_serialized(&self) -> Result<Vec<u8>> {
         let bytes = self.get_wasm()?;
-        let (v, _) = super::build_component_artifacts(self.engine, &bytes, None, &())?;
+        let (v, _) = super::build_component_artifacts(
+            self.engine,
+            &bytes,
+            None,
+            self.get_unsafe_intrinsics_import(),
+            &(),
+        )?;
         Ok(v)
+    }
+
+    pub(super) fn get_unsafe_intrinsics_import(&self) -> Option<&str> {
+        self.unsafe_intrinsics_import.as_deref()
     }
 }
 

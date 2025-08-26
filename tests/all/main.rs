@@ -27,6 +27,7 @@ mod iloop;
 mod import_calling_export;
 mod import_indexes;
 mod instance;
+mod intrinsics;
 mod invoke_func_via_table;
 mod limits;
 mod linker;

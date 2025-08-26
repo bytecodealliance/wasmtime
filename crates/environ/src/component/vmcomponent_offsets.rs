@@ -6,6 +6,7 @@
 //      limits: *const VMStoreContext,
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
 //      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
+//      unsafe_intrinsics: [VMFuncRef; component.num_unsafe_intrinsics],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_runtime_memories],
 //      tables: [VMTable; component.num_runtime_tables],
@@ -58,6 +59,8 @@ pub struct VMComponentOffsets<P> {
     pub num_runtime_component_instances: u32,
     /// Number of cranelift-compiled trampolines required for this component.
     pub num_trampolines: u32,
+    /// Number of cranelift-compiled intrinsics required for this component.
+    pub num_unsafe_intrinsics: u32,
     /// Number of resources within a component which need destructors stored.
     pub num_resources: u32,
 
@@ -67,6 +70,7 @@ pub struct VMComponentOffsets<P> {
     vm_store_context: u32,
     flags: u32,
     trampoline_func_refs: u32,
+    intrinsic_func_refs: u32,
     lowerings: u32,
     memories: u32,
     tables: u32,
@@ -97,12 +101,14 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_runtime_post_returns: component.num_runtime_post_returns,
             num_runtime_component_instances: component.num_runtime_component_instances,
             num_trampolines: component.trampolines.len().try_into().unwrap(),
+            num_unsafe_intrinsics: UnsafeIntrinsic::len(),
             num_resources: component.num_resources,
             magic: 0,
             builtins: 0,
             vm_store_context: 0,
             flags: 0,
             trampoline_func_refs: 0,
+            intrinsic_func_refs: 0,
             lowerings: 0,
             memories: 0,
             tables: 0,
@@ -146,6 +152,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
             align(u32::from(ret.ptr.size())),
             size(trampoline_func_refs) = cmul(ret.num_trampolines, ret.ptr.size_of_vm_func_ref()),
+            size(intrinsic_func_refs) = cmul(ret.num_unsafe_intrinsics, ret.ptr.size_of_vm_func_ref()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
             size(tables) = cmul(ret.num_runtime_tables, ret.size_of_vmtable_import()),
@@ -207,6 +214,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn trampoline_func_ref(&self, index: TrampolineIndex) -> u32 {
         assert!(index.as_u32() < self.num_trampolines);
         self.trampoline_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
+    }
+
+    /// The offset of the `unsafe_intrinsic_func_refs` field.
+    #[inline]
+    pub fn unsafe_intrinsic_func_refs(&self) -> u32 {
+        self.intrinsic_func_refs
+    }
+
+    /// The offset of the `VMFuncRef` for the `intrinsic` specified.
+    #[inline]
+    pub fn unsafe_intrinsic_func_ref(&self, intrinsic: UnsafeIntrinsic) -> u32 {
+        assert!(intrinsic.index() < self.num_unsafe_intrinsics);
+        self.unsafe_intrinsic_func_refs()
+            + intrinsic.index() * u32::from(self.ptr.size_of_vm_func_ref())
     }
 
     /// The offset of the `lowerings` field.

@@ -53,11 +53,13 @@ pub const START_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
 
 mod artifacts;
 mod info;
+mod intrinsic;
 mod names;
 mod types;
 mod vmcomponent_offsets;
 pub use self::artifacts::*;
 pub use self::info::*;
+pub use self::intrinsic::*;
 pub use self::names::*;
 pub use self::types::*;
 pub use self::vmcomponent_offsets::*;
