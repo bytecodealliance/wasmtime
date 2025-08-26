@@ -99,7 +99,7 @@ impl<T: GcRef> Rooted<T> {
         match self.inner {}
     }
 
-    pub fn to_manually_rooted(&self, _store: impl AsContextMut) -> Result<ManuallyRooted<T>> {
+    pub fn to_owned_rooted(&self, _store: impl AsContextMut) -> Result<OwnedRooted<T>> {
         match self.inner {}
     }
 
@@ -157,7 +157,7 @@ where
 
 /// This type has been disabled because the `gc` cargo feature was not enabled
 /// at compile time.
-pub struct ManuallyRooted<T>
+pub struct OwnedRooted<T>
 where
     T: GcRef,
 {
@@ -165,13 +165,13 @@ where
     _phantom: marker::PhantomData<T>,
 }
 
-impl<T: GcRef> Debug for ManuallyRooted<T> {
+impl<T: GcRef> Debug for OwnedRooted<T> {
     fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.inner {}
     }
 }
 
-impl<T: GcRef> Deref for ManuallyRooted<T> {
+impl<T: GcRef> Deref for OwnedRooted<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -179,15 +179,11 @@ impl<T: GcRef> Deref for ManuallyRooted<T> {
     }
 }
 
-impl<T> ManuallyRooted<T>
+impl<T> OwnedRooted<T>
 where
     T: GcRef,
 {
     pub fn clone(&self, _store: impl AsContextMut) -> Self {
-        match self.inner {}
-    }
-
-    pub fn unroot(self, _store: impl AsContextMut) {
         match self.inner {}
     }
 
@@ -200,7 +196,7 @@ where
     }
 }
 
-impl<T: GcRef> RootedGcRefImpl<T> for ManuallyRooted<T> {
+impl<T: GcRef> RootedGcRefImpl<T> for OwnedRooted<T> {
     fn assert_unreachable<U>(&self) -> U {
         match self.inner {}
     }

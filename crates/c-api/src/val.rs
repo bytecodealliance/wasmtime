@@ -152,7 +152,8 @@ pub union wasmtime_val_union {
 }
 
 const _: () = {
-    assert!(std::mem::size_of::<wasmtime_val_union>() == 16);
+    // This is forced to 24 or 20 bytes by `anyref` and `externref`.
+    assert!(std::mem::size_of::<wasmtime_val_union>() <= 24);
     assert!(std::mem::align_of::<wasmtime_val_union>() == std::mem::align_of::<u64>());
 };
 
@@ -235,15 +236,13 @@ impl wasmtime_val_t {
             Val::AnyRef(a) => wasmtime_val_t {
                 kind: crate::WASMTIME_ANYREF,
                 of: wasmtime_val_union {
-                    anyref: ManuallyDrop::new(a.and_then(|a| a.to_manually_rooted(cx).ok()).into()),
+                    anyref: ManuallyDrop::new(a.and_then(|a| a.to_owned_rooted(cx).ok()).into()),
                 },
             },
             Val::ExternRef(e) => wasmtime_val_t {
                 kind: crate::WASMTIME_EXTERNREF,
                 of: wasmtime_val_union {
-                    externref: ManuallyDrop::new(
-                        e.and_then(|e| e.to_manually_rooted(cx).ok()).into(),
-                    ),
+                    externref: ManuallyDrop::new(e.and_then(|e| e.to_owned_rooted(cx).ok()).into()),
                 },
             },
             Val::FuncRef(func) => wasmtime_val_t {
@@ -298,19 +297,19 @@ impl wasmtime_val_t {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_val_unroot(
-    cx: WasmtimeStoreContextMut<'_>,
+    _cx: WasmtimeStoreContextMut<'_>,
     val: &mut MaybeUninit<wasmtime_val_t>,
 ) {
     let val = val.assume_init_read();
     match val.kind {
         crate::WASMTIME_ANYREF => {
             if let Some(val) = ManuallyDrop::into_inner(val.of.anyref).as_wasmtime() {
-                val.unroot(cx);
+                drop(val);
             }
         }
         crate::WASMTIME_EXTERNREF => {
             if let Some(val) = ManuallyDrop::into_inner(val.of.externref).as_wasmtime() {
-                val.unroot(cx);
+                drop(val);
             }
         }
         _ => {}

@@ -6,7 +6,7 @@ use crate::vm::{self, VMArrayRef, VMGcHeader};
 use crate::{AnyRef, FieldType};
 use crate::{
     ArrayType, AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
-    ManuallyRooted, RefType, Rooted, Val, ValRaw, ValType, WasmTy,
+    OwnedRooted, RefType, Rooted, Val, ValRaw, ValType, WasmTy,
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
 };
@@ -108,7 +108,7 @@ impl ArrayRefPre {
 /// `0x12345678` into a reference, pretend it is a valid `arrayref`, and trick
 /// the host into dereferencing it and segfaulting or worse.
 ///
-/// Note that you can also use `Rooted<ArrayRef>` and `ManuallyRooted<ArrayRef>`
+/// Note that you can also use `Rooted<ArrayRef>` and `OwnedRooted<ArrayRef>`
 /// as a type parameter with [`Func::typed`][crate::Func::typed]- and
 /// [`Func::wrap`][crate::Func::wrap]-style APIs.
 ///
@@ -213,16 +213,16 @@ impl Rooted<ArrayRef> {
     }
 }
 
-impl ManuallyRooted<ArrayRef> {
+impl OwnedRooted<ArrayRef> {
     /// Upcast this `arrayref` into an `anyref`.
     #[inline]
-    pub fn to_anyref(self) -> ManuallyRooted<AnyRef> {
+    pub fn to_anyref(self) -> OwnedRooted<AnyRef> {
         self.unchecked_cast()
     }
 
     /// Upcast this `arrayref` into an `eqref`.
     #[inline]
-    pub fn to_eqref(self) -> ManuallyRooted<EqRef> {
+    pub fn to_eqref(self) -> OwnedRooted<EqRef> {
         self.unchecked_cast()
     }
 }
@@ -923,7 +923,7 @@ unsafe impl WasmTy for Option<Rooted<ArrayRef>> {
     }
 }
 
-unsafe impl WasmTy for ManuallyRooted<ArrayRef> {
+unsafe impl WasmTy for OwnedRooted<ArrayRef> {
     #[inline]
     fn valtype() -> ValType {
         ValType::Ref(RefType::new(false, HeapType::Array))
@@ -975,7 +975,7 @@ unsafe impl WasmTy for ManuallyRooted<ArrayRef> {
     }
 }
 
-unsafe impl WasmTy for Option<ManuallyRooted<ArrayRef>> {
+unsafe impl WasmTy for Option<OwnedRooted<ArrayRef>> {
     #[inline]
     fn valtype() -> ValType {
         ValType::ARRAYREF
@@ -995,9 +995,7 @@ unsafe impl WasmTy for Option<ManuallyRooted<ArrayRef>> {
         ty: &HeapType,
     ) -> Result<()> {
         match self {
-            Some(s) => {
-                ManuallyRooted::<ArrayRef>::dynamic_concrete_type_check(s, store, nullable, ty)
-            }
+            Some(s) => OwnedRooted::<ArrayRef>::dynamic_concrete_type_check(s, store, nullable, ty),
             None => {
                 ensure!(
                     nullable,
@@ -1014,11 +1012,11 @@ unsafe impl WasmTy for Option<ManuallyRooted<ArrayRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <ManuallyRooted<ArrayRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <OwnedRooted<ArrayRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        <ManuallyRooted<ArrayRef>>::wasm_ty_option_load(
+        <OwnedRooted<ArrayRef>>::wasm_ty_option_load(
             store,
             ptr.get_anyref(),
             ArrayRef::from_cloned_gc_ref,
