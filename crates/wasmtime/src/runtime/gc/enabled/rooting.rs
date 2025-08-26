@@ -706,7 +706,7 @@ impl RootSet {
 
         if !eager {
             let post_trim_len = self.liveness_flags.len();
-            let high_water_mark = std::cmp::max(
+            let high_water_mark = core::cmp::max(
                 DEFAULT_HIGH_WATER,
                 post_trim_len.saturating_mul(GROWTH_FACTOR),
             );
