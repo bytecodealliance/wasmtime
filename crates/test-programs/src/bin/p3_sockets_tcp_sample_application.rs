@@ -44,11 +44,14 @@ async fn test_tcp_sample_application(family: IpAddressFamily, bind_address: IpSo
             let (mut data_rx, fut) = sock.receive();
             let (result, data) = data_rx.read(Vec::with_capacity(100)).await;
             assert_eq!(result, StreamResult::Complete(first_message.len()));
-
             // Check that we sent and received our message!
             assert_eq!(data, first_message); // Not guaranteed to work but should work in practice.
-            drop(data_rx);
-            fut.await.unwrap()
+
+            let (result, data) = data_rx.read(Vec::with_capacity(1)).await;
+            assert_eq!(result, StreamResult::Dropped);
+            assert_eq!(data, []);
+
+            fut.await.unwrap();
         },
     );
 
@@ -74,11 +77,14 @@ async fn test_tcp_sample_application(family: IpAddressFamily, bind_address: IpSo
             let (mut data_rx, fut) = sock.receive();
             let (result, data) = data_rx.read(Vec::with_capacity(100)).await;
             assert_eq!(result, StreamResult::Complete(second_message.len()));
-
             // Check that we sent and received our message!
             assert_eq!(data, second_message); // Not guaranteed to work but should work in practice.
-            drop(data_rx);
-            fut.await.unwrap()
+
+            let (result, data) = data_rx.read(Vec::with_capacity(1)).await;
+            assert_eq!(result, StreamResult::Dropped);
+            assert_eq!(data, []);
+
+            fut.await.unwrap();
         }
     );
 }
