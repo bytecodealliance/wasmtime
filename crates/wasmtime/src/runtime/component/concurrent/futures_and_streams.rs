@@ -291,7 +291,7 @@ async fn watch_reader(accessor: impl AsAccessor, instance: Instance, id: TableId
             .as_accessor()
             .with(|mut access| {
                 let concurrent_state = instance.concurrent_state_mut(access.as_context_mut().0);
-                let state_id = concurrent_state.get(id)?.state;
+                let state_id = concurrent_state.get_mut(id)?.state;
                 let state = concurrent_state.get_mut(state_id)?;
                 anyhow::Ok(if matches!(&state.read, ReadState::Dropped) {
                     Poll::Ready(())
@@ -313,7 +313,7 @@ async fn watch_writer(accessor: impl AsAccessor, instance: Instance, id: TableId
             .as_accessor()
             .with(|mut access| {
                 let concurrent_state = instance.concurrent_state_mut(access.as_context_mut().0);
-                let state_id = concurrent_state.get(id)?.state;
+                let state_id = concurrent_state.get_mut(id)?.state;
                 let state = concurrent_state.get_mut(state_id)?;
                 anyhow::Ok(
                     if matches!(
@@ -638,7 +638,7 @@ impl<T> FutureReader<T> {
         };
         let store = store.as_context_mut();
         let id = TableId::<TransmitHandle>::new(*rep);
-        instance.concurrent_state_mut(store.0).get(id)?; // Just make sure it's present
+        instance.concurrent_state_mut(store.0).get_mut(id)?; // Just make sure it's present
         Ok(Self::new(id, instance))
     }
 
@@ -659,7 +659,7 @@ impl<T> FutureReader<T> {
                 future.common.handle = None;
                 let state = future.state;
 
-                if concurrent_state.get(state)?.done {
+                if concurrent_state.get_mut(state)?.done {
                     bail!("cannot lift future after previous read succeeded");
                 }
 
@@ -721,8 +721,8 @@ pub(crate) fn lower_future_to_index<U>(
         InterfaceType::Future(dst) => {
             let concurrent_state = cx.instance_mut().concurrent_state_mut();
             let id = TableId::<TransmitHandle>::new(rep);
-            let state = concurrent_state.get(id)?.state;
-            let rep = concurrent_state.get(state)?.read_handle.rep();
+            let state = concurrent_state.get_mut(id)?.state;
+            let rep = concurrent_state.get_mut(state)?.read_handle.rep();
 
             let handle = cx
                 .instance_mut()
@@ -1210,7 +1210,7 @@ impl<T> StreamReader<T> {
         };
         let store = store.as_context_mut();
         let id = TableId::<TransmitHandle>::new(*rep);
-        instance.concurrent_state_mut(store.0).get(id)?; // Just make sure it's present
+        instance.concurrent_state_mut(store.0).get_mut(id)?; // Just make sure it's present
         Ok(Self::new(id, instance))
     }
 
@@ -1289,8 +1289,8 @@ pub(crate) fn lower_stream_to_index<U>(
         InterfaceType::Stream(dst) => {
             let concurrent_state = cx.instance_mut().concurrent_state_mut();
             let id = TableId::<TransmitHandle>::new(rep);
-            let state = concurrent_state.get(id)?.state;
-            let rep = concurrent_state.get(state)?.read_handle.rep();
+            let state = concurrent_state.get_mut(id)?.state;
+            let rep = concurrent_state.get_mut(state)?.read_handle.rep();
 
             let handle = cx
                 .instance_mut()
@@ -1790,7 +1790,7 @@ impl Instance {
         kind: TransmitKind,
         post_write: PostWrite,
     ) -> Result<Result<HostResult<B>, oneshot::Receiver<HostResult<B>>>> {
-        let transmit_id = self.concurrent_state_mut(store.0).get(id)?.state;
+        let transmit_id = self.concurrent_state_mut(store.0).get_mut(id)?.state;
         let transmit = self
             .concurrent_state_mut(store.0)
             .get_mut(transmit_id)
@@ -1956,7 +1956,7 @@ impl Instance {
         mut buffer: B,
         kind: TransmitKind,
     ) -> Result<Result<HostResult<B>, oneshot::Receiver<HostResult<B>>>> {
-        let transmit_id = self.concurrent_state_mut(store.0).get(id)?.state;
+        let transmit_id = self.concurrent_state_mut(store.0).get_mut(id)?.state;
         let transmit = self
             .concurrent_state_mut(store.0)
             .get_mut(transmit_id)
@@ -2093,7 +2093,7 @@ impl Instance {
         id: TableId<TransmitHandle>,
         kind: TransmitKind,
     ) -> Result<()> {
-        let transmit_id = self.concurrent_state_mut(store).get(id)?.state;
+        let transmit_id = self.concurrent_state_mut(store).get_mut(id)?.state;
         let state = self.concurrent_state_mut(store);
         let transmit = state
             .get_mut(transmit_id)
@@ -2182,7 +2182,7 @@ impl Instance {
         id: TableId<TransmitHandle>,
         default: Option<&dyn Fn() -> Result<T>>,
     ) -> Result<()> {
-        let transmit_id = self.concurrent_state_mut(store.0).get(id)?.state;
+        let transmit_id = self.concurrent_state_mut(store.0).get_mut(id)?.state;
         let transmit = self
             .concurrent_state_mut(store.0)
             .get_mut(transmit_id)
@@ -2499,7 +2499,7 @@ impl Instance {
         *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
         let concurrent_state = self.concurrent_state_mut(store.0);
-        let transmit_id = concurrent_state.get(transmit_handle)?.state;
+        let transmit_id = concurrent_state.get_mut(transmit_handle)?.state;
         let transmit = concurrent_state.get_mut(transmit_id)?;
         log::trace!(
             "guest_write {transmit_handle:?} (handle {handle}; state {transmit_id:?}); {:?}",
@@ -2712,7 +2712,7 @@ impl Instance {
         *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
         let concurrent_state = self.concurrent_state_mut(store.0);
-        let transmit_id = concurrent_state.get(transmit_handle)?.state;
+        let transmit_id = concurrent_state.get_mut(transmit_handle)?.state;
         let transmit = concurrent_state.get_mut(transmit_id)?;
         log::trace!(
             "guest_read {transmit_handle:?} (handle {handle}; state {transmit_id:?}); {:?}",
@@ -3106,7 +3106,7 @@ impl ComponentInstance {
             }
         }
         let state = self.concurrent_state_mut();
-        let rep = state.get(id)?.state.rep();
+        let rep = state.get_mut(id)?.state.rep();
         state.host_cancel_write(rep)
     }
 
@@ -3132,7 +3132,7 @@ impl ComponentInstance {
             }
         }
         let state = self.concurrent_state_mut();
-        let rep = state.get(id)?.state.rep();
+        let rep = state.get_mut(id)?.state.rep();
         state.host_cancel_read(rep)
     }
 

@@ -635,7 +635,7 @@ impl GuestCall {
     /// - the call is for a not-yet started task and the (sub-)component
     /// instance to be called has backpressure enabled
     fn is_ready(&self, state: &mut ConcurrentState) -> Result<bool> {
-        let task_instance = state.get(self.task)?.instance;
+        let task_instance = state.get_mut(self.task)?.instance;
         let state = state.instance_state(task_instance);
         let ready = match &self.kind {
             GuestCallKind::DeliverEvent { .. } => !state.do_not_enter,
@@ -931,14 +931,14 @@ impl ComponentInstance {
         let concurrent_state = self.concurrent_state_mut();
         let (waitable, expected_caller_instance, delete) = if is_host {
             let id = TableId::<HostTask>::new(rep);
-            let task = concurrent_state.get(id)?;
+            let task = concurrent_state.get_mut(id)?;
             if task.join_handle.is_some() {
                 bail!("cannot drop a subtask which has not yet resolved");
             }
             (Waitable::Host(id), task.caller_instance, true)
         } else {
             let id = TableId::<GuestTask>::new(rep);
-            let task = concurrent_state.get(id)?;
+            let task = concurrent_state.get_mut(id)?;
             if task.lift_result.is_some() {
                 bail!("cannot drop a subtask which has not yet resolved");
             }
@@ -1370,7 +1370,7 @@ impl Instance {
                         }
                     }
 
-                    let runtime_instance = state.get(call.task)?.instance;
+                    let runtime_instance = state.get_mut(call.task)?.instance;
                     state
                         .instance_state(runtime_instance)
                         .pending
@@ -1598,7 +1598,7 @@ impl Instance {
     ) -> Result<()> {
         if self
             .concurrent_state_mut(store)
-            .get(guest_task)?
+            .get_mut(guest_task)?
             .lift_result
             .is_some()
         {
@@ -1707,7 +1707,10 @@ impl Instance {
             )
         };
 
-        let callee_instance = self.concurrent_state_mut(store.0).get(guest_task)?.instance;
+        let callee_instance = self
+            .concurrent_state_mut(store.0)
+            .get_mut(guest_task)?
+            .instance;
         let fun = if callback.is_some() {
             assert!(async_);
 
@@ -1797,7 +1800,7 @@ impl Instance {
                     // been called.
                     if instance
                         .concurrent_state_mut(store)
-                        .get(guest_task)?
+                        .get_mut(guest_task)?
                         .lift_result
                         .is_some()
                     {
@@ -1813,7 +1816,7 @@ impl Instance {
                         let state = instance.concurrent_state_mut(store);
                         state.exit_instance(callee_instance)?;
 
-                        assert!(state.get(guest_task)?.result.is_none());
+                        assert!(state.get_mut(guest_task)?.result.is_none());
 
                         state.get_mut(guest_task)?.lift_result.take().unwrap()
                     };
@@ -1836,7 +1839,7 @@ impl Instance {
 
                     if instance
                         .concurrent_state_mut(store)
-                        .get(guest_task)?
+                        .get_mut(guest_task)?
                         .call_post_return_automatically()
                     {
                         unsafe { flags.set_needs_post_return(false) }
@@ -2147,7 +2150,7 @@ impl Instance {
         let async_caller = storage.is_none();
         let state = self.concurrent_state_mut(store.0);
         let guest_task = state.guest_task.unwrap();
-        let may_enter_after_call = state.get(guest_task)?.call_post_return_automatically();
+        let may_enter_after_call = state.get_mut(guest_task)?.call_post_return_automatically();
         let callee = SendSyncPtr::new(NonNull::new(callee).unwrap());
         let param_count = usize::try_from(param_count).unwrap();
         assert!(param_count <= MAX_FLAT_PARAMS);
@@ -2583,7 +2586,7 @@ impl Instance {
             .ok_or_else(|| {
                 anyhow!("`task.return` or `task.cancel` called more than once for current task")
             })?;
-        assert!(state.get(guest_task)?.result.is_none());
+        assert!(state.get_mut(guest_task)?.result.is_none());
 
         let invalid = ty != lift.ty
             || string_encoding != lift.string_encoding
@@ -2657,7 +2660,7 @@ impl Instance {
     ) -> Result<()> {
         if self
             .concurrent_state_mut(store)
-            .get(guest_task)?
+            .get_mut(guest_task)?
             .call_post_return_automatically()
         {
             let (calls, host_table, _, instance) = store
@@ -2676,7 +2679,7 @@ impl Instance {
             // should be a non-`None` value.
             let function_index = self
                 .concurrent_state_mut(store)
-                .get(guest_task)?
+                .get_mut(guest_task)?
                 .function_index
                 .unwrap();
 
@@ -2793,7 +2796,7 @@ impl Instance {
         log::trace!("waitable check for {guest_task:?}; set {set:?}");
 
         let state = self.concurrent_state_mut(store);
-        let task = state.get(guest_task)?;
+        let task = state.get_mut(guest_task)?;
 
         if wait && task.callback.is_some() {
             bail!("cannot call `task.wait` from async-lifted export with callback");
@@ -2804,7 +2807,7 @@ impl Instance {
         if wait {
             let set = set.unwrap();
 
-            if task.event.is_none() && state.get(set)?.ready.is_empty() {
+            if task.event.is_none() && state.get_mut(set)?.ready.is_empty() {
                 let old = state.get_mut(guest_task)?.wake_on_cancel.replace(set);
                 assert!(old.is_none());
 
@@ -2877,12 +2880,14 @@ impl Instance {
             let id = TableId::<HostTask>::new(rep);
             (
                 Waitable::Host(id),
-                self.concurrent_state_mut(store).get(id)?.caller_instance,
+                self.concurrent_state_mut(store)
+                    .get_mut(id)?
+                    .caller_instance,
             )
         } else {
             let id = TableId::<GuestTask>::new(rep);
             if let Caller::Guest { instance, .. } =
-                &self.concurrent_state_mut(store).get(id)?.caller
+                &self.concurrent_state_mut(store).get_mut(id)?.caller
             {
                 (Waitable::Guest(id), *instance)
             } else {
@@ -4111,10 +4116,6 @@ impl ConcurrentState {
         self.table.get_mut().unwrap().push(value).map(TableId::from)
     }
 
-    fn get<V: 'static>(&mut self, id: TableId<V>) -> Result<&V, ResourceTableError> {
-        self.table.get_mut().unwrap().get(&Resource::from(id))
-    }
-
     fn get_mut<V: 'static>(&mut self, id: TableId<V>) -> Result<&mut V, ResourceTableError> {
         self.table.get_mut().unwrap().get_mut(&Resource::from(id))
     }
@@ -4175,7 +4176,7 @@ impl ConcurrentState {
     /// if there are no activation records on the stack (i.e. the "may_enter"
     /// field is `true`) for that instance.
     fn may_enter(&mut self, mut guest_task: TableId<GuestTask>) -> bool {
-        let guest_instance = self.get(guest_task).unwrap().instance;
+        let guest_instance = self.get_mut(guest_task).unwrap().instance;
 
         // Walk the task tree back to the root, looking for potential
         // reentrance.
@@ -4255,7 +4256,7 @@ impl ConcurrentState {
     /// Implements the `context.get` intrinsic.
     pub(crate) fn context_get(&mut self, slot: u32) -> Result<u32> {
         let task = self.guest_task.unwrap();
-        let val = self.get(task)?.context[usize::try_from(slot).unwrap()];
+        let val = self.get_mut(task)?.context[usize::try_from(slot).unwrap()];
         log::trace!("context_get {task:?} slot {slot} val {val:#x}");
         Ok(val)
     }
