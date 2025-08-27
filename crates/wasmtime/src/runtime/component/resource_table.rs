@@ -151,8 +151,8 @@ impl ResourceTable {
     }
 
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
-    fn free_entry(&mut self, ix: usize) -> TableEntry {
-        if cfg!(debug_assertions) {
+    fn free_entry(&mut self, ix: usize, debug: bool) -> TableEntry {
+        if debug {
             // Instead of making this entry available for reuse, we leave a
             // tombstone in debug mode.  This helps detect use-after-delete and
             // double-delete bugs.
@@ -306,24 +306,35 @@ impl ResourceTable {
         Ok(&mut *r.entry)
     }
 
-    /// Same as `delete`, but typed
+    /// Remove the specified entry from the table.
     pub fn delete<T>(&mut self, resource: Resource<T>) -> Result<T, ResourceTableError>
     where
         T: Any,
     {
+        self.delete_maybe_debug(resource, cfg!(debug_assertions))
+    }
+
+    fn delete_maybe_debug<T>(
+        &mut self,
+        resource: Resource<T>,
+        debug: bool,
+    ) -> Result<T, ResourceTableError>
+    where
+        T: Any,
+    {
         debug_assert!(resource.owned());
-        let entry = self.delete_entry(resource.rep())?;
+        let entry = self.delete_entry(resource.rep(), debug)?;
         match entry.entry.downcast() {
             Ok(t) => Ok(*t),
             Err(_e) => Err(ResourceTableError::WrongType),
         }
     }
 
-    fn delete_entry(&mut self, key: u32) -> Result<TableEntry, ResourceTableError> {
+    fn delete_entry(&mut self, key: u32, debug: bool) -> Result<TableEntry, ResourceTableError> {
         if !self.occupied(key)?.children.is_empty() {
             return Err(ResourceTableError::HasChildren);
         }
-        let e = self.free_entry(key as usize);
+        let e = self.free_entry(key as usize, debug);
         if let Some(parent) = e.parent {
             // Remove deleted resource from parent's child list.
             // Parent must still be present because it can't be deleted while still having
@@ -413,13 +424,13 @@ pub fn test_free_list() {
     assert_eq!(y.rep(), 1);
 
     // Deleting x should put it on the free list, so the next entry should have the same rep.
-    table.delete(x).unwrap();
+    table.delete_maybe_debug(x, false).unwrap();
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 0);
 
     // Deleting x and then y should yield indices 1 and then 0 for new entries.
-    table.delete(x).unwrap();
-    table.delete(y).unwrap();
+    table.delete_maybe_debug(x, false).unwrap();
+    table.delete_maybe_debug(y, false).unwrap();
 
     let y = table.push(()).unwrap();
     assert_eq!(y.rep(), 1);
