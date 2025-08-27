@@ -648,7 +648,7 @@ impl Wizer {
         // Enable Wasmtime's code cache. This makes it so that repeated
         // wizenings of the same Wasm module (e.g. with different WASI inputs)
         // doesn't require re-compiling the Wasm to native code every time.
-        config.cache_config_load_default()?;
+        wasmtime::Cache::from_file(None).map(|cache| config.cache(Some(cache)))?;
 
         // Proposals we support.
         config.wasm_multi_memory(self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY));

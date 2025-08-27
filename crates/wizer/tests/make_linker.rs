@@ -31,7 +31,9 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
     }
 
     let mut config = wasmtime::Config::new();
-    config.cache_config_load_default().unwrap();
+    wasmtime::Cache::from_file(None)
+        .map(|cache| config.cache(Some(cache)))
+        .unwrap();
     config.wasm_multi_memory(true);
     config.wasm_multi_value(true);
 

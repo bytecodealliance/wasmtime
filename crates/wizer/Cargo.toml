@@ -33,8 +33,8 @@ env_logger = { version = "0.11.8", optional = true }
 log = "0.4.27"
 rayon = "1.10.0"
 structopt = { version = "0.3.26", optional = true }
-wasm-encoder = "0.228.0"
-wasmparser = "0.228.0"
+wasm-encoder = "0.238.0"
+wasmparser = "0.238.0"
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["preview1"] }
 
@@ -45,15 +45,15 @@ workspace = true
 optional = true
 
 [workspace.dependencies]
-wasmprinter = "0.228.0"
-wasmtime = "31"
-wasmtime-wasi = "31"
+wasmprinter = "0.238.0"
+wasmtime = "36"
+wasmtime-wasi = "36"
 
 [dev-dependencies]
 criterion = "0.5.1"
 env_logger = "0.11.8"
 wasmprinter = { workspace = true }
-wat = "1.228.0"
+wat = "1.238.0"
 
 [workspace]
 members = [

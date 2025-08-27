@@ -91,8 +91,12 @@ impl Wizer {
                             &match val {
                                 wasmtime::Val::I32(x) => ConstExpr::i32_const(*x),
                                 wasmtime::Val::I64(x) => ConstExpr::i64_const(*x),
-                                wasmtime::Val::F32(x) => ConstExpr::f32_const(f32::from_bits(*x)),
-                                wasmtime::Val::F64(x) => ConstExpr::f64_const(f64::from_bits(*x)),
+                                wasmtime::Val::F32(x) => {
+                                    ConstExpr::f32_const(wasm_encoder::Ieee32::new(*x))
+                                }
+                                wasmtime::Val::F64(x) => {
+                                    ConstExpr::f64_const(wasm_encoder::Ieee64::new(*x))
+                                }
                                 wasmtime::Val::V128(x) => {
                                     ConstExpr::v128_const(x.as_u128() as i128)
                                 }
