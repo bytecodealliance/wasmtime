@@ -1537,7 +1537,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         _fs_rights_inheriting: types::Rights,
     ) -> Result<(), types::Error> {
         self.get_fd(fd)?;
-        Ok(())
+        Err(types::Errno::Notsup.into())
     }
 
     /// Return the attributes of an open file.
