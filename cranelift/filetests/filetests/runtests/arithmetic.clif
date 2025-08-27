@@ -574,3 +574,17 @@ block0:
     return v2
 }
 ; run: %imul_big_constant() == 248153666
+
+
+;; x * (1 << y) should be optimized to x << y
+function %mul_one_shl(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = ishl v2, v1
+    v4 = imul v0, v3
+    return v4
+}
+
+; run: %mul_one_shl(2, 3) == 16
+; run: %mul_one_shl(4, 5) == 128
+; run: %mul_one_shl(8, 6) == 512
