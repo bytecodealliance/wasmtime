@@ -274,6 +274,16 @@ impl Global {
                     let new = new.as_ref();
                     definition.write_gc_ref(&mut store, new);
                 }
+                Val::ContRef(None) => {
+                    // Allow null continuation references for globals - these are just placeholders
+                    // Non-null references are not supported yet
+                }
+                Val::ContRef(Some(_)) => {
+                    // TODO(#10248): Implement non-null global continuation reference handling
+                    return Err(anyhow::anyhow!(
+                        "setting non-null continuation references in globals not yet supported"
+                    ));
+                }
             }
         }
         Ok(())

@@ -70,6 +70,16 @@ pub fn generate_global_export(
                 let new = new.as_ref();
                 global.write_gc_ref(&mut store, new);
             }
+            Val::ContRef(None) => {
+                // Allow null continuation references for trampoline globals - these are just placeholders
+                // Non-null references are not supported yet
+            }
+            Val::ContRef(Some(_)) => {
+                // TODO(#10248): Implement non-null trampoline continuation reference handling
+                return Err(anyhow::anyhow!(
+                    "non-null continuation references in trampoline globals not yet supported"
+                ));
+            }
         }
     }
 
