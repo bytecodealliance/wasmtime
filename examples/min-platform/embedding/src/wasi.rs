@@ -301,7 +301,7 @@ impl InputStream for NeverReadable {
     }
 }
 
-// WriteLog is used implement stdout and stderr. Clonable because wasi:cli
+// WriteLog is used implement stdout and stderr. Cloneable because wasi:cli
 // requires, when calling get_stdout/get_stderr multiple times, to provide
 // distinct resources that point to the same underlying stream. RefCell
 // provides mutation, and VecDeque provides O(1) push_back operation.
