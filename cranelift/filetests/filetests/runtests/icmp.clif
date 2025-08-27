@@ -22,3 +22,25 @@ block0(v0: i8):
 }
 ; run: %overflow_rhs_const(49) == 1
 ; run: %overflow_rhs_const(-65) == 0
+
+function %ugt_sub_swap(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp ugt v2, v0
+    return v3
+}
+
+; run: %ugt_sub_swap(1, -49) == 1
+; run: %ugt_sub_swap(1, 2) == 1
+; run: %ugt_sub_swap(2, 1) == 0
+
+function %ule_sub_swap(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp ule v2, v0
+    return v3
+}
+
+; run: %ule_sub_swap(1, -88) == 0
+; run: %ule_sub_swap(1, 2) == 0
+; run: %ule_sub_swap(2, 1) == 1
