@@ -6,8 +6,8 @@ use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
 use crate::component::{AsAccessor, Instance, Lower, Val, WasmList, WasmStr};
 use crate::store::{StoreOpaque, StoreToken};
-use crate::vm::VMStore;
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
+use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{Context, Result, anyhow, bail};
 use buffers::Extender;
@@ -21,7 +21,7 @@ use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
 use std::pin::Pin;
 use std::string::{String, ToString};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::task::{Poll, Waker};
 use std::vec::Vec;
 use wasmtime_environ::component::{
@@ -1887,7 +1887,7 @@ impl Instance {
                     let (tx, rx) = oneshot::channel();
                     let token = StoreToken::new(store.as_context_mut());
                     self.concurrent_state_mut(store.0).push_high_priority(
-                        WorkItem::WorkerFunction(Mutex::new(Box::new(move |store, _| {
+                        WorkItem::WorkerFunction(AlwaysMut::new(Box::new(move |store, _| {
                             _ = tx.send(accept(token.as_context_mut(store))?);
                             Ok(())
                         }))),

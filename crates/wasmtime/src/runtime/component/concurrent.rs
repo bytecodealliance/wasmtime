@@ -57,7 +57,7 @@ use crate::store::{StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{
     CallContext, ComponentInstance, InstanceFlags, ResourceTables, TransmitLocalState,
 };
-use crate::vm::{SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
+use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use anyhow::{Context as _, Result, anyhow, bail};
 use error_contexts::GlobalErrorContextRefCount;
@@ -78,7 +78,6 @@ use std::ops::DerefMut;
 use std::pin::{Pin, pin};
 use std::ptr::{self, NonNull};
 use std::slice;
-use std::sync::Mutex;
 use std::task::{Context, Poll, Waker};
 use std::vec::Vec;
 use table::{TableDebug, TableId};
@@ -653,7 +652,7 @@ impl GuestCall {
 /// Job to be run on a worker fiber.
 enum WorkerItem {
     GuestCall(GuestCall),
-    Function(Mutex<Box<dyn FnOnce(&mut dyn VMStore, Instance) -> Result<()> + Send>>),
+    Function(AlwaysMut<Box<dyn FnOnce(&mut dyn VMStore, Instance) -> Result<()> + Send>>),
 }
 
 /// Represents state related to an in-progress poll operation (e.g. `task.poll`
@@ -670,7 +669,7 @@ struct PollParams {
 /// component instance.
 enum WorkItem {
     /// A host task to be pushed to `ConcurrentState::futures`.
-    PushFuture(Mutex<HostTaskFuture>),
+    PushFuture(AlwaysMut<HostTaskFuture>),
     /// A fiber to resume.
     ResumeFiber(StoreFiber<'static>),
     /// A pending call into guest code for a given guest task.
@@ -678,7 +677,7 @@ enum WorkItem {
     /// A pending `task.poll` or `CallbackCode.POLL` operation.
     Poll(PollParams),
     /// A job to run on a worker fiber.
-    WorkerFunction(Mutex<Box<dyn FnOnce(&mut dyn VMStore, Instance) -> Result<()> + Send>>),
+    WorkerFunction(AlwaysMut<Box<dyn FnOnce(&mut dyn VMStore, Instance) -> Result<()> + Send>>),
 }
 
 impl fmt::Debug for WorkItem {
@@ -983,7 +982,6 @@ impl Instance {
             .concurrent_state_mut()
             .table
             .get_mut()
-            .unwrap()
             .enable_debug(enable);
         // TODO: do the same for the tables holding guest-facing handles
     }
@@ -1009,22 +1007,14 @@ impl Instance {
         );
         let state = instance.concurrent_state_mut();
         assert!(
-            state.table.get_mut().unwrap().is_empty(),
+            state.table.get_mut().is_empty(),
             "non-empty table: {:?}",
             state.table
         );
         assert!(state.high_priority.is_empty());
         assert!(state.low_priority.is_empty());
         assert!(state.guest_task.is_none());
-        assert!(
-            state
-                .futures
-                .get_mut()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .is_empty()
-        );
+        assert!(state.futures.get_mut().as_ref().unwrap().is_empty());
         assert!(
             state
                 .instance_states
@@ -1186,7 +1176,6 @@ impl Instance {
                 .concurrent_state_mut(store.0)
                 .futures
                 .get_mut()
-                .unwrap()
                 .take()
                 .unwrap();
             let mut next = pin!(futures.next());
@@ -1216,8 +1205,9 @@ impl Instance {
                                 // by adding another variant to `HostOutput` to
                                 // distinguish which ones need it and which
                                 // don't.
-                                self.concurrent_state_mut(store.0)
-                                    .push_high_priority(WorkItem::WorkerFunction(Mutex::new(fun)))
+                                self.concurrent_state_mut(store.0).push_high_priority(
+                                    WorkItem::WorkerFunction(AlwaysMut::new(fun)),
+                                )
                             }
                         }
                         Poll::Ready(true)
@@ -1310,11 +1300,7 @@ impl Instance {
             // Put the `ConcurrentState::futures` back into the instance before
             // we return or handle any work items since one or more of those
             // items might append more futures.
-            *self
-                .concurrent_state_mut(store.0)
-                .futures
-                .get_mut()
-                .unwrap() = Some(futures);
+            *self.concurrent_state_mut(store.0).futures.get_mut() = Some(futures);
 
             match result? {
                 // The future we were passed as an argument completed, so we
@@ -1343,10 +1329,9 @@ impl Instance {
                 self.concurrent_state_mut(store.0)
                     .futures
                     .get_mut()
-                    .unwrap()
                     .as_mut()
                     .unwrap()
-                    .push(future.into_inner().unwrap());
+                    .push(future.into_inner());
             }
             WorkItem::ResumeFiber(fiber) => {
                 self.resume_fiber(store.0, fiber).await?;
@@ -1462,7 +1447,7 @@ impl Instance {
                 loop {
                     match self.concurrent_state_mut(store).worker_item.take().unwrap() {
                         WorkerItem::GuestCall(call) => self.handle_guest_call(store, call)?,
-                        WorkerItem::Function(fun) => fun.into_inner().unwrap()(store, self)?,
+                        WorkerItem::Function(fun) => fun.into_inner()(store, self)?,
                     }
 
                     self.suspend(store, SuspendReason::NeedWork)?;
@@ -3976,15 +3961,11 @@ pub struct ConcurrentState {
     guest_task: Option<TableId<GuestTask>>,
     /// The set of pending host and background tasks, if any.
     ///
-    /// We must wrap this in a `Mutex` to ensure that `ComponentInstance` and
-    /// `Store` satisfy a `Sync` bound, but it can't actually be accessed from
-    /// more than one thread at a time.
-    ///
     /// See `ComponentInstance::poll_until` for where we temporarily take this
     /// out, poll it, then put it back to avoid any mutable aliasing hazards.
-    futures: Mutex<Option<FuturesUnordered<HostTaskFuture>>>,
+    futures: AlwaysMut<Option<FuturesUnordered<HostTaskFuture>>>,
     /// The table of waitables, waitable sets, etc.
-    table: Mutex<ResourceTable>,
+    table: AlwaysMut<ResourceTable>,
     /// Per (sub-)component instance states.
     ///
     /// See `InstanceState` for details and note that this map is lazily
@@ -4030,8 +4011,8 @@ impl ConcurrentState {
     pub(crate) fn new(component: &Component) -> Self {
         Self {
             guest_task: None,
-            table: Mutex::new(ResourceTable::new()),
-            futures: Mutex::new(Some(FuturesUnordered::new())),
+            table: AlwaysMut::new(ResourceTable::new()),
+            futures: AlwaysMut::new(Some(FuturesUnordered::new())),
             instance_states: HashMap::new(),
             high_priority: Vec::new(),
             low_priority: Vec::new(),
@@ -4064,7 +4045,7 @@ impl ConcurrentState {
         fibers: &mut Vec<StoreFiber<'static>>,
         futures: &mut Vec<FuturesUnordered<HostTaskFuture>>,
     ) {
-        for entry in self.table.get_mut().unwrap().iter_mut() {
+        for entry in self.table.get_mut().iter_mut() {
             if let Some(set) = entry.downcast_mut::<WaitableSet>() {
                 for mode in mem::take(&mut set.waiting).into_values() {
                     if let WaitMode::Fiber(fiber) = mode {
@@ -4087,10 +4068,9 @@ impl ConcurrentState {
                     WorkItem::PushFuture(future) => {
                         self.futures
                             .get_mut()
-                            .unwrap()
                             .as_mut()
                             .unwrap()
-                            .push(future.into_inner().unwrap());
+                            .push(future.into_inner());
                     }
                     _ => {}
                 }
@@ -4100,7 +4080,7 @@ impl ConcurrentState {
         take_items(&mut self.high_priority);
         take_items(&mut self.low_priority);
 
-        if let Some(them) = self.futures.get_mut().unwrap().take() {
+        if let Some(them) = self.futures.get_mut().take() {
             futures.push(them);
         }
     }
@@ -4113,11 +4093,11 @@ impl ConcurrentState {
         &mut self,
         value: V,
     ) -> Result<TableId<V>, ResourceTableError> {
-        self.table.get_mut().unwrap().push(value).map(TableId::from)
+        self.table.get_mut().push(value).map(TableId::from)
     }
 
     fn get_mut<V: 'static>(&mut self, id: TableId<V>) -> Result<&mut V, ResourceTableError> {
-        self.table.get_mut().unwrap().get_mut(&Resource::from(id))
+        self.table.get_mut().get_mut(&Resource::from(id))
     }
 
     pub fn add_child<T: 'static, U: 'static>(
@@ -4127,7 +4107,6 @@ impl ConcurrentState {
     ) -> Result<(), ResourceTableError> {
         self.table
             .get_mut()
-            .unwrap()
             .add_child(Resource::from(child), Resource::from(parent))
     }
 
@@ -4138,12 +4117,11 @@ impl ConcurrentState {
     ) -> Result<(), ResourceTableError> {
         self.table
             .get_mut()
-            .unwrap()
             .remove_child(Resource::from(child), Resource::from(parent))
     }
 
     fn delete<V: 'static>(&mut self, id: TableId<V>) -> Result<V, ResourceTableError> {
-        self.table.get_mut().unwrap().delete(Resource::from(id))
+        self.table.get_mut().delete(Resource::from(id))
     }
 
     fn push_future(&mut self, future: HostTaskFuture) {
@@ -4153,7 +4131,7 @@ impl ConcurrentState {
         // so it has exclusive access while polling it.  Therefore, we push a
         // work item to the "high priority" queue, which will actually push to
         // `ConcurrentState::futures` later.
-        self.push_high_priority(WorkItem::PushFuture(Mutex::new(future)));
+        self.push_high_priority(WorkItem::PushFuture(AlwaysMut::new(future)));
     }
 
     fn push_high_priority(&mut self, item: WorkItem) {
