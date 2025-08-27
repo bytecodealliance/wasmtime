@@ -375,6 +375,7 @@ impl BuiltinFunctionSignatures {
         AbiParam::new(ir::types::I8)
     }
 
+    #[cfg(feature = "stack-switching")]
     fn size(&self) -> AbiParam {
         AbiParam::new(self.pointer_type)
     }
