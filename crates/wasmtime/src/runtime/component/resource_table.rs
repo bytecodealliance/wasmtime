@@ -3,6 +3,7 @@ use crate::prelude::*;
 use alloc::collections::{BTreeMap, BTreeSet};
 use core::any::Any;
 use core::fmt;
+use core::mem;
 
 #[derive(Debug)]
 /// Errors returned by operations on `ResourceTable`
@@ -32,7 +33,6 @@ impl fmt::Display for ResourceTableError {
 impl core::error::Error for ResourceTableError {}
 
 /// The `ResourceTable` type maps a `Resource<T>` to its `T`.
-#[derive(Debug)]
 pub struct ResourceTable {
     entries: Vec<Entry>,
     free_head: Option<usize>,
@@ -60,12 +60,13 @@ impl Entry {
     }
 }
 
+struct Tombstone;
+
 /// This structure tracks parent and child relationships for a given table entry.
 ///
 /// Parents and children are referred to by table index. We maintain the
-/// following invariants to prevent orphans and cycles:
-/// * parent can only be assigned on creating the entry.
-/// * parent, if some, must exist when creating the entry.
+/// following invariants:
+/// * the parent must exist when adding a child.
 /// * whenever a child is created, its index is added to children.
 /// * whenever a child is deleted, its index is removed from children.
 /// * an entry with children may not be deleted.
@@ -106,6 +107,17 @@ impl ResourceTable {
         }
     }
 
+    /// Returns whether or not this table is empty.
+    ///
+    /// Note that this is an `O(n)` operation, where `n` is the number of
+    /// entries in the backing `Vec`.
+    pub fn is_empty(&self) -> bool {
+        self.entries.iter().all(|entry| match entry {
+            Entry::Free { .. } => true,
+            Entry::Occupied { entry } => entry.entry.downcast_ref::<Tombstone>().is_some(),
+        })
+    }
+
     /// Create an empty table with at least the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         ResourceTable {
@@ -139,20 +151,39 @@ impl ResourceTable {
     }
 
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
-    fn free_entry(&mut self, ix: usize) -> TableEntry {
-        let entry = match core::mem::replace(
-            &mut self.entries[ix],
-            Entry::Free {
-                next: self.free_head,
-            },
-        ) {
-            Entry::Occupied { entry } => entry,
-            Entry::Free { .. } => unreachable!(),
-        };
+    fn free_entry(&mut self, ix: usize, debug: bool) -> TableEntry {
+        if debug {
+            // Instead of making this entry available for reuse, we leave a
+            // tombstone in debug mode.  This helps detect use-after-delete and
+            // double-delete bugs.
+            match mem::replace(
+                &mut self.entries[ix],
+                Entry::Occupied {
+                    entry: TableEntry {
+                        entry: Box::new(Tombstone),
+                        parent: None,
+                        children: BTreeSet::new(),
+                    },
+                },
+            ) {
+                Entry::Occupied { entry } => entry,
+                Entry::Free { .. } => unreachable!(),
+            }
+        } else {
+            let entry = match core::mem::replace(
+                &mut self.entries[ix],
+                Entry::Free {
+                    next: self.free_head,
+                },
+            ) {
+                Entry::Occupied { entry } => entry,
+                Entry::Free { .. } => unreachable!(),
+            };
 
-        self.free_head = Some(ix);
+            self.free_head = Some(ix);
 
-        entry
+            entry
+        }
     }
 
     /// Push a new entry into the table, returning its handle. This will prefer to use free entries
@@ -201,11 +232,6 @@ impl ResourceTable {
     /// locking overhead and design issues, such as child existence extending
     /// lifetime of parent referent even after parent resource is destroyed,
     /// possibility for deadlocks.
-    ///
-    /// Parent-child relationships may not be modified once created. There
-    /// is no way to observe these relationships through the [`ResourceTable`]
-    /// methods except for erroring on deletion, or the [`std::fmt::Debug`]
-    /// impl.
     pub fn push_child<T, U>(
         &mut self,
         entry: T,
@@ -220,6 +246,32 @@ impl ResourceTable {
         let child = self.push_(TableEntry::new(Box::new(entry), Some(parent)))?;
         self.occupied_mut(parent)?.add_child(child);
         Ok(Resource::new_own(child))
+    }
+
+    /// Add an already-resident child to a resource.
+    pub fn add_child<T: 'static, U: 'static>(
+        &mut self,
+        child: Resource<T>,
+        parent: Resource<U>,
+    ) -> Result<(), ResourceTableError> {
+        let entry = self.occupied_mut(child.rep())?;
+        assert!(entry.parent.is_none());
+        entry.parent = Some(parent.rep());
+        self.occupied_mut(parent.rep())?.add_child(child.rep());
+        Ok(())
+    }
+
+    /// Remove a child to from a resource (but leave it in the table).
+    pub fn remove_child<T: 'static, U: 'static>(
+        &mut self,
+        child: Resource<T>,
+        parent: Resource<U>,
+    ) -> Result<(), ResourceTableError> {
+        let entry = self.occupied_mut(child.rep())?;
+        assert_eq!(entry.parent, Some(parent.rep()));
+        entry.parent = None;
+        self.occupied_mut(parent.rep())?.remove_child(child.rep());
+        Ok(())
     }
 
     /// Get an immutable reference to a resource of a given type at a given
@@ -254,24 +306,35 @@ impl ResourceTable {
         Ok(&mut *r.entry)
     }
 
-    /// Same as `delete`, but typed
+    /// Remove the specified entry from the table.
     pub fn delete<T>(&mut self, resource: Resource<T>) -> Result<T, ResourceTableError>
     where
         T: Any,
     {
+        self.delete_maybe_debug(resource, cfg!(debug_assertions))
+    }
+
+    fn delete_maybe_debug<T>(
+        &mut self,
+        resource: Resource<T>,
+        debug: bool,
+    ) -> Result<T, ResourceTableError>
+    where
+        T: Any,
+    {
         debug_assert!(resource.owned());
-        let entry = self.delete_entry(resource.rep())?;
+        let entry = self.delete_entry(resource.rep(), debug)?;
         match entry.entry.downcast() {
             Ok(t) => Ok(*t),
             Err(_e) => Err(ResourceTableError::WrongType),
         }
     }
 
-    fn delete_entry(&mut self, key: u32) -> Result<TableEntry, ResourceTableError> {
+    fn delete_entry(&mut self, key: u32, debug: bool) -> Result<TableEntry, ResourceTableError> {
         if !self.occupied(key)?.children.is_empty() {
             return Err(ResourceTableError::HasChildren);
         }
-        let e = self.free_entry(key as usize);
+        let e = self.free_entry(key as usize, debug);
         if let Some(parent) = e.parent {
             // Remove deleted resource from parent's child list.
             // Parent must still be present because it can't be deleted while still having
@@ -314,11 +377,39 @@ impl ResourceTable {
             child.entry.as_ref()
         }))
     }
+
+    /// Iterate over all the entries in this table.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (dyn Any + Send)> {
+        self.entries.iter_mut().filter_map(|entry| match entry {
+            Entry::Occupied { entry } => Some(&mut *entry.entry),
+            Entry::Free { .. } => None,
+        })
+    }
 }
 
 impl Default for ResourceTable {
     fn default() -> Self {
         ResourceTable::new()
+    }
+}
+
+impl fmt::Debug for ResourceTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[")?;
+        let mut wrote = false;
+        for (index, entry) in self.entries.iter().enumerate() {
+            if let Entry::Occupied { entry } = entry {
+                if entry.entry.downcast_ref::<Tombstone>().is_none() {
+                    if wrote {
+                        write!(f, ", ")?;
+                    } else {
+                        wrote = true;
+                    }
+                    write!(f, "{index}")?;
+                }
+            }
+        }
+        write!(f, "]")
     }
 }
 
@@ -333,13 +424,13 @@ pub fn test_free_list() {
     assert_eq!(y.rep(), 1);
 
     // Deleting x should put it on the free list, so the next entry should have the same rep.
-    table.delete(x).unwrap();
+    table.delete_maybe_debug(x, false).unwrap();
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 0);
 
     // Deleting x and then y should yield indices 1 and then 0 for new entries.
-    table.delete(x).unwrap();
-    table.delete(y).unwrap();
+    table.delete_maybe_debug(x, false).unwrap();
+    table.delete_maybe_debug(y, false).unwrap();
 
     let y = table.push(()).unwrap();
     assert_eq!(y.rep(), 1);
