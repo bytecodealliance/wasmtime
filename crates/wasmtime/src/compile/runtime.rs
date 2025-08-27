@@ -21,10 +21,6 @@ impl<'a> CodeBuilder<'a> {
         let wasm = self.get_wasm()?;
         let dwarf_package = self.get_dwarf_package();
 
-        self.engine
-            .check_compatible_with_native_host()
-            .context("compilation settings are not compatible with the native host")?;
-
         #[cfg(feature = "cache")]
         {
             let state = (

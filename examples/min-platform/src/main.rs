@@ -76,6 +76,19 @@ fn main() -> Result<()> {
         config.signals_based_traps(false);
     }
 
+    // For x86_64 targets be sure to enable relevant CPU features to avoid
+    // float-related libcalls which is required for the `x86_64-unknown-none`
+    // target.
+    if cfg!(target_arch = "x86_64") {
+        unsafe {
+            config.cranelift_flag_enable("has_sse3");
+            config.cranelift_flag_enable("has_ssse3");
+            config.cranelift_flag_enable("has_sse41");
+            config.cranelift_flag_enable("has_sse42");
+            config.cranelift_flag_enable("has_fma");
+        }
+    }
+
     let engine = Engine::new(&config)?;
     let smoke = engine.precompile_module(b"(module)")?;
     let simple_add = engine.precompile_module(
@@ -92,6 +105,16 @@ fn main() -> Result<()> {
                 (import "host" "multiply" (func $multiply (param i32 i32) (result i32)))
                 (func (export "add_and_mul") (param i32 i32 i32) (result i32)
                     (i32.add (call $multiply (local.get 0) (local.get 1)) (local.get 2)))
+            )
+        "#,
+    )?;
+    let simple_floats = engine.precompile_module(
+        br#"
+            (module
+                (func (export "frob") (param f32 f32) (result f32)
+                    (f32.ceil (local.get 0))
+                    (f32.floor (local.get 1))
+                    f32.add)
             )
         "#,
     )?;
@@ -134,6 +157,8 @@ fn main() -> Result<()> {
                 usize,
                 *const u8,
                 usize,
+                *const u8,
+                usize,
             ) -> usize,
         > = lib
             .get(b"run")
@@ -149,6 +174,8 @@ fn main() -> Result<()> {
             simple_add.len(),
             simple_host_fn.as_ptr(),
             simple_host_fn.len(),
+            simple_floats.as_ptr(),
+            simple_floats.len(),
         );
         error_buf.set_len(len);
 
