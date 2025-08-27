@@ -241,7 +241,7 @@ mod tcp;
 mod udp;
 mod write_stream;
 
-pub use self::filesystem::{FsError, FsResult};
+pub use self::filesystem::{FsError, FsResult, ReaddirIterator};
 pub use self::network::{Network, SocketError, SocketResult};
 pub use self::stdio::IsATTY;
 pub(crate) use tcp::P2TcpStreamingState;
