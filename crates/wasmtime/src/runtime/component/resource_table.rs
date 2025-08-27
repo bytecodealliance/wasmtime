@@ -36,7 +36,6 @@ impl core::error::Error for ResourceTableError {}
 pub struct ResourceTable {
     entries: Vec<Entry>,
     free_head: Option<usize>,
-    debug: bool,
 }
 
 #[derive(Debug)]
@@ -105,18 +104,7 @@ impl ResourceTable {
         ResourceTable {
             entries: Vec::new(),
             free_head: None,
-            debug: false,
         }
-    }
-
-    /// Enable or disable "debug mode".
-    ///
-    /// When this is enabled, the `delete` method will leave a tombstone in
-    /// place of the deleted item rather than add the entry to the free list.
-    /// This can help uncover "use-after-delete" or "double-delete" bugs which
-    /// might otherwise go unnoticed if an entry is repopulated.
-    pub fn enable_debug(&mut self, enable: bool) {
-        self.debug = enable;
     }
 
     /// Returns whether or not this table is empty.
@@ -135,7 +123,6 @@ impl ResourceTable {
         ResourceTable {
             entries: Vec::with_capacity(capacity),
             free_head: None,
-            debug: true,
         }
     }
 
@@ -165,7 +152,10 @@ impl ResourceTable {
 
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
     fn free_entry(&mut self, ix: usize) -> TableEntry {
-        if self.debug {
+        if cfg!(debug_assertions) {
+            // Instead of making this entry available for reuse, we leave a
+            // tombstone in debug mode.  This helps detect use-after-delete and
+            // double-delete bugs.
             match mem::replace(
                 &mut self.entries[ix],
                 Entry::Occupied {

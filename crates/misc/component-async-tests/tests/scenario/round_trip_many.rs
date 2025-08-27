@@ -245,7 +245,6 @@ async fn test_round_trip_many(
         let mut store = make_store();
 
         let instance = linker.instantiate_async(&mut store, &component).await?;
-        instance.enable_concurrent_state_debug(&mut store, true);
         let round_trip_many = component_async_tests::round_trip_many::bindings::RoundTripMany::new(
             &mut store, &instance,
         )?;

@@ -968,24 +968,6 @@ impl ComponentInstance {
 }
 
 impl Instance {
-    /// Enable or disable concurrent state debugging mode for e.g. integration
-    /// tests.
-    ///
-    /// This will avoid re-using deleted handles, making it easier to catch
-    /// e.g. "use-after-delete" and "double-delete" errors.  It can also make
-    /// reading trace output easier since it ensures handles are never
-    /// repurposed.
-    #[doc(hidden)]
-    pub fn enable_concurrent_state_debug(&self, mut store: impl AsContextMut, enable: bool) {
-        self.id()
-            .get_mut(store.as_context_mut().0)
-            .concurrent_state_mut()
-            .table
-            .get_mut()
-            .enable_debug(enable);
-        // TODO: do the same for the tables holding guest-facing handles
-    }
-
     /// Assert that all the relevant tables and queues in the concurrent state
     /// for this instance are empty.
     ///
