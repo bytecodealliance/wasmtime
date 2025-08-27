@@ -17,10 +17,52 @@ pub mod sockets;
 
 use crate::WasiView;
 use crate::p3::bindings::LinkOptions;
-use wasmtime::component::Linker;
+use anyhow::Context as _;
+use tokio::sync::oneshot;
+use wasmtime::component::{
+    Accessor, Destination, FutureProducer, Linker, StreamProducer, StreamState,
+};
 
 // Default buffer capacity to use for reads of byte-sized values.
 const DEFAULT_BUFFER_CAPACITY: usize = 8192;
+
+struct StreamEmptyProducer;
+
+impl<T, D> StreamProducer<D, T> for StreamEmptyProducer {
+    async fn produce(
+        &mut self,
+        _: &Accessor<D>,
+        _: &mut Destination<T>,
+    ) -> wasmtime::Result<StreamState> {
+        Ok(StreamState::Closed)
+    }
+
+    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+        Ok(StreamState::Closed)
+    }
+}
+
+struct FutureReadyProducer<T>(T);
+
+impl<T, D> FutureProducer<D, T> for FutureReadyProducer<T>
+where
+    T: Send + 'static,
+{
+    async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<T> {
+        Ok(self.0)
+    }
+}
+
+struct FutureOneshotProducer<T>(oneshot::Receiver<T>);
+
+impl<T, D> FutureProducer<D, T> for FutureOneshotProducer<T>
+where
+    T: Send + 'static,
+{
+    async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<T> {
+        self.0.await.context("oneshot sender dropped")
+    }
+}
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///

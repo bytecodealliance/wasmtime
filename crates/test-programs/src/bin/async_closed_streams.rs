@@ -11,6 +11,7 @@ mod bindings {
 
 use {
     bindings::exports::local::local::closed::Guest,
+    std::mem,
     wit_bindgen_rt::async_support::{self, FutureReader, StreamReader, StreamResult},
 };
 
@@ -18,9 +19,15 @@ struct Component;
 
 impl Guest for Component {
     async fn read_stream(mut rx: StreamReader<u8>, expected: Vec<u8>) {
-        let (result, buf) = rx.read(Vec::with_capacity(expected.len())).await;
-        assert_eq!(result, StreamResult::Complete(expected.len()));
-        assert_eq!(buf, expected);
+        let mut buffer = Vec::with_capacity(expected.len());
+        loop {
+            let (result, buf) = rx.read(mem::replace(&mut buffer, Vec::new())).await;
+            buffer = buf;
+            if !matches!(result, StreamResult::Complete(_)) {
+                break;
+            }
+        }
+        assert_eq!(buffer, expected);
     }
 
     async fn read_future(rx: FutureReader<u8>, expected: u8, _rx_ignored: FutureReader<u8>) {
