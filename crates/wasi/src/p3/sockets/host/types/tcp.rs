@@ -1,25 +1,27 @@
 use super::is_addr_allowed;
-use crate::TrappableError;
-use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::sockets::types::{
     Duration, ErrorCode, HostTcpSocket, HostTcpSocketWithStore, IpAddressFamily, IpSocketAddress,
     TcpSocket,
 };
+use crate::p3::sockets::SocketError;
 use crate::p3::sockets::{SocketResult, WasiSockets};
+use crate::p3::{
+    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, StreamEmptyProducer,
+};
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
 use anyhow::Context;
 use bytes::BytesMut;
+use core::mem;
 use io_lifetimes::AsSocketlike as _;
-use std::future::poll_fn;
 use std::io::Cursor;
 use std::net::{Shutdown, SocketAddr};
-use std::pin::pin;
 use std::sync::Arc;
-use std::task::Poll;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::oneshot;
+use wasmtime::AsContextMut as _;
 use wasmtime::component::{
-    Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureWriter, GuardedStreamWriter,
-    Resource, ResourceTable, StreamReader, StreamWriter,
+    Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
+    StreamProducer, StreamReader, StreamState,
 };
 
 fn get_socket<'a>(
@@ -29,7 +31,7 @@ fn get_socket<'a>(
     table
         .get(socket)
         .context("failed to get socket resource from table")
-        .map_err(TrappableError::trap)
+        .map_err(SocketError::trap)
 }
 
 fn get_socket_mut<'a>(
@@ -39,106 +41,226 @@ fn get_socket_mut<'a>(
     table
         .get_mut(socket)
         .context("failed to get socket resource from table")
-        .map_err(TrappableError::trap)
+        .map_err(SocketError::trap)
 }
 
-struct ListenTask {
+struct ListenStreamProducer<T> {
+    accepted: Option<std::io::Result<TcpStream>>,
     listener: Arc<TcpListener>,
     family: SocketAddressFamily,
-    tx: StreamWriter<Resource<TcpSocket>>,
     options: NonInheritedOptions,
+    getter: for<'a> fn(&'a mut T) -> WasiSocketsCtxView<'a>,
 }
 
-impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
-    async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
-        let mut tx = GuardedStreamWriter::new(store, self.tx);
-        while !tx.is_closed() {
-            let Some(res) = ({
-                let mut accept = pin!(self.listener.accept());
-                let mut tx = pin!(tx.watch_reader());
-                poll_fn(|cx| match tx.as_mut().poll(cx) {
-                    Poll::Ready(()) => return Poll::Ready(None),
-                    Poll::Pending => accept.as_mut().poll(cx).map(Some),
-                })
-                .await
-            }) else {
-                return Ok(());
-            };
-            let socket = TcpSocket::new_accept(res.map(|p| p.0), &self.options, self.family)
-                .unwrap_or_else(|err| TcpSocket::new_error(err, self.family));
-            let socket = store.with(|mut view| {
-                view.get()
-                    .table
-                    .push(socket)
-                    .context("failed to push socket resource to table")
-            })?;
-            if let Some(socket) = tx.write(Some(socket)).await {
-                debug_assert!(tx.is_closed());
-                store.with(|mut view| {
-                    view.get()
-                        .table
-                        .delete(socket)
-                        .context("failed to delete socket resource from table")
-                })?;
-                return Ok(());
-            }
+impl<T> ListenStreamProducer<T> {
+    async fn accept(&mut self) -> std::io::Result<TcpStream> {
+        if let Some(res) = self.accepted.take() {
+            return res;
         }
-        Ok(())
+        let (stream, _) = self.listener.accept().await?;
+        Ok(stream)
     }
 }
 
-struct ReceiveTask {
-    stream: Arc<TcpStream>,
-    data_tx: StreamWriter<u8>,
-    result_tx: FutureWriter<Result<(), ErrorCode>>,
+impl<D> StreamProducer<D, Resource<TcpSocket>> for ListenStreamProducer<D>
+where
+    D: 'static,
+{
+    async fn produce(
+        &mut self,
+        store: &Accessor<D>,
+        dst: &mut Destination<Resource<TcpSocket>>,
+    ) -> wasmtime::Result<StreamState> {
+        let res = self.accept().await;
+        let socket = TcpSocket::new_accept(res, &self.options, self.family)
+            .unwrap_or_else(|err| TcpSocket::new_error(err, self.family));
+        let store = store.with_getter::<WasiSockets>(self.getter);
+        let socket = store.with(|mut store| {
+            store
+                .get()
+                .table
+                .push(socket)
+                .context("failed to push socket resource to table")
+        })?;
+        if let Some(socket) = dst.write(&store, Some(socket)).await? {
+            store.with(|mut store| {
+                store
+                    .get()
+                    .table
+                    .delete(socket)
+                    .context("failed to delete socket resource from table")
+            })?;
+            return Ok(StreamState::Closed);
+        }
+        Ok(StreamState::Open)
+    }
+
+    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+        if self.accepted.is_none() {
+            let res = self.accept().await;
+            self.accepted = Some(res);
+        }
+        Ok(StreamState::Open)
+    }
 }
 
-impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
-    async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
-        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
-        let mut data_tx = GuardedStreamWriter::new(store, self.data_tx);
-        let result_tx = GuardedFutureWriter::new(store, self.result_tx);
+struct ReceiveStreamProducer {
+    stream: Arc<TcpStream>,
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+    buffer: BytesMut,
+}
+
+impl Drop for ReceiveStreamProducer {
+    fn drop(&mut self) {
+        self.close(Ok(()))
+    }
+}
+
+impl ReceiveStreamProducer {
+    fn close(&mut self, res: Result<(), ErrorCode>) {
+        if let Some(tx) = self.result.take() {
+            _ = self
+                .stream
+                .as_socketlike_view::<std::net::TcpStream>()
+                .shutdown(Shutdown::Read);
+            _ = tx.send(res);
+        }
+    }
+}
+
+impl<D> StreamProducer<D, u8> for ReceiveStreamProducer {
+    async fn produce(
+        &mut self,
+        store: &Accessor<D>,
+        dst: &mut Destination<u8>,
+    ) -> wasmtime::Result<StreamState> {
         let res = loop {
-            match self.stream.try_read_buf(&mut buf) {
-                Ok(0) => {
-                    break Ok(());
-                }
-                Ok(..) => {
-                    buf = data_tx.write_all(Cursor::new(buf)).await.into_inner();
-                    if data_tx.is_closed() {
-                        break Ok(());
+            match store.with(|mut store| {
+                if let Some(mut dst) = dst.as_guest_destination(store.as_context_mut()) {
+                    let n = self.stream.try_read(dst.remaining())?;
+                    if n > 0 {
+                        dst.mark_written(n);
                     }
-                    buf.clear();
+                    Ok(n)
+                } else {
+                    self.buffer.reserve(DEFAULT_BUFFER_CAPACITY);
+                    self.stream.try_read_buf(&mut self.buffer)
+                }
+            }) {
+                Ok(0) => break Ok(()),
+                Ok(..) if self.buffer.is_empty() => return Ok(StreamState::Open),
+                Ok(n) => {
+                    let mut buf = Cursor::new(mem::take(&mut self.buffer));
+                    while buf.position() as usize != n {
+                        buf = dst.write(store, buf).await?
+                    }
+                    self.buffer = buf.into_inner();
+                    self.buffer.clear();
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                    let Some(res) = ({
-                        let mut readable = pin!(self.stream.readable());
-                        let mut tx = pin!(data_tx.watch_reader());
-                        poll_fn(|cx| match tx.as_mut().poll(cx) {
-                            Poll::Ready(()) => return Poll::Ready(None),
-                            Poll::Pending => readable.as_mut().poll(cx).map(Some),
-                        })
-                        .await
-                    }) else {
-                        break Ok(());
-                    };
-                    if let Err(err) = res {
+                    if let Err(err) = self.stream.readable().await {
                         break Err(err.into());
                     }
                 }
-                Err(err) => {
-                    break Err(err.into());
-                }
+                Err(err) => break Err(err.into()),
             }
         };
-        _ = self
-            .stream
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(Shutdown::Read);
-        drop(self.stream);
-        drop(data_tx);
-        result_tx.write(res).await;
-        Ok(())
+        self.close(res);
+        Ok(StreamState::Closed)
+    }
+
+    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+        if let Err(err) = self.stream.readable().await {
+            self.close(Err(err.into()));
+            return Ok(StreamState::Closed);
+        }
+        Ok(StreamState::Open)
+    }
+}
+
+struct SendStreamConsumer {
+    stream: Arc<TcpStream>,
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+    buffer: BytesMut,
+}
+
+impl Drop for SendStreamConsumer {
+    fn drop(&mut self) {
+        self.close(Ok(()))
+    }
+}
+
+impl SendStreamConsumer {
+    fn close(&mut self, res: Result<(), ErrorCode>) {
+        if let Some(tx) = self.result.take() {
+            _ = self
+                .stream
+                .as_socketlike_view::<std::net::TcpStream>()
+                .shutdown(Shutdown::Write);
+            _ = tx.send(res);
+        }
+    }
+}
+
+impl<D> StreamConsumer<D, u8> for SendStreamConsumer {
+    async fn consume(
+        &mut self,
+        store: &Accessor<D>,
+        src: &mut Source<'_, u8>,
+    ) -> wasmtime::Result<StreamState> {
+        let res = 'outer: loop {
+            match store.with(|mut store| {
+                let n = if let Some(mut src) = src.as_guest_source(store.as_context_mut()) {
+                    let n = self.stream.try_write(src.remaining())?;
+                    src.mark_read(n);
+                    n
+                } else {
+                    // NOTE: The implementation might want to use Linux SIOCOUTQ ioctl or similar construct
+                    // on other platforms to only read `min(socket_capacity, src.remaining())` and prevent
+                    // short writes
+                    self.buffer.reserve(src.remaining(&mut store));
+                    if let Err(err) = src.read(&mut store, &mut self.buffer) {
+                        return Ok(Err(err));
+                    }
+                    self.stream.try_write(&self.buffer)?
+                };
+                debug_assert!(n > 0);
+                std::io::Result::Ok(Ok(n))
+            }) {
+                Ok(Ok(..)) if self.buffer.is_empty() => return Ok(StreamState::Open),
+                Ok(Ok(n)) => {
+                    let mut buf = &self.buffer[n..];
+                    while !buf.is_empty() {
+                        if let Err(err) = self.stream.writable().await {
+                            break 'outer Err(err.into());
+                        }
+                        match self.stream.try_write(buf) {
+                            Ok(n) => buf = &buf[n..],
+                            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => continue,
+                            Err(err) => break 'outer Err(err.into()),
+                        }
+                    }
+                    self.buffer.clear();
+                }
+                Ok(Err(err)) => return Err(err),
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if let Err(err) = self.stream.writable().await {
+                        break 'outer Err(err.into());
+                    }
+                }
+                Err(err) => break 'outer Err(err.into()),
+            }
+        };
+        self.close(res);
+        Ok(StreamState::Closed)
+    }
+
+    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+        if let Err(err) = self.stream.writable().await {
+            self.close(Err(err.into()));
+            return Ok(StreamState::Closed);
+        }
+        Ok(StreamState::Open)
     }
 }
 
@@ -152,8 +274,8 @@ impl HostTcpSocketWithStore for WasiSockets {
         if !is_addr_allowed(store, local_address, SocketAddrUse::TcpBind).await {
             return Err(ErrorCode::AccessDenied.into());
         }
-        store.with(|mut view| {
-            let socket = get_socket_mut(view.get().table, &socket)?;
+        store.with(|mut store| {
+            let socket = get_socket_mut(store.get().table, &socket)?;
             socket.start_bind(local_address)?;
             socket.finish_bind()?;
             Ok(())
@@ -169,16 +291,17 @@ impl HostTcpSocketWithStore for WasiSockets {
         if !is_addr_allowed(store, remote_address, SocketAddrUse::TcpConnect).await {
             return Err(ErrorCode::AccessDenied.into());
         }
-        let sock = store.with(|mut view| -> SocketResult<_> {
-            let socket = get_socket_mut(view.get().table, &socket)?;
-            Ok(socket.start_connect(&remote_address)?)
+        let sock = store.with(|mut store| {
+            let socket = get_socket_mut(store.get().table, &socket)?;
+            let socket = socket.start_connect(&remote_address)?;
+            SocketResult::Ok(socket)
         })?;
 
         // FIXME: handle possible cancellation of the outer `connect`
         // https://github.com/bytecodealliance/wasmtime/pull/11291#discussion_r2223917986
         let res = sock.connect(remote_address).await;
-        store.with(|mut view| -> SocketResult<_> {
-            let socket = get_socket_mut(view.get().table, &socket)?;
+        store.with(|mut store| {
+            let socket = get_socket_mut(store.get().table, &socket)?;
             socket.finish_connect(res)?;
             Ok(())
         })
@@ -188,98 +311,88 @@ impl HostTcpSocketWithStore for WasiSockets {
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
     ) -> SocketResult<StreamReader<Resource<TcpSocket>>> {
-        store.with(|mut view| {
-            let socket = get_socket_mut(view.get().table, &socket)?;
+        let instance = store.instance();
+        let getter = store.getter();
+        store.with(|mut store| {
+            let socket = get_socket_mut(store.get().table, &socket)?;
             socket.start_listen()?;
             socket.finish_listen()?;
             let listener = socket.tcp_listener_arc().unwrap().clone();
             let family = socket.address_family();
             let options = socket.non_inherited_options().clone();
-            let (tx, rx) = view
-                .instance()
-                .stream(&mut view)
-                .context("failed to create stream")
-                .map_err(TrappableError::trap)?;
-            let task = ListenTask {
-                listener,
-                family,
-                tx,
-                options,
-            };
-            view.spawn(task);
-            Ok(rx)
+            Ok(StreamReader::new(
+                instance,
+                &mut store,
+                ListenStreamProducer {
+                    accepted: None,
+                    listener,
+                    family,
+                    options,
+                    getter,
+                },
+            ))
         })
     }
 
     async fn send<T: 'static>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
-        mut data: StreamReader<u8>,
+        data: StreamReader<u8>,
     ) -> SocketResult<()> {
-        let stream = store.with(|mut view| -> SocketResult<_> {
-            let sock = get_socket(view.get().table, &socket)?;
+        let (result_tx, result_rx) = oneshot::channel();
+        store.with(|mut store| {
+            let sock = get_socket(store.get().table, &socket)?;
             let stream = sock.tcp_stream_arc()?;
-            Ok(Arc::clone(stream))
+            let stream = Arc::clone(stream);
+            data.pipe(
+                store,
+                SendStreamConsumer {
+                    stream,
+                    result: Some(result_tx),
+                    buffer: BytesMut::default(),
+                },
+            );
+            SocketResult::Ok(())
         })?;
-        let mut buf = Vec::with_capacity(DEFAULT_BUFFER_CAPACITY);
-        let mut result = Ok(());
-        while !data.is_closed() {
-            buf = data.read(store, buf).await;
-            let mut slice = buf.as_slice();
-            while !slice.is_empty() {
-                match stream.try_write(&slice) {
-                    Ok(n) => slice = &slice[n..],
-                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                        if let Err(err) = stream.writable().await {
-                            result = Err(ErrorCode::from(err).into());
-                            break;
-                        }
-                    }
-                    Err(err) => {
-                        result = Err(ErrorCode::from(err).into());
-                        break;
-                    }
-                }
-            }
-            buf.clear();
-        }
-        _ = stream
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(Shutdown::Write);
-        result
+        result_rx
+            .await
+            .context("oneshot sender dropped")
+            .map_err(SocketError::trap)??;
+        Ok(())
     }
 
     async fn receive<T: 'static>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        store.with(|mut view| {
-            let instance = view.instance();
-            let (mut data_tx, data_rx) = instance
-                .stream(&mut view)
-                .context("failed to create stream")?;
-            let socket = get_socket_mut(view.get().table, &socket)?;
+        let instance = store.instance();
+        store.with(|mut store| {
+            let socket = get_socket_mut(store.get().table, &socket)?;
             match socket.start_receive() {
                 Some(stream) => {
-                    let stream = stream.clone();
-                    let (result_tx, result_rx) = instance
-                        .future(&mut view, || unreachable!())
-                        .context("failed to create future")?;
-                    view.spawn(ReceiveTask {
-                        stream,
-                        data_tx,
-                        result_tx,
-                    });
-                    Ok((data_rx, result_rx))
+                    let stream = Arc::clone(stream);
+                    let (result_tx, result_rx) = oneshot::channel();
+                    Ok((
+                        StreamReader::new(
+                            instance,
+                            &mut store,
+                            ReceiveStreamProducer {
+                                stream,
+                                result: Some(result_tx),
+                                buffer: BytesMut::default(),
+                            },
+                        ),
+                        FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
+                    ))
                 }
-                None => {
-                    let (mut result_tx, result_rx) = instance
-                        .future(&mut view, || Err(ErrorCode::InvalidState))
-                        .context("failed to create future")?;
-                    result_tx.close(&mut view);
-                    data_tx.close(&mut view);
-                    Ok((data_rx, result_rx))
-                }
+                None => Ok((
+                    StreamReader::new(instance, &mut store, StreamEmptyProducer),
+                    FutureReader::new(
+                        instance,
+                        &mut store,
+                        FutureReadyProducer(Err(ErrorCode::InvalidState)),
+                    ),
+                )),
             }
         })
     }
@@ -293,7 +406,7 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
             .table
             .push(socket)
             .context("failed to push socket resource to table")
-            .map_err(TrappableError::trap)?;
+            .map_err(SocketError::trap)?;
         Ok(resource)
     }
 
