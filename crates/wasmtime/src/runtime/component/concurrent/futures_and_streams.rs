@@ -436,7 +436,7 @@ impl<T> FutureWriter<T> {
     where
         T: func::Lower + Send + Sync + 'static,
     {
-        let id = mem::replace(&mut self.id, TableId::new(0));
+        let id = mem::replace(&mut self.id, TableId::new(u32::MAX));
         let default = self.default;
         self.instance
             .host_drop_writer(store.as_context_mut(), id, Some(&move || Ok(default())))
@@ -678,7 +678,7 @@ impl<T> FutureReader<T> {
     /// a panic.
     pub fn close(&mut self, mut store: impl AsContextMut) {
         // `self` should never be used again, but leave an invalid handle there just in case.
-        let id = mem::replace(&mut self.id, TableId::new(0));
+        let id = mem::replace(&mut self.id, TableId::new(u32::MAX));
         self.instance
             .host_drop_reader(store.as_context_mut().0, id, TransmitKind::Future)
             .unwrap();
@@ -994,7 +994,7 @@ impl<T> StreamWriter<T> {
     /// a panic.
     pub fn close(&mut self, mut store: impl AsContextMut) {
         // `self` should never be used again, but leave an invalid handle there just in case.
-        let id = mem::replace(&mut self.id, TableId::new(0));
+        let id = mem::replace(&mut self.id, TableId::new(u32::MAX));
         self.instance
             .host_drop_writer(store.as_context_mut(), id, None::<&dyn Fn() -> Result<()>>)
             .unwrap()
@@ -1246,7 +1246,7 @@ impl<T> StreamReader<T> {
     /// a panic.
     pub fn close(&mut self, mut store: impl AsContextMut) {
         // `self` should never be used again, but leave an invalid handle there just in case.
-        let id = mem::replace(&mut self.id, TableId::new(0));
+        let id = mem::replace(&mut self.id, TableId::new(u32::MAX));
         self.instance
             .host_drop_reader(store.as_context_mut().0, id, TransmitKind::Stream)
             .unwrap()
@@ -1620,8 +1620,8 @@ struct TransmitState {
 impl Default for TransmitState {
     fn default() -> Self {
         Self {
-            write_handle: TableId::new(0),
-            read_handle: TableId::new(0),
+            write_handle: TableId::new(u32::MAX),
+            read_handle: TableId::new(u32::MAX),
             read: ReadState::Open,
             write: WriteState::Open,
             reader_watcher: None,

@@ -102,18 +102,11 @@ impl TableEntry {
 impl ResourceTable {
     /// Create an empty table
     pub fn new() -> Self {
-        let mut me = ResourceTable {
+        ResourceTable {
             entries: Vec::new(),
             free_head: None,
             debug: false,
-        };
-
-        // Reserve 0 as an invalid entry.  This effectively reserves
-        // `Resource::new_own(0)` as a sentinal value meaning "this resource
-        // doesn't exist anymore".
-        me.push(Tombstone).unwrap();
-
-        me
+        }
     }
 
     /// Enable or disable "debug mode".
@@ -139,16 +132,11 @@ impl ResourceTable {
 
     /// Create an empty table with at least the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
-        let mut me = ResourceTable {
+        ResourceTable {
             entries: Vec::with_capacity(capacity),
             free_head: None,
             debug: true,
-        };
-
-        // See comment in `Self::new` for why we do this.
-        me.push(Tombstone).unwrap();
-
-        me
+        }
     }
 
     /// Inserts a new value `T` into this table, returning a corresponding
@@ -429,27 +417,27 @@ pub fn test_free_list() {
     let mut table = ResourceTable::new();
 
     let x = table.push(()).unwrap();
-    assert_eq!(x.rep(), 1);
+    assert_eq!(x.rep(), 0);
 
     let y = table.push(()).unwrap();
-    assert_eq!(y.rep(), 2);
+    assert_eq!(y.rep(), 1);
 
     // Deleting x should put it on the free list, so the next entry should have the same rep.
     table.delete(x).unwrap();
     let x = table.push(()).unwrap();
-    assert_eq!(x.rep(), 1);
+    assert_eq!(x.rep(), 0);
 
     // Deleting x and then y should yield indices 1 and then 0 for new entries.
     table.delete(x).unwrap();
     table.delete(y).unwrap();
 
     let y = table.push(()).unwrap();
-    assert_eq!(y.rep(), 2);
+    assert_eq!(y.rep(), 1);
 
     let x = table.push(()).unwrap();
-    assert_eq!(x.rep(), 1);
+    assert_eq!(x.rep(), 0);
 
     // As the free list is empty, this entry will have a new id.
     let x = table.push(()).unwrap();
-    assert_eq!(x.rep(), 3);
+    assert_eq!(x.rep(), 2);
 }
