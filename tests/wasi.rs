@@ -23,6 +23,69 @@ const KNOWN_FAILURES: &[&str] = &[
     "remove_directory_trailing_slashes",
     // FIXME(WebAssembly/wasi-testsuite#125)
     "pwrite-with-append",
+    // FIXME(WebAssembly/wasi-testsuite#128)
+    #[cfg(windows)]
+    "dangling_fd",
+    #[cfg(windows)]
+    "dangling_symlink",
+    #[cfg(windows)]
+    "file_allocate",
+    #[cfg(windows)]
+    "file_pread_pwrite",
+    #[cfg(windows)]
+    "file_seek_tell",
+    #[cfg(windows)]
+    "file_truncation",
+    #[cfg(windows)]
+    "file_unbuffered_write",
+    #[cfg(windows)]
+    "interesting_paths",
+    #[cfg(windows)]
+    "isatty",
+    #[cfg(windows)]
+    "fd_readdir",
+    #[cfg(windows)]
+    "nofollow_errors",
+    #[cfg(windows)]
+    "overwrite_preopen",
+    #[cfg(windows)]
+    "path_exists",
+    #[cfg(windows)]
+    "path_filestat",
+    #[cfg(windows)]
+    "path_open_create_existing",
+    #[cfg(windows)]
+    "path_open_dirfd_not_dir",
+    #[cfg(windows)]
+    "path_open_missing",
+    #[cfg(windows)]
+    "path_open_preopen",
+    #[cfg(windows)]
+    "path_open_read_write",
+    #[cfg(windows)]
+    "path_rename",
+    #[cfg(windows)]
+    "path_rename_dir_trailing_slashes",
+    #[cfg(windows)]
+    "path_symlink_trailing_slashes",
+    #[cfg(windows)]
+    "readlink",
+    #[cfg(windows)]
+    "remove_nonempty_directory",
+    #[cfg(windows)]
+    "renumber",
+    #[cfg(windows)]
+    "symlink_create",
+    #[cfg(windows)]
+    "stdio",
+    #[cfg(windows)]
+    "symlink_filestat",
+    #[cfg(windows)]
+    "truncation_rights",
+    #[cfg(windows)]
+    "symlink_loop",
+    #[cfg(windows)]
+    "unlink_file_trailing_slashes",
 ];
 
 fn main() -> Result<()> {
