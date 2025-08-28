@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::ops::RangeInclusive;
 use wasm_encoder::{
-    CodeSection, CompositeInnerType, CompositeType, ConstExpr, EntityType, ExportKind,
-    ExportSection, Function, FunctionSection, GlobalSection, ImportSection, Instruction, Module,
-    RefType, StructType, SubType, TableSection, TableType, TypeSection, ValType,
+    CodeSection, ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection,
+    GlobalSection, ImportSection, Instruction, Module, RefType, TableSection, TableType,
+    TypeSection, ValType,
 };
 
 /// RecGroup ID struct definition.
@@ -16,26 +16,21 @@ pub struct RecGroupId(u32);
 
 /// Struct types definition.
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct StructTypes {
-    next_group: u32,
+pub struct Types {
     rec_groups: std::collections::BTreeSet<RecGroupId>,
 }
 
-impl StructTypes {
-    /// Create a fresh `StructTypes` allocator with no recursive groups defined yet.
+impl Types {
+    /// Create a fresh `Types` allocator with no recursive groups defined yet.
     pub fn new() -> Self {
         Self {
-            next_group: 0,
             rec_groups: Default::default(),
         }
     }
 
-    /// Allocate a new empty recursive group `(rec ...)` and return its unique `RecGroupId`.
-    pub fn alloc_empty_rec_group(&mut self) -> RecGroupId {
-        let id = RecGroupId(self.next_group);
-        self.next_group += 1;
-        self.rec_groups.insert(id.clone());
-        id
+    /// Insert a rec-group id. Returns true if newly inserted, false if it already existed.
+    pub fn insert_rec_group(&mut self, id: RecGroupId) -> bool {
+        self.rec_groups.insert(id)
     }
 
     /// Iterate over all allocated recursive groups.
@@ -51,16 +46,6 @@ pub struct TableOpsLimits {
     pub(crate) num_globals: u32,
     pub(crate) table_size: i32,
     pub(crate) num_rec_groups: u32,
-    pub(crate) empty_structs_per_group: u32,
-}
-
-impl TableOpsLimits {
-    /// Calculates and returns the total number of struct types the configuration describes
-    #[inline]
-    pub fn total_struct_types(&self) -> u32 {
-        self.num_rec_groups
-            .saturating_mul(self.empty_structs_per_group)
-    }
 }
 
 /// A description of a Wasm module that makes a series of `externref` table
@@ -69,16 +54,13 @@ impl TableOpsLimits {
 pub struct TableOps {
     pub(crate) limits: TableOpsLimits,
     pub(crate) ops: Vec<TableOp>,
-    pub(crate) struct_types: StructTypes,
+    pub(crate) types: Types,
 }
-
-const BASE_STRUCT_TYPE_INDEX: u32 = 4;
 
 const NUM_PARAMS_RANGE: RangeInclusive<u32> = 0..=10;
 const NUM_GLOBALS_RANGE: RangeInclusive<u32> = 0..=10;
 const TABLE_SIZE_RANGE: RangeInclusive<i32> = 0..=100;
 const NUM_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
-const EMPTY_STRUCTS_PER_GROUP_RANGE: RangeInclusive<u32> = 1..=11;
 const MAX_OPS: usize = 100;
 
 impl TableOps {
@@ -114,11 +96,6 @@ impl TableOps {
             .limits
             .num_rec_groups
             .clamp(*NUM_REC_GROUPS_RANGE.start(), *NUM_REC_GROUPS_RANGE.end());
-
-        self.limits.empty_structs_per_group = self.limits.empty_structs_per_group.clamp(
-            *EMPTY_STRUCTS_PER_GROUP_RANGE.start(),
-            *EMPTY_STRUCTS_PER_GROUP_RANGE.end(),
-        );
 
         let mut module = Module::new();
 
@@ -205,22 +182,9 @@ impl TableOps {
         func.instruction(&Instruction::End);
         func.instruction(&Instruction::End);
 
-        for _gid in self.struct_types.groups() {
-            let n = self.limits.empty_structs_per_group;
-            let mut subtys = Vec::with_capacity(n as usize);
-            for _ in 0..n {
-                subtys.push(SubType {
-                    is_final: true,
-                    supertype_idx: None,
-                    composite_type: CompositeType {
-                        inner: CompositeInnerType::Struct(StructType {
-                            fields: Box::new([]),
-                        }),
-                        shared: false,
-                    },
-                });
-            }
-            types.ty().rec(subtys);
+        // Emit one empty (rec ...) per declared group.
+        for _ in self.types.groups() {
+            types.ty().rec(Vec::<wasm_encoder::SubType>::new());
         }
 
         let mut code = CodeSection::new();
@@ -350,7 +314,6 @@ impl Generate<TableOps> for TableOpsMutator {
         let table_size = m::range(TABLE_SIZE_RANGE).generate(ctx)?;
 
         let num_rec_groups = m::range(NUM_REC_GROUPS_RANGE).generate(ctx)?;
-        let empty_structs_per_group = m::range(EMPTY_STRUCTS_PER_GROUP_RANGE).generate(ctx)?;
 
         let mut ops = TableOps {
             limits: TableOpsLimits {
@@ -358,7 +321,6 @@ impl Generate<TableOps> for TableOpsMutator {
                 num_globals,
                 table_size,
                 num_rec_groups,
-                empty_structs_per_group,
             },
             ops: vec![
                 TableOp::Null(),
@@ -369,11 +331,11 @@ impl Generate<TableOps> for TableOpsMutator {
                 TableOp::GlobalSet(0),
                 TableOp::GlobalGet(0),
             ],
-            struct_types: StructTypes::new(),
+            types: Types::new(),
         };
 
-        for _ in 0..ops.limits.num_rec_groups {
-            ops.struct_types.alloc_empty_rec_group();
+        for i in 0..ops.limits.num_rec_groups {
+            ops.types.insert_rec_group(RecGroupId(i));
         }
 
         let mut stack: usize = 0;
@@ -526,8 +488,6 @@ define_table_ops! {
     LocalGet(local_index: |ops| ops.num_params => u32) : 0 => 1,
     LocalSet(local_index: |ops| ops.num_params => u32) : 1 => 0,
 
-    StructNew(k: |ops| ops.total_struct_types() => u32) : 0 => 0,
-
     Drop : 1 => 0,
 
     Null : 0 => 1,
@@ -577,11 +537,6 @@ impl TableOp {
             Self::Null() => {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
-            Self::StructNew(k) => {
-                let ty = BASE_STRUCT_TYPE_INDEX + k;
-                func.instruction(&Instruction::StructNew(ty));
-                func.instruction(&Instruction::Drop);
-            }
         }
     }
 }
@@ -591,20 +546,19 @@ mod tests {
     use super::*;
 
     /// Creates empty TableOps
-    fn empty_test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
+    fn empty_test_ops() -> TableOps {
         let mut t = TableOps {
             limits: TableOpsLimits {
-                num_params,
-                num_globals,
-                table_size,
-                num_rec_groups: 3,
-                empty_structs_per_group: 4,
+                num_params: 5,
+                num_globals: 5,
+                table_size: 5,
+                num_rec_groups: 5,
             },
             ops: vec![],
-            struct_types: StructTypes::new(),
+            types: Types::new(),
         };
-        for _ in 0..t.limits.num_rec_groups {
-            t.struct_types.alloc_empty_rec_group();
+        for i in 0..t.limits.num_rec_groups {
+            t.types.insert_rec_group(RecGroupId(i));
         }
         t
     }
@@ -617,7 +571,6 @@ mod tests {
                 num_globals,
                 table_size,
                 num_rec_groups: 3,
-                empty_structs_per_group: 4,
             },
             ops: vec![
                 TableOp::Null(),
@@ -636,12 +589,11 @@ mod tests {
                 TableOp::GlobalGet(0),
                 TableOp::Null(),
                 TableOp::Drop(),
-                TableOp::StructNew(0),
             ],
-            struct_types: StructTypes::new(),
+            types: Types::new(),
         };
-        for _ in 0..t.limits.num_rec_groups {
-            t.struct_types.alloc_empty_rec_group();
+        for i in 0..t.limits.num_rec_groups {
+            t.types.insert_rec_group(RecGroupId(i));
         }
         t
     }
@@ -680,7 +632,7 @@ mod tests {
         let _ = env_logger::try_init();
         let mut unseen_ops: std::collections::HashSet<_> = OP_NAMES.iter().copied().collect();
 
-        let mut res = empty_test_ops(5, 5, 5);
+        let mut res = empty_test_ops();
         let mut generator = TableOpsMutator;
         let mut session = mutatis::Session::new();
 
@@ -707,59 +659,42 @@ mod tests {
         let wat = wasmprinter::print_bytes(&wasm).expect("Failed to convert to WAT");
         let expected = r#"
             (module
-            (type (;0;) (func (result externref externref externref)))
-            (type (;1;) (func (param externref externref)))
-            (type (;2;) (func (param externref externref externref)))
-            (type (;3;) (func (result externref externref externref)))
-            (rec
-                (type (;4;) (struct))
-                (type (;5;) (struct))
-                (type (;6;) (struct))
-                (type (;7;) (struct))
-            )
-            (rec
-                (type (;8;) (struct))
-                (type (;9;) (struct))
-                (type (;10;) (struct))
-                (type (;11;) (struct))
-            )
-            (rec
-                (type (;12;) (struct))
-                (type (;13;) (struct))
-                (type (;14;) (struct))
-                (type (;15;) (struct))
-            )
-            (import "" "gc" (func (;0;) (type 0)))
-            (import "" "take_refs" (func (;1;) (type 2)))
-            (import "" "make_refs" (func (;2;) (type 3)))
-            (table (;0;) 5 externref)
-            (global (;0;) (mut externref) ref.null extern)
-            (global (;1;) (mut externref) ref.null extern)
-            (export "run" (func 3))
-            (func (;3;) (type 1) (param externref externref)
-                (local externref)
-                loop ;; label = @1
-                ref.null extern
-                drop
-                call 0
-                local.set 0
-                local.get 0
-                global.set 0
-                global.get 0
-                ref.null extern
-                drop
-                call 0
-                local.set 0
-                local.get 0
-                global.set 0
-                global.get 0
-                ref.null extern
-                drop
-                struct.new 4
-                drop
-                br 0 (;@1;)
-                end
-            )
+                (type (;0;) (func (result externref externref externref)))
+                (type (;1;) (func (param externref externref)))
+                (type (;2;) (func (param externref externref externref)))
+                (type (;3;) (func (result externref externref externref)))
+                (rec)
+                (rec)
+                (rec)
+                (import "" "gc" (func (;0;) (type 0)))
+                (import "" "take_refs" (func (;1;) (type 2)))
+                (import "" "make_refs" (func (;2;) (type 3)))
+                (table (;0;) 5 externref)
+                (global (;0;) (mut externref) ref.null extern)
+                (global (;1;) (mut externref) ref.null extern)
+                (export "run" (func 3))
+                (func (;3;) (type 1) (param externref externref)
+                    (local externref)
+                    loop ;; label = @1
+                    ref.null extern
+                    drop
+                    call 0
+                    local.set 0
+                    local.get 0
+                    global.set 0
+                    global.get 0
+                    ref.null extern
+                    drop
+                    call 0
+                    local.set 0
+                    local.get 0
+                    global.set 0
+                    global.get 0
+                    ref.null extern
+                    drop
+                    br 0 (;@1;)
+                    end
+                )
             )
         "#;
 
@@ -780,14 +715,13 @@ mod tests {
                 num_globals: 1,
                 table_size: 5,
                 num_rec_groups: 2,
-                empty_structs_per_group: 3,
             },
-            ops: vec![TableOp::Null(), TableOp::Drop(), TableOp::StructNew(0)],
-            struct_types: StructTypes::new(),
+            ops: vec![TableOp::Null(), TableOp::Drop()],
+            types: Types::new(),
         };
 
-        for _ in 0..ops.limits.num_rec_groups {
-            ops.struct_types.alloc_empty_rec_group();
+        for i in 0..ops.limits.num_rec_groups {
+            ops.types.insert_rec_group(RecGroupId(i));
         }
 
         let wasm = ops.to_wasm_binary();
@@ -806,11 +740,8 @@ mod tests {
         let structs = wat.matches("(struct)").count();
 
         assert_eq!(recs, 2, "expected 2 (rec) blocks, got {recs}");
-        assert_eq!(
-            structs,
-            2 * 3,
-            "expected 6 empty struct types, got {structs}"
-        );
+        // Still keep as zero. Will update in the next PR
+        assert_eq!(structs, 0, "expected no struct types, got {structs}");
 
         Ok(())
     }
