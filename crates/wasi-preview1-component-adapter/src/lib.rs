@@ -952,7 +952,7 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
     State::with(|state| {
         let ds = state.descriptors();
         match ds.get(fd)? {
-            Descriptor::Streams(..) => Ok(()),
+            Descriptor::Streams(..) => Err(wasi::ERRNO_NOTSUP),
             Descriptor::Closed(..) | Descriptor::Bad => Err(wasi::ERRNO_BADF),
         }
     })
