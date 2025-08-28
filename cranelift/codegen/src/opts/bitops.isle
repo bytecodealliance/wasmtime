@@ -191,3 +191,9 @@
   (bswap ty x))
 
 (rule (simplify (bxor ty (bor ty x y) (band ty x y))) (bxor ty x y))
+
+
+(rule (simplify (bor ty (bor ty x y) x)) (bor ty x y))
+(rule (simplify (bor ty (bor ty x y) y)) (bor ty x y))
+(rule (simplify (bor ty x (bor ty x y))) (bor ty x y))
+(rule (simplify (bor ty y (bor ty x y))) (bor ty x y))
