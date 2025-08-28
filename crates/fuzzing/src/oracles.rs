@@ -417,6 +417,8 @@ fn unwrap_instance(
         || e.is::<wasmtime::PoolConcurrencyLimitError>()
         // And GC heap OOMs.
         || e.is::<wasmtime::GcHeapOutOfMemory<()>>()
+        // And thrown exceptions.
+        || e.is::<wasmtime::ThrownException>()
     {
         return None;
     }
