@@ -3,8 +3,7 @@ use crate::p3::bindings::sockets::types::{
     Duration, ErrorCode, HostTcpSocket, HostTcpSocketWithStore, IpAddressFamily, IpSocketAddress,
     TcpSocket,
 };
-use crate::p3::sockets::SocketError;
-use crate::p3::sockets::{SocketResult, WasiSockets};
+use crate::p3::sockets::{SocketError, SocketResult, WasiSockets};
 use crate::p3::{
     DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, StreamEmptyProducer,
 };
@@ -82,6 +81,7 @@ where
                 .push(socket)
                 .context("failed to push socket resource to table")
         })?;
+        // FIXME: Handle cancellation
         if let Some(socket) = dst.write(&store, Some(socket)).await? {
             store.with(|mut store| {
                 store
@@ -107,7 +107,7 @@ where
 struct ReceiveStreamProducer {
     stream: Arc<TcpStream>,
     result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
-    buffer: BytesMut,
+    buffer: Cursor<BytesMut>,
 }
 
 impl Drop for ReceiveStreamProducer {
@@ -134,6 +134,30 @@ impl<D> StreamProducer<D, u8> for ReceiveStreamProducer {
         store: &Accessor<D>,
         dst: &mut Destination<u8>,
     ) -> wasmtime::Result<StreamState> {
+        if !self.buffer.get_ref().is_empty() {
+            if !store.with(|mut store| {
+                dst.as_guest_destination(store.as_context_mut())
+                    .map(|mut dst| {
+                        let start = self.buffer.position() as _;
+                        let buffered = self.buffer.get_ref().len().saturating_sub(start);
+                        let n = dst.remaining().len().min(buffered);
+                        debug_assert!(n > 0);
+                        let end = start.saturating_add(n);
+                        dst.remaining()[..n].copy_from_slice(&self.buffer.get_ref()[start..end]);
+                        dst.mark_written(n);
+                        self.buffer.set_position(end as _);
+                    })
+                    .is_some()
+            }) {
+                // FIXME: Handle cancellation
+                self.buffer = dst.write(store, mem::take(&mut self.buffer)).await?;
+            }
+            if self.buffer.position() as usize == self.buffer.get_ref().len() {
+                self.buffer.get_mut().clear();
+                self.buffer.set_position(0);
+            }
+            return Ok(StreamState::Open);
+        }
         let res = loop {
             match store.with(|mut store| {
                 if let Some(mut dst) = dst.as_guest_destination(store.as_context_mut()) {
@@ -143,19 +167,21 @@ impl<D> StreamProducer<D, u8> for ReceiveStreamProducer {
                     }
                     Ok(n)
                 } else {
-                    self.buffer.reserve(DEFAULT_BUFFER_CAPACITY);
-                    self.stream.try_read_buf(&mut self.buffer)
+                    self.buffer.get_mut().reserve(DEFAULT_BUFFER_CAPACITY);
+                    self.stream.try_read_buf(self.buffer.get_mut())
                 }
             }) {
                 Ok(0) => break Ok(()),
-                Ok(..) if self.buffer.is_empty() => return Ok(StreamState::Open),
-                Ok(n) => {
-                    let mut buf = Cursor::new(mem::take(&mut self.buffer));
-                    while buf.position() as usize != n {
-                        buf = dst.write(store, buf).await?
+                Ok(..) => {
+                    if !self.buffer.get_ref().is_empty() {
+                        // FIXME: Handle cancellation
+                        self.buffer = dst.write(store, mem::take(&mut self.buffer)).await?;
+                        if self.buffer.position() as usize == self.buffer.get_ref().len() {
+                            self.buffer.get_mut().clear();
+                            self.buffer.set_position(0);
+                        }
                     }
-                    self.buffer = buf.into_inner();
-                    self.buffer.clear();
+                    return Ok(StreamState::Open);
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     if let Err(err) = self.stream.readable().await {
@@ -170,9 +196,11 @@ impl<D> StreamProducer<D, u8> for ReceiveStreamProducer {
     }
 
     async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
-        if let Err(err) = self.stream.readable().await {
-            self.close(Err(err.into()));
-            return Ok(StreamState::Closed);
+        if self.buffer.get_ref().is_empty() {
+            if let Err(err) = self.stream.readable().await {
+                self.close(Err(err.into()));
+                return Ok(StreamState::Closed);
+            }
         }
         Ok(StreamState::Open)
     }
@@ -231,6 +259,7 @@ impl<D> StreamConsumer<D, u8> for SendStreamConsumer {
                 Ok(Ok(n)) => {
                     let mut buf = &self.buffer[n..];
                     while !buf.is_empty() {
+                        // FIXME: Handle cancellation
                         if let Err(err) = self.stream.writable().await {
                             break 'outer Err(err.into());
                         }
@@ -379,7 +408,7 @@ impl HostTcpSocketWithStore for WasiSockets {
                             ReceiveStreamProducer {
                                 stream,
                                 result: Some(result_tx),
-                                buffer: BytesMut::default(),
+                                buffer: Cursor::default(),
                             },
                         ),
                         FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
