@@ -18,7 +18,10 @@ pub mod sockets;
 use crate::WasiView;
 use crate::p3::bindings::LinkOptions;
 use anyhow::Context as _;
+use bytes::BytesMut;
+use std::io::Cursor;
 use tokio::sync::oneshot;
+use wasmtime::AsContextMut as _;
 use wasmtime::component::{
     Accessor, Destination, FutureProducer, Linker, StreamProducer, StreamState,
 };
@@ -62,6 +65,37 @@ where
     async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<T> {
         self.0.await.context("oneshot sender dropped")
     }
+}
+
+async fn write_buffered_bytes<T>(
+    store: &Accessor<T>,
+    src: &mut Cursor<BytesMut>,
+    dst: &mut Destination<u8>,
+) -> wasmtime::Result<()> {
+    if !store.with(|mut store| {
+        dst.as_guest_destination(store.as_context_mut())
+            .map(|mut dst| {
+                let start = src.position() as _;
+                let buffered = src.get_ref().len().saturating_sub(start);
+                let n = dst.remaining().len().min(buffered);
+                debug_assert!(n > 0);
+                let end = start.saturating_add(n);
+                dst.remaining()[..n].copy_from_slice(&src.get_ref()[start..end]);
+                dst.mark_written(n);
+                src.set_position(end as _);
+            })
+            .is_some()
+    }) {
+        // FIXME: `mem::take` rather than `clone` when we can ensure cancellation-safety
+        //let buf = mem::take(src);
+        let buf = src.clone();
+        *src = dst.write(store, buf).await?;
+    }
+    if src.position() as usize == src.get_ref().len() {
+        src.get_mut().clear();
+        src.set_position(0);
+    }
+    Ok(())
 }
 
 /// Add all WASI interfaces from this module into the `linker` provided.

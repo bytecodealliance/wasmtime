@@ -6,6 +6,7 @@ use crate::p3::bindings::sockets::types::{
 use crate::p3::sockets::{SocketError, SocketResult, WasiSockets};
 use crate::p3::{
     DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, StreamEmptyProducer,
+    write_buffered_bytes,
 };
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
 use anyhow::Context;
@@ -135,30 +136,11 @@ impl<D> StreamProducer<D, u8> for ReceiveStreamProducer {
         dst: &mut Destination<u8>,
     ) -> wasmtime::Result<StreamState> {
         if !self.buffer.get_ref().is_empty() {
-            if !store.with(|mut store| {
-                dst.as_guest_destination(store.as_context_mut())
-                    .map(|mut dst| {
-                        let start = self.buffer.position() as _;
-                        let buffered = self.buffer.get_ref().len().saturating_sub(start);
-                        let n = dst.remaining().len().min(buffered);
-                        debug_assert!(n > 0);
-                        let end = start.saturating_add(n);
-                        dst.remaining()[..n].copy_from_slice(&self.buffer.get_ref()[start..end]);
-                        dst.mark_written(n);
-                        self.buffer.set_position(end as _);
-                    })
-                    .is_some()
-            }) {
-                // FIXME: Handle cancellation
-                self.buffer = dst.write(store, mem::take(&mut self.buffer)).await?;
-            }
-            if self.buffer.position() as usize == self.buffer.get_ref().len() {
-                self.buffer.get_mut().clear();
-                self.buffer.set_position(0);
-            }
+            write_buffered_bytes(store, &mut self.buffer, dst).await?;
             return Ok(StreamState::Open);
         }
-        let res = loop {
+
+        let res = 'result: loop {
             match store.with(|mut store| {
                 if let Some(mut dst) = dst.as_guest_destination(store.as_context_mut()) {
                     let n = self.stream.try_read(dst.remaining())?;
@@ -171,11 +153,13 @@ impl<D> StreamProducer<D, u8> for ReceiveStreamProducer {
                     self.stream.try_read_buf(self.buffer.get_mut())
                 }
             }) {
-                Ok(0) => break Ok(()),
+                Ok(0) => break 'result Ok(()),
                 Ok(..) => {
                     if !self.buffer.get_ref().is_empty() {
-                        // FIXME: Handle cancellation
-                        self.buffer = dst.write(store, mem::take(&mut self.buffer)).await?;
+                        // FIXME: `mem::take` rather than `clone` when we can ensure cancellation-safety
+                        //let buf = mem::take(&mut self.buffer);
+                        let buf = self.buffer.clone();
+                        self.buffer = dst.write(store, buf).await?;
                         if self.buffer.position() as usize == self.buffer.get_ref().len() {
                             self.buffer.get_mut().clear();
                             self.buffer.set_position(0);
@@ -185,10 +169,10 @@ impl<D> StreamProducer<D, u8> for ReceiveStreamProducer {
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     if let Err(err) = self.stream.readable().await {
-                        break Err(err.into());
+                        break 'result Err(err.into());
                     }
                 }
-                Err(err) => break Err(err.into()),
+                Err(err) => break 'result Err(err.into()),
             }
         };
         self.close(res);
@@ -236,7 +220,7 @@ impl<D> StreamConsumer<D, u8> for SendStreamConsumer {
         store: &Accessor<D>,
         src: &mut Source<'_, u8>,
     ) -> wasmtime::Result<StreamState> {
-        let res = 'outer: loop {
+        let res = 'result: loop {
             match store.with(|mut store| {
                 let n = if let Some(mut src) = src.as_guest_source(store.as_context_mut()) {
                     let n = self.stream.try_write(src.remaining())?;
@@ -261,12 +245,12 @@ impl<D> StreamConsumer<D, u8> for SendStreamConsumer {
                     while !buf.is_empty() {
                         // FIXME: Handle cancellation
                         if let Err(err) = self.stream.writable().await {
-                            break 'outer Err(err.into());
+                            break 'result Err(err.into());
                         }
                         match self.stream.try_write(buf) {
                             Ok(n) => buf = &buf[n..],
                             Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => continue,
-                            Err(err) => break 'outer Err(err.into()),
+                            Err(err) => break 'result Err(err.into()),
                         }
                     }
                     self.buffer.clear();
@@ -274,10 +258,10 @@ impl<D> StreamConsumer<D, u8> for SendStreamConsumer {
                 Ok(Err(err)) => return Err(err),
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     if let Err(err) = self.stream.writable().await {
-                        break 'outer Err(err.into());
+                        break 'result Err(err.into());
                     }
                 }
-                Err(err) => break 'outer Err(err.into()),
+                Err(err) => break 'result Err(err.into()),
             }
         };
         self.close(res);
