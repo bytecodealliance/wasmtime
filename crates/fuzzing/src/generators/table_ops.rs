@@ -642,11 +642,10 @@ mod tests {
         let mut unseen_ops: std::collections::HashSet<_> = OP_NAMES.iter().copied().collect();
 
         let mut res = empty_test_ops();
-        let mut generator = TableOpsMutator;
         let mut session = mutatis::Session::new();
 
         'outer: for _ in 0..=1024 {
-            session.mutate_with(&mut generator, &mut res)?;
+            session.mutate(&mut res)?;
             for op in &res.ops {
                 unseen_ops.remove(op.name());
                 if unseen_ops.is_empty() {
@@ -654,6 +653,7 @@ mod tests {
                 }
             }
         }
+
         assert!(unseen_ops.is_empty(), "Failed to generate {unseen_ops:?}");
         Ok(())
     }
