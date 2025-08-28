@@ -197,3 +197,8 @@
 (rule (simplify (bor ty (bor ty x y) y)) (bor ty x y))
 (rule (simplify (bor ty x (bor ty x y))) (bor ty x y))
 (rule (simplify (bor ty y (bor ty x y))) (bor ty x y))
+
+(rule (simplify (band ty (band ty x y) x)) (band ty x y))
+(rule (simplify (band ty (band ty x y) y)) (band ty x y))
+(rule (simplify (band ty x (band ty x y))) (band ty x y))
+(rule (simplify (band ty y (band ty x y))) (band ty x y))
