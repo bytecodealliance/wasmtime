@@ -11,7 +11,6 @@ use crate::p3::{
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
 use anyhow::Context;
 use bytes::BytesMut;
-use core::mem;
 use io_lifetimes::AsSocketlike as _;
 use std::io::Cursor;
 use std::net::{Shutdown, SocketAddr};
