@@ -10,6 +10,12 @@ use wasm_encoder::{
     TypeSection, ValType,
 };
 
+const NUM_PARAMS_RANGE: RangeInclusive<u32> = 0..=10;
+const NUM_GLOBALS_RANGE: RangeInclusive<u32> = 0..=10;
+const TABLE_SIZE_RANGE: RangeInclusive<u32> = 0..=100;
+const NUM_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
+const MAX_OPS: usize = 100;
+
 /// RecGroup ID struct definition.
 #[derive(Debug, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct RecGroupId(u32);
@@ -44,8 +50,29 @@ impl Types {
 pub struct TableOpsLimits {
     pub(crate) num_params: u32,
     pub(crate) num_globals: u32,
-    pub(crate) table_size: i32,
+    pub(crate) table_size: u32,
     pub(crate) num_rec_groups: u32,
+}
+
+impl TableOpsLimits {
+    fn fixup(&mut self) {
+        // NB: Exhaustively match so that we remember to fixup any other new
+        // limits we add in the future.
+        let Self {
+            num_params,
+            num_globals,
+            table_size,
+            num_rec_groups,
+        } = self;
+
+        let clamp = |limit: &mut u32, range: RangeInclusive<u32>| {
+            *limit = (*limit).clamp(*range.start(), *range.end())
+        };
+        clamp(table_size, TABLE_SIZE_RANGE);
+        clamp(num_params, NUM_PARAMS_RANGE);
+        clamp(num_globals, NUM_GLOBALS_RANGE);
+        clamp(num_rec_groups, NUM_REC_GROUPS_RANGE);
+    }
 }
 
 /// A description of a Wasm module that makes a series of `externref` table
@@ -56,12 +83,6 @@ pub struct TableOps {
     pub(crate) ops: Vec<TableOp>,
     pub(crate) types: Types,
 }
-
-const NUM_PARAMS_RANGE: RangeInclusive<u32> = 0..=10;
-const NUM_GLOBALS_RANGE: RangeInclusive<u32> = 0..=10;
-const TABLE_SIZE_RANGE: RangeInclusive<i32> = 0..=100;
-const NUM_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
-const MAX_OPS: usize = 100;
 
 impl TableOps {
     /// Serialize this module into a Wasm binary.
@@ -76,26 +97,7 @@ impl TableOps {
     /// fuel. It also is not guaranteed to avoid traps: it may access
     /// out-of-bounds of the table.
     pub fn to_wasm_binary(&mut self) -> Vec<u8> {
-        // Clamp limits to generate opcodes within bounds
-        self.limits.table_size = self
-            .limits
-            .table_size
-            .clamp(*TABLE_SIZE_RANGE.start(), *TABLE_SIZE_RANGE.end());
-
-        self.limits.num_params = self
-            .limits
-            .num_params
-            .clamp(*NUM_PARAMS_RANGE.start(), *NUM_PARAMS_RANGE.end());
-
-        self.limits.num_globals = self
-            .limits
-            .num_globals
-            .clamp(*NUM_GLOBALS_RANGE.start(), *NUM_GLOBALS_RANGE.end());
-
-        self.limits.num_rec_groups = self
-            .limits
-            .num_rec_groups
-            .clamp(*NUM_REC_GROUPS_RANGE.start(), *NUM_REC_GROUPS_RANGE.end());
+        self.fixup();
 
         let mut module = Module::new();
 
@@ -144,7 +146,7 @@ impl TableOps {
         let mut tables = TableSection::new();
         tables.table(TableType {
             element_type: RefType::EXTERNREF,
-            minimum: self.limits.table_size as u64,
+            minimum: u64::from(self.limits.table_size),
             maximum: None,
             table64: false,
             shared: false,
@@ -215,11 +217,20 @@ impl TableOps {
         stack
     }
 
-    /// Fixes the stack after mutating the `idx`th op.
+    /// Fixes this test case such that it becomes valid.
     ///
-    /// The abstract stack depth starting at the `idx`th opcode must be `stack`.
-    ///
+    /// This is necessary because a random mutation (e.g. removing an op in the
+    /// middle of our sequence) might have made it so that subsequent ops won't
+    /// have their expected operand types on the Wasm stack
+    /// anymore. Furthermore, because we serialize and deserialize test cases,
+    /// and libFuzzer will occasionally mutate those serialized bytes directly,
+    /// rather than use one of our custom mutations, we have no guarantee that
+    /// pre-mutation test cases are even valid! Therefore, we always call this
+    /// method before translating this "AST"-style representation into a raw
+    /// Wasm binary.
     fn fixup(&mut self) {
+        self.limits.fixup();
+
         let mut new_ops = Vec::with_capacity(self.ops.len());
         let mut stack = 0;
 
@@ -267,7 +278,6 @@ impl Mutate<TableOps> for TableOpsMutator {
                     let stack = ops.abstract_stack_depth(idx);
                     let (op, _new_stack_size) = TableOp::generate(ctx, &ops, stack)?;
                     ops.ops.insert(idx, op);
-                    ops.fixup();
                 }
                 Ok(())
             })?;
@@ -279,7 +289,6 @@ impl Mutate<TableOps> for TableOpsMutator {
                     .gen_index(ops.ops.len())
                     .expect("ops is not empty");
                 ops.ops.remove(idx);
-                ops.fixup();
                 Ok(())
             })?;
         }
@@ -479,8 +488,8 @@ define_table_ops! {
     TakeRefs : 3 => 0,
 
     // Add one to make sure that out of bounds table accesses are possible, but still rare.
-    TableGet(elem_index: |ops| ops.table_size + 1 => i32) : 0 => 1,
-    TableSet(elem_index: |ops| ops.table_size + 1 => i32) : 1 => 0,
+    TableGet(elem_index: |ops| ops.table_size + 1 => u32) : 0 => 1,
+    TableSet(elem_index: |ops| ops.table_size + 1 => u32) : 1 => 0,
 
     GlobalGet(global_index: |ops| ops.num_globals => u32) : 0 => 1,
     GlobalSet(global_index: |ops| ops.num_globals => u32) : 1 => 0,
@@ -510,12 +519,12 @@ impl TableOp {
                 func.instruction(&Instruction::Call(take_refs_func_idx));
             }
             Self::TableGet(x) => {
-                func.instruction(&Instruction::I32Const(x));
+                func.instruction(&Instruction::I32Const(x.cast_signed()));
                 func.instruction(&Instruction::TableGet(0));
             }
             Self::TableSet(x) => {
                 func.instruction(&Instruction::LocalSet(scratch_local));
-                func.instruction(&Instruction::I32Const(x));
+                func.instruction(&Instruction::I32Const(x.cast_signed()));
                 func.instruction(&Instruction::LocalGet(scratch_local));
                 func.instruction(&Instruction::TableSet(0));
             }
@@ -564,7 +573,7 @@ mod tests {
     }
 
     /// Creates TableOps with all default opcodes
-    fn test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
+    fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> TableOps {
         let mut t = TableOps {
             limits: TableOpsLimits {
                 num_params,
@@ -656,51 +665,64 @@ mod tests {
         let mut table_ops = test_ops(2, 2, 5);
 
         let wasm = table_ops.to_wasm_binary();
-        let wat = wasmprinter::print_bytes(&wasm).expect("Failed to convert to WAT");
-        let expected = r#"
-            (module
-                (type (;0;) (func (result externref externref externref)))
-                (type (;1;) (func (param externref externref)))
-                (type (;2;) (func (param externref externref externref)))
-                (type (;3;) (func (result externref externref externref)))
-                (rec)
-                (rec)
-                (rec)
-                (import "" "gc" (func (;0;) (type 0)))
-                (import "" "take_refs" (func (;1;) (type 2)))
-                (import "" "make_refs" (func (;2;) (type 3)))
-                (table (;0;) 5 externref)
-                (global (;0;) (mut externref) ref.null extern)
-                (global (;1;) (mut externref) ref.null extern)
-                (export "run" (func 3))
-                (func (;3;) (type 1) (param externref externref)
-                    (local externref)
-                    loop ;; label = @1
-                    ref.null extern
-                    drop
-                    call 0
-                    local.set 0
-                    local.get 0
-                    global.set 0
-                    global.get 0
-                    ref.null extern
-                    drop
-                    call 0
-                    local.set 0
-                    local.get 0
-                    global.set 0
-                    global.get 0
-                    ref.null extern
-                    drop
-                    br 0 (;@1;)
-                    end
-                )
-            )
-        "#;
 
-        let generated = wat.split_whitespace().collect::<Vec<_>>().join(" ");
-        let expected = expected.split_whitespace().collect::<Vec<_>>().join(" ");
-        assert_eq!(generated, expected, "WAT does not match expected");
+        let actual_wat = wasmprinter::print_bytes(&wasm).expect("Failed to convert to WAT");
+        let actual_wat = actual_wat.trim();
+
+        let expected_wat = r#"
+(module
+  (type (;0;) (func (result externref externref externref)))
+  (type (;1;) (func (param externref externref)))
+  (type (;2;) (func (param externref externref externref)))
+  (type (;3;) (func (result externref externref externref)))
+  (rec)
+  (rec)
+  (rec)
+  (import "" "gc" (func (;0;) (type 0)))
+  (import "" "take_refs" (func (;1;) (type 2)))
+  (import "" "make_refs" (func (;2;) (type 3)))
+  (table (;0;) 5 externref)
+  (global (;0;) (mut externref) ref.null extern)
+  (global (;1;) (mut externref) ref.null extern)
+  (export "run" (func 3))
+  (func (;3;) (type 1) (param externref externref)
+    (local externref)
+    loop ;; label = @1
+      ref.null extern
+      drop
+      call 0
+      local.set 0
+      local.get 0
+      global.set 0
+      global.get 0
+      ref.null extern
+      drop
+      call 0
+      local.set 0
+      local.get 0
+      global.set 0
+      global.get 0
+      ref.null extern
+      drop
+      drop
+      drop
+      drop
+      drop
+      drop
+      drop
+      br 0 (;@1;)
+    end
+  )
+)
+        "#;
+        let expected_wat = expected_wat.trim();
+
+        eprintln!("=== actual ===\n{actual_wat}");
+        eprintln!("=== expected ===\n{expected_wat}");
+        assert_eq!(
+            actual_wat, expected_wat,
+            "actual WAT does not match expected"
+        );
 
         Ok(())
     }
