@@ -5,8 +5,8 @@ use crate::p3::bindings::sockets::types::{
 };
 use crate::p3::sockets::{SocketError, SocketResult, WasiSockets};
 use crate::p3::{
-    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, StreamEmptyProducer,
-    write_buffered_bytes,
+    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, MAX_BUFFER_CAPACITY,
+    StreamEmptyProducer, write_buffered_bytes,
 };
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
 use anyhow::Context;
@@ -229,7 +229,8 @@ impl<D> StreamConsumer<D, u8> for SendStreamConsumer {
                     // NOTE: The implementation might want to use Linux SIOCOUTQ ioctl or similar construct
                     // on other platforms to only read `min(socket_capacity, src.remaining())` and prevent
                     // short writes
-                    self.buffer.reserve(src.remaining(&mut store));
+                    let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
+                    self.buffer.reserve(n);
                     if let Err(err) = src.read(&mut store, &mut self.buffer) {
                         return Ok(Err(err));
                     }

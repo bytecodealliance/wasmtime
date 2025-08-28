@@ -1,5 +1,4 @@
 use crate::filesystem::{Descriptor, Dir, File, WasiFilesystem, WasiFilesystemCtxView};
-use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::clocks::wall_clock;
 use crate::p3::bindings::filesystem::types::{
     self, Advice, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry, ErrorCode,
@@ -7,7 +6,8 @@ use crate::p3::bindings::filesystem::types::{
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::p3::{
-    FutureOneshotProducer, FutureReadyProducer, StreamEmptyProducer, write_buffered_bytes,
+    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, MAX_BUFFER_CAPACITY,
+    StreamEmptyProducer, write_buffered_bytes,
 };
 use crate::{DirPerms, FilePerms};
 use anyhow::{Context as _, bail};
@@ -146,7 +146,8 @@ impl<D> StreamProducer<D, u8> for ReadStreamProducer {
 
         let n = store
             .with(|store| dst.remaining(store))
-            .unwrap_or(DEFAULT_BUFFER_CAPACITY);
+            .unwrap_or(DEFAULT_BUFFER_CAPACITY)
+            .min(MAX_BUFFER_CAPACITY);
         let mut buf = mem::take(&mut self.buffer).into_inner();
         buf.resize(n, 0);
         let offset = self.offset;
@@ -303,7 +304,8 @@ impl<D> StreamConsumer<D, u8> for WriteStreamConsumer {
     ) -> wasmtime::Result<StreamState> {
         let res = 'result: loop {
             store.with(|mut store| {
-                self.buffer.reserve(src.remaining(&mut store));
+                let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
+                self.buffer.reserve(n);
                 src.read(&mut store, &mut self.buffer)
             })?;
             // FIXME: `mem::take` rather than `clone` when we can ensure cancellation-safety
@@ -370,7 +372,8 @@ impl<D> StreamConsumer<D, u8> for AppendStreamConsumer {
     ) -> wasmtime::Result<StreamState> {
         let res = 'result: loop {
             store.with(|mut store| {
-                self.buffer.reserve(src.remaining(&mut store));
+                let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
+                self.buffer.reserve(n);
                 src.read(&mut store, &mut self.buffer)
             })?;
             let buf = mem::take(&mut self.buffer);
