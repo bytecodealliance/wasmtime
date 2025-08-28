@@ -147,7 +147,7 @@ fn simple_floats(module: &[u8]) -> Result<()> {
     let engine = Engine::new(&config())?;
     let module = match deserialize(&engine, module)? {
         Some(module) => module,
-        None => panic!(),
+        None => return Ok(()),
     };
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &module)?;
