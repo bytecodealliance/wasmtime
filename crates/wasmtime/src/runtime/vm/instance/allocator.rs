@@ -535,8 +535,7 @@ async fn initialize_tables(
             TableInitialValue::Expr(expr) => {
                 let init = const_evaluator
                     .eval(&mut store, limiter.as_deref_mut(), context, expr)
-                    .await
-                    .expect("const expression should be valid");
+                    .await?;
                 let idx = module.table_index(table);
                 let id = store.id();
                 let table = store
@@ -767,8 +766,7 @@ async fn initialize_globals(
         } else {
             const_evaluator
                 .eval(&mut store, limiter.as_deref_mut(), context, init)
-                .await
-                .expect("should be a valid const expr")
+                .await?
         };
 
         let id = store.id();

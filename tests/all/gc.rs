@@ -1567,3 +1567,237 @@ fn owned_rooted_lots_of_root_creation() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn runtime_table_init_oom() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.memory_may_move(false);
+    config.memory_reservation(64 << 10);
+    config.memory_reservation_for_growth(0);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (table 100 arrayref)
+
+                (type $a (array i31ref))
+
+                (func (export "run")
+                    i32.const 0
+                    i32.const 0
+                    i32.const 5
+                    table.init $e)
+                (elem $e arrayref
+                    (array.new_default $a (i32.const 100))
+                    (array.new_default $a (i32.const 10000))
+                    (array.new_default $a (i32.const 10000))
+                    (array.new_default $a (i32.const 10000))
+                    (array.new_default $a (i32.const 1000000))
+                )
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    func.call(&mut store, ())
+        .unwrap_err()
+        .downcast::<GcHeapOutOfMemory<()>>()?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn instantiate_table_init_oom() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.memory_may_move(false);
+    config.memory_reservation(64 << 10);
+    config.memory_reservation_for_growth(0);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (table 100 arrayref)
+
+                (type $a (array i31ref))
+
+                (elem (i32.const 0) arrayref
+                    (array.new_default $a (i32.const 100))
+                    (array.new_default $a (i32.const 10000))
+                    (array.new_default $a (i32.const 10000))
+                    (array.new_default $a (i32.const 10000))
+                    (array.new_default $a (i32.const 1000000))
+                )
+            )
+        "#,
+    )?;
+
+    Instance::new(&mut store, &module, &[])
+        .unwrap_err()
+        .downcast::<GcHeapOutOfMemory<()>>()?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn instantiate_table_init_expr_oom() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.memory_may_move(false);
+    config.memory_reservation(64 << 10);
+    config.memory_reservation_for_growth(0);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (type $a (array i31ref))
+                (table 100 (ref $a) (array.new_default $a (i32.const 100000)))
+            )
+        "#,
+    )?;
+
+    Instance::new(&mut store, &module, &[])
+        .unwrap_err()
+        .downcast::<GcHeapOutOfMemory<()>>()?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn instantiate_global_init_oom() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.memory_may_move(false);
+    config.memory_reservation(64 << 10);
+    config.memory_reservation_for_growth(0);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (table 100 arrayref)
+                (type $a (array i31ref))
+                (global (ref $a) (array.new_default $a (i32.const 10000000)))
+            )
+        "#,
+    )?;
+
+    Instance::new(&mut store, &module, &[])
+        .unwrap_err()
+        .downcast::<GcHeapOutOfMemory<()>>()?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_new_elem_oom() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.memory_may_move(false);
+    config.memory_reservation(64 << 10);
+    config.memory_reservation_for_growth(0);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (type $a (array (mut arrayref)))
+                (type $i (array i31ref))
+
+                (func (export "run")
+                    i32.const 0
+                    i32.const 5
+                    array.new_elem $a $e
+                    drop)
+
+                (elem $e arrayref
+                    (array.new_default $i (i32.const 100))
+                    (array.new_default $i (i32.const 10000))
+                    (array.new_default $i (i32.const 10000))
+                    (array.new_default $i (i32.const 10000))
+                    (array.new_default $i (i32.const 1000000))
+                )
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    func.call(&mut store, ())
+        .unwrap_err()
+        .downcast::<GcHeapOutOfMemory<()>>()?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_init_elem_oom() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.memory_may_move(false);
+    config.memory_reservation(64 << 10);
+    config.memory_reservation_for_growth(0);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (type $a (array (mut arrayref)))
+                (type $i (array i31ref))
+
+                (func (export "run")
+                    i32.const 5
+                    array.new_default $a
+                    i32.const 0
+                    i32.const 0
+                    i32.const 5
+                    array.init_elem $a $e)
+
+                (elem $e arrayref
+                    (array.new_default $i (i32.const 100))
+                    (array.new_default $i (i32.const 10000))
+                    (array.new_default $i (i32.const 10000))
+                    (array.new_default $i (i32.const 10000))
+                    (array.new_default $i (i32.const 1000000))
+                )
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    func.call(&mut store, ())
+        .unwrap_err()
+        .downcast::<GcHeapOutOfMemory<()>>()?;
+
+    Ok(())
+}
