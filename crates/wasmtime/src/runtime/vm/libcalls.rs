@@ -987,8 +987,7 @@ fn array_new_elem(
                 for x in xs.iter() {
                     let val = *const_evaluator
                         .eval(&mut store, limiter.as_mut(), &mut const_context, x)
-                        .await
-                        .expect("const expr should be valid");
+                        .await?;
                     vals.push(val);
                 }
             }
@@ -1083,8 +1082,7 @@ fn array_init_elem(
                 {
                     let val = *const_evaluator
                         .eval(&mut store, limiter.as_mut(), &mut const_context, x)
-                        .await
-                        .expect("const expr should be valid");
+                        .await?;
                     vals.push(val);
                 }
                 vals

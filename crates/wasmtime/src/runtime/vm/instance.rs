@@ -888,7 +888,7 @@ impl Instance {
         dst: u64,
         src: u64,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         let mut storage = None;
         let elements = store
             .instance(instance)
@@ -918,7 +918,7 @@ impl Instance {
         dst: u64,
         src: u64,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
         let store_id = store.id();
@@ -967,8 +967,7 @@ impl Instance {
                 for (i, expr) in positions.zip(exprs) {
                     let element = const_evaluator
                         .eval(&mut store, limiter.as_deref_mut(), &mut context, expr)
-                        .await
-                        .expect("const expr should be valid");
+                        .await?;
                     table.set_(&mut store, i, element.ref_().unwrap()).unwrap();
                 }
             }
