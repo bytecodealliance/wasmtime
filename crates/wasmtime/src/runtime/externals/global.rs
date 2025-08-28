@@ -276,7 +276,7 @@ impl Global {
                 }
                 Val::ContRef(None) => {
                     // Allow null continuation references for globals - these are just placeholders
-                    // Non-null references are not supported yet
+                    definition.write_gc_ref(&mut store, None);
                 }
                 Val::ContRef(Some(_)) => {
                     // TODO(#10248): Implement non-null global continuation reference handling
