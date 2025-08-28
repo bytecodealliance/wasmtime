@@ -79,6 +79,11 @@ fn main() -> Result<()> {
     // For x86_64 targets be sure to enable relevant CPU features to avoid
     // float-related libcalls which is required for the `x86_64-unknown-none`
     // target.
+    //
+    // Note that the embedding will need to check that these features are
+    // actually available at runtime. CPU support for these features has
+    // existend since 2013 (Haswell) on Intel chips and 2012 (Piledriver) on
+    // AMD chips.
     if cfg!(target_arch = "x86_64") {
         unsafe {
             config.cranelift_flag_enable("has_sse3");

@@ -2708,7 +2708,7 @@ impl Config {
     /// ABI on x86 targets.
     ///
     /// This configuration option is only applicable on the
-    /// `x86_64-unknown-none` Rust target and has no affect on other host
+    /// `x86_64-unknown-none` Rust target and has no effect on other host
     /// targets. The `x86_64-unknown-none` Rust target does not support hardware
     /// floats by default and uses a "soft float" implementation and ABI. This
     /// means that `f32`, for example, is passed in a general-purpose register
