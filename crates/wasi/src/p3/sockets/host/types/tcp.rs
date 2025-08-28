@@ -44,18 +44,15 @@ fn get_socket_mut<'a>(
 }
 
 struct ListenStreamProducer<T> {
-    accepted: Option<std::io::Result<TcpStream>>,
     listener: Arc<TcpListener>,
     family: SocketAddressFamily,
     options: NonInheritedOptions,
+    accepted: Option<std::io::Result<TcpStream>>,
     getter: for<'a> fn(&'a mut T) -> WasiSocketsCtxView<'a>,
 }
 
 impl<T> ListenStreamProducer<T> {
-    async fn accept(&mut self) -> std::io::Result<TcpStream> {
-        if let Some(res) = self.accepted.take() {
-            return res;
-        }
+    async fn next(&mut self) -> std::io::Result<TcpStream> {
         let (stream, _) = self.listener.accept().await?;
         Ok(stream)
     }
@@ -70,7 +67,11 @@ where
         store: &Accessor<D>,
         dst: &mut Destination<Resource<TcpSocket>>,
     ) -> wasmtime::Result<StreamState> {
-        let res = self.accept().await;
+        let res = if let Some(res) = self.accepted.take() {
+            res
+        } else {
+            self.next().await
+        };
         let socket = TcpSocket::new_accept(res, &self.options, self.family)
             .unwrap_or_else(|err| TcpSocket::new_error(err, self.family));
         let store = store.with_getter::<WasiSockets>(self.getter);
@@ -97,7 +98,7 @@ where
 
     async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
         if self.accepted.is_none() {
-            let res = self.accept().await;
+            let res = self.next().await;
             self.accepted = Some(res);
         }
         Ok(StreamState::Open)
@@ -337,10 +338,10 @@ impl HostTcpSocketWithStore for WasiSockets {
                 instance,
                 &mut store,
                 ListenStreamProducer {
-                    accepted: None,
                     listener,
                     family,
                     options,
+                    accepted: None,
                     getter,
                 },
             ))

@@ -21,6 +21,23 @@ struct InputStreamProducer<T> {
     buffer: Cursor<BytesMut>,
 }
 
+impl<T> InputStreamProducer<T>
+where
+    T: AsyncRead + Send + Unpin,
+{
+    async fn read(&mut self, n: usize) -> StreamState {
+        self.buffer.get_mut().reserve(n);
+        match self.rx.read_buf(self.buffer.get_mut()).await {
+            Ok(0) => StreamState::Closed,
+            Ok(_) => StreamState::Open,
+            Err(_err) => {
+                // TODO: Report the error to the guest
+                StreamState::Closed
+            }
+        }
+    }
+}
+
 impl<T, D> StreamProducer<D, u8> for InputStreamProducer<T>
 where
     T: AsyncRead + Send + Unpin + 'static,
@@ -34,33 +51,48 @@ where
             write_buffered_bytes(store, &mut self.buffer, dst).await?;
             return Ok(StreamState::Open);
         }
-
         let n = store
             .with(|store| dst.remaining(store))
             .unwrap_or(DEFAULT_BUFFER_CAPACITY)
             .min(MAX_BUFFER_CAPACITY);
-        self.buffer.get_mut().reserve(n);
-        match self.rx.read_buf(self.buffer.get_mut()).await {
-            Ok(0) => Ok(StreamState::Closed),
-            Ok(_) => {
+        match self.read(n).await {
+            StreamState::Open => {
                 write_buffered_bytes(store, &mut self.buffer, dst).await?;
                 Ok(StreamState::Open)
             }
-            Err(_err) => {
-                // TODO: Report the error to the guest
-                Ok(StreamState::Closed)
-            }
+            StreamState::Closed => Ok(StreamState::Closed),
         }
     }
 
     async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
-        Ok(StreamState::Open)
+        if !self.buffer.get_ref().is_empty() {
+            return Ok(StreamState::Open);
+        }
+        Ok(self.read(DEFAULT_BUFFER_CAPACITY).await)
     }
 }
 
 struct OutputStreamConsumer<T> {
     tx: T,
     buffer: BytesMut,
+}
+
+impl<T> OutputStreamConsumer<T>
+where
+    T: AsyncWrite + Send + Unpin + 'static,
+{
+    async fn flush(&mut self) -> StreamState {
+        match self.tx.write_all(&self.buffer).await {
+            Ok(()) => {
+                self.buffer.clear();
+                StreamState::Open
+            }
+            Err(_err) => {
+                // TODO: Report the error to the guest
+                StreamState::Closed
+            }
+        }
+    }
 }
 
 impl<T, D> StreamConsumer<D, u8> for OutputStreamConsumer<T>
@@ -77,19 +109,13 @@ where
             self.buffer.reserve(n);
             src.read(&mut store, &mut self.buffer)
         })?;
-        match self.tx.write_all(&self.buffer).await {
-            Ok(()) => {
-                self.buffer.clear();
-                Ok(StreamState::Open)
-            }
-            Err(_err) => {
-                // TODO: Report the error to the guest
-                Ok(StreamState::Closed)
-            }
-        }
+        Ok(self.flush().await)
     }
 
     async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+        if !self.buffer.is_empty() {
+            return Ok(self.flush().await);
+        }
         Ok(StreamState::Open)
     }
 }

@@ -131,23 +131,8 @@ impl ReadStreamProducer {
             _ = tx.send(res);
         }
     }
-}
 
-impl<D> StreamProducer<D, u8> for ReadStreamProducer {
-    async fn produce(
-        &mut self,
-        store: &Accessor<D>,
-        dst: &mut Destination<u8>,
-    ) -> wasmtime::Result<StreamState> {
-        if !self.buffer.get_ref().is_empty() {
-            write_buffered_bytes(store, &mut self.buffer, dst).await?;
-            return Ok(StreamState::Open);
-        }
-
-        let n = store
-            .with(|store| dst.remaining(store))
-            .unwrap_or(DEFAULT_BUFFER_CAPACITY)
-            .min(MAX_BUFFER_CAPACITY);
+    async fn read(&mut self, n: usize) -> StreamState {
         let mut buf = mem::take(&mut self.buffer).into_inner();
         buf.resize(n, 0);
         let offset = self.offset;
@@ -171,24 +156,51 @@ impl<D> StreamProducer<D, u8> for ReadStreamProducer {
                     };
                     self.offset = n;
                     self.buffer = Cursor::new(buf);
-                    write_buffered_bytes(store, &mut self.buffer, dst).await?;
-                    return Ok(StreamState::Open);
+                    return StreamState::Open;
                 }
                 Err(err) => break 'result Err(err.into()),
             }
         };
         self.close(res);
-        Ok(StreamState::Closed)
+        StreamState::Closed
+    }
+}
+
+impl<D> StreamProducer<D, u8> for ReadStreamProducer {
+    async fn produce(
+        &mut self,
+        store: &Accessor<D>,
+        dst: &mut Destination<u8>,
+    ) -> wasmtime::Result<StreamState> {
+        if !self.buffer.get_ref().is_empty() {
+            write_buffered_bytes(store, &mut self.buffer, dst).await?;
+            return Ok(StreamState::Open);
+        }
+        let n = store
+            .with(|store| dst.remaining(store))
+            .unwrap_or(DEFAULT_BUFFER_CAPACITY)
+            .min(MAX_BUFFER_CAPACITY);
+        match self.read(n).await {
+            StreamState::Open => {
+                write_buffered_bytes(store, &mut self.buffer, dst).await?;
+                Ok(StreamState::Open)
+            }
+            StreamState::Closed => Ok(StreamState::Closed),
+        }
     }
 
     async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
-        Ok(StreamState::Open)
+        if !self.buffer.get_ref().is_empty() {
+            return Ok(StreamState::Open);
+        }
+        Ok(self.read(DEFAULT_BUFFER_CAPACITY).await)
     }
 }
 
 struct DirectoryStreamProducer {
     dir: Dir,
     entries: Option<cap_std::fs::ReadDir>,
+    buffered: Option<DirectoryEntry>,
     result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
 }
 
@@ -198,14 +210,8 @@ impl DirectoryStreamProducer {
             _ = tx.send(res);
         }
     }
-}
 
-impl<D> StreamProducer<D, DirectoryEntry> for DirectoryStreamProducer {
-    async fn produce(
-        &mut self,
-        store: &Accessor<D>,
-        dst: &mut Destination<DirectoryEntry>,
-    ) -> wasmtime::Result<StreamState> {
+    async fn next(&mut self) -> Option<DirectoryEntry> {
         let res = 'result: loop {
             let mut entries = if let Some(entries) = self.entries.take() {
                 entries
@@ -252,25 +258,43 @@ impl<D> StreamProducer<D, DirectoryEntry> for DirectoryStreamProducer {
                 break 'result Err(ErrorCode::IllegalByteSequence);
             };
             // FIXME: Handle cancellation
-            if let Some(_) = dst
-                .write(
-                    store,
-                    Some(DirectoryEntry {
-                        type_: meta.file_type().into(),
-                        name,
-                    }),
-                )
-                .await?
-            {
-                bail!("failed to write entry")
-            }
-            return Ok(StreamState::Open);
+            return Some(DirectoryEntry {
+                type_: meta.file_type().into(),
+                name,
+            });
         };
         self.close(res);
-        Ok(StreamState::Closed)
+        None
+    }
+}
+
+impl<D> StreamProducer<D, DirectoryEntry> for DirectoryStreamProducer {
+    async fn produce(
+        &mut self,
+        store: &Accessor<D>,
+        dst: &mut Destination<DirectoryEntry>,
+    ) -> wasmtime::Result<StreamState> {
+        let entry = if let Some(entry) = self.buffered.take() {
+            entry
+        } else if let Some(entry) = self.next().await {
+            entry
+        } else {
+            return Ok(StreamState::Closed);
+        };
+        // FIXME: Handle cancellation
+        if let Some(_) = dst.write(store, Some(entry)).await? {
+            bail!("failed to write entry")
+        }
+        return Ok(StreamState::Open);
     }
 
     async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+        if self.buffered.is_none() {
+            let Some(entry) = self.next().await else {
+                return Ok(StreamState::Closed);
+            };
+            self.buffered = Some(entry);
+        }
         Ok(StreamState::Open)
     }
 }
@@ -294,20 +318,9 @@ impl WriteStreamConsumer {
             _ = tx.send(res);
         }
     }
-}
 
-impl<D> StreamConsumer<D, u8> for WriteStreamConsumer {
-    async fn consume(
-        &mut self,
-        store: &Accessor<D>,
-        src: &mut Source<'_, u8>,
-    ) -> wasmtime::Result<StreamState> {
-        let res = 'result: loop {
-            store.with(|mut store| {
-                let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
-                self.buffer.reserve(n);
-                src.read(&mut store, &mut self.buffer)
-            })?;
+    async fn flush(&mut self) -> StreamState {
+        let res = 'result: {
             // FIXME: `mem::take` rather than `clone` when we can ensure cancellation-safety
             //let buf = mem::take(&mut self.buffer);
             let buf = self.buffer.clone();
@@ -330,16 +343,34 @@ impl<D> StreamConsumer<D, u8> for WriteStreamConsumer {
                     self.buffer = buf;
                     self.buffer.clear();
                     self.offset = offset;
-                    return Ok(StreamState::Open);
+                    return StreamState::Open;
                 }
                 Err(err) => break 'result Err(err),
             }
         };
         self.close(res);
-        Ok(StreamState::Closed)
+        StreamState::Closed
+    }
+}
+
+impl<D> StreamConsumer<D, u8> for WriteStreamConsumer {
+    async fn consume(
+        &mut self,
+        store: &Accessor<D>,
+        src: &mut Source<'_, u8>,
+    ) -> wasmtime::Result<StreamState> {
+        store.with(|mut store| {
+            let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
+            self.buffer.reserve(n);
+            src.read(&mut store, &mut self.buffer)
+        })?;
+        Ok(self.flush().await)
     }
 
     async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+        if !self.buffer.is_empty() {
+            return Ok(self.flush().await);
+        }
         Ok(StreamState::Open)
     }
 }
@@ -362,20 +393,9 @@ impl AppendStreamConsumer {
             _ = tx.send(res);
         }
     }
-}
 
-impl<D> StreamConsumer<D, u8> for AppendStreamConsumer {
-    async fn consume(
-        &mut self,
-        store: &Accessor<D>,
-        src: &mut Source<'_, u8>,
-    ) -> wasmtime::Result<StreamState> {
-        let res = 'result: loop {
-            store.with(|mut store| {
-                let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
-                self.buffer.reserve(n);
-                src.read(&mut store, &mut self.buffer)
-            })?;
+    async fn flush(&mut self) -> StreamState {
+        let res = 'result: {
             let buf = mem::take(&mut self.buffer);
             // FIXME: Handle cancellation
             match self
@@ -393,16 +413,34 @@ impl<D> StreamConsumer<D, u8> for AppendStreamConsumer {
                 Ok(buf) => {
                     self.buffer = buf;
                     self.buffer.clear();
-                    return Ok(StreamState::Open);
+                    return StreamState::Open;
                 }
                 Err(err) => break 'result Err(err),
             }
         };
         self.close(res);
-        Ok(StreamState::Closed)
+        StreamState::Closed
+    }
+}
+
+impl<D> StreamConsumer<D, u8> for AppendStreamConsumer {
+    async fn consume(
+        &mut self,
+        store: &Accessor<D>,
+        src: &mut Source<'_, u8>,
+    ) -> wasmtime::Result<StreamState> {
+        store.with(|mut store| {
+            let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
+            self.buffer.reserve(n);
+            src.read(&mut store, &mut self.buffer)
+        })?;
+        Ok(self.flush().await)
     }
 
     async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+        if !self.buffer.is_empty() {
+            return Ok(self.flush().await);
+        }
         Ok(StreamState::Open)
     }
 }
@@ -603,6 +641,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     DirectoryStreamProducer {
                         dir,
                         entries: None,
+                        buffered: None,
                         result: Some(result_tx),
                     },
                 ),
