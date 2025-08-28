@@ -33,7 +33,7 @@ use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker};
 use wasmtime::component::{Component, Linker, Resource, ResourceTable};
-use wasmtime::{Config, Engine, Store};
+use wasmtime::{Engine, Store};
 use wasmtime_wasi_io::{
     IoView,
     bytes::Bytes,
@@ -78,7 +78,7 @@ fn run(wasi_component: &[u8]) -> Result<String> {
     // interface will poll as Pending while execution is suspended and it is
     // waiting for a Pollable to become Ready. This example provides a very
     // small async executor which is entered below with `block_on`.
-    let mut config = Config::default();
+    let mut config = super::config();
     config.async_support(true);
     // For future: we could consider turning on fuel in the Config to meter
     // how long a wasm guest could execute for.

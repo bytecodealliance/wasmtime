@@ -65,7 +65,6 @@ struct EngineInner {
 
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     compatible_with_native_host: crate::sync::OnceLock<Result<(), String>>,
 }
 
@@ -141,7 +140,6 @@ impl Engine {
                 signatures: TypeRegistry::new(),
                 #[cfg(all(feature = "runtime", target_has_atomic = "64"))]
                 epoch: AtomicU64::new(0),
-                #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compatible_with_native_host: Default::default(),
                 config,
                 tunables,
@@ -293,7 +291,6 @@ impl Engine {
     /// engine can indeed load modules for the configured compiler (if any).
     /// Note that if cranelift is disabled this trivially returns `Ok` because
     /// loaded serialized modules are checked separately.
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn check_compatible_with_native_host(&self) -> Result<()> {
         self.inner
             .compatible_with_native_host
@@ -302,18 +299,16 @@ impl Engine {
             .map_err(anyhow::Error::msg)
     }
 
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
         use target_lexicon::Triple;
 
-        let compiler = self.compiler();
-
-        let target = compiler.triple();
         let host = Triple::host();
+        let target = self.config().compiler_target();
+
         let target_matches_host = || {
             // If the host target and target triple match, then it's valid
             // to run results of compilation on this host.
-            if host == *target {
+            if host == target {
                 return true;
             }
 
@@ -337,12 +332,16 @@ impl Engine {
             ));
         }
 
-        // Also double-check all compiler settings
-        for (key, value) in compiler.flags().iter() {
-            self.check_compatible_with_shared_flag(key, value)?;
-        }
-        for (key, value) in compiler.isa_flags().iter() {
-            self.check_compatible_with_isa_flag(key, value)?;
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        {
+            let compiler = self.compiler();
+            // Also double-check all compiler settings
+            for (key, value) in compiler.flags().iter() {
+                self.check_compatible_with_shared_flag(key, value)?;
+            }
+            for (key, value) in compiler.isa_flags().iter() {
+                self.check_compatible_with_isa_flag(key, value)?;
+            }
         }
 
         // Double-check that this configuration isn't requesting capabilities
@@ -356,6 +355,22 @@ impl Engine {
         if !cfg!(target_has_atomic = "64") && self.tunables().epoch_interruption {
             return Err("epochs currently require 64-bit atomics".into());
         }
+
+        // Double-check that the host's float ABI matches Cranelift's float ABI.
+        // See `Config::x86_float_abi_ok` for some more
+        // information.
+        if target == target_lexicon::triple!("x86_64-unknown-none")
+            && self.config().x86_float_abi_ok != Some(true)
+        {
+            return Err("\
+the x86_64-unknown-none target by default uses a soft-float ABI that is \
+incompatible with Cranelift and Wasmtime -- use \
+`Config::x86_float_abi_ok` to disable this check and see more \
+information about this check\
+"
+            .into());
+        }
+
         Ok(())
     }
 
@@ -601,8 +616,8 @@ impl Engine {
                  available on the host",
             )),
             None => Err(format!(
-                "failed to detect if target-specific flag {flag:?} is \
-                 available at runtime"
+                "failed to detect if target-specific flag {host_feature:?} is \
+                 available at runtime (compile setting {flag:?})"
             )),
         }
     }
@@ -876,6 +891,9 @@ impl Engine {
         mmap: crate::runtime::vm::MmapVec,
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
+        self.check_compatible_with_native_host()
+            .context("compilation settings are not compatible with the native host")?;
+
         serialization::check_compatible(self, &mmap, expected)?;
         let mut code = crate::CodeMemory::new(self, mmap)?;
         code.publish()?;

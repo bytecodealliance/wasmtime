@@ -3278,6 +3278,15 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.23 -> 1.0.27"
 
+[[audits.raw-cpuid]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "11.5.0"
+notes = """
+Very little `unsafe` usage, what is there is well-documented. Otherwise it's a
+big library but that's more Intel's fault than anyone else's.
+"""
+
 [[audits.regalloc2]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
