@@ -390,7 +390,7 @@ pub trait PtrSize {
 
     /// Return the offset of `VMContRef::stack`.
     fn vmcontref_stack(&self) -> u8 {
-        self.vmcontref_revision() + 8
+        self.vmcontref_revision() + self.size()
     }
 
     /// Return the offset of `VMContRef::args`.
