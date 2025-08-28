@@ -320,36 +320,35 @@ impl WriteStreamConsumer {
     }
 
     async fn flush(&mut self) -> StreamState {
-        let res = 'result: {
-            // FIXME: `mem::take` rather than `clone` when we can ensure cancellation-safety
-            //let buf = mem::take(&mut self.buffer);
-            let buf = self.buffer.clone();
-            let mut offset = self.offset;
-            match self
-                .file
-                .spawn_blocking(move |file| {
-                    let mut pos = 0;
-                    while pos != buf.len() {
-                        let n = file.write_at(&buf[pos..], offset)?;
-                        pos = pos.saturating_add(n);
-                        let n = n.try_into().or(Err(ErrorCode::Overflow))?;
-                        offset = offset.checked_add(n).ok_or(ErrorCode::Overflow)?;
-                    }
-                    Ok((buf, offset))
-                })
-                .await
-            {
-                Ok((buf, offset)) => {
-                    self.buffer = buf;
-                    self.buffer.clear();
-                    self.offset = offset;
-                    return StreamState::Open;
+        // FIXME: `mem::take` rather than `clone` when we can ensure cancellation-safety
+        //let buf = mem::take(&mut self.buffer);
+        let buf = self.buffer.clone();
+        let mut offset = self.offset;
+        match self
+            .file
+            .spawn_blocking(move |file| {
+                let mut pos = 0;
+                while pos != buf.len() {
+                    let n = file.write_at(&buf[pos..], offset)?;
+                    pos = pos.saturating_add(n);
+                    let n = n.try_into().or(Err(ErrorCode::Overflow))?;
+                    offset = offset.checked_add(n).ok_or(ErrorCode::Overflow)?;
                 }
-                Err(err) => break 'result Err(err),
+                Ok((buf, offset))
+            })
+            .await
+        {
+            Ok((buf, offset)) => {
+                self.buffer = buf;
+                self.buffer.clear();
+                self.offset = offset;
+                StreamState::Open
             }
-        };
-        self.close(res);
-        StreamState::Closed
+            Err(err) => {
+                self.close(Err(err));
+                StreamState::Closed
+            }
+        }
     }
 }
 
@@ -395,31 +394,30 @@ impl AppendStreamConsumer {
     }
 
     async fn flush(&mut self) -> StreamState {
-        let res = 'result: {
-            let buf = mem::take(&mut self.buffer);
-            // FIXME: Handle cancellation
-            match self
-                .file
-                .spawn_blocking(move |file| {
-                    let mut pos = 0;
-                    while pos != buf.len() {
-                        let n = file.append(&buf[pos..])?;
-                        pos = pos.saturating_add(n);
-                    }
-                    Ok(buf)
-                })
-                .await
-            {
-                Ok(buf) => {
-                    self.buffer = buf;
-                    self.buffer.clear();
-                    return StreamState::Open;
+        let buf = mem::take(&mut self.buffer);
+        // FIXME: Handle cancellation
+        match self
+            .file
+            .spawn_blocking(move |file| {
+                let mut pos = 0;
+                while pos != buf.len() {
+                    let n = file.append(&buf[pos..])?;
+                    pos = pos.saturating_add(n);
                 }
-                Err(err) => break 'result Err(err),
+                Ok(buf)
+            })
+            .await
+        {
+            Ok(buf) => {
+                self.buffer = buf;
+                self.buffer.clear();
+                StreamState::Open
             }
-        };
-        self.close(res);
-        StreamState::Closed
+            Err(err) => {
+                self.close(Err(err));
+                StreamState::Closed
+            }
+        }
     }
 }
 
