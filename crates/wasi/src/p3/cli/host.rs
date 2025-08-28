@@ -1,77 +1,96 @@
 use crate::I32Exit;
 use crate::cli::{IsTerminal, WasiCli, WasiCliCtxView};
-use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::cli::{
     environment, exit, stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr,
     terminal_stdin, terminal_stdout,
 };
 use crate::p3::cli::{TerminalInput, TerminalOutput};
+use crate::p3::write_buffered_bytes;
+use crate::p3::{DEFAULT_BUFFER_CAPACITY, MAX_BUFFER_CAPACITY};
 use anyhow::{Context as _, anyhow};
 use bytes::BytesMut;
 use std::io::Cursor;
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
 use wasmtime::component::{
-    Accessor, AccessorTask, GuardedStreamReader, GuardedStreamWriter, HasData, Resource,
-    StreamReader, StreamWriter,
+    Accessor, Destination, Resource, Source, StreamConsumer, StreamProducer, StreamReader,
+    StreamState,
 };
 
-struct InputTask<T> {
+struct InputStreamProducer<T> {
     rx: T,
-    tx: StreamWriter<u8>,
+    buffer: Cursor<BytesMut>,
 }
 
-impl<T, U, V> AccessorTask<T, U, wasmtime::Result<()>> for InputTask<V>
+impl<T, D> StreamProducer<D, u8> for InputStreamProducer<T>
 where
-    U: HasData,
-    V: AsyncRead + Send + Sync + Unpin + 'static,
+    T: AsyncRead + Send + Unpin + 'static,
 {
-    async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
-        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
-        let mut tx = GuardedStreamWriter::new(store, self.tx);
-        while !tx.is_closed() {
-            match self.rx.read_buf(&mut buf).await {
-                Ok(0) => return Ok(()),
-                Ok(_) => {
-                    buf = tx.write_all(Cursor::new(buf)).await.into_inner();
-                    buf.clear();
-                }
-                Err(_err) => {
-                    // TODO: Report the error to the guest
-                    return Ok(());
-                }
+    async fn produce(
+        &mut self,
+        store: &Accessor<D>,
+        dst: &mut Destination<u8>,
+    ) -> wasmtime::Result<StreamState> {
+        if !self.buffer.get_ref().is_empty() {
+            write_buffered_bytes(store, &mut self.buffer, dst).await?;
+            return Ok(StreamState::Open);
+        }
+
+        let n = store
+            .with(|store| dst.remaining(store))
+            .unwrap_or(DEFAULT_BUFFER_CAPACITY)
+            .min(MAX_BUFFER_CAPACITY);
+        self.buffer.get_mut().reserve(n);
+        match self.rx.read_buf(self.buffer.get_mut()).await {
+            Ok(0) => Ok(StreamState::Closed),
+            Ok(_) => {
+                write_buffered_bytes(store, &mut self.buffer, dst).await?;
+                Ok(StreamState::Open)
+            }
+            Err(_err) => {
+                // TODO: Report the error to the guest
+                Ok(StreamState::Closed)
             }
         }
-        Ok(())
+    }
+
+    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+        Ok(StreamState::Open)
     }
 }
 
-struct OutputTask<T> {
-    rx: StreamReader<u8>,
+struct OutputStreamConsumer<T> {
     tx: T,
+    buffer: BytesMut,
 }
 
-impl<T, U, V> AccessorTask<T, U, wasmtime::Result<()>> for OutputTask<V>
+impl<T, D> StreamConsumer<D, u8> for OutputStreamConsumer<T>
 where
-    U: HasData,
-    V: AsyncWrite + Send + Sync + Unpin + 'static,
+    T: AsyncWrite + Send + Unpin + 'static,
 {
-    async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
-        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
-        let mut rx = GuardedStreamReader::new(store, self.rx);
-        while !rx.is_closed() {
-            buf = rx.read(buf).await;
-            match self.tx.write_all(&buf).await {
-                Ok(()) => {
-                    buf.clear();
-                    continue;
-                }
-                Err(_err) => {
-                    // TODO: Report the error to the guest
-                    return Ok(());
-                }
+    async fn consume(
+        &mut self,
+        store: &Accessor<D>,
+        src: &mut Source<'_, u8>,
+    ) -> wasmtime::Result<StreamState> {
+        store.with(|mut store| {
+            let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
+            self.buffer.reserve(n);
+            src.read(&mut store, &mut self.buffer)
+        })?;
+        match self.tx.write_all(&self.buffer).await {
+            Ok(()) => {
+                self.buffer.clear();
+                Ok(StreamState::Open)
+            }
+            Err(_err) => {
+                // TODO: Report the error to the guest
+                Ok(StreamState::Closed)
             }
         }
-        Ok(())
+    }
+
+    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+        Ok(StreamState::Open)
     }
 }
 
@@ -140,17 +159,17 @@ impl terminal_stderr::Host for WasiCliCtxView<'_> {
 
 impl stdin::HostWithStore for WasiCli {
     async fn get_stdin<U>(store: &Accessor<U, Self>) -> wasmtime::Result<StreamReader<u8>> {
-        store.with(|mut view| {
-            let instance = view.instance();
-            let (tx, rx) = instance
-                .stream(&mut view)
-                .context("failed to create stream")?;
-            let stdin = view.get().ctx.stdin.async_stream();
-            view.spawn(InputTask {
-                rx: Box::into_pin(stdin),
-                tx,
-            });
-            Ok(rx)
+        let instance = store.instance();
+        store.with(|mut store| {
+            let rx = store.get().ctx.stdin.async_stream();
+            Ok(StreamReader::new(
+                instance,
+                &mut store,
+                InputStreamProducer {
+                    rx: Box::into_pin(rx),
+                    buffer: Cursor::default(),
+                },
+            ))
         })
     }
 }
@@ -162,12 +181,15 @@ impl stdout::HostWithStore for WasiCli {
         store: &Accessor<U, Self>,
         data: StreamReader<u8>,
     ) -> wasmtime::Result<()> {
-        store.with(|mut view| {
-            let tx = view.get().ctx.stdout.async_stream();
-            view.spawn(OutputTask {
-                rx: data,
-                tx: Box::into_pin(tx),
-            });
+        store.with(|mut store| {
+            let tx = store.get().ctx.stdout.async_stream();
+            data.pipe(
+                store,
+                OutputStreamConsumer {
+                    tx: Box::into_pin(tx),
+                    buffer: BytesMut::default(),
+                },
+            );
             Ok(())
         })
     }
@@ -180,12 +202,15 @@ impl stderr::HostWithStore for WasiCli {
         store: &Accessor<U, Self>,
         data: StreamReader<u8>,
     ) -> wasmtime::Result<()> {
-        store.with(|mut view| {
-            let tx = view.get().ctx.stderr.async_stream();
-            view.spawn(OutputTask {
-                rx: data,
-                tx: Box::into_pin(tx),
-            });
+        store.with(|mut store| {
+            let tx = store.get().ctx.stderr.async_stream();
+            data.pipe(
+                store,
+                OutputStreamConsumer {
+                    tx: Box::into_pin(tx),
+                    buffer: BytesMut::default(),
+                },
+            );
             Ok(())
         })
     }
