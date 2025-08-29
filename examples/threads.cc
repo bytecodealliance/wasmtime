@@ -34,56 +34,46 @@ std::string readFile(const char *name) {
 const int N_THREADS = 10;
 const int N_REPS = 3;
 
-// Synchronization for clean output and mapping to small numeric thread ids.
-static std::mutex print_mutex;
-static std::unordered_map<std::thread::id, int> id_map;
-static std::atomic<int> next_id{
-    15}; // Rust sample started at ThreadId(15) in captured run
-
-int thread_number() {
-  std::lock_guard<std::mutex> lock(print_mutex);
-  auto tid = std::this_thread::get_id();
-  auto it = id_map.find(tid);
-  if (it != id_map.end())
-    return it->second;
-  int id = next_id++;
-  id_map.emplace(tid, id);
-  return id;
-}
-
-void print_line(const std::string &s) {
-  std::lock_guard<std::mutex> lock(print_mutex);
-  std::cout << s << '\n';
-}
+std::mutex print_mutex;
 
 void run_worker(Engine engine, Module module) {
+  std::thread::id id = std::this_thread::get_id();
   Store store(engine);
   for (int i = 0; i < N_REPS; i++) {
-    print_line("Instantiating module...");
+    {
+      std::lock_guard<std::mutex> lock(print_mutex);
+      std::cout << "Instantiating module...\n";
+    }
     Func hello_func = Func::wrap(store, []() {
-      int id = thread_number();
-      print_line("> Hello from ThreadId(" + std::to_string(id) + ")");
+      std::lock_guard<std::mutex> lock(print_mutex);
+      std::thread::id id = std::this_thread::get_id();
+      std::cout << "> Hello from ThreadId(" << id << ")\n";
     });
     auto instance_res = Instance::create(store, module, {hello_func});
     if (!instance_res) {
-      print_line("> Error instantiating module!");
+      std::cout << "> Error instantiating module!\n";
       return;
     }
     Instance instance = instance_res.unwrap();
     Func run = std::get<Func>(*instance.get(store, "run"));
-    print_line("Executing...");
+    {
+      std::lock_guard<std::mutex> lock(print_mutex);
+      std::cout << "Executing...\n";
+    }
     run.call(store, {}).unwrap();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
   // Move store to a new thread once.
-  int old_id = thread_number();
-  print_line("> Moving ThreadId(" + std::to_string(old_id) +
-             ") to a new thread");
+  {
+    std::lock_guard<std::mutex> lock(print_mutex);
+    std::cout << "> Moving (" << id << ") to a new thread\n";
+  }
   auto handle = std::thread([store = std::move(store), module]() mutable {
     Func hello_func = Func::wrap(store, []() {
-      int id = thread_number();
-      print_line("> Hello from ThreadId(" + std::to_string(id) + ")");
+      std::lock_guard<std::mutex> lock(print_mutex);
+      std::thread::id id = std::this_thread::get_id();
+      std::cout << "> Hello from ThreadId(" << id << ")\n";
     });
     Instance instance = Instance::create(store, module, {hello_func}).unwrap();
     Func run = std::get<Func>(*instance.get(store, "run"));
