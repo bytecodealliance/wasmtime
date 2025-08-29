@@ -3273,7 +3273,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::AluRRImm12 {
                     alu_op: ALUOp::Add,
                     size: OperandSize::Size64,
-                    rd: rd,
+                    rd,
                     rn: rd.to_reg(),
                     imm12: Imm12::ZERO,
                 };
