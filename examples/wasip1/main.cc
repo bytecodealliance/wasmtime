@@ -50,9 +50,12 @@ int main() {
 
     // Load and compile the wasm module.
     auto bytes = read_binary_file("target/wasm32-wasip1/debug/wasi.wasm");
-    auto module = Module::compile(engine, Span<uint8_t>(bytes.data(), bytes.size())).unwrap();
+    auto module =
+        Module::compile(engine, Span<uint8_t>(bytes.data(), bytes.size()))
+            .unwrap();
 
-    // Define the module in the linker (anonymous name matches Rust example usage).
+    // Define the module in the linker (anonymous name matches Rust example
+    // usage).
     linker.module(store.context(), "", module).unwrap();
 
     // Get the default export (command entrypoint) and invoke it.
