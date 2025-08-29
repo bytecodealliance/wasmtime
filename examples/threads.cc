@@ -14,11 +14,11 @@ build/wasmtime-threads-cpp
 
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <thread>
-#include <vector>
-#include <mutex>
 #include <unordered_map>
+#include <vector>
 #include <wasmtime.hh>
 
 using namespace wasmtime;
@@ -37,13 +37,15 @@ const int N_REPS = 3;
 // Synchronization for clean output and mapping to small numeric thread ids.
 static std::mutex print_mutex;
 static std::unordered_map<std::thread::id, int> id_map;
-static std::atomic<int> next_id{15}; // Rust sample started at ThreadId(15) in captured run
+static std::atomic<int> next_id{
+    15}; // Rust sample started at ThreadId(15) in captured run
 
 int thread_number() {
   std::lock_guard<std::mutex> lock(print_mutex);
   auto tid = std::this_thread::get_id();
   auto it = id_map.find(tid);
-  if (it != id_map.end()) return it->second;
+  if (it != id_map.end())
+    return it->second;
   int id = next_id++;
   id_map.emplace(tid, id);
   return id;
@@ -76,7 +78,8 @@ void run_worker(Engine engine, Module module) {
 
   // Move store to a new thread once.
   int old_id = thread_number();
-  print_line("> Moving ThreadId(" + std::to_string(old_id) + ") to a new thread");
+  print_line("> Moving ThreadId(" + std::to_string(old_id) +
+             ") to a new thread");
   auto handle = std::thread([store = std::move(store), module]() mutable {
     Func hello_func = Func::wrap(store, []() {
       int id = thread_number();
@@ -98,7 +101,9 @@ int main() {
 
   std::vector<std::thread> threads;
   threads.reserve(N_THREADS);
-  for (int i = 0; i < N_THREADS; i++) threads.emplace_back(run_worker, engine, module);
-  for (auto &t : threads) t.join();
+  for (int i = 0; i < N_THREADS; i++)
+    threads.emplace_back(run_worker, engine, module);
+  for (auto &t : threads)
+    t.join();
   return 0;
 }

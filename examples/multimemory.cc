@@ -47,9 +47,11 @@ int main() {
 
   std::cout << "Mutating memory...\n";
   auto d0 = memory0.data(store);
-  if (d0.size() >= 0x1004) d0[0x1003] = 5;
+  if (d0.size() >= 0x1004)
+    d0[0x1003] = 5;
   auto d1 = memory1.data(store);
-  if (d1.size() >= 0x1004) d1[0x1003] = 7;
+  if (d1.size() >= 0x1004)
+    d1[0x1003] = 7;
 
   std::cout << "Growing memory...\n";
   memory0.grow(store, 1).unwrap();

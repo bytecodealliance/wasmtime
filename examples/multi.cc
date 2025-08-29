@@ -37,10 +37,11 @@ int main() {
   Module module = Module::compile(engine, wat).unwrap();
 
   std::cout << "Creating callback...\n";
-  Func callback_func = Func::wrap(store, [](int32_t a, int64_t b) -> std::tuple<int64_t, int32_t> {
-    // Rust example adds 1 to each argument but flips order.
-    return std::make_tuple(b + 1, a + 1);
-  });
+  Func callback_func = Func::wrap(
+      store, [](int32_t a, int64_t b) -> std::tuple<int64_t, int32_t> {
+        // Rust example adds 1 to each argument but flips order.
+        return std::make_tuple(b + 1, a + 1);
+      });
 
   std::cout << "Instantiating module...\n";
   Instance instance = Instance::create(store, module, {callback_func}).unwrap();
@@ -56,15 +57,20 @@ int main() {
   std::cout << "> " << results[0].i64() << " " << results[1].i32() << "\n";
 
   std::cout << "Calling export \"round_trip_many\"...\n";
-  Func round_trip_many = std::get<Func>(*instance.get(store, "round_trip_many"));
-  auto many_results = round_trip_many.call(store, {
-    Val(int64_t(0)), Val(int64_t(1)), Val(int64_t(2)), Val(int64_t(3)), Val(int64_t(4)),
-    Val(int64_t(5)), Val(int64_t(6)), Val(int64_t(7)), Val(int64_t(8)), Val(int64_t(9))
-  }).unwrap();
+  Func round_trip_many =
+      std::get<Func>(*instance.get(store, "round_trip_many"));
+  auto many_results =
+      round_trip_many
+          .call(store, {Val(int64_t(0)), Val(int64_t(1)), Val(int64_t(2)),
+                        Val(int64_t(3)), Val(int64_t(4)), Val(int64_t(5)),
+                        Val(int64_t(6)), Val(int64_t(7)), Val(int64_t(8)),
+                        Val(int64_t(9))})
+          .unwrap();
   std::cout << "Printing result...\n";
   std::cout << "> (";
   for (size_t i = 0; i < many_results.size(); i++) {
-    if (i) std::cout << ", ";
+    if (i)
+      std::cout << ", ";
     std::cout << many_results[i].i64();
   }
   std::cout << ")\n";

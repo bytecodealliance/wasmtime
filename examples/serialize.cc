@@ -48,7 +48,9 @@ void deserialize(std::vector<uint8_t> buffer) {
   Store store(engine);
 
   std::cout << "Deserialize module...\n";
-  Module module = Module::deserialize(engine, Span<uint8_t>(buffer.data(), buffer.size())).unwrap();
+  Module module =
+      Module::deserialize(engine, Span<uint8_t>(buffer.data(), buffer.size()))
+          .unwrap();
 
   std::cout << "Creating callback...\n";
   Func hello_func = Func::wrap(store, []() {
