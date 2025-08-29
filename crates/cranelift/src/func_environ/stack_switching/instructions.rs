@@ -201,7 +201,7 @@ pub(crate) mod stack_switching_helpers {
         }
     }
 
-    impl<T> VMHostArrayRef<T> {
+    impl<T: 'static> VMHostArrayRef<T> {
         pub(crate) fn new(address: ir::Value) -> Self {
             Self {
                 address,
@@ -270,8 +270,10 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             data: ir::Value,
         ) {
-            let offset = env.offsets.ptr.vmhostarray_data().into();
-            self.set::<*mut T>(builder, offset, data);
+            debug_assert_eq!(builder.func.dfg.value_type(data), env.pointer_type());
+            let offset: i32 = env.offsets.ptr.vmhostarray_data().into();
+            let mem_flags = ir::MemFlags::trusted();
+            builder.ins().store(mem_flags, data, self.address, offset);
         }
 
         /// Returns pointer to next empty slot in data buffer and marks the
@@ -302,8 +304,19 @@ pub(crate) mod stack_switching_helpers {
             required_capacity: u32,
             existing_slot: Option<StackSlot>,
         ) -> StackSlot {
-            let align = u8::try_from(std::mem::align_of::<T>()).unwrap();
-            let entry_size = u32::try_from(std::mem::size_of::<T>()).unwrap();
+            // TODO: hack around host pointer size being mixed up with target
+            let (align, entry_size) =
+                if core::any::TypeId::of::<T>() == core::any::TypeId::of::<*mut u8>() {
+                    (
+                        u8::try_from(env.pointer_type().bytes()).unwrap(),
+                        env.pointer_type().bytes(),
+                    )
+                } else {
+                    (
+                        u8::try_from(std::mem::align_of::<T>()).unwrap(),
+                        u32::try_from(std::mem::size_of::<T>()).unwrap(),
+                    )
+                };
             let required_size = required_capacity * entry_size;
 
             match existing_slot {
@@ -368,14 +381,12 @@ pub(crate) mod stack_switching_helpers {
         /// index 0. This expects the Vector object to be empty (i.e., current
         /// length is 0), and to be of sufficient capacity to store |`values`|
         /// entries.
-        /// If `allow_smaller` is true, we allow storing values whose type has a
-        /// smaller size than T's. In that case, such values will be stored at
-        /// the beginning of a `T`-sized slot.
         pub fn store_data_entries<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
             values: &[ir::Value],
+            entry_size: u32,
         ) {
             let store_count = builder
                 .ins()
@@ -383,21 +394,20 @@ pub(crate) mod stack_switching_helpers {
 
             debug_assert!(values.iter().all(|val| {
                 let ty = builder.func.dfg.value_type(*val);
-                let size = usize::try_from(ty.bytes()).unwrap();
-                size <= std::mem::size_of::<T>()
+                let size = ty.bytes();
+                size <= entry_size
             }));
 
             let memflags = ir::MemFlags::trusted();
 
             let data_start_pointer = self.get_data(env, builder);
 
-            let entry_size = i32::try_from(std::mem::size_of::<T>()).unwrap();
             let mut offset = 0;
             for value in values {
                 builder
                     .ins()
                     .store(memflags, *value, data_start_pointer, offset);
-                offset += entry_size;
+                offset += i32::try_from(entry_size).unwrap();
             }
 
             self.set_length(env, builder, store_count);
@@ -793,11 +803,13 @@ pub(crate) mod stack_switching_helpers {
 
         fn load_top_of_stack<'a>(
             &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             let mem_flags = ir::MemFlags::trusted();
-            builder.ins().load(I64, mem_flags, self.tos_ptr, 0)
+            builder
+                .ins()
+                .load(env.pointer_type(), mem_flags, self.tos_ptr, 0)
         }
 
         /// Returns address of the control context stored in the stack memory,
@@ -1114,10 +1126,8 @@ fn search_handler<'a>(
         builder.switch_to_block(compare_tags);
 
         let base = handler_list_data_ptr;
-        let entry_size = std::mem::size_of::<*mut u8>();
-        let offset = builder
-            .ins()
-            .imul_imm(index, i64::try_from(entry_size).unwrap());
+        let entry_size = env.pointer_type().bytes();
+        let offset = builder.ins().imul_imm(index, i64::from(entry_size));
         let offset = builder.ins().uextend(I64, offset);
         let entry_address = builder.ins().iadd(base, offset);
 
@@ -1378,7 +1388,8 @@ pub(crate) fn translate_resume<'a>(
                 .collect();
 
             // Store all tag addresess in the handler list.
-            handler_list.store_data_entries(env, builder, &all_tag_addresses);
+            let entry_size = env.pointer_type().bytes();
+            handler_list.store_data_entries(env, builder, &all_tag_addresses, entry_size);
 
             // To enable distinguishing switch and suspend handlers when searching the handler list:
             // Store at which index the switch handlers start.
@@ -1624,7 +1635,8 @@ pub(crate) fn translate_suspend<'a>(
     }
 
     if suspend_args.len() > 0 {
-        values.store_data_entries(env, builder, suspend_args)
+        let entry_size: u32 = std::mem::size_of::<u128>().try_into().unwrap();
+        values.store_data_entries(env, builder, suspend_args, entry_size)
     }
 
     // Set current continuation to suspended and break up handler chain.
