@@ -139,8 +139,8 @@ the implementation.
 Languages supported by the Bytecode Alliance:
 
 * **[Rust]** - the [`wasmtime` crate]
-* **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers], [CMake](crates/c-api/CMakeLists.txt) or [`wasmtime` Conan package]
-* **C++** - the [`wasmtime.hh` header][c-headers] or the [`wasmtime-cpp` Conan package]
+* **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers]
+* **C++** - the [`wasmtime.hh` header][c-headers]
 * **[Python]** - the [`wasmtime` PyPI package]
 * **[.NET]** - the [`Wasmtime` NuGet package]
 * **[Go]** - the [`wasmtime-go` repository]
@@ -161,8 +161,6 @@ Languages supported by the community:
 [`Wasmtime` NuGet package]: https://www.nuget.org/packages/Wasmtime
 [Go]: https://bytecodealliance.github.io/wasmtime/lang-go.html
 [`wasmtime-go` repository]: https://pkg.go.dev/github.com/bytecodealliance/wasmtime-go
-[`wasmtime` Conan package]: https://conan.io/center/wasmtime
-[`wasmtime-cpp` Conan package]: https://conan.io/center/wasmtime-cpp
 [Ruby]: https://bytecodealliance.github.io/wasmtime/lang-ruby.html
 [`wasmtime` gem]: https://rubygems.org/gems/wasmtime
 [Elixir]: https://docs.wasmtime.dev/lang-elixir.html
