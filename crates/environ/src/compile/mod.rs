@@ -175,6 +175,15 @@ pub struct CompiledFunctionBody {
     pub needs_gc_heap: bool,
 }
 
+/// ABI signature of functions that are generated here.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Abi {
+    /// The "wasm" ABI, or suitable to be a `wasm_call` field of a `VMFuncRef`.
+    Wasm,
+    /// The "array" ABI, or suitable to be an `array_call` field.
+    Array,
+}
+
 /// An implementation of a compiler which can compile WebAssembly functions to
 /// machine code and perform other miscellaneous tasks needed by the JIT runtime.
 ///

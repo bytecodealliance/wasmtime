@@ -45,9 +45,6 @@ pub struct ModuleTranslation<'data> {
     /// Module information.
     pub module: Module,
 
-    /// This module's index.
-    pub module_index: StaticModuleIndex,
-
     /// The input wasm binary.
     ///
     /// This can be useful, for example, when modules are parsed from a
@@ -114,9 +111,10 @@ pub struct ModuleTranslation<'data> {
 impl<'data> ModuleTranslation<'data> {
     /// Create a new translation for the module with the given index.
     pub fn new(module_index: StaticModuleIndex) -> Self {
+        let mut module = Module::default();
+        module.module_index = Some(module_index);
         Self {
-            module_index,
-            module: Module::default(),
+            module,
             wasm: &[],
             function_body_inputs: PrimaryMap::default(),
             known_imported_functions: SecondaryMap::default(),
@@ -138,6 +136,11 @@ impl<'data> ModuleTranslation<'data> {
         self.types
             .as_ref()
             .expect("module type information to be available")
+    }
+
+    /// Get this translation's module's index.
+    pub fn module_index(&self) -> StaticModuleIndex {
+        self.module.module_index.unwrap()
     }
 }
 

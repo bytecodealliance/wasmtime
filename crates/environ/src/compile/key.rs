@@ -1,6 +1,8 @@
 //! Keys for identifying functions during compilation, in call graphs, and when
 //! resolving relocations.
 
+use core::cmp;
+
 #[cfg(feature = "component-model")]
 use crate::component;
 use crate::{
@@ -9,7 +11,7 @@ use crate::{
 
 /// A sortable, comparable function key for compilation output, call graph
 /// edges, and relocations.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FuncKey {
     /// A Wasm-defined function.
     DefinedWasmFunction(StaticModuleIndex, DefinedFuncIndex),
@@ -28,11 +30,27 @@ pub enum FuncKey {
 
     /// A Wasm-caller to component builtin trampoline.
     #[cfg(feature = "component-model")]
-    ComponentTrampoline(component::TrampolineIndex),
+    ComponentTrampoline(crate::Abi, component::TrampolineIndex),
 
     /// A Wasm-caller to array-callee `resource.drop` trampoline.
     #[cfg(feature = "component-model")]
     ResourceDropTrampoline,
+}
+
+impl Ord for FuncKey {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        // Make sure to sort by our raw parts, because `CompiledFunctionsIndex`
+        // relies on this for its binary search tables.
+        let raw_self = self.into_raw_parts();
+        let raw_other = other.into_raw_parts();
+        raw_self.cmp(&raw_other)
+    }
+}
+
+impl PartialOrd for FuncKey {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl FuncKey {
@@ -96,8 +114,13 @@ impl FuncKey {
             }
 
             #[cfg(feature = "component-model")]
-            FuncKey::ComponentTrampoline(trampoline) => {
-                let namespace = Self::COMPONENT_TRAMPOLINE_KIND;
+            FuncKey::ComponentTrampoline(abi, trampoline) => {
+                let abi = match abi {
+                    crate::Abi::Wasm => 0,
+                    crate::Abi::Array => 1,
+                };
+                assert_eq!(abi & Self::KIND_MASK, 0);
+                let namespace = Self::COMPONENT_TRAMPOLINE_KIND | abi;
                 let index = trampoline.as_u32();
                 (namespace, index)
             }
@@ -144,9 +167,16 @@ impl FuncKey {
 
             #[cfg(feature = "component-model")]
             Self::COMPONENT_TRAMPOLINE_KIND => {
-                assert_eq!(a & Self::MODULE_MASK, 0);
+                let abi = match a & Self::MODULE_MASK {
+                    0 => crate::Abi::Wasm,
+                    1 => crate::Abi::Array,
+                    n => panic!(
+                        "bad raw parts given to `FuncKey::from_raw_parts` call: ({a}, {b}), \
+                         invalid component trampoline abi: {n}"
+                    ),
+                };
                 let trampoline = component::TrampolineIndex::from_u32(b);
-                Self::ComponentTrampoline(trampoline)
+                Self::ComponentTrampoline(abi, trampoline)
             }
             #[cfg(feature = "component-model")]
             Self::RESOURCE_DROP_TRAMPOLINE_KIND => {
@@ -203,9 +233,9 @@ impl FuncKey {
 
     /// Unwrap a `FuncKey::ComponentTrampoline` or else panic.
     #[cfg(feature = "component-model")]
-    pub fn unwrap_component_trampoline(self) -> component::TrampolineIndex {
+    pub fn unwrap_component_trampoline(self) -> (crate::Abi, component::TrampolineIndex) {
         match self {
-            Self::ComponentTrampoline(trampoline) => trampoline,
+            Self::ComponentTrampoline(abi, trampoline) => (abi, trampoline),
             _ => panic!("`FuncKey::unwrap_component_trampoline` called on {self:?}"),
         }
     }
