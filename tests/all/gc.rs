@@ -1531,6 +1531,7 @@ fn owned_rooted() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn owned_rooted_lots_of_root_creation() -> Result<()> {
     let mut config = Config::new();
     config.wasm_function_references(true);
