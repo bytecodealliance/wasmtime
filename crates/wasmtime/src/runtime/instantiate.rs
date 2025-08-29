@@ -120,11 +120,6 @@ impl CompiledModule {
         Some(str::from_utf8(&data[name.offset as usize..][..name.len as usize]).unwrap())
     }
 
-    /// Return a reference to a mutable module (if possible).
-    pub fn module_mut(&mut self) -> Option<&mut Module> {
-        Arc::get_mut(&mut self.module)
-    }
-
     /// Returns an iterator over all functions defined within this module with
     /// their index and their body in memory.
     #[inline]
