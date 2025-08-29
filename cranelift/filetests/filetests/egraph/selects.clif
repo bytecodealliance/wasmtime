@@ -21,3 +21,23 @@ block0(v0: i8):
 ;     return v8
 ; }
 
+
+;; (iadd ty (select ty c x y) z) -> (select ty c (x + z) (y + z))
+function %simplify_iadd_select_const_i32_big_constants(i8) -> i8 fast {
+block0(v0: i8):
+    v1 = iconst.i8 100
+    v2 = iconst.i8 200
+    v3 = select v0, v1, v2
+    v4 = iconst.i8 200
+    v5 = iadd v3, v4
+    return v5
+}
+
+; function %simplify_iadd_select_const_i32_big_constants(i8) -> i8 fast {
+; block0(v0: i8):
+;     v6 = iconst.i8 44
+;     v7 = iconst.i8 -112
+;     v8 = select v0, v6, v7  ; v6 = 44, v7 = -112
+;     return v8
+; }
+
