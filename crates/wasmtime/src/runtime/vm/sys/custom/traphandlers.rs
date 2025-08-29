@@ -1,29 +1,6 @@
 use crate::prelude::*;
-#[cfg(has_host_compiler_backend)]
-use crate::runtime::vm::VMContext;
-#[cfg(has_host_compiler_backend)]
-use core::{mem, ptr::NonNull};
-
-#[cfg(has_host_compiler_backend)]
-pub use crate::runtime::vm::sys::capi::{self, wasmtime_longjmp};
 
 pub type SignalHandler = Box<dyn Fn() + Send + Sync>;
-
-#[cfg(has_host_compiler_backend)]
-pub unsafe fn wasmtime_setjmp(
-    jmp_buf: *mut *const u8,
-    callback: extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,
-    payload: *mut u8,
-    callee: NonNull<VMContext>,
-) -> bool {
-    unsafe {
-        let callback = mem::transmute::<
-            extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,
-            extern "C" fn(*mut u8, *mut u8) -> bool,
-        >(callback);
-        capi::wasmtime_setjmp(jmp_buf, callback, payload, callee.as_ptr().cast())
-    }
-}
 
 #[cfg(has_native_signals)]
 pub struct TrapHandler;
@@ -32,7 +9,7 @@ pub struct TrapHandler;
 impl TrapHandler {
     pub unsafe fn new(_macos_use_mach_ports: bool) -> TrapHandler {
         unsafe {
-            capi::wasmtime_init_traps(handle_trap);
+            crate::runtime::vm::sys::capi::wasmtime_init_traps(handle_trap);
         }
         TrapHandler
     }
@@ -61,7 +38,7 @@ extern "C" fn handle_trap(pc: usize, fp: usize, has_faulting_addr: bool, faultin
         match test {
             TrapTest::NotWasm => {}
             TrapTest::HandledByEmbedder => unreachable!(),
-            TrapTest::Trap { jmp_buf } => unsafe { wasmtime_longjmp(jmp_buf) },
+            TrapTest::Trap(handler) => unsafe { handler.resume_tailcc(0, 0) },
         }
     })
 }

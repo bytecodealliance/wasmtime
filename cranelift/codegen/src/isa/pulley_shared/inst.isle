@@ -709,9 +709,9 @@
 
 ;; Helper for creating `MInst.LoadExtName*` instructions.
 (decl load_ext_name (BoxExternalName i64 RelocDistance) XReg)
-(rule 1 (load_ext_name name offset (RelocDistance.Near))
+(rule (load_ext_name name offset (RelocDistance.Near))
   (load_ext_name_near name offset))
-(rule 0 (load_ext_name name offset (RelocDistance.Far))
+(rule (load_ext_name name offset (RelocDistance.Far))
   (load_ext_name_far name offset))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
