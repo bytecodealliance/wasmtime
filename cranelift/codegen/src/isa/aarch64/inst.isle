@@ -918,7 +918,14 @@
         (rtmp2 WritableReg))
 
        ;; Load an inline symbol reference.
-       (LoadExtName
+       (LoadExtNameGot
+        (rd WritableReg)
+        (name BoxExternalName))
+       (LoadExtNameNear
+        (rd WritableReg)
+        (name BoxExternalName)
+        (offset i64))
+       (LoadExtNameFar
         (rd WritableReg)
         (name BoxExternalName)
         (offset i64))
@@ -3808,11 +3815,51 @@
             (_ Unit (emit (MInst.VecLoadReplicate dst src size flags))))
         dst))
 
-;; Helper for emitting `MInst.LoadExtName` instructions.
-(decl load_ext_name (BoxExternalName i64) Reg)
-(rule (load_ext_name extname offset)
+(decl pure is_pic () bool)
+(extern constructor is_pic is_pic)
+
+;; Helper loading an external name into a register via `MInst.LoadExt*`
+(decl load_ext_name (BoxExternalName i64 RelocDistance) Reg)
+
+;; When `is_pic` is true all names are referenced through the GOT. Note that
+;; the relocation is applied to the address of the GOT itself so the offset
+;; requested must be manually added in (or skipped if it's 0).
+(rule (load_ext_name name offset _)
+  (if-let true (is_pic))
+  (add $I64 (load_ext_name_got name) (imm $I64 (ImmExtend.Zero) (i64_cast_unsigned offset))))
+(rule 1 (load_ext_name name 0 _)
+  (if-let true (is_pic))
+  (load_ext_name_got name))
+
+;; Relocations that are "near" do an `adr;add` combo.
+(rule 1 (load_ext_name name offset (RelocDistance.Near))
+  (if-let false (is_pic))
+  (load_ext_name_near name offset))
+
+;; Relocations that are "far" do an `Abs8` relocation.
+(rule 1 (load_ext_name name offset (RelocDistance.Far))
+  (if-let false (is_pic))
+  (load_ext_name_far name offset))
+
+;; Helper for emitting `MInst.LoadExtNameGot` instructions.
+(decl load_ext_name_got (BoxExternalName) Reg)
+(rule (load_ext_name_got extname)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.LoadExtName dst extname offset))))
+            (_ Unit (emit (MInst.LoadExtNameGot dst extname))))
+        dst))
+
+;; Helper for emitting `MInst.LoadExtNameNear` instructions.
+(decl load_ext_name_near (BoxExternalName i64) Reg)
+(rule (load_ext_name_near extname offset)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadExtNameNear dst extname offset))))
+        dst))
+
+;; Helper for emitting `MInst.LoadExtNameFar` instructions.
+(decl load_ext_name_far (BoxExternalName i64) Reg)
+(rule (load_ext_name_far extname offset)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadExtNameFar dst extname offset))))
         dst))
 
 ;; Lower the address of a load or a store.

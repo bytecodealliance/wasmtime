@@ -852,4 +852,8 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             ShiftOpShiftImm::maybe_from_shift(shift.value().into()).unwrap(),
         )
     }
+
+    fn is_pic(&mut self) -> bool {
+        self.backend.flags.is_pic()
+    }
 }

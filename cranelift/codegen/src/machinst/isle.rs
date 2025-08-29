@@ -359,15 +359,6 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn reloc_distance_near(&mut self, dist: RelocDistance) -> Option<()> {
-            if dist == RelocDistance::Near {
-                Some(())
-            } else {
-                None
-            }
-        }
-
-        #[inline]
         fn u128_from_immediate(&mut self, imm: Immediate) -> Option<u128> {
             let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
             Some(u128::from_le_bytes(bytes.try_into().ok()?))

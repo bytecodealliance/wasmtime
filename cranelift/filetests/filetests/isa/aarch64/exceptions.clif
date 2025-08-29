@@ -157,7 +157,7 @@ function %f2(i32) -> i32, f32, f64 {
 ; block0:
 ;   fmov d1, #1
 ;   str q1, [sp]
-;   load_ext_name x11, TestCase(%g)+0
+;   load_ext_name_far x11, TestCase(%g)+0
 ;   mov x2, x0
 ;   blr x11; b MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
@@ -286,7 +286,7 @@ function %f4(i64, i32) -> i32, f32, f64 {
 ;   str x0, [sp, #8]
 ;   fmov d1, #1
 ;   str q1, [sp, #16]
-;   load_ext_name x12, TestCase(%g)+0
+;   load_ext_name_far x12, TestCase(%g)+0
 ;   mov x2, x1
 ;   str x1, [sp]
 ;   blr x12; b MachLabel(3); catch [context stack1, tag0: MachLabel(1), tag1: MachLabel(2), context stack0, tag0: MachLabel(4)]

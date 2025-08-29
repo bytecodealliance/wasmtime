@@ -196,7 +196,7 @@
 (type UnwindInst (primitive UnwindInst))
 (type ExternalName (primitive ExternalName))
 (type BoxExternalName (primitive BoxExternalName))
-(type RelocDistance (primitive RelocDistance))
+(type RelocDistance extern (enum (Near) (Far)))
 (type VecArgPair extern (enum))
 (type VecRetPair extern (enum))
 (type CallArgList (primitive CallArgList))
@@ -994,11 +994,6 @@
 
 (decl symbol_value_data (ExternalName RelocDistance i64) GlobalValue)
 (extern extractor symbol_value_data symbol_value_data)
-
-;; Accessor for `RelocDistance`.
-
-(decl reloc_distance_near () RelocDistance)
-(extern extractor reloc_distance_near reloc_distance_near)
 
 ;; Accessor for `Immediate` as a vector of u8 values.
 
