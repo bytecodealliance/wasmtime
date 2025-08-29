@@ -918,9 +918,9 @@ impl MachInstLabelUse for LabelUse {
         }
     }
 
-    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
-        match (reloc, addend) {
-            (Reloc::PulleyPcRel, 0) => Some(LabelUse::PcRel),
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<(LabelUse, Addend)> {
+        match reloc {
+            Reloc::PulleyPcRel => Some((LabelUse::PcRel, addend)),
             _ => None,
         }
     }

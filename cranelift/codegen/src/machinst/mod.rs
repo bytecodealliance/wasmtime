@@ -268,9 +268,12 @@ pub trait MachInstLabelUse: Clone + Copy + Debug + Eq {
 
     /// Returns the corresponding label-use for the relocation specified.
     ///
-    /// This returns `None` if the relocation doesn't have a corresponding
-    /// representation for the target architecture.
-    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self>;
+    /// The `reloc` and `addend` specified are the kind of relocation and static
+    /// offset to the target. This function returns `None` if the relocation
+    /// isn't modeled by `LabelUse`. When this function returns `Some` it can
+    /// return a new `Addend` as some relocations modify the addend that they
+    /// are applied to.
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<(Self, Addend)>;
 }
 
 /// Classification of call instruction types for granular analysis.
@@ -584,14 +587,15 @@ pub trait TextSectionBuilder {
     /// `resolve_reloc`.
     ///
     /// This function returns the offset at which the data was placed in the
-    /// text section.
+    /// text section along with the optional label that was created for this
+    /// function (suitable to pass to `resolve_reloc`).
     fn append(
         &mut self,
         labeled: bool,
         data: &[u8],
         align: u32,
         ctrl_plane: &mut ControlPlane,
-    ) -> u64;
+    ) -> (u64, Option<usize>);
 
     /// Attempts to resolve a relocation for this function.
     ///

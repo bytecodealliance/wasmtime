@@ -135,6 +135,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let func = self
             .isa
             .compile_function(
+                key,
                 ty,
                 &body,
                 translation,

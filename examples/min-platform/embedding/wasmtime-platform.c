@@ -1,6 +1,5 @@
 #include <assert.h>
 #include <errno.h>
-#include <setjmp.h>
 #include <signal.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -56,20 +55,6 @@ int wasmtime_mprotect(uint8_t *ptr, uintptr_t size, uint32_t prot_flags) {
 uintptr_t wasmtime_page_size(void) { return sysconf(_SC_PAGESIZE); }
 
 #endif // WASMTIME_VIRTUAL_MEMORY
-
-bool wasmtime_setjmp(const uint8_t **jmp_buf_out,
-                     bool (*callback)(uint8_t *, uint8_t *), uint8_t *payload,
-                     uint8_t *callee) {
-  jmp_buf buf;
-  if (setjmp(buf) != 0)
-    return false;
-  *jmp_buf_out = (uint8_t *)&buf;
-  return callback(payload, callee);
-}
-
-void wasmtime_longjmp(const uint8_t *jmp_buf_ptr) {
-  longjmp(*(jmp_buf *)jmp_buf_ptr, 1);
-}
 
 #ifdef WASMTIME_NATIVE_SIGNALS
 

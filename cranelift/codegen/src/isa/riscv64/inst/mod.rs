@@ -1808,9 +1808,11 @@ impl MachInstLabelUse for LabelUse {
         (veneer_offset, Self::PCRel32)
     }
 
-    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
-        match (reloc, addend) {
-            (Reloc::RiscvCallPlt, _) => Some(Self::PCRel32),
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<(LabelUse, Addend)> {
+        match reloc {
+            Reloc::RiscvCallPlt => Some((Self::PCRel32, addend)),
+            Reloc::RiscvPCRelHi20 => Some((Self::PCRelHi20, addend)),
+            Reloc::RiscvPCRelLo12I => Some((Self::PCRelLo12I, addend)),
             _ => None,
         }
     }

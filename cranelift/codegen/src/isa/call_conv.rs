@@ -84,7 +84,7 @@ impl CallConv {
     /// Does this calling convention support exceptions?
     pub fn supports_exceptions(&self) -> bool {
         match self {
-            CallConv::Tail | CallConv::SystemV => true,
+            CallConv::Tail | CallConv::SystemV | CallConv::Winch => true,
             _ => false,
         }
     }

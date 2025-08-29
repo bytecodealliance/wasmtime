@@ -1150,6 +1150,11 @@ impl FunctionIndices {
                 FuncKey::PulleyHostCall(_) => {
                     unreachable!("we don't compile any artifacts for Pulley host calls")
                 }
+                FuncKey::TrampolineExceptionHandler => {
+                    unreachable!(
+                        "trampoline exception handlers are used for relocations, not function definitions"
+                    )
+                }
 
                 #[cfg(feature = "component-model")]
                 FuncKey::ComponentTrampoline(trampoline) => {

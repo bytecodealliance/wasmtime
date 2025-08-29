@@ -1141,21 +1141,33 @@ pub struct VMStoreContext {
 
     /// The last host stack pointer before we called into Wasm from the host.
     ///
-    /// Maintained by our host-to-Wasm trampoline, and cleared just before
-    /// calling into Wasm in `catch_traps`.
-    ///
-    /// This member is `0` when Wasm is actively running and has not called out
-    /// to the host.
+    /// Maintained by our host-to-Wasm trampoline. This member is `0` when Wasm
+    /// is not running, and it's set to nonzero once a host-to-wasm trampoline
+    /// is executed.
     ///
     /// When a host function is wrapped into a `wasmtime::Func`, and is then
-    /// called from the host, then this member has the sentinel value of `-1 as
-    /// usize`, meaning that this contiguous sequence of Wasm frames is the
-    /// empty sequence, and it is not safe to dereference the
-    /// `last_wasm_exit_trampoline_fp`.
+    /// called from the host, then this member is not changed meaning that the
+    /// previous activation in pointed to by `last_wasm_exit_trampoline_fp` is
+    /// still the last wasm set of frames on the stack.
     ///
-    /// Used to find the end of a contiguous sequence of Wasm frames when
-    /// walking the stack.
+    /// This field is saved/restored during fiber suspension/resumption
+    /// resumption as part of `CallThreadState::swap`.
+    ///
+    /// This field is used to find the end of a contiguous sequence of Wasm
+    /// frames when walking the stack. Additionally it's used when a trap is
+    /// raised as part of the set of parameters used to resume in the entry
+    /// trampoline's "catch" block.
+    pub last_wasm_entry_sp: UnsafeCell<usize>,
+
+    /// Same as `last_wasm_entry_sp`, but for the `fp` of the trampoline.
     pub last_wasm_entry_fp: UnsafeCell<usize>,
+
+    /// The last trap handler from a host-to-wasm entry trampoline on the stack.
+    ///
+    /// This field is configured when the host calls into wasm by the trampoline
+    /// itself. It stores the `pc` of an exception handler suitable to handle
+    /// all traps (or uncaught exceptions).
+    pub last_wasm_entry_trap_handler: UnsafeCell<usize>,
 
     /// Stack information used by stack switching instructions. See documentation
     /// on `VMStackChain` for details.
@@ -1250,6 +1262,8 @@ impl Default for VMStoreContext {
             last_wasm_exit_trampoline_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
+            last_wasm_entry_sp: UnsafeCell::new(0),
+            last_wasm_entry_trap_handler: UnsafeCell::new(0),
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
         }
@@ -1301,6 +1315,14 @@ mod test_vmstore_context {
         assert_eq!(
             offset_of!(VMStoreContext, last_wasm_entry_fp),
             usize::from(offsets.ptr.vmstore_context_last_wasm_entry_fp())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, last_wasm_entry_sp),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_entry_sp())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, last_wasm_entry_trap_handler),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_entry_trap_handler())
         );
         assert_eq!(
             offset_of!(VMStoreContext, stack_chain),

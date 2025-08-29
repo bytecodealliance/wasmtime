@@ -3523,10 +3523,10 @@ impl MachInstLabelUse for LabelUse {
         unreachable!();
     }
 
-    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self> {
-        match (reloc, addend) {
-            (Reloc::S390xPCRel32Dbl, 2) => Some(LabelUse::PCRel32Dbl),
-            (Reloc::S390xPLTRel32Dbl, 2) => Some(LabelUse::PCRel32Dbl),
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<(Self, Addend)> {
+        match reloc {
+            Reloc::S390xPCRel32Dbl => Some((LabelUse::PCRel32Dbl, addend - 2)),
+            Reloc::S390xPLTRel32Dbl => Some((LabelUse::PCRel32Dbl, addend - 2)),
             _ => None,
         }
     }

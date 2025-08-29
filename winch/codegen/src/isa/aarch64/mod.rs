@@ -17,7 +17,9 @@ use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_cranelift::CompiledFunction;
-use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, Tunables, VMOffsets, WasmFuncType};
+use wasmtime_environ::{
+    FuncKey, ModuleTranslation, ModuleTypesBuilder, Tunables, VMOffsets, WasmFuncType,
+};
 
 mod abi;
 mod address;
@@ -82,6 +84,7 @@ impl TargetIsa for Aarch64 {
 
     fn compile_function(
         &self,
+        key: FuncKey,
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
@@ -118,6 +121,7 @@ impl TargetIsa for Aarch64 {
         let names = body_codegen.env.take_name_map();
         let base = body_codegen.source_location.base;
         Ok(CompiledFunction::new(
+            key,
             masm.finalize(base)?,
             names,
             self.function_alignment(),

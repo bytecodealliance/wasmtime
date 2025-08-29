@@ -887,11 +887,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         call_conv_of_callee: isa::CallConv,
         is_exception: bool,
     ) -> PRegSet {
-        match call_conv_of_callee {
-            CallConv::Winch => ALL_CLOBBERS,
-            CallConv::WindowsFastcall => WINDOWS_CLOBBERS,
-            CallConv::Tail if is_exception => ALL_CLOBBERS,
-            _ => SYSV_CLOBBERS,
+        match (call_conv_of_callee, is_exception) {
+            (isa::CallConv::Tail, true) => ALL_CLOBBERS,
+            (isa::CallConv::Winch, _) => ALL_CLOBBERS,
+            (isa::CallConv::SystemV, _) => SYSV_CLOBBERS,
+            (isa::CallConv::WindowsFastcall, false) => WINDOWS_CLOBBERS,
+            (_, false) => SYSV_CLOBBERS,
+            (call_conv, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
         }
     }
 

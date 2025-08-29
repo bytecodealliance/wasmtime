@@ -85,12 +85,13 @@ fn build_c_helpers() {
     build.define("VERSIONED_SUFFIX", Some(versioned_suffix!()));
     if std::env::var("CARGO_FEATURE_DEBUG_BUILTINS").is_ok() {
         build.define("FEATURE_DEBUG_BUILTINS", None);
-    }
-
-    // On MinGW targets work around a bug in the MinGW compiler described at
-    // https://github.com/bytecodealliance/wasmtime/pull/9688#issuecomment-2573367719
-    if cfg("windows") && cfg_is("target_env", "gnu") {
-        build.define("__USE_MINGW_SETJMP_NON_SEH", None);
+    } else if cfg("windows") {
+        // If debug builtins are disabled and this target is for Windows then
+        // there's no need to build the C helpers file.
+        //
+        // TODO: should skip this on Unix targets as well but needs a solution
+        // for `wasmtime_using_libunwind`.
+        return;
     }
 
     println!("cargo:rerun-if-changed=src/runtime/vm/helpers.c");
