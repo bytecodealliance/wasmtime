@@ -1,13 +1,14 @@
 use std::future::{self, Future};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 use super::util::{config, make_component, test_run, test_run_with_count};
 use anyhow::{Result, anyhow};
 use cancel::exports::local::local::cancel::Mode;
 use component_async_tests::transmit::bindings::exports::local::local::transmit::Control;
-use component_async_tests::util::{MpscConsumer, MpscProducer, OneshotConsumer, OneshotProducer};
+use component_async_tests::util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer};
 use component_async_tests::{Ctx, sleep, transmit};
 use futures::{
     FutureExt, SinkExt, StreamExt, TryStreamExt,
@@ -16,9 +17,9 @@ use futures::{
 };
 use wasmtime::component::{
     Accessor, Component, Destination, FutureReader, HasSelf, Instance, Linker, ResourceTable,
-    Source, StreamConsumer, StreamProducer, StreamReader, StreamState, Val,
+    Source, StreamConsumer, StreamProducer, StreamReader, StreamResult, Val,
 };
-use wasmtime::{AsContextMut, Engine, Store, Trap};
+use wasmtime::{AsContextMut, Engine, Store, StoreContextMut, Trap};
 use wasmtime_wasi::WasiCtxBuilder;
 
 mod readiness {
@@ -30,101 +31,88 @@ mod readiness {
 
 struct ReadinessProducer {
     buffer: Vec<u8>,
-    slept: bool,
-    closed: bool,
+    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
 }
 
-impl ReadinessProducer {
-    async fn maybe_sleep(&mut self) {
-        if !self.slept {
-            self.slept = true;
-            component_async_tests::util::sleep(Duration::from_millis(delay_millis())).await;
+impl<D> StreamProducer<D> for ReadinessProducer {
+    type Item = u8;
+    type Buffer = Option<u8>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>> {
+        let me = self.get_mut();
+
+        match me.sleep.as_mut().poll(cx) {
+            Poll::Pending => {
+                if finish {
+                    Poll::Ready(Ok(StreamResult::Cancelled))
+                } else {
+                    Poll::Pending
+                }
+            }
+            Poll::Ready(()) => {
+                me.sleep = async {}.boxed();
+                let capacity = destination.remaining(store.as_context_mut());
+                if capacity == Some(0) {
+                    Poll::Ready(Ok(StreamResult::Completed))
+                } else {
+                    assert_eq!(capacity, Some(me.buffer.len()));
+                    let mut destination = destination.as_direct_destination(store).unwrap();
+                    destination.remaining().copy_from_slice(&me.buffer);
+                    destination.mark_written(me.buffer.len());
+
+                    Poll::Ready(Ok(StreamResult::Dropped))
+                }
+            }
         }
-    }
-
-    fn state(&self) -> StreamState {
-        if self.closed {
-            StreamState::Closed
-        } else {
-            StreamState::Open
-        }
-    }
-}
-
-impl<D> StreamProducer<D, u8> for ReadinessProducer {
-    async fn produce(
-        &mut self,
-        accessor: &Accessor<D>,
-        destination: &mut Destination<u8>,
-    ) -> Result<StreamState> {
-        self.maybe_sleep().await;
-        accessor.with(|mut access| {
-            assert_eq!(
-                destination.remaining(access.as_context_mut()),
-                Some(self.buffer.len())
-            );
-            let mut destination = destination
-                .as_guest_destination(access.as_context_mut())
-                .unwrap();
-            destination.remaining().copy_from_slice(&self.buffer);
-            destination.mark_written(self.buffer.len());
-        });
-        self.closed = true;
-        Ok(self.state())
-    }
-
-    async fn when_ready(&mut self, _: &Accessor<D>) -> Result<StreamState> {
-        self.maybe_sleep().await;
-        Ok(self.state())
     }
 }
 
 struct ReadinessConsumer {
     expected: Vec<u8>,
-    slept: bool,
-    closed: bool,
+    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
 }
 
-impl ReadinessConsumer {
-    async fn maybe_sleep(&mut self) {
-        if !self.slept {
-            self.slept = true;
-            component_async_tests::util::sleep(Duration::from_millis(delay_millis())).await;
+impl<D> StreamConsumer<D> for ReadinessConsumer {
+    type Item = u8;
+
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut store: StoreContextMut<D>,
+        source: &mut Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>> {
+        let me = self.get_mut();
+
+        match me.sleep.as_mut().poll(cx) {
+            Poll::Pending => {
+                if finish {
+                    Poll::Ready(Ok(StreamResult::Cancelled))
+                } else {
+                    Poll::Pending
+                }
+            }
+            Poll::Ready(()) => {
+                me.sleep = async {}.boxed();
+                let available = source.remaining(store.as_context_mut());
+                if available == 0 {
+                    Poll::Ready(Ok(StreamResult::Completed))
+                } else {
+                    assert_eq!(available, me.expected.len());
+                    let mut source = source.as_direct_source(store);
+                    assert_eq!(&me.expected, source.remaining());
+                    source.mark_read(me.expected.len());
+
+                    Poll::Ready(Ok(StreamResult::Dropped))
+                }
+            }
         }
-    }
-
-    fn state(&self) -> StreamState {
-        if self.closed {
-            StreamState::Closed
-        } else {
-            StreamState::Open
-        }
-    }
-}
-
-impl<D> StreamConsumer<D, u8> for ReadinessConsumer {
-    async fn consume(
-        &mut self,
-        accessor: &Accessor<D>,
-        source: &mut Source<'_, u8>,
-    ) -> Result<StreamState> {
-        self.maybe_sleep().await;
-        accessor.with(|mut access| {
-            assert_eq!(
-                source.remaining(access.as_context_mut()),
-                self.expected.len()
-            );
-            let mut source = source.as_guest_source(access.as_context_mut()).unwrap();
-            assert_eq!(&self.expected, source.remaining());
-            source.mark_read(self.expected.len());
-        });
-        self.closed = true;
-        Ok(self.state())
-    }
-
-    async fn when_ready(&mut self, _: &Accessor<D>) -> Result<StreamState> {
-        self.maybe_sleep().await;
-        Ok(self.state())
     }
 }
 
@@ -158,8 +146,8 @@ pub async fn async_readiness() -> Result<()> {
         &mut store,
         ReadinessProducer {
             buffer: expected.clone(),
-            slept: false,
-            closed: false,
+            sleep: component_async_tests::util::sleep(Duration::from_millis(delay_millis()))
+                .boxed(),
         },
     );
     let result = instance
@@ -174,8 +162,10 @@ pub async fn async_readiness() -> Result<()> {
                     access,
                     ReadinessConsumer {
                         expected,
-                        slept: false,
-                        closed: false,
+                        sleep: component_async_tests::util::sleep(Duration::from_millis(
+                            delay_millis(),
+                        ))
+                        .boxed(),
                     },
                 )
             });
@@ -553,10 +543,10 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
     }
 
     let (mut control_tx, control_rx) = mpsc::channel(1);
-    let control_rx = StreamReader::new(instance, &mut store, MpscProducer::new(control_rx));
+    let control_rx = StreamReader::new(instance, &mut store, PipeProducer::new(control_rx));
     let (mut caller_stream_tx, caller_stream_rx) = mpsc::channel(1);
     let caller_stream_rx =
-        StreamReader::new(instance, &mut store, MpscProducer::new(caller_stream_rx));
+        StreamReader::new(instance, &mut store, PipeProducer::new(caller_stream_rx));
     let (caller_future1_tx, caller_future1_rx) = oneshot::channel();
     let caller_future1_rx = FutureReader::new(
         instance,
@@ -622,7 +612,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                                 Test::from_result(&mut store, instance, result)?;
                             callee_stream_rx.pipe(
                                 &mut store,
-                                MpscConsumer::new(callee_stream_tx.take().unwrap()),
+                                PipeConsumer::new(callee_stream_tx.take().unwrap()),
                             );
                             callee_future1_rx.pipe(
                                 &mut store,

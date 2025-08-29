@@ -1,4 +1,4 @@
-use crate::util::MpscProducer;
+use crate::util::PipeProducer;
 use anyhow::Result;
 use futures::channel::mpsc;
 use wasmtime::component::{Accessor, Resource, StreamReader};
@@ -45,7 +45,7 @@ impl bindings::local::local::resource_stream::HostWithStore for Ctx {
                     .unwrap()
             }
             let instance = access.instance();
-            Ok(StreamReader::new(instance, access, MpscProducer::new(rx)))
+            Ok(StreamReader::new(instance, access, PipeProducer::new(rx)))
         })
     }
 }

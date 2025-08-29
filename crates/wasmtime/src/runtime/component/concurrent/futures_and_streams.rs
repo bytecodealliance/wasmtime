@@ -1,6 +1,6 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{Accessor, ConcurrentState, JoinHandle, WorkItem, tls};
+use crate::component::concurrent::{Accessor, ConcurrentState, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
@@ -16,6 +16,7 @@ use futures::FutureExt;
 use futures::channel::oneshot;
 use std::boxed::Box;
 use std::fmt;
+use std::future;
 use std::iter;
 use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
@@ -213,148 +214,25 @@ pub(super) struct FlatAbi {
 }
 
 /// Represents the buffer for a host- or guest-initiated stream read.
-pub struct Destination<T> {
+pub struct Destination<'a, T, B> {
     instance: Instance,
-    kind: TransmitKind,
     id: TableId<TransmitState>,
+    buffer: &'a mut B,
     _phantom: PhantomData<fn() -> T>,
 }
 
-impl<T> Destination<T> {
-    /// Deliver zero or more items to the reader.
-    pub async fn write<B, A: AsAccessor>(&mut self, accessor: A, mut buffer: B) -> Result<B>
-    where
-        T: func::Lower + 'static,
-        B: WriteBuffer<T>,
-    {
-        let accessor = accessor.as_accessor();
-        let (read, guest_offset) = accessor.with(|mut access| {
-            let transmit = self
-                .instance
-                .concurrent_state_mut(access.as_context_mut().0)
-                .get_mut(self.id)?;
-
-            let guest_offset = if let &WriteState::HostReady { guest_offset, .. } = &transmit.write
-            {
-                Some(guest_offset)
-            } else {
-                None
-            };
-
-            anyhow::Ok((
-                mem::replace(&mut transmit.read, ReadState::Open),
-                guest_offset,
-            ))
-        })?;
-
-        match read {
-            ReadState::GuestReady {
-                ty,
-                flat_abi,
-                options,
-                address,
-                count,
-                handle,
-            } => {
-                let guest_offset = guest_offset.unwrap();
-
-                if let TransmitKind::Future = self.kind {
-                    accessor.with(|mut access| {
-                        self.instance
-                            .concurrent_state_mut(access.as_context_mut().0)
-                            .get_mut(self.id)?
-                            .done = true;
-                        anyhow::Ok(())
-                    })?;
-                }
-
-                let old_remaining = buffer.remaining().len();
-                let instance = self.instance;
-                let accept = move |mut store: StoreContextMut<A::Data>| {
-                    lower::<T, B, A::Data>(
-                        store.as_context_mut(),
-                        instance,
-                        &options,
-                        ty,
-                        address + (T::SIZE32 * guest_offset),
-                        count - guest_offset,
-                        &mut buffer,
-                    )?;
-                    anyhow::Ok(buffer)
-                };
-
-                let buffer = if T::MAY_REQUIRE_REALLOC {
-                    // For payloads which may require a realloc call, use a
-                    // oneshot::channel and background task.  This is necessary
-                    // because calling the guest while there are host embedder
-                    // frames on the stack is unsound.
-                    let (tx, rx) = oneshot::channel();
-                    accessor.with(move |mut access| {
-                        let mut store = access.as_context_mut();
-                        let token = StoreToken::new(store.as_context_mut());
-                        instance.concurrent_state_mut(store.0).push_high_priority(
-                            WorkItem::WorkerFunction(Mutex::new(Box::new(move |store, _| {
-                                _ = tx.send(accept(token.as_context_mut(store))?);
-                                Ok(())
-                            }))),
-                        )
-                    });
-                    rx.await?
-                } else {
-                    // Optimize flat payloads (i.e. those which do not require
-                    // calling the guest's realloc function) by lowering
-                    // directly instead of using a oneshot::channel and
-                    // background task.
-                    accessor.with(|mut access| accept(access.as_context_mut()))?
-                };
-
-                accessor.with(|mut access| {
-                    let count = old_remaining - buffer.remaining().len();
-
-                    let transmit = self
-                        .instance
-                        .concurrent_state_mut(access.as_context_mut().0)
-                        .get_mut(self.id)?;
-
-                    let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
-                        unreachable!();
-                    };
-
-                    *guest_offset += count;
-
-                    transmit.read = ReadState::GuestReady {
-                        ty,
-                        flat_abi,
-                        options,
-                        address,
-                        count,
-                        handle,
-                    };
-
-                    anyhow::Ok(())
-                })?;
-
-                Ok(buffer)
-            }
-
-            ReadState::HostToHost { accept } => {
-                let state = accept(&mut UntypedWriteBuffer::new(&mut buffer)).await?;
-                accessor.with(|mut access| {
-                    self.instance
-                        .concurrent_state_mut(access.as_context_mut().0)
-                        .get_mut(self.id)?
-                        .read = match state {
-                        StreamState::Closed => ReadState::Dropped,
-                        StreamState::Open => ReadState::HostToHost { accept },
-                    };
-
-                    anyhow::Ok(())
-                })?;
-                Ok(buffer)
-            }
-
-            _ => unreachable!(),
-        }
+impl<'a, T, B> Destination<'a, T, B> {
+    /// Return a unique reference to the buffer in which items may be stored.
+    ///
+    /// Any items added to this buffer will be delivered to the reader after the
+    /// `StreamProducer::poll_produce` call to which this `Destination` was
+    /// passed returns.
+    ///
+    /// If items are added to this buffer _and_ written via a `DirectDestination`
+    /// view of `self`, then the items in the buffer will be delivered after the
+    /// ones written using `DirectDestination`.
+    pub fn buffer(&'a mut self) -> &'a mut B {
+        self.buffer
     }
 
     /// Return the remaining number of items the current read has capacity to
@@ -362,6 +240,13 @@ impl<T> Destination<T> {
     ///
     /// This will return `Some(_)` if the reader is a guest; it will return
     /// `None` if the reader is the host.
+    ///
+    /// Note that, if this returns `None(0)`, the producer must still attempt to
+    /// produce at least one item if the value of `finish` passed to
+    /// `StreamProducer::poll_produce` is false.  In that case, the reader is
+    /// effectively asking when the producer will be able to produce items
+    /// without blocking (or reach a terminal state such as end-of-stream),
+    /// meaning the next non-zero read must complete without blocking.
     pub fn remaining(&self, mut store: impl AsContextMut) -> Option<usize> {
         let transmit = self
             .instance
@@ -381,12 +266,12 @@ impl<T> Destination<T> {
     }
 }
 
-impl Destination<u8> {
-    /// Return a `GuestDestination` view of `self` if the guest is reading.
-    pub fn as_guest_destination<'a, D>(
+impl<'a, B> Destination<'a, u8, B> {
+    /// Return a `DirectDestination` view of `self` if the guest is reading.
+    pub fn as_direct_destination<D>(
         &'a mut self,
         store: StoreContextMut<'a, D>,
-    ) -> Option<GuestDestination<'a, D>> {
+    ) -> Option<DirectDestination<'a, D>> {
         if let ReadState::GuestReady { .. } = self
             .instance
             .concurrent_state_mut(store.0)
@@ -394,7 +279,7 @@ impl Destination<u8> {
             .unwrap()
             .read
         {
-            Some(GuestDestination {
+            Some(DirectDestination {
                 instance: self.instance,
                 id: self.id,
                 store,
@@ -405,16 +290,16 @@ impl Destination<u8> {
     }
 }
 
-/// Represents a guest read from a `stream<u8>`, providing direct access to the
-/// guest's buffer.
-pub struct GuestDestination<'a, D: 'static> {
+/// Represents a read from a `stream<u8>`, providing direct access to the
+/// writer's buffer.
+pub struct DirectDestination<'a, D: 'static> {
     instance: Instance,
     id: TableId<TransmitState>,
     store: StoreContextMut<'a, D>,
 }
 
-impl<D: 'static> GuestDestination<'_, D> {
-    /// Provide direct access to the guest's buffer.
+impl<D: 'static> DirectDestination<'_, D> {
+    /// Provide direct access to the writer's buffer.
     pub fn remaining(&mut self) -> &mut [u8] {
         let transmit = self
             .instance
@@ -443,7 +328,7 @@ impl<D: 'static> GuestDestination<'_, D> {
             .unwrap()
     }
 
-    /// Mark the specified number of bytes as written to the guest's buffer.
+    /// Mark the specified number of bytes as written to the writer's buffer.
     ///
     /// This will panic if the count is larger than the size of the
     /// buffer returned by `Self::remaining`.
@@ -475,35 +360,93 @@ impl<D: 'static> GuestDestination<'_, D> {
 
 /// Represents the state of a `Stream{Producer,Consumer}`.
 #[derive(Copy, Clone, Debug)]
-pub enum StreamState {
-    /// The producer or consumer may be able to produce or consume more items,
-    /// respectively.
-    Open,
-    /// The producer or consumer is _not_ able to produce or consume more items,
-    /// respectively.
-    Closed,
+pub enum StreamResult {
+    /// The operation completed normally, and the producer or consumer may be
+    /// able to produce or consume more items, respectively.
+    Completed,
+    /// The operation was interrupted (i.e. it wrapped up early after receiving
+    /// a `finish` parameter value of true in a call to `poll_produce` or
+    /// `poll_consume`), and the producer or consumer may be able to produce or
+    /// consume more items, respectively.
+    Cancelled,
+    /// The operation completed normally, but the producer or consumer will
+    /// _not_ able to produce or consume more items, respectively.
+    Dropped,
 }
-
 /// Represents the host-owned write end of a stream.
-pub trait StreamProducer<D, T>: Send + 'static {
+pub trait StreamProducer<D>: Send + 'static {
+    /// The payload type of this stream.
+    type Item;
+
+    /// The `WriteBuffer` type to use when delivering items.
+    type Buffer: WriteBuffer<Self::Item> + Default;
+
     /// Handle a host- or guest-initiated read by delivering zero or more items
     /// to the specified destination.
     ///
-    /// The returned future will resolve to `Ok(StreamState::Closed)` if and
-    /// when this producer cannot produce any more items.
-    fn produce(
-        &mut self,
-        accessor: &Accessor<D>,
-        destination: &mut Destination<T>,
-    ) -> impl Future<Output = Result<StreamState>> + Send;
-
-    /// Handle a guest-initiated zero-length read by returning a future which
-    /// resolves once this producer is either ready to produce more items or is
-    /// closed.
-    fn when_ready(
-        &mut self,
-        accessor: &Accessor<D>,
-    ) -> impl Future<Output = Result<StreamState>> + Send;
+    /// This will be called whenever the reader starts a read.
+    ///
+    /// If the implementation is able to produce one or more items immediately,
+    /// it should write them to `destination` and return either
+    /// `Poll::Ready(Ok(StreamResult::Completed))` if it expects to produce more
+    /// items, or `Poll::Ready(Ok(StreamResult::Dropped))` if it cannot produce
+    /// any more items.
+    ///
+    /// If the implementation is unable to produce any items immediately, but
+    /// expects to do so later, and `finish` is _false_, it should store the
+    /// waker from `cx` for later and return `Poll::Pending` without writing
+    /// anything to `destination`.  Later, it should alert the waker when either
+    /// the items arrive, the stream has ended, or an error occurs.
+    ///
+    /// If the implementation is unable to produce any items immediately, but
+    /// expects to do so later, and `finish` is _true_, it should, if possible,
+    /// return `Poll::Ready(Ok(StreamResult::Cancelled))` immediately without
+    /// writing anything to `destination`.  However, that might not be possible
+    /// if an earlier call to `poll_produce` kicked off an asynchronous
+    /// operation which needs to be completed (and possibly interrupted)
+    /// gracefully, in which case the implementation may return `Poll::Pending`
+    /// and later alert the waker as described above.  In other words, when
+    /// `finish` is true, the implementation should prioritize returning a
+    /// result to the reader (even if no items can be produced) rather than wait
+    /// indefinitely for at least one item to arrive.
+    ///
+    /// In all of the above cases, the implementation may alternatively choose
+    /// to return `Err(_)` to indicate an unrecoverable error.  This will cause
+    /// the guest (if any) to trap and render the component instance (if any)
+    /// unusable.  The implementation should report errors that _are_
+    /// recoverable by other means (e.g. by writing to a `future`) and return
+    /// `Poll::Ready(Ok(StreamResult::Dropped))`.
+    ///
+    /// Note that the implementation should never return `Poll::Pending` after
+    /// writing one or more items to `destination`; if it does, the caller will
+    /// trap as if `Err(_)` was returned.  Conversely, it should only return
+    /// `Poll::Ready(Ok(StreamResult::Cancelled))` without writing any items to
+    /// `destination` if called with `finish` set to true.  If it does so when
+    /// `finish` is false, the caller will trap.  Additionally, it should only
+    /// return `Poll::Ready(Ok(StreamResult::Completed))` after writing at least
+    /// one item to `destination` if it has capacity to accept that item;
+    /// otherwise, the caller will trap.
+    ///
+    /// If more items are written to `destination` than the reader has immediate
+    /// capacity to accept, they will be retained in memory by the caller and
+    /// used to satisify future reads, in which case `poll_produce` will only be
+    /// called again once all those items have been delivered.  This is
+    /// particularly important for zero-length reads, in which case the
+    /// implementation is expected to either:
+    ///
+    /// 1. Produce at least one item (if possible, and if `finish` is false) so
+    /// that it is ready to be delivered immediately upon the next
+    /// non-zero-length read.
+    ///
+    /// 2. Produce at least one item the next time `poll_produce` is called with
+    /// non-zero capacity and `finish` set to false.
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<'a, D>,
+        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>>;
 }
 
 /// Represents the buffer for a host- or guest-initiated stream write.
@@ -598,40 +541,29 @@ impl<T> Source<'_, T> {
 }
 
 impl Source<'_, u8> {
-    /// Return a `GuestSource` view of `self` if the guest is writing.
-    pub fn as_guest_source<'a, D>(
+    /// Return a `DirectSource` view of `self`.
+    pub fn as_direct_source<'a, D>(
         &'a mut self,
         store: StoreContextMut<'a, D>,
-    ) -> Option<GuestSource<'a, D>> {
-        if let WriteState::GuestReady { .. } = self
-            .instance
-            .concurrent_state_mut(store.0)
-            .get_mut(self.id)
-            .unwrap()
-            .write
-        {
-            assert!(self.host_buffer.is_none());
-            Some(GuestSource {
-                instance: self.instance,
-                id: self.id,
-                store,
-            })
-        } else {
-            None
+    ) -> DirectSource<'a, D> {
+        DirectSource {
+            instance: self.instance,
+            id: self.id,
+            store,
         }
     }
 }
 
-/// Represents a guest write to a `stream<u8>`, providing direct access to the
-/// guest's buffer.
-pub struct GuestSource<'a, D: 'static> {
+/// Represents a write to a `stream<u8>`, providing direct access to the
+/// writer's buffer.
+pub struct DirectSource<'a, D: 'static> {
     instance: Instance,
     id: TableId<TransmitState>,
     store: StoreContextMut<'a, D>,
 }
 
-impl<D: 'static> GuestSource<'_, D> {
-    /// Provide direct access to the guest's buffer.
+impl<D: 'static> DirectSource<'_, D> {
+    /// Provide direct access to the writer's buffer.
     pub fn remaining(&mut self) -> &[u8] {
         let transmit = self
             .instance
@@ -660,7 +592,7 @@ impl<D: 'static> GuestSource<'_, D> {
             .unwrap()
     }
 
-    /// Mark the specified number of bytes as read from the guest's buffer.
+    /// Mark the specified number of bytes as read from the writer's buffer.
     ///
     /// This will panic if the count is larger than the size of the buffer
     /// returned by `Self::remaining`.
@@ -691,37 +623,121 @@ impl<D: 'static> GuestSource<'_, D> {
 }
 
 /// Represents the host-owned read end of a stream.
-pub trait StreamConsumer<D, T>: Send + 'static {
+pub trait StreamConsumer<D>: Send + 'static {
+    /// The payload type of this stream.
+    type Item;
+
     /// Handle a host- or guest-initiated write by accepting zero or more items
     /// from the specified source.
     ///
-    /// The returned future will resolve to `Ok(StreamState::Closed)` if and
-    /// when this consumer cannot accept any more items.
-    fn consume(
-        &mut self,
-        accessor: &Accessor<D>,
-        source: &mut Source<T>,
-    ) -> impl Future<Output = Result<StreamState>> + Send;
-
-    /// Handle a guest-initiated zero-length write by returning a future which
-    /// resolves once this consumer is either ready to consume more items or is
-    /// closed.
-    fn when_ready(
-        &mut self,
-        accessor: &Accessor<D>,
-    ) -> impl Future<Output = Result<StreamState>> + Send;
+    /// This will be called whenever the writer starts a write.
+    ///
+    /// If the implementation is able to consume one or more items immediately,
+    /// it should take them from `source` and return either
+    /// `Poll::Ready(Ok(StreamResult::Completed))` if it expects to be able to consume
+    /// more items, or `Poll::Ready(Ok(StreamResult::Dropped))` if it cannot
+    /// accept any more items.  Alternatively, it may return `Poll::Pending` to
+    /// indicate that the caller should delay sending a `COMPLETED` event to the
+    /// writer until a later call to this function returns `Poll::Ready(_)`.
+    /// For more about that, see the `Backpressure` section below.
+    ///
+    /// If the implementation cannot consume any items immediately and `finish`
+    /// is _false_, it should store the waker from `cx` for later and return
+    /// `Poll::Pending` without writing anything to `destination`.  Later, it
+    /// should alert the waker when either (1) the items arrive, (2) the stream
+    /// has ended, or (3) an error occurs.
+    ///
+    /// If the implementation cannot consume any items immediately and `finish`
+    /// is _true_, it should, if possible, return
+    /// `Poll::Ready(Ok(StreamResult::Cancelled))` immediately without taking
+    /// anything from `source`.  However, that might not be possible if an
+    /// earlier call to `poll_consume` kicked off an asynchronous operation
+    /// which needs to be completed (and possibly interrupted) gracefully, in
+    /// which case the implementation may return `Poll::Pending` and later alert
+    /// the waker as described above.  In other words, when `finish` is true,
+    /// the implementation should prioritize returning a result to the reader
+    /// (even if no items can be consumed) rather than wait indefinitely for at
+    /// capacity to free up.
+    ///
+    /// In all of the above cases, the implementation may alternatively choose
+    /// to return `Err(_)` to indicate an unrecoverable error.  This will cause
+    /// the guest (if any) to trap and render the component instance (if any)
+    /// unusable.  The implementation should report errors that _are_
+    /// recoverable by other means (e.g. by writing to a `future`) and return
+    /// `Poll::Ready(Ok(StreamResult::Dropped))`.
+    ///
+    /// Note that the implementation should only return
+    /// `Poll::Ready(Ok(StreamResult::Cancelled))` without having taken any
+    /// items from `source` if called with `finish` set to true.  If it does so
+    /// when `finish` is false, the caller will trap.  Additionally, it should
+    /// only return `Poll::Ready(Ok(StreamResult::Completed))` after taking at
+    /// least one item from `source` if there is an item available; otherwise,
+    /// the caller will trap.  If `poll_consume` is called with no items in
+    /// `source`, it should only return `Poll::Ready(_)` once it is able to
+    /// accept at least one item during the next call to `poll_consume`.
+    ///
+    /// Note that any items which the implementation of this trait takes from
+    /// `source` become the responsibility of that implementation.  For that
+    /// reason, an implementation which forwards items to an upstream sink
+    /// should reserve capacity in that sink before taking items out of
+    /// `source`, if possible.  Alternatively, it might buffer items which can't
+    /// be forwarded immediately and send them once capacity is freed up.
+    ///
+    /// ## Backpressure
+    ///
+    /// As mentioned above, an implementation might choose to return
+    /// `Poll::Pending` after taking items from `source`, which tells the caller
+    /// to delay sending a `COMPLETED` event to the writer.  This can be used as
+    /// a form of backpressure when the items are forwarded to an upstream sink
+    /// asynchronously.  Note, however, that it's not possible to "put back"
+    /// items into `source` once they've been taken out, so if the upstream sink
+    /// is unable to accept all the items, that cannot be communicated to the
+    /// writer at this level of abstraction.  Just as with application-specific,
+    /// recoverable errors, information about which items could be forwarded and
+    /// which could not must be communicated out-of-band, e.g. by writing to an
+    /// application-specific `future`.
+    ///
+    /// Similarly, if the writer cancels the write after items have been taken
+    /// from `source` but before the items have all been forwarded to an
+    /// upstream sink, `poll_consume` will be called with `finish` set to true,
+    /// and the implementation may either:
+    ///
+    /// - Interrupt the forwarding process gracefully.  This may be preferrable
+    /// if there is an out-of-band channel for communicating to the writer how
+    /// many items were forwarded before being interrupted.
+    ///
+    /// - Allow the forwarding to complete without interrupting it.  This is
+    /// usually preferable if there's no out-of-band channel for reporting back
+    /// to the writer how many items were forwarded.
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        source: &mut Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>>;
 }
 
 /// Represents a host-owned write end of a future.
-pub trait FutureProducer<D, T>: Send + 'static {
+pub trait FutureProducer<D>: Send + 'static {
+    /// The payload type of this future.
+    type Item;
+
     /// Handle a host- or guest-initiated read by producing a value.
-    fn produce(self, accessor: &Accessor<D>) -> impl Future<Output = Result<T>> + Send;
+    fn produce(self, accessor: &Accessor<D>) -> impl Future<Output = Result<Self::Item>> + Send;
 }
 
 /// Represents a host-owned read end of a future.
-pub trait FutureConsumer<D, T>: Send + 'static {
+pub trait FutureConsumer<D>: Send + 'static {
+    /// The payload type of this future.
+    type Item;
+
     /// Handle a host- or guest-initiated write by consuming a value.
-    fn consume(self, accessor: &Accessor<D>, value: T) -> impl Future<Output = Result<()>> + Send;
+    fn consume(
+        self,
+        accessor: &Accessor<D>,
+        value: Self::Item,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Represents the readable end of a Component Model `future`.
@@ -740,33 +756,66 @@ impl<T> FutureReader<T> {
     /// Create a new future with the specified producer.
     pub fn new<S: AsContextMut>(
         instance: Instance,
-        store: S,
-        producer: impl FutureProducer<S::Data, T>,
+        mut store: S,
+        producer: impl FutureProducer<S::Data, Item = T>,
     ) -> Self
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
     {
-        struct Producer<P>(Option<P>);
+        struct Producer<F>(F);
 
-        impl<D, T: func::Lower + 'static, P: FutureProducer<D, T>> StreamProducer<D, T> for Producer<P> {
-            async fn produce(
-                &mut self,
-                accessor: &Accessor<D>,
-                destination: &mut Destination<T>,
-            ) -> Result<StreamState> {
-                let value = self.0.take().unwrap().produce(accessor).await?;
-                let value = destination.write(accessor, Some(value)).await?;
-                assert!(value.is_none());
-                Ok(StreamState::Open)
-            }
+        impl<D, T: func::Lower + 'static, F: Future<Output = Result<T>> + Send + 'static>
+            StreamProducer<D> for Producer<F>
+        {
+            type Item = T;
+            type Buffer = Option<T>;
 
-            async fn when_ready(&mut self, _: &Accessor<D>) -> Result<StreamState> {
-                Ok(StreamState::Open)
+            fn poll_produce<'a>(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+                store: StoreContextMut<D>,
+                destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+                finish: bool,
+            ) -> Poll<Result<StreamResult>> {
+                // SAFETY: This is a standard pin-projection, and we never move
+                // out of `self`.
+                let future = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
+
+                match tls::set(store.0, || future.poll(cx)) {
+                    Poll::Pending => {
+                        if finish {
+                            Poll::Ready(Ok(StreamResult::Cancelled))
+                        } else {
+                            Poll::Pending
+                        }
+                    }
+                    Poll::Ready(value) => {
+                        *destination.buffer() = Some(value?);
+
+                        // Here we return `StreamResult::Completed` even though
+                        // we've produced the last item we'll ever produce.
+                        // That's because the ABI expects
+                        // `ReturnCode::Completed(1)` rather than
+                        // `ReturnCode::Dropped(1)`.  In any case, we won't be
+                        // called again since the future will have resolved.
+                        Poll::Ready(Ok(StreamResult::Completed))
+                    }
+                }
             }
         }
 
+        let mut store = store.as_context_mut();
+        let token = StoreToken::new(store.as_context_mut());
         Self::new_(
-            instance.new_transmit(store, TransmitKind::Future, Producer(Some(producer))),
+            instance.new_transmit(
+                store,
+                TransmitKind::Future,
+                Producer(async move {
+                    producer
+                        .produce(&Accessor::new(token, Some(instance)))
+                        .await
+                }),
+            ),
             instance,
         )
     }
@@ -780,32 +829,69 @@ impl<T> FutureReader<T> {
     }
 
     /// Set the consumer that accepts the result of this future.
-    pub fn pipe<S: AsContextMut>(self, store: S, consumer: impl FutureConsumer<S::Data, T>)
-    where
+    pub fn pipe<S: AsContextMut>(
+        self,
+        store: S,
+        consumer: impl FutureConsumer<S::Data, Item = T> + Unpin,
+    ) where
         T: func::Lift + 'static,
     {
-        struct Consumer<C>(Option<C>);
+        enum Consumer<C> {
+            Start(C, Instance),
+            Poll(Pin<Box<dyn Future<Output = Result<()>> + Send>>),
+            Invalid,
+        }
 
-        impl<D: 'static, T: func::Lift + 'static, C: FutureConsumer<D, T>> StreamConsumer<D, T>
-            for Consumer<C>
+        impl<D: 'static, T: func::Lift + 'static, C: FutureConsumer<D, Item = T> + Unpin>
+            StreamConsumer<D> for Consumer<C>
         {
-            async fn consume(
-                &mut self,
-                accessor: &Accessor<D>,
-                source: &mut Source<'_, T>,
-            ) -> Result<StreamState> {
-                let value = &mut None;
-                accessor.with(|access| source.read(access, value))?;
-                self.0
-                    .take()
-                    .unwrap()
-                    .consume(accessor, value.take().unwrap())
-                    .await?;
-                Ok(StreamState::Open)
-            }
+            type Item = T;
 
-            async fn when_ready(&mut self, _: &Accessor<D>) -> Result<StreamState> {
-                Ok(StreamState::Open)
+            fn poll_consume(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+                mut store: StoreContextMut<D>,
+                source: &mut Source<Self::Item>,
+                finish: bool,
+            ) -> Poll<Result<StreamResult>> {
+                let me = self.get_mut();
+
+                if let Consumer::Start(consumer, instance) = mem::replace(me, Consumer::Invalid) {
+                    let token = StoreToken::new(store.as_context_mut());
+                    let value = &mut None;
+                    source.read(store.as_context_mut(), value)?;
+                    let value = value.take().unwrap();
+                    *me = Consumer::Poll(Box::pin(async move {
+                        consumer
+                            .consume(&Accessor::new(token, Some(instance)), value)
+                            .await
+                    }));
+                }
+
+                let Consumer::Poll(future) = me else {
+                    unreachable!();
+                };
+
+                match tls::set(store.0, || future.as_mut().poll(cx)) {
+                    Poll::Pending => {
+                        if finish {
+                            Poll::Ready(Ok(StreamResult::Cancelled))
+                        } else {
+                            Poll::Pending
+                        }
+                    }
+                    Poll::Ready(result) => {
+                        result?;
+
+                        // Here we return `StreamResult::Completed` even though
+                        // we've consumed the last item we'll ever consume.
+                        // That's because the ABI expects
+                        // `ReturnCode::Completed(1)` rather than
+                        // `ReturnCode::Dropped(1)`.  In any case, we won't be
+                        // called again since the future will have resolved.
+                        Poll::Ready(Ok(StreamResult::Completed))
+                    }
+                }
             }
         }
 
@@ -813,7 +899,7 @@ impl<T> FutureReader<T> {
             store,
             self.id,
             TransmitKind::Future,
-            Consumer(Some(consumer)),
+            Consumer::Start(consumer, self.instance),
         );
     }
 
@@ -1074,7 +1160,7 @@ impl<T> StreamReader<T> {
     pub fn new<S: AsContextMut>(
         instance: Instance,
         store: S,
-        producer: impl StreamProducer<S::Data, T>,
+        producer: impl StreamProducer<S::Data, Item = T>,
     ) -> Self
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
@@ -1094,7 +1180,7 @@ impl<T> StreamReader<T> {
     }
 
     /// Set the consumer that accepts the items delivered to this stream.
-    pub fn pipe<S: AsContextMut>(self, store: S, consumer: impl StreamConsumer<S::Data, T>)
+    pub fn pipe<S: AsContextMut>(self, store: S, consumer: impl StreamConsumer<S::Data, Item = T>)
     where
         T: 'static,
     {
@@ -1525,12 +1611,13 @@ enum WriteState {
     /// The write end is owned by the host, which is ready to produce items.
     HostReady {
         produce: Box<
-            dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamState>> + Send + 'static>>
+            dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>
                 + Send
                 + Sync,
         >,
         guest_offset: usize,
-        join: Option<JoinHandle>,
+        cancel: bool,
+        cancel_waker: Option<Waker>,
     },
     /// The write end has been dropped.
     Dropped,
@@ -1563,12 +1650,13 @@ enum ReadState {
     /// The read end is owned by a host task, and it is ready to consume items.
     HostReady {
         consume: Box<
-            dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamState>> + Send + 'static>>
+            dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>
                 + Send
                 + Sync,
         >,
         guest_offset: usize,
-        join: Option<JoinHandle>,
+        cancel: bool,
+        cancel_waker: Option<Waker>,
     },
     /// Both the read and write ends are owned by the host.
     HostToHost {
@@ -1576,7 +1664,7 @@ enum ReadState {
             dyn for<'a> Fn(
                     &'a mut UntypedWriteBuffer<'a>,
                 )
-                    -> Pin<Box<dyn Future<Output = Result<StreamState>> + Send + 'a>>
+                    -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'a>>
                 + Send
                 + Sync,
         >,
@@ -1597,110 +1685,263 @@ impl fmt::Debug for ReadState {
     }
 }
 
-fn return_code(kind: TransmitKind, state: StreamState, guest_offset: usize) -> ReturnCode {
+fn return_code(kind: TransmitKind, state: StreamResult, guest_offset: usize) -> ReturnCode {
     let count = guest_offset.try_into().unwrap();
     match state {
-        StreamState::Closed => ReturnCode::Dropped(count),
-        StreamState::Open => ReturnCode::completed(kind, count),
+        StreamResult::Dropped => ReturnCode::Dropped(count),
+        StreamResult::Completed => ReturnCode::completed(kind, count),
+        StreamResult::Cancelled => ReturnCode::Cancelled(count),
     }
 }
 
 impl Instance {
-    fn new_transmit<T, S: AsContextMut>(
+    fn new_transmit<S: AsContextMut, P: StreamProducer<S::Data>>(
         self,
         mut store: S,
         kind: TransmitKind,
-        producer: impl StreamProducer<S::Data, T>,
-    ) -> TableId<TransmitHandle> {
+        producer: P,
+    ) -> TableId<TransmitHandle>
+    where
+        P::Item: func::Lower,
+    {
         let mut store = store.as_context_mut();
         let token = StoreToken::new(store.as_context_mut());
         let state = self.concurrent_state_mut(store.0);
         let (_, read) = state.new_transmit().unwrap();
-        let producer = Arc::new(Mutex::new(Some(producer)));
+        let producer = Arc::new(Mutex::new(Some((Box::pin(producer), P::Buffer::default()))));
         let id = state.get(read).unwrap().state;
         let produce = Box::new(move || {
             let producer = producer.clone();
             async move {
-                let zero_length_read = tls::get(|store| {
-                    anyhow::Ok(matches!(
-                        self.concurrent_state_mut(store).get(id)?.read,
-                        ReadState::GuestReady { count: 0, .. }
-                    ))
-                })?;
+                let (mut mine, mut buffer) = producer.lock().unwrap().take().unwrap();
 
-                let mut mine = producer.lock().unwrap().take().unwrap();
-                let accessor = &Accessor::new(token, Some(self));
-                let result = if zero_length_read {
-                    mine.when_ready(accessor).await
+                let (result, cancelled) = if buffer.remaining().is_empty() {
+                    future::poll_fn(|cx| {
+                        tls::get(|store| {
+                            let &WriteState::HostReady { cancel, .. } =
+                                &self.concurrent_state_mut(store).get_mut(id).unwrap().write
+                            else {
+                                unreachable!();
+                            };
+
+                            let poll = mine.as_mut().poll_produce(
+                                cx,
+                                token.as_context_mut(store),
+                                &mut Destination {
+                                    instance: self,
+                                    id,
+                                    buffer: &mut buffer,
+                                    _phantom: PhantomData,
+                                },
+                                cancel,
+                            );
+
+                            {
+                                let WriteState::HostReady {
+                                    guest_offset,
+                                    cancel,
+                                    cancel_waker,
+                                    ..
+                                } = &mut self
+                                    .concurrent_state_mut(store)
+                                    .get_mut(id)
+                                    .unwrap()
+                                    .write
+                                else {
+                                    unreachable!();
+                                };
+
+                                if let Poll::Pending = &poll {
+                                    if !buffer.remaining().is_empty() || *guest_offset > 0 {
+                                        return Poll::Ready(Err(anyhow!(
+                                            "StreamProducer::poll_produce returned Poll::Pending \
+                                             after producing at least one item"
+                                        )));
+                                    }
+
+                                    *cancel_waker = Some(cx.waker().clone());
+                                } else {
+                                    *cancel_waker = None;
+                                    *cancel = false;
+                                }
+                            }
+
+                            poll.map(|v| v.map(|result| (result, cancel)))
+                        })
+                    })
+                    .await?
                 } else {
-                    mine.produce(
-                        accessor,
-                        &mut Destination {
-                            instance: self,
-                            id,
-                            kind,
-                            _phantom: PhantomData,
+                    (StreamResult::Completed, false)
+                };
+
+                let (guest_offset, count) = tls::get(|store| {
+                    let transmit = self.concurrent_state_mut(store).get_mut(id).unwrap();
+                    (
+                        match &transmit.write {
+                            &WriteState::HostReady { guest_offset, .. } => guest_offset,
+                            _ => unreachable!(),
+                        },
+                        match &transmit.read {
+                            &ReadState::GuestReady { count, .. } => count,
+                            ReadState::HostToHost { .. } => 1,
+                            _ => unreachable!(),
                         },
                     )
-                    .await
-                };
-                *producer.lock().unwrap() = Some(mine);
-                result
+                });
+
+                match result {
+                    StreamResult::Completed => {
+                        if count > 1 && buffer.remaining().is_empty() && guest_offset == 0 {
+                            bail!(
+                                "StreamProducer::poll_produce returned StreamResult::Completed \
+                                 without producing any items"
+                            );
+                        }
+                    }
+                    StreamResult::Cancelled => {
+                        if !cancelled {
+                            bail!(
+                                "StreamProducer::poll_produce returned StreamResult::Cancelled \
+                                 without being given a `finish` parameter value of true"
+                            );
+                        }
+                    }
+                    StreamResult::Dropped => {}
+                }
+
+                let write = !buffer.remaining().is_empty();
+
+                *producer.lock().unwrap() = Some((mine, buffer));
+
+                if write {
+                    self.write(token, id, producer, kind).await?;
+                }
+
+                Ok(result)
             }
             .boxed()
         });
         state.get_mut(id).unwrap().write = WriteState::HostReady {
             produce,
             guest_offset: 0,
-            join: None,
+            cancel: false,
+            cancel_waker: None,
         };
         read
     }
 
-    fn set_consumer<T: 'static, S: AsContextMut>(
+    fn set_consumer<S: AsContextMut, C: StreamConsumer<S::Data>>(
         self,
         mut store: S,
         id: TableId<TransmitHandle>,
         kind: TransmitKind,
-        consumer: impl StreamConsumer<S::Data, T>,
+        consumer: C,
     ) {
         let mut store = store.as_context_mut();
         let token = StoreToken::new(store.as_context_mut());
         let state = self.concurrent_state_mut(store.0);
         let id = state.get(id).unwrap().state;
         let transmit = state.get_mut(id).unwrap();
-        let consumer = Arc::new(Mutex::new(Some(consumer)));
-        let consume = {
+        let consumer = Arc::new(Mutex::new(Some(Box::pin(consumer))));
+        let consume_with_buffer = {
             let consumer = consumer.clone();
-            Box::new(move || {
-                let consumer = consumer.clone();
-                async move {
-                    let zero_length_write = tls::get(|store| {
-                        anyhow::Ok(matches!(
-                            self.concurrent_state_mut(store).get(id)?.write,
-                            WriteState::GuestReady { count: 0, .. }
-                        ))
-                    })?;
+            async move |mut host_buffer: Option<&mut dyn WriteBuffer<C::Item>>| {
+                let mut mine = consumer.lock().unwrap().take().unwrap();
 
-                    let mut mine = consumer.lock().unwrap().take().unwrap();
-                    let accessor = &Accessor::new(token, Some(self));
-                    let result = if zero_length_write {
-                        mine.when_ready(accessor).await
-                    } else {
-                        mine.consume(
-                            accessor,
+                let host_buffer_remaining_before =
+                    host_buffer.as_deref_mut().map(|v| v.remaining().len());
+
+                let (result, cancelled) = future::poll_fn(|cx| {
+                    tls::get(|store| {
+                        let cancel =
+                            match &self.concurrent_state_mut(store).get_mut(id).unwrap().read {
+                                &ReadState::HostReady { cancel, .. } => cancel,
+                                ReadState::Open => false,
+                                _ => unreachable!(),
+                            };
+
+                        let poll = mine.as_mut().poll_consume(
+                            cx,
+                            token.as_context_mut(store),
                             &mut Source {
                                 instance: self,
                                 id,
-                                host_buffer: None,
+                                host_buffer: host_buffer.as_deref_mut(),
                             },
-                        )
-                        .await
-                    };
-                    *consumer.lock().unwrap() = Some(mine);
-                    result
+                            cancel,
+                        );
+
+                        if let ReadState::HostReady {
+                            cancel_waker,
+                            cancel,
+                            ..
+                        } = &mut self.concurrent_state_mut(store).get_mut(id).unwrap().read
+                        {
+                            if let Poll::Pending = &poll {
+                                *cancel_waker = Some(cx.waker().clone());
+                            } else {
+                                *cancel_waker = None;
+                                *cancel = false;
+                            }
+                        }
+
+                        poll.map(|v| v.map(|result| (result, cancel)))
+                    })
+                })
+                .await?;
+
+                let (guest_offset, count) = tls::get(|store| {
+                    let transmit = self.concurrent_state_mut(store).get_mut(id).unwrap();
+                    (
+                        match &transmit.read {
+                            &ReadState::HostReady { guest_offset, .. } => guest_offset,
+                            ReadState::Open => 0,
+                            _ => unreachable!(),
+                        },
+                        match &transmit.write {
+                            &WriteState::GuestReady { count, .. } => count,
+                            WriteState::HostReady { .. } => host_buffer_remaining_before.unwrap(),
+                            _ => unreachable!(),
+                        },
+                    )
+                });
+
+                match result {
+                    StreamResult::Completed => {
+                        if count > 0
+                            && guest_offset == 0
+                            && host_buffer_remaining_before
+                                .zip(host_buffer.map(|v| v.remaining().len()))
+                                .map(|(before, after)| before == after)
+                                .unwrap_or(false)
+                        {
+                            bail!(
+                                "StreamConsumer::poll_consume returned StreamResult::Completed \
+                                 without consuming any items"
+                            );
+                        }
+                    }
+                    StreamResult::Cancelled => {
+                        if !cancelled {
+                            bail!(
+                                "StreamConsumer::poll_consume returned StreamResult::Cancelled \
+                                 without being given a `finish` parameter value of true"
+                            );
+                        }
+                    }
+                    StreamResult::Dropped => {}
                 }
-                .boxed()
+
+                *consumer.lock().unwrap() = Some(mine);
+
+                Ok(result)
+            }
+        };
+        let consume = {
+            let consume = consume_with_buffer.clone();
+            Box::new(move || {
+                let consume = consume.clone();
+                async move { consume(None).await }.boxed()
             })
         };
 
@@ -1709,7 +1950,8 @@ impl Instance {
                 transmit.read = ReadState::HostReady {
                     consume,
                     guest_offset: 0,
-                    join: None,
+                    cancel: false,
+                    cancel_waker: None,
                 };
             }
             WriteState::GuestReady { .. } => {
@@ -1717,36 +1959,28 @@ impl Instance {
                 transmit.read = ReadState::HostReady {
                     consume,
                     guest_offset: 0,
-                    join: None,
+                    cancel: false,
+                    cancel_waker: None,
                 };
-                self.pipe_from_guest(store, kind, id, future).unwrap();
+                self.pipe_from_guest(store, kind, id, future);
             }
             WriteState::HostReady { .. } => {
-                let WriteState::HostReady { produce, .. } =
-                    mem::replace(&mut transmit.write, WriteState::Open)
-                else {
+                let WriteState::HostReady { produce, .. } = mem::replace(
+                    &mut transmit.write,
+                    WriteState::HostReady {
+                        produce: Box::new(|| unreachable!()),
+                        guest_offset: 0,
+                        cancel: false,
+                        cancel_waker: None,
+                    },
+                ) else {
                     unreachable!();
                 };
 
                 transmit.read = ReadState::HostToHost {
                     accept: Box::new(move |input| {
-                        let consumer = consumer.clone();
-                        async move {
-                            let mut mine = consumer.lock().unwrap().take().unwrap();
-                            let result = mine
-                                .consume(
-                                    &Accessor::new(token, Some(self)),
-                                    &mut Source {
-                                        instance: self,
-                                        id,
-                                        host_buffer: Some(input.get_mut::<T>()),
-                                    },
-                                )
-                                .await;
-                            *consumer.lock().unwrap() = Some(mine);
-                            result
-                        }
-                        .boxed()
+                        let consume = consume_with_buffer.clone();
+                        async move { consume(Some(input.get_mut::<C::Item>())).await }.boxed()
                     }),
                 };
 
@@ -1762,8 +1996,8 @@ impl Instance {
                         }
 
                         match produce().await? {
-                            StreamState::Open => {}
-                            StreamState::Closed => break Ok(()),
+                            StreamResult::Completed | StreamResult::Cancelled => {}
+                            StreamResult::Dropped => break Ok(()),
                         }
 
                         if let TransmitKind::Future = kind {
@@ -1782,14 +2016,148 @@ impl Instance {
         }
     }
 
+    async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: WriteBuffer<T>>(
+        self,
+        token: StoreToken<D>,
+        id: TableId<TransmitState>,
+        pair: Arc<Mutex<Option<(P, B)>>>,
+        kind: TransmitKind,
+    ) -> Result<()> {
+        let (read, guest_offset) = tls::get(|store| {
+            let transmit = self.concurrent_state_mut(store).get_mut(id)?;
+
+            let guest_offset = if let &WriteState::HostReady { guest_offset, .. } = &transmit.write
+            {
+                Some(guest_offset)
+            } else {
+                None
+            };
+
+            anyhow::Ok((
+                mem::replace(&mut transmit.read, ReadState::Open),
+                guest_offset,
+            ))
+        })?;
+
+        match read {
+            ReadState::GuestReady {
+                ty,
+                flat_abi,
+                options,
+                address,
+                count,
+                handle,
+            } => {
+                let guest_offset = guest_offset.unwrap();
+
+                if let TransmitKind::Future = kind {
+                    tls::get(|store| {
+                        self.concurrent_state_mut(store).get_mut(id)?.done = true;
+                        anyhow::Ok(())
+                    })?;
+                }
+
+                let old_remaining = pair.lock().unwrap().as_mut().unwrap().1.remaining().len();
+                let accept = {
+                    let pair = pair.clone();
+                    move |mut store: StoreContextMut<D>| {
+                        lower::<T, B, D>(
+                            store.as_context_mut(),
+                            self,
+                            &options,
+                            ty,
+                            address + (T::SIZE32 * guest_offset),
+                            count - guest_offset,
+                            &mut pair.lock().unwrap().as_mut().unwrap().1,
+                        )?;
+                        anyhow::Ok(())
+                    }
+                };
+
+                if guest_offset < count {
+                    if T::MAY_REQUIRE_REALLOC {
+                        // For payloads which may require a realloc call, use a
+                        // oneshot::channel and background task.  This is
+                        // necessary because calling the guest while there are
+                        // host embedder frames on the stack is unsound.
+                        let (tx, rx) = oneshot::channel();
+                        tls::get(move |store| {
+                            self.concurrent_state_mut(store).push_high_priority(
+                                WorkItem::WorkerFunction(Mutex::new(Box::new(move |store, _| {
+                                    _ = tx.send(accept(token.as_context_mut(store))?);
+                                    Ok(())
+                                }))),
+                            )
+                        });
+                        rx.await?
+                    } else {
+                        // Optimize flat payloads (i.e. those which do not
+                        // require calling the guest's realloc function) by
+                        // lowering directly instead of using a oneshot::channel
+                        // and background task.
+                        tls::get(|store| accept(token.as_context_mut(store)))?
+                    };
+                }
+
+                tls::get(|store| {
+                    let count =
+                        old_remaining - pair.lock().unwrap().as_mut().unwrap().1.remaining().len();
+
+                    let transmit = self.concurrent_state_mut(store).get_mut(id)?;
+
+                    let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
+                        unreachable!();
+                    };
+
+                    *guest_offset += count;
+
+                    transmit.read = ReadState::GuestReady {
+                        ty,
+                        flat_abi,
+                        options,
+                        address,
+                        count,
+                        handle,
+                    };
+
+                    anyhow::Ok(())
+                })?;
+
+                Ok(())
+            }
+
+            ReadState::HostToHost { accept } => {
+                let (mine, mut buffer) = pair.lock().unwrap().take().unwrap();
+
+                let state = accept(&mut UntypedWriteBuffer::new(&mut buffer)).await?;
+
+                *pair.lock().unwrap() = Some((mine, buffer));
+
+                tls::get(|store| {
+                    self.concurrent_state_mut(store).get_mut(id)?.read = match state {
+                        StreamResult::Dropped => ReadState::Dropped,
+                        StreamResult::Completed | StreamResult::Cancelled => {
+                            ReadState::HostToHost { accept }
+                        }
+                    };
+
+                    anyhow::Ok(())
+                })?;
+                Ok(())
+            }
+
+            _ => unreachable!(),
+        }
+    }
+
     fn pipe_from_guest(
         self,
         mut store: impl AsContextMut,
         kind: TransmitKind,
         id: TableId<TransmitState>,
-        future: Pin<Box<dyn Future<Output = Result<StreamState>> + Send + 'static>>,
-    ) -> Result<()> {
-        let (join, future) = JoinHandle::run(async move {
+        future: Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>,
+    ) {
+        let future = async move {
             let stream_state = future.await?;
             tls::get(|store| {
                 let state = self.concurrent_state_mut(store);
@@ -1804,11 +2172,12 @@ impl Instance {
                 };
                 let code = return_code(kind, stream_state, guest_offset);
                 transmit.read = match stream_state {
-                    StreamState::Closed => ReadState::Dropped,
-                    StreamState::Open => ReadState::HostReady {
+                    StreamResult::Dropped => ReadState::Dropped,
+                    StreamResult::Completed | StreamResult::Cancelled => ReadState::HostReady {
                         consume,
                         guest_offset: 0,
-                        join: None,
+                        cancel: false,
+                        cancel_waker: None,
                     },
                 };
                 let WriteState::GuestReady { ty, handle, .. } =
@@ -1819,17 +2188,10 @@ impl Instance {
                 state.send_write_result(ty, id, handle, code)?;
                 Ok(())
             })
-        });
-        let state = self.concurrent_state_mut(store.as_context_mut().0);
-        state.push_future(future.map(|result| result.unwrap_or(Ok(()))).boxed());
-        let ReadState::HostReady {
-            join: state_join, ..
-        } = &mut state.get_mut(id)?.read
-        else {
-            unreachable!()
         };
-        *state_join = Some(join);
-        Ok(())
+
+        self.concurrent_state_mut(store.as_context_mut().0)
+            .push_future(future.boxed());
     }
 
     fn pipe_to_guest(
@@ -1837,9 +2199,9 @@ impl Instance {
         mut store: impl AsContextMut,
         kind: TransmitKind,
         id: TableId<TransmitState>,
-        future: Pin<Box<dyn Future<Output = Result<StreamState>> + Send + 'static>>,
-    ) -> Result<()> {
-        let (join, future) = JoinHandle::run(async move {
+        future: Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>,
+    ) {
+        let future = async move {
             let stream_state = future.await?;
             tls::get(|store| {
                 let state = self.concurrent_state_mut(store);
@@ -1854,11 +2216,12 @@ impl Instance {
                 };
                 let code = return_code(kind, stream_state, guest_offset);
                 transmit.write = match stream_state {
-                    StreamState::Closed => WriteState::Dropped,
-                    StreamState::Open => WriteState::HostReady {
+                    StreamResult::Dropped => WriteState::Dropped,
+                    StreamResult::Completed | StreamResult::Cancelled => WriteState::HostReady {
                         produce,
                         guest_offset: 0,
-                        join: None,
+                        cancel: false,
+                        cancel_waker: None,
                     },
                 };
                 let ReadState::GuestReady { ty, handle, .. } =
@@ -1869,17 +2232,10 @@ impl Instance {
                 state.send_read_result(ty, id, handle, code)?;
                 Ok(())
             })
-        });
-        let state = self.concurrent_state_mut(store.as_context_mut().0);
-        state.push_future(future.map(|result| result.unwrap_or(Ok(()))).boxed());
-        let WriteState::HostReady {
-            join: state_join, ..
-        } = &mut state.get_mut(id)?.write
-        else {
-            unreachable!()
         };
-        *state_join = Some(join);
-        Ok(())
+
+        self.concurrent_state_mut(store.as_context_mut().0)
+            .push_future(future.boxed());
     }
 
     /// Drop the read end of a stream or future read from the host.
@@ -2430,9 +2786,11 @@ impl Instance {
             ReadState::HostReady {
                 consume,
                 guest_offset,
-                join,
+                cancel,
+                cancel_waker,
             } => {
-                assert!(join.is_none());
+                assert!(cancel_waker.is_none());
+                assert!(!cancel);
                 assert_eq!(0, guest_offset);
 
                 if let TransmitIndex::Future(_) = ty {
@@ -2443,7 +2801,8 @@ impl Instance {
                 transmit.read = ReadState::HostReady {
                     consume,
                     guest_offset: 0,
-                    join: None,
+                    cancel: false,
+                    cancel_waker: None,
                 };
                 set_guest_ready(concurrent_state)?;
                 let poll = self.set_tls(store.0, || {
@@ -2468,7 +2827,7 @@ impl Instance {
                             ty.kind(),
                             transmit_id,
                             future,
-                        )?;
+                        );
                         ReturnCode::Blocked
                     }
                 }
@@ -2656,9 +3015,11 @@ impl Instance {
             WriteState::HostReady {
                 produce,
                 guest_offset,
-                join,
+                cancel,
+                cancel_waker,
             } => {
-                assert!(join.is_none());
+                assert!(cancel_waker.is_none());
+                assert!(!cancel);
                 assert_eq!(0, guest_offset);
 
                 if let TransmitIndex::Future(_) = ty {
@@ -2669,7 +3030,8 @@ impl Instance {
                 transmit.write = WriteState::HostReady {
                     produce,
                     guest_offset: 0,
-                    join: None,
+                    cancel: false,
+                    cancel_waker: None,
                 };
                 set_guest_ready(concurrent_state)?;
                 let poll = self.set_tls(store.0, || {
@@ -2689,7 +3051,7 @@ impl Instance {
                         code
                     }
                     Poll::Pending => {
-                        self.pipe_to_guest(store.as_context_mut(), ty.kind(), transmit_id, future)?;
+                        self.pipe_to_guest(store.as_context_mut(), ty.kind(), transmit_id, future);
                         ReturnCode::Blocked
                     }
                 }
@@ -3312,13 +3674,16 @@ impl ConcurrentState {
                 _ => unreachable!(),
             }
         } else if let ReadState::HostReady {
-            join, guest_offset, ..
+            cancel,
+            cancel_waker,
+            ..
         } = &mut self.get_mut(transmit_id)?.read
         {
-            if let Some(join) = join.take() {
-                join.abort();
+            *cancel = true;
+            if let Some(waker) = cancel_waker.take() {
+                waker.wake()
             }
-            ReturnCode::Cancelled(u32::try_from(mem::replace(guest_offset, 0)).unwrap())
+            ReturnCode::Blocked
         } else {
             ReturnCode::Cancelled(0)
         };
@@ -3364,13 +3729,16 @@ impl ConcurrentState {
                 _ => unreachable!(),
             }
         } else if let WriteState::HostReady {
-            join, guest_offset, ..
+            cancel,
+            cancel_waker,
+            ..
         } = &mut self.get_mut(transmit_id)?.write
         {
-            if let Some(join) = join.take() {
-                join.abort();
+            *cancel = true;
+            if let Some(waker) = cancel_waker.take() {
+                waker.wake()
             }
-            ReturnCode::Cancelled(u32::try_from(mem::replace(guest_offset, 0)).unwrap())
+            ReturnCode::Blocked
         } else {
             ReturnCode::Cancelled(0)
         };

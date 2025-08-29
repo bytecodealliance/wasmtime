@@ -3,7 +3,7 @@ use {
     anyhow::Result,
     component_async_tests::{
         Ctx, closed_streams,
-        util::{MpscConsumer, MpscProducer, OneshotConsumer, OneshotProducer},
+        util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer},
     },
     futures::{
         SinkExt, StreamExt,
@@ -52,8 +52,8 @@ pub async fn async_closed_streams() -> Result<()> {
     {
         let (mut input_tx, input_rx) = mpsc::channel(1);
         let (output_tx, mut output_rx) = mpsc::channel(1);
-        StreamReader::new(instance, &mut store, MpscProducer::new(input_rx))
-            .pipe(&mut store, MpscConsumer::new(output_tx));
+        StreamReader::new(instance, &mut store, PipeProducer::new(input_rx))
+            .pipe(&mut store, PipeConsumer::new(output_tx));
 
         instance
             .run_concurrent(&mut store, async |_| {
@@ -99,7 +99,7 @@ pub async fn async_closed_streams() -> Result<()> {
     // Next, test stream host->guest
     {
         let (mut tx, rx) = mpsc::channel(1);
-        let rx = StreamReader::new(instance, &mut store, MpscProducer::new(rx));
+        let rx = StreamReader::new(instance, &mut store, PipeProducer::new(rx));
 
         let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
 

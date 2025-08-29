@@ -1,12 +1,17 @@
 use anyhow::Result;
-use futures::{
-    SinkExt, StreamExt,
-    channel::{mpsc, oneshot},
+use futures::{Sink, Stream, channel::oneshot};
+use std::{
+    marker::PhantomData,
+    pin::Pin,
+    task::{Context, Poll},
+    thread,
 };
-use std::{future, thread};
-use wasmtime::component::{
-    Accessor, Destination, FutureConsumer, FutureProducer, Lift, Lower, Source, StreamConsumer,
-    StreamProducer, StreamState,
+use wasmtime::{
+    StoreContextMut,
+    component::{
+        Accessor, Destination, FutureConsumer, FutureProducer, Lift, Lower, Source, StreamConsumer,
+        StreamProducer, StreamResult,
+    },
 };
 
 pub async fn sleep(duration: std::time::Duration) {
@@ -30,133 +35,128 @@ pub async fn sleep(duration: std::time::Duration) {
     }
 }
 
-pub struct MpscProducer<T> {
-    rx: mpsc::Receiver<T>,
-    next: Option<T>,
-    closed: bool,
-}
+pub struct PipeProducer<S>(S);
 
-impl<T: Send + Sync + 'static> MpscProducer<T> {
-    pub fn new(rx: mpsc::Receiver<T>) -> Self {
-        Self {
-            rx,
-            next: None,
-            closed: false,
-        }
-    }
-
-    fn state(&self) -> StreamState {
-        if self.closed {
-            StreamState::Closed
-        } else {
-            StreamState::Open
-        }
+impl<S> PipeProducer<S> {
+    pub fn new(rx: S) -> Self {
+        Self(rx)
     }
 }
 
-impl<D, T: Send + Sync + Lower + 'static> StreamProducer<D, T> for MpscProducer<T> {
-    async fn produce(
-        &mut self,
-        accessor: &Accessor<D>,
-        destination: &mut Destination<T>,
-    ) -> Result<StreamState> {
-        let item = if let Some(item) = self.next.take() {
-            Some(item)
-        } else if let Some(item) = self.rx.next().await {
-            Some(item)
-        } else {
-            None
+impl<D, T: Send + Sync + Lower + 'static, S: Stream<Item = T> + Send + 'static> StreamProducer<D>
+    for PipeProducer<S>
+{
+    type Item = T;
+    type Buffer = Option<T>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        _: StoreContextMut<D>,
+        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>> {
+        // SAFETY: This is a standard pin-projection, and we never move
+        // out of `self`.
+        let stream = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
+
+        match stream.poll_next(cx) {
+            Poll::Pending => {
+                if finish {
+                    Poll::Ready(Ok(StreamResult::Cancelled))
+                } else {
+                    Poll::Pending
+                }
+            }
+            Poll::Ready(Some(item)) => {
+                *destination.buffer() = Some(item);
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Poll::Ready(None) => Poll::Ready(Ok(StreamResult::Dropped)),
+        }
+    }
+}
+
+pub struct PipeConsumer<T, S>(S, PhantomData<fn() -> T>);
+
+impl<T, S> PipeConsumer<T, S> {
+    pub fn new(tx: S) -> Self {
+        Self(tx, PhantomData)
+    }
+}
+
+impl<D, T: Lift + 'static, S: Sink<T, Error: std::error::Error + Send + Sync> + Send + 'static>
+    StreamConsumer<D> for PipeConsumer<T, S>
+{
+    type Item = T;
+
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        source: &mut Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>> {
+        // SAFETY: This is a standard pin-projection, and we never move
+        // out of `self`.
+        let mut sink = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
+
+        let on_pending = || {
+            if finish {
+                Poll::Ready(Ok(StreamResult::Cancelled))
+            } else {
+                Poll::Pending
+            }
         };
 
-        if let Some(item) = item {
-            let item = destination.write(accessor, Some(item)).await?;
-            assert!(item.is_none());
-        } else {
-            self.closed = true;
-        }
-
-        Ok(self.state())
-    }
-
-    async fn when_ready(&mut self, _: &Accessor<D>) -> Result<StreamState> {
-        if !self.closed && self.next.is_none() {
-            if let Some(item) = self.rx.next().await {
-                self.next = Some(item);
-            } else {
-                self.closed = true;
+        match sink.as_mut().poll_flush(cx) {
+            Poll::Pending => on_pending(),
+            Poll::Ready(result) => {
+                result?;
+                match sink.as_mut().poll_ready(cx) {
+                    Poll::Pending => on_pending(),
+                    Poll::Ready(result) => {
+                        result?;
+                        let item = &mut None;
+                        source.read(store, item)?;
+                        sink.start_send(item.take().unwrap())?;
+                        Poll::Ready(Ok(StreamResult::Completed))
+                    }
+                }
             }
         }
-
-        Ok(self.state())
     }
 }
 
-pub struct MpscConsumer<T> {
-    tx: mpsc::Sender<T>,
-}
-
-impl<T> MpscConsumer<T> {
-    pub fn new(tx: mpsc::Sender<T>) -> Self {
-        Self { tx }
-    }
-
-    fn state(&self) -> StreamState {
-        if self.tx.is_closed() {
-            StreamState::Closed
-        } else {
-            StreamState::Open
-        }
-    }
-}
-
-impl<D, T: Lift + 'static> StreamConsumer<D, T> for MpscConsumer<T> {
-    async fn consume(
-        &mut self,
-        accessor: &Accessor<D>,
-        source: &mut Source<'_, T>,
-    ) -> Result<StreamState> {
-        let item = &mut None;
-        accessor.with(|access| source.read(access, item))?;
-        _ = self.tx.send(item.take().unwrap()).await;
-        Ok(self.state())
-    }
-
-    async fn when_ready(&mut self, _: &Accessor<D>) -> Result<StreamState> {
-        future::poll_fn(|cx| self.tx.poll_ready(cx)).await?;
-
-        Ok(self.state())
-    }
-}
-
-pub struct OneshotProducer<T> {
-    rx: oneshot::Receiver<T>,
-}
+pub struct OneshotProducer<T>(oneshot::Receiver<T>);
 
 impl<T> OneshotProducer<T> {
     pub fn new(rx: oneshot::Receiver<T>) -> Self {
-        Self { rx }
+        Self(rx)
     }
 }
 
-impl<D, T: Send + 'static> FutureProducer<D, T> for OneshotProducer<T> {
+impl<D, T: Send + 'static> FutureProducer<D> for OneshotProducer<T> {
+    type Item = T;
+
     async fn produce(self, _: &Accessor<D>) -> Result<T> {
-        Ok(self.rx.await?)
+        Ok(self.0.await?)
     }
 }
 
-pub struct OneshotConsumer<T> {
-    tx: oneshot::Sender<T>,
-}
+pub struct OneshotConsumer<T>(oneshot::Sender<T>);
 
 impl<T> OneshotConsumer<T> {
     pub fn new(tx: oneshot::Sender<T>) -> Self {
-        Self { tx }
+        Self(tx)
     }
 }
 
-impl<D, T: Send + 'static> FutureConsumer<D, T> for OneshotConsumer<T> {
+impl<D, T: Send + 'static> FutureConsumer<D> for OneshotConsumer<T> {
+    type Item = T;
+
     async fn consume(self, _: &Accessor<D>, value: T) -> Result<()> {
-        _ = self.tx.send(value);
+        _ = self.0.send(value);
         Ok(())
     }
 }
