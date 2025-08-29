@@ -1,8 +1,8 @@
 use crate::prelude::*;
 use crate::runtime::vm::{self, VMGlobalDefinition, VMGlobalKind, VMOpaqueContext};
 use crate::{
-    AnyRef, AsContext, AsContextMut, ExternRef, Func, GlobalType, HeapType, Mutability, Ref,
-    RootedGcRefImpl, Val, ValType,
+    AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, GlobalType, HeapType, Mutability,
+    Ref, RootedGcRefImpl, Val, ValType,
     store::{AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque},
     trampoline::generate_global_export,
 };
@@ -172,15 +172,21 @@ impl Global {
 
                         HeapType::NoExtern => Ref::Extern(None),
 
+                        HeapType::Exn | HeapType::ConcreteExn(_) => definition
+                            .as_gc_ref()
+                            .map(|r| {
+                                let r = store.clone_gc_ref(r);
+                                ExnRef::from_cloned_gc_ref(store, r)
+                            })
+                            .into(),
+
                         HeapType::Any
                         | HeapType::Eq
                         | HeapType::I31
                         | HeapType::Struct
                         | HeapType::ConcreteStruct(_)
                         | HeapType::Array
-                        | HeapType::ConcreteArray(_)
-                        | HeapType::Exn
-                        | HeapType::ConcreteExn(_) => definition
+                        | HeapType::ConcreteArray(_) => definition
                             .as_gc_ref()
                             .map(|r| {
                                 let r = store.clone_gc_ref(r);
