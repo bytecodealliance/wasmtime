@@ -37,6 +37,7 @@ fn coredump_attached_to_error() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn coredump_has_stack() -> Result<()> {
+    let _ = env_logger::try_init();
     let mut config = Config::default();
     config.coredump_on_trap(true);
     let engine = Engine::new(&config).unwrap();

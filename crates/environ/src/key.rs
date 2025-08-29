@@ -230,22 +230,8 @@ impl FuncKey {
         kind << Self::KIND_OFFSET
     }
 
-    /// Get this key's kind.
-    pub fn kind(self) -> FuncKeyKind {
-        self.namespace().kind()
-    }
-
-    /// Get this key's namespace.
-    pub fn namespace(self) -> FuncKeyNamespace {
-        self.into_parts().0
-    }
-
-    /// Get this key's index.
-    pub fn index(self) -> FuncKeyIndex {
-        self.into_parts().1
-    }
-
     /// Split this key into its namespace and index halves.
+    #[inline]
     pub fn into_parts(self) -> (FuncKeyNamespace, FuncKeyIndex) {
         let (namespace, index) = match self {
             FuncKey::DefinedWasmFunction(module, def_func) => {
@@ -294,16 +280,19 @@ impl FuncKey {
         (FuncKeyNamespace(namespace), FuncKeyIndex(index))
     }
 
-    /// Create a key from its namespace and index parts.
-    ///
-    /// Should only be called with namespaces and indices that are ultimately
-    /// derived from the same key. For example, if you attempt to pair an index
-    /// and namespace that come from different keys, that may panic. If it
-    /// happens not to panic, you'll end up with a valid key that names an
-    /// arbitrary function in the given namespace, but that function probably
-    /// does not actually exist in the compilation artifact.
-    pub fn from_parts(namespace: FuncKeyNamespace, index: FuncKeyIndex) -> Self {
-        Self::from_raw_parts(namespace.into_raw(), index.into_raw())
+    /// Get this key's kind.
+    pub fn kind(self) -> FuncKeyKind {
+        self.namespace().kind()
+    }
+
+    /// Get this key's namespace.
+    pub fn namespace(self) -> FuncKeyNamespace {
+        self.into_parts().0
+    }
+
+    /// Get this key's index.
+    pub fn index(self) -> FuncKeyIndex {
+        self.into_parts().1
     }
 
     /// Get the raw, underlying `(namespace, index)` representation of this
@@ -318,6 +307,18 @@ impl FuncKey {
     pub fn into_raw_parts(self) -> (u32, u32) {
         let (ns, index) = self.into_parts();
         (ns.into_raw(), index.into_raw())
+    }
+
+    /// Create a key from its namespace and index parts.
+    ///
+    /// Should only be called with namespaces and indices that are ultimately
+    /// derived from the same key. For example, if you attempt to pair an index
+    /// and namespace that come from different keys, that may panic. If it
+    /// happens not to panic, you'll end up with a valid key that names an
+    /// arbitrary function in the given namespace, but that function probably
+    /// does not actually exist in the compilation artifact.
+    pub fn from_parts(namespace: FuncKeyNamespace, index: FuncKeyIndex) -> Self {
+        Self::from_raw_parts(namespace.into_raw(), index.into_raw())
     }
 
     /// Create a key from its raw, underlying representation.

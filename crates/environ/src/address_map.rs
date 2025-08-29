@@ -30,10 +30,22 @@ impl FilePos {
         FilePos(pos)
     }
 
+    /// Get the null file position.
+    pub fn none() -> FilePos {
+        FilePos(u32::MAX)
+    }
+
+    /// Is this the null file position?
+    #[inline]
+    pub fn is_none(&self) -> bool {
+        *self == FilePos::none()
+    }
+
     /// Returns the offset that this offset was created with.
     ///
-    /// Note that the `Default` implementation will return `None` here, whereas
-    /// positions created with `FilePos::new` will return `Some`.
+    /// Note that positions created with `FilePos::none` and the `Default`
+    /// implementation will return `None` here, whereas positions created with
+    /// `FilePos::new` will return `Some`.
     pub fn file_offset(self) -> Option<u32> {
         if self.0 == u32::MAX {
             None
@@ -45,7 +57,7 @@ impl FilePos {
 
 impl Default for FilePos {
     fn default() -> FilePos {
-        FilePos(u32::MAX)
+        FilePos::none()
     }
 }
 

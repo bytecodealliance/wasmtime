@@ -19,8 +19,8 @@ use core::ptr::NonNull;
 use std::{fs::File, path::Path};
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind, TypeTrace, VMOffsets,
-    VMSharedTypeIndex,
+    CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind,
+    TypeTrace, VMOffsets, VMSharedTypeIndex,
 };
 #[cfg(feature = "gc")]
 use wasmtime_unwinder::ExceptionTable;
@@ -495,13 +495,13 @@ impl Module {
     pub(crate) fn from_parts(
         engine: &Engine,
         code_memory: Arc<CodeMemory>,
-        info_and_types: Option<(CompiledModuleInfo, ModuleTypes)>,
+        info_and_types: Option<(CompiledModuleInfo, CompiledFunctionsTable, ModuleTypes)>,
     ) -> Result<Self> {
         // Acquire this module's metadata and type information, deserializing
         // it from the provided artifact if it wasn't otherwise provided
         // already.
-        let (mut info, mut types) = match info_and_types {
-            Some((info, types)) => (info, types),
+        let (mut info, index, mut types) = match info_and_types {
+            Some((info, index, types)) => (info, index, types),
             None => postcard::from_bytes(code_memory.wasmtime_info())?,
         };
 
@@ -519,17 +519,23 @@ impl Module {
         // Package up all our data into a `CodeObject` and delegate to the final
         // step of module compilation.
         let code = Arc::new(CodeObject::new(code_memory, signatures, types.into()));
-        Module::from_parts_raw(engine, code, info, true)
+        let index = Arc::new(index);
+        Module::from_parts_raw(engine, code, info, index, true)
     }
 
     pub(crate) fn from_parts_raw(
         engine: &Engine,
         code: Arc<CodeObject>,
         info: CompiledModuleInfo,
+        index: Arc<CompiledFunctionsTable>,
         serializable: bool,
     ) -> Result<Self> {
-        let module =
-            CompiledModule::from_artifacts(code.code_memory().clone(), info, engine.profiler())?;
+        let module = CompiledModule::from_artifacts(
+            code.code_memory().clone(),
+            info,
+            index,
+            engine.profiler(),
+        )?;
 
         // Validate the module can be used with the current instance allocator.
         let offsets = VMOffsets::new(HostPtr, module.module());
@@ -1106,6 +1112,7 @@ impl Module {
         let ptr = self
             .compiled_module()
             .wasm_to_array_trampoline(trampoline_module_ty)
+            .expect("always have a trampoline for the trampoline type")
             .as_ptr()
             .cast::<VMWasmCallFunction>()
             .cast_mut();

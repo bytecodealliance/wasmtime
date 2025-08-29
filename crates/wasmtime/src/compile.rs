@@ -26,22 +26,17 @@ use crate::Engine;
 use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::prelude::*;
-use std::{
-    any::Any,
-    borrow::Cow,
-    collections::{BTreeMap, BTreeSet},
-    mem,
-    ops::Range,
-};
+use std::{any::Any, borrow::Cow, collections::BTreeMap, mem, ops::Range};
 
 use call_graph::CallGraph;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, CompiledFunctionBody, CompiledFunctionInfo, CompiledModuleInfo, Compiler,
-    DefinedFuncIndex, FilePos, FinishedObject, FuncKey, FunctionBodyData, InliningCompiler,
-    IntraModuleInlining, ModuleEnvironment, ModuleTranslation, ModuleTypes, ModuleTypesBuilder,
-    ObjectKind, PrimaryMap, SecondaryMap, StaticModuleIndex, Tunables,
+    BuiltinFunctionIndex, CompiledFunctionBody, CompiledFunctionsTable,
+    CompiledFunctionsTableBuilder, CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos,
+    FinishedObject, FuncKey, FunctionBodyData, InliningCompiler, IntraModuleInlining,
+    ModuleEnvironment, ModuleTranslation, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap,
+    StaticModuleIndex, Tunables,
 };
 
 mod call_graph;
@@ -71,7 +66,10 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     wasm: &[u8],
     dwarf_package: Option<&[u8]>,
     obj_state: &T::State,
-) -> Result<(T, Option<(CompiledModuleInfo, ModuleTypes)>)> {
+) -> Result<(
+    T,
+    Option<(CompiledModuleInfo, CompiledFunctionsTable, ModuleTypes)>,
+)> {
     let tunables = engine.tunables();
 
     // First a `ModuleEnvironment` is created which records type information
@@ -117,7 +115,6 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     engine.append_bti(&mut object);
 
     let (mut object, compilation_artifacts) = indices.link_and_append_code(
-        &types,
         object,
         engine,
         compiled_funcs,
@@ -125,12 +122,12 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
         dwarf_package,
     )?;
 
-    let info = compilation_artifacts.unwrap_as_module_info();
+    let (info, index) = compilation_artifacts.unwrap_as_module_info();
     let types = types.finish();
-    object.serialize_info(&(&info, &types));
+    object.serialize_info(&(&info, &index, &types));
     let result = T::finish_object(object, obj_state)?;
 
-    Ok((result, Some((info, types))))
+    Ok((result, Some((info, index, types))))
 }
 
 /// Performs the compilation phase for a component, translating and
@@ -188,7 +185,6 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     engine.append_bti(&mut object);
 
     let (mut object, compilation_artifacts) = indices.link_and_append_code(
-        types.module_types_builder(),
         object,
         engine,
         compiled_funcs,
@@ -199,12 +195,10 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
 
     let info = CompiledComponentInfo {
         component: component.component,
-        wasm_call_trampolines: compilation_artifacts.wasm_call_trampolines,
-        array_call_trampolines: compilation_artifacts.array_call_trampolines,
-        resource_drop_wasm_to_array_trampoline: compilation_artifacts.resource_drop_trampoline,
     };
     let artifacts = ComponentArtifacts {
         info,
+        table: compilation_artifacts.table,
         ty,
         types,
         static_modules: compilation_artifacts.modules,
@@ -874,7 +868,7 @@ impl UnlinkedCompileOutputs<'_> {
     /// indices within it.
     fn pre_link(self) -> PreLinkOutput {
         // We must ensure that `compiled_funcs` contains the function bodies
-        // sorted by their `FuncKey`, as `CompiledFunctionsIndex` relies on that
+        // sorted by their `FuncKey`, as `CompiledFunctionsTable` relies on that
         // property.
         //
         // Furthermore, note that, because the order functions end up in
@@ -898,7 +892,7 @@ impl UnlinkedCompileOutputs<'_> {
             let index = compiled_funcs.len();
             compiled_funcs.push((output.symbol, output.function.code));
 
-            if output.start_srcloc != FilePos::default() {
+            if output.start_srcloc != FilePos::none() {
                 indices
                     .start_srclocs
                     .insert(output.key, output.start_srcloc);
@@ -941,7 +935,6 @@ impl FunctionIndices {
     /// them to the given ELF file.
     fn link_and_append_code<'a>(
         self,
-        types: &ModuleTypesBuilder,
         mut obj: object::write::Object<'static>,
         engine: &'a Engine,
         compiled_funcs: Vec<(String, Box<dyn Any + Send + Sync>)>,
@@ -981,103 +974,21 @@ impl FunctionIndices {
             )?;
         }
 
-        let mut def_funcs = SecondaryMap::<
-            StaticModuleIndex,
-            PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
-        >::new();
-
-        #[cfg(feature = "component-model")]
-        let mut wasm_call_trampolines = PrimaryMap::<
-            wasmtime_environ::component::TrampolineIndex,
-            wasmtime_environ::FunctionLoc,
-        >::new();
-
-        #[cfg(feature = "component-model")]
-        let mut array_call_trampolines = PrimaryMap::<
-            wasmtime_environ::component::TrampolineIndex,
-            wasmtime_environ::FunctionLoc,
-        >::new();
-
-        #[cfg(feature = "component-model")]
-        let mut resource_drop_trampoline = None;
-
-        for (key, index) in &self.indices {
-            // NB: exhaustively match on function keys to make sure that we are
-            // remembering to handle everything we are compiling when doing this
-            // final linking and metadata-collection step.
-            match *key {
-                FuncKey::DefinedWasmFunction(module, def_func) => {
-                    let (_, wasm_func_loc) = symbol_ids_and_locs[*index];
-                    let start_srcloc = self.start_srclocs[key];
-
-                    let array_to_wasm_trampoline = self
-                        .indices
-                        .get(&FuncKey::ArrayToWasmTrampoline(module, def_func))
-                        .map(|index| {
-                            let (_, loc) = symbol_ids_and_locs[*index];
-                            loc
-                        });
-
-                    debug_assert!(def_funcs[module].get(def_func).is_none());
-                    let def_func2 = def_funcs[module].push(CompiledFunctionInfo {
-                        start_srcloc,
-                        wasm_func_loc,
-                        array_to_wasm_trampoline,
-                    });
-                    debug_assert_eq!(def_func, def_func2);
-                }
-
-                FuncKey::ArrayToWasmTrampoline(module, def_func) => {
-                    // These are handled by the `DefinedWasmFunction` arm above.
-                    debug_assert!(def_funcs[module].get(def_func).is_some());
-                }
-
-                FuncKey::WasmToArrayTrampoline(_) => {
-                    // These are handled in `modules` creation below.
-                }
-
-                FuncKey::WasmToBuiltinTrampoline(_) => {
-                    // Nothing we need to do for these: they are only called by
-                    // Wasm functions, and we never create `funcref`s containing
-                    // them, so we don't need to keep any metadata for them or
-                    // anything like that.
-                }
-
-                FuncKey::PulleyHostCall(_) => {
-                    unreachable!("we don't compile any artifacts for Pulley host calls")
-                }
-
-                #[cfg(feature = "component-model")]
-                FuncKey::ComponentTrampoline(abi, trampoline) => {
-                    let (_, loc) = symbol_ids_and_locs[*index];
-                    match abi {
-                        wasmtime_environ::Abi::Wasm => {
-                            debug_assert!(wasm_call_trampolines.get(trampoline).is_none());
-                            let trampoline2 = wasm_call_trampolines.push(loc);
-                            debug_assert_eq!(trampoline, trampoline2);
-                        }
-                        wasmtime_environ::Abi::Array => {
-                            debug_assert!(array_call_trampolines.get(trampoline).is_none());
-                            let trampoline2 = array_call_trampolines.push(loc);
-                            debug_assert_eq!(trampoline, trampoline2);
-                        }
-                    }
-                }
-
-                #[cfg(feature = "component-model")]
-                FuncKey::ResourceDropTrampoline => {
-                    let (_, loc) = symbol_ids_and_locs[*index];
-                    resource_drop_trampoline = Some(loc);
-                }
-            }
+        let mut table_builder = CompiledFunctionsTableBuilder::new();
+        for (key, compiled_func_index) in &self.indices {
+            let (_, func_loc) = symbol_ids_and_locs[*compiled_func_index];
+            let src_loc = self
+                .start_srclocs
+                .get(key)
+                .copied()
+                .unwrap_or_else(FilePos::none);
+            table_builder.push_func(*key, func_loc, src_loc);
         }
 
         let mut obj = wasmtime_environ::ObjectBuilder::new(obj, tunables);
         let modules = translations
             .into_iter()
-            .map(|(module, mut translation)| {
-                let def_funcs = mem::take(&mut def_funcs[module]);
-
+            .map(|(_, mut translation)| {
                 // If configured attempt to use static memory initialization
                 // which can either at runtime be implemented as a single memcpy
                 // to initialize memory or otherwise enabling
@@ -1095,38 +1006,13 @@ impl FunctionIndices {
                     translation.try_func_table_init();
                 }
 
-                // Gather this module's trampolines.
-                let unique_and_sorted_trampoline_sigs = translation
-                    .module
-                    .types
-                    .iter()
-                    .map(|(_, ty)| ty.unwrap_module_type_index())
-                    .filter(|idx| types[*idx].is_func())
-                    .map(|idx| types.trampoline_type(idx))
-                    .collect::<BTreeSet<_>>();
-                let wasm_to_array_trampolines = unique_and_sorted_trampoline_sigs
-                    .into_iter()
-                    .map(|ty| {
-                        debug_assert_eq!(ty, types.trampoline_type(ty));
-                        let key = FuncKey::WasmToArrayTrampoline(ty);
-                        let index = self.indices[&key];
-                        let (_, loc) = symbol_ids_and_locs[index];
-                        (ty, loc)
-                    })
-                    .collect();
-
-                obj.append(translation, def_funcs, wasm_to_array_trampolines)
+                obj.append(translation)
             })
             .collect::<Result<PrimaryMap<_, _>>>()?;
 
         let artifacts = Artifacts {
             modules,
-            #[cfg(feature = "component-model")]
-            wasm_call_trampolines,
-            #[cfg(feature = "component-model")]
-            array_call_trampolines,
-            #[cfg(feature = "component-model")]
-            resource_drop_trampoline,
+            table: table_builder.finish(),
         };
 
         Ok((obj, artifacts))
@@ -1135,32 +1021,19 @@ impl FunctionIndices {
 
 /// The artifacts necessary for finding and calling Wasm functions at runtime,
 /// to be serialized into an ELF file.
-#[derive(Default)]
 struct Artifacts {
     modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
-    #[cfg(feature = "component-model")]
-    wasm_call_trampolines:
-        PrimaryMap<wasmtime_environ::component::TrampolineIndex, wasmtime_environ::FunctionLoc>,
-    #[cfg(feature = "component-model")]
-    array_call_trampolines:
-        PrimaryMap<wasmtime_environ::component::TrampolineIndex, wasmtime_environ::FunctionLoc>,
-    #[cfg(feature = "component-model")]
-    resource_drop_trampoline: Option<wasmtime_environ::FunctionLoc>,
+    table: CompiledFunctionsTable,
 }
 
 impl Artifacts {
     /// Assuming this compilation was for a single core Wasm module, get the
     /// resulting `CompiledModuleInfo`.
-    fn unwrap_as_module_info(self) -> CompiledModuleInfo {
+    fn unwrap_as_module_info(self) -> (CompiledModuleInfo, CompiledFunctionsTable) {
         assert_eq!(self.modules.len(), 1);
-
-        #[cfg(feature = "component-model")]
-        {
-            assert!(self.wasm_call_trampolines.is_empty());
-            assert!(self.array_call_trampolines.is_empty());
-        }
-
-        self.modules.into_iter().next().unwrap().1
+        let info = self.modules.into_iter().next().unwrap().1;
+        let table = self.table;
+        (info, table)
     }
 }
 
