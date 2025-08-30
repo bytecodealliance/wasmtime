@@ -25,7 +25,7 @@ wit_bindgen::generate!({
         "../wasi-tls/wit/deps/tls",
     ],
     world: "wasmtime:test/test",
-    features: ["cli-exit-with-code", "tls"],
+    features: ["cli-exit-with-code", "tls", "clocks-timezone"],
     generate_all,
 });
 

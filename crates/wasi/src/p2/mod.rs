@@ -203,6 +203,7 @@
 //! [`wasi:cli/terminal-stderr`]: bindings::cli::terminal_stderr::Host
 //! [`wasi:clocks/monotonic-clock`]: bindings::clocks::monotonic_clock::Host
 //! [`wasi:clocks/wall-clock`]: bindings::clocks::wall_clock::Host
+//! [`wasi:clocks/timezone`]: bindings::clocks::timezone::Host
 //! [`wasi:filesystem/preopens`]: bindings::filesystem::preopens::Host
 //! [`wasi:filesystem/types`]: bindings::filesystem::types::Host
 //! [`wasi:io/error`]: wasmtime_wasi_io::bindings::wasi::io::error::Host
@@ -339,12 +340,14 @@ fn add_nonblocking_to_linker<'a, T: WasiView, O>(
 where
     bindings::sockets::network::LinkOptions: From<&'a O>,
     bindings::cli::exit::LinkOptions: From<&'a O>,
+    bindings::clocks::timezone::LinkOptions: From<&'a O>,
 {
     use crate::p2::bindings::{cli, clocks, filesystem, random, sockets};
 
     let l = linker;
     clocks::wall_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
     clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(l, T::clocks)?;
+    clocks::timezone::add_to_linker::<T, WasiClocks>(l, &options.into(), T::clocks)?;
     filesystem::preopens::add_to_linker::<T, WasiFilesystem>(l, T::filesystem)?;
     random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
     random::insecure::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
