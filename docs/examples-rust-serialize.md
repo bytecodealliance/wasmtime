@@ -5,7 +5,7 @@ repository to run the example locally.
 
 [code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/serialize.rs
 
-This example shows how to compile a module once and serialize its compiled representation to disk and later deserialize it to skip compilation. See also the pre-compilation example for ahead-of-time compilation.
+This example shows how to compile a module once and serialize its compiled representation to disk and later deserialize it to skip compilation on the critical path. See also the [pre-compilation example](examples-pre-compiling-wasm.md) for ahead-of-time compilation.
 
 ## `serialize.rs`
 

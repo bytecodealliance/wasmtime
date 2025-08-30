@@ -5,7 +5,7 @@ repository to run the example locally.
 
 [code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/serialize.cc
 
-This example shows how to serialize a compiled module to disk and later deserialize it to skip compilation.
+This example shows how to serialize a compiled module to disk and later deserialize it to skip compilation on the critical path.
 
 ## `serialize.cc`
 
