@@ -16,7 +16,7 @@ function %f0(i32) -> i32, f32, f64 {
     block2(v6: i64):
         v7 = ireduce.i32 v6
         v8 = iadd_imm.i32 v7, 1
-        v9 = f32const 0x0.0        
+        v9 = f32const 0x0.0
         return v8, v9, v2
 }
 
@@ -42,7 +42,7 @@ function %f0(i32) -> i32, f32, f64 {
 ; push_frame_save 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
 ; fconst64 f1, 4607182418800017408
 ; fstore64le_o32 sp, 0, f1
-; call 0x0    // target = 0x1a
+; call 0x1    // target = 0x1b
 ; xone x0
 ; fload64le_o32 f1, sp, 0
 ; pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
@@ -68,7 +68,7 @@ function %f2(i32, i64) -> i32, f32, f64 {
     block2(v6: i64):
         v7 = ireduce.i32 v6
         v8 = iadd_imm.i32 v7, 1
-        v9 = f32const 0x0.0        
+        v9 = f32const 0x0.0
         return v8, v9, v2
 }
 
@@ -120,7 +120,7 @@ function %f4(i64, i32) -> i32, f32, f64 {
     block2(v6: i64):
         v7 = ireduce.i32 v6
         v8 = iadd_imm.i32 v7, 1
-        v9 = f32const 0x0.0        
+        v9 = f32const 0x0.0
         return v8, v9, v2
 
     block3:

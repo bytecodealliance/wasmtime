@@ -35,6 +35,7 @@ type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<XReg>>;
 type BoxExternalName = Box<ExternalName>;
 type UpperXRegSet = pulley_interpreter::UpperRegSet<pulley_interpreter::XReg>;
+type PcRelOffset = pulley_interpreter::PcRelOffset;
 
 #[expect(
     unused_imports,
