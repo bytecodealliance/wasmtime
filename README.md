@@ -139,7 +139,7 @@ the implementation.
 Languages supported by the Bytecode Alliance:
 
 * **[Rust]** - the [`wasmtime` crate]
-* **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers]
+* **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers], [CMake](crates/c-api/CMakeLists.txt)
 * **C++** - the [`wasmtime.hh` header][c-headers]
 * **[Python]** - the [`wasmtime` PyPI package]
 * **[.NET]** - the [`Wasmtime` NuGet package]
