@@ -5,8 +5,9 @@ use anyhow::bail;
 use wasmtime::component::{Accessor, Resource};
 
 impl HostWithStore for WasiHttp {
-    async fn handle<U>(
-        store: &Accessor<U, Self>,
+    #[expect(unused, reason = "work in progress")] // TODO: implement
+    async fn handle<T>(
+        store: &Accessor<T, Self>,
         request: Resource<Request>,
     ) -> wasmtime::Result<Result<Resource<Response>, ErrorCode>> {
         bail!("TODO")
