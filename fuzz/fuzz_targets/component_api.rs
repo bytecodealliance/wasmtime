@@ -1,4 +1,5 @@
 #![no_main]
+#![allow(dead_code, reason = "fuzz-generation sometimes generates unused types")]
 
 use libfuzzer_sys::{arbitrary, fuzz_target};
 use wasmtime_fuzzing::oracles;
