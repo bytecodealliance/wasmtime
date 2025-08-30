@@ -107,7 +107,8 @@ impl From<&DiffValue> for SpecValue {
             DiffValue::FuncRef { .. }
             | DiffValue::ExternRef { .. }
             | DiffValue::AnyRef { .. }
-            | DiffValue::ExnRef { .. } => {
+            | DiffValue::ExnRef { .. }
+            | DiffValue::ContRef { .. } => {
                 unimplemented!()
             }
         }

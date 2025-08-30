@@ -18,6 +18,7 @@ pub enum DiffValue {
     ExternRef { null: bool },
     AnyRef { null: bool },
     ExnRef { null: bool },
+    ContRef { null: bool },
 }
 
 impl DiffValue {
@@ -32,6 +33,7 @@ impl DiffValue {
             DiffValue::ExternRef { .. } => DiffValueType::ExternRef,
             DiffValue::AnyRef { .. } => DiffValueType::AnyRef,
             DiffValue::ExnRef { .. } => DiffValueType::ExnRef,
+            DiffValue::ContRef { .. } => DiffValueType::ContRef,
         }
     }
 
@@ -189,6 +191,7 @@ impl DiffValue {
             ExternRef => DiffValue::ExternRef { null: true },
             AnyRef => DiffValue::AnyRef { null: true },
             ExnRef => DiffValue::ExnRef { null: true },
+            ContRef => DiffValue::ContRef { null: true },
         };
         arbitrary::Result::Ok(val)
     }
@@ -236,6 +239,7 @@ impl Hash for DiffValue {
             DiffValue::FuncRef { null } => null.hash(state),
             DiffValue::AnyRef { null } => null.hash(state),
             DiffValue::ExnRef { null } => null.hash(state),
+            DiffValue::ContRef { null } => null.hash(state),
         }
     }
 }
@@ -273,6 +277,7 @@ impl PartialEq for DiffValue {
             (Self::ExternRef { null: a }, Self::ExternRef { null: b }) => a == b,
             (Self::AnyRef { null: a }, Self::AnyRef { null: b }) => a == b,
             (Self::ExnRef { null: a }, Self::ExnRef { null: b }) => a == b,
+            (Self::ContRef { null: a }, Self::ContRef { null: b }) => a == b,
             _ => false,
         }
     }
@@ -291,6 +296,7 @@ pub enum DiffValueType {
     ExternRef,
     AnyRef,
     ExnRef,
+    ContRef,
 }
 
 impl TryFrom<wasmtime::ValType> for DiffValueType {
@@ -310,6 +316,7 @@ impl TryFrom<wasmtime::ValType> for DiffValueType {
                 (true, HeapType::I31) => Ok(Self::AnyRef),
                 (true, HeapType::None) => Ok(Self::AnyRef),
                 (true, HeapType::Exn) => Ok(Self::ExnRef),
+                (true, HeapType::Cont) => Ok(Self::ContRef),
                 _ => Err("non-null reference types are not supported yet"),
             },
         }

@@ -276,6 +276,12 @@ impl VMArrayRef {
                     .gc_object_data(self.as_gc_ref())
                     .write_u32(offset, id.into_raw());
             }
+            Val::ContRef(_) => {
+                // TODO(#10248): Implement array continuation reference element handling
+                return Err(anyhow::anyhow!(
+                    "setting continuation references in array elements not yet supported"
+                ));
+            }
         }
         Ok(())
     }
@@ -382,6 +388,12 @@ impl VMArrayRef {
                 gcstore
                     .gc_object_data(self.as_gc_ref())
                     .write_u32(offset, id.into_raw());
+            }
+            Val::ContRef(_) => {
+                // TODO(#10248): Implement array continuation reference init handling
+                return Err(anyhow::anyhow!(
+                    "initializing continuation references in array elements not yet supported"
+                ));
             }
         }
         Ok(())

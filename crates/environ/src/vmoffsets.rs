@@ -161,6 +161,12 @@ pub trait PtrSize {
         4
     }
 
+    /// This is the size of the largest value type (i.e. a V128).
+    #[inline]
+    fn maximum_value_size(&self) -> u8 {
+        self.size_of_vmglobal_definition()
+    }
+
     // Offsets within `VMStoreContext`
 
     /// Return the offset of the `fuel_consumed` field of `VMStoreContext`
@@ -333,6 +339,28 @@ pub trait PtrSize {
         .unwrap()
     }
 
+    // Offsets within `VMContObj`
+
+    /// Return the offset of `VMContObj::contref`
+    fn vmcontobj_contref(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMContObj::revision`
+    fn vmcontobj_revision(&self) -> u8 {
+        self.size()
+    }
+
+    /// Return the size of `VMContObj`.
+    fn size_of_vmcontobj(&self) -> u8 {
+        u8::try_from(align(
+            u32::from(self.vmcontobj_revision())
+                + u32::try_from(core::mem::size_of::<usize>()).unwrap(),
+            u32::from(self.size()),
+        ))
+        .unwrap()
+    }
+
     // Offsets within `VMContRef`
 
     /// Return the offset of `VMContRef::common_stack_information`.
@@ -362,7 +390,7 @@ pub trait PtrSize {
 
     /// Return the offset of `VMContRef::stack`.
     fn vmcontref_stack(&self) -> u8 {
-        self.vmcontref_revision() + 8
+        self.vmcontref_revision() + self.size()
     }
 
     /// Return the offset of `VMContRef::args`.

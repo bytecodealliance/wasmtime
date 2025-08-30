@@ -1056,6 +1056,7 @@ macro_rules! define_builtin_array {
     (@ty f64x2) => (f64x2);
     (@ty bool) => (bool);
     (@ty pointer) => (*mut u8);
+    (@ty size) => (usize);
     (@ty vmctx) => (NonNull<VMContext>);
 }
 
