@@ -675,17 +675,15 @@ extern "C-unwind" fn __cranelift_throw(
             })
     };
     unsafe {
-        match wasmtime_unwinder::compute_throw_action(
+        match wasmtime_unwinder::Handler::find(
             &unwind_host,
             frame_handler,
             exit_pc,
             exit_fp,
             entry_fp,
         ) {
-            wasmtime_unwinder::ThrowAction::Handler { pc, sp, fp } => {
-                wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2);
-            }
-            wasmtime_unwinder::ThrowAction::None => {
+            Some(handler) => handler.resume(payload1, payload2),
+            None => {
                 panic!("Expected a handler to exit for throw of tag {tag} at pc {exit_pc:x}");
             }
         }

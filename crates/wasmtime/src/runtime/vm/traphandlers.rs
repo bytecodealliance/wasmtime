@@ -26,6 +26,7 @@ use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
 use core::ptr::{self, NonNull};
+use wasmtime_unwinder::Handler;
 
 pub use self::backtrace::Backtrace;
 #[cfg(feature = "gc")]
@@ -548,7 +549,7 @@ mod call_thread_state {
         /// payload word in the underlying exception ABI is used to
         /// send the raw `VMExnRef`.
         #[cfg(feature = "gc")]
-        UnwindToWasm { pc: usize, fp: usize, sp: usize },
+        UnwindToWasm(Handler),
         /// Do not unwind.
         None,
     }
@@ -749,7 +750,7 @@ mod call_thread_state {
 pub use call_thread_state::*;
 
 #[cfg(feature = "gc")]
-use super::compute_throw_action;
+use super::compute_handler;
 
 pub enum UnwindReason {
     #[cfg(all(feature = "std", panic = "unwind"))]
@@ -822,15 +823,13 @@ impl CallThreadState {
             // payload at that point.
             #[cfg(feature = "gc")]
             UnwindReason::Trap(TrapReason::Exception) => {
-                // SAFETY: we are invoking `compute_throw()` while
+                // SAFETY: we are invoking `compute_handler()` while
                 // Wasm is on the stack and we have re-entered via a
                 // trampoline, as required by its stack-walking logic.
-                let action = unsafe { compute_throw_action(store) };
-                match action {
-                    wasmtime_unwinder::ThrowAction::Handler { pc, sp, fp } => {
-                        UnwindState::UnwindToWasm { pc, sp, fp }
-                    }
-                    wasmtime_unwinder::ThrowAction::None => UnwindState::UnwindToHost {
+                let handler = unsafe { compute_handler(store) };
+                match handler {
+                    Some(handler) => UnwindState::UnwindToWasm(handler),
+                    None => UnwindState::UnwindToHost {
                         reason: UnwindReason::Trap(TrapReason::Exception),
                         backtrace: None,
                         coredump_stack: None,
@@ -889,7 +888,7 @@ impl CallThreadState {
                 }
             }
             #[cfg(feature = "gc")]
-            UnwindState::UnwindToWasm { pc, fp, sp } => {
+            UnwindState::UnwindToWasm(handler) => {
                 // Take the pending exception at this time and use it as payload.
                 let payload1 = usize::try_from(
                     store
@@ -904,9 +903,7 @@ impl CallThreadState {
                 unsafe {
                     self.resume_to_exception_handler(
                         store.executor(),
-                        pc,
-                        sp,
-                        fp,
+                        &handler,
                         payload1,
                         payload2,
                     );
@@ -936,21 +933,17 @@ impl CallThreadState {
     unsafe fn resume_to_exception_handler(
         &self,
         executor: ExecutorRef<'_>,
-        pc: usize,
-        sp: usize,
-        fp: usize,
+        handler: &Handler,
         payload1: usize,
         payload2: usize,
     ) {
         unsafe {
             match executor {
                 ExecutorRef::Interpreter(r) => {
-                    r.resume_to_exception_handler(pc, sp, fp, payload1, payload2)
+                    r.resume_to_exception_handler(handler, payload1, payload2)
                 }
                 #[cfg(has_host_compiler_backend)]
-                ExecutorRef::Native => {
-                    wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2)
-                }
+                ExecutorRef::Native => handler.resume(payload1, payload2),
             }
         }
     }
