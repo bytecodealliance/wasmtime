@@ -61,9 +61,7 @@ impl InterpreterRef<'_> {
     #[cfg(feature = "gc")]
     pub(crate) unsafe fn resume_to_exception_handler(
         self,
-        _pc: usize,
-        _sp: usize,
-        _fp: usize,
+        _handler: &wasmtime_unwinder::Handler,
         _payload1: usize,
         _payload2: usize,
     ) {

@@ -1,12 +1,10 @@
 //! Exception-throw logic for Wasm exceptions.
 
-use core::ptr::NonNull;
-
-use wasmtime_environ::TagIndex;
-use wasmtime_unwinder::{Frame, ThrowAction};
-
 use super::{VMContext, VMStore};
 use crate::{store::AutoAssertNoGc, vm::Instance};
+use core::ptr::NonNull;
+use wasmtime_environ::TagIndex;
+use wasmtime_unwinder::{Frame, Handler};
 
 /// Compute the target of the pending exception on the store.
 ///
@@ -14,7 +12,7 @@ use crate::{store::AutoAssertNoGc, vm::Instance};
 ///
 /// The stored last-exit state in `store` either must be valid, or
 /// must have a zeroed exit FP if no Wasm is on the stack.
-pub unsafe fn compute_throw_action(store: &mut dyn VMStore) -> ThrowAction {
+pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
     let mut nogc = AutoAssertNoGc::new(store.store_opaque_mut());
 
     // Get the tag identity relative to the store.
@@ -44,7 +42,7 @@ pub unsafe fn compute_throw_action(store: &mut dyn VMStore) -> ThrowAction {
     // `Func::call` -- then the only possible action we can take is
     // `None` (i.e., no handler, unwind to entry from host).
     if exit_fp == 0 {
-        return ThrowAction::None;
+        return None;
     }
 
     // Walk the stack, looking up the module with each PC, and using
@@ -119,16 +117,7 @@ pub unsafe fn compute_throw_action(store: &mut dyn VMStore) -> ThrowAction {
         None
     };
     let unwinder = nogc.unwinder();
-    let action = unsafe {
-        wasmtime_unwinder::compute_throw_action(
-            unwinder,
-            handler_lookup,
-            exit_pc,
-            exit_fp,
-            entry_fp,
-        )
-    };
-
+    let action = unsafe { Handler::find(unwinder, handler_lookup, exit_pc, exit_fp, entry_fp) };
     log::trace!("throw action: {action:?}");
     action
 }
