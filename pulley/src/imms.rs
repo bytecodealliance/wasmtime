@@ -32,6 +32,12 @@ impl From<PcRelOffset> for i32 {
     }
 }
 
+impl fmt::Display for PcRelOffset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        i32::from(*self).fmt(f)
+    }
+}
+
 /// A 6-byte unsigned integer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct U6(u8);
