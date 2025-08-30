@@ -2,8 +2,9 @@ use crate::p2::bindings::clocks::timezone::TimezoneDisplay;
 use cap_std::time::{Duration, Instant, SystemClock, SystemTime};
 use cap_std::{AmbientAuthority, ambient_authority};
 use cap_time_ext::{MonotonicClockExt as _, SystemClockExt as _};
-use chrono::{DateTime, TimeZone};
-use chrono_tz::{OffsetComponents, TZ_VARIANTS, Tz};
+use jiff::Timestamp;
+use jiff::tz::TimeZone as JiffTimeZone;
+use std::{convert::TryFrom, str::FromStr};
 use wasmtime::component::{HasData, ResourceTable};
 
 pub(crate) struct WasiClocks;
@@ -157,30 +158,28 @@ impl TryFrom<SystemTime> for Datetime {
 }
 
 pub struct Timezone {
-    // The underlying system timezone.
-    timezone: cap_time_ext::Timezone,
+    timezone: JiffTimeZone,
 }
 
 impl Default for Timezone {
     fn default() -> Self {
-        Self::new(ambient_authority())
+        Self::new()
     }
 }
 
 impl Timezone {
-    pub fn new(ambient_authority: AmbientAuthority) -> Self {
+    pub fn new() -> Self {
         Self {
-            timezone: cap_time_ext::Timezone::new(ambient_authority),
+            timezone: JiffTimeZone::try_system().unwrap_or(JiffTimeZone::UTC),
         }
     }
 
     fn timezone_from_duration(&self, datetime: Duration) -> Option<TimezoneDisplay> {
-        let name = self.timezone.timezone_name().ok()?;
-        let tz: Tz = TZ_VARIANTS.into_iter().find(|tz| tz.to_string() == name)?;
-        let naive_datetime = DateTime::from_timestamp(datetime.as_secs() as i64, 0)?.naive_utc();
-        let tz_offset = tz.offset_from_local_datetime(&naive_datetime).single()?;
-        let utc_offset = tz_offset.base_utc_offset().num_hours() as i32;
-        let in_daylight_saving_time = !tz_offset.dst_offset().is_zero();
+        let timestamp = Timestamp::from_second(datetime.as_secs() as i64).ok()?;
+        let localtime = self.timezone.to_offset_info(timestamp);
+        let utc_offset = localtime.offset().seconds();
+        let name = self.timezone.iana_name().unwrap_or("UTC").to_string();
+        let in_daylight_saving_time = jiff::tz::Dst::Yes == localtime.dst();
         Some(TimezoneDisplay {
             utc_offset,
             name,
@@ -206,5 +205,14 @@ impl HostTimezone for Timezone {
             None => 0,
             Some(timezone_display) => timezone_display.utc_offset,
         }
+    }
+}
+
+impl FromStr for Timezone {
+    type Err = wasmtime::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let timezone = JiffTimeZone::get(s)?;
+        Ok(Timezone { timezone })
     }
 }
