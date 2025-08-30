@@ -106,7 +106,7 @@ function %f0(i32) -> i32, f32, f64 {
 ; fstore64le_o32 sp, 16, f31
 ; fconst64 f1, 4607182418800017408
 ; fstore64le_o32 sp, 0, f1
-; call 0x0    // target = 0xaa
+; call 0x1    // target = 0xab
 ; xone x0
 ; fload64le_o32 f1, sp, 0
 ; fload64le_o32 f16, sp, 136

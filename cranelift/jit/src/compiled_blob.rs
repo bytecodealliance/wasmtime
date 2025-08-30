@@ -150,7 +150,16 @@ impl CompiledBlob {
                         modify_inst32(jalr_addr, |jalr| (jalr & 0xFFFFF) | (lo12 << 20));
                     }
                 }
-                _ => unimplemented!(),
+                Reloc::PulleyPcRel => {
+                    let base = get_address(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
+                    let at = at as *mut i32;
+                    unsafe {
+                        at.write_unaligned(at.read_unaligned().wrapping_add(pcrel));
+                    }
+                }
+                other => unimplemented!("unimplemented reloc {other:?}"),
             }
         }
     }

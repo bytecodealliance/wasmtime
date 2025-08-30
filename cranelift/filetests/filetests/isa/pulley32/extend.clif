@@ -19,7 +19,7 @@ block0(v0: i8):
 ; Disassembled:
 ; push_frame
 ; zext8 x2, x0
-; call1 x2, 0x0    // target = 0x4
+; call1 x2, 0x2    // target = 0x6
 ; pop_frame
 ; ret
 
@@ -41,7 +41,7 @@ block0(v0: i16):
 ; Disassembled:
 ; push_frame
 ; zext16 x2, x0
-; call1 x2, 0x0    // target = 0x4
+; call1 x2, 0x2    // target = 0x6
 ; pop_frame
 ; ret
 
@@ -61,7 +61,7 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; push_frame
-; call 0x0    // target = 0x1
+; call 0x1    // target = 0x2
 ; pop_frame
 ; ret
 
@@ -81,7 +81,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; push_frame
-; call 0x0    // target = 0x1
+; call 0x1    // target = 0x2
 ; pop_frame
 ; ret
 
@@ -103,7 +103,7 @@ block0(v0: i8):
 ; Disassembled:
 ; push_frame
 ; sext8 x2, x0
-; call1 x2, 0x0    // target = 0x4
+; call1 x2, 0x2    // target = 0x6
 ; pop_frame
 ; ret
 
@@ -125,7 +125,7 @@ block0(v0: i16):
 ; Disassembled:
 ; push_frame
 ; sext16 x2, x0
-; call1 x2, 0x0    // target = 0x4
+; call1 x2, 0x2    // target = 0x6
 ; pop_frame
 ; ret
 
@@ -145,7 +145,7 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; push_frame
-; call 0x0    // target = 0x1
+; call 0x1    // target = 0x2
 ; pop_frame
 ; ret
 
@@ -165,7 +165,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; push_frame
-; call 0x0    // target = 0x1
+; call 0x1    // target = 0x2
 ; pop_frame
 ; ret
 
