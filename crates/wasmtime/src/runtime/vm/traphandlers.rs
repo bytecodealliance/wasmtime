@@ -26,6 +26,7 @@ use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
 use core::ptr::{self, NonNull};
+#[cfg(feature = "gc")]
 use wasmtime_unwinder::Handler;
 
 pub use self::backtrace::Backtrace;
