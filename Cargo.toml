@@ -380,7 +380,7 @@ glob = "0.3.0"
 libfuzzer-sys = "0.4.8"
 walkdir = "2.3.3"
 cfg-if = "1.0"
-tempfile = "3.1.0"
+tempfile = "3.21.0"
 filecheck = "0.5.0"
 libc = { version = "0.2.112", default-features = true }
 file-per-thread-logger = "0.2.0"
@@ -569,6 +569,10 @@ harness = false
 
 [[test]]
 name = "wast"
+harness = false
+
+[[test]]
+name = "wasi"
 harness = false
 
 [[example]]

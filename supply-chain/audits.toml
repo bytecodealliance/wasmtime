@@ -3635,6 +3635,12 @@ criteria = "safe-to-deploy"
 delta = "3.16.0 -> 3.19.1"
 notes = "Idiom and platform updates, but nothing major and nothing out of line."
 
+[[audits.tempfile]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "3.20.0 -> 3.21.0"
+notes = "Only minor manifest/CI changes."
+
 [[audits.terminal_size]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
