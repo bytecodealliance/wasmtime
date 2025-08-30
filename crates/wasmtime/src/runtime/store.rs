@@ -1950,7 +1950,7 @@ impl StoreOpaque {
                 }
                 VMStackState::Parent => {
                     // We don't know whether our child is suspended or running, but in
-                    // either case things should be hanlded correctly when traversing
+                    // either case things should be handled correctly when traversing
                     // further along in the chain, nothing required at this point.
                 }
                 VMStackState::Fresh | VMStackState::Returned => {
