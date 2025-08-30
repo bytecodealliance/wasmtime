@@ -50,14 +50,14 @@ When downloading binaries you'll likely want one of the following archives (for
 the `dev` release)
 
 * Linux users - [`wasmtime-dev-x86_64-linux.tar.xz`]
-* macOS users - [`wasmtime-dev-x86_64-macos.tar.xz`]
+* macOS users - [`wasmtime-dev-aarch64-macos.tar.xz`]
 * Windows users - [`wasmtime-dev-x86_64-windows.zip`]
 
 Each of these archives has a `wasmtime` binary placed inside which can be
 executed normally as the CLI would.
 
 [`wasmtime-dev-x86_64-linux.tar.xz`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-linux.tar.xz
-[`wasmtime-dev-x86_64-macos.tar.xz`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-macos.tar.xz
+[`wasmtime-dev-aarch64-macos.tar.xz`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-aarch64-macos.tar.xz
 [`wasmtime-dev-x86_64-windows.zip`]: https://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-windows.zip
 
 ## Install via Cargo
