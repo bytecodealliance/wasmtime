@@ -51,6 +51,7 @@ create_rust_wasm(resource-component wasm32-wasip2)
 
 # C/C++ examples/tests
 create_target(anyref anyref.c)
+create_target(anyref-cpp anyref.cc)
 create_target(async async.cpp)
 create_target(externref externref.c)
 create_target(externref-cpp externref.cc)
@@ -68,10 +69,15 @@ create_target(linking-cpp linking.cc)
 create_target(memory memory.c)
 create_target(memory-cpp memory.cc)
 create_target(multi multi.c)
+create_target(multi-cpp multi.cc)
 create_target(multimemory multimemory.c)
+create_target(multimemory-cpp multimemory.cc)
 create_target(serialize serialize.c)
+create_target(serialize-cpp serialize.cc)
 create_target(threads threads.c)
+create_target(threads-cpp threads.cc)
 create_target(wasip1 wasip1/main.c)
+create_target(wasip1-cpp wasip1/main.cc)
 
 # Rust examples/tests
 create_rust_test(anyref)

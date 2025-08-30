@@ -1,0 +1,20 @@
+# Asynchronous Host Functions
+
+You can also [browse this source code online][code] and clone the wasmtime
+repository to run the example locally.
+
+[code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/async.cpp
+
+This example demonstrates configuring Wasmtime for asynchronous operation and calling async host functions from wasm.
+
+## `async.wat`
+
+```wat
+{{#include ../examples/async.wat}}
+```
+
+## `async.cpp`
+
+```cpp
+{{#include ../examples/async.cpp}}
+```
