@@ -3230,56 +3230,82 @@ impl MachInstEmit for Inst {
                 // disable the worst-case-size check in this case.
                 start_off = sink.cur_offset();
             }
-            &Inst::LoadExtName {
+            &Inst::LoadExtNameGot { rd, ref name } => {
+                // See this CE Example for the variations of this with and without BTI & PAUTH
+                // https://godbolt.org/z/ncqjbbvvn
+                //
+                // Emit the following code:
+                //   adrp    rd, :got:X
+                //   ldr     rd, [rd, :got_lo12:X]
+
+                // adrp rd, symbol
+                sink.add_reloc(Reloc::Aarch64AdrGotPage21, &**name, 0);
+                let inst = Inst::Adrp { rd, off: 0 };
+                inst.emit(sink, emit_info, state);
+
+                // ldr rd, [rd, :got_lo12:X]
+                sink.add_reloc(Reloc::Aarch64Ld64GotLo12Nc, &**name, 0);
+                let inst = Inst::ULoad64 {
+                    rd,
+                    mem: AMode::reg(rd.to_reg()),
+                    flags: MemFlags::trusted(),
+                };
+                inst.emit(sink, emit_info, state);
+            }
+            &Inst::LoadExtNameNear {
                 rd,
                 ref name,
                 offset,
             } => {
-                if emit_info.0.is_pic() {
-                    // See this CE Example for the variations of this with and without BTI & PAUTH
-                    // https://godbolt.org/z/ncqjbbvvn
-                    //
-                    // Emit the following code:
-                    //   adrp    rd, :got:X
-                    //   ldr     rd, [rd, :got_lo12:X]
+                // Emit the following code:
+                //   adrp    rd, X
+                //   add     rd, rd, :lo12:X
+                //
+                // See https://godbolt.org/z/855KEvM5r for an example.
 
-                    // adrp rd, symbol
-                    sink.add_reloc(Reloc::Aarch64AdrGotPage21, &**name, 0);
-                    let inst = Inst::Adrp { rd, off: 0 };
-                    inst.emit(sink, emit_info, state);
+                // adrp rd, symbol
+                sink.add_reloc(Reloc::Aarch64AdrPrelPgHi21, &**name, offset);
+                let inst = Inst::Adrp { rd, off: 0 };
+                inst.emit(sink, emit_info, state);
 
-                    // ldr rd, [rd, :got_lo12:X]
-                    sink.add_reloc(Reloc::Aarch64Ld64GotLo12Nc, &**name, 0);
-                    let inst = Inst::ULoad64 {
-                        rd,
-                        mem: AMode::reg(rd.to_reg()),
-                        flags: MemFlags::trusted(),
-                    };
-                    inst.emit(sink, emit_info, state);
-                } else {
-                    // With absolute offsets we set up a load from a preallocated space, and then jump
-                    // over it.
-                    //
-                    // Emit the following code:
-                    //   ldr     rd, #8
-                    //   b       #0x10
-                    //   <8 byte space>
+                // add rd, rd, :lo12:X
+                sink.add_reloc(Reloc::Aarch64AddAbsLo12Nc, &**name, offset);
+                let inst = Inst::AluRRImm12 {
+                    alu_op: ALUOp::Add,
+                    size: OperandSize::Size64,
+                    rd,
+                    rn: rd.to_reg(),
+                    imm12: Imm12::ZERO,
+                };
+                inst.emit(sink, emit_info, state);
+            }
+            &Inst::LoadExtNameFar {
+                rd,
+                ref name,
+                offset,
+            } => {
+                // With absolute offsets we set up a load from a preallocated space, and then jump
+                // over it.
+                //
+                // Emit the following code:
+                //   ldr     rd, #8
+                //   b       #0x10
+                //   <8 byte space>
 
-                    let inst = Inst::ULoad64 {
-                        rd,
-                        mem: AMode::Label {
-                            label: MemLabel::PCRel(8),
-                        },
-                        flags: MemFlags::trusted(),
-                    };
-                    inst.emit(sink, emit_info, state);
-                    let inst = Inst::Jump {
-                        dest: BranchTarget::ResolvedOffset(12),
-                    };
-                    inst.emit(sink, emit_info, state);
-                    sink.add_reloc(Reloc::Abs8, &**name, offset);
-                    sink.put8(0);
-                }
+                let inst = Inst::ULoad64 {
+                    rd,
+                    mem: AMode::Label {
+                        label: MemLabel::PCRel(8),
+                    },
+                    flags: MemFlags::trusted(),
+                };
+                inst.emit(sink, emit_info, state);
+                let inst = Inst::Jump {
+                    dest: BranchTarget::ResolvedOffset(12),
+                };
+                inst.emit(sink, emit_info, state);
+                sink.add_reloc(Reloc::Abs8, &**name, offset);
+                sink.put8(0);
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 let mem = mem.clone();

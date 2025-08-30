@@ -1825,7 +1825,7 @@
       (memarg_reg_plus_reg x y 0 flags))
 
 (rule 1 (lower_address flags
-                     (symbol_value (symbol_value_data name (reloc_distance_near) sym_offset))
+                     (symbol_value (symbol_value_data name (RelocDistance.Near) sym_offset))
                      (i64_from_offset offset))
       (if-let final_offset (memarg_symbol_offset_sum offset sym_offset))
       (memarg_symbol name final_offset flags))
@@ -1846,7 +1846,7 @@
 
 (decl pure partial load_sym (Inst) Inst)
 (rule (load_sym inst)
-      (if-let (load _ (symbol_value (symbol_value_data _ (reloc_distance_near) sym_offset))
+      (if-let (load _ (symbol_value (symbol_value_data _ (RelocDistance.Near) sym_offset))
                     (i64_from_offset load_offset))
           inst)
       (if (memarg_symbol_offset_sum sym_offset load_offset))
@@ -1854,7 +1854,7 @@
 
 (decl pure partial uload16_sym (Inst) Inst)
 (rule (uload16_sym inst)
-      (if-let (uload16 _ (symbol_value (symbol_value_data _ (reloc_distance_near) sym_offset))
+      (if-let (uload16 _ (symbol_value (symbol_value_data _ (RelocDistance.Near) sym_offset))
                        (i64_from_offset load_offset))
           inst)
       (if (memarg_symbol_offset_sum sym_offset load_offset))

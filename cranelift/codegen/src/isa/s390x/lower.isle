@@ -2302,7 +2302,7 @@
 ;;;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load the address of a function, target reachable via PC-relative instruction.
-(rule 1 (lower (func_addr (func_ref_data _ name (reloc_distance_near))))
+(rule 1 (lower (func_addr (func_ref_data _ name (RelocDistance.Near))))
       (load_addr (memarg_symbol name 0 (memflags_trusted))))
 
 ;; Load the address of a function, general case.
@@ -2313,7 +2313,7 @@
 ;;;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load the address of a symbol, target reachable via PC-relative instruction.
-(rule 1 (lower (symbol_value (symbol_value_data name (reloc_distance_near)
+(rule 1 (lower (symbol_value (symbol_value_data name (RelocDistance.Near)
                                               off)))
       (if-let offset (memarg_symbol_offset off))
       (load_addr (memarg_symbol name offset (memflags_trusted))))
@@ -3957,7 +3957,7 @@
 ;;;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.
-(rule 1 (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
+(rule 1 (lower (call (func_ref_data sig_ref name (RelocDistance.Near)) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (_ Unit (abi_emit_call_adjust_stack abi))
@@ -3995,7 +3995,7 @@
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct tail call to an in-range function.
-(rule 1 (lower (return_call (func_ref_data sig_ref name (reloc_distance_near)) args))
+(rule 1 (lower (return_call (func_ref_data sig_ref name (RelocDistance.Near)) args))
       (let ((abi Sig (abi_sig sig_ref))
             (_ Unit (abi_emit_return_call_adjust_stack abi))
             (uses CallArgList (gen_return_call_args abi (abi_prepare_args abi args)))
@@ -4024,7 +4024,7 @@
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function.
-(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (reloc_distance_near)) args et) targets)
+(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Near)) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (_ Unit (abi_emit_call_adjust_stack abi))
