@@ -575,15 +575,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn store_op(&mut self, ty: Type) -> StoreOP {
         StoreOP::from_type(ty)
     }
-    fn load_ext_name(&mut self, name: ExternalName, offset: i64) -> Reg {
-        let tmp = self.temp_writable_reg(I64);
-        self.emit(&MInst::LoadExtName {
-            rd: tmp,
-            name: Box::new(name),
-            offset,
-        });
-        tmp.to_reg()
-    }
 
     fn gen_stack_addr(&mut self, slot: StackSlot, offset: Offset32) -> Reg {
         let result = self.temp_writable_reg(I64);
@@ -726,6 +717,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             F64 => (-1.0f64).to_bits(),
             _ => unimplemented!(),
         }
+    }
+
+    fn is_pic(&mut self) -> bool {
+        self.backend.flags.is_pic()
     }
 }
 

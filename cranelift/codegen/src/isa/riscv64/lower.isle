@@ -2379,8 +2379,8 @@
 
 ;;;;;  Rules for `func_addr`;;;;;;;;;
 (rule
-  (lower (func_addr (func_ref_data _ name _)))
-  (load_ext_name name 0))
+  (lower (func_addr (func_ref_data _ name dist)))
+  (load_ext_name name 0 dist))
 
 ;;;;;  Rules for `fcvt_to_uint`;;;;;;;;;
 
@@ -2538,8 +2538,8 @@
 
 ;;;;;  Rules for `symbol_value`;;;;;;;;;
 (rule
-   (lower (symbol_value (symbol_value_data name _ offset)))
-   (load_ext_name name offset))
+   (lower (symbol_value (symbol_value_data name dist offset)))
+   (load_ext_name name offset dist))
 
 ;;;;;  Rules for `tls_value` ;;;;;;;;;;;;;;
 
@@ -2679,12 +2679,12 @@
         output))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower (call (func_ref_data sig_ref name _) args))
+(rule (lower (call (func_ref_data sig_ref name dist) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_call_rets abi output))
-            (target Reg (load_ext_name name 0))
+            (target Reg (load_ext_name name 0 dist))
             (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
             (_ Unit (emit_side_effect (call_ind_impl info))))
         output))
@@ -2712,12 +2712,12 @@
         (emit_side_effect (call_impl info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower_branch (try_call (func_ref_data sig_ref name _) args et) targets)
+(rule (lower_branch (try_call (func_ref_data sig_ref name dist) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_try_call_rets abi))
-            (target Reg (load_ext_name name 0))
+            (target Reg (load_ext_name name 0 dist))
             (info BoxCallIndInfo (gen_call_ind_info abi target uses defs trycall)))
         (emit_side_effect (call_ind_impl info))))
 
@@ -2742,10 +2742,10 @@
         (side_effect (return_call_impl info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower (return_call (func_ref_data sig_ref name _) args))
+(rule (lower (return_call (func_ref_data sig_ref name dist) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_return_call_args abi args))
-            (target Reg (load_ext_name name 0))
+            (target Reg (load_ext_name name 0 dist))
             (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
         (side_effect (return_call_ind_impl info))))
 
