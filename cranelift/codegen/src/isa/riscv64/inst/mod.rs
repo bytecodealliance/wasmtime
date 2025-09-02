@@ -756,6 +756,17 @@ impl MachInst for Inst {
         }
     }
 
+    fn is_call(&self) -> bool {
+        match self {
+            Inst::Call { .. }
+            | Inst::CallInd { .. }
+            | Inst::ReturnCall { .. }
+            | Inst::ReturnCallInd { .. }
+            | Inst::ElfTlsGetAddr { .. } => true,
+            _ => false,
+        }
+    }
+
     fn is_term(&self) -> MachTerminator {
         match self {
             &Inst::Jal { .. } => MachTerminator::Branch,
