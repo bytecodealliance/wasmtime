@@ -14,7 +14,7 @@ pub(crate) use tcp::NonInheritedOptions;
 pub use tcp::TcpSocket;
 pub use udp::UdpSocket;
 
-pub(crate) struct WasiSockets;
+pub struct WasiSockets;
 
 impl HasData for WasiSockets {
     type Data<'a> = WasiSocketsCtxView<'a>;
