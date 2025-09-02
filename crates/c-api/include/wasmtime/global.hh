@@ -61,7 +61,7 @@ public:
   Val get(Store::Context cx) const {
     Val val;
     wasmtime_global_get(cx.ptr, &global, &val.val);
-    return std::move(val);
+    return val;
   }
 
   /// Sets this global to a new value.
