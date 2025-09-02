@@ -321,6 +321,7 @@
     tmp))
 
 ;;;; Rules for uadd_overflow ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;; For i64, we can use the fact that if a + b < a, then overflow occurred
 (rule 0 (lower (has_type $I64 (uadd_overflow x y)))
   (let ((sum XReg (rv_add x y))
