@@ -205,7 +205,7 @@ macro_rules! foreach_builtin_component_function {
 }
 
 // Define `struct ComponentBuiltinFunctionIndex`
-declare_builtin_index!(
-    ComponentBuiltinFunctionIndex,
-    foreach_builtin_component_function
-);
+declare_builtin_index! {
+    /// An index type for component builtin functions.
+    pub struct ComponentBuiltinFunctionIndex: foreach_builtin_component_function;
+}

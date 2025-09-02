@@ -141,7 +141,7 @@
 ;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to a pulley function.
-(rule 1 (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
+(rule 1 (lower (call (func_ref_data sig_ref name (RelocDistance.Near)) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
@@ -174,7 +174,7 @@
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to a pulley function.
-(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (reloc_distance_near)) args et) targets)
+(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Near)) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
@@ -205,11 +205,19 @@
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to a pulley function.
-(rule 1 (lower (return_call (func_ref_data sig_ref name (reloc_distance_near)) args))
+(rule 1 (lower (return_call (func_ref_data sig_ref name (RelocDistance.Near)) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_return_call_args abi args))
             (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
         (side_effect (return_call_impl info))))
+
+;; Direct call to a pulley function.
+(rule (lower (return_call (func_ref_data sig_ref name dist) args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_return_call_args abi args))
+            (target Reg (load_ext_name name 0 dist))
+            (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
+        (side_effect (return_indirect_call_impl info))))
 
 ;; Indirect call (assumed to be pulley->pulley).
 (rule (lower (return_call_indirect sig_ref ptr args))
@@ -1811,3 +1819,13 @@
 
 (rule (lower (has_type $F32X4 (fma a b c))) (pulley_vfma32x4 a b c))
 (rule (lower (has_type $F64X2 (fma a b c))) (pulley_vfma64x2 a b c))
+
+;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (symbol_value (symbol_value_data extname dist offset)))
+  (load_ext_name extname offset dist))
+
+;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (func_addr (func_ref_data _ extname dist)))
+      (load_ext_name extname 0 dist))

@@ -9,7 +9,11 @@ fn main() {
     let unix = cfg("unix");
     let windows = cfg("windows");
     let miri = cfg("miri");
-    let supported_os = unix || windows;
+
+    // A boolean indicating whether there's a `sys` module for this platform.
+    // This is true for `unix` or `windows`, but both of those require the `std`
+    // feature to also be active so check that too.
+    let supported_os = (unix || windows) && cfg!(feature = "std");
 
     // Determine if the current host architecture is supported by Cranelift
     // meaning that we might be executing native code.

@@ -837,6 +837,7 @@ impl Ref {
             HeapType::Any => Ref::Any(None),
             HeapType::Extern => Ref::Extern(None),
             HeapType::Func => Ref::Func(None),
+            HeapType::Exn => Ref::Exn(None),
             ty => unreachable!("not a heap type: {ty:?}"),
         }
     }

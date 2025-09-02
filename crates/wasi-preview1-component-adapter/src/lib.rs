@@ -952,7 +952,7 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
     State::with(|state| {
         let ds = state.descriptors();
         match ds.get(fd)? {
-            Descriptor::Streams(..) => Ok(()),
+            Descriptor::Streams(..) => Err(wasi::ERRNO_NOTSUP),
             Descriptor::Closed(..) | Descriptor::Bad => Err(wasi::ERRNO_BADF),
         }
     })
@@ -2415,8 +2415,13 @@ pub unsafe extern "C" fn sock_send(
 /// Shut down socket send and receive channels.
 /// Note: This is similar to `shutdown` in POSIX.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn sock_shutdown(_fd: Fd, _how: Sdflags) -> Errno {
-    unreachable!()
+pub unsafe extern "C" fn sock_shutdown(fd: Fd, _how: Sdflags) -> Errno {
+    State::with(|state| {
+        state
+            .descriptors_mut()
+            .get_stream_with_error_mut(fd, wasi::ERRNO_BADF)?;
+        Err(wasi::ERRNO_NOTSOCK)
+    })
 }
 
 #[cfg(not(feature = "proxy"))]

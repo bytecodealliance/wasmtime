@@ -19,8 +19,13 @@
  * \example gcd.cc
  * \example linking.cc
  * \example memory.cc
+ * \example multimemory.cc
  * \example interrupt.cc
+ * \example multi.cc
+ * \example anyref.cc
  * \example externref.cc
+ * \example serialize.cc
+ * \example threads.cc
  */
 
 /**

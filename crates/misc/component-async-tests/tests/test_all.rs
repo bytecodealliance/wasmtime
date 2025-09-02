@@ -35,4 +35,5 @@ use scenario::transmit::{
 use scenario::unit_stream::{async_unit_stream_callee, async_unit_stream_caller};
 use scenario::yield_::{
     async_yield_callee_stackless, async_yield_callee_synchronous, async_yield_caller,
+    async_yield_caller_cancel,
 };

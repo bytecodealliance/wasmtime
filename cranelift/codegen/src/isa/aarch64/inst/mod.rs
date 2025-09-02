@@ -879,7 +879,9 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(rtmp1);
             collector.reg_early_def(rtmp2);
         }
-        Inst::LoadExtName { rd, .. } => {
+        Inst::LoadExtNameGot { rd, .. }
+        | Inst::LoadExtNameNear { rd, .. }
+        | Inst::LoadExtNameFar { rd, .. } => {
             collector.reg_def(rd);
         }
         Inst::LoadAddr { rd, mem } => {
@@ -2746,13 +2748,25 @@ impl Inst {
                     targets
                 )
             }
-            &Inst::LoadExtName {
+            &Inst::LoadExtNameGot { rd, ref name } => {
+                let rd = pretty_print_reg(rd.to_reg());
+                format!("load_ext_name_got {rd}, {name:?}")
+            }
+            &Inst::LoadExtNameNear {
                 rd,
                 ref name,
                 offset,
             } => {
                 let rd = pretty_print_reg(rd.to_reg());
-                format!("load_ext_name {rd}, {name:?}+{offset}")
+                format!("load_ext_name_near {rd}, {name:?}+{offset}")
+            }
+            &Inst::LoadExtNameFar {
+                rd,
+                ref name,
+                offset,
+            } => {
+                let rd = pretty_print_reg(rd.to_reg());
+                format!("load_ext_name_far {rd}, {name:?}+{offset}")
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 // TODO: we really should find a better way to avoid duplication of

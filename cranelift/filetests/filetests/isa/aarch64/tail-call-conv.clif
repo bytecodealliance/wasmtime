@@ -118,7 +118,7 @@ block0:
 ;   str x24, [sp, #136]
 ;   str x25, [sp, #144]
 ;   str x26, [sp, #152]
-;   load_ext_name x15, TestCase(%tail_callee_stack_args)+0
+;   load_ext_name_far x15, TestCase(%tail_callee_stack_args)+0
 ;   blr x15
 ;   add sp, sp, #160
 ;   ldp x19, x20, [sp], #16
@@ -388,7 +388,7 @@ block0:
 ;   sub sp, sp, #240
 ; block0:
 ;   mov x8, sp
-;   load_ext_name x12, TestCase(%tail_callee_stack_rets)+0
+;   load_ext_name_far x12, TestCase(%tail_callee_stack_rets)+0
 ;   blr x12
 ;   ldr x2, [sp, #232]
 ;   add sp, sp, #240
@@ -681,7 +681,7 @@ block0:
 ;   str x20, [sp, #144]
 ;   str x22, [sp, #152]
 ;   add x8, sp, #160
-;   load_ext_name x10, TestCase(%tail_callee_stack_args_and_rets)+0
+;   load_ext_name_far x10, TestCase(%tail_callee_stack_args_and_rets)+0
 ;   blr x10
 ;   ldr x2, [sp, #392]
 ;   add sp, sp, #400

@@ -8,10 +8,9 @@ fn main() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 fn main() -> Result<()> {
-    use anyhow::{Context, anyhow};
+    use anyhow::{Context, anyhow, bail};
     use libloading::os::unix::{Library, RTLD_GLOBAL, RTLD_NOW, Symbol};
     use object::{Object, ObjectSymbol};
-    use std::io::Write;
     use wasmtime::{Config, Engine};
 
     let mut args = std::env::args();
@@ -77,6 +76,24 @@ fn main() -> Result<()> {
         config.signals_based_traps(false);
     }
 
+    // For x86_64 targets be sure to enable relevant CPU features to avoid
+    // float-related libcalls which is required for the `x86_64-unknown-none`
+    // target.
+    //
+    // Note that the embedding will need to check that these features are
+    // actually available at runtime. CPU support for these features has
+    // existend since 2013 (Haswell) on Intel chips and 2012 (Piledriver) on
+    // AMD chips.
+    if cfg!(target_arch = "x86_64") {
+        unsafe {
+            config.cranelift_flag_enable("has_sse3");
+            config.cranelift_flag_enable("has_ssse3");
+            config.cranelift_flag_enable("has_sse41");
+            config.cranelift_flag_enable("has_sse42");
+            config.cranelift_flag_enable("has_fma");
+        }
+    }
+
     let engine = Engine::new(&config)?;
     let smoke = engine.precompile_module(b"(module)")?;
     let simple_add = engine.precompile_module(
@@ -93,6 +110,16 @@ fn main() -> Result<()> {
                 (import "host" "multiply" (func $multiply (param i32 i32) (result i32)))
                 (func (export "add_and_mul") (param i32 i32 i32) (result i32)
                     (i32.add (call $multiply (local.get 0) (local.get 1)) (local.get 2)))
+            )
+        "#,
+    )?;
+    let simple_floats = engine.precompile_module(
+        br#"
+            (module
+                (func (export "frob") (param f32 f32) (result f32)
+                    (f32.ceil (local.get 0))
+                    (f32.floor (local.get 1))
+                    f32.add)
             )
         "#,
     )?;
@@ -135,6 +162,8 @@ fn main() -> Result<()> {
                 usize,
                 *const u8,
                 usize,
+                *const u8,
+                usize,
             ) -> usize,
         > = lib
             .get(b"run")
@@ -150,10 +179,14 @@ fn main() -> Result<()> {
             simple_add.len(),
             simple_host_fn.as_ptr(),
             simple_host_fn.len(),
+            simple_floats.as_ptr(),
+            simple_floats.len(),
         );
         error_buf.set_len(len);
 
-        std::io::stderr().write_all(&error_buf).unwrap();
+        if len > 0 {
+            bail!("{}", String::from_utf8_lossy(&error_buf));
+        }
 
         #[cfg(feature = "wasi")]
         {
@@ -177,11 +210,12 @@ fn main() -> Result<()> {
                 wasi_component.len(),
             );
             print_buf.set_len(print_len);
+            let print_buf = String::from_utf8_lossy(&print_buf);
 
             if status > 0 {
-                std::io::stderr().write_all(&print_buf).unwrap();
+                bail!("{print_buf}");
             } else {
-                std::io::stdout().write_all(&print_buf).unwrap();
+                println!("{print_buf}");
             }
         }
     }

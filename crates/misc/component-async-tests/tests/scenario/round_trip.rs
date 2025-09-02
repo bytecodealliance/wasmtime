@@ -232,7 +232,6 @@ pub async fn test_round_trip(
         let mut store = make_store();
 
         let instance = linker.instantiate_async(&mut store, &component).await?;
-        instance.enable_concurrent_state_debug(&mut store, true);
         let round_trip =
             component_async_tests::round_trip::bindings::RoundTrip::new(&mut store, &instance)?;
 

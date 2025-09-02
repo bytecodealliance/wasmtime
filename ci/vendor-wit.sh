@@ -25,8 +25,9 @@ make_vendor() {
 
     if [[ ! -d $cached_extracted_dir ]]; then
       mkdir -p $cached_extracted_dir
-      curl -sL https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz | \
-        tar xzf - --strip-components=1 -C $cached_extracted_dir
+      curl --retry 5 --retry-all-errors -sLO https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz
+      tar xzf $tag.tar.gz --strip-components=1 -C $cached_extracted_dir
+      rm $tag.tar.gz
       rm -rf $cached_extracted_dir/${subdir:-"wit"}/deps*
     fi
 
@@ -91,5 +92,5 @@ rm -rf $cache_dir
 # slightly different than above.
 repo=https://raw.githubusercontent.com/WebAssembly/wasi-nn
 revision=0.2.0-rc-2024-10-28
-curl -L $repo/$revision/wasi-nn.witx -o crates/wasi-nn/witx/wasi-nn.witx
-curl -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit
+curl --retry 5 --retry-all-errors -L $repo/$revision/wasi-nn.witx -o crates/wasi-nn/witx/wasi-nn.witx
+curl --retry 5 --retry-all-errors -L $repo/$revision/wit/wasi-nn.wit -o crates/wasi-nn/wit/wasi-nn.wit

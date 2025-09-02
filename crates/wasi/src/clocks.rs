@@ -3,7 +3,7 @@ use cap_std::{AmbientAuthority, ambient_authority};
 use cap_time_ext::{MonotonicClockExt as _, SystemClockExt as _};
 use wasmtime::component::{HasData, ResourceTable};
 
-pub(crate) struct WasiClocks;
+pub struct WasiClocks;
 
 impl HasData for WasiClocks {
     type Data<'a> = WasiClocksCtxView<'a>;

@@ -745,24 +745,7 @@ const DEFAULT_CALLEE_SAVES: PRegSet = PRegSet::empty()
     .with(px_reg(29))
     .with(px_reg(30))
     .with(px_reg(31))
-    // Float registers.
-    .with(pf_reg(16))
-    .with(pf_reg(17))
-    .with(pf_reg(18))
-    .with(pf_reg(19))
-    .with(pf_reg(20))
-    .with(pf_reg(21))
-    .with(pf_reg(22))
-    .with(pf_reg(23))
-    .with(pf_reg(24))
-    .with(pf_reg(25))
-    .with(pf_reg(26))
-    .with(pf_reg(27))
-    .with(pf_reg(28))
-    .with(pf_reg(29))
-    .with(pf_reg(30))
-    .with(pf_reg(31))
-    // Note: no vector registers are callee-saved.
+    // Note: no float/vector registers are callee-saved.
 ;
 
 fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
@@ -799,7 +782,7 @@ const DEFAULT_CLOBBERS: PRegSet = PRegSet::empty()
     .with(px_reg(13))
     .with(px_reg(14))
     .with(px_reg(15))
-    // Float registers: the first 16 get clobbered.
+    // All float registers get clobbered.
     .with(pf_reg(0))
     .with(pf_reg(1))
     .with(pf_reg(2))
@@ -816,6 +799,22 @@ const DEFAULT_CLOBBERS: PRegSet = PRegSet::empty()
     .with(pf_reg(13))
     .with(pf_reg(14))
     .with(pf_reg(15))
+    .with(pf_reg(16))
+    .with(pf_reg(17))
+    .with(pf_reg(18))
+    .with(pf_reg(19))
+    .with(pf_reg(20))
+    .with(pf_reg(21))
+    .with(pf_reg(22))
+    .with(pf_reg(23))
+    .with(pf_reg(24))
+    .with(pf_reg(25))
+    .with(pf_reg(26))
+    .with(pf_reg(27))
+    .with(pf_reg(28))
+    .with(pf_reg(29))
+    .with(pf_reg(30))
+    .with(pf_reg(31))
     // All vector registers get clobbered.
     .with(pv_reg(0))
     .with(pv_reg(1))
@@ -955,7 +954,7 @@ fn create_reg_environment() -> MachineEnv {
 
     let preferred_regs_by_class: [Vec<PReg>; 3] = {
         let x_registers: Vec<PReg> = (0..16).map(|x| px_reg(x)).collect();
-        let f_registers: Vec<PReg> = (0..16).map(|x| pf_reg(x)).collect();
+        let f_registers: Vec<PReg> = (0..32).map(|x| pf_reg(x)).collect();
         let v_registers: Vec<PReg> = (0..32).map(|x| pv_reg(x)).collect();
         [x_registers, f_registers, v_registers]
     };
@@ -964,7 +963,7 @@ fn create_reg_environment() -> MachineEnv {
         let x_registers: Vec<PReg> = (16..XReg::SPECIAL_START)
             .map(|x| px_reg(x.into()))
             .collect();
-        let f_registers: Vec<PReg> = (16..32).map(|x| pf_reg(x)).collect();
+        let f_registers: Vec<PReg> = vec![];
         let v_registers: Vec<PReg> = vec![];
         [x_registers, f_registers, v_registers]
     };

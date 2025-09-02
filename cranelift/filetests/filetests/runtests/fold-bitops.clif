@@ -1,0 +1,66 @@
+test interpret
+test run
+set opt_level=none
+target aarch64
+target s390x
+target riscv64
+target riscv64 has_c has_zcb
+target s390x has_mie3
+target x86_64
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
+set opt_level=speed
+target aarch64
+target s390x
+target riscv64
+target riscv64 has_c has_zcb
+target s390x has_mie3
+target x86_64
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
+
+function %simplify_bor_xxy(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bor v0, v2
+    return v3
+}
+
+; run: %simplify_bor_xxy(1, 2) == 3
+; run: %simplify_bor_xxy(54, 9) == 63
+
+function %simplify_bor_yxy(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v3 = bor v0, v1
+    v4 = bor v1, v3
+    return v4
+}
+
+; run: %simplify_bor_yxy(1, 2) == 3
+; run: %simplify_bor_yxy(54, 9) == 63
+
+function %simplify_bor_xyx(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bor v2, v0
+    return v3
+}
+
+; run: %simplify_bor_xyx(1, 2) == 3
+; run: %simplify_bor_xyx(54, 9) == 63
+
+function %simplify_bor_xyy(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bor v2, v1
+    return v3
+}
+
+; run: %simplify_bor_xyy(1, 2) == 3
+; run: %simplify_bor_xyy(54, 9) == 63

@@ -94,6 +94,26 @@ impl CompiledBlob {
                 Reloc::Aarch64Ld64GotLo12Nc => {
                     panic!("GOT relocation shouldn't be generated when !is_pic");
                 }
+                Reloc::Aarch64AdrPrelPgHi21 => {
+                    let base = get_address(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let get_page = |x| x & (!0xfff);
+                    let pcrel = i32::try_from(get_page(what as isize) - get_page(at as isize))
+                        .unwrap()
+                        .cast_unsigned();
+                    let iptr = at as *mut u32;
+                    let hi21 = pcrel >> 12;
+                    let lo = (hi21 & 0x3) << 29;
+                    let hi = (hi21 & 0x1ffffc) << 3;
+                    unsafe { modify_inst32(iptr, |inst| inst | lo | hi) };
+                }
+                Reloc::Aarch64AddAbsLo12Nc => {
+                    let base = get_address(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let iptr = at as *mut u32;
+                    let imm12 = (what.addr() as u32 & 0xfff) << 10;
+                    unsafe { modify_inst32(iptr, |inst| inst | imm12) };
+                }
                 Reloc::RiscvCallPlt => {
                     // A R_RISCV_CALL_PLT relocation expects auipc+jalr instruction pair.
                     // It is the equivalent of two relocations:
@@ -130,7 +150,16 @@ impl CompiledBlob {
                         modify_inst32(jalr_addr, |jalr| (jalr & 0xFFFFF) | (lo12 << 20));
                     }
                 }
-                _ => unimplemented!(),
+                Reloc::PulleyPcRel => {
+                    let base = get_address(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
+                    let at = at as *mut i32;
+                    unsafe {
+                        at.write_unaligned(at.read_unaligned().wrapping_add(pcrel));
+                    }
+                }
+                other => unimplemented!("unimplemented reloc {other:?}"),
             }
         }
     }

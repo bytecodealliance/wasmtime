@@ -163,6 +163,7 @@ pub struct Config {
     pub(crate) coredump_on_trap: bool,
     pub(crate) macos_use_mach_ports: bool,
     pub(crate) detect_host_feature: Option<fn(&str) -> Option<bool>>,
+    pub(crate) x86_float_abi_ok: Option<bool>,
 }
 
 /// User-provided configuration for the compiler.
@@ -271,6 +272,7 @@ impl Config {
             detect_host_feature: Some(detect_host_feature),
             #[cfg(not(feature = "std"))]
             detect_host_feature: None,
+            x86_float_abi_ok: None,
         };
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
@@ -279,9 +281,10 @@ impl Config {
 
             // When running under MIRI try to optimize for compile time of wasm
             // code itself as much as possible. Disable optimizations by
-            // default.
+            // default and use the fastest regalloc available to us.
             if cfg!(miri) {
                 ret.cranelift_opt_level(OptLevel::None);
+                ret.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
             }
         }
 
@@ -1299,6 +1302,7 @@ impl Config {
     pub fn cranelift_regalloc_algorithm(&mut self, algo: RegallocAlgorithm) -> &mut Self {
         let val = match algo {
             RegallocAlgorithm::Backtracking => "backtracking",
+            RegallocAlgorithm::SinglePass => "single_pass",
         };
         self.compiler_config
             .settings
@@ -2699,6 +2703,76 @@ impl Config {
     pub fn gc_support(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::GC_TYPES, enable)
     }
+
+    /// Explicitly indicate or not whether the host is using a hardware float
+    /// ABI on x86 targets.
+    ///
+    /// This configuration option is only applicable on the
+    /// `x86_64-unknown-none` Rust target and has no effect on other host
+    /// targets. The `x86_64-unknown-none` Rust target does not support hardware
+    /// floats by default and uses a "soft float" implementation and ABI. This
+    /// means that `f32`, for example, is passed in a general-purpose register
+    /// between functions instead of a floating-point register. This does not
+    /// match Cranelift's ABI for `f32` where it's passed in floating-point
+    /// registers.  Cranelift does not have support for a "soft float"
+    /// implementation where all floating-point operations are lowered to
+    /// libcalls.
+    ///
+    /// This means that for the `x86_64-unknown-none` target the ABI between
+    /// Wasmtime's libcalls and the host is incompatible when floats are used.
+    /// This further means that, by default, Wasmtime is unable to load native
+    /// code when compiled to the `x86_64-unknown-none` target. The purpose of
+    /// this option is to explicitly allow loading code and bypass this check.
+    ///
+    /// Setting this configuration option to `true` indicates that either:
+    /// (a) the Rust target is compiled with the hard-float ABI manually via
+    /// `-Zbuild-std` and a custom target JSON configuration, or (b) sufficient
+    /// x86 features have been enabled in the compiler such that float libcalls
+    /// will not be used in Wasmtime. For (a) there is no way in Rust at this
+    /// time to detect whether a hard-float or soft-float ABI is in use on
+    /// stable Rust, so this manual opt-in is required. For (b) the only
+    /// instance where Wasmtime passes a floating-point value in a register
+    /// between the host and compiled wasm code is with libcalls.
+    ///
+    /// Float-based libcalls are only used when the compilation target for a
+    /// wasm module has insufficient target features enabled for native
+    /// support. For example SSE4.1 is required for the `f32.ceil` WebAssembly
+    /// instruction to be compiled to a native instruction. If SSE4.1 is not
+    /// enabled then `f32.ceil` is translated to a "libcall" which is
+    /// implemented on the host. Float-based libcalls can be avoided with
+    /// sufficient target features enabled, for example:
+    ///
+    /// * `self.cranelift_flag_enable("has_sse3")`
+    /// * `self.cranelift_flag_enable("has_ssse3")`
+    /// * `self.cranelift_flag_enable("has_sse41")`
+    /// * `self.cranelift_flag_enable("has_sse42")`
+    /// * `self.cranelift_flag_enable("has_fma")`
+    ///
+    /// Note that when these features are enabled Wasmtime will perform a
+    /// runtime check to determine that the host actually has the feature
+    /// present.
+    ///
+    /// For some more discussion see [#11506].
+    ///
+    /// [#11506]: https://github.com/bytecodealliance/wasmtime/issues/11506
+    ///
+    /// # Safety
+    ///
+    /// This method is not safe because it cannot be detected in Rust right now
+    /// whether the host is compiled with a soft or hard float ABI. Additionally
+    /// if the host is compiled with a soft float ABI disabling this check does
+    /// not ensure that the wasm module in question has zero usage of floats
+    /// in the boundary to the host.
+    ///
+    /// Safely using this method requires one of:
+    ///
+    /// * The host target is compiled to use hardware floats.
+    /// * Wasm modules loaded are compiled with enough x86 Cranelift features
+    ///   enabled to avoid float-related hostcalls.
+    pub unsafe fn x86_float_abi_ok(&mut self, enable: bool) -> &mut Self {
+        self.x86_float_abi_ok = Some(enable);
+        self
+    }
 }
 
 impl Default for Config {
@@ -2934,6 +3008,16 @@ pub enum RegallocAlgorithm {
     /// results in better register utilization, producing fewer spills
     /// and moves, but can cause super-linear compile runtime.
     Backtracking,
+    /// Generates acceptable code very quickly.
+    ///
+    /// This algorithm performs a single pass through the code,
+    /// guaranteed to work in linear time.  (Note that the rest of
+    /// Cranelift is not necessarily guaranteed to run in linear time,
+    /// however.) It cannot undo earlier decisions, however, and it
+    /// cannot foresee constraints or issues that may occur further
+    /// ahead in the code, so the code may have more spills and moves as
+    /// a result.
+    SinglePass,
 }
 
 /// Select which profiling technique to support.

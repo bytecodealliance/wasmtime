@@ -2159,6 +2159,20 @@ start a print 1234
             Ok(())
         }
     }
+
+    #[test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    fn cli_invoke_async() -> Result<()> {
+        let output = run_wasmtime(&[
+            "run",
+            "-Wcomponent-model-async",
+            "--invoke",
+            "echo(\"hello?\")",
+            CLI_INVOKE_ASYNC_COMPONENT,
+        ])?;
+        assert_eq!(output, "\"hello?\"\n");
+        Ok(())
+    }
 }
 
 #[test]
@@ -2239,10 +2253,14 @@ fn config_cli_flag() -> Result<()> {
         br#"
         [optimize]
         opt-level = 2
+        regalloc-algorithm = "single-pass"
         signals-based-traps = false
 
         [codegen]
         collector = "null"
+
+        [debug]
+        debug-info = true
 
         [wasm]
         max-wasm-stack = 65536

@@ -625,15 +625,14 @@ the use case.
             })
         }
 
-        // A map from a Wasm function's (module, defined-function-index) pair to
-        // its index in our unlinked outputs.
+        // A map from a `FuncKey` to its index in our unlinked outputs.
         //
         // We will generally just be working with `OutputIndex`es, but
-        // occasionally we must translate from these pairs back to our index
-        // space, for example when we know that one module's function import is
-        // always satisfied with a particular function defined in a particular
-        // module. This map enables that translation.
-        let pair_to_output: HashMap<(StaticModuleIndex, DefinedFuncIndex), OutputIndex> = outputs
+        // occasionally we must translate from keys back to our index space, for
+        // example when we know that one module's function import is always
+        // satisfied with a particular `FuncKey::DefinedWasmFunction`. This map
+        // enables that translation.
+        let key_to_output: HashMap<FuncKey, OutputIndex> = outputs
             .iter()
             .filter(|(_, output)| {
                 matches!(
@@ -643,8 +642,7 @@ the use case.
             })
             .map(|(output_index, output)| {
                 let output = output.as_ref().unwrap();
-                let (module_index, defined_func_index) = output.key.unwrap_defined_wasm_function();
-                ((module_index, defined_func_index), output_index)
+                (output.key, output_index)
             })
             .collect();
 
@@ -654,9 +652,9 @@ the use case.
         // trampolines being in their own stack frame when we save the entry and
         // exit SP, FP, and PC for backtraces in trampolines.
         let call_graph = CallGraph::<OutputIndex>::new(wasm_functions(&outputs), {
-            let mut compile_keys = IndexSet::default();
+            let mut func_keys = IndexSet::default();
             let outputs = &outputs;
-            let pair_to_output = &pair_to_output;
+            let key_to_output = &key_to_output;
             move |output_index, calls| {
                 debug_assert!(calls.is_empty());
 
@@ -671,20 +669,18 @@ the use case.
                     }
                 };
 
-                // Get this function's call graph edges as `CompileKey`s.
-                compile_keys.clear();
-                inlining_compiler.calls(func, &mut compile_keys)?;
+                // Get this function's call graph edges as `FuncKey`s.
+                func_keys.clear();
+                inlining_compiler.calls(func, &mut func_keys)?;
 
-                // Translate each of those to (module, defined-function-index)
-                // pairs and then finally to output indices, which is what we
-                // actually need.
-                calls.extend(compile_keys.iter().copied().filter_map(|key| {
-                    if let FuncKey::DefinedWasmFunction(module, def_func) = key {
-                        Some(pair_to_output[&(module, def_func)])
-                    } else {
-                        None
-                    }
-                }));
+                // Translate each of those to keys to output indices, which is
+                // what we actually need.
+                calls.extend(
+                    func_keys
+                        .iter()
+                        .copied()
+                        .filter_map(|key| key_to_output.get(&key)),
+                );
                 log::trace!(
                     "call graph edges for {output_index:?} = {:?}: {calls:?}",
                     output.key
@@ -729,10 +725,7 @@ the use case.
                     let mut caller_size = inlining_compiler.size(caller);
 
                     inlining_compiler.inline(caller, &mut |callee_key: FuncKey| {
-                        let (callee_module, callee_def_func) =
-                            callee_key.unwrap_defined_wasm_function();
-                        let callee_output_index: OutputIndex =
-                            pair_to_output[&(callee_module, callee_def_func)];
+                        let callee_output_index: OutputIndex = key_to_output[&callee_key];
 
                         // NB: If the callee is not inside `outputs`, then it is
                         // in the same `Strata` layer as the caller (and
@@ -753,6 +746,8 @@ the use case.
                         let callee_needs_gc_heap =
                             callee_output.translation.unwrap().module.needs_gc_heap;
 
+                        let (callee_module, callee_def_func) =
+                            callee_key.unwrap_defined_wasm_function();
                         if Self::should_inline(InlineHeuristicParams {
                             tunables: engine.tunables(),
                             caller_size,

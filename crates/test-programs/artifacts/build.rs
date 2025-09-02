@@ -37,12 +37,19 @@ struct Test {
 
 impl Artifacts {
     fn build(&mut self) {
+        let mut generated_code = String::new();
         // Build adapters used below for componentization.
-        let reactor_adapter = self.build_adapter("reactor", &[]);
-        let command_adapter =
-            self.build_adapter("command", &["--no-default-features", "--features=command"]);
-        let proxy_adapter =
-            self.build_adapter("proxy", &["--no-default-features", "--features=proxy"]);
+        let reactor_adapter = self.build_adapter(&mut generated_code, "reactor", &[]);
+        let command_adapter = self.build_adapter(
+            &mut generated_code,
+            "command",
+            &["--no-default-features", "--features=command"],
+        );
+        let proxy_adapter = self.build_adapter(
+            &mut generated_code,
+            "proxy",
+            &["--no-default-features", "--features=proxy"],
+        );
 
         // Build all test programs both in Rust and C/C++.
         let mut tests = Vec::new();
@@ -53,7 +60,6 @@ impl Artifacts {
         // test along with constants pointing to various paths. Note that
         // components are created here as well from core modules.
         let mut kinds = BTreeMap::new();
-        let mut generated_code = String::new();
         let missing_sdk_path =
             PathBuf::from("Asset not compiled, WASI_SDK_PATH missing at compile time");
         for test in tests.iter() {
@@ -175,7 +181,12 @@ impl Artifacts {
     }
 
     // Build the WASI Preview 1 adapter, and get the binary:
-    fn build_adapter(&mut self, name: &str, features: &[&str]) -> Vec<u8> {
+    fn build_adapter(
+        &mut self,
+        generated_code: &mut String,
+        name: &str,
+        features: &[&str],
+    ) -> Vec<u8> {
         let mut cmd = cargo();
         cmd.arg("build")
             .arg("--release")
@@ -202,6 +213,10 @@ impl Artifacts {
         std::fs::copy(&artifact, &adapter).unwrap();
         self.read_deps_of(&artifact);
         println!("wasi {name} adapter: {:?}", &adapter);
+        generated_code.push_str(&format!(
+            "pub const ADAPTER_{}: &'static str = {adapter:?};\n",
+            name.to_shouty_snake_case(),
+        ));
         fs::read(&adapter).unwrap()
     }
 

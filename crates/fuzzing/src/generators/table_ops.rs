@@ -10,12 +10,69 @@ use wasm_encoder::{
     TypeSection, ValType,
 };
 
+const NUM_PARAMS_RANGE: RangeInclusive<u32> = 0..=10;
+const NUM_GLOBALS_RANGE: RangeInclusive<u32> = 0..=10;
+const TABLE_SIZE_RANGE: RangeInclusive<u32> = 0..=100;
+const NUM_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
+const MAX_OPS: usize = 100;
+
+/// RecGroup ID struct definition.
+#[derive(Debug, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize)]
+pub struct RecGroupId(u32);
+
+/// Struct types definition.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Types {
+    rec_groups: std::collections::BTreeSet<RecGroupId>,
+}
+
+impl Types {
+    /// Create a fresh `Types` allocator with no recursive groups defined yet.
+    pub fn new() -> Self {
+        Self {
+            rec_groups: Default::default(),
+        }
+    }
+
+    /// Insert a rec-group id. Returns true if newly inserted, false if it already existed.
+    pub fn insert_rec_group(&mut self, id: RecGroupId) -> bool {
+        self.rec_groups.insert(id)
+    }
+
+    /// Iterate over all allocated recursive groups.
+    pub fn groups(&self) -> impl Iterator<Item = &RecGroupId> {
+        self.rec_groups.iter()
+    }
+}
+
 /// Limits controlling the structure of a generated Wasm module.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TableOpsLimits {
     pub(crate) num_params: u32,
     pub(crate) num_globals: u32,
-    pub(crate) table_size: i32,
+    pub(crate) table_size: u32,
+    pub(crate) num_rec_groups: u32,
+}
+
+impl TableOpsLimits {
+    fn fixup(&mut self) {
+        // NB: Exhaustively match so that we remember to fixup any other new
+        // limits we add in the future.
+        let Self {
+            num_params,
+            num_globals,
+            table_size,
+            num_rec_groups,
+        } = self;
+
+        let clamp = |limit: &mut u32, range: RangeInclusive<u32>| {
+            *limit = (*limit).clamp(*range.start(), *range.end())
+        };
+        clamp(table_size, TABLE_SIZE_RANGE);
+        clamp(num_params, NUM_PARAMS_RANGE);
+        clamp(num_globals, NUM_GLOBALS_RANGE);
+        clamp(num_rec_groups, NUM_REC_GROUPS_RANGE);
+    }
 }
 
 /// A description of a Wasm module that makes a series of `externref` table
@@ -24,12 +81,8 @@ pub struct TableOpsLimits {
 pub struct TableOps {
     pub(crate) limits: TableOpsLimits,
     pub(crate) ops: Vec<TableOp>,
+    pub(crate) types: Types,
 }
-
-const NUM_PARAMS_RANGE: RangeInclusive<u32> = 0..=10;
-const NUM_GLOBALS_RANGE: RangeInclusive<u32> = 0..=10;
-const TABLE_SIZE_RANGE: RangeInclusive<i32> = 0..=100;
-const MAX_OPS: usize = 100;
 
 impl TableOps {
     /// Serialize this module into a Wasm binary.
@@ -44,19 +97,7 @@ impl TableOps {
     /// fuel. It also is not guaranteed to avoid traps: it may access
     /// out-of-bounds of the table.
     pub fn to_wasm_binary(&mut self) -> Vec<u8> {
-        // Clamp limits to generate opcodes within bounds
-        self.limits.table_size = self
-            .limits
-            .table_size
-            .clamp(*TABLE_SIZE_RANGE.start(), *TABLE_SIZE_RANGE.end());
-        self.limits.num_params = self
-            .limits
-            .num_params
-            .clamp(*NUM_PARAMS_RANGE.start(), *NUM_PARAMS_RANGE.end());
-        self.limits.num_globals = self
-            .limits
-            .num_globals
-            .clamp(*NUM_GLOBALS_RANGE.start(), *NUM_GLOBALS_RANGE.end());
+        self.fixup();
 
         let mut module = Module::new();
 
@@ -105,7 +146,7 @@ impl TableOps {
         let mut tables = TableSection::new();
         tables.table(TableType {
             element_type: RefType::EXTERNREF,
-            minimum: self.limits.table_size as u64,
+            minimum: u64::from(self.limits.table_size),
             maximum: None,
             table64: false,
             shared: false,
@@ -143,6 +184,11 @@ impl TableOps {
         func.instruction(&Instruction::End);
         func.instruction(&Instruction::End);
 
+        // Emit one empty (rec ...) per declared group.
+        for _ in self.types.groups() {
+            types.ty().rec(Vec::<wasm_encoder::SubType>::new());
+        }
+
         let mut code = CodeSection::new();
         code.function(&func);
 
@@ -171,11 +217,20 @@ impl TableOps {
         stack
     }
 
-    /// Fixes the stack after mutating the `idx`th op.
+    /// Fixes this test case such that it becomes valid.
     ///
-    /// The abstract stack depth starting at the `idx`th opcode must be `stack`.
-    ///
+    /// This is necessary because a random mutation (e.g. removing an op in the
+    /// middle of our sequence) might have made it so that subsequent ops won't
+    /// have their expected operand types on the Wasm stack
+    /// anymore. Furthermore, because we serialize and deserialize test cases,
+    /// and libFuzzer will occasionally mutate those serialized bytes directly,
+    /// rather than use one of our custom mutations, we have no guarantee that
+    /// pre-mutation test cases are even valid! Therefore, we always call this
+    /// method before translating this "AST"-style representation into a raw
+    /// Wasm binary.
     fn fixup(&mut self) {
+        self.limits.fixup();
+
         let mut new_ops = Vec::with_capacity(self.ops.len());
         let mut stack = 0;
 
@@ -217,20 +272,16 @@ pub struct TableOpsMutator;
 
 impl Mutate<TableOps> for TableOpsMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut TableOps) -> mutatis::Result<()> {
-        // Insert
         if !c.shrink() {
             c.mutation(|ctx| {
                 if let Some(idx) = ctx.rng().gen_index(ops.ops.len() + 1) {
                     let stack = ops.abstract_stack_depth(idx);
                     let (op, _new_stack_size) = TableOp::generate(ctx, &ops, stack)?;
                     ops.ops.insert(idx, op);
-                    ops.fixup();
                 }
                 Ok(())
             })?;
         }
-
-        // Remove
         if !ops.ops.is_empty() {
             c.mutation(|ctx| {
                 let idx = ctx
@@ -238,7 +289,6 @@ impl Mutate<TableOps> for TableOpsMutator {
                     .gen_index(ops.ops.len())
                     .expect("ops is not empty");
                 ops.ops.remove(idx);
-                ops.fixup();
                 Ok(())
             })?;
         }
@@ -272,11 +322,14 @@ impl Generate<TableOps> for TableOpsMutator {
         let num_globals = m::range(NUM_GLOBALS_RANGE).generate(ctx)?;
         let table_size = m::range(TABLE_SIZE_RANGE).generate(ctx)?;
 
+        let num_rec_groups = m::range(NUM_REC_GROUPS_RANGE).generate(ctx)?;
+
         let mut ops = TableOps {
             limits: TableOpsLimits {
                 num_params,
                 num_globals,
                 table_size,
+                num_rec_groups,
             },
             ops: vec![
                 TableOp::Null(),
@@ -287,7 +340,12 @@ impl Generate<TableOps> for TableOpsMutator {
                 TableOp::GlobalSet(0),
                 TableOp::GlobalGet(0),
             ],
+            types: Types::new(),
         };
+
+        for i in 0..ops.limits.num_rec_groups {
+            ops.types.insert_rec_group(RecGroupId(i));
+        }
 
         let mut stack: usize = 0;
         while ops.ops.len() < MAX_OPS {
@@ -430,8 +488,8 @@ define_table_ops! {
     TakeRefs : 3 => 0,
 
     // Add one to make sure that out of bounds table accesses are possible, but still rare.
-    TableGet(elem_index: |ops| ops.table_size + 1 => i32) : 0 => 1,
-    TableSet(elem_index: |ops| ops.table_size + 1 => i32) : 1 => 0,
+    TableGet(elem_index: |ops| ops.table_size + 1 => u32) : 0 => 1,
+    TableSet(elem_index: |ops| ops.table_size + 1 => u32) : 1 => 0,
 
     GlobalGet(global_index: |ops| ops.num_globals => u32) : 0 => 1,
     GlobalSet(global_index: |ops| ops.num_globals => u32) : 1 => 0,
@@ -461,12 +519,12 @@ impl TableOp {
                 func.instruction(&Instruction::Call(take_refs_func_idx));
             }
             Self::TableGet(x) => {
-                func.instruction(&Instruction::I32Const(x));
+                func.instruction(&Instruction::I32Const(x.cast_signed()));
                 func.instruction(&Instruction::TableGet(0));
             }
             Self::TableSet(x) => {
                 func.instruction(&Instruction::LocalSet(scratch_local));
-                func.instruction(&Instruction::I32Const(x));
+                func.instruction(&Instruction::I32Const(x.cast_signed()));
                 func.instruction(&Instruction::LocalGet(scratch_local));
                 func.instruction(&Instruction::TableSet(0));
             }
@@ -497,24 +555,31 @@ mod tests {
     use super::*;
 
     /// Creates empty TableOps
-    fn empty_test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
-        TableOps {
+    fn empty_test_ops() -> TableOps {
+        let mut t = TableOps {
             limits: TableOpsLimits {
-                num_params,
-                num_globals,
-                table_size,
+                num_params: 5,
+                num_globals: 5,
+                table_size: 5,
+                num_rec_groups: 5,
             },
             ops: vec![],
+            types: Types::new(),
+        };
+        for i in 0..t.limits.num_rec_groups {
+            t.types.insert_rec_group(RecGroupId(i));
         }
+        t
     }
 
     /// Creates TableOps with all default opcodes
-    fn test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
-        TableOps {
+    fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> TableOps {
+        let mut t = TableOps {
             limits: TableOpsLimits {
                 num_params,
                 num_globals,
                 table_size,
+                num_rec_groups: 3,
             },
             ops: vec![
                 TableOp::Null(),
@@ -524,22 +589,40 @@ mod tests {
                 TableOp::LocalGet(0),
                 TableOp::GlobalSet(0),
                 TableOp::GlobalGet(0),
+                TableOp::Null(),
+                TableOp::Drop(),
+                TableOp::Gc(),
+                TableOp::LocalSet(0),
+                TableOp::LocalGet(0),
+                TableOp::GlobalSet(0),
+                TableOp::GlobalGet(0),
+                TableOp::Null(),
+                TableOp::Drop(),
             ],
+            types: Types::new(),
+        };
+        for i in 0..t.limits.num_rec_groups {
+            t.types.insert_rec_group(RecGroupId(i));
         }
+        t
     }
 
     #[test]
     fn mutate_table_ops_with_default_mutator() -> mutatis::Result<()> {
         let _ = env_logger::try_init();
-        use mutatis::Session;
-        use wasmparser::Validator;
         let mut res = test_ops(5, 5, 5);
-        let mut session = Session::new();
+
+        let mut session = mutatis::Session::new();
 
         for _ in 0..1024 {
             session.mutate(&mut res)?;
             let wasm = res.to_wasm_binary();
-            let mut validator = Validator::new();
+
+            let feats = wasmparser::WasmFeatures::default();
+            feats.reference_types();
+            feats.gc();
+            let mut validator = wasmparser::Validator::new_with_features(feats);
+
             let wat = wasmprinter::print_bytes(&wasm).expect("[-] Failed .print_bytes(&wasm).");
             let result = validator.validate_all(&wasm);
             log::debug!("{wat}");
@@ -558,12 +641,11 @@ mod tests {
         let _ = env_logger::try_init();
         let mut unseen_ops: std::collections::HashSet<_> = OP_NAMES.iter().copied().collect();
 
-        let mut res = empty_test_ops(5, 5, 5);
-        let mut generator = TableOpsMutator;
+        let mut res = empty_test_ops();
         let mut session = mutatis::Session::new();
 
         'outer: for _ in 0..=1024 {
-            session.mutate_with(&mut generator, &mut res)?;
+            session.mutate(&mut res)?;
             for op in &res.ops {
                 unseen_ops.remove(op.name());
                 if unseen_ops.is_empty() {
@@ -571,6 +653,7 @@ mod tests {
                 }
             }
         }
+
         assert!(unseen_ops.is_empty(), "Failed to generate {unseen_ops:?}");
         Ok(())
     }
@@ -580,74 +663,107 @@ mod tests {
         let _ = env_logger::try_init();
 
         let mut table_ops = test_ops(2, 2, 5);
-        table_ops.ops.extend([
-            TableOp::Null(),
-            TableOp::Drop(),
-            TableOp::Gc(),
-            TableOp::LocalSet(0),
-            TableOp::LocalGet(0),
-            TableOp::GlobalSet(0),
-            TableOp::GlobalGet(0),
-            TableOp::Null(),
-            TableOp::Drop(),
-            TableOp::Gc(),
-            TableOp::LocalSet(0),
-            TableOp::LocalGet(0),
-            TableOp::GlobalSet(0),
-            TableOp::GlobalGet(0),
-            TableOp::Null(),
-            TableOp::Drop(),
-        ]);
-        let wasm = table_ops.to_wasm_binary();
-        let wat = wasmprinter::print_bytes(&wasm).expect("Failed to convert to WAT");
-        let expected = r#"
-        (module
-        (type (;0;) (func (result externref externref externref)))
-        (type (;1;) (func (param externref externref)))
-        (type (;2;) (func (param externref externref externref)))
-        (type (;3;) (func (result externref externref externref)))
-        (import "" "gc" (func (;0;) (type 0)))
-        (import "" "take_refs" (func (;1;) (type 2)))
-        (import "" "make_refs" (func (;2;) (type 3)))
-        (table (;0;) 5 externref)
-        (global (;0;) (mut externref) ref.null extern)
-        (global (;1;) (mut externref) ref.null extern)
-        (export "run" (func 3))
-        (func (;3;) (type 1) (param externref externref)
-            (local externref)
-            loop ;; label = @1
-            ref.null extern
-            drop
-            call 0
-            local.set 0
-            local.get 0
-            global.set 0
-            global.get 0
-            ref.null extern
-            drop
-            call 0
-            local.set 0
-            local.get 0
-            global.set 0
-            global.get 0
-            ref.null extern
-            drop
-            call 0
-            local.set 0
-            local.get 0
-            global.set 0
-            global.get 0
-            ref.null extern
-            drop
-            br 0 (;@1;)
-            end
-        )
-        )
-        "#;
 
-        let generated = wat.split_whitespace().collect::<Vec<_>>().join(" ");
-        let expected = expected.split_whitespace().collect::<Vec<_>>().join(" ");
-        assert_eq!(generated, expected, "WAT does not match expected");
+        let wasm = table_ops.to_wasm_binary();
+
+        let actual_wat = wasmprinter::print_bytes(&wasm).expect("Failed to convert to WAT");
+        let actual_wat = actual_wat.trim();
+
+        let expected_wat = r#"
+(module
+  (type (;0;) (func (result externref externref externref)))
+  (type (;1;) (func (param externref externref)))
+  (type (;2;) (func (param externref externref externref)))
+  (type (;3;) (func (result externref externref externref)))
+  (rec)
+  (rec)
+  (rec)
+  (import "" "gc" (func (;0;) (type 0)))
+  (import "" "take_refs" (func (;1;) (type 2)))
+  (import "" "make_refs" (func (;2;) (type 3)))
+  (table (;0;) 5 externref)
+  (global (;0;) (mut externref) ref.null extern)
+  (global (;1;) (mut externref) ref.null extern)
+  (export "run" (func 3))
+  (func (;3;) (type 1) (param externref externref)
+    (local externref)
+    loop ;; label = @1
+      ref.null extern
+      drop
+      call 0
+      local.set 0
+      local.get 0
+      global.set 0
+      global.get 0
+      ref.null extern
+      drop
+      call 0
+      local.set 0
+      local.get 0
+      global.set 0
+      global.get 0
+      ref.null extern
+      drop
+      drop
+      drop
+      drop
+      drop
+      drop
+      drop
+      br 0 (;@1;)
+    end
+  )
+)
+        "#;
+        let expected_wat = expected_wat.trim();
+
+        eprintln!("=== actual ===\n{actual_wat}");
+        eprintln!("=== expected ===\n{expected_wat}");
+        assert_eq!(
+            actual_wat, expected_wat,
+            "actual WAT does not match expected"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn emits_empty_rec_groups_and_validates() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
+
+        let mut ops = TableOps {
+            limits: TableOpsLimits {
+                num_params: 2,
+                num_globals: 1,
+                table_size: 5,
+                num_rec_groups: 2,
+            },
+            ops: vec![TableOp::Null(), TableOp::Drop()],
+            types: Types::new(),
+        };
+
+        for i in 0..ops.limits.num_rec_groups {
+            ops.types.insert_rec_group(RecGroupId(i));
+        }
+
+        let wasm = ops.to_wasm_binary();
+
+        let feats = wasmparser::WasmFeatures::default();
+        feats.reference_types();
+        feats.gc();
+        let mut validator = wasmparser::Validator::new_with_features(feats);
+        assert!(
+            validator.validate_all(&wasm).is_ok(),
+            "GC validation failed"
+        );
+
+        let wat = wasmprinter::print_bytes(&wasm).expect("to WAT");
+        let recs = wat.matches("(rec").count();
+        let structs = wat.matches("(struct)").count();
+
+        assert_eq!(recs, 2, "expected 2 (rec) blocks, got {recs}");
+        // Still keep as zero. Will update in the next PR
+        assert_eq!(structs, 0, "expected no struct types, got {structs}");
 
         Ok(())
     }

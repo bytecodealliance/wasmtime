@@ -33,7 +33,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x1, TestCase(%callee_i64)+0
+;   load_ext_name_far x1, TestCase(%callee_i64)+0
 ;   return_call_ind x1 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
@@ -63,7 +63,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x1, TestCase(%callee_i64)+0
+;   load_ext_name_near x1, TestCase(%callee_i64)+0
 ;   return_call_ind x1 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
@@ -71,10 +71,8 @@ block0(v0: i64):
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0x8
-;   ldr x1, #0x10
-;   b #0x18
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   adrp x1, #0 ; reloc_external Aarch64AdrPrelPgHi21 %callee_i64 0
+;   add x1, x1, #0 ; reloc_external Aarch64AddAbsLo12Nc %callee_i64 0
 ;   ldp x29, x30, [sp], #0x10
 ;   br x1
 
@@ -112,7 +110,7 @@ block0(v0: f64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x1, TestCase(%callee_f64)+0
+;   load_ext_name_far x1, TestCase(%callee_f64)+0
 ;   return_call_ind x1 new_stack_arg_size:0 v0=v0
 ;
 ; Disassembled:
@@ -163,7 +161,7 @@ block0(v0: i8):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
-;   load_ext_name x1, TestCase(%callee_i8)+0
+;   load_ext_name_far x1, TestCase(%callee_i8)+0
 ;   return_call_ind x1 new_stack_arg_size:0 x2=x2
 ;
 ; Disassembled:
@@ -255,7 +253,7 @@ block0:
 ;   movz x23, #125
 ;   movz x24, #130
 ;   movz x25, #135
-;   load_ext_name x2, TestCase(%tail_callee_stack_args)+0
+;   load_ext_name_far x2, TestCase(%tail_callee_stack_args)+0
 ;   str x10, [sp, #112]
 ;   str x11, [sp, #120]
 ;   str x12, [sp, #128]

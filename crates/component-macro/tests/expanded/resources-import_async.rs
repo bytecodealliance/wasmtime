@@ -519,12 +519,51 @@ pub mod foo {
                     4 == < SomeHandle as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + Send {}
+            pub enum Fallible {}
+            pub trait HostFallibleWithStore: wasmtime::component::HasData + Send {}
+            impl<_T: ?Sized> HostFallibleWithStore for _T
+            where
+                _T: wasmtime::component::HasData + Send,
+            {}
+            pub trait HostFallible: Send {
+                fn new(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = Result<
+                        wasmtime::component::Resource<Fallible>,
+                        wasmtime::component::__internal::String,
+                    >,
+                > + Send;
+                fn drop(
+                    &mut self,
+                    rep: wasmtime::component::Resource<Fallible>,
+                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send;
+            }
+            impl<_T: HostFallible + ?Sized + Send> HostFallible for &mut _T {
+                fn new(
+                    &mut self,
+                ) -> impl ::core::future::Future<
+                    Output = Result<
+                        wasmtime::component::Resource<Fallible>,
+                        wasmtime::component::__internal::String,
+                    >,
+                > + Send {
+                    async move { HostFallible::new(*self).await }
+                }
+                async fn drop(
+                    &mut self,
+                    rep: wasmtime::component::Resource<Fallible>,
+                ) -> wasmtime::Result<()> {
+                    HostFallible::drop(*self, rep).await
+                }
+            }
+            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + HostFallibleWithStore + Send {}
             impl<_T: ?Sized> HostWithStore for _T
             where
-                _T: wasmtime::component::HasData + HostBarWithStore + Send,
+                _T: wasmtime::component::HasData + HostBarWithStore
+                    + HostFallibleWithStore + Send,
             {}
-            pub trait Host: HostBar + Send {
+            pub trait Host: HostBar + HostFallible + Send {
                 fn bar_own_arg(
                     &mut self,
                     x: wasmtime::component::Resource<Bar>,
@@ -754,6 +793,19 @@ pub mod foo {
                     move |mut store, rep| {
                         wasmtime::component::__internal::Box::new(async move {
                             HostBar::drop(
+                                    &mut host_getter(store.data_mut()),
+                                    wasmtime::component::Resource::new_own(rep),
+                                )
+                                .await
+                        })
+                    },
+                )?;
+                inst.resource_async(
+                    "fallible",
+                    wasmtime::component::ResourceType::host::<Fallible>(),
+                    move |mut store, rep| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            HostFallible::drop(
                                     &mut host_getter(store.data_mut()),
                                     wasmtime::component::Resource::new_own(rep),
                                 )
@@ -1035,6 +1087,16 @@ pub mod foo {
                         })
                     },
                 )?;
+                inst.func_wrap_async(
+                    "[constructor]fallible",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = HostFallible::new(host).await;
+                            Ok((r,))
+                        })
+                    },
+                )?;
                 Ok(())
             }
         }
@@ -1294,7 +1356,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
-                                                                            not have export `{name}`"
+                                                                                not have export `{name}`"
                                     )
                                 })
                         };

@@ -111,3 +111,56 @@ block0(v0: i64, v1: i64):
     return v4
 }
 ; run: %a64_extr_i64_12_swap(0x0102_0304_0506_0708, 0x090a_0b0c_0d0e_0f00) == 0x708_090a_0b0c_0d0e_0
+
+;; (x | y) ^ (x & y) is optimized to (x ^ y)
+function %test_bxor_bor_band_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = bor v0, v1
+    v3 = band v0, v1
+    v4 = bxor v2, v3
+    return v4
+}
+
+; run: %test_bxor_bor_band_i64(0, 0) == 0
+; run: %test_bxor_bor_band_i64(0, 1) == 1
+; run: %test_bxor_bor_band_i64(1, 0) == 1
+; run: %test_bxor_bor_band_i64(1, 1) == 0
+; run: %test_bxor_bor_band_i64(7879, 7879) == 0
+
+
+function %test_and_and1(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = band v2, v0
+    return v3
+}
+
+; run: %test_and_and1(4, 3) == 0
+
+function %test_and_and2(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = band v0, v2
+    return v3
+}
+
+; run: %test_and_and2(4, 3) == 0
+
+function %test_and_and3(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v1, v0
+    v3 = band v0, v2
+    return v3
+}
+
+; run: %test_and_and3(4, 3) == 0
+
+function %test_and_and4(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v1, v0
+    v3 = band v2, v0
+    return v3
+}
+
+; run: %test_and_and4(4, 3) == 0
+

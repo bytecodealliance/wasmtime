@@ -22,6 +22,9 @@ wasmtime-wasi-io = { workspace = true, optional = true }
 # Memory allocator used in this example (not required, however)
 dlmalloc = "0.2.4"
 
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+raw-cpuid = "11.5.0"
+
 [lib]
 crate-type = ['staticlib']
 test = false

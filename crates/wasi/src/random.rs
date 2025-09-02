@@ -1,7 +1,7 @@
 use cap_rand::{Rng as _, RngCore, SeedableRng as _};
 use wasmtime::component::HasData;
 
-pub(crate) struct WasiRandom;
+pub struct WasiRandom;
 
 impl HasData for WasiRandom {
     type Data<'a> = &'a mut WasiRandomCtx;

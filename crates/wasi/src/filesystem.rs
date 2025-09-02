@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tracing::debug;
 use wasmtime::component::{HasData, Resource, ResourceTable};
 
-pub(crate) struct WasiFilesystem;
+pub struct WasiFilesystem;
 
 impl HasData for WasiFilesystem {
     type Data<'a> = WasiFilesystemCtxView<'a>;

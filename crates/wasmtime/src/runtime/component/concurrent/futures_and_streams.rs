@@ -6,8 +6,8 @@ use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
 use crate::component::{AsAccessor, Instance, Lower, Val, WasmList, WasmStr};
 use crate::store::{StoreOpaque, StoreToken};
-use crate::vm::VMStore;
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
+use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{Context as _, Result, anyhow, bail};
 use buffers::Extender;
@@ -251,7 +251,7 @@ impl<'a, T, B> Destination<'a, T, B> {
         let transmit = self
             .instance
             .concurrent_state_mut(store.as_context_mut().0)
-            .get(self.id)
+            .get_mut(self.id)
             .unwrap();
 
         if let &ReadState::GuestReady { count, .. } = &transmit.read {
@@ -523,7 +523,7 @@ impl<T> Source<'_, T> {
         let transmit = self
             .instance
             .concurrent_state_mut(store.as_context_mut().0)
-            .get(self.id)
+            .get_mut(self.id)
             .unwrap();
 
         if let &WriteState::GuestReady { count, .. } = &transmit.write {
@@ -920,7 +920,7 @@ impl<T> FutureReader<T> {
         };
         let store = store.as_context_mut();
         let id = TableId::<TransmitHandle>::new(*rep);
-        instance.concurrent_state_mut(store.0).get(id)?; // Just make sure it's present
+        instance.concurrent_state_mut(store.0).get_mut(id)?; // Just make sure it's present
         Ok(Self::new_(id, instance))
     }
 
@@ -941,7 +941,7 @@ impl<T> FutureReader<T> {
                 future.common.handle = None;
                 let state = future.state;
 
-                if concurrent_state.get(state)?.done {
+                if concurrent_state.get_mut(state)?.done {
                     bail!("cannot lift future after previous read succeeded");
                 }
 
@@ -960,7 +960,7 @@ impl<T> FutureReader<T> {
     /// a panic.
     pub fn close(&mut self, mut store: impl AsContextMut) {
         // `self` should never be used again, but leave an invalid handle there just in case.
-        let id = mem::replace(&mut self.id, TableId::new(0));
+        let id = mem::replace(&mut self.id, TableId::new(u32::MAX));
         self.instance
             .host_drop_reader(store.as_context_mut().0, id, TransmitKind::Future)
             .unwrap();
@@ -1003,8 +1003,8 @@ pub(crate) fn lower_future_to_index<U>(
         InterfaceType::Future(dst) => {
             let concurrent_state = cx.instance_mut().concurrent_state_mut();
             let id = TableId::<TransmitHandle>::new(rep);
-            let state = concurrent_state.get(id)?.state;
-            let rep = concurrent_state.get(state)?.read_handle.rep();
+            let state = concurrent_state.get_mut(id)?.state;
+            let rep = concurrent_state.get_mut(state)?.read_handle.rep();
 
             let handle = cx
                 .instance_mut()
@@ -1205,7 +1205,7 @@ impl<T> StreamReader<T> {
         };
         let store = store.as_context_mut();
         let id = TableId::<TransmitHandle>::new(*rep);
-        instance.concurrent_state_mut(store.0).get(id)?; // Just make sure it's present
+        instance.concurrent_state_mut(store.0).get_mut(id)?; // Just make sure it's present
         Ok(Self::new_(id, instance))
     }
 
@@ -1241,7 +1241,7 @@ impl<T> StreamReader<T> {
     /// a panic.
     pub fn close(&mut self, mut store: impl AsContextMut) {
         // `self` should never be used again, but leave an invalid handle there just in case.
-        let id = mem::replace(&mut self.id, TableId::new(0));
+        let id = mem::replace(&mut self.id, TableId::new(u32::MAX));
         self.instance
             .host_drop_reader(store.as_context_mut().0, id, TransmitKind::Stream)
             .unwrap()
@@ -1284,8 +1284,8 @@ pub(crate) fn lower_stream_to_index<U>(
         InterfaceType::Stream(dst) => {
             let concurrent_state = cx.instance_mut().concurrent_state_mut();
             let id = TableId::<TransmitHandle>::new(rep);
-            let state = concurrent_state.get(id)?.state;
-            let rep = concurrent_state.get(state)?.read_handle.rep();
+            let state = concurrent_state.get_mut(id)?.state;
+            let rep = concurrent_state.get_mut(state)?.read_handle.rep();
 
             let handle = cx
                 .instance_mut()
@@ -1580,8 +1580,8 @@ struct TransmitState {
 impl Default for TransmitState {
     fn default() -> Self {
         Self {
-            write_handle: TableId::new(0),
-            read_handle: TableId::new(0),
+            write_handle: TableId::new(u32::MAX),
+            read_handle: TableId::new(u32::MAX),
             read: ReadState::Open,
             write: WriteState::Open,
             done: false,
@@ -1709,7 +1709,7 @@ impl Instance {
         let state = self.concurrent_state_mut(store.0);
         let (_, read) = state.new_transmit().unwrap();
         let producer = Arc::new(Mutex::new(Some((Box::pin(producer), P::Buffer::default()))));
-        let id = state.get(read).unwrap().state;
+        let id = state.get_mut(read).unwrap().state;
         let produce = Box::new(move || {
             let producer = producer.clone();
             async move {
@@ -1840,7 +1840,7 @@ impl Instance {
         let mut store = store.as_context_mut();
         let token = StoreToken::new(store.as_context_mut());
         let state = self.concurrent_state_mut(store.0);
-        let id = state.get(id).unwrap().state;
+        let id = state.get_mut(id).unwrap().state;
         let transmit = state.get_mut(id).unwrap();
         let consumer = Arc::new(Mutex::new(Some(Box::pin(consumer))));
         let consume_with_buffer = {
@@ -1988,7 +1988,7 @@ impl Instance {
                     loop {
                         if tls::get(|store| {
                             anyhow::Ok(matches!(
-                                self.concurrent_state_mut(store).get(id)?.read,
+                                self.concurrent_state_mut(store).get_mut(id)?.read,
                                 ReadState::Dropped
                             ))
                         })? {
@@ -2083,10 +2083,12 @@ impl Instance {
                         let (tx, rx) = oneshot::channel();
                         tls::get(move |store| {
                             self.concurrent_state_mut(store).push_high_priority(
-                                WorkItem::WorkerFunction(Mutex::new(Box::new(move |store, _| {
-                                    _ = tx.send(accept(token.as_context_mut(store))?);
-                                    Ok(())
-                                }))),
+                                WorkItem::WorkerFunction(AlwaysMut::new(Box::new(
+                                    move |store, _| {
+                                        _ = tx.send(accept(token.as_context_mut(store))?);
+                                        Ok(())
+                                    },
+                                ))),
                             )
                         });
                         rx.await?
@@ -2245,7 +2247,7 @@ impl Instance {
         id: TableId<TransmitHandle>,
         kind: TransmitKind,
     ) -> Result<()> {
-        let transmit_id = self.concurrent_state_mut(store).get(id)?.state;
+        let transmit_id = self.concurrent_state_mut(store).get_mut(id)?.state;
         let state = self.concurrent_state_mut(store);
         let transmit = state
             .get_mut(transmit_id)
@@ -2320,7 +2322,7 @@ impl Instance {
         id: TableId<TransmitHandle>,
         on_drop_open: Option<fn() -> Result<()>>,
     ) -> Result<()> {
-        let transmit_id = self.concurrent_state_mut(store.0).get(id)?.state;
+        let transmit_id = self.concurrent_state_mut(store.0).get_mut(id)?.state;
         let transmit = self
             .concurrent_state_mut(store.0)
             .get_mut(transmit_id)
@@ -2652,7 +2654,7 @@ impl Instance {
         *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
         let concurrent_state = self.concurrent_state_mut(store.0);
-        let transmit_id = concurrent_state.get(transmit_handle)?.state;
+        let transmit_id = concurrent_state.get_mut(transmit_handle)?.state;
         let transmit = concurrent_state.get_mut(transmit_id)?;
         log::trace!(
             "guest_write {count} to {transmit_handle:?} (handle {handle}; state {transmit_id:?}); {:?}",
@@ -2892,7 +2894,7 @@ impl Instance {
         *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
         let concurrent_state = self.concurrent_state_mut(store.0);
-        let transmit_id = concurrent_state.get(transmit_handle)?.state;
+        let transmit_id = concurrent_state.get_mut(transmit_handle)?.state;
         let transmit = concurrent_state.get_mut(transmit_id)?;
         log::trace!(
             "guest_read {count} from {transmit_handle:?} (handle {handle}; state {transmit_id:?}); {:?}",
@@ -3289,7 +3291,7 @@ impl ComponentInstance {
             }
         }
         let state = self.concurrent_state_mut();
-        let rep = state.get(id)?.state.rep();
+        let rep = state.get_mut(id)?.state.rep();
         state.host_cancel_write(rep)
     }
 
@@ -3315,7 +3317,7 @@ impl ComponentInstance {
             }
         }
         let state = self.concurrent_state_mut();
-        let rep = state.get(id)?.state.rep();
+        let rep = state.get_mut(id)?.state.rep();
         state.host_cancel_read(rep)
     }
 

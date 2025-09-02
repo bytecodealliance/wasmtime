@@ -1021,6 +1021,13 @@ struct Interpreter<'a> {
 }
 
 impl Interpreter<'_> {
+    /// Calculates the `offset` for the current instruction `I`.
+    #[inline]
+    fn pc_rel<I: Encode>(&mut self, offset: PcRelOffset) -> NonNull<u8> {
+        let offset = isize::try_from(i32::from(offset)).unwrap();
+        unsafe { self.current_pc::<I>().offset(offset) }
+    }
+
     /// Performs a relative jump of `offset` bytes from the current instruction.
     ///
     /// This will jump from the start of the current instruction, identified by
@@ -1029,9 +1036,8 @@ impl Interpreter<'_> {
     /// necessary to go back to ourselves after which we then go `offset` away.
     #[inline]
     fn pc_rel_jump<I: Encode>(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
-        let offset = isize::try_from(i32::from(offset)).unwrap();
-        let my_pc = self.current_pc::<I>();
-        self.pc = unsafe { UnsafeBytecodeStream::new(my_pc.offset(offset)) };
+        let new_pc = self.pc_rel::<I>(offset);
+        self.pc = unsafe { UnsafeBytecodeStream::new(new_pc) };
         ControlFlow::Continue(())
     }
 
@@ -2831,6 +2837,12 @@ impl ExtendedOpVisitor for Interpreter<'_> {
 
     fn call_indirect_host(&mut self, id: u8) -> ControlFlow<Done> {
         self.done_call_indirect_host(id)
+    }
+
+    fn xpcadd(&mut self, dst: XReg, offset: PcRelOffset) -> ControlFlow<Done> {
+        let pc = self.pc_rel::<crate::Xpcadd>(offset);
+        self.state[dst].set_ptr(pc.as_ptr());
+        ControlFlow::Continue(())
     }
 
     fn bswap32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {

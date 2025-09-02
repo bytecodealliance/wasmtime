@@ -64,6 +64,7 @@ use crate::{
     runtime::vm::mpk::{self, ProtectionKey, ProtectionMask},
     vm::HostAlignedByteCount,
 };
+use std::mem;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{DefinedMemoryIndex, Module, Tunables};
@@ -112,7 +113,7 @@ pub struct MemoryPool {
 
     /// If using a copy-on-write allocation scheme, the slot management. We
     /// dynamically transfer ownership of a slot to a Memory when in use.
-    image_slots: Vec<Mutex<Option<MemoryImageSlot>>>,
+    image_slots: Vec<Mutex<ImageSlot>>,
 
     /// A description of the various memory sizes used in allocating the
     /// `mapping` slab.
@@ -137,6 +138,37 @@ pub struct MemoryPool {
     /// Keep track of protection keys handed out to initialized stores; this
     /// allows us to round-robin the assignment of stores to stripes.
     next_available_pkey: AtomicUsize,
+}
+
+/// The state of memory for each slot in this pool.
+#[derive(Debug)]
+enum ImageSlot {
+    /// This slot is guaranteed to be entirely unmapped.
+    ///
+    /// This is the initial state of all slots.
+    Unmapped,
+
+    /// The state of this slot is unknown.
+    ///
+    /// This encompasses a number of situations such as:
+    ///
+    /// * The slot is currently in use.
+    /// * The slot was attempted to be in use, but allocation failed.
+    /// * The slot was used but not deallocated properly.
+    ///
+    /// All of these situations are lumped into this one variant indicating
+    /// that, at a base level, no knowledge is known about this slot. Using a
+    /// slot in this state first requires resetting all memory in this slot by
+    /// mapping anonymous memory on top of the entire slot.
+    Unknown,
+
+    /// This slot was previously used and `MemoryImageSlot` maintains the state
+    /// about what this slot was last configured as.
+    ///
+    /// Future use of this slot will use `MemoryImageSlot` to continue to
+    /// re-instantiate and reuse images and such. This state is entered after
+    /// and allocated slot is successfully deallcoated.
+    PreviouslyUsed(MemoryImageSlot),
 }
 
 impl MemoryPool {
@@ -219,7 +251,7 @@ impl MemoryPool {
             );
         }
 
-        let image_slots: Vec<_> = std::iter::repeat_with(|| Mutex::new(None))
+        let image_slots: Vec<_> = std::iter::repeat_with(|| Mutex::new(ImageSlot::Unmapped))
             .take(constraints.num_slots)
             .collect();
 
@@ -366,7 +398,7 @@ impl MemoryPool {
         let base = self.get_base(allocation_index);
         let base_capacity = self.layout.max_memory_bytes;
 
-        let mut slot = self.take_memory_image_slot(allocation_index);
+        let mut slot = self.take_memory_image_slot(allocation_index)?;
         let image = match memory_index {
             Some(memory_index) => request.runtime_info.memory_image(memory_index)?,
             None => None,
@@ -477,13 +509,18 @@ impl MemoryPool {
                     .allocator
                     .alloc_affine_and_clear_affinity(module, memory_index)
                 {
-                    // Clear the image from the slot and, if successful, return it back
-                    // to our state. Note that on failure here the whole slot will get
-                    // paved over with an anonymous mapping.
+                    // Attempt to acquire the `MemoryImageSlot` state for this
+                    // slot, and then if we have that try to remove the image,
+                    // and then if all that succeeds put the slot back in.
+                    //
+                    // If anything fails then the slot will be in an "unknown"
+                    // state which means that on next use it'll be remapped with
+                    // anonymous memory.
                     let index = MemoryAllocationIndex(id.0);
-                    let mut slot = self.take_memory_image_slot(index);
-                    if slot.remove_image().is_ok() {
-                        self.return_memory_image_slot(index, slot);
+                    if let Ok(mut slot) = self.take_memory_image_slot(index) {
+                        if slot.remove_image().is_ok() {
+                            self.return_memory_image_slot(index, slot);
+                        }
                     }
 
                     stripe.allocator.free(id);
@@ -503,21 +540,49 @@ impl MemoryPool {
         self.mapping.offset(offset).expect("offset is in bounds")
     }
 
-    /// Take ownership of the given image slot. Must be returned via
-    /// `return_memory_image_slot` when the instance is done using it.
-    fn take_memory_image_slot(&self, allocation_index: MemoryAllocationIndex) -> MemoryImageSlot {
-        let maybe_slot = self.image_slots[allocation_index.index()]
-            .lock()
-            .unwrap()
-            .take();
-
-        maybe_slot.unwrap_or_else(|| {
+    /// Take ownership of the given image slot.
+    ///
+    /// This method is used when a `MemoryAllocationIndex` has been allocated
+    /// and the state of the slot needs to be acquired. This will lazily
+    /// allocate a `MemoryImageSlot` which describes the current (and possibly
+    /// prior) state of the slot.
+    ///
+    /// During deallocation this structure is passed back to
+    /// `return_memory_image_slot`.
+    ///
+    /// Note that this is a fallible method because using a slot might require
+    /// resetting the memory that was previously there. This reset operation
+    /// is a fallible operation that may not succeed. If it fails then this
+    /// slot cannot be used at this time.
+    fn take_memory_image_slot(
+        &self,
+        allocation_index: MemoryAllocationIndex,
+    ) -> Result<MemoryImageSlot> {
+        let (maybe_slot, needs_reset) = {
+            let mut slot = self.image_slots[allocation_index.index()].lock().unwrap();
+            match mem::replace(&mut *slot, ImageSlot::Unknown) {
+                ImageSlot::Unmapped => (None, false),
+                ImageSlot::Unknown => (None, true),
+                ImageSlot::PreviouslyUsed(state) => (Some(state), false),
+            }
+        };
+        let mut slot = maybe_slot.unwrap_or_else(|| {
             MemoryImageSlot::create(
                 self.get_base(allocation_index),
                 HostAlignedByteCount::ZERO,
                 self.layout.max_memory_bytes.byte_count(),
             )
-        })
+        });
+
+        // For `Unknown` slots it means that `slot` is brand new and isn't
+        // actually tracking the state of the previous slot, so reset it
+        // entirely with anonymous memory to wipe the slate clean and start
+        // from zero. This should only happen if allocation of the previous
+        // slot failed, for example.
+        if needs_reset {
+            slot.reset_with_anon_memory()?;
+        }
+        Ok(slot)
     }
 
     /// Return ownership of the given image slot.
@@ -527,21 +592,12 @@ impl MemoryPool {
         slot: MemoryImageSlot,
     ) {
         assert!(!slot.is_dirty());
-        *self.image_slots[allocation_index.index()].lock().unwrap() = Some(slot);
-    }
-}
 
-impl Drop for MemoryPool {
-    fn drop(&mut self) {
-        // Clear the `clear_no_drop` flag (i.e., ask to *not* clear on
-        // drop) for all slots, and then drop them here. This is
-        // valid because the one `Mmap` that covers the whole region
-        // can just do its one munmap.
-        for mut slot in std::mem::take(&mut self.image_slots) {
-            if let Some(slot) = slot.get_mut().unwrap() {
-                slot.no_clear_on_drop();
-            }
-        }
+        let prev = mem::replace(
+            &mut *self.image_slots[allocation_index.index()].lock().unwrap(),
+            ImageSlot::PreviouslyUsed(slot),
+        );
+        assert!(matches!(prev, ImageSlot::Unknown));
     }
 }
 

@@ -5,7 +5,10 @@ RUN git config --global --add safe.directory '*'
 
 # The CMake in Ubuntu 16.04 was a bit too old for us to use so download one from
 # CMake's own releases and use that instead.
-RUN curl -L https://github.com/Kitware/CMake/releases/download/v3.29.3/cmake-3.29.3-linux-x86_64.tar.gz | tar xzf -
+RUN curl --retry 5 -L -o cmake.tar.gz \
+    https://github.com/Kitware/CMake/releases/download/v3.29.3/cmake-3.29.3-linux-x86_64.tar.gz && \
+  tar xf cmake.tar.gz && \
+  rm cmake.tar.gz
 ENV PATH=$PATH:/cmake-3.29.3-linux-x86_64/bin
 
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
