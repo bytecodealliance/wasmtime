@@ -29,8 +29,26 @@ pub(crate) mod stack_switching_helpers {
     use cranelift_codegen::ir::types::*;
     use cranelift_codegen::ir::{StackSlot, StackSlotKind::*};
     use cranelift_frontend::FunctionBuilder;
-    use std::mem;
     use wasmtime_environ::PtrSize;
+
+    /// Provides information about the layout of a type when it is used as an
+    /// element in a host array. This is used for `VMHostArrayRef`.
+    pub(crate) trait VMHostArrayEntry {
+        /// Returns `(align, size)` in bytes.
+        fn vmhostarray_entry_layout<P: wasmtime_environ::PtrSize>(p: &P) -> (u8, u32);
+    }
+
+    impl VMHostArrayEntry for u128 {
+        fn vmhostarray_entry_layout<P: wasmtime_environ::PtrSize>(_p: &P) -> (u8, u32) {
+            (16, 16)
+        }
+    }
+
+    impl<T> VMHostArrayEntry for *mut T {
+        fn vmhostarray_entry_layout<P: wasmtime_environ::PtrSize>(p: &P) -> (u8, u32) {
+            (p.size(), p.size().into())
+        }
+    }
 
     #[derive(Copy, Clone)]
     pub struct VMContRef {
@@ -201,7 +219,7 @@ pub(crate) mod stack_switching_helpers {
         }
     }
 
-    impl<T: 'static> VMHostArrayRef<T> {
+    impl<T: VMHostArrayEntry> VMHostArrayRef<T> {
         pub(crate) fn new(address: ir::Value) -> Self {
             Self {
                 address,
@@ -217,7 +235,8 @@ pub(crate) mod stack_switching_helpers {
         fn set<U>(&self, builder: &mut FunctionBuilder, offset: i32, value: ir::Value) {
             debug_assert_eq!(
                 builder.func.dfg.value_type(value),
-                Type::int_with_byte_size(u16::try_from(std::mem::size_of::<U>()).unwrap()).unwrap()
+                Type::int_with_byte_size(u16::try_from(core::mem::size_of::<U>()).unwrap())
+                    .unwrap()
             );
             let mem_flags = ir::MemFlags::trusted();
             builder.ins().store(mem_flags, value, self.address, offset);
@@ -291,9 +310,11 @@ pub(crate) mod stack_switching_helpers {
                 .iadd_imm(original_length, i64::from(arg_count));
             self.set_length(env, builder, new_length);
 
-            let value_size: i64 = mem::size_of::<T>().try_into().unwrap();
+            let (_align, entry_size) = T::vmhostarray_entry_layout(&env.offsets.ptr);
             let original_length = builder.ins().uextend(I64, original_length);
-            let byte_offset = builder.ins().imul_imm(original_length, value_size);
+            let byte_offset = builder
+                .ins()
+                .imul_imm(original_length, i64::from(entry_size));
             builder.ins().iadd(data, byte_offset)
         }
 
@@ -304,19 +325,7 @@ pub(crate) mod stack_switching_helpers {
             required_capacity: u32,
             existing_slot: Option<StackSlot>,
         ) -> StackSlot {
-            // TODO: hack around host pointer size being mixed up with target
-            let (align, entry_size) =
-                if core::any::TypeId::of::<T>() == core::any::TypeId::of::<*mut u8>() {
-                    (
-                        u8::try_from(env.pointer_type().bytes()).unwrap(),
-                        env.pointer_type().bytes(),
-                    )
-                } else {
-                    (
-                        u8::try_from(std::mem::align_of::<T>()).unwrap(),
-                        u32::try_from(std::mem::size_of::<T>()).unwrap(),
-                    )
-                };
+            let (align, entry_size) = T::vmhostarray_entry_layout(&env.offsets.ptr);
             let required_size = required_capacity * entry_size;
 
             match existing_slot {
@@ -366,13 +375,13 @@ pub(crate) mod stack_switching_helpers {
             let data_start_pointer = self.get_data(env, builder);
             let mut values = vec![];
             let mut offset = 0;
-            let entry_size = i32::try_from(std::mem::size_of::<T>()).unwrap();
+            let (_align, entry_size) = T::vmhostarray_entry_layout(&env.offsets.ptr);
             for valtype in load_types {
                 let val = builder
                     .ins()
                     .load(*valtype, memflags, data_start_pointer, offset);
                 values.push(val);
-                offset += entry_size;
+                offset += i32::try_from(entry_size).unwrap();
             }
             values
         }
@@ -386,11 +395,12 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
             values: &[ir::Value],
-            entry_size: u32,
         ) {
             let store_count = builder
                 .ins()
                 .iconst(I32, i64::try_from(values.len()).unwrap());
+
+            let (_align, entry_size) = T::vmhostarray_entry_layout(&env.offsets.ptr);
 
             debug_assert!(values.iter().all(|val| {
                 let ty = builder.func.dfg.value_type(*val);
@@ -1388,8 +1398,7 @@ pub(crate) fn translate_resume<'a>(
                 .collect();
 
             // Store all tag addresess in the handler list.
-            let entry_size = env.pointer_type().bytes();
-            handler_list.store_data_entries(env, builder, &all_tag_addresses, entry_size);
+            handler_list.store_data_entries(env, builder, &all_tag_addresses);
 
             // To enable distinguishing switch and suspend handlers when searching the handler list:
             // Store at which index the switch handlers start.
@@ -1635,8 +1644,7 @@ pub(crate) fn translate_suspend<'a>(
     }
 
     if suspend_args.len() > 0 {
-        let entry_size: u32 = std::mem::size_of::<u128>().try_into().unwrap();
-        values.store_data_entries(env, builder, suspend_args, entry_size)
+        values.store_data_entries(env, builder, suspend_args);
     }
 
     // Set current continuation to suspended and break up handler chain.
