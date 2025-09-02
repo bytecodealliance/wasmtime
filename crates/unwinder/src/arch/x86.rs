@@ -29,14 +29,14 @@ pub unsafe fn resume_to_exception_handler(
 ) -> ! {
     unsafe {
         core::arch::asm!(
-            "mov rsp, {}",
-            "mov rbp, {}",
-            "jmp {}",
-            in(reg) sp,
-            in(reg) fp,
-            in(reg) pc,
+            "mov rsp, rcx",
+            "mov rbp, rsi",
+            "jmp rdi",
             in("rax") payload1,
             in("rdx") payload2,
+            in("rcx") sp,
+            in("rsi") fp,
+            in("rdi") pc,
             options(nostack, nomem, noreturn),
         );
     }
