@@ -192,11 +192,12 @@ fn parse_source(
     let mut files = Vec::new();
     let mut pkgs = Vec::new();
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let default = root.join("wit");
 
     let parse = |resolve: &mut Resolve,
                  files: &mut Vec<PathBuf>,
                  pkgs: &mut Vec<PackageId>,
-                 paths: &[String]|
+                 paths: &[PathBuf]|
      -> anyhow::Result<_> {
         for path in paths {
             let p = root.join(path);
@@ -214,16 +215,22 @@ fn parse_source(
         Ok(())
     };
 
-    if !paths.is_empty() {
-        parse(&mut resolve, &mut files, &mut pkgs, &paths)?;
+    if paths.is_empty() {
+        if default.exists() {
+            parse(&mut resolve, &mut files, &mut pkgs, &[default])?;
+        }
+    } else {
+        parse(
+            &mut resolve,
+            &mut files,
+            &mut pkgs,
+            &paths.iter().map(|s| s.into()).collect::<Vec<_>>(),
+        )?;
     }
 
     if let Some(inline) = inline {
+        pkgs.truncate(0);
         pkgs.push(resolve.push_group(UnresolvedPackageGroup::parse("macro-input", inline)?)?);
-    }
-
-    if pkgs.is_empty() {
-        parse(&mut resolve, &mut files, &mut pkgs, &["wit".into()])?;
     }
 
     Ok((resolve, pkgs, files))
