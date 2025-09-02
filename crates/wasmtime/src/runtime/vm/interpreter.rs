@@ -7,7 +7,7 @@ use crate::{Engine, ValRaw};
 use core::marker;
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
-use pulley_interpreter::{FReg, Reg, XReg};
+use pulley_interpreter::{Reg, XReg};
 use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
 use wasmtime_unwinder::Unwind;
 
@@ -150,7 +150,7 @@ unsafe impl Unwind for UnwindPulley {
 /// amount of state and using function ABIs to auto-save registers. For example
 /// we could, in Cranelift, indicate that the Pulley-to-host function call
 /// clobbered all registers forcing the function prologue to save all
-/// xregs/fregs. This means though that every wasm->host call would save/restore
+/// xregs. This means though that every wasm->host call would save/restore
 /// all this state, even when a trap didn't happen. Alternatively this structure
 /// being large means that the state is only saved once per host->wasm call
 /// instead which is currently what's being optimized for.
@@ -161,7 +161,6 @@ unsafe impl Unwind for UnwindPulley {
 #[derive(Clone, Copy)]
 struct Setjmp {
     xregs: [u64; 16],
-    fregs: [f64; 16],
     fp: *mut u8,
     lr: *mut u8,
 }
@@ -294,9 +293,6 @@ impl InterpreterRef<'_> {
         if cfg!(debug_assertions) {
             for (i, reg) in callee_save_xregs() {
                 assert!(vm[reg].get_u64() == setjmp.xregs[i]);
-            }
-            for (i, reg) in callee_save_fregs() {
-                assert!(vm[reg].get_f64().to_bits() == setjmp.fregs[i].to_bits());
             }
             assert!(vm.fp() == setjmp.fp);
             assert!(vm.lr() == setjmp.lr);
@@ -595,16 +591,11 @@ fn trap(vm: &mut Vm, pc: NonNull<u8>, kind: Option<TrapKind>, setjmp: Setjmp) {
 
 fn setjmp(vm: &Vm) -> Setjmp {
     let mut xregs = [0; 16];
-    let mut fregs = [0.0; 16];
     for (i, reg) in callee_save_xregs() {
         xregs[i] = vm[reg].get_u64();
     }
-    for (i, reg) in callee_save_fregs() {
-        fregs[i] = vm[reg].get_f64();
-    }
     Setjmp {
         xregs,
-        fregs,
         fp: vm.fp(),
         lr: vm.lr(),
     }
@@ -613,18 +604,10 @@ fn setjmp(vm: &Vm) -> Setjmp {
 /// Perform a "longjmp" by restoring the "setjmp" context saved when this
 /// started.
 fn longjmp(vm: &mut Vm, setjmp: Setjmp) {
-    let Setjmp {
-        xregs,
-        fregs,
-        fp,
-        lr,
-    } = setjmp;
+    let Setjmp { xregs, fp, lr } = setjmp;
     unsafe {
         for (i, reg) in callee_save_xregs() {
             vm[reg].set_u64(xregs[i]);
-        }
-        for (i, reg) in callee_save_fregs() {
-            vm[reg].set_f64(fregs[i]);
         }
         vm.set_fp(fp);
         vm.set_lr(lr);
@@ -633,8 +616,4 @@ fn longjmp(vm: &mut Vm, setjmp: Setjmp) {
 
 fn callee_save_xregs() -> impl Iterator<Item = (usize, XReg)> {
     (0..16).map(|i| (i.into(), XReg::new(i + 16).unwrap()))
-}
-
-fn callee_save_fregs() -> impl Iterator<Item = (usize, FReg)> {
-    (0..16).map(|i| (i.into(), FReg::new(i + 16).unwrap()))
 }
