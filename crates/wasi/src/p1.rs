@@ -1468,6 +1468,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         if let types::Filetype::Directory = fs_filetype {
             fs_rights_base &= !types::Rights::FD_SEEK;
             fs_rights_base &= !types::Rights::FD_FILESTAT_SET_SIZE;
+            fs_rights_base &= !types::Rights::PATH_FILESTAT_SET_SIZE;
         }
         if !flags.contains(filesystem::DescriptorFlags::READ) {
             fs_rights_base &= !types::Rights::FD_READ;
@@ -1840,10 +1841,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     ) -> Result<(), types::Error> {
         let mut st = self.transact()?;
         let from = from.into();
+        let to = to.into();
+        if !st.descriptors.used.contains_key(&to) {
+            return Err(types::Errno::Badf.into());
+        }
         let btree_map::Entry::Occupied(desc) = st.descriptors.used.entry(from) else {
             return Err(types::Errno::Badf.into());
         };
-        let to = to.into();
         if from != to {
             let desc = desc.remove();
             st.descriptors.free.insert(from);
