@@ -12,21 +12,14 @@ block0:
 }
 
 ; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
 ; block0:
 ;   load_ext_name_got x0, TestCase(%func0)
-;   ldp fp, lr, [sp], #16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-; block1: ; offset 0x8
 ;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %func0 0
 ;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %func0 0
-;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %colocated_func_addr() -> i64 {
@@ -38,21 +31,14 @@ block0:
 }
 
 ; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
 ; block0:
 ;   load_ext_name_got x0, TestCase(%func0)
-;   ldp fp, lr, [sp], #16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-; block1: ; offset 0x8
 ;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %func0 0
 ;   ldr x0, [x0] ; reloc_external Aarch64AdrGotLo12Nc %func0 0
-;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %symbol_value() -> i64 {
