@@ -16,6 +16,8 @@ use core::mem::{self, MaybeUninit};
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
+use rustix::mm::{MapFlags, ProtFlags, mmap_anonymous, munmap};
+use rustix::param::page_size;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
     DefinedTagIndex, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
@@ -1093,6 +1095,13 @@ pub struct VMStoreContext {
     /// yield if running asynchronously.
     pub epoch_deadline: UnsafeCell<u64>,
 
+    /// The page of virtual memory used to signal that it's time to switch
+    /// tasks. Compiled guest code regularly attempts a read at this address.
+    /// When it is time to switch, the host uses mprotect() to forbid reads. The
+    /// fault soon caused by guest code then lands in the signal handler, which
+    /// effects a switch and resets the page permissions.
+    pub epoch_interrupt_page_ptr: Option<VmPtr<c_void>>, // ptr-sized
+
     /// Current stack limit of the wasm module.
     ///
     /// For more information see `crates/cranelift/src/lib.rs`.
@@ -1175,6 +1184,23 @@ impl Default for VMStoreContext {
         VMStoreContext {
             fuel_consumed: UnsafeCell::new(0),
             epoch_deadline: UnsafeCell::new(0),
+            // TODO: Allocate this only when epoch_interruption_via_mmu is on.
+            // Probably set it to None here and allocate it elsewhere.
+            epoch_interrupt_page_ptr: unsafe {
+                let page_ptr = mmap_anonymous(
+                    ptr::null_mut(), // Let the kernel pick location.
+                    page_size(),
+                    ProtFlags::READ,
+                    // Privacy doesn't matter, as we never write to the
+                    // interrupt page. However, private is the safer choice in
+                    // case someone starts doing so.
+                    MapFlags::PRIVATE,
+                )
+                .expect("an interrupt page should be allocable");
+                let non_null_page_ptr = NonNull::new(page_ptr)
+                    .expect("if mmap returns successfully, its result should not be null");
+                Some(non_null_page_ptr.into())
+            },
             stack_limit: UnsafeCell::new(usize::max_value()),
             gc_heap: VMMemoryDefinition {
                 base: NonNull::dangling().into(),
@@ -1188,6 +1214,17 @@ impl Default for VMStoreContext {
         }
     }
 }
+
+// TODO: Kill this and find somewhere else to munmap it, because VMStoreContext
+// is documented as being pod-type above.
+// impl Drop for VMStoreContext {
+//     fn drop(&mut self) {
+//         unsafe {
+//             munmap(self.epoch_interrupt_page_ptr, page_size())
+//                 .expect("should be able to unmap interrupt page");
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod test_vmstore_context {
