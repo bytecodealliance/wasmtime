@@ -20,7 +20,7 @@ pub use self::locked_async::{AsyncStdinStream, AsyncStdoutStream};
 #[doc(no_inline)]
 pub use tokio::io::{Stderr, Stdin, Stdout, stderr, stdin, stdout};
 
-pub(crate) struct WasiCli;
+pub struct WasiCli;
 
 impl HasData for WasiCli {
     type Data<'a> = WasiCliCtxView<'a>;
