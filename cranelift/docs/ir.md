@@ -644,7 +644,7 @@ slot on the stack for its entire live range. Since the live range of an SSA
 value can be quite large, it is sometimes beneficial to split the live range
 into smaller parts.
 
-A live range is split by creating new SSA values that are copies or the
+A live range is split by creating new SSA values that are copies of the
 original value or each other. The copies are created by inserting `copy`,
 `spill`, or `fill` instructions, depending on whether the values
 are assigned to registers or stack slots.
