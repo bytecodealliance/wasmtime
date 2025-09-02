@@ -96,5 +96,5 @@
 (rule (simplify
         (iadd ty (select ty c (iconst_u ty x) (iconst_u ty y)) (iconst_u ty z)))
         (select ty c
-            (iconst ty (imm64_masked ty (u64_add x z)))
-            (iconst ty (imm64_masked ty (u64_add y z)))))
+            (iconst ty (imm64_masked ty (u64_wrapping_add x z)))
+            (iconst ty (imm64_masked ty (u64_wrapping_add y z)))))

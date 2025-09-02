@@ -41,3 +41,14 @@ block0(v0: i8):
 ;     return v8
 ; }
 
+
+;; (iadd ty (select ty c x y) z) -> (select ty c (x + z) (y + z))
+function %simplify_iadd_select_const_i64_big_constants(i8) -> i64 fast {
+block0(v0: i8):
+    v1 = iconst.i64 0xa000_0000_0000_0000
+    v2 = iconst.i64 0xb000_0000_0000_0000
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 0xc000_0000_0000_0000
+    v5 = iadd v3, v4
+    return v5
+}
