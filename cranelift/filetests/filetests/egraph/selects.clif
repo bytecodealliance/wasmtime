@@ -52,3 +52,12 @@ block0(v0: i8):
     v5 = iadd v3, v4
     return v5
 }
+
+; function %simplify_iadd_select_const_i64_big_constants(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 0x6000_0000_0000_0000
+;     v7 = iconst.i64 0x7000_0000_0000_0000
+;     v8 = select v0, v6, v7  ; v6 = 0x6000_0000_0000_0000, v7 = 0x7000_0000_0000_0000
+;     return v8
+; }
+
