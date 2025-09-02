@@ -320,6 +320,37 @@
         (_ InstOutput (gen_trapif (IntCC.UnsignedLessThan) tmp x tc)))
     tmp))
 
+;;;; Rules for uadd_overflow ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; For i64, we can use the fact that if a + b < a, then overflow occurred
+(rule 0 (lower (has_type $I64 (uadd_overflow x y)))
+  (let ((sum XReg (rv_add x y))
+        (overflow XReg (rv_sltu sum x)))
+    (output_pair sum overflow)))
+
+;; For smaller types, we need to zero-extend first, then check overflow
+(rule 1 (lower (has_type (fits_in_32 ty) (uadd_overflow x y)))
+  (let ((tmp_x XReg (zext x))
+        (tmp_y XReg (zext y))
+        (sum XReg (rv_add tmp_x tmp_y))
+        (overflow XReg (rv_sltu sum tmp_x)))
+    (output_pair sum overflow)))
+
+;; For i128, we need to handle the high and low parts separately
+(rule 2 (lower (has_type $I128 (uadd_overflow x y)))
+  (let ((x_regs ValueRegs x)
+        (y_regs ValueRegs y)
+        (x_lo XReg (value_regs_get x_regs 0))
+        (x_hi XReg (value_regs_get x_regs 1))
+        (y_lo XReg (value_regs_get y_regs 0))
+        (y_hi XReg (value_regs_get y_regs 1))
+        (sum_lo XReg (rv_add x_lo y_lo))
+        (carry XReg (rv_sltu sum_lo x_lo))
+        (sum_hi XReg (rv_add x_hi y_hi))
+        (sum_hi_with_carry XReg (rv_add sum_hi carry))
+        (overflow XReg (rv_or (rv_sltu sum_hi_with_carry x_hi)
+                               (rv_and carry (rv_snez y_hi)))))
+    (output_pair (value_regs sum_lo sum_hi_with_carry) overflow)))
+
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
 
