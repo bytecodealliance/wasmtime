@@ -327,12 +327,11 @@
         (overflow XReg (rv_sltu sum x)))
     (output_pair sum overflow)))
 
-;; For smaller types, we need to zero-extend first, then check overflow
-(rule 1 (lower (has_type (fits_in_32 ty) (uadd_overflow x y)))
-  (let ((tmp_x XReg (zext x))
-        (tmp_y XReg (zext y))
-        (sum XReg (rv_add tmp_x tmp_y))
-        (overflow XReg (rv_sltu sum tmp_x)))
+;; i32 case (on RV64 use addw to detect 32-bit overflow correctly)
+(rule 1 (lower (has_type $I32 (uadd_overflow x y)))
+  (let ((x64 XReg (zext x))                
+        (sum XReg (rv_addw x y))           
+        (overflow XReg (rv_sltu sum x64))) 
     (output_pair sum overflow)))
 
 ;; For i128, we need to handle the high and low parts separately
