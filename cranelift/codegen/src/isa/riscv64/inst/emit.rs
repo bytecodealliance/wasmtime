@@ -2043,7 +2043,8 @@ impl Inst {
                 offset,
             } => {
                 // In the non PIC sequence we relocate the absolute address into
-                // a prealocatted space, load it into a register and jump over it.
+                // a preallocated space, load it into a register and jump over
+                // it.
                 //
                 // Emit the following code:
                 //   ld rd, label_data
