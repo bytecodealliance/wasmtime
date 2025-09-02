@@ -24,7 +24,7 @@ block0:
 ; Disassembled:
 ; push_frame
 ; xzero x2
-; call1 x2, 0x0    // target = 0x3
+; call1 x2, 0x2    // target = 0x5
 ; xone x0
 ; pop_frame
 ; ret
@@ -51,7 +51,7 @@ block0:
 ; Disassembled:
 ; push_frame
 ; xzero x2
-; call1 x2, 0x0    // target = 0x3
+; call1 x2, 0x2    // target = 0x5
 ; xone x0
 ; pop_frame
 ; ret
@@ -85,7 +85,7 @@ block0:
 ; xone x4
 ; xconst8 x5, 2
 ; xconst8 x6, 3
-; call4 x3, x4, x5, x6, 0x0    // target = 0xb
+; call4 x3, x4, x5, x6, 0x5    // target = 0x10
 ; pop_frame
 ; ret
 
@@ -112,7 +112,7 @@ block0:
 ;
 ; Disassembled:
 ; push_frame
-; call 0x0    // target = 0x1
+; call 0x1    // target = 0x2
 ; xadd64 x4, x0, x2
 ; xadd64 x3, x1, x3
 ; xadd64 x0, x4, x3
@@ -173,7 +173,7 @@ block0:
 ; xmov x11, x14
 ; xmov x12, x14
 ; xmov x13, x14
-; call4 x14, x14, x14, x14, 0x0    // target = 0x56
+; call4 x14, x14, x14, x14, 0x5    // target = 0x5b
 ; pop_frame_restore 64, 
 ; ret
 
@@ -247,7 +247,7 @@ block0:
 ; Disassembled:
 ; push_frame_save 112, x16, x17, x18, x19, x26, x27, x28, x29
 ; xmov x12, sp
-; call1 x12, 0x0    // target = 0x8
+; call1 x12, 0x2    // target = 0xa
 ; xload64le_o32 x27, sp, 0
 ; xload64le_o32 x19, sp, 8
 ; xload64le_o32 x29, sp, 16
@@ -367,7 +367,7 @@ block0:
 ; xmov x11, x14
 ; xmov x12, x14
 ; xmov x13, x14
-; call4 x14, x14, x14, x14, 0x0    // target = 0x64
+; call4 x14, x14, x14, x14, 0x5    // target = 0x69
 ; pop_frame_restore 80, 
 ; ret
 
@@ -400,7 +400,7 @@ block0(v0: i32):
 ; stack_alloc32 1000016
 ; xstore64le_o32 sp, 1000008, x20
 ; xmov x20, x0
-; call 0x0    // target = 0x10
+; call 0x1    // target = 0x11
 ; xmov x5, x20
 ; xadd32 x0, x5, x0
 ; xload64le_o32 x20, sp, 1000008

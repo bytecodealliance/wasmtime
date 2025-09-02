@@ -646,6 +646,10 @@ macro_rules! for_each_extended_op {
             /// assembled into the final object that Wasmtime will interpret.
             call_indirect_host = CallIndirectHost { id: u8 };
 
+            /// Adds `offset` to the pc of this instruction and stores it in
+            /// `dst`.
+            xpcadd = Xpcadd { dst: XReg, offset: PcRelOffset };
+
             /// Gets the special "fp" register and moves it into `dst`.
             xmov_fp = XmovFp { dst: XReg };
 

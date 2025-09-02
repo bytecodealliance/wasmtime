@@ -15,7 +15,7 @@ function %f0(i32) -> i32, f32, f64 {
 
     block2(v6: i32):
         v8 = iadd_imm.i32 v6, 1
-        v9 = f32const 0x0.0        
+        v9 = f32const 0x0.0
         return v8, v9, v2
 }
 
@@ -41,7 +41,7 @@ function %f0(i32) -> i32, f32, f64 {
 ; push_frame_save 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
 ; fconst64 f1, 4607182418800017408
 ; fstore64le_o32 sp, 0, f1
-; call 0x0    // target = 0x1a
+; call 0x1    // target = 0x1b
 ; xone x0
 ; fload64le_o32 f1, sp, 0
 ; pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
@@ -66,7 +66,7 @@ function %f2(i32, i32) -> i32, f32, f64 {
 
     block2(v7: i32):
         v8 = iadd_imm.i32 v7, 1
-        v9 = f32const 0x0.0        
+        v9 = f32const 0x0.0
         return v8, v9, v2
 }
 
@@ -117,7 +117,7 @@ function %f4(i32, i32) -> i32, f32, f64 {
 
     block2(v6: i32):
         v8 = iadd_imm.i32 v6, 1
-        v9 = f32const 0x0.0        
+        v9 = f32const 0x0.0
         return v8, v9, v2
 
     block3:
@@ -163,7 +163,7 @@ function %f4(i32, i32) -> i32, f32, f64 {
 ; fconst64 f1, 4607182418800017408
 ; xload64le_o32 x2, sp, 0
 ; fstore64le_o32 sp, 16, f1
-; call1 x2, 0x0    // target = 0x2f
+; call1 x2, 0x2    // target = 0x31
 ; jump 0x27    // target = 0x5c
 ; xmov x3, x0
 ; fload64le_o32 f1, sp, 16

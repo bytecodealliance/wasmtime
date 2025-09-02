@@ -289,103 +289,103 @@ impl Cond {
     ///
     /// Note that the offset encoded to jump by is filled in as 0 and it's
     /// assumed `MachBuffer` will come back and clean it up.
-    pub fn encode(&self, sink: &mut impl Extend<u8>) {
+    pub fn encode(&self, sink: &mut impl Extend<u8>, rel: i32) {
         match *self {
-            Cond::If32 { reg } => encode::br_if32(sink, reg, 0),
-            Cond::IfNot32 { reg } => encode::br_if_not32(sink, reg, 0),
-            Cond::IfXeq32 { src1, src2 } => encode::br_if_xeq32(sink, src1, src2, 0),
-            Cond::IfXneq32 { src1, src2 } => encode::br_if_xneq32(sink, src1, src2, 0),
-            Cond::IfXslt32 { src1, src2 } => encode::br_if_xslt32(sink, src1, src2, 0),
-            Cond::IfXslteq32 { src1, src2 } => encode::br_if_xslteq32(sink, src1, src2, 0),
-            Cond::IfXult32 { src1, src2 } => encode::br_if_xult32(sink, src1, src2, 0),
-            Cond::IfXulteq32 { src1, src2 } => encode::br_if_xulteq32(sink, src1, src2, 0),
-            Cond::IfXeq64 { src1, src2 } => encode::br_if_xeq64(sink, src1, src2, 0),
-            Cond::IfXneq64 { src1, src2 } => encode::br_if_xneq64(sink, src1, src2, 0),
-            Cond::IfXslt64 { src1, src2 } => encode::br_if_xslt64(sink, src1, src2, 0),
-            Cond::IfXslteq64 { src1, src2 } => encode::br_if_xslteq64(sink, src1, src2, 0),
-            Cond::IfXult64 { src1, src2 } => encode::br_if_xult64(sink, src1, src2, 0),
-            Cond::IfXulteq64 { src1, src2 } => encode::br_if_xulteq64(sink, src1, src2, 0),
+            Cond::If32 { reg } => encode::br_if32(sink, reg, rel),
+            Cond::IfNot32 { reg } => encode::br_if_not32(sink, reg, rel),
+            Cond::IfXeq32 { src1, src2 } => encode::br_if_xeq32(sink, src1, src2, rel),
+            Cond::IfXneq32 { src1, src2 } => encode::br_if_xneq32(sink, src1, src2, rel),
+            Cond::IfXslt32 { src1, src2 } => encode::br_if_xslt32(sink, src1, src2, rel),
+            Cond::IfXslteq32 { src1, src2 } => encode::br_if_xslteq32(sink, src1, src2, rel),
+            Cond::IfXult32 { src1, src2 } => encode::br_if_xult32(sink, src1, src2, rel),
+            Cond::IfXulteq32 { src1, src2 } => encode::br_if_xulteq32(sink, src1, src2, rel),
+            Cond::IfXeq64 { src1, src2 } => encode::br_if_xeq64(sink, src1, src2, rel),
+            Cond::IfXneq64 { src1, src2 } => encode::br_if_xneq64(sink, src1, src2, rel),
+            Cond::IfXslt64 { src1, src2 } => encode::br_if_xslt64(sink, src1, src2, rel),
+            Cond::IfXslteq64 { src1, src2 } => encode::br_if_xslteq64(sink, src1, src2, rel),
+            Cond::IfXult64 { src1, src2 } => encode::br_if_xult64(sink, src1, src2, rel),
+            Cond::IfXulteq64 { src1, src2 } => encode::br_if_xulteq64(sink, src1, src2, rel),
 
             Cond::IfXeq32I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xeq32_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xeq32_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xeq32_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xeq32_i32(sink, src1, src2, rel),
             },
             Cond::IfXneq32I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xneq32_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xneq32_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xneq32_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xneq32_i32(sink, src1, src2, rel),
             },
             Cond::IfXslt32I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xslt32_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xslt32_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xslt32_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xslt32_i32(sink, src1, src2, rel),
             },
             Cond::IfXslteq32I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xslteq32_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xslteq32_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xslteq32_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xslteq32_i32(sink, src1, src2, rel),
             },
             Cond::IfXsgt32I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xsgt32_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xsgt32_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xsgt32_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xsgt32_i32(sink, src1, src2, rel),
             },
             Cond::IfXsgteq32I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xsgteq32_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xsgteq32_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xsgteq32_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xsgteq32_i32(sink, src1, src2, rel),
             },
             Cond::IfXult32I32 { src1, src2 } => match u8::try_from(src2) {
-                Ok(src2) => encode::br_if_xult32_u8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xult32_u32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xult32_u8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xult32_u32(sink, src1, src2, rel),
             },
             Cond::IfXulteq32I32 { src1, src2 } => match u8::try_from(src2) {
-                Ok(src2) => encode::br_if_xulteq32_u8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xulteq32_u32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xulteq32_u8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xulteq32_u32(sink, src1, src2, rel),
             },
             Cond::IfXugt32I32 { src1, src2 } => match u8::try_from(src2) {
-                Ok(src2) => encode::br_if_xugt32_u8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xugt32_u32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xugt32_u8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xugt32_u32(sink, src1, src2, rel),
             },
             Cond::IfXugteq32I32 { src1, src2 } => match u8::try_from(src2) {
-                Ok(src2) => encode::br_if_xugteq32_u8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xugteq32_u32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xugteq32_u8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xugteq32_u32(sink, src1, src2, rel),
             },
 
             Cond::IfXeq64I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xeq64_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xeq64_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xeq64_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xeq64_i32(sink, src1, src2, rel),
             },
             Cond::IfXneq64I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xneq64_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xneq64_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xneq64_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xneq64_i32(sink, src1, src2, rel),
             },
             Cond::IfXslt64I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xslt64_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xslt64_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xslt64_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xslt64_i32(sink, src1, src2, rel),
             },
             Cond::IfXslteq64I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xslteq64_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xslteq64_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xslteq64_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xslteq64_i32(sink, src1, src2, rel),
             },
             Cond::IfXsgt64I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xsgt64_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xsgt64_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xsgt64_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xsgt64_i32(sink, src1, src2, rel),
             },
             Cond::IfXsgteq64I32 { src1, src2 } => match i8::try_from(src2) {
-                Ok(src2) => encode::br_if_xsgteq64_i8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xsgteq64_i32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xsgteq64_i8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xsgteq64_i32(sink, src1, src2, rel),
             },
             Cond::IfXult64I32 { src1, src2 } => match u8::try_from(src2) {
-                Ok(src2) => encode::br_if_xult64_u8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xult64_u32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xult64_u8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xult64_u32(sink, src1, src2, rel),
             },
             Cond::IfXulteq64I32 { src1, src2 } => match u8::try_from(src2) {
-                Ok(src2) => encode::br_if_xulteq64_u8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xulteq64_u32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xulteq64_u8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xulteq64_u32(sink, src1, src2, rel),
             },
             Cond::IfXugt64I32 { src1, src2 } => match u8::try_from(src2) {
-                Ok(src2) => encode::br_if_xugt64_u8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xugt64_u32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xugt64_u8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xugt64_u32(sink, src1, src2, rel),
             },
             Cond::IfXugteq64I32 { src1, src2 } => match u8::try_from(src2) {
-                Ok(src2) => encode::br_if_xugteq64_u8(sink, src1, src2, 0),
-                Err(_) => encode::br_if_xugteq64_u32(sink, src1, src2, 0),
+                Ok(src2) => encode::br_if_xugteq64_u8(sink, src1, src2, rel),
+                Err(_) => encode::br_if_xugteq64_u32(sink, src1, src2, rel),
             },
         }
     }

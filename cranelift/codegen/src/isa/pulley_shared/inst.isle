@@ -42,9 +42,8 @@
       (reg XReg))
 
     ;; Load an external symbol's address into a register.
-    (LoadExtName (dst WritableXReg)
-                 (name BoxExternalName)
-                 (offset i64))
+    (LoadExtNameNear (dst WritableXReg) (name BoxExternalName) (offset i64))
+    (LoadExtNameFar (dst WritableXReg) (name BoxExternalName) (offset i64))
 
     ;; A direct call to a known callee.
     (Call (info BoxCallInfo))
@@ -154,6 +153,7 @@
 (convert RawInst MInst raw_inst_to_inst)
 
 (type U6 (primitive U6))
+(type PcRelOffset (primitive PcRelOffset))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
@@ -688,6 +688,27 @@
 (decl gen_br_table (XReg MachLabel BoxVecMachLabel) Unit)
 (rule (gen_br_table idx default labels)
       (emit (MInst.BrTable idx default labels)))
+
+;; Helper for creating `MInst.LoadExtNameNear` instructions.
+(decl load_ext_name_near (BoxExternalName i64) XReg)
+(rule (load_ext_name_near name offset)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.LoadExtNameNear dst name offset))))
+        dst))
+
+;; Helper for creating `MInst.LoadExtNameFar` instructions.
+(decl load_ext_name_far (BoxExternalName i64) XReg)
+(rule (load_ext_name_far name offset)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.LoadExtNameFar dst name offset))))
+        dst))
+
+;; Helper for creating `MInst.LoadExtName*` instructions.
+(decl load_ext_name (BoxExternalName i64 RelocDistance) XReg)
+(rule 1 (load_ext_name name offset (RelocDistance.Near))
+  (load_ext_name_near name offset))
+(rule 0 (load_ext_name name offset (RelocDistance.Far))
+  (load_ext_name_far name offset))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
