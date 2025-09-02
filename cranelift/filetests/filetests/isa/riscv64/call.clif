@@ -17,7 +17,7 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   load_sym a3,%g+0
+;   load_ext_name_far a3,%g+0
 ;   callind a3
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -57,7 +57,7 @@ block0(v0: i32):
 ;   mv fp,sp
 ; block0:
 ;   slli a0,a0,32; srli a0,a0,32
-;   load_sym a5,%g+0
+;   load_ext_name_far a5,%g+0
 ;   callind a5
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -115,7 +115,7 @@ block0(v0: i32):
 ;   mv fp,sp
 ; block0:
 ;   slli a0,a0,32; srai a0,a0,32
-;   load_sym a5,%g+0
+;   load_ext_name_far a5,%g+0
 ;   callind a5
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -178,7 +178,7 @@ block0(v0: i8):
 ;   li a7,42
 ;   slli a4,a0,56; srai a4,a4,56
 ;   sd a4,0(sp)
-;   load_sym s1,%g+0
+;   load_ext_name_far s1,%g+0
 ;   mv a0,a7
 ;   mv a1,a7
 ;   mv a2,a7
@@ -294,24 +294,24 @@ block0:
 ;   fsd fs2,16(sp)
 ;   fsd fs4,8(sp)
 ; block0:
-;   load_sym a3,%g0+0
+;   load_ext_name_far a3,%g0+0
 ;   callind a3
 ;   fmv.d fs0,fa0
-;   load_sym a3,%g1+0
+;   load_ext_name_far a3,%g1+0
 ;   callind a3
 ;   fmv.d fs2,fa0
-;   load_sym a3,%g1+0
+;   load_ext_name_far a3,%g1+0
 ;   callind a3
 ;   fmv.d fs4,fa0
-;   load_sym a3,%g2+0
+;   load_ext_name_far a3,%g2+0
 ;   callind a3
-;   load_sym a4,%g3+0
+;   load_ext_name_far a4,%g3+0
 ;   fmv.d fa0,fs0
 ;   callind a4
-;   load_sym a5,%g4+0
+;   load_ext_name_far a5,%g4+0
 ;   fmv.d fa0,fs2
 ;   callind a5
-;   load_sym a0,%g4+0
+;   load_ext_name_far a0,%g4+0
 ;   fmv.d fa0,fs4
 ;   callind a0
 ;   fld fs0,24(sp)
@@ -424,7 +424,7 @@ block0(v0: i64):
 ;   mv fp,sp
 ; block0:
 ;   li a2,42
-;   load_sym a4,%f11+0
+;   load_ext_name_far a4,%f11+0
 ;   mv a1,a0
 ;   mv a0,a2
 ;   callind a4
@@ -487,7 +487,7 @@ block0(v0: i64):
 ;   mv fp,sp
 ; block0:
 ;   li a2,42
-;   load_sym a4,%f12+0
+;   load_ext_name_far a4,%f12+0
 ;   mv a1,a0
 ;   mv a0,a2
 ;   callind a4
@@ -550,7 +550,7 @@ block0(v0: i64):
 ;   mv fp,sp
 ; block0:
 ;   li a2,42
-;   load_sym a4,%f13+0
+;   load_ext_name_far a4,%f13+0
 ;   mv a1,a0
 ;   mv a0,a2
 ;   callind a4
@@ -630,7 +630,7 @@ block0(v0: i128, v1: i64):
 ;   sd s3,16(sp)
 ; block0:
 ;   sd a1,0(sp)
-;   load_sym s1,%f14+0
+;   load_ext_name_far s1,%f14+0
 ;   mv a5,a1
 ;   mv a6,a2
 ;   mv a7,a0
@@ -729,7 +729,7 @@ block0(v0: i128, v1: i64):
 ;   sd s3,16(sp)
 ; block0:
 ;   sd a1,0(sp)
-;   load_sym s1,%f15+0
+;   load_ext_name_far s1,%f15+0
 ;   mv a5,a1
 ;   mv a6,a2
 ;   mv a7,a0

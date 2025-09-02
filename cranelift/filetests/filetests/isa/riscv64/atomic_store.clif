@@ -29,17 +29,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   load_sym a2,%sym+0
+;   load_ext_name_near a2,%sym+0
 ;   atomic_store.i64 a0,(a2)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a2, 0
-;   ld a2, 0xc(a2)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %sym 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   auipc a2, 0 ; reloc_external RiscvPCRelHi20 %sym 0
+;   mv a2, a2 ; reloc_external RiscvPCRelLo12I func+0 0
 ;   fence rw, w
 ;   sd a0, 0(a2) ; trap: heap_oob
 ;   ret
@@ -93,17 +90,14 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   load_sym a2,%sym+0
+;   load_ext_name_near a2,%sym+0
 ;   atomic_store.i32 a0,(a2)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a2, 0
-;   ld a2, 0xc(a2)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %sym 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   auipc a2, 0 ; reloc_external RiscvPCRelHi20 %sym 0
+;   mv a2, a2 ; reloc_external RiscvPCRelLo12I func+0 0
 ;   fence rw, w
 ;   sw a0, 0(a2) ; trap: heap_oob
 ;   ret
