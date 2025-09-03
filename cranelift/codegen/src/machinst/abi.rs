@@ -601,7 +601,12 @@ pub trait ABIMachineSpec {
 
     /// Get the exception payload registers, if any, for a calling
     /// convention.
-    fn exception_payload_regs(_call_conv: isa::CallConv) -> &'static [Reg] {
+    ///
+    /// Note that the argument here is the calling convention of the *callee*.
+    /// This might differ from the caller but the exceptional payloads that are
+    /// available are defined by the callee, not the caller.
+    fn exception_payload_regs(callee_conv: isa::CallConv) -> &'static [Reg] {
+        let _ = callee_conv;
         &[]
     }
 }
@@ -2021,6 +2026,15 @@ impl<M: ABIMachineSpec> Callee<M> {
         assert!(outputs.next().is_none());
 
         if let Some(try_call_payloads) = try_call_payloads {
+            // Let `M` say where the payload values are going to end up and then
+            // double-check it's the same size as the calling convention's
+            // reported number of exception types.
+            let pregs = M::exception_payload_regs(callee_conv);
+            assert_eq!(
+                callee_conv.exception_payload_types(M::word_type()).len(),
+                pregs.len()
+            );
+
             // We need to update `defs` to contain the exception
             // payload regs as well. We have two sources of info that
             // we join:
@@ -2040,7 +2054,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             // handle the two cases below for each payload register:
             // overlaps a return value (and we alias to it) or not
             // (and we add a def).
-            let pregs = M::exception_payload_regs(callee_conv);
             for (i, &preg) in pregs.iter().enumerate() {
                 let vreg = try_call_payloads[i];
                 if let Some(existing) = defs.iter().find(|def| match def.location {

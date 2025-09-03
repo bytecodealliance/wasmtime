@@ -437,6 +437,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     try_call_rets.insert(inst, rets);
 
                     let mut payloads = smallvec![];
+                    // Note that this is intentionally using the calling
+                    // convention of the callee to determine what payload types
+                    // are available. The callee defines that, not the calling
+                    // convention of the caller.
                     for &ty in sig
                         .call_conv
                         .exception_payload_types(I::ABIMachineSpec::word_type())
