@@ -1269,6 +1269,15 @@ impl Config {
         self
     }
 
+    /// Configures whether extra debug checks are inserted into
+    /// Wasmtime-generated code by Cranelift.
+    ///
+    /// The default value for this is `false`
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub fn cranelift_wasmtime_debug_checks(&mut self, enable: bool) -> &mut Self {
+        unsafe { self.cranelift_flag_set("wasmtime_debug_checks", &enable.to_string()) }
+    }
+
     /// Configures the Cranelift code generator optimization level.
     ///
     /// When the Cranelift code generator is used you can configure the

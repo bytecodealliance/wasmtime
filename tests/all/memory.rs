@@ -109,6 +109,7 @@ fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
                 config.memory_guard_size(guard_size);
                 config.guard_before_linear_memory(guard_before_linear_memory);
                 config.cranelift_debug_verifier(true);
+                config.cranelift_wasmtime_debug_checks(true);
                 engines.push(Engine::new(&config)?);
             }
         }

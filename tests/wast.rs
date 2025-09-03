@@ -148,6 +148,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
 
     if is_cranelift {
         cfg.cranelift_debug_verifier(true);
+        cfg.cranelift_wasmtime_debug_checks(true);
     }
 
     // By default we'll allocate huge chunks (6gb) of the address space for each
