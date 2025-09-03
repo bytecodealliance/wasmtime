@@ -9,6 +9,8 @@ use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
 use pulley_interpreter::{Reg, XReg};
 use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
+#[cfg(feature = "gc")]
+use wasmtime_unwinder::Handler;
 use wasmtime_unwinder::Unwind;
 
 /// Interpreter state stored within a `Store<T>`.
@@ -526,9 +528,7 @@ impl InterpreterRef<'_> {
     #[cfg(feature = "gc")]
     pub(crate) unsafe fn resume_to_exception_handler(
         mut self,
-        pc: usize,
-        sp: usize,
-        fp: usize,
+        handler: &Handler,
         payload1: usize,
         payload2: usize,
     ) {
@@ -536,12 +536,12 @@ impl InterpreterRef<'_> {
             let vm = self.vm();
             vm[XReg::x0].set_u64(payload1 as u64);
             vm[XReg::x1].set_u64(payload2 as u64);
-            vm[XReg::sp].set_ptr(core::ptr::with_exposed_provenance_mut::<u8>(sp));
-            vm.set_fp(core::ptr::with_exposed_provenance_mut(fp));
+            vm[XReg::sp].set_ptr(core::ptr::with_exposed_provenance_mut::<u8>(handler.sp));
+            vm.set_fp(core::ptr::with_exposed_provenance_mut(handler.fp));
         }
         let state = self.vm_state();
         debug_assert!(state.raise.is_none());
-        self.vm_state().raise = Some(Raise::ResumeToExceptionHandler(pc));
+        self.vm_state().raise = Some(Raise::ResumeToExceptionHandler(handler.pc));
     }
 }
 
