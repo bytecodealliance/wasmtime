@@ -7,19 +7,24 @@ use crate::p3::bindings::filesystem::types::{
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::p3::{
     DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, MAX_BUFFER_CAPACITY,
-    StreamEmptyProducer, write_buffered_bytes,
+    StreamEmptyProducer,
 };
 use crate::{DirPerms, FilePerms};
 use anyhow::{Context as _, bail};
 use bytes::BytesMut;
 use core::mem;
+use futures::FutureExt;
 use std::io::Cursor;
+use std::marker::PhantomData;
+use std::pin::Pin;
+use std::task::{self, Context, Poll};
 use system_interface::fs::FileIoExt as _;
 use tokio::sync::oneshot;
 use wasmtime::component::{
     Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
-    StreamProducer, StreamReader, StreamState,
+    StreamProducer, StreamReader, StreamResult,
 };
+use wasmtime::{AsContextMut as _, StoreContextMut};
 
 fn get_descriptor<'a>(
     table: &'a ResourceTable,
@@ -116,13 +121,7 @@ struct ReadStreamProducer {
     file: File,
     offset: u64,
     result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
-    buffer: Cursor<BytesMut>,
-}
-
-impl Drop for ReadStreamProducer {
-    fn drop(&mut self) {
-        self.close(Ok(()))
-    }
+    future: Option<Pin<Box<dyn Future<Output = Result<Option<BytesMut>, ErrorCode>> + Send>>>,
 }
 
 impl ReadStreamProducer {
@@ -131,77 +130,98 @@ impl ReadStreamProducer {
             _ = tx.send(res);
         }
     }
-
-    async fn read(&mut self, n: usize) -> StreamState {
-        let mut buf = mem::take(&mut self.buffer).into_inner();
-        buf.resize(n, 0);
-        let offset = self.offset;
-        let res = 'result: {
-            match self
-                .file
-                .run_blocking(move |file| {
-                    let n = file.read_at(&mut buf, offset)?;
-                    buf.truncate(n);
-                    std::io::Result::Ok(buf)
-                })
-                .await
-            {
-                Ok(buf) if buf.is_empty() => break 'result Ok(()),
-                Ok(buf) => {
-                    let Ok(n) = buf.len().try_into() else {
-                        break 'result Err(ErrorCode::Overflow);
-                    };
-                    let Some(n) = offset.checked_add(n) else {
-                        break 'result Err(ErrorCode::Overflow);
-                    };
-                    self.offset = n;
-                    self.buffer = Cursor::new(buf);
-                    return StreamState::Open;
-                }
-                Err(err) => break 'result Err(err.into()),
-            }
-        };
-        self.close(res);
-        StreamState::Closed
-    }
 }
 
-impl<D> StreamProducer<D, u8> for ReadStreamProducer {
-    async fn produce(
-        &mut self,
-        store: &Accessor<D>,
-        dst: &mut Destination<u8>,
-    ) -> wasmtime::Result<StreamState> {
-        if !self.buffer.get_ref().is_empty() {
-            write_buffered_bytes(store, &mut self.buffer, dst).await?;
-            return Ok(StreamState::Open);
-        }
-        let n = store
-            .with(|store| dst.remaining(store))
-            .unwrap_or(DEFAULT_BUFFER_CAPACITY)
-            .min(MAX_BUFFER_CAPACITY);
-        match self.read(n).await {
-            StreamState::Open => {
-                write_buffered_bytes(store, &mut self.buffer, dst).await?;
-                Ok(StreamState::Open)
-            }
-            StreamState::Closed => Ok(StreamState::Closed),
-        }
-    }
+impl<D> StreamProducer<D> for ReadStreamProducer {
+    type Item = u8;
+    type Buffer = Cursor<BytesMut>;
 
-    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
-        if !self.buffer.get_ref().is_empty() {
-            return Ok(StreamState::Open);
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<'a, D>,
+        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let me = self.get_mut();
+        if me.future.is_none() {
+            if finish {
+                return Poll::Ready(Ok(StreamResult::Cancelled));
+            }
+
+            let capacity = destination
+                .remaining(store)
+                .unwrap_or(DEFAULT_BUFFER_CAPACITY)
+                // In the case of small or zero-length reads, we read more than
+                // was asked for; this will save the runtime from having to
+                // block or call `poll_produce` on subsequent reads.  See the
+                // documentation for `StreamProducer::poll_produce` for details.
+                .max(DEFAULT_BUFFER_CAPACITY)
+                .min(MAX_BUFFER_CAPACITY);
+            let mut buffer = destination.take_buffer().into_inner();
+            buffer.resize(capacity, 0);
+            let offset = me.offset;
+            let file = me.file.clone();
+            me.future = Some(
+                async move {
+                    match file
+                        .run_blocking(move |file| {
+                            let n = file.read_at(&mut buffer, offset)?;
+                            buffer.truncate(n);
+                            std::io::Result::Ok(buffer)
+                        })
+                        .await
+                    {
+                        Ok(buffer) if buffer.is_empty() => Ok(None),
+                        Ok(buffer) => {
+                            let n_u64 = buffer.len().try_into().or(Err(ErrorCode::Overflow))?;
+                            offset.checked_add(n_u64).ok_or(ErrorCode::Overflow)?;
+                            Ok(Some(buffer))
+                        }
+                        Err(err) => Err(err.into()),
+                    }
+                }
+                .boxed(),
+            );
         }
-        Ok(self.read(DEFAULT_BUFFER_CAPACITY).await)
+
+        let result = match task::ready!(me.future.as_mut().unwrap().as_mut().poll(cx)) {
+            Ok(Some(buffer)) => {
+                // We've already checked for overflow inside the future above,
+                // so no need to do it again here:
+                me.offset += u64::try_from(buffer.len()).unwrap();
+                destination.set_buffer(Cursor::new(buffer));
+                StreamResult::Completed
+            }
+            Ok(None) => {
+                me.close(Ok(()));
+                StreamResult::Dropped
+            }
+            Err(error) => {
+                me.close(Err(error));
+                StreamResult::Dropped
+            }
+        };
+
+        me.future = None;
+
+        Poll::Ready(Ok(result))
     }
 }
 
 struct DirectoryStreamProducer {
     dir: Dir,
     entries: Option<cap_std::fs::ReadDir>,
-    buffered: Option<DirectoryEntry>,
     result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+    future: Option<
+        Pin<
+            Box<
+                dyn Future<
+                        Output = Result<Option<(DirectoryEntry, cap_std::fs::ReadDir)>, ErrorCode>,
+                    > + Send,
+            >,
+        >,
+    >,
 }
 
 impl DirectoryStreamProducer {
@@ -210,106 +230,113 @@ impl DirectoryStreamProducer {
             _ = tx.send(res);
         }
     }
-
-    async fn next(&mut self) -> Option<DirectoryEntry> {
-        let res = 'result: loop {
-            let mut entries = if let Some(entries) = self.entries.take() {
-                entries
-            } else {
-                // FIXME: Handle cancellation
-                match self.dir.run_blocking(cap_std::fs::Dir::entries).await {
-                    Ok(entries) => entries,
-                    Err(err) => break 'result Err(err.into()),
-                }
-            };
-            // FIXME: Handle cancellation
-            let Some((res, tail)) = self
-                .dir
-                .run_blocking(move |_| entries.next().map(|entry| (entry, entries)))
-                .await
-            else {
-                break 'result Ok(());
-            };
-            self.entries = Some(tail);
-            let entry = match res {
-                Ok(entry) => entry,
-                Err(err) => {
-                    // On windows, filter out files like `C:\DumpStack.log.tmp` which we
-                    // can't get full metadata for.
-                    #[cfg(windows)]
-                    {
-                        use windows_sys::Win32::Foundation::{
-                            ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION,
-                        };
-                        if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
-                            || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
-                        {
-                            continue;
-                        }
-                    }
-                    break 'result Err(err.into());
-                }
-            };
-            let meta = match entry.metadata() {
-                Ok(meta) => meta,
-                Err(err) => break 'result Err(err.into()),
-            };
-            let Ok(name) = entry.file_name().into_string() else {
-                break 'result Err(ErrorCode::IllegalByteSequence);
-            };
-            // FIXME: Handle cancellation
-            return Some(DirectoryEntry {
-                type_: meta.file_type().into(),
-                name,
-            });
-        };
-        self.close(res);
-        None
-    }
 }
 
-impl<D> StreamProducer<D, DirectoryEntry> for DirectoryStreamProducer {
-    async fn produce(
-        &mut self,
-        store: &Accessor<D>,
-        dst: &mut Destination<DirectoryEntry>,
-    ) -> wasmtime::Result<StreamState> {
-        let entry = if let Some(entry) = self.buffered.take() {
-            entry
-        } else if let Some(entry) = self.next().await {
-            entry
-        } else {
-            return Ok(StreamState::Closed);
-        };
-        // FIXME: Handle cancellation
-        if let Some(_) = dst.write(store, Some(entry)).await? {
-            bail!("failed to write entry")
-        }
-        return Ok(StreamState::Open);
-    }
+impl<D> StreamProducer<D> for DirectoryStreamProducer {
+    type Item = DirectoryEntry;
+    type Buffer = Option<DirectoryEntry>;
 
-    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
-        if self.buffered.is_none() {
-            let Some(entry) = self.next().await else {
-                return Ok(StreamState::Closed);
-            };
-            self.buffered = Some(entry);
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<'a, D>,
+        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let me = self.get_mut();
+        if me.future.is_none() {
+            if finish {
+                return Poll::Ready(Ok(StreamResult::Cancelled));
+            }
+
+            let dir = me.dir.clone();
+            let mut entries = me.entries.take();
+            me.future = Some(
+                async move {
+                    loop {
+                        let mut entries = if let Some(entries) = entries.take() {
+                            entries
+                        } else {
+                            // FIXME: Handle cancellation
+                            match dir.run_blocking(cap_std::fs::Dir::entries).await {
+                                Ok(entries) => entries,
+                                Err(err) => break Err(err.into()),
+                            }
+                        };
+                        // FIXME: Handle cancellation
+                        let Some((res, tail)) = dir
+                            .run_blocking(move |_| entries.next().map(|entry| (entry, entries)))
+                            .await
+                        else {
+                            break Ok(None);
+                        };
+                        let entry = match res {
+                            Ok(entry) => entry,
+                            Err(err) => {
+                                // On windows, filter out files like `C:\DumpStack.log.tmp` which we
+                                // can't get full metadata for.
+                                #[cfg(windows)]
+                                {
+                                    use windows_sys::Win32::Foundation::{
+                                        ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION,
+                                    };
+                                    if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
+                                        || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
+                                    {
+                                        continue;
+                                    }
+                                }
+                                break Err(err.into());
+                            }
+                        };
+                        let meta = match entry.metadata() {
+                            Ok(meta) => meta,
+                            Err(err) => break Err(err.into()),
+                        };
+                        let Ok(name) = entry.file_name().into_string() else {
+                            break Err(ErrorCode::IllegalByteSequence);
+                        };
+                        break Ok(Some((
+                            DirectoryEntry {
+                                type_: meta.file_type().into(),
+                                name,
+                            },
+                            tail,
+                        )));
+                    }
+                }
+                .boxed(),
+            );
         }
-        Ok(StreamState::Open)
+
+        let result = match task::ready!(me.future.as_mut().unwrap().as_mut().poll(cx)) {
+            Ok(Some((entry, entries))) => {
+                destination.set_buffer(Some(entry));
+                me.entries = Some(entries);
+                StreamResult::Completed
+            }
+            Ok(None) => {
+                me.close(Ok(()));
+                StreamResult::Dropped
+            }
+            Err(error) => {
+                me.close(Err(error));
+                StreamResult::Dropped
+            }
+        };
+
+        me.future = None;
+
+        Poll::Ready(Ok(result))
     }
 }
 
 struct WriteStreamConsumer {
     file: File,
-    offset: u64,
-    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+    offset: Option<u64>,
     buffer: BytesMut,
-}
-
-impl Drop for WriteStreamConsumer {
-    fn drop(&mut self) {
-        self.close(Ok(()))
-    }
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+    future: Option<Pin<Box<dyn Future<Output = Result<(BytesMut, usize), ErrorCode>> + Send>>>,
 }
 
 impl WriteStreamConsumer {
@@ -318,128 +345,75 @@ impl WriteStreamConsumer {
             _ = tx.send(res);
         }
     }
+}
 
-    async fn flush(&mut self) -> StreamState {
-        // FIXME: `mem::take` rather than `clone` when we can ensure cancellation-safety
-        //let buf = mem::take(&mut self.buffer);
-        let buf = self.buffer.clone();
-        let mut offset = self.offset;
-        match self
-            .file
-            .spawn_blocking(move |file| {
-                let mut pos = 0;
-                while pos != buf.len() {
-                    let n = file.write_at(&buf[pos..], offset)?;
-                    pos = pos.saturating_add(n);
-                    let n = n.try_into().or(Err(ErrorCode::Overflow))?;
-                    offset = offset.checked_add(n).ok_or(ErrorCode::Overflow)?;
+impl<D> StreamConsumer<D> for WriteStreamConsumer {
+    type Item = u8;
+
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut store: StoreContextMut<D>,
+        source: &mut Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let me = self.get_mut();
+        if me.future.is_none() {
+            if finish {
+                return Poll::Ready(Ok(StreamResult::Cancelled));
+            }
+
+            let offset = me.offset;
+            let file = me.file.clone();
+            let mut buffer = mem::take(&mut me.buffer);
+            buffer.clear();
+            buffer.extend_from_slice(source.as_direct_source(store.as_context_mut()).remaining());
+
+            me.future = Some(
+                async move {
+                    file.spawn_blocking(move |file| {
+                        let n = if let Some(offset) = offset {
+                            let n = file.write_at(&buffer, offset)?;
+                            let n_u64 = n.try_into().or(Err(ErrorCode::Overflow))?;
+                            offset.checked_add(n_u64).ok_or(ErrorCode::Overflow)?;
+                            n
+                        } else {
+                            file.append(&buffer)?
+                        };
+                        Ok((buffer, n))
+                    })
+                    .await
                 }
-                Ok((buf, offset))
-            })
-            .await
-        {
-            Ok((buf, offset)) => {
-                self.buffer = buf;
-                self.buffer.clear();
-                self.offset = offset;
-                StreamState::Open
-            }
-            Err(err) => {
-                self.close(Err(err));
-                StreamState::Closed
-            }
+                .boxed(),
+            );
         }
-    }
-}
 
-impl<D> StreamConsumer<D, u8> for WriteStreamConsumer {
-    async fn consume(
-        &mut self,
-        store: &Accessor<D>,
-        src: &mut Source<'_, u8>,
-    ) -> wasmtime::Result<StreamState> {
-        store.with(|mut store| {
-            let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
-            self.buffer.reserve(n);
-            src.read(&mut store, &mut self.buffer)
-        })?;
-        Ok(self.flush().await)
-    }
-
-    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
-        if !self.buffer.is_empty() {
-            return Ok(self.flush().await);
-        }
-        Ok(StreamState::Open)
-    }
-}
-
-struct AppendStreamConsumer {
-    file: File,
-    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
-    buffer: BytesMut,
-}
-
-impl Drop for AppendStreamConsumer {
-    fn drop(&mut self) {
-        self.close(Ok(()))
-    }
-}
-
-impl AppendStreamConsumer {
-    fn close(&mut self, res: Result<(), ErrorCode>) {
-        if let Some(tx) = self.result.take() {
-            _ = tx.send(res);
-        }
-    }
-
-    async fn flush(&mut self) -> StreamState {
-        let buf = mem::take(&mut self.buffer);
-        // FIXME: Handle cancellation
-        match self
-            .file
-            .spawn_blocking(move |file| {
-                let mut pos = 0;
-                while pos != buf.len() {
-                    let n = file.append(&buf[pos..])?;
-                    pos = pos.saturating_add(n);
+        let result = match task::ready!(me.future.as_mut().unwrap().as_mut().poll(cx)) {
+            Ok((mut buffer, count)) => {
+                source.as_direct_source(store).mark_read(count);
+                let result = if count < buffer.len() && finish {
+                    StreamResult::Cancelled
+                } else {
+                    StreamResult::Completed
+                };
+                if let Some(offset) = me.offset.as_mut() {
+                    // We've already checked for overflow inside the future
+                    // above, so no need to do it again here:
+                    *offset += u64::try_from(count).unwrap();
                 }
-                Ok(buf)
-            })
-            .await
-        {
-            Ok(buf) => {
-                self.buffer = buf;
-                self.buffer.clear();
-                StreamState::Open
+                buffer.clear();
+                me.buffer = buffer;
+                result
             }
-            Err(err) => {
-                self.close(Err(err));
-                StreamState::Closed
+            Err(error) => {
+                me.close(Err(error));
+                StreamResult::Dropped
             }
-        }
-    }
-}
+        };
 
-impl<D> StreamConsumer<D, u8> for AppendStreamConsumer {
-    async fn consume(
-        &mut self,
-        store: &Accessor<D>,
-        src: &mut Source<'_, u8>,
-    ) -> wasmtime::Result<StreamState> {
-        store.with(|mut store| {
-            let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
-            self.buffer.reserve(n);
-            src.read(&mut store, &mut self.buffer)
-        })?;
-        Ok(self.flush().await)
-    }
+        me.future = None;
 
-    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
-        if !self.buffer.is_empty() {
-            return Ok(self.flush().await);
-        }
-        Ok(StreamState::Open)
+        Poll::Ready(Ok(result))
     }
 }
 
@@ -460,7 +434,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let file = get_file(store.get().table, &fd)?;
             if !file.perms.contains(FilePerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer),
+                    StreamReader::new(instance, &mut store, StreamEmptyProducer(PhantomData)),
                     FutureReader::new(
                         instance,
                         &mut store,
@@ -479,7 +453,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                         file,
                         offset,
                         result: Some(result_tx),
-                        buffer: Cursor::default(),
+                        future: None,
                     },
                 ),
                 FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
@@ -504,9 +478,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                 store,
                 WriteStreamConsumer {
                     file,
-                    offset,
-                    result: Some(result_tx),
+                    offset: Some(offset),
                     buffer: BytesMut::default(),
+                    result: Some(result_tx),
+                    future: None,
                 },
             );
             FilesystemResult::Ok(())
@@ -532,10 +507,12 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let file = file.clone();
             data.pipe(
                 store,
-                AppendStreamConsumer {
+                WriteStreamConsumer {
                     file,
-                    result: Some(result_tx),
+                    offset: None,
                     buffer: BytesMut::default(),
+                    result: Some(result_tx),
+                    future: None,
                 },
             );
             FilesystemResult::Ok(())
@@ -621,7 +598,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let dir = get_dir(store.get().table, &fd)?;
             if !dir.perms.contains(DirPerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer),
+                    StreamReader::new(instance, &mut store, StreamEmptyProducer(PhantomData)),
                     FutureReader::new(
                         instance,
                         &mut store,
@@ -639,8 +616,8 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     DirectoryStreamProducer {
                         dir,
                         entries: None,
-                        buffered: None,
                         result: Some(result_tx),
+                        future: None,
                     },
                 ),
                 FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),

@@ -22,11 +22,12 @@ use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use std::io::Cursor;
+use std::marker::PhantomData;
 use tokio::sync::oneshot;
-use wasmtime::AsContextMut as _;
 use wasmtime::component::{
-    Accessor, Destination, FutureProducer, Linker, StreamProducer, StreamResult, StreamState,
+    Accessor, Destination, FutureProducer, Linker, StreamProducer, StreamResult,
 };
+use wasmtime::{AsContextMut as _, StoreContextMut};
 
 // Default buffer capacity to use for reads of byte-sized values.
 const DEFAULT_BUFFER_CAPACITY: usize = 8192;
@@ -34,9 +35,9 @@ const DEFAULT_BUFFER_CAPACITY: usize = 8192;
 // Maximum buffer capacity to use for reads of byte-sized values.
 const MAX_BUFFER_CAPACITY: usize = 4 * DEFAULT_BUFFER_CAPACITY;
 
-struct StreamEmptyProducer;
+struct StreamEmptyProducer<T>(PhantomData<fn() -> T>);
 
-impl<T, D> StreamProducer<D> for StreamEmptyProducer {
+impl<T: Send + Sync + 'static, D> StreamProducer<D> for StreamEmptyProducer<T> {
     type Item = T;
     type Buffer = Option<Self::Item>;
 
@@ -47,7 +48,7 @@ impl<T, D> StreamProducer<D> for StreamEmptyProducer {
         _: &'a mut Destination<'a, Self::Item, Self::Buffer>,
         _: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        Ok(StreamState::Closed)
+        Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
 
@@ -75,37 +76,6 @@ where
     async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<T> {
         self.0.await.context("oneshot sender dropped")
     }
-}
-
-async fn write_buffered_bytes<T>(
-    store: &Accessor<T>,
-    src: &mut Cursor<BytesMut>,
-    dst: &mut Destination<u8>,
-) -> wasmtime::Result<()> {
-    if !store.with(|mut store| {
-        dst.as_guest_destination(store.as_context_mut())
-            .map(|mut dst| {
-                let start = src.position() as _;
-                let buffered = src.get_ref().len().saturating_sub(start);
-                let n = dst.remaining().len().min(buffered);
-                debug_assert!(n > 0);
-                let end = start.saturating_add(n);
-                dst.remaining()[..n].copy_from_slice(&src.get_ref()[start..end]);
-                dst.mark_written(n);
-                src.set_position(end as _);
-            })
-            .is_some()
-    }) {
-        // FIXME: `mem::take` rather than `clone` when we can ensure cancellation-safety
-        //let buf = mem::take(src);
-        let buf = src.clone();
-        *src = dst.write(store, buf).await?;
-    }
-    if src.position() as usize == src.get_ref().len() {
-        src.get_mut().clear();
-        src.set_position(0);
-    }
-    Ok(())
 }
 
 /// Add all WASI interfaces from this module into the `linker` provided.

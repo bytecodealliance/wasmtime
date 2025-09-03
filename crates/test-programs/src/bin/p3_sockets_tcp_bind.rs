@@ -4,7 +4,6 @@ use test_programs::p3::wasi::sockets::types::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, TcpSocket,
 };
 use test_programs::p3::wit_stream;
-use wit_bindgen::yield_blocking;
 
 struct Component;
 

@@ -222,17 +222,29 @@ pub struct Destination<'a, T, B> {
 }
 
 impl<'a, T, B> Destination<'a, T, B> {
-    /// Return a unique reference to the buffer in which items may be stored.
+    /// Take the buffer out of `self`, leaving a default-initialized one in its
+    /// place.
     ///
-    /// Any items added to this buffer will be delivered to the reader after the
-    /// `StreamProducer::poll_produce` call to which this `Destination` was
-    /// passed returns.
+    /// This can be useful for reusing the previously-stored buffer's capacity
+    /// instead of allocating a fresh one.
+    pub fn take_buffer(&mut self) -> B
+    where
+        B: Default,
+    {
+        mem::take(self.buffer)
+    }
+
+    /// Store the specified buffer in `self`.
     ///
-    /// If items are added to this buffer _and_ written via a `DirectDestination`
+    /// Any items contained in the buffer will be delivered to the reader after
+    /// the `StreamProducer::poll_produce` call to which this `Destination` was
+    /// passed returns (unless overwritten by another call to `set_buffer`).
+    ///
+    /// If items are stored via a buffer _and_ written via a `DirectDestination`
     /// view of `self`, then the items in the buffer will be delivered after the
     /// ones written using `DirectDestination`.
-    pub fn buffer(&'a mut self) -> &'a mut B {
-        self.buffer
+    pub fn set_buffer(&mut self, buffer: B) {
+        *self.buffer = buffer;
     }
 
     /// Return the remaining number of items the current read has capacity to
@@ -373,6 +385,7 @@ pub enum StreamResult {
     /// _not_ able to produce or consume more items, respectively.
     Dropped,
 }
+
 /// Represents the host-owned write end of a stream.
 pub trait StreamProducer<D>: Send + 'static {
     /// The payload type of this stream.
@@ -790,7 +803,7 @@ impl<T> FutureReader<T> {
                         }
                     }
                     Poll::Ready(value) => {
-                        *destination.buffer() = Some(value?);
+                        destination.set_buffer(Some(value?));
 
                         // Here we return `StreamResult::Completed` even though
                         // we've produced the last item we'll ever produce.

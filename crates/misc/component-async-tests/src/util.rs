@@ -69,7 +69,7 @@ impl<D, T: Send + Sync + Lower + 'static, S: Stream<Item = T> + Send + 'static> 
                 }
             }
             Poll::Ready(Some(item)) => {
-                *destination.buffer() = Some(item);
+                destination.set_buffer(Some(item));
                 Poll::Ready(Ok(StreamResult::Completed))
             }
             Poll::Ready(None) => Poll::Ready(Ok(StreamResult::Dropped)),
