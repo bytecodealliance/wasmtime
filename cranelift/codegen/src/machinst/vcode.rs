@@ -678,8 +678,7 @@ impl<I: VCodeInst> VCode<I> {
         regalloc: &regalloc2::Output,
     ) -> (Vec<Writable<RealReg>>, FunctionCalls) {
         let mut clobbered = PRegSet::default();
-        let mut has_regular_calls = false;
-        let mut has_tail_calls = false;
+        let mut function_calls = FunctionCalls::None;
 
         // All moves are included in clobbers.
         for (_, Edit::Move { to, .. }) in &regalloc.edits {
@@ -699,11 +698,7 @@ impl<I: VCodeInst> VCode<I> {
                 }
             }
 
-            match self.insts[i].call_type() {
-                CallType::Regular => has_regular_calls = true,
-                CallType::TailCall => has_tail_calls = true,
-                CallType::None => {}
-            }
+            function_calls.update(self.insts[i].call_type());
 
             // Also add explicitly-clobbered registers.
             //
@@ -735,12 +730,6 @@ impl<I: VCodeInst> VCode<I> {
             .into_iter()
             .map(|preg| Writable::from_reg(RealReg::from(preg)))
             .collect();
-
-        let function_calls = match (has_regular_calls, has_tail_calls) {
-            (true, _) => FunctionCalls::Regular,
-            (false, true) => FunctionCalls::TailOnly,
-            (false, false) => FunctionCalls::None,
-        };
 
         (clobbered_regs, function_calls)
     }

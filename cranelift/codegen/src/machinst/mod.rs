@@ -302,6 +302,26 @@ pub enum FunctionCalls {
     Regular,
 }
 
+impl FunctionCalls {
+    /// Update the function classification based on a new call instruction.
+    ///
+    /// This method implements the merge logic for accumulating call patterns:
+    /// - Any regular call makes the function Regular
+    /// - Tail calls upgrade None to TailOnly
+    /// - Regular always stays Regular
+    pub fn update(&mut self, call_type: CallType) {
+        *self = match (*self, call_type) {
+            // No call instruction - state unchanged
+            (current, CallType::None) => current,
+            // Regular call always results in Regular classification
+            (_, CallType::Regular) => FunctionCalls::Regular,
+            // Tail call: None becomes TailOnly, others unchanged
+            (FunctionCalls::None, CallType::TailCall) => FunctionCalls::TailOnly,
+            (current, CallType::TailCall) => current,
+        };
+    }
+}
+
 /// Describes a block terminator (not call) in the VCode.
 ///
 /// Actual targets are not included: the single-source-of-truth for
