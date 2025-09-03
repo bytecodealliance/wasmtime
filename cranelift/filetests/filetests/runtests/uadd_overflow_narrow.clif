@@ -1,0 +1,31 @@
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+target aarch64
+set enable_multi_ret_implicit_sret
+target x86_64
+
+function %uaddof_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+    v2, v3 = uadd_overflow v0, v1
+    return v2, v3
+}
+; run: %uaddof_i8(0, 1) == [1, 0]
+; run: %uaddof_i8(100, 27) == [127, 0]
+; run: %uaddof_i8(100, -20) == [80, 1]
+; run: %uaddof_i8(100, 28) == [-128, 0]
+; run: %uaddof_i8(-128, -128) == [0, 1]
+; run: %uaddof_i8(127, 1) == [0x80, 0]
+
+function %uaddof_i16(i16, i16) -> i16, i8 {
+block0(v0: i16, v1: i16):
+    v2, v3 = uadd_overflow v0, v1
+    return v2, v3
+}
+; run: %uaddof_i16(0, 1) == [1, 0]
+; run: %uaddof_i16(100, 27) == [127, 0]
+; run: %uaddof_i16(100, 28) == [128, 0]
+; run: %uaddof_i16(32000, 767) == [32767, 0]
+; run: %uaddof_i16(32000, 768) == [-32768, 0]
+; run: %uaddof_i16(65000, 535) == [65535, 0]
+; run: %uaddof_i16(65000, 536) == [0, 1]
