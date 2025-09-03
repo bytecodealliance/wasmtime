@@ -62,7 +62,10 @@ cfg_if::cfg_if! {
             /// - The Rust frames between the unwind destination and this
             ///   frame to be unwind-safe: that is, they cannot have `Drop`
             ///   handlers for which safety requires that they run.
-            pub unsafe fn resume(
+            ///
+            /// - The Cranelift-generated `try_call` that we're unwinding to was
+            ///   invoking the callee with the `tail` calling convention.
+            pub unsafe fn resume_tailcc(
                 &self,
                 payload1: usize,
                 payload2: usize,

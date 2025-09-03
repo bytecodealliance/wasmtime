@@ -944,7 +944,7 @@ impl CallThreadState {
                     r.resume_to_exception_handler(handler, payload1, payload2)
                 }
                 #[cfg(has_host_compiler_backend)]
-                ExecutorRef::Native => handler.resume(payload1, payload2),
+                ExecutorRef::Native => handler.resume_tailcc(payload1, payload2),
             }
         }
     }

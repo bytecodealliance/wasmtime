@@ -682,7 +682,7 @@ extern "C-unwind" fn __cranelift_throw(
             exit_fp,
             entry_fp,
         ) {
-            Some(handler) => handler.resume(payload1, payload2),
+            Some(handler) => handler.resume_tailcc(payload1, payload2),
             None => {
                 panic!("Expected a handler to exit for throw of tag {tag} at pc {exit_pc:x}");
             }
