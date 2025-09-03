@@ -291,21 +291,15 @@ pub enum CallType {
 /// - `None`: No calls at all (can use simplified calling conventions)
 /// - `TailOnly`: Only tail calls (may skip frame setup in some cases)
 /// - `Regular`: Has regular calls (requires full calling convention support)
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FunctionCalls {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FunctionCalls {
     /// Function makes no calls at all.
+    #[default]
     None,
     /// Function only makes tail calls (no regular calls).
     TailOnly,
     /// Function makes at least one regular call (may also have tail calls).
     Regular,
-}
-
-impl FunctionCalls {
-    /// Convert to boolean leaf classification.
-    pub fn is_leaf(self) -> bool {
-        matches!(self, FunctionCalls::None)
-    }
 }
 
 /// Describes a block terminator (not call) in the VCode.
@@ -605,16 +599,4 @@ pub trait TextSectionBuilder {
     /// Completes this text section, filling out any final details, and returns
     /// the bytes of the text section.
     fn finish(&mut self, ctrl_plane: &mut ControlPlane) -> Vec<u8>;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_function_calls_is_leaf() {
-        assert!(FunctionCalls::None.is_leaf());
-        assert!(!FunctionCalls::TailOnly.is_leaf());
-        assert!(!FunctionCalls::Regular.is_leaf());
-    }
 }
