@@ -19,11 +19,13 @@ use crate::WasiView;
 use crate::p3::bindings::LinkOptions;
 use anyhow::Context as _;
 use bytes::BytesMut;
+use core::pin::Pin;
+use core::task::{Context, Poll};
 use std::io::Cursor;
 use tokio::sync::oneshot;
 use wasmtime::AsContextMut as _;
 use wasmtime::component::{
-    Accessor, Destination, FutureProducer, Linker, StreamProducer, StreamState,
+    Accessor, Destination, FutureProducer, Linker, StreamProducer, StreamResult, StreamState,
 };
 
 // Default buffer capacity to use for reads of byte-sized values.
@@ -34,26 +36,29 @@ const MAX_BUFFER_CAPACITY: usize = 4 * DEFAULT_BUFFER_CAPACITY;
 
 struct StreamEmptyProducer;
 
-impl<T, D> StreamProducer<D, T> for StreamEmptyProducer {
-    async fn produce(
-        &mut self,
-        _: &Accessor<D>,
-        _: &mut Destination<T>,
-    ) -> wasmtime::Result<StreamState> {
-        Ok(StreamState::Closed)
-    }
+impl<T, D> StreamProducer<D> for StreamEmptyProducer {
+    type Item = T;
+    type Buffer = Option<Self::Item>;
 
-    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        _: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
         Ok(StreamState::Closed)
     }
 }
 
 struct FutureReadyProducer<T>(T);
 
-impl<T, D> FutureProducer<D, T> for FutureReadyProducer<T>
+impl<T, D> FutureProducer<D> for FutureReadyProducer<T>
 where
     T: Send + 'static,
 {
+    type Item = T;
+
     async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<T> {
         Ok(self.0)
     }
@@ -61,10 +66,12 @@ where
 
 struct FutureOneshotProducer<T>(oneshot::Receiver<T>);
 
-impl<T, D> FutureProducer<D, T> for FutureOneshotProducer<T>
+impl<T, D> FutureProducer<D> for FutureOneshotProducer<T>
 where
     T: Send + 'static,
 {
+    type Item = T;
+
     async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<T> {
         self.0.await.context("oneshot sender dropped")
     }

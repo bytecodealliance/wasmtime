@@ -9,19 +9,21 @@ use crate::p3::{
     StreamEmptyProducer, write_buffered_bytes,
 };
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
-use anyhow::Context;
+use anyhow::Context as _;
 use bytes::BytesMut;
+use core::pin::Pin;
+use core::task::{Context, Poll, ready};
 use io_lifetimes::AsSocketlike as _;
 use std::io::Cursor;
 use std::net::{Shutdown, SocketAddr};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
-use wasmtime::AsContextMut as _;
 use wasmtime::component::{
     Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
-    StreamProducer, StreamReader, StreamState,
+    StreamProducer, StreamReader, StreamResult, StreamState,
 };
+use wasmtime::{AsContextMut as _, StoreContextMut};
 
 fn get_socket<'a>(
     table: &'a ResourceTable,
@@ -58,11 +60,14 @@ impl<T> ListenStreamProducer<T> {
     }
 }
 
-impl<D> StreamProducer<D, Resource<TcpSocket>> for ListenStreamProducer<D>
+impl<D> StreamProducer<D> for ListenStreamProducer<D>
 where
     D: 'static,
 {
-    async fn produce(
+    type Item = Resource<TcpSocket>;
+    type Buffer = Option<Self::Item>;
+
+    fn poll_produce(
         &mut self,
         store: &Accessor<D>,
         dst: &mut Destination<Resource<TcpSocket>>,
@@ -129,11 +134,16 @@ impl ReceiveStreamProducer {
     }
 }
 
-impl<D> StreamProducer<D, u8> for ReceiveStreamProducer {
-    async fn produce(
+impl<D> StreamProducer<D> for ReceiveStreamProducer {
+    type Item = u8;
+    type Buffer = Cursor<BytesMut>;
+
+    fn poll_produce(
         &mut self,
-        store: &Accessor<D>,
-        dst: &mut Destination<u8>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<'a, D>,
+        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
     ) -> wasmtime::Result<StreamState> {
         if !self.buffer.get_ref().is_empty() {
             write_buffered_bytes(store, &mut self.buffer, dst).await?;
@@ -142,7 +152,7 @@ impl<D> StreamProducer<D, u8> for ReceiveStreamProducer {
 
         let res = 'result: loop {
             match store.with(|mut store| {
-                if let Some(mut dst) = dst.as_guest_destination(store.as_context_mut()) {
+                if let Some(mut dst) = dst.as_direct_destination(store.as_context_mut()) {
                     let n = self.stream.try_read(dst.remaining())?;
                     if n > 0 {
                         dst.mark_written(n);
@@ -214,51 +224,26 @@ impl SendStreamConsumer {
     }
 }
 
-impl<D> StreamConsumer<D, u8> for SendStreamConsumer {
-    async fn consume(
-        &mut self,
-        store: &Accessor<D>,
-        src: &mut Source<'_, u8>,
-    ) -> wasmtime::Result<StreamState> {
+impl<D> StreamConsumer<D> for SendStreamConsumer {
+    type Item = u8;
+
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        src: &mut Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let mut src = src.as_direct_source(&mut store);
         let res = 'result: loop {
-            match store.with(|mut store| {
-                let n = if let Some(mut src) = src.as_guest_source(store.as_context_mut()) {
-                    let n = self.stream.try_write(src.remaining())?;
+            match self.stream.try_write(src.remaining()) {
+                Ok(n) => {
+                    debug_assert!(n > 0);
                     src.mark_read(n);
-                    n
-                } else {
-                    // NOTE: The implementation might want to use Linux SIOCOUTQ ioctl or similar construct
-                    // on other platforms to only read `min(socket_capacity, src.remaining())` and prevent
-                    // short writes
-                    let n = src.remaining(&mut store).min(MAX_BUFFER_CAPACITY);
-                    self.buffer.reserve(n);
-                    if let Err(err) = src.read(&mut store, &mut self.buffer) {
-                        return Ok(Err(err));
-                    }
-                    self.stream.try_write(&self.buffer)?
-                };
-                debug_assert!(n > 0);
-                std::io::Result::Ok(Ok(n))
-            }) {
-                Ok(Ok(..)) if self.buffer.is_empty() => return Ok(StreamState::Open),
-                Ok(Ok(n)) => {
-                    let mut buf = &self.buffer[n..];
-                    while !buf.is_empty() {
-                        // FIXME: Handle cancellation
-                        if let Err(err) = self.stream.writable().await {
-                            break 'result Err(err.into());
-                        }
-                        match self.stream.try_write(buf) {
-                            Ok(n) => buf = &buf[n..],
-                            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => continue,
-                            Err(err) => break 'result Err(err.into()),
-                        }
-                    }
-                    self.buffer.clear();
+                    Poll::Ready(Ok(StreamResult::Open))
                 }
-                Ok(Err(err)) => return Err(err),
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                    if let Err(err) = self.stream.writable().await {
+                    if Err(err) = ready!(Pin::new(&mut self.stream.writable()).poll(cx)) {
                         break 'result Err(err.into());
                     }
                 }
@@ -266,15 +251,7 @@ impl<D> StreamConsumer<D, u8> for SendStreamConsumer {
             }
         };
         self.close(res);
-        Ok(StreamState::Closed)
-    }
-
-    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
-        if let Err(err) = self.stream.writable().await {
-            self.close(Err(err.into()));
-            return Ok(StreamState::Closed);
-        }
-        Ok(StreamState::Open)
+        Poll::Ready(Ok(StreamResult::Closed))
     }
 }
 
