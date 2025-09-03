@@ -4,7 +4,7 @@
 use super::Stats;
 use super::cost::Cost;
 use crate::ctxhash::NullCtx;
-use crate::dominator_tree::DominatorTreePreorder;
+use crate::dominator_tree::DominatorTree;
 use crate::hash_map::Entry as HashEntry;
 use crate::inst_predicates::is_pure_for_egraph;
 use crate::ir::{Block, Function, Inst, Value, ValueDef};
@@ -19,7 +19,7 @@ use smallvec::{SmallVec, smallvec};
 
 pub(crate) struct Elaborator<'a> {
     func: &'a mut Function,
-    domtree: &'a DominatorTreePreorder,
+    domtree: &'a DominatorTree,
     loop_analysis: &'a LoopAnalysis,
     /// Map from Value that is produced by a pure Inst (and was thus
     /// not in the side-effecting skeleton) to the value produced by
@@ -140,7 +140,7 @@ enum BlockStackEntry {
 impl<'a> Elaborator<'a> {
     pub(crate) fn new(
         func: &'a mut Function,
-        domtree: &'a DominatorTreePreorder,
+        domtree: &'a DominatorTree,
         loop_analysis: &'a LoopAnalysis,
         remat_values: &'a FxHashSet<Value>,
         stats: &'a mut Stats,
@@ -560,29 +560,30 @@ impl<'a> Elaborator<'a> {
                     // place the instruction. This is the current
                     // block *unless* we hoist above a loop when all
                     // args are loop-invariant (and this op is pure).
-                    let (scope_depth, before, insert_block) =
-                        if loop_hoist_level == self.loop_stack.len() {
-                            // Depends on some value at the current
-                            // loop depth, or remat forces it here:
-                            // place it at the current location.
-                            (
-                                self.value_to_elaborated_value.depth(),
-                                before,
-                                self.func.layout.inst_block(before).unwrap(),
-                            )
-                        } else {
-                            // Does not depend on any args at current
-                            // loop depth: hoist out of loop.
-                            self.stats.elaborate_licm_hoist += 1;
-                            let data = &self.loop_stack[loop_hoist_level];
-                            // `data.hoist_block` should dominate `before`'s block.
-                            let before_block = self.func.layout.inst_block(before).unwrap();
-                            debug_assert!(self.domtree.dominates(data.hoist_block, before_block));
-                            // Determine the instruction at which we
-                            // insert in `data.hoist_block`.
-                            let before = self.func.layout.last_inst(data.hoist_block).unwrap();
-                            (data.scope_depth as usize, before, data.hoist_block)
-                        };
+                    let (scope_depth, before, insert_block) = if loop_hoist_level
+                        == self.loop_stack.len()
+                    {
+                        // Depends on some value at the current
+                        // loop depth, or remat forces it here:
+                        // place it at the current location.
+                        (
+                            self.value_to_elaborated_value.depth(),
+                            before,
+                            self.func.layout.inst_block(before).unwrap(),
+                        )
+                    } else {
+                        // Does not depend on any args at current
+                        // loop depth: hoist out of loop.
+                        self.stats.elaborate_licm_hoist += 1;
+                        let data = &self.loop_stack[loop_hoist_level];
+                        // `data.hoist_block` should dominate `before`'s block.
+                        let before_block = self.func.layout.inst_block(before).unwrap();
+                        debug_assert!(self.domtree.block_dominates(data.hoist_block, before_block));
+                        // Determine the instruction at which we
+                        // insert in `data.hoist_block`.
+                        let before = self.func.layout.last_inst(data.hoist_block).unwrap();
+                        (data.scope_depth as usize, before, data.hoist_block)
+                    };
 
                     trace!(
                         " -> decided to place: before {} insert_block {}",
@@ -778,7 +779,7 @@ impl<'a> Elaborator<'a> {
         }
     }
 
-    fn elaborate_domtree(&mut self, domtree: &DominatorTreePreorder) {
+    fn elaborate_domtree(&mut self, domtree: &DominatorTree) {
         self.block_stack.push(BlockStackEntry::Elaborate {
             block: self.func.layout.entry_block().unwrap(),
             idom: None,

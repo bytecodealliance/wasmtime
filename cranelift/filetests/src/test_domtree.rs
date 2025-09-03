@@ -14,7 +14,7 @@
 
 use crate::match_directive::match_directive;
 use crate::subtest::{Context, SubTest, run_filecheck};
-use cranelift_codegen::dominator_tree::{DominatorTree, DominatorTreePreorder};
+use cranelift_codegen::dominator_tree::DominatorTree;
 use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::ir::entities::AnyEntity;
@@ -134,14 +134,12 @@ fn filecheck_text(func: &Function, domtree: &DominatorTree) -> Result<String, fm
 
     // Compute and print out a pre-order of the dominator tree.
     writeln!(s, "domtree_preorder {{")?;
-    let mut dtpo = DominatorTreePreorder::new();
-    dtpo.compute(domtree);
     let mut stack = Vec::new();
     stack.extend(func.layout.entry_block());
     while let Some(block) = stack.pop() {
         write!(s, "    {block}:")?;
         let i = stack.len();
-        for ch in dtpo.children(block) {
+        for ch in domtree.children(block) {
             write!(s, " {ch}")?;
             stack.push(ch);
         }
