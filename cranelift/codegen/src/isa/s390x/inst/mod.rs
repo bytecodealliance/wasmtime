@@ -1122,6 +1122,13 @@ impl MachInst for Inst {
         }
     }
 
+    fn is_call(&self) -> bool {
+        match self {
+            Inst::Call { .. } | Inst::ReturnCall { .. } | Inst::ElfTlsGetOffset { .. } => true,
+            _ => false,
+        }
+    }
+
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
         assert!(ty.bits() <= 128);
         if ty.bits() <= 32 {

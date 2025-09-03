@@ -896,7 +896,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         flags: &settings::Flags,
         _sig: &Signature,
         regs: &[Writable<RealReg>],
-        _is_leaf: bool,
+        is_leaf: bool,
         incoming_args_size: u32,
         tail_args_size: u32,
         stackslots_size: u32,
@@ -975,6 +975,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
+            is_leaf,
         }
     }
 

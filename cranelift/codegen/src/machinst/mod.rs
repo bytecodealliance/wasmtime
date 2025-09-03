@@ -109,6 +109,10 @@ pub trait MachInst: Clone + Debug {
     /// Is this an "args" pseudoinst?
     fn is_args(&self) -> bool;
 
+    /// Is this a call instruction (including indirect calls and tail calls)?
+    /// This is used to determine if a function is truly a leaf function.
+    fn is_call(&self) -> bool;
+
     /// Should this instruction's clobber-list be included in the
     /// clobber-set?
     fn is_included_in_clobbers(&self) -> bool;

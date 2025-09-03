@@ -490,6 +490,17 @@ where
         todo!()
     }
 
+    fn is_call(&self) -> bool {
+        match &self.inst {
+            Inst::Call { .. }
+            | Inst::IndirectCall { .. }
+            | Inst::IndirectCallHost { .. }
+            | Inst::ReturnCall { .. }
+            | Inst::ReturnIndirectCall { .. } => true,
+            _ => false,
+        }
+    }
+
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self {
         match ty {
             ir::types::I8 | ir::types::I16 | ir::types::I32 | ir::types::I64 => RawInst::Xmov {

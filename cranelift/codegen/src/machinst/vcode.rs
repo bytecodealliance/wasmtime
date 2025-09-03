@@ -673,8 +673,12 @@ impl<I: VCodeInst> VCode<I> {
         self.insts.len()
     }
 
-    fn compute_clobbers(&self, regalloc: &regalloc2::Output) -> Vec<Writable<RealReg>> {
+    fn compute_clobbers_and_leaf(
+        &self,
+        regalloc: &regalloc2::Output,
+    ) -> (Vec<Writable<RealReg>>, bool) {
         let mut clobbered = PRegSet::default();
+        let mut is_leaf = true; // Assume leaf until we find a call
 
         // All moves are included in clobbers.
         for (_, Edit::Move { to, .. }) in &regalloc.edits {
@@ -692,6 +696,11 @@ impl<I: VCodeInst> VCode<I> {
                         clobbered.add(preg);
                     }
                 }
+            }
+
+            // Check if this instruction is a call - if so, function is not a leaf.
+            if self.insts[i].is_call() {
+                is_leaf = false;
             }
 
             // Also add explicitly-clobbered registers.
@@ -720,10 +729,12 @@ impl<I: VCodeInst> VCode<I> {
             }
         }
 
-        clobbered
+        let clobbered_regs = clobbered
             .into_iter()
             .map(|preg| Writable::from_reg(RealReg::from(preg)))
-            .collect()
+            .collect();
+
+        (clobbered_regs, is_leaf)
     }
 
     /// Emit the instructions to a `MachBuffer`, containing fixed-up
@@ -777,9 +788,9 @@ impl<I: VCodeInst> VCode<I> {
         // mutate `VCode`. The info it usually carries prior to
         // setting clobbers is fairly minimal so this should be
         // relatively cheap.
-        let clobbers = self.compute_clobbers(regalloc);
+        let (clobbers, is_leaf) = self.compute_clobbers_and_leaf(regalloc);
         self.abi
-            .compute_frame_layout(&self.sigs, regalloc.num_spillslots, clobbers);
+            .compute_frame_layout(&self.sigs, regalloc.num_spillslots, clobbers, is_leaf);
 
         // Emit blocks.
         let mut cur_srcloc = None;

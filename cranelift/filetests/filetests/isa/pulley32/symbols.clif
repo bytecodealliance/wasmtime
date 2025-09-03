@@ -10,16 +10,12 @@ block0:
 }
 
 ; VCode:
-;   push_frame
 ; block0:
 ;   x0 = load_ext_name_far TestCase(%func0), 0
-;   pop_frame
 ;   ret
 ;
 ; Disassembled:
-; push_frame
 ; xconst32 x0, 0
-; pop_frame
 ; ret
 
 function %colocated_func_addr() -> i32 {
@@ -31,16 +27,12 @@ block0:
 }
 
 ; VCode:
-;   push_frame
 ; block0:
 ;   x0 = load_ext_name_near TestCase(%func0), 0
-;   pop_frame
 ;   ret
 ;
 ; Disassembled:
-; push_frame
-; xpcadd x0, 0x4    // target = 0x5
-; pop_frame
+; xpcadd x0, 0x4    // target = 0x4
 ; ret
 
 function %symbol_value() -> i32 {

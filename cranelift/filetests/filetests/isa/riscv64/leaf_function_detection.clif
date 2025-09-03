@@ -1,0 +1,202 @@
+;; Test leaf function detection across different function types.
+;; This test verifies that the is_leaf detection works correctly for:
+;; - True leaf functions (no calls)
+;; - Non-leaf functions (with calls, call_indirect)
+
+test compile precise-output
+set unwind_info=false
+set preserve_frame_pointers=false
+target riscv64
+
+;; Test 1: Simple leaf function - just arithmetic operations
+function %simple_leaf(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 10
+    v2 = imul v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a3,10
+;   mulw a0,a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0xa
+;   mulw a0, a0, a3
+;   ret
+
+;; Test 2: Leaf function with multiple basic blocks and control flow
+function %leaf_with_branches(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp sgt v0, v1
+    brif v2, block1, block2
+
+block1:
+    v3 = iconst.i32 2
+    v4 = imul v0, v3
+    jump block3(v4)
+
+block2:
+    v5 = isub v1, v0
+    jump block3(v5)
+
+block3(v6: i32):
+    return v6
+}
+
+; VCode:
+; block0:
+;   li a1,0
+;   sext.w a2,a0
+;   bgt a2,zero,taken(label2),not_taken(label1)
+; block1:
+;   subw a0,a1,a0
+;   j label3
+; block2:
+;   li a3,2
+;   mulw a0,a0,a3
+;   j label3
+; block3:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a1, zero
+;   sext.w a2, a0
+;   bgtz a2, 0xc
+; block1: ; offset 0xc
+;   subw a0, a1, a0
+;   j 0xc
+; block2: ; offset 0x14
+;   addi a3, zero, 2
+;   mulw a0, a0, a3
+; block3: ; offset 0x1c
+;   ret
+
+;; Test 3: Non-leaf function with direct call
+function %non_leaf_with_call(i32) -> i32 {
+    sig0 = (i32) -> i32
+    fn0 = colocated %simple_leaf sig0
+
+block0(v0: i32):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   call %simple_leaf
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %simple_leaf 0
+;   jalr ra
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+;; Test 4: Non-leaf function with indirect call
+function %non_leaf_with_call_indirect(i32, i64) -> i32 {
+    sig0 = (i32) -> i32
+
+block0(v0: i32, v1: i64):
+    v2 = call_indirect sig0, v1(v0)
+    return v2
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   callind a1
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   jalr a1
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+;; Test 5: Leaf function with memory operations (should still be leaf)
+function %leaf_with_memory(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+    store v0, v1
+    v2 = load.i32 v1
+    v3 = iconst.i32 1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   sw a0,0(a1)
+;   lw a5,0(a1)
+;   addiw a0,a5,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sw a0, 0(a1) ; trap: heap_oob
+;   lw a5, 0(a1) ; trap: heap_oob
+;   addiw a0, a5, 1
+;   ret
+
+;; Test 6: Leaf function that looks like it might call but doesn't
+function %leaf_no_actual_calls(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 42
+    v2 = imul v0, v1
+    v3 = iconst.i32 7
+    v4 = udiv v2, v3
+    v5 = iconst.i32 3
+    v6 = band v4, v5
+    return v6
+}
+
+; VCode:
+; block0:
+;   li a1,42
+;   mulw a0,a0,a1
+;   li a1,7
+;   divuw a0,a0,a1
+;   andi a0,a0,3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a1, zero, 0x2a
+;   mulw a0, a0, a1
+;   addi a1, zero, 7
+;   divuw a0, a0, a1
+;   andi a0, a0, 3
+;   ret

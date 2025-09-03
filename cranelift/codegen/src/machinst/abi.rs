@@ -1078,6 +1078,9 @@ pub struct FrameLayout {
     /// according to the ABI.  These registers will be saved and
     /// restored by gen_clobber_save and gen_clobber_restore.
     pub clobbered_callee_saves: Vec<Writable<RealReg>>,
+
+    /// Whether this function is a leaf function (makes no calls).
+    pub is_leaf: bool,
 }
 
 impl FrameLayout {
@@ -1155,9 +1158,6 @@ pub struct Callee<M: ABIMachineSpec> {
     flags: settings::Flags,
     /// The ISA-specific flag values controlling this function's compilation.
     isa_flags: M::F,
-    /// Whether or not this function is a "leaf", meaning it calls no other
-    /// functions
-    is_leaf: bool,
     /// If this function has a stack limit specified, then `Reg` is where the
     /// stack limit will be located after the instructions specified have been
     /// executed.
@@ -1308,7 +1308,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             call_conv,
             flags,
             isa_flags: isa_flags.clone(),
-            is_leaf: f.is_leaf(),
             stack_limit,
             _mach: PhantomData,
         })
@@ -2174,6 +2173,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         sigs: &SigSet,
         spillslots: usize,
         clobbered: Vec<Writable<RealReg>>,
+        is_leaf: bool,
     ) {
         let bytes = M::word_bytes();
         let total_stacksize = self.stackslots_size + bytes * spillslots as u32;
@@ -2184,7 +2184,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             &self.flags,
             self.signature(),
             &clobbered,
-            self.is_leaf,
+            is_leaf,
             self.stack_args_size(sigs),
             self.tail_args_size,
             self.stackslots_size,
@@ -2221,7 +2221,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             + frame_layout.clobber_size
             + frame_layout.fixed_frame_storage_size
             + frame_layout.outgoing_args_size
-            + if self.is_leaf {
+            + if frame_layout.is_leaf {
                 0
             } else {
                 frame_layout.setup_area_size
@@ -2229,7 +2229,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 
         // Leaf functions with zero stack don't need a stack check if one's
         // specified, otherwise always insert the stack check.
-        if total_stacksize > 0 || !self.is_leaf {
+        if total_stacksize > 0 || !frame_layout.is_leaf {
             if let Some((reg, stack_limit_load)) = &self.stack_limit {
                 insts.extend(stack_limit_load.clone());
                 self.insert_stack_check(*reg, total_stacksize, &mut insts);

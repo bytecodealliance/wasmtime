@@ -11,23 +11,16 @@ block0:
 }
 
 ; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
 ; block0:
 ;   load_ext_name_far x0, TestCase(%func0)+0
-;   ldp fp, lr, [sp], #16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-; block1: ; offset 0x8
-;   ldr x0, #0x10
-;   b #0x18
+;   ldr x0, #8
+;   b #0x10
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %func0 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %colocated_func_addr() -> i64 {
@@ -39,21 +32,14 @@ block0:
 }
 
 ; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
 ; block0:
 ;   load_ext_name_near x0, TestCase(%func0)+0
-;   ldp fp, lr, [sp], #16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-; block1: ; offset 0x8
 ;   adrp x0, #0 ; reloc_external Aarch64AdrPrelPgHi21 %func0 0
 ;   add x0, x0, #0 ; reloc_external Aarch64AddAbsLo12Nc %func0 0
-;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %symbol_value() -> i64 {

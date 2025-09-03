@@ -537,6 +537,7 @@ where
             stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
+            is_leaf,
         }
     }
 

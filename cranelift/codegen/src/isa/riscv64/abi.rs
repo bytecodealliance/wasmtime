@@ -671,6 +671,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
+            is_leaf,
         }
     }
 
