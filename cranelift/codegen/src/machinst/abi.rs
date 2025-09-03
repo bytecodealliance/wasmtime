@@ -490,7 +490,7 @@ pub trait ABIMachineSpec {
         flags: &settings::Flags,
         sig: &Signature,
         regs: &[Writable<RealReg>],
-        is_leaf: bool,
+        function_calls: FunctionCalls,
         incoming_args_size: u32,
         tail_args_size: u32,
         stackslots_size: u32,
@@ -1084,8 +1084,8 @@ pub struct FrameLayout {
     /// restored by gen_clobber_save and gen_clobber_restore.
     pub clobbered_callee_saves: Vec<Writable<RealReg>>,
 
-    /// Whether this function is a leaf function (makes no calls).
-    pub is_leaf: bool,
+    /// The function's call pattern classification.
+    pub function_calls: FunctionCalls,
 }
 
 impl FrameLayout {
@@ -2186,7 +2186,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         sigs: &SigSet,
         spillslots: usize,
         clobbered: Vec<Writable<RealReg>>,
-        is_leaf: bool,
+        function_calls: FunctionCalls,
     ) {
         let bytes = M::word_bytes();
         let total_stacksize = self.stackslots_size + bytes * spillslots as u32;
@@ -2197,7 +2197,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             &self.flags,
             self.signature(),
             &clobbered,
-            is_leaf,
+            function_calls,
             self.stack_args_size(sigs),
             self.tail_args_size,
             self.stackslots_size,
@@ -2234,7 +2234,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             + frame_layout.clobber_size
             + frame_layout.fixed_frame_storage_size
             + frame_layout.outgoing_args_size
-            + if frame_layout.is_leaf {
+            + if frame_layout.function_calls == FunctionCalls::None {
                 0
             } else {
                 frame_layout.setup_area_size
@@ -2242,7 +2242,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 
         // Leaf functions with zero stack don't need a stack check if one's
         // specified, otherwise always insert the stack check.
-        if total_stacksize > 0 || !frame_layout.is_leaf {
+        if total_stacksize > 0 || frame_layout.function_calls != FunctionCalls::None {
             if let Some((reg, stack_limit_load)) = &self.stack_limit {
                 insts.extend(stack_limit_load.clone());
                 self.insert_stack_check(*reg, total_stacksize, &mut insts);

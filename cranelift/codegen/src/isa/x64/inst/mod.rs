@@ -1281,15 +1281,16 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_call(&self) -> bool {
+    fn call_type(&self) -> CallType {
         match self {
             Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
-            | Inst::ReturnCallKnown { .. }
-            | Inst::ReturnCallUnknown { .. }
             | Inst::ElfTlsGetAddr { .. }
-            | Inst::MachOTlsGetAddr { .. } => true,
-            _ => false,
+            | Inst::MachOTlsGetAddr { .. } => CallType::Regular,
+
+            Inst::ReturnCallKnown { .. } | Inst::ReturnCallUnknown { .. } => CallType::TailCall,
+
+            _ => CallType::None,
         }
     }
 

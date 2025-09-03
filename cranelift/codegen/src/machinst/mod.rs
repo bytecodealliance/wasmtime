@@ -109,9 +109,13 @@ pub trait MachInst: Clone + Debug {
     /// Is this an "args" pseudoinst?
     fn is_args(&self) -> bool;
 
-    /// Is this a call instruction (including indirect calls and tail calls)?
-    /// This is used to determine if a function is truly a leaf function.
-    fn is_call(&self) -> bool;
+    /// Classify the type of call instruction this is.
+    ///
+    /// This enables more granular function type analysis and optimization.
+    /// Returns `CallType::None` for non-call instructions, `CallType::Regular`
+    /// for normal calls that return to the caller, and `CallType::TailCall`
+    /// for tail calls that don't return to the caller.
+    fn call_type(&self) -> CallType;
 
     /// Should this instruction's clobber-list be included in the
     /// clobber-set?
@@ -267,6 +271,55 @@ pub trait MachInstLabelUse: Clone + Copy + Debug + Eq {
     /// This returns `None` if the relocation doesn't have a corresponding
     /// representation for the target architecture.
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self>;
+}
+
+/// Classification of call instruction types for granular analysis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallType {
+    /// Not a call instruction.
+    None,
+    /// Regular call that returns to the caller.
+    Regular,
+    /// Tail call that doesn't return to the caller.
+    TailCall,
+}
+
+/// Function classification based on call patterns.
+///
+/// This enum classifies functions based on their calling behavior to enable
+/// targeted optimizations. Functions are categorized as:
+/// - `None`: No calls at all (can use simplified calling conventions)
+/// - `TailOnly`: Only tail calls (may skip frame setup in some cases)
+/// - `Regular`: Has regular calls (requires full calling convention support)
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FunctionCalls {
+    /// Function makes no calls at all.
+    #[default]
+    None,
+    /// Function only makes tail calls (no regular calls).
+    TailOnly,
+    /// Function makes at least one regular call (may also have tail calls).
+    Regular,
+}
+
+impl FunctionCalls {
+    /// Update the function classification based on a new call instruction.
+    ///
+    /// This method implements the merge logic for accumulating call patterns:
+    /// - Any regular call makes the function Regular
+    /// - Tail calls upgrade None to TailOnly
+    /// - Regular always stays Regular
+    pub fn update(&mut self, call_type: CallType) {
+        *self = match (*self, call_type) {
+            // No call instruction - state unchanged
+            (current, CallType::None) => current,
+            // Regular call always results in Regular classification
+            (_, CallType::Regular) => FunctionCalls::Regular,
+            // Tail call: None becomes TailOnly, others unchanged
+            (FunctionCalls::None, CallType::TailCall) => FunctionCalls::TailOnly,
+            (current, CallType::TailCall) => current,
+        };
+    }
 }
 
 /// Describes a block terminator (not call) in the VCode.

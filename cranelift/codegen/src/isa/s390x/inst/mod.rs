@@ -1122,10 +1122,13 @@ impl MachInst for Inst {
         }
     }
 
-    fn is_call(&self) -> bool {
+    fn call_type(&self) -> CallType {
         match self {
-            Inst::Call { .. } | Inst::ReturnCall { .. } | Inst::ElfTlsGetOffset { .. } => true,
-            _ => false,
+            Inst::Call { .. } | Inst::ElfTlsGetOffset { .. } => CallType::Regular,
+
+            Inst::ReturnCall { .. } => CallType::TailCall,
+
+            _ => CallType::None,
         }
     }
 

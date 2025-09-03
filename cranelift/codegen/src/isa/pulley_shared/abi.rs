@@ -495,7 +495,7 @@ where
         flags: &settings::Flags,
         _sig: &Signature,
         regs: &[Writable<RealReg>],
-        is_leaf: bool,
+        function_calls: FunctionCalls,
         incoming_args_size: u32,
         tail_args_size: u32,
         stackslots_size: u32,
@@ -515,7 +515,7 @@ where
 
         // Compute linkage frame size.
         let setup_area_size = if flags.preserve_frame_pointers()
-            || !is_leaf
+            || function_calls != FunctionCalls::None
             // The function arguments that are passed on the stack are addressed
             // relative to the Frame Pointer.
             || incoming_args_size > 0
@@ -537,7 +537,7 @@ where
             stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
-            is_leaf,
+            function_calls,
         }
     }
 
