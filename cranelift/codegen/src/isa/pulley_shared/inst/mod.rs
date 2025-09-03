@@ -490,14 +490,15 @@ where
         todo!()
     }
 
-    fn is_call(&self) -> bool {
+    fn call_type(&self) -> CallType {
         match &self.inst {
-            Inst::Call { .. }
-            | Inst::IndirectCall { .. }
-            | Inst::IndirectCallHost { .. }
-            | Inst::ReturnCall { .. }
-            | Inst::ReturnIndirectCall { .. } => true,
-            _ => false,
+            Inst::Call { .. } | Inst::IndirectCall { .. } | Inst::IndirectCallHost { .. } => {
+                CallType::Regular
+            }
+
+            Inst::ReturnCall { .. } | Inst::ReturnIndirectCall { .. } => CallType::TailCall,
+
+            _ => CallType::None,
         }
     }
 
