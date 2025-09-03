@@ -109,9 +109,13 @@ pub trait MachInst: Clone + Debug {
     /// Is this an "args" pseudoinst?
     fn is_args(&self) -> bool;
 
-    /// Is this a call instruction (including indirect calls and tail calls)?
-    /// This is used to determine if a function is truly a leaf function.
-    fn is_call(&self) -> bool;
+    /// Classify the type of call instruction this is.
+    ///
+    /// This enables more granular function type analysis and optimization.
+    /// Returns `CallType::None` for non-call instructions, `CallType::Regular`
+    /// for normal calls that return to the caller, and `CallType::TailCall`
+    /// for tail calls that don't return to the caller.
+    fn call_type(&self) -> CallType;
 
     /// Should this instruction's clobber-list be included in the
     /// clobber-set?
@@ -267,6 +271,41 @@ pub trait MachInstLabelUse: Clone + Copy + Debug + Eq {
     /// This returns `None` if the relocation doesn't have a corresponding
     /// representation for the target architecture.
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self>;
+}
+
+/// Classification of call instruction types for granular analysis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallType {
+    /// Not a call instruction.
+    None,
+    /// Regular call that returns to the caller.
+    Regular,
+    /// Tail call that doesn't return to the caller.
+    TailCall,
+}
+
+/// Function classification based on call patterns.
+///
+/// This enum classifies functions based on their calling behavior to enable
+/// targeted optimizations. Functions are categorized as:
+/// - `None`: No calls at all (can use simplified calling conventions)
+/// - `TailOnly`: Only tail calls (may skip frame setup in some cases)
+/// - `Regular`: Has regular calls (requires full calling convention support)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FunctionCalls {
+    /// Function makes no calls at all.
+    None,
+    /// Function only makes tail calls (no regular calls).
+    TailOnly,
+    /// Function makes at least one regular call (may also have tail calls).
+    Regular,
+}
+
+impl FunctionCalls {
+    /// Convert to boolean leaf classification.
+    pub fn is_leaf(self) -> bool {
+        matches!(self, FunctionCalls::None)
+    }
 }
 
 /// Describes a block terminator (not call) in the VCode.
@@ -566,4 +605,16 @@ pub trait TextSectionBuilder {
     /// Completes this text section, filling out any final details, and returns
     /// the bytes of the text section.
     fn finish(&mut self, ctrl_plane: &mut ControlPlane) -> Vec<u8>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_function_calls_is_leaf() {
+        assert!(FunctionCalls::None.is_leaf());
+        assert!(!FunctionCalls::TailOnly.is_leaf());
+        assert!(!FunctionCalls::Regular.is_leaf());
+    }
 }

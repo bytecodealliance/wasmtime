@@ -673,12 +673,13 @@ impl<I: VCodeInst> VCode<I> {
         self.insts.len()
     }
 
-    fn compute_clobbers_and_leaf(
+    fn compute_clobbers_and_function_type(
         &self,
         regalloc: &regalloc2::Output,
-    ) -> (Vec<Writable<RealReg>>, bool) {
+    ) -> (Vec<Writable<RealReg>>, FunctionCalls) {
         let mut clobbered = PRegSet::default();
-        let mut is_leaf = true; // Assume leaf until we find a call
+        let mut has_regular_calls = false;
+        let mut has_tail_calls = false;
 
         // All moves are included in clobbers.
         for (_, Edit::Move { to, .. }) in &regalloc.edits {
@@ -698,9 +699,10 @@ impl<I: VCodeInst> VCode<I> {
                 }
             }
 
-            // Check if this instruction is a call - if so, function is not a leaf.
-            if self.insts[i].is_call() {
-                is_leaf = false;
+            match self.insts[i].call_type() {
+                CallType::Regular => has_regular_calls = true,
+                CallType::TailCall => has_tail_calls = true,
+                CallType::None => {}
             }
 
             // Also add explicitly-clobbered registers.
@@ -734,7 +736,13 @@ impl<I: VCodeInst> VCode<I> {
             .map(|preg| Writable::from_reg(RealReg::from(preg)))
             .collect();
 
-        (clobbered_regs, is_leaf)
+        let function_type = match (has_regular_calls, has_tail_calls) {
+            (true, _) => FunctionCalls::Regular,
+            (false, true) => FunctionCalls::TailOnly,
+            (false, false) => FunctionCalls::None,
+        };
+
+        (clobbered_regs, function_type)
     }
 
     /// Emit the instructions to a `MachBuffer`, containing fixed-up
@@ -788,9 +796,13 @@ impl<I: VCodeInst> VCode<I> {
         // mutate `VCode`. The info it usually carries prior to
         // setting clobbers is fairly minimal so this should be
         // relatively cheap.
-        let (clobbers, is_leaf) = self.compute_clobbers_and_leaf(regalloc);
-        self.abi
-            .compute_frame_layout(&self.sigs, regalloc.num_spillslots, clobbers, is_leaf);
+        let (clobbers, function_type) = self.compute_clobbers_and_function_type(regalloc);
+        self.abi.compute_frame_layout(
+            &self.sigs,
+            regalloc.num_spillslots,
+            clobbers,
+            function_type.is_leaf(),
+        );
 
         // Emit blocks.
         let mut cur_srcloc = None;
