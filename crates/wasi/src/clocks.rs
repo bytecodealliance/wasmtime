@@ -1,6 +1,10 @@
+use crate::p2::bindings::clocks::timezone::TimezoneDisplay;
 use cap_std::time::{Duration, Instant, SystemClock, SystemTime};
 use cap_std::{AmbientAuthority, ambient_authority};
 use cap_time_ext::{MonotonicClockExt as _, SystemClockExt as _};
+use jiff::Timestamp;
+use jiff::tz::TimeZone as JiffTimeZone;
+use std::{convert::TryFrom, str::FromStr};
 use wasmtime::component::{HasData, ResourceTable};
 
 pub struct WasiClocks;
@@ -12,6 +16,7 @@ impl HasData for WasiClocks {
 pub struct WasiClocksCtx {
     pub wall_clock: Box<dyn HostWallClock + Send>,
     pub monotonic_clock: Box<dyn HostMonotonicClock + Send>,
+    pub timezone: Box<dyn HostTimezone + Send>,
 }
 
 impl Default for WasiClocksCtx {
@@ -19,6 +24,7 @@ impl Default for WasiClocksCtx {
         Self {
             wall_clock: wall_clock(),
             monotonic_clock: monotonic_clock(),
+            timezone: timezone(),
         }
     }
 }
@@ -40,6 +46,11 @@ pub trait HostWallClock: Send {
 pub trait HostMonotonicClock: Send {
     fn resolution(&self) -> u64;
     fn now(&self) -> u64;
+}
+
+pub trait HostTimezone: Send {
+    fn display(&self, datetime: Duration) -> TimezoneDisplay;
+    fn utc_offset(&self, datetime: Duration) -> i32;
 }
 
 pub struct WallClock {
@@ -123,6 +134,10 @@ pub fn wall_clock() -> Box<dyn HostWallClock + Send> {
     Box::new(WallClock::default())
 }
 
+pub fn timezone() -> Box<dyn HostTimezone + Send> {
+    Box::new(Timezone::default())
+}
+
 pub(crate) struct Datetime {
     pub seconds: u64,
     pub nanoseconds: u32,
@@ -139,5 +154,65 @@ impl TryFrom<SystemTime> for Datetime {
             seconds: duration.as_secs(),
             nanoseconds: duration.subsec_nanos(),
         })
+    }
+}
+
+pub struct Timezone {
+    timezone: JiffTimeZone,
+}
+
+impl Default for Timezone {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Timezone {
+    pub fn new() -> Self {
+        Self {
+            timezone: JiffTimeZone::try_system().unwrap_or(JiffTimeZone::UTC),
+        }
+    }
+
+    fn timezone_from_duration(&self, datetime: Duration) -> Option<TimezoneDisplay> {
+        let timestamp = Timestamp::from_second(datetime.as_secs() as i64).ok()?;
+        let localtime = self.timezone.to_offset_info(timestamp);
+        let utc_offset = localtime.offset().seconds();
+        let name = self.timezone.iana_name().unwrap_or("UTC").to_string();
+        let in_daylight_saving_time = jiff::tz::Dst::Yes == localtime.dst();
+        Some(TimezoneDisplay {
+            utc_offset,
+            name,
+            in_daylight_saving_time,
+        })
+    }
+}
+
+impl HostTimezone for Timezone {
+    fn display(&self, datetime: Duration) -> TimezoneDisplay {
+        match self.timezone_from_duration(datetime) {
+            None => TimezoneDisplay {
+                utc_offset: 0,
+                name: "UTC".to_string(),
+                in_daylight_saving_time: false,
+            },
+            Some(timezone_display) => timezone_display,
+        }
+    }
+
+    fn utc_offset(&self, datetime: Duration) -> i32 {
+        match self.timezone_from_duration(datetime) {
+            None => 0,
+            Some(timezone_display) => timezone_display.utc_offset,
+        }
+    }
+}
+
+impl FromStr for Timezone {
+    type Err = wasmtime::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let timezone = JiffTimeZone::get(s)?;
+        Ok(Timezone { timezone })
     }
 }
