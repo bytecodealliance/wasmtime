@@ -347,8 +347,8 @@
         (carry XReg (rv_sltu sum_lo x_lo))
         (sum_hi XReg (rv_add x_hi y_hi))
         (sum_hi_with_carry XReg (rv_add sum_hi carry))
-        (overflow XReg (rv_or (rv_sltu sum_hi_with_carry x_hi)
-                              (rv_and carry (rv_eq sum_hi_with_carry x_hi)))))
+        (overflow XReg (rv_or (rv_sltu sum_hi_with_carry x_hi) 
+                              (rv_and carry (rv_seqz (rv_xor sum_hi_with_carry x_hi))))))
     (output_pair (value_regs sum_lo sum_hi_with_carry) overflow)))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
