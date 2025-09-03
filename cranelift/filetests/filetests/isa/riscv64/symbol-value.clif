@@ -11,32 +11,17 @@ block0:
 }
 
 ; VCode:
-;   addi sp,sp,-16
-;   sd ra,8(sp)
-;   sd fp,0(sp)
-;   mv fp,sp
 ; block0:
 ;   load_ext_name_far a0,%func0+0
-;   ld ra,8(sp)
-;   ld fp,0(sp)
-;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi sp, sp, -0x10
-;   sd ra, 8(sp)
-;   sd s0, 0(sp)
-;   mv s0, sp
-; block1: ; offset 0x10
 ;   auipc a0, 0
 ;   ld a0, 0xc(a0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %func0 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
 ;   ret
 
 function %colocated_func_addr() -> i64 {
@@ -48,29 +33,14 @@ block0:
 }
 
 ; VCode:
-;   addi sp,sp,-16
-;   sd ra,8(sp)
-;   sd fp,0(sp)
-;   mv fp,sp
 ; block0:
 ;   load_ext_name_near a0,%func0+0
-;   ld ra,8(sp)
-;   ld fp,0(sp)
-;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi sp, sp, -0x10
-;   sd ra, 8(sp)
-;   sd s0, 0(sp)
-;   mv s0, sp
-; block1: ; offset 0x10
 ;   auipc a0, 0 ; reloc_external RiscvPCRelHi20 %func0 0
-;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+16 0
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
+;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0 0
 ;   ret
 
 function %symbol_value() -> i64 {
