@@ -9,6 +9,7 @@ use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
 use pulley_interpreter::{FReg, Reg, XReg};
 use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
+#[cfg(feature = "gc")]
 use wasmtime_unwinder::Handler;
 use wasmtime_unwinder::Unwind;
 
