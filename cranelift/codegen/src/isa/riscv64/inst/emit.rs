@@ -8,6 +8,7 @@ use crate::isa::riscv64::lower::isle::generated_code::{
 use cranelift_control::ControlPlane;
 
 pub struct EmitInfo {
+    #[expect(dead_code, reason = "may want to be used in the future")]
     shared_flag: settings::Flags,
     isa_flags: super::super::riscv_settings::Flags,
 }
@@ -170,7 +171,9 @@ impl Inst {
             | Inst::ReturnCallInd { .. }
             | Inst::Jal { .. }
             | Inst::CondBr { .. }
-            | Inst::LoadExtName { .. }
+            | Inst::LoadExtNameGot { .. }
+            | Inst::LoadExtNameNear { .. }
+            | Inst::LoadExtNameFar { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::LoadAddr { .. }
             | Inst::Mov { .. }
@@ -1999,76 +2002,108 @@ impl Inst {
                 .emit(sink, emit_info, state);
             }
 
-            &Inst::LoadExtName {
+            &Inst::LoadExtNameGot { rd, ref name } => {
+                // Load a PC-relative address into a register.
+                // RISC-V does this slightly differently from other arches. We emit a relocation
+                // with a label, instead of the symbol itself.
+                //
+                // See: https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
+                //
+                // Emit the following code:
+                // label:
+                //   auipc rd, 0              # R_RISCV_GOT_HI20 (symbol_name)
+                //   ld    rd, rd, 0          # R_RISCV_PCREL_LO12_I (label)
+
+                // Create the label that is going to be published to the final binary object.
+                let auipc_label = sink.get_label();
+                sink.bind_label(auipc_label, &mut state.ctrl_plane);
+
+                // Get the current PC.
+                sink.add_reloc(Reloc::RiscvGotHi20, &**name, 0);
+                Inst::Auipc {
+                    rd,
+                    imm: Imm20::from_i32(0),
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+
+                // The `ld` here, points to the `auipc` label instead of directly to the symbol.
+                sink.add_reloc(Reloc::RiscvPCRelLo12I, &auipc_label, 0);
+                Inst::Load {
+                    rd,
+                    op: LoadOP::Ld,
+                    flags: MemFlags::trusted(),
+                    from: AMode::RegOffset(rd.to_reg(), 0),
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+            }
+
+            &Inst::LoadExtNameFar {
                 rd,
                 ref name,
                 offset,
             } => {
-                if emit_info.shared_flag.is_pic() {
-                    // Load a PC-relative address into a register.
-                    // RISC-V does this slightly differently from other arches. We emit a relocation
-                    // with a label, instead of the symbol itself.
-                    //
-                    // See: https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
-                    //
-                    // Emit the following code:
-                    // label:
-                    //   auipc rd, 0              # R_RISCV_GOT_HI20 (symbol_name)
-                    //   ld    rd, rd, 0          # R_RISCV_PCREL_LO12_I (label)
+                // In the non PIC sequence we relocate the absolute address into
+                // a preallocated space, load it into a register and jump over
+                // it.
+                //
+                // Emit the following code:
+                //   ld rd, label_data
+                //   j label_end
+                // label_data:
+                //   <8 byte space>           # ABS8
+                // label_end:
 
-                    // Create the label that is going to be published to the final binary object.
-                    let auipc_label = sink.get_label();
-                    sink.bind_label(auipc_label, &mut state.ctrl_plane);
+                let label_data = sink.get_label();
+                let label_end = sink.get_label();
 
-                    // Get the current PC.
-                    sink.add_reloc(Reloc::RiscvGotHi20, &**name, 0);
-                    Inst::Auipc {
-                        rd,
-                        imm: Imm20::from_i32(0),
-                    }
-                    .emit_uncompressed(sink, emit_info, state, start_off);
-
-                    // The `ld` here, points to the `auipc` label instead of directly to the symbol.
-                    sink.add_reloc(Reloc::RiscvPCRelLo12I, &auipc_label, 0);
-                    Inst::Load {
-                        rd,
-                        op: LoadOP::Ld,
-                        flags: MemFlags::trusted(),
-                        from: AMode::RegOffset(rd.to_reg(), 0),
-                    }
-                    .emit_uncompressed(sink, emit_info, state, start_off);
-                } else {
-                    // In the non PIC sequence we relocate the absolute address into
-                    // a prealocatted space, load it into a register and jump over it.
-                    //
-                    // Emit the following code:
-                    //   ld rd, label_data
-                    //   j label_end
-                    // label_data:
-                    //   <8 byte space>           # ABS8
-                    // label_end:
-
-                    let label_data = sink.get_label();
-                    let label_end = sink.get_label();
-
-                    // Load the value from a label
-                    Inst::Load {
-                        rd,
-                        op: LoadOP::Ld,
-                        flags: MemFlags::trusted(),
-                        from: AMode::Label(label_data),
-                    }
-                    .emit(sink, emit_info, state);
-
-                    // Jump over the data
-                    Inst::gen_jump(label_end).emit(sink, emit_info, state);
-
-                    sink.bind_label(label_data, &mut state.ctrl_plane);
-                    sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
-                    sink.put8(0);
-
-                    sink.bind_label(label_end, &mut state.ctrl_plane);
+                // Load the value from a label
+                Inst::Load {
+                    rd,
+                    op: LoadOP::Ld,
+                    flags: MemFlags::trusted(),
+                    from: AMode::Label(label_data),
                 }
+                .emit(sink, emit_info, state);
+
+                // Jump over the data
+                Inst::gen_jump(label_end).emit(sink, emit_info, state);
+
+                sink.bind_label(label_data, &mut state.ctrl_plane);
+                sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
+                sink.put8(0);
+
+                sink.bind_label(label_end, &mut state.ctrl_plane);
+            }
+
+            &Inst::LoadExtNameNear {
+                rd,
+                ref name,
+                offset,
+            } => {
+                // Emit the following code:
+                // label:
+                //   auipc rd, 0              # R_RISCV_PCREL_HI20 (symbol_name)
+                //   ld    rd, rd, 0          # R_RISCV_PCREL_LO12_I (label)
+
+                let auipc_label = sink.get_label();
+                sink.bind_label(auipc_label, &mut state.ctrl_plane);
+
+                // Get the current PC.
+                sink.add_reloc(Reloc::RiscvPCRelHi20, &**name, offset);
+                Inst::Auipc {
+                    rd,
+                    imm: Imm20::from_i32(0),
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+
+                sink.add_reloc(Reloc::RiscvPCRelLo12I, &auipc_label, 0);
+                Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Addi,
+                    rd,
+                    rs: rd.to_reg(),
+                    imm12: Imm12::ZERO,
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
             }
 
             &Inst::ElfTlsGetAddr { rd, ref name } => {

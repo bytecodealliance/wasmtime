@@ -20,7 +20,7 @@ block0:
 ;   addi sp,sp,-16
 ;   sd s1,8(sp)
 ; block0:
-;   load_sym s1,userextname0+0
+;   load_ext_name_far s1,userextname0+0
 ;   callind s1
 ;   callind s1
 ;   ld s1,8(sp)
