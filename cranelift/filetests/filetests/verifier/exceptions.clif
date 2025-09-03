@@ -195,7 +195,7 @@ function %f5() {
         return
 }
 
-;; `system_v` has two paylaod slots
+;; `system_v` has two payload slots
 function %f5() {
     sig0 = () system_v
     fn0 = %g() system_v
