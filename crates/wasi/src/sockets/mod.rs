@@ -14,6 +14,44 @@ pub(crate) use tcp::NonInheritedOptions;
 pub use tcp::TcpSocket;
 pub use udp::UdpSocket;
 
+/// A helper struct which implements [`HasData`] for the `wasi:sockets` APIs.
+///
+/// This can be useful when directly calling `add_to_linker` functions directly,
+/// such as [`wasmtime_wasi::p2::bindings::sockets::tcp::add_to_linker`] as the
+/// `D` type parameter. See [`HasData`] for more information about the type
+/// parameter's purpose.
+///
+/// When using this type you can skip the [`WasiSocketsView`] trait, for
+/// example.
+///
+/// # Examples
+///
+/// ```
+/// use wasmtime::component::{Linker, ResourceTable};
+/// use wasmtime::{Engine, Result, Config};
+/// use wasmtime_wasi::sockets::*;
+///
+/// struct MyStoreState {
+///     table: ResourceTable,
+///     sockets: WasiSocketsCtx,
+/// }
+///
+/// fn main() -> Result<()> {
+///     let mut config = Config::new();
+///     config.async_support(true);
+///     let engine = Engine::new(&config)?;
+///     let mut linker = Linker::new(&engine);
+///
+///     wasmtime_wasi::p2::bindings::sockets::tcp::add_to_linker::<MyStoreState, WasiSockets>(
+///         &mut linker,
+///         |state| WasiSocketsCtxView {
+///             ctx: &mut state.sockets,
+///             table: &mut state.table,
+///         },
+///     )?;
+///     Ok(())
+/// }
+/// ```
 pub struct WasiSockets;
 
 impl HasData for WasiSockets {
