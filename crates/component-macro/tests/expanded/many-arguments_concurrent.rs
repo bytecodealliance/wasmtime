@@ -352,7 +352,7 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::many_args(
                                     accessor,
                                     arg0,
@@ -384,7 +384,7 @@ pub mod foo {
                         (arg0,): (BigStruct,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::big_argument(accessor, arg0)
                                 .await;
                             Ok(r)

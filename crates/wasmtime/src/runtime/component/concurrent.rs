@@ -91,9 +91,9 @@ use wasmtime_environ::component::{
 
 pub use abort::JoinHandle;
 pub use futures_and_streams::{
-    ErrorContext, FutureReader, FutureWriter, GuardedFutureReader, GuardedFutureWriter,
-    GuardedStreamReader, GuardedStreamWriter, ReadBuffer, StreamReader, StreamWriter, VecBuffer,
-    WriteBuffer,
+    Destination, DirectDestination, DirectSource, ErrorContext, FutureConsumer, FutureProducer,
+    FutureReader, GuardedFutureReader, GuardedStreamReader, ReadBuffer, Source, StreamConsumer,
+    StreamProducer, StreamReader, StreamResult, VecBuffer, WriteBuffer,
 };
 pub(crate) use futures_and_streams::{
     ResourcePair, lower_error_context_to_index, lower_future_to_index, lower_stream_to_index,
@@ -457,32 +457,32 @@ where
         })
     }
 
+    /// Returns the getter this accessor is using to project from `T` into
+    /// `D::Data`.
+    pub fn getter(&self) -> fn(&mut T) -> D::Data<'_> {
+        self.get_data
+    }
+
     /// Changes this accessor to access `D2` instead of the current type
     /// parameter `D`.
     ///
     /// This changes the underlying data access from `T` to `D2::Data<'_>`.
     ///
-    /// Note that this is not a public or recommended API because it's easy to
-    /// cause panics with this by having two `Accessor` values live at the same
-    /// time. The returned `Accessor` does not refer to this `Accessor` meaning
-    /// that both can be used. You could, for example, call `Accessor::with`
-    /// simultaneously on both. That would cause a panic though.
+    /// # Panics
     ///
-    /// In short while there's nothing unsafe about this it's a footgun. It's
-    /// here for bindings generation where the provided accessor is transformed
-    /// into a new accessor and then this returned accessor is passed to
-    /// implementations.
+    /// When using this API the returned value is disconnected from `&self` and
+    /// the lifetime binding the `self` argument. An `Accessor` only works
+    /// within the context of the closure or async closure that it was
+    /// originally given to, however. This means that due to the fact that the
+    /// returned value has no lifetime connection it's possible to use the
+    /// accessor outside of `&self`, the original accessor, and panic.
     ///
-    /// Note that one possible fix for this would be a lifetime parameter on
-    /// `Accessor` itself so the returned value could borrow from the original
-    /// value (or this could be `self`-by-value instead of `&mut self`) but in
-    /// attempting that it was found to be a bit too onerous in terms of
-    /// plumbing things around without a whole lot of benefit.
-    ///
-    /// In short, this works, but must be treated with care. The current main
-    /// user, bindings generation, treats this with care.
-    #[doc(hidden)]
-    pub fn with_data<D2: HasData>(&self, get_data: fn(&mut T) -> D2::Data<'_>) -> Accessor<T, D2> {
+    /// The returned value should only be used within the scope of the original
+    /// `Accessor` that `self` refers to.
+    pub fn with_getter<D2: HasData>(
+        &self,
+        get_data: fn(&mut T) -> D2::Data<'_>,
+    ) -> Accessor<T, D2> {
         Accessor {
             token: self.token,
             get_data,
@@ -1127,12 +1127,9 @@ impl Instance {
         // Create an "abortable future" here where internally the future will
         // hook calls to poll and possibly spawn more background tasks on each
         // iteration.
-        let (handle, future) =
-            JoinHandle::run(async move { HostTaskOutput::Result(task.run(&accessor).await) });
+        let (handle, future) = JoinHandle::run(async move { task.run(&accessor).await });
         self.concurrent_state_mut(store.0)
-            .push_future(Box::pin(async move {
-                future.await.unwrap_or(HostTaskOutput::Result(Ok(())))
-            }));
+            .push_future(Box::pin(async move { future.await.unwrap_or(Ok(())) }));
 
         handle
     }
@@ -1175,22 +1172,8 @@ impl Instance {
                 let next = match self.set_tls(store.0, || next.as_mut().poll(cx)) {
                     Poll::Ready(Some(output)) => {
                         match output {
-                            HostTaskOutput::Result(Err(e)) => return Poll::Ready(Err(e)),
-                            HostTaskOutput::Result(Ok(())) => {}
-                            HostTaskOutput::Function(fun) => {
-                                // Defer calling this function to a worker fiber
-                                // in case it involves calling a guest realloc
-                                // function as part of a lowering operation.
-                                //
-                                // TODO: This isn't necessary for _all_
-                                // `HostOutput::Function`s, so we could optimize
-                                // by adding another variant to `HostOutput` to
-                                // distinguish which ones need it and which
-                                // don't.
-                                self.concurrent_state_mut(store.0).push_high_priority(
-                                    WorkItem::WorkerFunction(AlwaysMut::new(fun)),
-                                )
-                            }
+                            Err(e) => return Poll::Ready(Err(e)),
+                            Ok(()) => {}
                         }
                         Poll::Ready(true)
                     }
@@ -2360,32 +2343,8 @@ impl Instance {
         let task = state.push(HostTask::new(caller_instance, Some(join_handle)))?;
 
         log::trace!("new host task child of {caller:?}: {task:?}");
-        let token = StoreToken::new(store.as_context_mut());
 
-        // Map the output of the future to a `HostTaskOutput` responsible for
-        // lowering the result into the guest's stack and memory, as well as
-        // notifying any waiters that the task returned.
-        let mut future = Box::pin(async move {
-            let result = match future.await {
-                Some(result) => result,
-                // Task was cancelled; nothing left to do.
-                None => return HostTaskOutput::Result(Ok(())),
-            };
-            HostTaskOutput::Function(Box::new(move |store, instance| {
-                let mut store = token.as_context_mut(store);
-                lower(store.as_context_mut(), instance, result?)?;
-                let state = instance.concurrent_state_mut(store.0);
-                state.get_mut(task)?.join_handle.take();
-                Waitable::Host(task).set_event(
-                    state,
-                    Some(Event::Subtask {
-                        status: Status::Returned,
-                    }),
-                )?;
-
-                Ok(())
-            }))
-        });
+        let mut future = Box::pin(future);
 
         // Finally, poll the future.  We can use a dummy `Waker` here because
         // we'll add the future to `ConcurrentState::futures` and poll it
@@ -2398,10 +2357,11 @@ impl Instance {
         });
 
         Ok(match poll {
-            Poll::Ready(output) => {
+            Poll::Ready(None) => unreachable!(),
+            Poll::Ready(Some(result)) => {
                 // It finished immediately; lower the result and delete the
                 // task.
-                output.consume(store.0, self)?;
+                lower(store.as_context_mut(), self, result?)?;
                 log::trace!("delete host task {task:?} (already ready)");
                 self.concurrent_state_mut(store.0).delete(task)?;
                 None
@@ -2410,6 +2370,39 @@ impl Instance {
                 // It hasn't finished yet; add the future to
                 // `ConcurrentState::futures` so it will be polled by the event
                 // loop and allocate a waitable handle to return to the guest.
+
+                // Wrap the future in a closure responsible for lowering the result into
+                // the guest's stack and memory, as well as notifying any waiters that
+                // the task returned.
+                let future = Box::pin(async move {
+                    let result = match future.await {
+                        Some(result) => result?,
+                        // Task was cancelled; nothing left to do.
+                        None => return Ok(()),
+                    };
+                    tls::get(move |store| {
+                        // Here we schedule a task to run on a worker fiber to do
+                        // the lowering since it may involve a call to the guest's
+                        // realloc function.  This is necessary because calling the
+                        // guest while there are host embedder frames on the stack
+                        // is unsound.
+                        self.concurrent_state_mut(store).push_high_priority(
+                            WorkItem::WorkerFunction(AlwaysMut::new(Box::new(move |store, _| {
+                                lower(token.as_context_mut(store), self, result)?;
+                                let state = self.concurrent_state_mut(store);
+                                state.get_mut(task)?.join_handle.take();
+                                Waitable::Host(task).set_event(
+                                    state,
+                                    Some(Event::Subtask {
+                                        status: Status::Returned,
+                                    }),
+                                )
+                            }))),
+                        );
+                        Ok(())
+                    })
+                });
+
                 self.concurrent_state_mut(store.0).push_future(future);
                 let handle = self.id().get_mut(store.0).guest_tables().0[caller_instance]
                     .subtask_insert_host(task.rep())?;
@@ -2467,13 +2460,14 @@ impl Instance {
 
         log::trace!("new host task child of {caller:?}: {task:?}");
 
-        // Map the output of the future to a `HostTaskOutput` which will take
-        // care of stashing the result in `GuestTask::result` and resuming this
-        // fiber when the host task completes.
-        let mut future = Box::pin(future.map(move |result| {
-            HostTaskOutput::Function(Box::new(move |store, instance| {
-                let state = instance.concurrent_state_mut(store);
-                state.get_mut(caller)?.result = Some(Box::new(result?) as _);
+        // Wrap the future in a closure which will take care of stashing the
+        // result in `GuestTask::result` and resuming this fiber when the host
+        // task completes.
+        let mut future = Box::pin(async move {
+            let result = future.await?;
+            tls::get(move |store| {
+                let state = self.concurrent_state_mut(store);
+                state.get_mut(caller)?.result = Some(Box::new(result) as _);
 
                 Waitable::Host(task).set_event(
                     state,
@@ -2483,8 +2477,8 @@ impl Instance {
                 )?;
 
                 Ok(())
-            }))
-        })) as HostTaskFuture;
+            })
+        }) as HostTaskFuture;
 
         // Finally, poll the future.  We can use a dummy `Waker` here because
         // we'll add the future to `ConcurrentState::futures` and poll it
@@ -2497,17 +2491,16 @@ impl Instance {
         });
 
         match poll {
-            Poll::Ready(output) => {
-                // It completed immediately; run the `HostTaskOutput` function
-                // to stash the result and delete the task.
-                output.consume(store, self)?;
+            Poll::Ready(result) => {
+                // It completed immediately; check the result and delete the task.
+                result?;
                 log::trace!("delete host task {task:?} (already ready)");
                 self.concurrent_state_mut(store).delete(task)?;
             }
             Poll::Pending => {
                 // It did not complete immediately; add it to
                 // `ConcurrentState::futures` so it will be polled via the event
-                // loop, then use `GuestTask::sync_call_set` to wait for the
+                // loop; then use `GuestTask::sync_call_set` to wait for the
                 // task to complete, suspending the current fiber until it does
                 // so.
                 let state = self.concurrent_state_mut(store);
@@ -3413,27 +3406,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
     }
 }
 
-/// Represents the output of a host task or background task.
-pub(crate) enum HostTaskOutput {
-    /// A plain result
-    Result(Result<()>),
-    /// A function to be run after the future completes (e.g. post-processing
-    /// which requires access to the store and instance).
-    Function(Box<dyn FnOnce(&mut dyn VMStore, Instance) -> Result<()> + Send>),
-}
-
-impl HostTaskOutput {
-    /// Retrieve the result of the host or background task, running the
-    /// post-processing function if present.
-    fn consume(self, store: &mut dyn VMStore, instance: Instance) -> Result<()> {
-        match self {
-            Self::Function(fun) => fun(store, instance),
-            Self::Result(result) => result,
-        }
-    }
-}
-
-type HostTaskFuture = Pin<Box<dyn Future<Output = HostTaskOutput> + Send + 'static>>;
+type HostTaskFuture = Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>;
 
 /// Represents the state of a pending host task.
 struct HostTask {

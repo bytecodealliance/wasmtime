@@ -17,10 +17,67 @@ pub mod sockets;
 
 use crate::WasiView;
 use crate::p3::bindings::LinkOptions;
-use wasmtime::component::Linker;
+use anyhow::Context as _;
+use core::marker::PhantomData;
+use core::pin::Pin;
+use core::task::{Context, Poll};
+use tokio::sync::oneshot;
+use wasmtime::StoreContextMut;
+use wasmtime::component::{
+    Accessor, Destination, FutureProducer, Linker, StreamProducer, StreamResult,
+};
 
 // Default buffer capacity to use for reads of byte-sized values.
 const DEFAULT_BUFFER_CAPACITY: usize = 8192;
+
+struct StreamEmptyProducer<T>(PhantomData<fn(T) -> T>);
+
+impl<T> Default for StreamEmptyProducer<T> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T: Send + Sync + 'static, D> StreamProducer<D> for StreamEmptyProducer<T> {
+    type Item = T;
+    type Buffer = Option<Self::Item>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        _: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
+struct FutureReadyProducer<T>(T);
+
+impl<T, D> FutureProducer<D> for FutureReadyProducer<T>
+where
+    T: Send + 'static,
+{
+    type Item = T;
+
+    async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<T> {
+        Ok(self.0)
+    }
+}
+
+struct FutureOneshotProducer<T>(oneshot::Receiver<T>);
+
+impl<T, D> FutureProducer<D> for FutureOneshotProducer<T>
+where
+    T: Send + 'static,
+{
+    type Item = T;
+
+    async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<T> {
+        self.0.await.context("oneshot sender dropped")
+    }
+}
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///

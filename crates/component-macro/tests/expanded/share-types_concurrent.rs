@@ -288,7 +288,7 @@ pub mod http_fetch {
             "fetch-request",
             move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Request,)| {
                 wasmtime::component::__internal::Box::pin(async move {
-                    let accessor = &caller.with_data(host_getter);
+                    let accessor = &caller.with_getter(host_getter);
                     let r = <D as HostWithStore>::fetch_request(accessor, arg0).await;
                     Ok((r,))
                 })

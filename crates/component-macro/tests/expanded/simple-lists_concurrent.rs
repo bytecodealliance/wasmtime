@@ -243,7 +243,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<u32>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::simple_list1(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -254,7 +254,7 @@ pub mod foo {
                     "simple-list2",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::simple_list2(accessor).await;
                             Ok((r,))
                         })
@@ -273,7 +273,7 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::simple_list3(
                                     accessor,
                                     arg0,
@@ -297,7 +297,7 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::simple_list4(accessor, arg0)
                                 .await;
                             Ok((r,))

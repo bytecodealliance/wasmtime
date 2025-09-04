@@ -218,7 +218,7 @@ pub mod foo {
                     "take-char",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (char,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::take_char(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -229,7 +229,7 @@ pub mod foo {
                     "return-char",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::return_char(accessor).await;
                             Ok((r,))
                         })

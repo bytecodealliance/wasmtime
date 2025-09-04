@@ -236,7 +236,7 @@ pub async fn test_round_trip(
             component_async_tests::round_trip::bindings::RoundTrip::new(&mut store, &instance)?;
 
         if call_style == 0 || !cfg!(miri) {
-            // Now do it again using `Instance::run_concurrent`:
+            // Run the test using `Instance::run_concurrent`:
             instance
                 .run_concurrent(&mut store, {
                     let inputs_and_outputs = inputs_and_outputs

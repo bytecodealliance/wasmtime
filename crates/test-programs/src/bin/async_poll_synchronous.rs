@@ -64,7 +64,7 @@ impl Guest for Component {
 
             assert_eq!(waitable_set_poll(set), (EVENT_NONE, 0, 0));
 
-            assert!(async_when_ready() == STATUS_RETURNED);
+            assert_eq!(async_when_ready(), STATUS_RETURNED);
 
             assert_eq!(waitable_set_poll(set), (EVENT_NONE, 0, 0));
 

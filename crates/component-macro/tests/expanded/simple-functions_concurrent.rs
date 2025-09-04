@@ -235,7 +235,7 @@ pub mod foo {
                     "f1",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::f1(accessor).await;
                             Ok(r)
                         })
@@ -245,7 +245,7 @@ pub mod foo {
                     "f2",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (u32,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::f2(accessor, arg0).await;
                             Ok(r)
                         })
@@ -258,7 +258,7 @@ pub mod foo {
                         (arg0, arg1): (u32, u32)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::f3(accessor, arg0, arg1).await;
                             Ok(r)
                         })
@@ -268,7 +268,7 @@ pub mod foo {
                     "f4",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::f4(accessor).await;
                             Ok((r,))
                         })
@@ -278,7 +278,7 @@ pub mod foo {
                     "f5",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::f5(accessor).await;
                             Ok((r,))
                         })
@@ -291,7 +291,7 @@ pub mod foo {
                         (arg0, arg1, arg2): (u32, u32, u32)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::f6(accessor, arg0, arg1, arg2)
                                 .await;
                             Ok((r,))

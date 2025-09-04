@@ -739,6 +739,12 @@ impl File {
         }
     }
 
+    /// Returns reference to the underlying [`cap_std::fs::File`]
+    #[cfg(feature = "p3")]
+    pub(crate) fn as_file(&self) -> &Arc<cap_std::fs::File> {
+        &self.file
+    }
+
     pub(crate) async fn advise(
         &self,
         offset: u64,
@@ -784,7 +790,7 @@ pub struct Dir {
     /// oflags back out using fcntl.
     pub open_mode: OpenMode,
 
-    allow_blocking_current_thread: bool,
+    pub(crate) allow_blocking_current_thread: bool,
 }
 
 impl Dir {
@@ -829,6 +835,12 @@ impl Dir {
             let d = self.dir.clone();
             spawn_blocking(move || body(&d)).await
         }
+    }
+
+    /// Returns reference to the underlying [`cap_std::fs::Dir`]
+    #[cfg(feature = "p3")]
+    pub(crate) fn as_dir(&self) -> &Arc<cap_std::fs::Dir> {
+        &self.dir
     }
 
     pub(crate) async fn create_directory_at(&self, path: String) -> Result<(), ErrorCode> {

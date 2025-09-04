@@ -1,7 +1,7 @@
+use crate::util::PipeProducer;
 use anyhow::Result;
-use wasmtime::component::{
-    Accessor, AccessorTask, GuardedStreamWriter, Resource, StreamReader, StreamWriter,
-};
+use futures::channel::mpsc;
+use wasmtime::component::{Accessor, Resource, StreamReader};
 
 use super::Ctx;
 
@@ -38,29 +38,15 @@ impl bindings::local::local::resource_stream::HostWithStore for Ctx {
         accessor: &Accessor<T, Self>,
         count: u32,
     ) -> wasmtime::Result<StreamReader<Resource<ResourceStreamX>>> {
-        struct Task {
-            tx: StreamWriter<Resource<ResourceStreamX>>,
-
-            count: u32,
-        }
-
-        impl<T> AccessorTask<T, Ctx, Result<()>> for Task {
-            async fn run(self, accessor: &Accessor<T, Ctx>) -> Result<()> {
-                let mut tx = GuardedStreamWriter::new(accessor, self.tx);
-                for _ in 0..self.count {
-                    let item = accessor.with(|mut view| view.get().table.push(ResourceStreamX))?;
-                    tx.write_all(Some(item)).await;
-                }
-                Ok(())
+        accessor.with(|mut access| {
+            let (mut tx, rx) = mpsc::channel(usize::try_from(count).unwrap());
+            for _ in 0..count {
+                tx.try_send(access.get().table.push(ResourceStreamX)?)
+                    .unwrap()
             }
-        }
-
-        let (tx, rx) = accessor.with(|mut view| {
-            let instance = view.instance();
-            instance.stream(&mut view)
-        })?;
-        accessor.spawn(Task { tx, count });
-        Ok(rx)
+            let instance = access.instance();
+            Ok(StreamReader::new(instance, access, PipeProducer::new(rx)))
+        })
     }
 }
 

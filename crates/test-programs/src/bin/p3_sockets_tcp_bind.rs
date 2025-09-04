@@ -4,7 +4,6 @@ use test_programs::p3::wasi::sockets::types::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, TcpSocket,
 };
 use test_programs::p3::wit_stream;
-use wit_bindgen::yield_blocking;
 
 struct Component;
 
@@ -87,25 +86,10 @@ async fn test_tcp_bind_reuseaddr(ip: IpAddress) {
 
     // If SO_REUSEADDR was configured correctly, the following lines
     // shouldn't be affected by the TIME_WAIT state of the just closed
-    // `listener1` socket.
-    //
-    // Note though that the way things are modeled in Wasmtime right now is that
-    // the TCP socket is kept alive by a spawned task created in `listen`
-    // meaning that to fully close the socket it requires the spawned task to
-    // shut down. That may require yielding to the host or similar so try a few
-    // times to let the host get around to closing the task while testing each
-    // time to see if we can reuse the address. This loop is bounded because it
-    // should complete "quickly".
-    for _ in 0..10 {
-        let listener2 = TcpSocket::create(ip.family()).unwrap();
-        if listener2.bind(bind_addr).is_ok() {
-            listener2.listen().unwrap();
-            return;
-        }
-        yield_blocking();
-    }
-
-    panic!("looks like REUSEADDR isn't in use?");
+    // `listener1` socket:
+    let listener2 = TcpSocket::create(ip.family()).unwrap();
+    listener2.bind(bind_addr).unwrap();
+    listener2.listen().unwrap();
 }
 
 // Try binding to an address that is not configured on the system.

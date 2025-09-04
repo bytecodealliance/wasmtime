@@ -11,9 +11,11 @@ use std::vec::Vec;
 pub use untyped::*;
 mod untyped {
     use super::WriteBuffer;
+    use crate::vm::SendSyncPtr;
     use std::any::TypeId;
     use std::marker;
     use std::mem;
+    use std::ptr::NonNull;
 
     /// Helper structure to type-erase the `T` in `WriteBuffer<T>`.
     ///
@@ -25,7 +27,7 @@ mod untyped {
     /// borrow on the original buffer passed in.
     pub struct UntypedWriteBuffer<'a> {
         element_type_id: TypeId,
-        buf: *mut dyn WriteBuffer<()>,
+        buf: SendSyncPtr<dyn WriteBuffer<()>>,
         _marker: marker::PhantomData<&'a mut dyn WriteBuffer<()>>,
     }
 
@@ -48,11 +50,14 @@ mod untyped {
                 // is safe here because `typed` and `untyped` have the same size
                 // and we're otherwise reinterpreting a raw pointer with a type
                 // parameter to one without one.
-                buf: unsafe {
-                    let r = ReinterpretWriteBuffer { typed: buf };
-                    assert_eq!(mem::size_of_val(&r.typed), mem::size_of_val(&r.untyped));
-                    r.untyped
-                },
+                buf: SendSyncPtr::new(
+                    NonNull::new(unsafe {
+                        let r = ReinterpretWriteBuffer { typed: buf };
+                        assert_eq!(mem::size_of_val(&r.typed), mem::size_of_val(&r.untyped));
+                        r.untyped
+                    })
+                    .unwrap(),
+                ),
                 _marker: marker::PhantomData,
             }
         }
@@ -68,7 +73,12 @@ mod untyped {
             // structure also is proof of valid existence of the original
             // `&mut WriteBuffer<T>`, so taking the raw pointer back to a safe
             // reference is valid.
-            unsafe { &mut *ReinterpretWriteBuffer { untyped: self.buf }.typed }
+            unsafe {
+                &mut *ReinterpretWriteBuffer {
+                    untyped: self.buf.as_ptr(),
+                }
+                .typed
+            }
         }
     }
 }
@@ -208,6 +218,12 @@ impl<T: Send + Sync + 'static> ReadBuffer<T> for Option<T> {
 pub struct VecBuffer<T> {
     buffer: Vec<MaybeUninit<T>>,
     offset: usize,
+}
+
+impl<T> Default for VecBuffer<T> {
+    fn default() -> Self {
+        Self::with_capacity(0)
+    }
 }
 
 impl<T> VecBuffer<T> {
