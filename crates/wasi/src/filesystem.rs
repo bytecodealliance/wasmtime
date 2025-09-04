@@ -702,6 +702,7 @@ impl File {
     }
 
     /// Returns reference to the underlying [`cap_std::fs::File`]
+    #[cfg(feature = "p3")]
     pub(crate) fn as_file(&self) -> &Arc<cap_std::fs::File> {
         &self.file
     }
@@ -799,6 +800,7 @@ impl Dir {
     }
 
     /// Returns reference to the underlying [`cap_std::fs::Dir`]
+    #[cfg(feature = "p3")]
     pub(crate) fn as_dir(&self) -> &Arc<cap_std::fs::Dir> {
         &self.dir
     }
