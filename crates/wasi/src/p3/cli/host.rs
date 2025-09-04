@@ -54,10 +54,10 @@ impl<D> StreamProducer<D> for InputStreamProducer {
                 }
             }
         }
-        let mut buf = dst.take_buffer();
-        debug_assert!(buf.get_ref().is_empty());
-        buf.get_mut().reserve(DEFAULT_BUFFER_CAPACITY);
-        let mut rbuf = ReadBuf::uninit(buf.get_mut().spare_capacity_mut());
+        let mut buf = dst.take_buffer().into_inner();
+        buf.clear();
+        buf.reserve(DEFAULT_BUFFER_CAPACITY);
+        let mut rbuf = ReadBuf::uninit(buf.spare_capacity_mut());
         match self.rx.as_mut().poll_read(cx, &mut rbuf) {
             Poll::Ready(Ok(())) if rbuf.filled().is_empty() => {
                 Poll::Ready(Ok(StreamResult::Dropped))
@@ -66,8 +66,8 @@ impl<D> StreamProducer<D> for InputStreamProducer {
                 let n = rbuf.filled().len();
                 // SAFETY: `ReadyBuf::filled` promised us `count` bytes have
                 // been initialized.
-                unsafe { buf.get_mut().set_len(n) };
-                dst.set_buffer(buf);
+                unsafe { buf.set_len(n) };
+                dst.set_buffer(Cursor::new(buf));
                 Poll::Ready(Ok(StreamResult::Completed))
             }
             Poll::Ready(Err(..)) => {

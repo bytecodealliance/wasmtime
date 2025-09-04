@@ -142,14 +142,14 @@ impl<D> StreamProducer<D> for ReceiveStreamProducer {
                 }
             }
 
-            let mut buf = dst.take_buffer();
-            debug_assert!(buf.get_ref().is_empty());
-            buf.get_mut().reserve(DEFAULT_BUFFER_CAPACITY);
+            let mut buf = dst.take_buffer().into_inner();
+            buf.clear();
+            buf.reserve(DEFAULT_BUFFER_CAPACITY);
             loop {
-                match self.stream.try_read_buf(buf.get_mut()) {
+                match self.stream.try_read_buf(&mut buf) {
                     Ok(0) => break 'result Ok(()),
                     Ok(..) => {
-                        dst.set_buffer(buf);
+                        dst.set_buffer(Cursor::new(buf));
                         return Poll::Ready(Ok(StreamResult::Completed));
                     }
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
