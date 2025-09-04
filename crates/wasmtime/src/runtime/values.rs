@@ -8,6 +8,13 @@ use wasmtime_environ::WasmHeapTopType;
 
 pub use crate::runtime::vm::ValRaw;
 
+/// A stub implementation for continuation references.
+///
+/// This is a placeholder until continuation objects are fully integrated
+/// with the GC system (see #10248).
+#[derive(Debug, Clone, Copy)]
+pub struct ContRef;
+
 /// Possible runtime values that a WebAssembly module can either consume or
 /// produce.
 ///
@@ -50,6 +57,12 @@ pub enum Val {
 
     /// An exception reference.
     ExnRef(Option<Rooted<ExnRef>>),
+
+    /// A continuation reference.
+    ///
+    /// Note: This is currently a stub implementation as continuation objects
+    /// are not yet fully integrated with the GC system. See #10248.
+    ContRef(Option<ContRef>),
 }
 
 macro_rules! accessors {
@@ -118,7 +131,7 @@ impl Val {
             WasmHeapTopType::Extern => Val::ExternRef(None),
             WasmHeapTopType::Any => Val::AnyRef(None),
             WasmHeapTopType::Exn => Val::ExnRef(None),
-            WasmHeapTopType::Cont => todo!(), // FIXME(#10248)
+            WasmHeapTopType::Cont => Val::ContRef(None),
         }
     }
 
@@ -177,6 +190,12 @@ impl Val {
             Val::AnyRef(Some(a)) => ValType::Ref(RefType::new(false, a._ty(store)?)),
             Val::ExnRef(None) => ValType::NULLEXNREF,
             Val::ExnRef(Some(e)) => ValType::Ref(RefType::new(false, e._ty(store)?.into())),
+            Val::ContRef(_) => {
+                // TODO(#10248): Return proper continuation reference type when available
+                return Err(anyhow::anyhow!(
+                    "continuation references not yet supported in embedder API"
+                ));
+            }
         })
     }
 
@@ -216,7 +235,8 @@ impl Val {
             | (Val::FuncRef(_), _)
             | (Val::ExternRef(_), _)
             | (Val::AnyRef(_), _)
-            | (Val::ExnRef(_), _) => false,
+            | (Val::ExnRef(_), _)
+            | (Val::ContRef(_), _) => false,
         })
     }
 
@@ -268,6 +288,12 @@ impl Val {
                 Some(f) => f.to_raw(store),
                 None => ptr::null_mut(),
             })),
+            Val::ContRef(_) => {
+                // TODO(#10248): Implement proper continuation reference to_raw conversion
+                Err(anyhow::anyhow!(
+                    "continuation references not yet supported in to_raw conversion"
+                ))
+            }
         }
     }
 
@@ -363,6 +389,7 @@ impl Val {
             Val::AnyRef(a) => Some(Ref::Any(a)),
             Val::ExnRef(e) => Some(Ref::Exn(e)),
             Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => None,
+            Val::ContRef(_) => None, // TODO(#10248): Return proper Ref::Cont when available
         }
     }
 
@@ -509,6 +536,9 @@ impl Val {
             // particular store, so they're always considered as "yes I came
             // from that store",
             Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => true,
+
+            // Continuation references are not yet associated with stores
+            Val::ContRef(_) => true, // TODO(#10248): Proper store association when implemented
         }
     }
 }

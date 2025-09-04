@@ -89,7 +89,7 @@ use cranelift_codegen::ir::{BlockArg, types::*};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use itertools::Itertools;
-use smallvec::SmallVec;
+use smallvec::{SmallVec, ToSmallVec};
 use std::collections::{HashMap, hash_map};
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
@@ -2942,35 +2942,101 @@ pub fn translate_operator(
             // representation, so we don't actually need to do anything.
         }
 
-        Operator::ContNew { cont_type_index: _ } => {
-            // TODO(10248) This is added in a follow-up PR
-            return Err(wasmtime_environ::WasmError::Unsupported(
-                "codegen for stack switching instructions not implemented, yet".to_string(),
-            ));
+        Operator::ContNew { cont_type_index } => {
+            let cont_type_index = TypeIndex::from_u32(*cont_type_index);
+            let arg_types: SmallVec<[_; 8]> = environ
+                .continuation_arguments(cont_type_index)
+                .to_smallvec();
+            let result_types: SmallVec<[_; 8]> =
+                environ.continuation_returns(cont_type_index).to_smallvec();
+            let r = stack.pop1();
+            let contobj = environ.translate_cont_new(builder, r, &arg_types, &result_types)?;
+            stack.push1(contobj);
         }
         Operator::ContBind {
-            argument_index: _,
-            result_index: _,
+            argument_index,
+            result_index,
         } => {
-            // TODO(10248) This is added in a follow-up PR
-            return Err(wasmtime_environ::WasmError::Unsupported(
-                "codegen for stack switching instructions not implemented, yet".to_string(),
-            ));
+            let src_types = environ.continuation_arguments(TypeIndex::from_u32(*argument_index));
+            let dst_arity = environ
+                .continuation_arguments(TypeIndex::from_u32(*result_index))
+                .len();
+            let arg_count = src_types.len() - dst_arity;
+
+            let arg_types = &src_types[0..arg_count];
+            for arg_type in arg_types {
+                // We can't bind GC objects using cont.bind at the moment: We
+                // don't have the necessary infrastructure to traverse the
+                // buffers used by cont.bind when looking for GC roots. Thus,
+                // this crude check ensures that these buffers can never contain
+                // GC roots to begin with.
+                if arg_type.is_vmgcref_type_and_not_i31() {
+                    return Err(wasmtime_environ::WasmError::Unsupported(
+                        "cont.bind does not support GC types at the moment".into(),
+                    ));
+                }
+            }
+
+            let (original_contobj, args) = stack.peekn(arg_count + 1).split_last().unwrap();
+
+            let new_contobj = environ.translate_cont_bind(builder, *original_contobj, args);
+
+            stack.popn(arg_count + 1);
+            stack.push1(new_contobj);
         }
-        Operator::Suspend { tag_index: _ } => {
-            // TODO(10248) This is added in a follow-up PR
-            return Err(wasmtime_environ::WasmError::Unsupported(
-                "codegen for stack switching instructions not implemented, yet".to_string(),
-            ));
+        Operator::Suspend { tag_index } => {
+            let tag_index = TagIndex::from_u32(*tag_index);
+            let param_types = environ.tag_params(tag_index).to_vec();
+            let return_types: SmallVec<[_; 8]> = environ
+                .tag_returns(tag_index)
+                .iter()
+                .map(|ty| crate::value_type(environ.isa(), *ty))
+                .collect();
+
+            let params = stack.peekn(param_types.len());
+            let param_count = params.len();
+
+            let return_values =
+                environ.translate_suspend(builder, tag_index.as_u32(), params, &return_types);
+
+            stack.popn(param_count);
+            stack.pushn(&return_values);
         }
         Operator::Resume {
-            cont_type_index: _,
-            resume_table: _,
+            cont_type_index,
+            resume_table: wasm_resume_table,
         } => {
-            // TODO(10248) This is added in a follow-up PR
-            return Err(wasmtime_environ::WasmError::Unsupported(
-                "codegen for stack switching instructions not implemented, yet".to_string(),
-            ));
+            // We translate the block indices in the wasm resume_table to actual Blocks.
+            let mut clif_resume_table = vec![];
+            for handle in &wasm_resume_table.handlers {
+                match handle {
+                    wasmparser::Handle::OnLabel { tag, label } => {
+                        let i = stack.control_stack.len() - 1 - (*label as usize);
+                        let frame = &mut stack.control_stack[i];
+                        // This is side-effecting!
+                        frame.set_branched_to_exit();
+                        clif_resume_table.push((*tag, Some(frame.br_destination())));
+                    }
+                    wasmparser::Handle::OnSwitch { tag } => {
+                        clif_resume_table.push((*tag, None));
+                    }
+                }
+            }
+
+            let cont_type_index = TypeIndex::from_u32(*cont_type_index);
+            let arity = environ.continuation_arguments(cont_type_index).len();
+            let (contobj, call_args) = stack.peekn(arity + 1).split_last().unwrap();
+
+            let cont_return_vals = environ.translate_resume(
+                builder,
+                cont_type_index.as_u32(),
+                *contobj,
+                call_args,
+                &clif_resume_table,
+            )?;
+
+            stack.popn(arity + 1); // arguments + continuation
+            stack.pushn(&cont_return_vals);
         }
         Operator::ResumeThrow {
             cont_type_index: _,
@@ -2983,13 +3049,51 @@ pub fn translate_operator(
             ));
         }
         Operator::Switch {
-            cont_type_index: _,
-            tag_index: _,
+            cont_type_index,
+            tag_index,
         } => {
-            // TODO(10248) This is added in a follow-up PR
-            return Err(wasmtime_environ::WasmError::Unsupported(
-                "codegen for stack switching instructions not implemented, yet".to_string(),
-            ));
+            // Arguments of the continuation we are going to switch to
+            let continuation_argument_types: SmallVec<[_; 8]> = environ
+                .continuation_arguments(TypeIndex::from_u32(*cont_type_index))
+                .to_smallvec();
+            // Arity includes the continuation argument
+            let arity = continuation_argument_types.len();
+            let (contobj, switch_args) = stack.peekn(arity).split_last().unwrap();
+
+            // Type of the continuation we are going to create by suspending the
+            // currently running stack
+            let current_continuation_type = continuation_argument_types.last().unwrap();
+            let current_continuation_type = current_continuation_type.unwrap_ref_type();
+
+            // Argument types of current_continuation_type. These will in turn
+            // be the types of the arguments we receive when someone switches
+            // back to this switch instruction
+            let current_continuation_arg_types: SmallVec<[_; 8]> =
+                match current_continuation_type.heap_type {
+                    WasmHeapType::ConcreteCont(index) => {
+                        let mti = index
+                            .as_module_type_index()
+                            .expect("Only supporting module type indices on switch for now");
+
+                        environ
+                            .continuation_arguments(TypeIndex::from_u32(mti.as_u32()))
+                            .iter()
+                            .map(|ty| crate::value_type(environ.isa(), *ty))
+                            .collect()
+                    }
+                    _ => panic!("Invalid type on switch"),
+                };
+
+            let switch_return_values = environ.translate_switch(
+                builder,
+                *tag_index,
+                *contobj,
+                switch_args,
+                &current_continuation_arg_types,
+            )?;
+
+            stack.popn(arity);
+            stack.pushn(&switch_return_values)
         }
 
         Operator::GlobalAtomicGet { .. }
