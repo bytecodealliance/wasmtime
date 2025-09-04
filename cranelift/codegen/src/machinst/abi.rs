@@ -2477,11 +2477,14 @@ impl<T> CallInfo<T> {
                         // returns), we use the integer temp register in
                         // steps.
                         let parts = (ty.bytes() + M::word_bytes() - 1) / M::word_bytes();
+                        let one_part_load_ty =
+                            Type::int_with_byte_size(M::word_bytes().min(ty.bytes()) as u16)
+                                .unwrap();
                         for part in 0..parts {
                             emit(M::gen_load_stack(
                                 amode.offset_by(part * M::word_bytes()),
                                 temp,
-                                M::word_type(),
+                                one_part_load_ty,
                             ));
                             emit(M::gen_store_stack(
                                 StackAMode::Slot(
