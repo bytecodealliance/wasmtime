@@ -281,7 +281,7 @@ impl<'a, T, B> Destination<'a, T, B> {
 impl<'a, B> Destination<'a, u8, B> {
     /// Return a `DirectDestination` view of `self` if the guest is reading.
     pub fn as_direct_destination<D>(
-        &'a mut self,
+        &mut self,
         store: StoreContextMut<'a, D>,
     ) -> Option<DirectDestination<'a, D>> {
         if let ReadState::GuestReady { .. } = self
@@ -556,7 +556,7 @@ impl<T> Source<'_, T> {
 impl Source<'_, u8> {
     /// Return a `DirectSource` view of `self`.
     pub fn as_direct_source<'a, D>(
-        &'a mut self,
+        &mut self,
         store: StoreContextMut<'a, D>,
     ) -> DirectSource<'a, D> {
         DirectSource {
