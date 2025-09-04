@@ -115,7 +115,7 @@ impl<D> StreamProducer<D> for ReceiveStreamProducer {
         dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let res = 'result: loop {
+        let res = 'result: {
             if let Some(mut dst) = dst.as_direct_destination(store) {
                 let buf = dst.remaining();
                 if buf.is_empty() {
