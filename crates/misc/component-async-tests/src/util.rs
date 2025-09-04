@@ -53,7 +53,7 @@ impl<D, T: Send + Sync + Lower + 'static, S: Stream<Item = T> + Send + 'static> 
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         _: StoreContextMut<D>,
-        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        mut destination: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<Result<StreamResult>> {
         // SAFETY: This is a standard pin-projection, and we never move
@@ -94,7 +94,7 @@ impl<D, T: Lift + 'static, S: Sink<T, Error: std::error::Error + Send + Sync> + 
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<D>,
-        source: &mut Source<Self::Item>,
+        mut source: Source<Self::Item>,
         finish: bool,
     ) -> Poll<Result<StreamResult>> {
         // SAFETY: This is a standard pin-projection, and we never move
