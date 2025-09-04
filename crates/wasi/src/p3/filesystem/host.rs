@@ -19,11 +19,11 @@ use std::sync::Arc;
 use system_interface::fs::FileIoExt as _;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
+use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
-    StreamProducer, StreamReader, StreamResult,
+    StreamProducer, StreamReader, StreamResult, VecBuffer,
 };
-use wasmtime::{StoreContextMut, component::VecBuffer};
 
 fn get_descriptor<'a>(
     table: &'a ResourceTable,
