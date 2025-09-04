@@ -1,155 +1,119 @@
 use crate::I32Exit;
 use crate::cli::{IsTerminal, WasiCli, WasiCliCtxView};
+use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::cli::{
     environment, exit, stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr,
     terminal_stdin, terminal_stdout,
 };
 use crate::p3::cli::{TerminalInput, TerminalOutput};
-use crate::p3::{DEFAULT_BUFFER_CAPACITY, MAX_BUFFER_CAPACITY};
 use anyhow::{Context as _, anyhow};
 use bytes::BytesMut;
+use core::pin::Pin;
+use core::task::{Context, Poll};
 use std::io::Cursor;
-use std::pin::Pin;
-use std::task::{self, Context, Poll};
-use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _, ReadBuf};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Accessor, Destination, Resource, Source, StreamConsumer, StreamProducer, StreamReader,
     StreamResult,
 };
 
-struct InputStreamProducer<T> {
-    rx: T,
+struct InputStreamProducer {
+    rx: Pin<Box<dyn AsyncRead + Send + Sync>>,
 }
 
-impl<T, D> StreamProducer<D> for InputStreamProducer<T>
-where
-    T: AsyncRead + Send + Unpin + 'static,
-{
+impl<D> StreamProducer<D> for InputStreamProducer {
     type Item = u8;
     type Buffer = Cursor<BytesMut>;
 
     fn poll_produce<'a>(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<'a, D>,
-        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        if finish {
-            return Poll::Ready(Ok(StreamResult::Cancelled));
+        if let Some(mut dst) = dst.as_direct_destination(store) {
+            let mut buf = ReadBuf::new(dst.remaining());
+            match self.rx.as_mut().poll_read(cx, &mut buf) {
+                Poll::Ready(Ok(())) if buf.capacity() == 0 => {
+                    Poll::Ready(Ok(StreamResult::Completed))
+                }
+                Poll::Ready(Ok(())) if buf.filled().is_empty() => {
+                    Poll::Ready(Ok(StreamResult::Dropped))
+                }
+                Poll::Ready(Ok(())) => {
+                    let n = buf.filled().len();
+                    dst.mark_written(n);
+                    Poll::Ready(Ok(StreamResult::Completed))
+                }
+                Poll::Ready(Err(..)) => {
+                    // TODO: Report the error to the guest
+                    Poll::Ready(Ok(StreamResult::Dropped))
+                }
+                Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+                Poll::Pending => Poll::Pending,
+            }
+        } else {
+            let mut buf = dst.take_buffer();
+            debug_assert!(buf.get_ref().is_empty());
+            buf.get_mut().reserve(DEFAULT_BUFFER_CAPACITY);
+            let mut rbuf = ReadBuf::uninit(buf.get_mut().spare_capacity_mut());
+            match self.rx.as_mut().poll_read(cx, &mut rbuf) {
+                Poll::Ready(Ok(())) if rbuf.filled().is_empty() => {
+                    Poll::Ready(Ok(StreamResult::Dropped))
+                }
+                Poll::Ready(Ok(())) => {
+                    let n = rbuf.filled().len();
+                    // SAFETY: `ReadyBuf::filled` promised us `count` bytes have
+                    // been initialized.
+                    unsafe { buf.get_mut().set_len(n) };
+                    dst.set_buffer(buf);
+                    Poll::Ready(Ok(StreamResult::Completed))
+                }
+                Poll::Ready(Err(..)) => {
+                    // TODO: Report the error to the guest
+                    Poll::Ready(Ok(StreamResult::Dropped))
+                }
+                Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+                Poll::Pending => Poll::Pending,
+            }
         }
-
-        let me = self.get_mut();
-
-        Poll::Ready(Ok(
-            if let Some(mut destination) = destination.as_direct_destination(store)
-                && !destination.remaining().is_empty()
-            {
-                let mut buffer = ReadBuf::new(destination.remaining());
-                match task::ready!(Pin::new(&mut me.rx).poll_read(cx, &mut buffer)) {
-                    Ok(()) => {
-                        if buffer.filled().is_empty() {
-                            StreamResult::Dropped
-                        } else {
-                            let count = buffer.filled().len();
-                            destination.mark_written(count);
-                            StreamResult::Completed
-                        }
-                    }
-                    Err(_) => {
-                        // TODO: Report the error to the guest
-                        StreamResult::Dropped
-                    }
-                }
-            } else {
-                let capacity = destination
-                    .remaining(store)
-                    .unwrap_or(DEFAULT_BUFFER_CAPACITY)
-                    // In the case of small or zero-length reads, we read more than
-                    // was asked for; this will save the runtime from having to
-                    // block or call `poll_produce` on subsequent reads.  See the
-                    // documentation for `StreamProducer::poll_produce` for details.
-                    .max(DEFAULT_BUFFER_CAPACITY)
-                    .min(MAX_BUFFER_CAPACITY);
-
-                let mut buffer = destination.take_buffer().into_inner();
-                buffer.clear();
-                buffer.reserve(capacity);
-
-                let mut readbuf = ReadBuf::uninit(buffer.spare_capacity_mut());
-                let result = Pin::new(&mut me.rx).poll_read(cx, &mut readbuf);
-                let count = readbuf.filled().len();
-                // SAFETY: `ReadyBuf::filled` promised us `count` bytes have
-                // been initialized.
-                unsafe {
-                    buffer.set_len(count);
-                }
-
-                destination.set_buffer(Cursor::new(buffer));
-
-                match task::ready!(result) {
-                    Ok(()) => {
-                        if count == 0 {
-                            StreamResult::Dropped
-                        } else {
-                            StreamResult::Completed
-                        }
-                    }
-                    Err(_) => {
-                        // TODO: Report the error to the guest
-                        StreamResult::Dropped
-                    }
-                }
-            },
-        ))
     }
 }
 
-struct OutputStreamConsumer<T> {
-    tx: T,
+struct OutputStreamConsumer {
+    tx: Pin<Box<dyn AsyncWrite + Send + Sync>>,
 }
 
-impl<T, D> StreamConsumer<D> for OutputStreamConsumer<T>
-where
-    T: AsyncWrite + Send + Unpin + 'static,
-{
+impl<D> StreamConsumer<D> for OutputStreamConsumer {
     type Item = u8;
 
     fn poll_consume(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        mut store: StoreContextMut<D>,
-        source: &mut Source<Self::Item>,
+        store: StoreContextMut<D>,
+        src: &mut Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let me = self.get_mut();
-
-        let mut source = source.as_direct_source(store);
-
-        let (mut count, mut result) = if !source.remaining().is_empty() {
-            match task::ready!(Pin::new(&mut me.tx).poll_write(cx, source.remaining())) {
-                Ok(count) => (count, StreamResult::Completed),
-                Err(_) => {
-                    // TODO: Report the error to the guest
-                    (0, StreamResult::Dropped)
-                }
+        let mut src = src.as_direct_source(store);
+        let buf = src.remaining();
+        match self.tx.as_mut().poll_write(cx, buf) {
+            Poll::Ready(Ok(n)) if buf.is_empty() => {
+                debug_assert_eq!(n, 0);
+                Poll::Ready(Ok(StreamResult::Completed))
             }
-        } else {
-            (0, StreamResult::Completed)
-        };
-
-        if task::ready!(Pin::new(&mut me.tx).poll_flush(cx)).is_err() {
-            // TODO: Report the error to the guest
-            count = 0;
-            result = StreamResult::Dropped;
+            Poll::Ready(Ok(n)) => {
+                src.mark_read(n);
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Poll::Ready(Err(..)) => {
+                // TODO: Report the error to the guest
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
         }
-
-        if count > 0 {
-            source.mark_read(count);
-        }
-
-        Poll::Ready(Ok(result))
     }
 }
 
