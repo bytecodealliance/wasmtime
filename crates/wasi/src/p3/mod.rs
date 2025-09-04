@@ -18,16 +18,14 @@ pub mod sockets;
 use crate::WasiView;
 use crate::p3::bindings::LinkOptions;
 use anyhow::Context as _;
-use bytes::BytesMut;
+use core::marker::PhantomData;
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use std::io::Cursor;
-use std::marker::PhantomData;
 use tokio::sync::oneshot;
+use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Accessor, Destination, FutureProducer, Linker, StreamProducer, StreamResult,
 };
-use wasmtime::{AsContextMut as _, StoreContextMut};
 
 // Default buffer capacity to use for reads of byte-sized values.
 const DEFAULT_BUFFER_CAPACITY: usize = 8192;
@@ -35,7 +33,13 @@ const DEFAULT_BUFFER_CAPACITY: usize = 8192;
 // Maximum buffer capacity to use for reads of byte-sized values.
 const MAX_BUFFER_CAPACITY: usize = 4 * DEFAULT_BUFFER_CAPACITY;
 
-struct StreamEmptyProducer<T>(PhantomData<fn() -> T>);
+struct StreamEmptyProducer<T>(PhantomData<fn(T) -> T>);
+
+impl<T> Default for StreamEmptyProducer<T> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
 
 impl<T: Send + Sync + 'static, D> StreamProducer<D> for StreamEmptyProducer<T> {
     type Item = T;

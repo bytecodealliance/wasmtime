@@ -5,25 +5,24 @@ use crate::p3::bindings::sockets::types::{
 };
 use crate::p3::sockets::{SocketError, SocketResult, WasiSockets};
 use crate::p3::{
-    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, MAX_BUFFER_CAPACITY,
-    StreamEmptyProducer, write_buffered_bytes,
+    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, StreamEmptyProducer,
 };
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
 use anyhow::Context as _;
 use bytes::BytesMut;
 use core::pin::Pin;
-use core::task::{Context, Poll, ready};
+use core::task::{Context, Poll};
 use io_lifetimes::AsSocketlike as _;
 use std::io::Cursor;
 use std::net::{Shutdown, SocketAddr};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
+use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
-    StreamProducer, StreamReader, StreamResult, StreamState,
+    StreamProducer, StreamReader, StreamResult,
 };
-use wasmtime::{AsContextMut as _, StoreContextMut};
 
 fn get_socket<'a>(
     table: &'a ResourceTable,
@@ -49,15 +48,7 @@ struct ListenStreamProducer<T> {
     listener: Arc<TcpListener>,
     family: SocketAddressFamily,
     options: NonInheritedOptions,
-    accepted: Option<std::io::Result<TcpStream>>,
     getter: for<'a> fn(&'a mut T) -> WasiSocketsCtxView<'a>,
-}
-
-impl<T> ListenStreamProducer<T> {
-    async fn next(&mut self) -> std::io::Result<TcpStream> {
-        let (stream, _) = self.listener.accept().await?;
-        Ok(stream)
-    }
 }
 
 impl<D> StreamProducer<D> for ListenStreamProducer<D>
@@ -67,53 +58,32 @@ where
     type Item = Resource<TcpSocket>;
     type Buffer = Option<Self::Item>;
 
-    fn poll_produce(
-        &mut self,
-        store: &Accessor<D>,
-        dst: &mut Destination<Resource<TcpSocket>>,
-    ) -> wasmtime::Result<StreamState> {
-        let res = if let Some(res) = self.accepted.take() {
-            res
-        } else {
-            self.next().await
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let res = match self.listener.poll_accept(cx) {
+            Poll::Ready(res) => res.map(|(stream, _)| stream),
+            Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => return Poll::Pending,
         };
         let socket = TcpSocket::new_accept(res, &self.options, self.family)
             .unwrap_or_else(|err| TcpSocket::new_error(err, self.family));
-        let store = store.with_getter::<WasiSockets>(self.getter);
-        let socket = store.with(|mut store| {
-            store
-                .get()
-                .table
-                .push(socket)
-                .context("failed to push socket resource to table")
-        })?;
-        // FIXME: Handle cancellation
-        if let Some(socket) = dst.write(&store, Some(socket)).await? {
-            store.with(|mut store| {
-                store
-                    .get()
-                    .table
-                    .delete(socket)
-                    .context("failed to delete socket resource from table")
-            })?;
-            return Ok(StreamState::Closed);
-        }
-        Ok(StreamState::Open)
-    }
-
-    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
-        if self.accepted.is_none() {
-            let res = self.next().await;
-            self.accepted = Some(res);
-        }
-        Ok(StreamState::Open)
+        let WasiSocketsCtxView { table, .. } = (self.getter)(store.data_mut());
+        let socket = table
+            .push(socket)
+            .context("failed to push socket resource to table")?;
+        dst.set_buffer(Some(socket));
+        Poll::Ready(Ok(StreamResult::Completed))
     }
 }
 
 struct ReceiveStreamProducer {
     stream: Arc<TcpStream>,
     result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
-    buffer: Cursor<BytesMut>,
 }
 
 impl Drop for ReceiveStreamProducer {
@@ -138,72 +108,78 @@ impl<D> StreamProducer<D> for ReceiveStreamProducer {
     type Item = u8;
     type Buffer = Cursor<BytesMut>;
 
-    fn poll_produce(
-        &mut self,
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<'a, D>,
         dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
-    ) -> wasmtime::Result<StreamState> {
-        if !self.buffer.get_ref().is_empty() {
-            write_buffered_bytes(store, &mut self.buffer, dst).await?;
-            return Ok(StreamState::Open);
-        }
-
+    ) -> Poll<wasmtime::Result<StreamResult>> {
         let res = 'result: loop {
-            match store.with(|mut store| {
-                if let Some(mut dst) = dst.as_direct_destination(store.as_context_mut()) {
-                    let n = self.stream.try_read(dst.remaining())?;
-                    if n > 0 {
-                        dst.mark_written(n);
+            if let Some(mut dst) = dst.as_direct_destination(store) {
+                let buf = dst.remaining();
+                if buf.is_empty() {
+                    match self.stream.poll_read_ready(cx) {
+                        Poll::Ready(Ok(())) => return Poll::Ready(Ok(StreamResult::Completed)),
+                        Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                        Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+                        Poll::Pending => return Poll::Pending,
                     }
-                    Ok(n)
-                } else {
-                    self.buffer.get_mut().reserve(DEFAULT_BUFFER_CAPACITY);
-                    self.stream.try_read_buf(self.buffer.get_mut())
                 }
-            }) {
-                Ok(0) => break 'result Ok(()),
-                Ok(..) => {
-                    if !self.buffer.get_ref().is_empty() {
-                        // FIXME: `mem::take` rather than `clone` when we can ensure cancellation-safety
-                        //let buf = mem::take(&mut self.buffer);
-                        let buf = self.buffer.clone();
-                        self.buffer = dst.write(store, buf).await?;
-                        if self.buffer.position() as usize == self.buffer.get_ref().len() {
-                            self.buffer.get_mut().clear();
-                            self.buffer.set_position(0);
+                loop {
+                    match self.stream.try_read(buf) {
+                        Ok(0) => break 'result Ok(()),
+                        Ok(n) => {
+                            dst.mark_written(n);
+                            return Poll::Ready(Ok(StreamResult::Completed));
+                        }
+                        Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                            match self.stream.poll_read_ready(cx) {
+                                Poll::Ready(Ok(())) => continue,
+                                Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                                Poll::Pending if finish => {
+                                    return Poll::Ready(Ok(StreamResult::Cancelled));
+                                }
+                                Poll::Pending => return Poll::Pending,
+                            }
+                        }
+                        Err(err) => break 'result Err(err.into()),
+                    }
+                }
+            }
+
+            let mut buf = dst.take_buffer();
+            debug_assert!(buf.get_ref().is_empty());
+            buf.get_mut().reserve(DEFAULT_BUFFER_CAPACITY);
+            loop {
+                match self.stream.try_read_buf(buf.get_mut()) {
+                    Ok(0) => break 'result Ok(()),
+                    Ok(..) => {
+                        dst.set_buffer(buf);
+                        return Poll::Ready(Ok(StreamResult::Completed));
+                    }
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        match self.stream.poll_read_ready(cx) {
+                            Poll::Ready(Ok(())) => continue,
+                            Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                            Poll::Pending if finish => {
+                                return Poll::Ready(Ok(StreamResult::Cancelled));
+                            }
+                            Poll::Pending => return Poll::Pending,
                         }
                     }
-                    return Ok(StreamState::Open);
+                    Err(err) => break 'result Err(err.into()),
                 }
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                    if let Err(err) = self.stream.readable().await {
-                        break 'result Err(err.into());
-                    }
-                }
-                Err(err) => break 'result Err(err.into()),
             }
         };
         self.close(res);
-        Ok(StreamState::Closed)
-    }
-
-    async fn when_ready(&mut self, _: &Accessor<D>) -> wasmtime::Result<StreamState> {
-        if self.buffer.get_ref().is_empty() {
-            if let Err(err) = self.stream.readable().await {
-                self.close(Err(err.into()));
-                return Ok(StreamState::Closed);
-            }
-        }
-        Ok(StreamState::Open)
+        Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
 
 struct SendStreamConsumer {
     stream: Arc<TcpStream>,
     result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
-    buffer: BytesMut,
 }
 
 impl Drop for SendStreamConsumer {
@@ -228,30 +204,45 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
     type Item = u8;
 
     fn poll_consume(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<D>,
         src: &mut Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let mut src = src.as_direct_source(&mut store);
-        let res = 'result: loop {
-            match self.stream.try_write(src.remaining()) {
-                Ok(n) => {
-                    debug_assert!(n > 0);
-                    src.mark_read(n);
-                    Poll::Ready(Ok(StreamResult::Open))
+        let mut src = src.as_direct_source(store);
+        let res = 'result: {
+            if src.remaining().is_empty() {
+                match self.stream.poll_write_ready(cx) {
+                    Poll::Ready(Ok(())) => return Poll::Ready(Ok(StreamResult::Completed)),
+                    Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                    Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+                    Poll::Pending => return Poll::Pending,
                 }
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                    if Err(err) = ready!(Pin::new(&mut self.stream.writable()).poll(cx)) {
-                        break 'result Err(err.into());
+            }
+            loop {
+                match self.stream.try_write(src.remaining()) {
+                    Ok(n) => {
+                        debug_assert!(n > 0);
+                        src.mark_read(n);
+                        return Poll::Ready(Ok(StreamResult::Completed));
                     }
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        match self.stream.poll_write_ready(cx) {
+                            Poll::Ready(Ok(())) => continue,
+                            Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                            Poll::Pending if finish => {
+                                return Poll::Ready(Ok(StreamResult::Cancelled));
+                            }
+                            Poll::Pending => return Poll::Pending,
+                        }
+                    }
+                    Err(err) => break 'result Err(err.into()),
                 }
-                Err(err) => break 'result Err(err.into()),
             }
         };
         self.close(res);
-        Poll::Ready(Ok(StreamResult::Closed))
+        Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
 
@@ -318,7 +309,6 @@ impl HostTcpSocketWithStore for WasiSockets {
                     listener,
                     family,
                     options,
-                    accepted: None,
                     getter,
                 },
             ))
@@ -340,7 +330,6 @@ impl HostTcpSocketWithStore for WasiSockets {
                 SendStreamConsumer {
                     stream,
                     result: Some(result_tx),
-                    buffer: BytesMut::default(),
                 },
             );
             SocketResult::Ok(())
@@ -370,14 +359,13 @@ impl HostTcpSocketWithStore for WasiSockets {
                             ReceiveStreamProducer {
                                 stream,
                                 result: Some(result_tx),
-                                buffer: Cursor::default(),
                             },
                         ),
                         FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
                     ))
                 }
                 None => Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer),
+                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
                     FutureReader::new(
                         instance,
                         &mut store,
