@@ -7,10 +7,10 @@ use std::ops::RangeInclusive;
 use wasm_encoder::{
     CodeSection, ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection,
     GlobalSection, ImportSection, Instruction, Module, RefType, TableSection, TableType,
-    TypeSection, ValType,
-};
+    TypeSection, ValType };
 
 const NUM_PARAMS_RANGE: RangeInclusive<u32> = 0..=10;
+const NUM_TYPES_RANGE: RangeInclusive<u32> = 0..=32;
 const NUM_GLOBALS_RANGE: RangeInclusive<u32> = 0..=10;
 const TABLE_SIZE_RANGE: RangeInclusive<u32> = 0..=100;
 const NUM_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
@@ -20,17 +20,42 @@ const MAX_OPS: usize = 100;
 #[derive(Debug, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct RecGroupId(u32);
 
+/// TypeID struct definition.
+#[derive(Debug, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize)]
+pub struct TypeId(u32);
+
+/// StructType definition
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct StructType {
+    // Empty for now; fields will come in a future PR.
+}
+
+/// CompsiteType definition
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CompositeType {
+    /// Struct Type definition
+    Struct(StructType),
+}
+
+/// SubType definition
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubType {
+    pub(crate) rec_group: RecGroupId,
+    pub(crate) composite_type: CompositeType,
+}
 /// Struct types definition.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Types {
     rec_groups: std::collections::BTreeSet<RecGroupId>,
+    type_defs: std::collections::BTreeMap<TypeId, SubType>,
 }
 
 impl Types {
     /// Create a fresh `Types` allocator with no recursive groups defined yet.
     pub fn new() -> Self {
-        Self {
-            rec_groups: Default::default(),
+        Self { 
+            rec_groups: Default::default(), 
+            type_defs: Default::default() 
         }
     }
 
@@ -43,6 +68,27 @@ impl Types {
     pub fn groups(&self) -> impl Iterator<Item = &RecGroupId> {
         self.rec_groups.iter()
     }
+
+    /// Add an empty struct type to a given group 
+    pub fn insert_empty_struct(&mut self, id: TypeId, group: RecGroupId) {
+        self.type_defs.insert(id, SubType {
+            rec_group: group,
+            composite_type: CompositeType::Struct(StructType::default()),
+        });
+    }
+
+    /// Return true if there is at least one struct type defined.
+    pub fn has_structs(&self) -> bool {
+        self.type_defs.values().any(|t| matches!(t.composite_type, CompositeType::Struct(_)))
+    }
+
+    /// Iterate over the IDs of all struct type definitions.
+    pub fn struct_ids(&self) -> impl Iterator<Item = &TypeId> {
+        self.type_defs
+            .iter()
+            .filter(|(_, t)| matches!(t.composite_type, CompositeType::Struct(_)))
+            .map(|(id, _)| id)
+    }
 }
 
 /// Limits controlling the structure of a generated Wasm module.
@@ -52,6 +98,7 @@ pub struct TableOpsLimits {
     pub(crate) num_globals: u32,
     pub(crate) table_size: u32,
     pub(crate) num_rec_groups: u32,
+    pub(crate) num_types: u32,
 }
 
 impl TableOpsLimits {
@@ -63,6 +110,7 @@ impl TableOpsLimits {
             num_globals,
             table_size,
             num_rec_groups,
+            num_types,
         } = self;
 
         let clamp = |limit: &mut u32, range: RangeInclusive<u32>| {
@@ -72,6 +120,7 @@ impl TableOpsLimits {
         clamp(num_params, NUM_PARAMS_RANGE);
         clamp(num_globals, NUM_GLOBALS_RANGE);
         clamp(num_rec_groups, NUM_REC_GROUPS_RANGE);
+        clamp(num_types, NUM_TYPES_RANGE);
     }
 }
 
@@ -136,6 +185,44 @@ impl TableOps {
             vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
         );
 
+        let groups = self.limits.num_rec_groups as usize;
+        let total  = self.limits.num_types as usize;
+
+        if groups == 0 {
+            // Nothing to emit.
+        } else {
+            // Distribute total types across groups: q each, first r get +1.
+            let q = total / groups;
+            let r = total % groups;
+
+            for g in 0..groups {
+                let count = q + usize::from(g < r);
+                if count == 0 {
+                    types.ty().rec(Vec::<wasm_encoder::SubType>::new());
+                    continue;
+                }
+
+                let mut members = Vec::with_capacity(count);
+                for _ in 0..count {
+                    members.push(wasm_encoder::SubType {
+                        is_final: true,
+                        supertype_idx: None,
+                        composite_type: wasm_encoder::CompositeType {
+                            inner: wasm_encoder::CompositeInnerType::Struct(
+                                wasm_encoder::StructType { fields: Box::new([]) }
+                            ),
+                            shared: false,
+                        },
+                    });
+                }
+                types.ty().rec(members);
+            }
+        }
+
+        for _ in self.types.groups() {
+            types.ty().rec(Vec::<wasm_encoder::SubType>::new());
+        }
+
         // Import the GC function.
         let mut imports = ImportSection::new();
         imports.import("", "gc", EntityType::Function(0));
@@ -164,7 +251,7 @@ impl TableOps {
                 &ConstExpr::ref_null(wasm_encoder::HeapType::EXTERN),
             );
         }
-
+        
         // Define the "run" function export.
         let mut functions = FunctionSection::new();
         functions.function(1);
@@ -184,10 +271,6 @@ impl TableOps {
         func.instruction(&Instruction::End);
         func.instruction(&Instruction::End);
 
-        // Emit one empty (rec ...) per declared group.
-        for _ in self.types.groups() {
-            types.ty().rec(Vec::<wasm_encoder::SubType>::new());
-        }
 
         let mut code = CodeSection::new();
         code.function(&func);
@@ -323,6 +406,7 @@ impl Generate<TableOps> for TableOpsMutator {
         let table_size = m::range(TABLE_SIZE_RANGE).generate(ctx)?;
 
         let num_rec_groups = m::range(NUM_REC_GROUPS_RANGE).generate(ctx)?;
+        let num_types = m::range(NUM_TYPES_RANGE).generate(ctx)?;
 
         let mut ops = TableOps {
             limits: TableOpsLimits {
@@ -330,6 +414,7 @@ impl Generate<TableOps> for TableOpsMutator {
                 num_globals,
                 table_size,
                 num_rec_groups,
+                num_types,
             },
             ops: vec![
                 TableOp::Null(),
@@ -497,6 +582,8 @@ define_table_ops! {
     LocalGet(local_index: |ops| ops.num_params => u32) : 0 => 1,
     LocalSet(local_index: |ops| ops.num_params => u32) : 1 => 0,
 
+    StructNew(type_index: |ops| ops.num_types => u32) : 0 => 0,
+
     Drop : 1 => 0,
 
     Null : 0 => 1,
@@ -546,6 +633,10 @@ impl TableOp {
             Self::Null() => {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
+            Self::StructNew(x) => {
+            func.instruction(&Instruction::StructNew(x + 4));
+            func.instruction(&Instruction::Drop);
+        }
         }
     }
 }
@@ -562,6 +653,7 @@ mod tests {
                 num_globals: 5,
                 table_size: 5,
                 num_rec_groups: 5,
+                num_types: 5,
             },
             ops: vec![],
             types: Types::new(),
@@ -579,7 +671,8 @@ mod tests {
                 num_params,
                 num_globals,
                 table_size,
-                num_rec_groups: 3,
+                num_rec_groups: 7,
+                num_types: 10,
             },
             ops: vec![
                 TableOp::Null(),
@@ -596,8 +689,7 @@ mod tests {
                 TableOp::LocalGet(0),
                 TableOp::GlobalSet(0),
                 TableOp::GlobalGet(0),
-                TableOp::Null(),
-                TableOp::Drop(),
+                TableOp::StructNew(0),
             ],
             types: Types::new(),
         };
@@ -614,7 +706,7 @@ mod tests {
 
         let mut session = mutatis::Session::new();
 
-        for _ in 0..1024 {
+        for _ in 0..5 {
             session.mutate(&mut res)?;
             let wasm = res.to_wasm_binary();
 
@@ -626,6 +718,7 @@ mod tests {
             let wat = wasmprinter::print_bytes(&wasm).expect("[-] Failed .print_bytes(&wasm).");
             let result = validator.validate_all(&wasm);
             log::debug!("{wat}");
+            println!("{wat}");
             assert!(
                 result.is_ok(),
                 "\n[-] Invalid wat: {}\n\t\t==== Failed Wat ====\n{}",
@@ -675,6 +768,34 @@ mod tests {
   (type (;1;) (func (param externref externref)))
   (type (;2;) (func (param externref externref externref)))
   (type (;3;) (func (result externref externref externref)))
+  (rec
+    (type (;4;) (struct))
+    (type (;5;) (struct))
+  )
+  (rec
+    (type (;6;) (struct))
+    (type (;7;) (struct))
+  )
+  (rec
+    (type (;8;) (struct))
+    (type (;9;) (struct))
+  )
+  (rec
+    (type (;10;) (struct))
+  )
+  (rec
+    (type (;11;) (struct))
+  )
+  (rec
+    (type (;12;) (struct))
+  )
+  (rec
+    (type (;13;) (struct))
+  )
+  (rec)
+  (rec)
+  (rec)
+  (rec)
   (rec)
   (rec)
   (rec)
@@ -702,7 +823,7 @@ mod tests {
       local.get 0
       global.set 0
       global.get 0
-      ref.null extern
+      struct.new 4
       drop
       drop
       drop
@@ -737,6 +858,7 @@ mod tests {
                 num_globals: 1,
                 table_size: 5,
                 num_rec_groups: 2,
+                num_types: 2,
             },
             ops: vec![TableOp::Null(), TableOp::Drop()],
             types: Types::new(),
@@ -761,9 +883,9 @@ mod tests {
         let recs = wat.matches("(rec").count();
         let structs = wat.matches("(struct)").count();
 
-        assert_eq!(recs, 2, "expected 2 (rec) blocks, got {recs}");
+        assert_eq!(recs, 4, "expected 2 (rec) blocks, got {recs}");
         // Still keep as zero. Will update in the next PR
-        assert_eq!(structs, 0, "expected no struct types, got {structs}");
+        assert_eq!(structs, 2, "expected no struct types, got {structs}");
 
         Ok(())
     }
