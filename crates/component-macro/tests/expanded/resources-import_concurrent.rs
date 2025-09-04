@@ -259,7 +259,7 @@ const _: () = {
                     wasmtime::component::ResourceType::host::<WorldResource>(),
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             HostWorldResourceWithStore::drop(
                                     accessor,
                                     wasmtime::component::Resource::new_own(rep),
@@ -273,7 +273,7 @@ const _: () = {
                     "some-world-func",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as TheWorldImportsWithStore>::some_world_func(
                                     accessor,
                                 )
@@ -287,7 +287,7 @@ const _: () = {
                     "[constructor]world-resource",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWorldResourceWithStore>::new(accessor)
                                 .await;
                             Ok((r,))
@@ -302,7 +302,7 @@ const _: () = {
                         (arg0,): (wasmtime::component::Resource<WorldResource>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWorldResourceWithStore>::foo(
                                     accessor,
                                     arg0,
@@ -317,7 +317,7 @@ const _: () = {
                     "[static]world-resource.static-foo",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWorldResourceWithStore>::static_foo(
                                     accessor,
                                 )
@@ -593,7 +593,7 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Bar>(),
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             HostBarWithStore::drop(
                                     accessor,
                                     wasmtime::component::Resource::new_own(rep),
@@ -607,7 +607,7 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Fallible>(),
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             HostFallibleWithStore::drop(
                                     accessor,
                                     wasmtime::component::Resource::new_own(rep),
@@ -620,7 +620,7 @@ pub mod foo {
                     "[constructor]bar",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostBarWithStore>::new(accessor).await;
                             Ok((r,))
                         })
@@ -630,7 +630,7 @@ pub mod foo {
                     "[static]bar.static-a",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostBarWithStore>::static_a(accessor).await;
                             Ok((r,))
                         })
@@ -643,7 +643,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::Resource<Bar>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostBarWithStore>::method_a(accessor, arg0)
                                 .await;
                             Ok((r,))
@@ -657,7 +657,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::Resource<Bar>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::bar_own_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -671,7 +671,7 @@ pub mod foo {
                         (arg0,): (wasmtime::component::Resource<Bar>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::bar_borrow_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -682,7 +682,7 @@ pub mod foo {
                     "bar-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::bar_result(accessor).await;
                             Ok((r,))
                         })
@@ -695,7 +695,7 @@ pub mod foo {
                         (arg0,): ((wasmtime::component::Resource<Bar>, u32),)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::tuple_own_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -709,7 +709,7 @@ pub mod foo {
                         (arg0,): ((wasmtime::component::Resource<Bar>, u32),)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::tuple_borrow_arg(
                                     accessor,
                                     arg0,
@@ -723,7 +723,7 @@ pub mod foo {
                     "tuple-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::tuple_result(accessor).await;
                             Ok((r,))
                         })
@@ -736,7 +736,7 @@ pub mod foo {
                         (arg0,): (Option<wasmtime::component::Resource<Bar>>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::option_own_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -750,7 +750,7 @@ pub mod foo {
                         (arg0,): (Option<wasmtime::component::Resource<Bar>>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::option_borrow_arg(
                                     accessor,
                                     arg0,
@@ -764,7 +764,7 @@ pub mod foo {
                     "option-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::option_result(accessor).await;
                             Ok((r,))
                         })
@@ -777,7 +777,7 @@ pub mod foo {
                         (arg0,): (Result<wasmtime::component::Resource<Bar>, ()>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::result_own_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -791,7 +791,7 @@ pub mod foo {
                         (arg0,): (Result<wasmtime::component::Resource<Bar>, ()>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::result_borrow_arg(
                                     accessor,
                                     arg0,
@@ -805,7 +805,7 @@ pub mod foo {
                     "result-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::result_result(accessor).await;
                             Ok((r,))
                         })
@@ -824,7 +824,7 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::list_own_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -844,7 +844,7 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::list_borrow_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -855,7 +855,7 @@ pub mod foo {
                     "list-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::list_result(accessor).await;
                             Ok((r,))
                         })
@@ -868,7 +868,7 @@ pub mod foo {
                         (arg0,): (NestedOwn,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::record_own_arg(accessor, arg0)
                                 .await;
                             Ok(r)
@@ -882,7 +882,7 @@ pub mod foo {
                         (arg0,): (NestedBorrow,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::record_borrow_arg(
                                     accessor,
                                     arg0,
@@ -896,7 +896,7 @@ pub mod foo {
                     "record-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::record_result(accessor).await;
                             Ok((r,))
                         })
@@ -909,7 +909,7 @@ pub mod foo {
                         (arg0,): (SomeHandle,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::func_with_handle_typedef(
                                     accessor,
                                     arg0,
@@ -923,7 +923,7 @@ pub mod foo {
                     "[constructor]fallible",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostFallibleWithStore>::new(accessor).await;
                             Ok((r,))
                         })
@@ -969,7 +969,7 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<A>(),
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             HostAWithStore::drop(
                                     accessor,
                                     wasmtime::component::Resource::new_own(rep),
@@ -1059,7 +1059,7 @@ pub mod foo {
                     "foo",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::foo(accessor).await;
                             Ok((r,))
                         })
@@ -1106,7 +1106,7 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Foo>(),
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_getter(host_getter);
                             HostFooWithStore::drop(
                                     accessor,
                                     wasmtime::component::Resource::new_own(rep),
