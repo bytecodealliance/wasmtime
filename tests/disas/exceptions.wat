@@ -33,14 +33,14 @@
 ;;       movq    %rdi, %r12
 ;;       movq    %rcx, %r13
 ;;       movq    %rdx, %r15
-;;       callq   0x3c9
+;;       callq   0x360
 ;;       movq    %rax, %r14
 ;;       movl    $0x4000000, %esi
 ;;       movl    $3, %edx
 ;;       movl    $0x30, %ecx
 ;;       movl    $8, %r8d
 ;;       movq    %r12, %rdi
-;;       callq   0x355
+;;       callq   0x2fd
 ;;       movq    8(%r12), %r8
 ;;       movq    0x18(%r8), %r8
 ;;       movl    %eax, %r9d
@@ -54,7 +54,7 @@
 ;;       movq    %rax, %rsi
 ;;       movq    %r12, %rdi
 ;;       movq    %r12, (%rsp)
-;;       callq   0x405
+;;       callq   0x38c
 ;;       ud2
 ;;       ud2
 ;;

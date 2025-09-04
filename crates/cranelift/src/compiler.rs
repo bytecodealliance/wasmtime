@@ -87,6 +87,7 @@ pub struct Compiler {
     tunables: Tunables,
     contexts: Mutex<Vec<CompilerContext>>,
     isa: OwnedTargetIsa,
+    emit_debug_checks: bool,
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<path::PathBuf>,
@@ -127,6 +128,7 @@ impl Compiler {
         tunables: Tunables,
         isa: OwnedTargetIsa,
         cache_store: Option<Arc<dyn CacheStore>>,
+        emit_debug_checks: bool,
         linkopts: LinkOptions,
         clif_dir: Option<path::PathBuf>,
         wmemcheck: bool,
@@ -136,6 +138,7 @@ impl Compiler {
             contexts: Default::default(),
             tunables,
             isa,
+            emit_debug_checks,
             linkopts,
             cache_store,
             clif_dir,
@@ -392,7 +395,7 @@ impl wasmtime_environ::Compiler for Compiler {
         //
         // Assert that we were really given a core Wasm vmctx, since that's
         // what we are assuming with our offsets below.
-        debug_assert_vmctx_kind(isa, &mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
+        self.debug_assert_vmctx_kind(&mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
         let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
         let vm_store_context_offset = offsets.ptr.vmctx_store_context();
         save_last_wasm_entry_fp(
@@ -456,8 +459,7 @@ impl wasmtime_environ::Compiler for Compiler {
         //
         // Assert that the caller vmctx really is a core Wasm vmctx, since
         // that's what we are assuming with our offsets below.
-        debug_assert_vmctx_kind(
-            isa,
+        self.debug_assert_vmctx_kind(
             &mut builder,
             caller_vmctx,
             wasmtime_environ::VMCONTEXT_MAGIC,
@@ -707,7 +709,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // Debug-assert that this is the right kind of vmctx, and then
         // additionally perform the "routine of the exit trampoline" of saving
         // fp/pc/etc.
-        debug_assert_vmctx_kind(isa, &mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
+        self.debug_assert_vmctx_kind(&mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
         let vm_store_context = builder.ins().load(
             pointer_type,
             MemFlags::trusted(),
@@ -1034,7 +1036,7 @@ impl Compiler {
         values_vec_capacity: Value,
     ) {
         debug_assert_eq!(types.len(), values.len());
-        debug_assert_enough_capacity_for_length(builder, types.len(), values_vec_capacity);
+        self.debug_assert_enough_capacity_for_length(builder, types.len(), values_vec_capacity);
 
         // Note that loads and stores are unconditionally done in the
         // little-endian format rather than the host's native-endianness,
@@ -1074,7 +1076,7 @@ impl Compiler {
         let isa = &*self.isa;
         let value_size = mem::size_of::<u128>();
 
-        debug_assert_enough_capacity_for_length(builder, types.len(), values_vec_capacity);
+        self.debug_assert_enough_capacity_for_length(builder, types.len(), values_vec_capacity);
 
         // Note that this is little-endian like `store_values_to_array` above,
         // see notes there for more information.
@@ -1196,6 +1198,46 @@ impl Compiler {
 
     pub fn tunables(&self) -> &Tunables {
         &self.tunables
+    }
+
+    fn debug_assert_enough_capacity_for_length(
+        &self,
+        builder: &mut FunctionBuilder,
+        length: usize,
+        capacity: ir::Value,
+    ) {
+        if !self.emit_debug_checks {
+            return;
+        }
+        let enough_capacity = builder.ins().icmp_imm(
+            ir::condcodes::IntCC::UnsignedGreaterThanOrEqual,
+            capacity,
+            ir::immediates::Imm64::new(length.try_into().unwrap()),
+        );
+        builder.ins().trapz(enough_capacity, TRAP_INTERNAL_ASSERT);
+    }
+
+    fn debug_assert_vmctx_kind(
+        &self,
+        builder: &mut FunctionBuilder,
+        vmctx: ir::Value,
+        expected_vmctx_magic: u32,
+    ) {
+        if !self.emit_debug_checks {
+            return;
+        }
+        let magic = builder.ins().load(
+            ir::types::I32,
+            MemFlags::trusted().with_endianness(self.isa.endianness()),
+            vmctx,
+            0,
+        );
+        let is_expected_vmctx = builder.ins().icmp_imm(
+            ir::condcodes::IntCC::Equal,
+            magic,
+            i64::from(expected_vmctx_magic),
+        );
+        builder.ins().trapz(is_expected_vmctx, TRAP_INTERNAL_ASSERT);
     }
 }
 
@@ -1379,43 +1421,6 @@ fn declare_and_call(
         colocated: true,
     });
     builder.ins().call(callee, &args)
-}
-
-fn debug_assert_enough_capacity_for_length(
-    builder: &mut FunctionBuilder,
-    length: usize,
-    capacity: ir::Value,
-) {
-    if cfg!(debug_assertions) {
-        let enough_capacity = builder.ins().icmp_imm(
-            ir::condcodes::IntCC::UnsignedGreaterThanOrEqual,
-            capacity,
-            ir::immediates::Imm64::new(length.try_into().unwrap()),
-        );
-        builder.ins().trapz(enough_capacity, TRAP_INTERNAL_ASSERT);
-    }
-}
-
-fn debug_assert_vmctx_kind(
-    isa: &dyn TargetIsa,
-    builder: &mut FunctionBuilder,
-    vmctx: ir::Value,
-    expected_vmctx_magic: u32,
-) {
-    if cfg!(debug_assertions) {
-        let magic = builder.ins().load(
-            ir::types::I32,
-            MemFlags::trusted().with_endianness(isa.endianness()),
-            vmctx,
-            0,
-        );
-        let is_expected_vmctx = builder.ins().icmp_imm(
-            ir::condcodes::IntCC::Equal,
-            magic,
-            i64::from(expected_vmctx_magic),
-        );
-        builder.ins().trapz(is_expected_vmctx, TRAP_INTERNAL_ASSERT);
-    }
 }
 
 fn save_last_wasm_entry_fp(

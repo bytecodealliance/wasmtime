@@ -9,16 +9,11 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       lw      a2, 0(a0)
-;;       lui     a3, 0x65727
-;;       addi    a3, a3, -0x9d
-;;       beq     a2, a3, 8
-;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a3, 8(a0)
-;;       mv      a4, s0
-;;       sd      a4, 0x38(a3)
+;;       ld      a5, 8(a0)
+;;       mv      a2, s0
+;;       sd      a2, 0x38(a5)
 ;;       auipc   ra, 0
-;;       jalr    ra, ra, -0x50
+;;       jalr    ra, ra, -0x3c
 ;;       addi    a0, zero, 1
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)

@@ -26,7 +26,7 @@
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movss   0xc(%rsp), %xmm0
-;;       callq   0xf6
+;;       callq   0xe1
 ;;       addq    $0xc, %rsp
 ;;       addq    $4, %rsp
 ;;       movq    0x18(%rsp), %r14

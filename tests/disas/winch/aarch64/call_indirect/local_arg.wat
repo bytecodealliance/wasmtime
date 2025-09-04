@@ -91,7 +91,7 @@
 ;;       mov     x0, x9
 ;;       mov     x1, #0
 ;;       ldur    w2, [x28]
-;;       bl      #0x41c
+;;       bl      #0x384
 ;;  120: add     x28, x28, #4
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x14]

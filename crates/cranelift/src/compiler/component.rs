@@ -1060,7 +1060,7 @@ impl<'a> TrampolineCompiler<'a> {
                 vmctx,
                 i32::try_from(self.offsets.resource_destructor(index)).unwrap(),
             );
-            if cfg!(debug_assertions) {
+            if self.compiler.emit_debug_checks {
                 self.builder
                     .ins()
                     .trapz(dtor_func_ref, TRAP_INTERNAL_ASSERT);
@@ -1304,8 +1304,7 @@ impl ComponentCompiler for Compiler {
             // always hold.
             let vmctx = c.builder.block_params(c.block0)[0];
             let pointer_type = self.isa.pointer_type();
-            super::debug_assert_vmctx_kind(
-                &*self.isa,
+            self.debug_assert_vmctx_kind(
                 &mut c.builder,
                 vmctx,
                 wasmtime_environ::component::VMCOMPONENT_MAGIC,
