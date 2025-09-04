@@ -1,10 +1,11 @@
-use core::future::Future;
-
 use futures::join;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
 use test_programs::p3::wasi::sockets::types::{
     IpAddress, IpAddressFamily, IpSocketAddress, TcpSocket,
 };
 use test_programs::p3::wit_stream;
+use wit_bindgen::StreamResult;
 
 struct Component;
 

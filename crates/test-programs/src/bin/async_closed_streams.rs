@@ -12,7 +12,7 @@ mod bindings {
 use {
     bindings::exports::local::local::closed::Guest,
     std::mem,
-    wit_bindgen_rt::async_support::{self, FutureReader, StreamReader, StreamResult},
+    wit_bindgen::{FutureReader, StreamReader, StreamResult},
 };
 
 struct Component;
@@ -39,7 +39,7 @@ impl Guest for Component {
         expected: u8,
         _rx_ignored: FutureReader<u8>,
     ) {
-        async_support::spawn(async move {
+        wit_bindgen::spawn(async move {
             assert_eq!(rx.await, expected);
         });
     }

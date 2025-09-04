@@ -7,7 +7,7 @@ mod bindings {
     use super::Component;
     export!(Component);
 }
-use wit_bindgen_rt::async_support::ErrorContext;
+use wit_bindgen::rt::async_support::ErrorContext;
 
 struct Component;
 

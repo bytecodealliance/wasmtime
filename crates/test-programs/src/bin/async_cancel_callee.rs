@@ -5,14 +5,10 @@ mod bindings {
     });
 }
 
-use {
-    test_programs::async_::{
-        CALLBACK_CODE_EXIT, CALLBACK_CODE_WAIT, EVENT_CANCELLED, EVENT_NONE, EVENT_SUBTASK,
-        STATUS_RETURN_CANCELLED, STATUS_RETURNED, STATUS_STARTED, context_get, context_set,
-        subtask_cancel, subtask_drop, task_cancel, waitable_join, waitable_set_drop,
-        waitable_set_new,
-    },
-    wit_bindgen_rt::async_support,
+use test_programs::async_::{
+    CALLBACK_CODE_EXIT, CALLBACK_CODE_WAIT, EVENT_CANCELLED, EVENT_NONE, EVENT_SUBTASK,
+    STATUS_RETURN_CANCELLED, STATUS_RETURNED, STATUS_STARTED, context_get, context_set,
+    subtask_cancel, subtask_drop, task_cancel, waitable_join, waitable_set_drop, waitable_set_new,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -84,7 +80,7 @@ enum State {
 
 #[unsafe(export_name = "local:local/backpressure#set-backpressure")]
 unsafe extern "C" fn export_set_backpressure(enabled: bool) {
-    async_support::backpressure_set(enabled);
+    wit_bindgen::backpressure_set(enabled);
 }
 
 #[unsafe(export_name = "local:local/sleep#[async]sleep-millis")]

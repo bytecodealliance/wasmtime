@@ -4,7 +4,7 @@ use {
         wasi::http::types::{ErrorCode, Request, Response},
         wit_future, wit_stream,
     },
-    wit_bindgen_rt::async_support::{self, StreamResult},
+    wit_bindgen::StreamResult,
 };
 
 struct Component;
@@ -28,7 +28,7 @@ impl Handler for Component {
             let (trailers_tx, trailers_rx) = wit_future::new(|| todo!());
             let (mut pipe_tx, pipe_rx) = wit_stream::new();
 
-            async_support::spawn(async move {
+            wit_bindgen::spawn(async move {
                 let mut body_rx = body;
                 let mut chunk = Vec::with_capacity(1024);
                 loop {
