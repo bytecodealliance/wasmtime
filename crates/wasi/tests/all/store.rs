@@ -24,8 +24,9 @@ impl<T> Ctx<T> {
         name: &str,
         configure: impl FnOnce(&mut WasiCtxBuilder) -> T,
     ) -> Result<(Store<Ctx<T>>, TempDir)> {
-        let stdout = MemoryOutputPipe::new(4096);
-        let stderr = MemoryOutputPipe::new(4096);
+        const MAX_OUTPUT_SIZE: usize = 10 << 20;
+        let stdout = MemoryOutputPipe::new(MAX_OUTPUT_SIZE);
+        let stderr = MemoryOutputPipe::new(MAX_OUTPUT_SIZE);
         let workspace = prepare_workspace(name)?;
 
         // Create our wasi context.
