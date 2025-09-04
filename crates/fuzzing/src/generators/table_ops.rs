@@ -7,7 +7,8 @@ use std::ops::RangeInclusive;
 use wasm_encoder::{
     CodeSection, ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection,
     GlobalSection, ImportSection, Instruction, Module, RefType, TableSection, TableType,
-    TypeSection, ValType };
+    TypeSection, ValType,
+};
 
 const NUM_PARAMS_RANGE: RangeInclusive<u32> = 0..=10;
 const NUM_TYPES_RANGE: RangeInclusive<u32> = 0..=32;
@@ -53,9 +54,9 @@ pub struct Types {
 impl Types {
     /// Create a fresh `Types` allocator with no recursive groups defined yet.
     pub fn new() -> Self {
-        Self { 
-            rec_groups: Default::default(), 
-            type_defs: Default::default() 
+        Self {
+            rec_groups: Default::default(),
+            type_defs: Default::default(),
         }
     }
 
@@ -69,17 +70,22 @@ impl Types {
         self.rec_groups.iter()
     }
 
-    /// Add an empty struct type to a given group 
+    /// Add an empty struct type to a given group
     pub fn insert_empty_struct(&mut self, id: TypeId, group: RecGroupId) {
-        self.type_defs.insert(id, SubType {
-            rec_group: group,
-            composite_type: CompositeType::Struct(StructType::default()),
-        });
+        self.type_defs.insert(
+            id,
+            SubType {
+                rec_group: group,
+                composite_type: CompositeType::Struct(StructType::default()),
+            },
+        );
     }
 
     /// Return true if there is at least one struct type defined.
     pub fn has_structs(&self) -> bool {
-        self.type_defs.values().any(|t| matches!(t.composite_type, CompositeType::Struct(_)))
+        self.type_defs
+            .values()
+            .any(|t| matches!(t.composite_type, CompositeType::Struct(_)))
     }
 
     /// Iterate over the IDs of all struct type definitions.
@@ -186,7 +192,7 @@ impl TableOps {
         );
 
         let groups = self.limits.num_rec_groups as usize;
-        let total  = self.limits.num_types as usize;
+        let total = self.limits.num_types as usize;
 
         if groups == 0 {
             // Nothing to emit.
@@ -209,7 +215,9 @@ impl TableOps {
                         supertype_idx: None,
                         composite_type: wasm_encoder::CompositeType {
                             inner: wasm_encoder::CompositeInnerType::Struct(
-                                wasm_encoder::StructType { fields: Box::new([]) }
+                                wasm_encoder::StructType {
+                                    fields: Box::new([]),
+                                },
                             ),
                             shared: false,
                         },
@@ -251,7 +259,7 @@ impl TableOps {
                 &ConstExpr::ref_null(wasm_encoder::HeapType::EXTERN),
             );
         }
-        
+
         // Define the "run" function export.
         let mut functions = FunctionSection::new();
         functions.function(1);
@@ -270,7 +278,6 @@ impl TableOps {
         func.instruction(&Instruction::Br(0));
         func.instruction(&Instruction::End);
         func.instruction(&Instruction::End);
-
 
         let mut code = CodeSection::new();
         code.function(&func);
@@ -634,9 +641,9 @@ impl TableOp {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
             Self::StructNew(x) => {
-            func.instruction(&Instruction::StructNew(x + 4));
-            func.instruction(&Instruction::Drop);
-        }
+                func.instruction(&Instruction::StructNew(x + 4));
+                func.instruction(&Instruction::Drop);
+            }
         }
     }
 }
