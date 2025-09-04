@@ -6,25 +6,24 @@ use crate::p3::bindings::filesystem::types::{
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::p3::{
-    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, MAX_BUFFER_CAPACITY,
-    StreamEmptyProducer,
+    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, StreamEmptyProducer,
 };
 use crate::{DirPerms, FilePerms};
-use anyhow::{Context as _, bail};
+use anyhow::{Context as _, anyhow};
 use bytes::BytesMut;
 use core::mem;
-use futures::FutureExt;
+use core::pin::Pin;
+use core::task::{Context, Poll, ready};
 use std::io::Cursor;
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::task::{self, Context, Poll};
+use std::sync::Arc;
 use system_interface::fs::FileIoExt as _;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::component::{
     Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
     StreamProducer, StreamReader, StreamResult,
 };
-use wasmtime::{AsContextMut as _, StoreContextMut};
+use wasmtime::{StoreContextMut, component::VecBuffer};
 
 fn get_descriptor<'a>(
     table: &'a ResourceTable,
@@ -121,7 +120,13 @@ struct ReadStreamProducer {
     file: File,
     offset: u64,
     result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
-    future: Option<Pin<Box<dyn Future<Output = Result<Option<BytesMut>, ErrorCode>> + Send>>>,
+    task: Option<JoinHandle<std::io::Result<BytesMut>>>,
+}
+
+impl Drop for ReadStreamProducer {
+    fn drop(&mut self) {
+        self.close(Ok(()))
+    }
 }
 
 impl ReadStreamProducer {
@@ -137,94 +142,192 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
     type Buffer = Cursor<BytesMut>;
 
     fn poll_produce<'a>(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<'a, D>,
-        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let me = self.get_mut();
-        if me.future.is_none() {
-            if finish {
-                return Poll::Ready(Ok(StreamResult::Cancelled));
+        if let Some(task) = self.task.as_mut() {
+            let res = ready!(Pin::new(task).poll(cx));
+            self.task = None;
+            match res {
+                Ok(Ok(buf)) if buf.is_empty() => {
+                    self.close(Ok(()));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
+                Ok(Ok(buf)) => {
+                    let n = buf.len();
+                    dst.set_buffer(Cursor::new(buf));
+                    let Ok(n) = n.try_into() else {
+                        self.close(Err(ErrorCode::Overflow));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    };
+                    let Some(n) = self.offset.checked_add(n) else {
+                        self.close(Err(ErrorCode::Overflow));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    };
+                    self.offset = n;
+                    return Poll::Ready(Ok(StreamResult::Completed));
+                }
+                Ok(Err(err)) => {
+                    self.close(Err(err.into()));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
+                Err(err) => {
+                    return Poll::Ready(Err(anyhow!(err).context("failed to join I/O task")));
+                }
             }
-
-            let capacity = destination
-                .remaining(store)
-                .unwrap_or(DEFAULT_BUFFER_CAPACITY)
-                // In the case of small or zero-length reads, we read more than
-                // was asked for; this will save the runtime from having to
-                // block or call `poll_produce` on subsequent reads.  See the
-                // documentation for `StreamProducer::poll_produce` for details.
-                .max(DEFAULT_BUFFER_CAPACITY)
-                .min(MAX_BUFFER_CAPACITY);
-            let mut buffer = destination.take_buffer().into_inner();
-            buffer.resize(capacity, 0);
-            let offset = me.offset;
-            let file = me.file.clone();
-            me.future = Some(
-                async move {
-                    match file
-                        .run_blocking(move |file| {
-                            let n = file.read_at(&mut buffer, offset)?;
-                            buffer.truncate(n);
-                            std::io::Result::Ok(buffer)
-                        })
-                        .await
-                    {
-                        Ok(buffer) if buffer.is_empty() => Ok(None),
-                        Ok(buffer) => {
-                            let n_u64 = buffer.len().try_into().or(Err(ErrorCode::Overflow))?;
-                            offset.checked_add(n_u64).ok_or(ErrorCode::Overflow)?;
-                            Ok(Some(buffer))
+        }
+        if finish {
+            return Poll::Ready(Ok(StreamResult::Cancelled));
+        }
+        if let Some(file) = self.file.as_blocking_file() {
+            if let Some(mut dst) = dst.as_direct_destination(store) {
+                let buf = dst.remaining();
+                if !buf.is_empty() {
+                    match file.read_at(buf, self.offset) {
+                        Ok(0) => {
+                            self.close(Ok(()));
+                            return Poll::Ready(Ok(StreamResult::Dropped));
                         }
-                        Err(err) => Err(err.into()),
+                        Ok(n) => {
+                            dst.mark_written(n);
+                            let Ok(n) = n.try_into() else {
+                                self.close(Err(ErrorCode::Overflow));
+                                return Poll::Ready(Ok(StreamResult::Dropped));
+                            };
+                            let Some(n) = self.offset.checked_add(n) else {
+                                self.close(Err(ErrorCode::Overflow));
+                                return Poll::Ready(Ok(StreamResult::Dropped));
+                            };
+                            self.offset = n;
+                            return Poll::Ready(Ok(StreamResult::Completed));
+                        }
+                        Err(err) => {
+                            self.close(Err(err.into()));
+                            return Poll::Ready(Ok(StreamResult::Dropped));
+                        }
                     }
                 }
-                .boxed(),
-            );
+            }
+            let mut buf = dst.take_buffer().into_inner();
+            buf.resize(DEFAULT_BUFFER_CAPACITY, 0);
+            match file.read_at(&mut buf, self.offset) {
+                Ok(0) => {
+                    self.close(Ok(()));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
+                Ok(n) => {
+                    buf.truncate(n);
+                    dst.set_buffer(Cursor::new(buf));
+                    let Ok(n) = n.try_into() else {
+                        self.close(Err(ErrorCode::Overflow));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    };
+                    let Some(n) = self.offset.checked_add(n) else {
+                        self.close(Err(ErrorCode::Overflow));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    };
+                    self.offset = n;
+                    return Poll::Ready(Ok(StreamResult::Completed));
+                }
+                Err(err) => {
+                    self.close(Err(err.into()));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
+            }
         }
-
-        let result = match task::ready!(me.future.as_mut().unwrap().as_mut().poll(cx)) {
-            Ok(Some(buffer)) => {
-                // We've already checked for overflow inside the future above,
-                // so no need to do it again here:
-                me.offset += u64::try_from(buffer.len()).unwrap();
-                destination.set_buffer(Cursor::new(buffer));
-                StreamResult::Completed
-            }
-            Ok(None) => {
-                me.close(Ok(()));
-                StreamResult::Dropped
-            }
-            Err(error) => {
-                me.close(Err(error));
-                StreamResult::Dropped
+        let mut buf = dst.take_buffer().into_inner();
+        buf.resize(DEFAULT_BUFFER_CAPACITY, 0);
+        let file = Arc::clone(self.file.as_file());
+        let offset = self.offset;
+        let mut task = spawn_blocking(move || {
+            file.read_at(&mut buf, offset).map(|n| {
+                buf.truncate(n);
+                buf
+            })
+        });
+        let res = match Pin::new(&mut task).poll(cx) {
+            Poll::Ready(res) => res,
+            Poll::Pending => {
+                self.task = Some(task);
+                return Poll::Pending;
             }
         };
-
-        me.future = None;
-
-        Poll::Ready(Ok(result))
+        match res {
+            Ok(Ok(buf)) if buf.is_empty() => {
+                self.close(Ok(()));
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Ok(Ok(buf)) => {
+                let n = buf.len();
+                dst.set_buffer(Cursor::new(buf));
+                let Ok(n) = n.try_into() else {
+                    self.close(Err(ErrorCode::Overflow));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                };
+                let Some(n) = self.offset.checked_add(n) else {
+                    self.close(Err(ErrorCode::Overflow));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                };
+                self.offset = n;
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Ok(Err(err)) => {
+                self.close(Err(err.into()));
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Err(err) => Poll::Ready(Err(anyhow!(err).context("failed to join I/O task"))),
+        }
     }
 }
 
-struct DirectoryStreamProducer {
-    dir: Dir,
-    entries: Option<cap_std::fs::ReadDir>,
-    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
-    future: Option<
-        Pin<
-            Box<
-                dyn Future<
-                        Output = Result<Option<(DirectoryEntry, cap_std::fs::ReadDir)>, ErrorCode>,
-                    > + Send,
-            >,
-        >,
-    >,
+fn map_dir_entry(
+    entry: std::io::Result<cap_std::fs::DirEntry>,
+) -> Result<Option<DirectoryEntry>, ErrorCode> {
+    match entry {
+        Ok(entry) => {
+            let meta = entry.metadata()?;
+            let Ok(name) = entry.file_name().into_string() else {
+                return Err(ErrorCode::IllegalByteSequence);
+            };
+            Ok(Some(DirectoryEntry {
+                type_: meta.file_type().into(),
+                name,
+            }))
+        }
+        Err(err) => {
+            // On windows, filter out files like `C:\DumpStack.log.tmp` which we
+            // can't get full metadata for.
+            #[cfg(windows)]
+            {
+                use windows_sys::Win32::Foundation::{
+                    ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION,
+                };
+                if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
+                    || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
+                {
+                    return Ok(None);
+                }
+            }
+            Err(err.into())
+        }
+    }
 }
 
-impl DirectoryStreamProducer {
+struct BlockingDirectoryStreamProducer {
+    dir: Arc<cap_std::fs::Dir>,
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+}
+
+impl Drop for BlockingDirectoryStreamProducer {
+    fn drop(&mut self) {
+        self.close(Ok(()))
+    }
+}
+
+impl BlockingDirectoryStreamProducer {
     fn close(&mut self, res: Result<(), ErrorCode>) {
         if let Some(tx) = self.result.take() {
             _ = tx.send(res);
@@ -232,111 +335,147 @@ impl DirectoryStreamProducer {
     }
 }
 
-impl<D> StreamProducer<D> for DirectoryStreamProducer {
+impl<D> StreamProducer<D> for BlockingDirectoryStreamProducer {
+    type Item = DirectoryEntry;
+    type Buffer = VecBuffer<DirectoryEntry>;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        _finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let entries = match self.dir.entries() {
+            Ok(entries) => entries,
+            Err(err) => {
+                self.close(Err(err.into()));
+                return Poll::Ready(Ok(StreamResult::Dropped));
+            }
+        };
+        let res = match entries
+            .filter_map(|entry| map_dir_entry(entry).transpose())
+            .collect::<Result<Vec<_>, _>>()
+        {
+            Ok(entries) => {
+                dst.set_buffer(entries.into());
+                Ok(())
+            }
+            Err(err) => Err(err),
+        };
+        self.close(res);
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
+struct NonblockingDirectoryStreamProducer(DirStreamState);
+
+enum DirStreamState {
+    Init {
+        dir: Arc<cap_std::fs::Dir>,
+        result: oneshot::Sender<Result<(), ErrorCode>>,
+    },
+    InProgress {
+        rx: mpsc::Receiver<DirectoryEntry>,
+        task: JoinHandle<Result<(), ErrorCode>>,
+        result: oneshot::Sender<Result<(), ErrorCode>>,
+    },
+    Closed,
+}
+
+impl Drop for NonblockingDirectoryStreamProducer {
+    fn drop(&mut self) {
+        self.close(Ok(()))
+    }
+}
+
+impl NonblockingDirectoryStreamProducer {
+    fn close(&mut self, res: Result<(), ErrorCode>) {
+        if let DirStreamState::Init { result, .. } | DirStreamState::InProgress { result, .. } =
+            mem::replace(&mut self.0, DirStreamState::Closed)
+        {
+            _ = result.send(res);
+        }
+    }
+}
+
+impl<D> StreamProducer<D> for NonblockingDirectoryStreamProducer {
     type Item = DirectoryEntry;
     type Buffer = Option<DirectoryEntry>;
 
     fn poll_produce<'a>(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<'a, D>,
-        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let me = self.get_mut();
-        if me.future.is_none() {
-            if finish {
-                return Poll::Ready(Ok(StreamResult::Cancelled));
+        match mem::replace(&mut self.0, DirStreamState::Closed) {
+            DirStreamState::Init { .. } if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            DirStreamState::Init { dir, result } => {
+                let (entry_tx, entry_rx) = mpsc::channel(1);
+                let task = spawn_blocking(move || {
+                    let entries = dir.entries()?;
+                    for entry in entries {
+                        if let Some(entry) = map_dir_entry(entry)? {
+                            if let Err(_) = entry_tx.blocking_send(entry) {
+                                break;
+                            }
+                        }
+                    }
+                    Ok(())
+                });
+                self.0 = DirStreamState::InProgress {
+                    rx: entry_rx,
+                    task,
+                    result,
+                };
+                self.poll_produce(cx, store, dst, finish)
             }
-
-            let dir = me.dir.clone();
-            let mut entries = me.entries.take();
-            me.future = Some(
-                async move {
-                    loop {
-                        let mut entries = if let Some(entries) = entries.take() {
-                            entries
-                        } else {
-                            // FIXME: Handle cancellation
-                            match dir.run_blocking(cap_std::fs::Dir::entries).await {
-                                Ok(entries) => entries,
-                                Err(err) => break Err(err.into()),
-                            }
-                        };
-                        // FIXME: Handle cancellation
-                        let Some((res, tail)) = dir
-                            .run_blocking(move |_| entries.next().map(|entry| (entry, entries)))
-                            .await
-                        else {
-                            break Ok(None);
-                        };
-                        let entry = match res {
-                            Ok(entry) => entry,
-                            Err(err) => {
-                                // On windows, filter out files like `C:\DumpStack.log.tmp` which we
-                                // can't get full metadata for.
-                                #[cfg(windows)]
-                                {
-                                    use windows_sys::Win32::Foundation::{
-                                        ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION,
-                                    };
-                                    if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
-                                        || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
-                                    {
-                                        continue;
-                                    }
-                                }
-                                break Err(err.into());
-                            }
-                        };
-                        let meta = match entry.metadata() {
-                            Ok(meta) => meta,
-                            Err(err) => break Err(err.into()),
-                        };
-                        let Ok(name) = entry.file_name().into_string() else {
-                            break Err(ErrorCode::IllegalByteSequence);
-                        };
-                        break Ok(Some((
-                            DirectoryEntry {
-                                type_: meta.file_type().into(),
-                                name,
-                            },
-                            tail,
-                        )));
+            DirStreamState::InProgress {
+                mut rx,
+                mut task,
+                result,
+            } => {
+                let Poll::Ready(res) = rx.poll_recv(cx) else {
+                    self.0 = DirStreamState::InProgress { rx, task, result };
+                    if finish {
+                        return Poll::Ready(Ok(StreamResult::Cancelled));
+                    }
+                    return Poll::Pending;
+                };
+                match res {
+                    Some(entry) => {
+                        self.0 = DirStreamState::InProgress { rx, task, result };
+                        dst.set_buffer(Some(entry));
+                        Poll::Ready(Ok(StreamResult::Completed))
+                    }
+                    None => {
+                        let res = ready!(Pin::new(&mut task).poll(cx))
+                            .context("failed to join I/O task")?;
+                        self.0 = DirStreamState::InProgress { rx, task, result };
+                        self.close(res);
+                        Poll::Ready(Ok(StreamResult::Dropped))
                     }
                 }
-                .boxed(),
-            );
+            }
+            DirStreamState::Closed => Poll::Ready(Ok(StreamResult::Dropped)),
         }
-
-        let result = match task::ready!(me.future.as_mut().unwrap().as_mut().poll(cx)) {
-            Ok(Some((entry, entries))) => {
-                destination.set_buffer(Some(entry));
-                me.entries = Some(entries);
-                StreamResult::Completed
-            }
-            Ok(None) => {
-                me.close(Ok(()));
-                StreamResult::Dropped
-            }
-            Err(error) => {
-                me.close(Err(error));
-                StreamResult::Dropped
-            }
-        };
-
-        me.future = None;
-
-        Poll::Ready(Ok(result))
     }
 }
 
 struct WriteStreamConsumer {
     file: File,
-    offset: Option<u64>,
-    buffer: BytesMut,
+    offset: u64,
     result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
-    future: Option<Pin<Box<dyn Future<Output = Result<(BytesMut, usize), ErrorCode>> + Send>>>,
+    buffer: BytesMut,
+    task: Option<JoinHandle<std::io::Result<(BytesMut, usize)>>>,
+}
+
+impl Drop for WriteStreamConsumer {
+    fn drop(&mut self) {
+        self.close(Ok(()))
+    }
 }
 
 impl WriteStreamConsumer {
@@ -351,69 +490,194 @@ impl<D> StreamConsumer<D> for WriteStreamConsumer {
     type Item = u8;
 
     fn poll_consume(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        mut store: StoreContextMut<D>,
-        source: &mut Source<Self::Item>,
+        store: StoreContextMut<D>,
+        src: &mut Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let me = self.get_mut();
-        if me.future.is_none() {
-            if finish {
-                return Poll::Ready(Ok(StreamResult::Cancelled));
-            }
-
-            let offset = me.offset;
-            let file = me.file.clone();
-            let mut buffer = mem::take(&mut me.buffer);
-            buffer.clear();
-            buffer.extend_from_slice(source.as_direct_source(store.as_context_mut()).remaining());
-
-            me.future = Some(
-                async move {
-                    file.spawn_blocking(move |file| {
-                        let n = if let Some(offset) = offset {
-                            let n = file.write_at(&buffer, offset)?;
-                            let n_u64 = n.try_into().or(Err(ErrorCode::Overflow))?;
-                            offset.checked_add(n_u64).ok_or(ErrorCode::Overflow)?;
-                            n
-                        } else {
-                            file.append(&buffer)?
-                        };
-                        Ok((buffer, n))
-                    })
-                    .await
+        let mut src = src.as_direct_source(store);
+        if let Some(task) = self.task.as_mut() {
+            let res = ready!(Pin::new(task).poll(cx));
+            self.task = None;
+            match res {
+                Ok(Ok((buf, n))) => {
+                    src.mark_read(n);
+                    self.buffer = buf;
+                    self.buffer.clear();
+                    let Ok(n) = n.try_into() else {
+                        self.close(Err(ErrorCode::Overflow));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    };
+                    let Some(n) = self.offset.checked_add(n) else {
+                        self.close(Err(ErrorCode::Overflow));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    };
+                    self.offset = n;
+                    return Poll::Ready(Ok(StreamResult::Completed));
                 }
-                .boxed(),
-            );
+                Ok(Err(err)) => {
+                    self.close(Err(err.into()));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
+                Err(err) => {
+                    return Poll::Ready(Err(anyhow!(err).context("failed to join I/O task")));
+                }
+            }
         }
-
-        let result = match task::ready!(me.future.as_mut().unwrap().as_mut().poll(cx)) {
-            Ok((mut buffer, count)) => {
-                source.as_direct_source(store).mark_read(count);
-                let result = if count < buffer.len() && finish {
-                    StreamResult::Cancelled
-                } else {
-                    StreamResult::Completed
-                };
-                if let Some(offset) = me.offset.as_mut() {
-                    // We've already checked for overflow inside the future
-                    // above, so no need to do it again here:
-                    *offset += u64::try_from(count).unwrap();
+        if finish {
+            return Poll::Ready(Ok(StreamResult::Cancelled));
+        }
+        if let Some(file) = self.file.as_blocking_file() {
+            match file.write_at(src.remaining(), self.offset) {
+                Ok(n) => {
+                    src.mark_read(n);
+                    let Ok(n) = n.try_into() else {
+                        self.close(Err(ErrorCode::Overflow));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    };
+                    let Some(n) = self.offset.checked_add(n) else {
+                        self.close(Err(ErrorCode::Overflow));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    };
+                    self.offset = n;
+                    return Poll::Ready(Ok(StreamResult::Completed));
                 }
-                buffer.clear();
-                me.buffer = buffer;
-                result
+                Err(err) => {
+                    self.close(Err(err.into()));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
             }
-            Err(error) => {
-                me.close(Err(error));
-                StreamResult::Dropped
+        }
+        debug_assert!(self.buffer.is_empty());
+        self.buffer.extend_from_slice(src.remaining());
+        let buf = mem::take(&mut self.buffer);
+        let file = Arc::clone(self.file.as_file());
+        let offset = self.offset;
+        let mut task = spawn_blocking(move || file.write_at(&buf, offset).map(|n| (buf, n)));
+        let res = match Pin::new(&mut task).poll(cx) {
+            Poll::Ready(res) => res,
+            Poll::Pending => {
+                self.task = Some(task);
+                return Poll::Pending;
             }
         };
+        match res {
+            Ok(Ok((buf, n))) => {
+                src.mark_read(n);
+                self.buffer = buf;
+                self.buffer.clear();
+                let Ok(n) = n.try_into() else {
+                    self.close(Err(ErrorCode::Overflow));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                };
+                let Some(n) = self.offset.checked_add(n) else {
+                    self.close(Err(ErrorCode::Overflow));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                };
+                self.offset = n;
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Ok(Err(err)) => {
+                self.close(Err(err.into()));
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Err(err) => Poll::Ready(Err(anyhow!(err).context("failed to join I/O task"))),
+        }
+    }
+}
 
-        me.future = None;
+struct AppendStreamConsumer {
+    file: File,
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+    buffer: BytesMut,
+    task: Option<JoinHandle<std::io::Result<(BytesMut, usize)>>>,
+}
 
-        Poll::Ready(Ok(result))
+impl Drop for AppendStreamConsumer {
+    fn drop(&mut self) {
+        self.close(Ok(()))
+    }
+}
+
+impl AppendStreamConsumer {
+    fn close(&mut self, res: Result<(), ErrorCode>) {
+        if let Some(tx) = self.result.take() {
+            _ = tx.send(res);
+        }
+    }
+}
+
+impl<D> StreamConsumer<D> for AppendStreamConsumer {
+    type Item = u8;
+
+    fn poll_consume(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        src: &mut Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let mut src = src.as_direct_source(store);
+        if let Some(task) = self.task.as_mut() {
+            let res = ready!(Pin::new(task).poll(cx));
+            self.task = None;
+            match res {
+                Ok(Ok((buf, n))) => {
+                    src.mark_read(n);
+                    self.buffer = buf;
+                    self.buffer.clear();
+                    return Poll::Ready(Ok(StreamResult::Completed));
+                }
+                Ok(Err(err)) => {
+                    self.close(Err(err.into()));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
+                Err(err) => {
+                    return Poll::Ready(Err(anyhow!(err).context("failed to join I/O task")));
+                }
+            }
+        }
+        if finish {
+            return Poll::Ready(Ok(StreamResult::Cancelled));
+        }
+        if let Some(file) = self.file.as_blocking_file() {
+            match file.append(src.remaining()) {
+                Ok(n) => {
+                    src.mark_read(n);
+                    return Poll::Ready(Ok(StreamResult::Completed));
+                }
+                Err(err) => {
+                    self.close(Err(err.into()));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
+            }
+        }
+        debug_assert!(self.buffer.is_empty());
+        self.buffer.extend_from_slice(src.remaining());
+        let buf = mem::take(&mut self.buffer);
+        let file = Arc::clone(self.file.as_file());
+        let mut task = spawn_blocking(move || file.append(&buf).map(|n| (buf, n)));
+        let res = match Pin::new(&mut task).poll(cx) {
+            Poll::Ready(res) => res,
+            Poll::Pending => {
+                self.task = Some(task);
+                return Poll::Pending;
+            }
+        };
+        match res {
+            Ok(Ok((buf, n))) => {
+                src.mark_read(n);
+                self.buffer = buf;
+                self.buffer.clear();
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Ok(Err(err)) => {
+                self.close(Err(err.into()));
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Err(err) => Poll::Ready(Err(anyhow!(err).context("failed to join I/O task"))),
+        }
     }
 }
 
@@ -434,7 +698,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let file = get_file(store.get().table, &fd)?;
             if !file.perms.contains(FilePerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer(PhantomData)),
+                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
                     FutureReader::new(
                         instance,
                         &mut store,
@@ -453,7 +717,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                         file,
                         offset,
                         result: Some(result_tx),
-                        future: None,
+                        task: None,
                     },
                 ),
                 FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
@@ -478,10 +742,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                 store,
                 WriteStreamConsumer {
                     file,
-                    offset: Some(offset),
-                    buffer: BytesMut::default(),
+                    offset,
                     result: Some(result_tx),
-                    future: None,
+                    buffer: BytesMut::default(),
+                    task: None,
                 },
             );
             FilesystemResult::Ok(())
@@ -507,12 +771,11 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let file = file.clone();
             data.pipe(
                 store,
-                WriteStreamConsumer {
+                AppendStreamConsumer {
                     file,
-                    offset: None,
-                    buffer: BytesMut::default(),
                     result: Some(result_tx),
-                    future: None,
+                    buffer: BytesMut::default(),
+                    task: None,
                 },
             );
             FilesystemResult::Ok(())
@@ -598,7 +861,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let dir = get_dir(store.get().table, &fd)?;
             if !dir.perms.contains(DirPerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer(PhantomData)),
+                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
                     FutureReader::new(
                         instance,
                         &mut store,
@@ -606,20 +869,30 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     ),
                 ));
             }
-
-            let dir = dir.clone();
+            let allow_blocking_current_thread = dir.allow_blocking_current_thread;
+            let dir = Arc::clone(dir.as_dir());
             let (result_tx, result_rx) = oneshot::channel();
-            Ok((
+            let stream = if allow_blocking_current_thread {
                 StreamReader::new(
                     instance,
                     &mut store,
-                    DirectoryStreamProducer {
+                    BlockingDirectoryStreamProducer {
                         dir,
-                        entries: None,
                         result: Some(result_tx),
-                        future: None,
                     },
-                ),
+                )
+            } else {
+                StreamReader::new(
+                    instance,
+                    &mut store,
+                    NonblockingDirectoryStreamProducer(DirStreamState::Init {
+                        dir,
+                        result: result_tx,
+                    }),
+                )
+            };
+            Ok((
+                stream,
                 FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
             ))
         })
