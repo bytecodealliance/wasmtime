@@ -34,50 +34,48 @@ impl<D> StreamProducer<D> for InputStreamProducer {
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         if let Some(mut dst) = dst.as_direct_destination(store) {
-            let mut buf = ReadBuf::new(dst.remaining());
-            match self.rx.as_mut().poll_read(cx, &mut buf) {
-                Poll::Ready(Ok(())) if buf.capacity() == 0 => {
-                    Poll::Ready(Ok(StreamResult::Completed))
+            if !dst.remaining().is_empty() {
+                let mut buf = ReadBuf::new(dst.remaining());
+                match self.rx.as_mut().poll_read(cx, &mut buf) {
+                    Poll::Ready(Ok(())) if buf.filled().is_empty() => {
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    }
+                    Poll::Ready(Ok(())) => {
+                        let n = buf.filled().len();
+                        dst.mark_written(n);
+                        return Poll::Ready(Ok(StreamResult::Completed));
+                    }
+                    Poll::Ready(Err(..)) => {
+                        // TODO: Report the error to the guest
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    }
+                    Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+                    Poll::Pending => return Poll::Pending,
                 }
-                Poll::Ready(Ok(())) if buf.filled().is_empty() => {
-                    Poll::Ready(Ok(StreamResult::Dropped))
-                }
-                Poll::Ready(Ok(())) => {
-                    let n = buf.filled().len();
-                    dst.mark_written(n);
-                    Poll::Ready(Ok(StreamResult::Completed))
-                }
-                Poll::Ready(Err(..)) => {
-                    // TODO: Report the error to the guest
-                    Poll::Ready(Ok(StreamResult::Dropped))
-                }
-                Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
-                Poll::Pending => Poll::Pending,
             }
-        } else {
-            let mut buf = dst.take_buffer();
-            debug_assert!(buf.get_ref().is_empty());
-            buf.get_mut().reserve(DEFAULT_BUFFER_CAPACITY);
-            let mut rbuf = ReadBuf::uninit(buf.get_mut().spare_capacity_mut());
-            match self.rx.as_mut().poll_read(cx, &mut rbuf) {
-                Poll::Ready(Ok(())) if rbuf.filled().is_empty() => {
-                    Poll::Ready(Ok(StreamResult::Dropped))
-                }
-                Poll::Ready(Ok(())) => {
-                    let n = rbuf.filled().len();
-                    // SAFETY: `ReadyBuf::filled` promised us `count` bytes have
-                    // been initialized.
-                    unsafe { buf.get_mut().set_len(n) };
-                    dst.set_buffer(buf);
-                    Poll::Ready(Ok(StreamResult::Completed))
-                }
-                Poll::Ready(Err(..)) => {
-                    // TODO: Report the error to the guest
-                    Poll::Ready(Ok(StreamResult::Dropped))
-                }
-                Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
-                Poll::Pending => Poll::Pending,
+        }
+        let mut buf = dst.take_buffer();
+        debug_assert!(buf.get_ref().is_empty());
+        buf.get_mut().reserve(DEFAULT_BUFFER_CAPACITY);
+        let mut rbuf = ReadBuf::uninit(buf.get_mut().spare_capacity_mut());
+        match self.rx.as_mut().poll_read(cx, &mut rbuf) {
+            Poll::Ready(Ok(())) if rbuf.filled().is_empty() => {
+                Poll::Ready(Ok(StreamResult::Dropped))
             }
+            Poll::Ready(Ok(())) => {
+                let n = rbuf.filled().len();
+                // SAFETY: `ReadyBuf::filled` promised us `count` bytes have
+                // been initialized.
+                unsafe { buf.get_mut().set_len(n) };
+                dst.set_buffer(buf);
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Poll::Ready(Err(..)) => {
+                // TODO: Report the error to the guest
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
         }
     }
 }

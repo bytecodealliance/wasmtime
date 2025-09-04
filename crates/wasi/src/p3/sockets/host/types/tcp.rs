@@ -118,32 +118,26 @@ impl<D> StreamProducer<D> for ReceiveStreamProducer {
         let res = 'result: {
             if let Some(mut dst) = dst.as_direct_destination(store) {
                 let buf = dst.remaining();
-                if buf.is_empty() {
-                    match self.stream.poll_read_ready(cx) {
-                        Poll::Ready(Ok(())) => return Poll::Ready(Ok(StreamResult::Completed)),
-                        Poll::Ready(Err(err)) => break 'result Err(err.into()),
-                        Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
-                        Poll::Pending => return Poll::Pending,
-                    }
-                }
-                loop {
-                    match self.stream.try_read(buf) {
-                        Ok(0) => break 'result Ok(()),
-                        Ok(n) => {
-                            dst.mark_written(n);
-                            return Poll::Ready(Ok(StreamResult::Completed));
-                        }
-                        Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                            match self.stream.poll_read_ready(cx) {
-                                Poll::Ready(Ok(())) => continue,
-                                Poll::Ready(Err(err)) => break 'result Err(err.into()),
-                                Poll::Pending if finish => {
-                                    return Poll::Ready(Ok(StreamResult::Cancelled));
-                                }
-                                Poll::Pending => return Poll::Pending,
+                if !buf.is_empty() {
+                    loop {
+                        match self.stream.try_read(buf) {
+                            Ok(0) => break 'result Ok(()),
+                            Ok(n) => {
+                                dst.mark_written(n);
+                                return Poll::Ready(Ok(StreamResult::Completed));
                             }
+                            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                                match self.stream.poll_read_ready(cx) {
+                                    Poll::Ready(Ok(())) => continue,
+                                    Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                                    Poll::Pending if finish => {
+                                        return Poll::Ready(Ok(StreamResult::Cancelled));
+                                    }
+                                    Poll::Pending => return Poll::Pending,
+                                }
+                            }
+                            Err(err) => break 'result Err(err.into()),
                         }
-                        Err(err) => break 'result Err(err.into()),
                     }
                 }
             }
