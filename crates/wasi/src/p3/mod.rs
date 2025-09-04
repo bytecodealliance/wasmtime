@@ -30,9 +30,6 @@ use wasmtime::component::{
 // Default buffer capacity to use for reads of byte-sized values.
 const DEFAULT_BUFFER_CAPACITY: usize = 8192;
 
-// Maximum buffer capacity to use for reads of byte-sized values.
-const MAX_BUFFER_CAPACITY: usize = 4 * DEFAULT_BUFFER_CAPACITY;
-
 struct StreamEmptyProducer<T>(PhantomData<fn(T) -> T>);
 
 impl<T> Default for StreamEmptyProducer<T> {
