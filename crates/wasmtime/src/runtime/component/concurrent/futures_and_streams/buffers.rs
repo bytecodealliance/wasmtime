@@ -220,6 +220,12 @@ pub struct VecBuffer<T> {
     offset: usize,
 }
 
+impl<T> Default for VecBuffer<T> {
+    fn default() -> Self {
+        Self::with_capacity(0)
+    }
+}
+
 impl<T> VecBuffer<T> {
     /// Create a new instance with the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
