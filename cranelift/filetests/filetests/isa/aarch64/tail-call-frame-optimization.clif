@@ -1,0 +1,130 @@
+test compile precise-output
+set unwind_info=false
+set preserve_frame_pointers=false
+target aarch64
+
+;; Test 1: Tail calling convention with tail-only calls
+;; FunctionCalls::TailOnly → setup_area_size = 8 → optimized frame
+function %tail_only_function() -> i64 tail {
+    fn0 = colocated %target_func() -> i64 tail
+
+block0:
+    return_call fn0()
+}
+
+; VCode:
+;   str fp, [sp, #-8]!
+;   mov fp, sp
+; block0:
+;   return_call TestCase(%target_func) new_stack_arg_size:0
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   str x29, [sp, #-8]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldr x29, [sp], #8
+;   b #0xc ; reloc_external Call %target_func 0
+
+;; Test 2: SystemV calling convention with regular calls
+;; FunctionCalls::Regular → setup_area_size = 16 → standard frame
+function %systemv_regular_function() -> i64 system_v {
+    fn0 = colocated %target_func() -> i64 system_v
+
+block0:
+    v0 = call fn0()
+    return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   bl 0
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   bl #8 ; reloc_external Call %target_func 0
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+;; Test 3: Tail calling convention with conditional tail calls
+;; Multiple return_call instructions still → FunctionCalls::TailOnly → optimized frame
+function %tail_only_conditional(i64) -> i64 tail {
+    fn0 = colocated %target_func() -> i64 tail
+    fn1 = colocated %other_func() -> i64 tail
+
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp sgt v0, v1
+    brif v2, block1, block2
+
+block1:
+    return_call fn0()
+
+block2:
+    return_call fn1()
+}
+
+; VCode:
+;   str fp, [sp, #-8]!
+;   mov fp, sp
+; block0:
+;   subs xzr, x2, #0
+;   b.gt label2 ; b label1
+; block1:
+;   return_call TestCase(%other_func) new_stack_arg_size:0
+; block2:
+;   return_call TestCase(%target_func) new_stack_arg_size:0
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   str x29, [sp, #-8]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   cmp x2, #0
+;   b.gt #0x18
+; block2: ; offset 0x10
+;   ldr x29, [sp], #8
+;   b #0x14 ; reloc_external Call %other_func 0
+; block3: ; offset 0x18
+;   ldr x29, [sp], #8
+;   b #0x1c ; reloc_external Call %target_func 0
+
+;; Target functions for testing
+function %target_func() -> i64 {
+block0:
+    v0 = iconst.i64 42
+    return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #42
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0x2a
+;   ret
+
+function %other_func() -> i64 {
+block0:
+    v0 = iconst.i64 24
+    return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #24
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0x18
+;   ret
