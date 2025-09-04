@@ -9,16 +9,13 @@ mod bindings {
     export!(Component);
 }
 
-use {
-    bindings::{exports::local::local::run::Guest, local::local::continue_},
-    wit_bindgen_rt::async_support,
-};
+use bindings::{exports::local::local::run::Guest, local::local::continue_};
 
 struct Component;
 
 impl Guest for Component {
     fn run() {
-        while continue_::get_continue() && async_support::yield_blocking() {}
+        while continue_::get_continue() && wit_bindgen::yield_blocking() {}
     }
 }
 

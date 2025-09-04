@@ -14,7 +14,6 @@ workspace = true
 anyhow = { workspace = true, features = ['std'] }
 wasi-nn = "0.6.0"
 wit-bindgen = { workspace = true, features = ['default'] }
-wit-bindgen-rt = { workspace = true, features = ['async'] }
 libc = { workspace = true }
 futures = { workspace = true, default-features = false, features = ['alloc'] }
 url = { workspace = true }

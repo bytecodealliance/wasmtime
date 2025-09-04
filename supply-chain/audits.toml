@@ -4742,10 +4742,22 @@ who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-run"
 version = "0.37.0"
 
+[[audits.wit-bindgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.43.0 -> 0.45.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.wit-bindgen-core]]
 who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-run"
 version = "0.37.0"
+
+[[audits.wit-bindgen-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.43.0 -> 0.45.0"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.wit-bindgen-rt]]
 who = "Joel Dice <joel.dice@gmail.com>"
@@ -4757,10 +4769,22 @@ who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-run"
 version = "0.37.0"
 
+[[audits.wit-bindgen-rust]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.43.0 -> 0.45.0"
+notes = "The Bytecode Alliance is the author of this crate"
+
 [[audits.wit-bindgen-rust-macro]]
 who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-run"
 version = "0.37.0"
+
+[[audits.wit-bindgen-rust-macro]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.43.0 -> 0.45.0"
+notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.wit-component]]
 who = "Alex Crichton <alex@alexcrichton.com>"

@@ -3,7 +3,7 @@ use test_programs::p3::wasi::sockets::types::{
     IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress, TcpSocket,
 };
 use test_programs::p3::wit_stream;
-use wit_bindgen_rt::async_support::StreamResult;
+use wit_bindgen::StreamResult;
 
 struct Component;
 

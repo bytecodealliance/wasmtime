@@ -1,5 +1,3 @@
-use core::future::Future;
-
 use futures::join;
 use test_programs::p3::wasi::sockets::types::{
     IpAddress, IpAddressFamily, IpSocketAddress, TcpSocket,

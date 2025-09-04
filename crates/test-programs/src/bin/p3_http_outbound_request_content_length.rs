@@ -3,8 +3,7 @@ use futures::join;
 use test_programs::p3::wasi::http::handler;
 use test_programs::p3::wasi::http::types::{ErrorCode, Headers, Method, Request, Scheme, Trailers};
 use test_programs::p3::{wit_future, wit_stream};
-use wit_bindgen::FutureReader;
-use wit_bindgen_rt::async_support::{FutureWriter, StreamWriter};
+use wit_bindgen::{FutureReader, FutureWriter, StreamWriter};
 
 struct Component;
 
