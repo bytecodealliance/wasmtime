@@ -1,6 +1,6 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{Accessor, ConcurrentState, WorkItem, tls};
+use crate::component::concurrent::{Accessor, ConcurrentState, SuspendReason, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
@@ -1653,6 +1653,10 @@ impl TableDebug for TransmitState {
     }
 }
 
+type PollStream = Box<
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>> + Send + Sync,
+>;
+
 /// Represents the state of the write end of a stream or future.
 enum WriteState {
     /// The write end is open, but no write is pending.
@@ -1668,14 +1672,9 @@ enum WriteState {
     },
     /// The write end is owned by the host, which is ready to produce items.
     HostReady {
-        produce: Box<
-            dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>
-                + Send
-                + Sync,
-        >,
+        produce: PollStream,
         guest_offset: usize,
         cancel: bool,
-        cancel_waker: Option<Waker>,
     },
     /// The write end has been dropped.
     Dropped,
@@ -1707,14 +1706,9 @@ enum ReadState {
     },
     /// The read end is owned by a host task, and it is ready to consume items.
     HostReady {
-        consume: Box<
-            dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>
-                + Send
-                + Sync,
-        >,
+        consume: PollStream,
         guest_offset: usize,
         cancel: bool,
-        cancel_waker: Option<Waker>,
     },
     /// Both the read and write ends are owned by the host.
     HostToHost {
@@ -1822,7 +1816,6 @@ impl Instance {
                                 let WriteState::HostReady {
                                     guest_offset,
                                     cancel,
-                                    cancel_waker,
                                     ..
                                 } = &mut transmit.write
                                 else {
@@ -1839,10 +1832,7 @@ impl Instance {
                                              after producing at least one item"
                                         )));
                                     }
-
-                                    *cancel_waker = Some(cx.waker().clone());
                                 } else {
-                                    *cancel_waker = None;
                                     *cancel = false;
                                 }
                             }
@@ -1909,7 +1899,6 @@ impl Instance {
             produce,
             guest_offset: 0,
             cancel: false,
-            cancel_waker: None,
         };
         read
     }
@@ -1955,16 +1944,10 @@ impl Instance {
                             cancel,
                         );
 
-                        if let ReadState::HostReady {
-                            cancel_waker,
-                            cancel,
-                            ..
-                        } = &mut self.concurrent_state_mut(store).get_mut(id).unwrap().read
-                        {
-                            if let Poll::Pending = &poll {
-                                *cancel_waker = Some(cx.waker().clone());
-                            } else {
-                                *cancel_waker = None;
+                        if !poll.is_pending() {
+                            if let ReadState::HostReady { cancel, .. } =
+                                &mut self.concurrent_state_mut(store).get_mut(id).unwrap().read
+                            {
                                 *cancel = false;
                             }
                         }
@@ -2035,7 +2018,6 @@ impl Instance {
                     consume,
                     guest_offset: 0,
                     cancel: false,
-                    cancel_waker: None,
                 };
             }
             WriteState::GuestReady { .. } => {
@@ -2044,9 +2026,8 @@ impl Instance {
                     consume,
                     guest_offset: 0,
                     cancel: false,
-                    cancel_waker: None,
                 };
-                self.pipe_from_guest(store, kind, id, future);
+                self.pipe_from_guest(store.0, kind, id, future);
             }
             WriteState::HostReady { .. } => {
                 let WriteState::HostReady { produce, .. } = mem::replace(
@@ -2055,7 +2036,6 @@ impl Instance {
                         produce: Box::new(|| unreachable!()),
                         guest_offset: 0,
                         cancel: false,
-                        cancel_waker: None,
                     },
                 ) else {
                     unreachable!();
@@ -2262,7 +2242,7 @@ impl Instance {
 
     fn pipe_from_guest(
         self,
-        mut store: impl AsContextMut,
+        store: &mut dyn VMStore,
         kind: TransmitKind,
         id: TableId<TransmitState>,
         future: Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>,
@@ -2287,7 +2267,6 @@ impl Instance {
                         consume,
                         guest_offset: 0,
                         cancel: false,
-                        cancel_waker: None,
                     },
                 };
                 let WriteState::GuestReady { ty, handle, .. } =
@@ -2300,13 +2279,12 @@ impl Instance {
             })
         };
 
-        self.concurrent_state_mut(store.as_context_mut().0)
-            .push_future(future.boxed());
+        self.concurrent_state_mut(store).push_future(future.boxed());
     }
 
     fn pipe_to_guest(
         self,
-        mut store: impl AsContextMut,
+        store: &mut dyn VMStore,
         kind: TransmitKind,
         id: TableId<TransmitState>,
         future: Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>,
@@ -2331,7 +2309,6 @@ impl Instance {
                         produce,
                         guest_offset: 0,
                         cancel: false,
-                        cancel_waker: None,
                     },
                 };
                 let ReadState::GuestReady { ty, handle, .. } =
@@ -2344,8 +2321,7 @@ impl Instance {
             })
         };
 
-        self.concurrent_state_mut(store.as_context_mut().0)
-            .push_future(future.boxed());
+        self.concurrent_state_mut(store).push_future(future.boxed());
     }
 
     /// Drop the read end of a stream or future read from the host.
@@ -2897,9 +2873,7 @@ impl Instance {
                 consume,
                 guest_offset,
                 cancel,
-                cancel_waker,
             } => {
-                assert!(cancel_waker.is_none());
                 assert!(!cancel);
                 assert_eq!(0, guest_offset);
 
@@ -2907,40 +2881,8 @@ impl Instance {
                     transmit.done = true;
                 }
 
-                let mut future = consume();
-                transmit.read = ReadState::HostReady {
-                    consume,
-                    guest_offset: 0,
-                    cancel: false,
-                    cancel_waker: None,
-                };
                 set_guest_ready(concurrent_state)?;
-                let poll = self.set_tls(store.0, || {
-                    future
-                        .as_mut()
-                        .poll(&mut Context::from_waker(&Waker::noop()))
-                });
-
-                match poll {
-                    Poll::Ready(state) => {
-                        let transmit = self.concurrent_state_mut(store.0).get_mut(transmit_id)?;
-                        let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
-                            unreachable!();
-                        };
-                        let code = return_code(ty.kind(), state?, mem::replace(guest_offset, 0));
-                        transmit.write = WriteState::Open;
-                        code
-                    }
-                    Poll::Pending => {
-                        self.pipe_from_guest(
-                            store.as_context_mut(),
-                            ty.kind(),
-                            transmit_id,
-                            future,
-                        );
-                        ReturnCode::Blocked
-                    }
-                }
+                self.consume(store.0, ty.kind(), transmit_id, consume, 0, false)?
             }
 
             ReadState::HostToHost { .. } => unreachable!(),
@@ -2970,6 +2912,44 @@ impl Instance {
         }
 
         Ok(result)
+    }
+
+    fn consume(
+        self,
+        store: &mut dyn VMStore,
+        kind: TransmitKind,
+        transmit_id: TableId<TransmitState>,
+        consume: PollStream,
+        guest_offset: usize,
+        cancel: bool,
+    ) -> Result<ReturnCode> {
+        let mut future = consume();
+        self.concurrent_state_mut(store).get_mut(transmit_id)?.read = ReadState::HostReady {
+            consume,
+            guest_offset,
+            cancel,
+        };
+        let poll = self.set_tls(store, || {
+            future
+                .as_mut()
+                .poll(&mut Context::from_waker(&Waker::noop()))
+        });
+
+        Ok(match poll {
+            Poll::Ready(state) => {
+                let transmit = self.concurrent_state_mut(store).get_mut(transmit_id)?;
+                let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
+                    unreachable!();
+                };
+                let code = return_code(kind, state?, mem::replace(guest_offset, 0));
+                transmit.write = WriteState::Open;
+                code
+            }
+            Poll::Pending => {
+                self.pipe_from_guest(store, kind, transmit_id, future);
+                ReturnCode::Blocked
+            }
+        })
     }
 
     /// Read from the specified stream or future from the guest.
@@ -3126,9 +3106,7 @@ impl Instance {
                 produce,
                 guest_offset,
                 cancel,
-                cancel_waker,
             } => {
-                assert!(cancel_waker.is_none());
                 assert!(!cancel);
                 assert_eq!(0, guest_offset);
 
@@ -3136,35 +3114,9 @@ impl Instance {
                     transmit.done = true;
                 }
 
-                let mut future = produce();
-                transmit.write = WriteState::HostReady {
-                    produce,
-                    guest_offset: 0,
-                    cancel: false,
-                    cancel_waker: None,
-                };
                 set_guest_ready(concurrent_state)?;
-                let poll = self.set_tls(store.0, || {
-                    future
-                        .as_mut()
-                        .poll(&mut Context::from_waker(&Waker::noop()))
-                });
 
-                match poll {
-                    Poll::Ready(state) => {
-                        let transmit = self.concurrent_state_mut(store.0).get_mut(transmit_id)?;
-                        let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
-                            unreachable!();
-                        };
-                        let code = return_code(ty.kind(), state?, mem::replace(guest_offset, 0));
-                        transmit.read = ReadState::Open;
-                        code
-                    }
-                    Poll::Pending => {
-                        self.pipe_to_guest(store.as_context_mut(), ty.kind(), transmit_id, future);
-                        ReturnCode::Blocked
-                    }
-                }
+                self.produce(store.0, ty.kind(), transmit_id, produce, 0, false)?
             }
 
             WriteState::Open => {
@@ -3186,6 +3138,270 @@ impl Instance {
         }
 
         Ok(result)
+    }
+
+    fn produce(
+        self,
+        store: &mut dyn VMStore,
+        kind: TransmitKind,
+        transmit_id: TableId<TransmitState>,
+        produce: PollStream,
+        guest_offset: usize,
+        cancel: bool,
+    ) -> Result<ReturnCode> {
+        let mut future = produce();
+        self.concurrent_state_mut(store).get_mut(transmit_id)?.write = WriteState::HostReady {
+            produce,
+            guest_offset,
+            cancel,
+        };
+        let poll = self.set_tls(store, || {
+            future
+                .as_mut()
+                .poll(&mut Context::from_waker(&Waker::noop()))
+        });
+
+        Ok(match poll {
+            Poll::Ready(state) => {
+                let transmit = self.concurrent_state_mut(store).get_mut(transmit_id)?;
+                let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
+                    unreachable!();
+                };
+                let code = return_code(kind, state?, mem::replace(guest_offset, 0));
+                transmit.read = ReadState::Open;
+                code
+            }
+            Poll::Pending => {
+                self.pipe_to_guest(store, kind, transmit_id, future);
+                ReturnCode::Blocked
+            }
+        })
+    }
+
+    /// Cancel a pending stream or future write.
+    fn cancel_write(
+        self,
+        store: &mut dyn VMStore,
+        kind: TransmitKind,
+        transmit_id: TableId<TransmitState>,
+        async_: bool,
+    ) -> Result<ReturnCode> {
+        let state = self.concurrent_state_mut(store);
+        let transmit = state.get_mut(transmit_id)?;
+        log::trace!(
+            "host_cancel_write state {transmit_id:?}; write state {:?} read state {:?}",
+            transmit.read,
+            transmit.write
+        );
+
+        let code = if let Some(event) =
+            Waitable::Transmit(transmit.write_handle).take_event(state)?
+        {
+            let (Event::FutureWrite { code, .. } | Event::StreamWrite { code, .. }) = event else {
+                unreachable!();
+            };
+            match (code, event) {
+                (ReturnCode::Completed(count), Event::StreamWrite { .. }) => {
+                    ReturnCode::Cancelled(count)
+                }
+                (ReturnCode::Dropped(_) | ReturnCode::Completed(_), _) => code,
+                _ => unreachable!(),
+            }
+        } else if let ReadState::HostReady { .. } = &state.get_mut(transmit_id)?.read {
+            let ReadState::HostReady {
+                consume,
+                guest_offset,
+                ..
+            } = mem::replace(&mut state.get_mut(transmit_id)?.read, ReadState::Open)
+            else {
+                unreachable!();
+            };
+
+            let code = self.consume(store, kind, transmit_id, consume, guest_offset, true)?;
+
+            if let ReturnCode::Blocked = &code
+                && !async_
+            {
+                let state = self.concurrent_state_mut(store);
+                let caller = state.guest_task.unwrap();
+                let waitable = Waitable::Transmit(state.get_mut(transmit_id)?.write_handle);
+                let old_set = waitable.common(state)?.set;
+                let set = state.get_mut(caller)?.sync_call_set;
+                waitable.join(state, Some(set))?;
+
+                self.suspend(store, SuspendReason::Waiting { set, task: caller })?;
+
+                let state = self.concurrent_state_mut(store);
+                waitable.join(state, old_set)?;
+
+                let event = waitable.take_event(state)?;
+                if let Some(event @ Event::StreamWrite { code, .. }) = event {
+                    waitable.on_delivery(self.id().get_mut(store), event);
+                    code
+                } else {
+                    unreachable!()
+                }
+            } else {
+                code
+            }
+        } else {
+            ReturnCode::Cancelled(0)
+        };
+
+        let transmit = self.concurrent_state_mut(store).get_mut(transmit_id)?;
+
+        match &transmit.write {
+            WriteState::GuestReady { .. } => {
+                transmit.write = WriteState::Open;
+            }
+            WriteState::HostReady { .. } => todo!("support host write cancellation"),
+            WriteState::Open | WriteState::Dropped => {}
+        }
+
+        log::trace!("cancelled write {transmit_id:?}");
+
+        Ok(code)
+    }
+
+    /// Cancel a pending stream or future read.
+    fn cancel_read(
+        self,
+        store: &mut dyn VMStore,
+        kind: TransmitKind,
+        transmit_id: TableId<TransmitState>,
+        async_: bool,
+    ) -> Result<ReturnCode> {
+        let state = self.concurrent_state_mut(store);
+        let transmit = state.get_mut(transmit_id)?;
+        log::trace!(
+            "host_cancel_read state {transmit_id:?}; read state {:?} write state {:?}",
+            transmit.read,
+            transmit.write
+        );
+
+        let code = if let Some(event) =
+            Waitable::Transmit(transmit.read_handle).take_event(state)?
+        {
+            let (Event::FutureRead { code, .. } | Event::StreamRead { code, .. }) = event else {
+                unreachable!();
+            };
+            match (code, event) {
+                (ReturnCode::Completed(count), Event::StreamRead { .. }) => {
+                    ReturnCode::Cancelled(count)
+                }
+                (ReturnCode::Dropped(_) | ReturnCode::Completed(_), _) => code,
+                _ => unreachable!(),
+            }
+        } else if let WriteState::HostReady { .. } = &state.get_mut(transmit_id)?.write {
+            let WriteState::HostReady {
+                produce,
+                guest_offset,
+                ..
+            } = mem::replace(&mut state.get_mut(transmit_id)?.write, WriteState::Open)
+            else {
+                unreachable!();
+            };
+
+            let code = self.produce(store, kind, transmit_id, produce, guest_offset, true)?;
+
+            if let ReturnCode::Blocked = &code
+                && !async_
+            {
+                let state = self.concurrent_state_mut(store);
+                let caller = state.guest_task.unwrap();
+                let waitable = Waitable::Transmit(state.get_mut(transmit_id)?.read_handle);
+                let old_set = waitable.common(state)?.set;
+                let set = state.get_mut(caller)?.sync_call_set;
+                waitable.join(state, Some(set))?;
+
+                self.suspend(store, SuspendReason::Waiting { set, task: caller })?;
+
+                let state = self.concurrent_state_mut(store);
+                waitable.join(state, old_set)?;
+
+                let event = waitable.take_event(state)?;
+                if let Some(event @ Event::StreamRead { code, .. }) = event {
+                    waitable.on_delivery(self.id().get_mut(store), event);
+                    code
+                } else {
+                    unreachable!()
+                }
+            } else {
+                code
+            }
+        } else {
+            ReturnCode::Cancelled(0)
+        };
+
+        let transmit = self.concurrent_state_mut(store).get_mut(transmit_id)?;
+
+        match &transmit.read {
+            ReadState::GuestReady { .. } => {
+                transmit.read = ReadState::Open;
+            }
+            ReadState::HostReady { .. } | ReadState::HostToHost { .. } => {
+                todo!("support host read cancellation")
+            }
+            ReadState::Open | ReadState::Dropped => {}
+        }
+
+        log::trace!("cancelled read {transmit_id:?}");
+
+        Ok(code)
+    }
+
+    /// Cancel a pending write for the specified stream or future from the guest.
+    fn guest_cancel_write(
+        self,
+        store: &mut dyn VMStore,
+        ty: TransmitIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<ReturnCode> {
+        let (rep, state) =
+            get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?;
+        let id = TableId::<TransmitHandle>::new(rep);
+        log::trace!("guest cancel write {id:?} (handle {writer})");
+        match state {
+            TransmitLocalState::Write { .. } => {
+                bail!("stream or future write cancelled when no write is pending")
+            }
+            TransmitLocalState::Read { .. } => {
+                bail!("passed read end to `{{stream|future}}.cancel-write`")
+            }
+            TransmitLocalState::Busy => {
+                *state = TransmitLocalState::Write { done: false };
+            }
+        }
+        let transmit_id = self.concurrent_state_mut(store).get_mut(id)?.state;
+        self.cancel_write(store, ty.kind(), transmit_id, async_)
+    }
+
+    /// Cancel a pending read for the specified stream or future from the guest.
+    fn guest_cancel_read(
+        self,
+        store: &mut dyn VMStore,
+        ty: TransmitIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<ReturnCode> {
+        let (rep, state) =
+            get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?;
+        let id = TableId::<TransmitHandle>::new(rep);
+        log::trace!("guest cancel read {id:?} (handle {reader})");
+        match state {
+            TransmitLocalState::Read { .. } => {
+                bail!("stream or future read cancelled when no read is pending")
+            }
+            TransmitLocalState::Write { .. } => {
+                bail!("passed write end to `{{stream|future}}.cancel-read`")
+            }
+            TransmitLocalState::Busy => {
+                *state = TransmitLocalState::Read { done: false };
+            }
+        }
+        let transmit_id = self.concurrent_state_mut(store).get_mut(id)?.state;
+        self.cancel_read(store, ty.kind(), transmit_id, async_)
     }
 
     /// Drop the readable end of the specified stream or future from the guest.
@@ -3301,6 +3517,54 @@ impl Instance {
         Ok(())
     }
 
+    /// Implements the `future.cancel-read` intrinsic.
+    pub(crate) fn future_cancel_read(
+        self,
+        store: &mut dyn VMStore,
+        ty: TypeFutureTableIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_read(store, TransmitIndex::Future(ty), async_, reader)
+            .map(|v| v.encode())
+    }
+
+    /// Implements the `future.cancel-write` intrinsic.
+    pub(crate) fn future_cancel_write(
+        self,
+        store: &mut dyn VMStore,
+        ty: TypeFutureTableIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_write(store, TransmitIndex::Future(ty), async_, writer)
+            .map(|v| v.encode())
+    }
+
+    /// Implements the `stream.cancel-read` intrinsic.
+    pub(crate) fn stream_cancel_read(
+        self,
+        store: &mut dyn VMStore,
+        ty: TypeStreamTableIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_read(store, TransmitIndex::Stream(ty), async_, reader)
+            .map(|v| v.encode())
+    }
+
+    /// Implements the `stream.cancel-write` intrinsic.
+    pub(crate) fn stream_cancel_write(
+        self,
+        store: &mut dyn VMStore,
+        ty: TypeStreamTableIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_write(store, TransmitIndex::Stream(ty), async_, writer)
+            .map(|v| v.encode())
+    }
+
     /// Implements the `future.drop-readable` intrinsic.
     pub(crate) fn future_drop_readable(
         self,
@@ -3377,58 +3641,6 @@ impl ComponentInstance {
         })
     }
 
-    /// Cancel a pending write for the specified stream or future from the guest.
-    fn guest_cancel_write(
-        mut self: Pin<&mut Self>,
-        ty: TransmitIndex,
-        writer: u32,
-        _async_: bool,
-    ) -> Result<ReturnCode> {
-        let (rep, state) = get_mut_by_index_from(self.as_mut().table_for_transmit(ty), ty, writer)?;
-        let id = TableId::<TransmitHandle>::new(rep);
-        log::trace!("guest cancel write {id:?} (handle {writer})");
-        match state {
-            TransmitLocalState::Write { .. } => {
-                bail!("stream or future write cancelled when no write is pending")
-            }
-            TransmitLocalState::Read { .. } => {
-                bail!("passed read end to `{{stream|future}}.cancel-write`")
-            }
-            TransmitLocalState::Busy => {
-                *state = TransmitLocalState::Write { done: false };
-            }
-        }
-        let state = self.concurrent_state_mut();
-        let rep = state.get_mut(id)?.state.rep();
-        state.host_cancel_write(rep)
-    }
-
-    /// Cancel a pending read for the specified stream or future from the guest.
-    fn guest_cancel_read(
-        mut self: Pin<&mut Self>,
-        ty: TransmitIndex,
-        reader: u32,
-        _async_: bool,
-    ) -> Result<ReturnCode> {
-        let (rep, state) = get_mut_by_index_from(self.as_mut().table_for_transmit(ty), ty, reader)?;
-        let id = TableId::<TransmitHandle>::new(rep);
-        log::trace!("guest cancel read {id:?} (handle {reader})");
-        match state {
-            TransmitLocalState::Read { .. } => {
-                bail!("stream or future read cancelled when no read is pending")
-            }
-            TransmitLocalState::Write { .. } => {
-                bail!("passed write end to `{{stream|future}}.cancel-read`")
-            }
-            TransmitLocalState::Busy => {
-                *state = TransmitLocalState::Read { done: false };
-            }
-        }
-        let state = self.concurrent_state_mut();
-        let rep = state.get_mut(id)?.state.rep();
-        state.host_cancel_read(rep)
-    }
-
     /// Drop the specified error context.
     pub(crate) fn error_context_drop(
         mut self: Pin<&mut Self>,
@@ -3499,56 +3711,12 @@ impl ComponentInstance {
         self.guest_new(TransmitIndex::Future(ty))
     }
 
-    /// Implements the `future.cancel-write` intrinsic.
-    pub(crate) fn future_cancel_write(
-        self: Pin<&mut Self>,
-        ty: TypeFutureTableIndex,
-        async_: bool,
-        writer: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_write(TransmitIndex::Future(ty), writer, async_)
-            .map(|result| result.encode())
-    }
-
-    /// Implements the `future.cancel-read` intrinsic.
-    pub(crate) fn future_cancel_read(
-        self: Pin<&mut Self>,
-        ty: TypeFutureTableIndex,
-        async_: bool,
-        reader: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_read(TransmitIndex::Future(ty), reader, async_)
-            .map(|result| result.encode())
-    }
-
     /// Implements the `stream.new` intrinsic.
     pub(crate) fn stream_new(
         self: Pin<&mut Self>,
         ty: TypeStreamTableIndex,
     ) -> Result<ResourcePair> {
         self.guest_new(TransmitIndex::Stream(ty))
-    }
-
-    /// Implements the `stream.cancel-write` intrinsic.
-    pub(crate) fn stream_cancel_write(
-        self: Pin<&mut Self>,
-        ty: TypeStreamTableIndex,
-        async_: bool,
-        writer: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_write(TransmitIndex::Stream(ty), writer, async_)
-            .map(|result| result.encode())
-    }
-
-    /// Implements the `stream.cancel-read` intrinsic.
-    pub(crate) fn stream_cancel_read(
-        self: Pin<&mut Self>,
-        ty: TypeStreamTableIndex,
-        async_: bool,
-        reader: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_read(TransmitIndex::Stream(ty), reader, async_)
-            .map(|result| result.encode())
     }
 
     /// Transfer ownership of the specified future read end from one guest to
@@ -3754,120 +3922,6 @@ impl ConcurrentState {
         );
 
         Ok(())
-    }
-
-    /// Cancel a pending stream or future write from the host.
-    ///
-    /// # Arguments
-    ///
-    /// * `rep` - The `TransmitState` rep for the stream or future.
-    fn host_cancel_write(&mut self, rep: u32) -> Result<ReturnCode> {
-        let transmit_id = TableId::<TransmitState>::new(rep);
-        let transmit = self.get_mut(transmit_id)?;
-        log::trace!(
-            "host_cancel_write state {transmit_id:?}; write state {:?} read state {:?}",
-            transmit.read,
-            transmit.write
-        );
-
-        let code = if let Some(event) =
-            Waitable::Transmit(transmit.write_handle).take_event(self)?
-        {
-            let (Event::FutureWrite { code, .. } | Event::StreamWrite { code, .. }) = event else {
-                unreachable!();
-            };
-            match (code, event) {
-                (ReturnCode::Completed(count), Event::StreamWrite { .. }) => {
-                    ReturnCode::Cancelled(count)
-                }
-                (ReturnCode::Dropped(_) | ReturnCode::Completed(_), _) => code,
-                _ => unreachable!(),
-            }
-        } else if let ReadState::HostReady {
-            cancel,
-            cancel_waker,
-            ..
-        } = &mut self.get_mut(transmit_id)?.read
-        {
-            *cancel = true;
-            if let Some(waker) = cancel_waker.take() {
-                waker.wake()
-            }
-            ReturnCode::Blocked
-        } else {
-            ReturnCode::Cancelled(0)
-        };
-
-        let transmit = self.get_mut(transmit_id)?;
-
-        match &transmit.write {
-            WriteState::GuestReady { .. } => {
-                transmit.write = WriteState::Open;
-            }
-            WriteState::HostReady { .. } => todo!("support host write cancellation"),
-            WriteState::Open | WriteState::Dropped => {}
-        }
-
-        log::trace!("cancelled write {transmit_id:?}");
-
-        Ok(code)
-    }
-
-    /// Cancel a pending stream or future read from the host.
-    ///
-    /// # Arguments
-    ///
-    /// * `rep` - The `TransmitState` rep for the stream or future.
-    fn host_cancel_read(&mut self, rep: u32) -> Result<ReturnCode> {
-        let transmit_id = TableId::<TransmitState>::new(rep);
-        let transmit = self.get_mut(transmit_id)?;
-        log::trace!(
-            "host_cancel_read state {transmit_id:?}; read state {:?} write state {:?}",
-            transmit.read,
-            transmit.write
-        );
-
-        let code = if let Some(event) = Waitable::Transmit(transmit.read_handle).take_event(self)? {
-            let (Event::FutureRead { code, .. } | Event::StreamRead { code, .. }) = event else {
-                unreachable!();
-            };
-            match (code, event) {
-                (ReturnCode::Completed(count), Event::StreamRead { .. }) => {
-                    ReturnCode::Cancelled(count)
-                }
-                (ReturnCode::Dropped(_) | ReturnCode::Completed(_), _) => code,
-                _ => unreachable!(),
-            }
-        } else if let WriteState::HostReady {
-            cancel,
-            cancel_waker,
-            ..
-        } = &mut self.get_mut(transmit_id)?.write
-        {
-            *cancel = true;
-            if let Some(waker) = cancel_waker.take() {
-                waker.wake()
-            }
-            ReturnCode::Blocked
-        } else {
-            ReturnCode::Cancelled(0)
-        };
-
-        let transmit = self.get_mut(transmit_id)?;
-
-        match &transmit.read {
-            ReadState::GuestReady { .. } => {
-                transmit.read = ReadState::Open;
-            }
-            ReadState::HostReady { .. } | ReadState::HostToHost { .. } => {
-                todo!("support host read cancellation")
-            }
-            ReadState::Open | ReadState::Dropped => {}
-        }
-
-        log::trace!("cancelled read {transmit_id:?}");
-
-        Ok(code)
     }
 }
 
