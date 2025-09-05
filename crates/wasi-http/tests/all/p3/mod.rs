@@ -20,14 +20,23 @@ use wasmtime_wasi::p3::bindings::Command;
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::p3::bindings::Proxy;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
-use wasmtime_wasi_http::p3::{DefaultWasiHttpCtx, Request, WasiHttpCtxView, WasiHttpView};
+use wasmtime_wasi_http::p3::{Request, WasiHttpCtx, WasiHttpCtxView, WasiHttpView};
+use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
 
 foreach_p3_http!(assert_test_exists);
+
+struct TestHttpCtx;
+
+impl WasiHttpCtx for TestHttpCtx {
+    fn is_forbidden_header(&mut self, name: &http::header::HeaderName) -> bool {
+        name.as_str() == "custom-forbidden-header" || DEFAULT_FORBIDDEN_HEADERS.contains(name)
+    }
+}
 
 struct Ctx {
     table: ResourceTable,
     wasi: WasiCtx,
-    http: DefaultWasiHttpCtx,
+    http: TestHttpCtx,
 }
 
 impl Default for Ctx {
@@ -35,7 +44,7 @@ impl Default for Ctx {
         Self {
             table: ResourceTable::default(),
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
-            http: DefaultWasiHttpCtx::default(),
+            http: TestHttpCtx,
         }
     }
 }
@@ -173,7 +182,6 @@ async fn p3_http_outbound_request_invalid_version() -> anyhow::Result<()> {
     run_cli(P3_HTTP_OUTBOUND_REQUEST_INVALID_VERSION_COMPONENT, &server).await
 }
 
-#[ignore = "unimplemented"] // TODO: implement
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_invalid_header() -> anyhow::Result<()> {
     let server = Server::http2(1)?;
