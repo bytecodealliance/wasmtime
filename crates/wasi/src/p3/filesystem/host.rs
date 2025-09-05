@@ -6,7 +6,8 @@ use crate::p3::bindings::filesystem::types::{
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::p3::{
-    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, StreamEmptyProducer,
+    DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer, FutureOneshotProducer, FutureReadyProducer,
+    StreamEmptyProducer,
 };
 use crate::{DirPerms, FilePerms};
 use anyhow::{Context as _, anyhow};
@@ -22,7 +23,7 @@ use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
-    StreamProducer, StreamReader, StreamResult, VecBuffer,
+    StreamProducer, StreamReader, StreamResult,
 };
 
 fn get_descriptor<'a>(
@@ -288,58 +289,6 @@ fn map_dir_entry(
             }
             Err(err.into())
         }
-    }
-}
-
-struct BlockingDirectoryStreamProducer {
-    dir: Arc<cap_std::fs::Dir>,
-    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
-}
-
-impl Drop for BlockingDirectoryStreamProducer {
-    fn drop(&mut self) {
-        self.close(Ok(()))
-    }
-}
-
-impl BlockingDirectoryStreamProducer {
-    fn close(&mut self, res: Result<(), ErrorCode>) {
-        if let Some(tx) = self.result.take() {
-            _ = tx.send(res);
-        }
-    }
-}
-
-impl<D> StreamProducer<D> for BlockingDirectoryStreamProducer {
-    type Item = DirectoryEntry;
-    type Buffer = VecBuffer<DirectoryEntry>;
-
-    fn poll_produce<'a>(
-        mut self: Pin<&mut Self>,
-        _: &mut Context<'_>,
-        _: StoreContextMut<'a, D>,
-        mut dst: Destination<'a, Self::Item, Self::Buffer>,
-        _finish: bool,
-    ) -> Poll<wasmtime::Result<StreamResult>> {
-        let entries = match self.dir.entries() {
-            Ok(entries) => entries,
-            Err(err) => {
-                self.close(Err(err.into()));
-                return Poll::Ready(Ok(StreamResult::Dropped));
-            }
-        };
-        let res = match entries
-            .filter_map(|entry| map_dir_entry(entry).transpose())
-            .collect::<Result<Vec<_>, _>>()
-        {
-            Ok(entries) => {
-                dst.set_buffer(entries.into());
-                Ok(())
-            }
-            Err(err) => Err(err),
-        };
-        self.close(res);
-        Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
 
@@ -848,14 +797,20 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let dir = Arc::clone(dir.as_dir());
             let (result_tx, result_rx) = oneshot::channel();
             let stream = if allow_blocking_current_thread {
-                StreamReader::new(
-                    instance,
-                    &mut store,
-                    BlockingDirectoryStreamProducer {
-                        dir,
-                        result: Some(result_tx),
-                    },
-                )
+                match dir.entries() {
+                    Ok(readdir) => StreamReader::new(
+                        instance,
+                        &mut store,
+                        FallibleIteratorProducer::new(
+                            readdir.filter_map(|e| map_dir_entry(e).transpose()),
+                            result_tx,
+                        ),
+                    ),
+                    Err(e) => {
+                        result_tx.send(Err(e.into())).unwrap();
+                        StreamReader::new(instance, &mut store, StreamEmptyProducer::default())
+                    }
+                }
             } else {
                 StreamReader::new(
                     instance,
