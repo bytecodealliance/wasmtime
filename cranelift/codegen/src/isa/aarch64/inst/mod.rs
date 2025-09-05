@@ -916,6 +916,9 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::DummyUse { reg } => {
             collector.reg_use(reg);
         }
+        Inst::LabelAddress { dst, .. } => {
+            collector.reg_def(dst);
+        }
         Inst::StackProbeLoop { start, end, .. } => {
             collector.reg_early_def(start);
             collector.reg_use(end);
@@ -2887,6 +2890,10 @@ impl Inst {
                 let reg = pretty_print_reg(reg);
                 format!("dummy_use {reg}")
             }
+            &Inst::LabelAddress { dst, label } => {
+                let dst = pretty_print_reg(dst.to_reg());
+                format!("label_address {dst}, {label:?}")
+            }
             &Inst::StackProbeLoop { start, end, step } => {
                 let start = pretty_print_reg(start.to_reg());
                 let end = pretty_print_reg(end);
@@ -2983,7 +2990,9 @@ impl MachInstLabelUse for LabelUse {
             LabelUse::Branch14 => (pc_rel_shifted & 0x3fff) << 5,
             LabelUse::Branch19 | LabelUse::Ldr19 => (pc_rel_shifted & 0x7ffff) << 5,
             LabelUse::Branch26 => pc_rel_shifted & 0x3ffffff,
-            LabelUse::Adr21 => (pc_rel_shifted & 0x7ffff) << 5 | (pc_rel_shifted & 0x180000) << 10,
+            // Note: the *low* two bits of offset are put in the
+            // *high* bits (30, 29).
+            LabelUse::Adr21 => (pc_rel_shifted & 0x1ffffc) << 3 | (pc_rel_shifted & 3) << 29,
             LabelUse::PCRel32 => pc_rel_shifted,
         };
         let is_add = match self {

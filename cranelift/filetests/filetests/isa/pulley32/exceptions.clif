@@ -182,3 +182,50 @@ function %f4(i32, i32) -> i32, f32, f64 {
 ; pop_frame_restore 160, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
 ; ret
 
+function %f5() -> i32 {
+    sig0 = () tail
+    fn0 = %g() tail
+
+    block0:
+        v1 = get_exception_handler_address.i32 block1, 0
+        jump block1
+
+    block1:
+        try_call fn0(), sig0, block2(), [ default: block3() ]
+
+    block2:
+        return v1
+
+    block3:
+        return v1
+}
+
+; VCode:
+;   push_frame_save 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+; block0:
+;   label_address x0, MachLabel(3)
+;   xstore64 Slot(0), x0 // flags =  notrap aligned
+;   jump label1
+; block1:
+;   indirect_call_host CallInfo { dest: TestCase(%g), uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I32) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I32) }], clobbers: PRegSet { bits: [4294967292, 4294967295, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(2), exception_handlers: [Default(MachLabel(3))] }) }; jump MachLabel(2); catch [default: MachLabel(3)]
+; block2:
+;   x0 = xload64 Slot(0) // flags = notrap aligned
+;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+;   ret
+; block3:
+;   x0 = xload64 Slot(0) // flags = notrap aligned
+;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+;   ret
+;
+; Disassembled:
+; push_frame_save 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; xpcadd x0, 0x20    // target = 0x25
+; xstore64le_o32 sp, 0, x0
+; call_indirect_host 0
+; xload64le_o32 x0, sp, 0
+; pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; ret
+; xload64le_o32 x0, sp, 0
+; pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; ret
+

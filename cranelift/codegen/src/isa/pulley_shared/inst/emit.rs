@@ -590,6 +590,12 @@ fn pulley_emit<P>(
                 sink.bind_label(label, &mut state.ctrl_plane);
             }
         }
+
+        Inst::LabelAddress { dst, label } => {
+            patch_pc_rel_offset(sink, |sink| enc::xpcadd(sink, dst, 0));
+            let end = sink.cur_offset();
+            sink.use_label_at_offset(end - 4, *label, LabelUse::PcRel);
+        }
     }
 }
 

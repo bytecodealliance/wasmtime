@@ -729,6 +729,11 @@ impl<'a> Verifier<'a> {
                 self.verify_constant_size(inst, opcode, constant_handle, errors)?;
             }
 
+            ExceptionHandlerAddress { block, imm, .. } => {
+                self.verify_block(inst, block, errors)?;
+                self.verify_try_call_handler_index(inst, block, imm.into(), errors)?;
+            }
+
             // Exhaustive list so we can't forget to add new formats
             AtomicCas { .. }
             | AtomicRmw { .. }
@@ -1970,6 +1975,54 @@ impl<'a> Verifier<'a> {
         }
 
         if errors.has_error() { Err(()) } else { Ok(()) }
+    }
+
+    fn verify_try_call_handler_index(
+        &self,
+        inst: Inst,
+        block: Block,
+        index_imm: i64,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult {
+        if index_imm < 0 {
+            return errors.fatal((
+                inst,
+                format!("exception handler index {index_imm} cannot be negative"),
+            ));
+        }
+        let Ok(index) = usize::try_from(index_imm) else {
+            return errors.fatal((
+                inst,
+                format!("exception handler index {index_imm} is out-of-range"),
+            ));
+        };
+        let Some(terminator) = self.func.layout.last_inst(block) else {
+            return errors.fatal((
+                inst,
+                format!("referenced block {block} does not have a terminator"),
+            ));
+        };
+        let Some(et) = self.func.dfg.insts[terminator].exception_table() else {
+            return errors.fatal((
+                inst,
+                format!("referenced block {block} does not end in a try_call"),
+            ));
+        };
+
+        let etd = &self.func.dfg.exception_tables[et];
+        // The exception table's out-edges consist of all exceptional
+        // edges first, followed by the normal return last. For N
+        // out-edges, there are N-1 exception handlers that can be
+        // selected.
+        let num_exceptional_edges = etd.all_branches().len() - 1;
+        if index >= num_exceptional_edges {
+            return errors.fatal((
+                inst,
+                format!("exception handler index {index_imm} is out-of-range"),
+            ));
+        }
+
+        Ok(())
     }
 
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult {

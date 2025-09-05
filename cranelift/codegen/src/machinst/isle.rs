@@ -754,6 +754,14 @@ macro_rules! isle_lower_prelude_methods {
         fn value_is_unused(&mut self, val: Value) -> bool {
             self.lower_ctx.value_is_unused(val)
         }
+
+        fn block_exn_successor_label(&mut self, block: &Block, exn_succ: u64) -> MachLabel {
+            // The first N successors are the exceptional edges, and
+            // the normal return is last; so the `exn_succ`'th
+            // exceptional edge is just the `exn_succ`'th edge overall.
+            let succ = usize::try_from(exn_succ).unwrap();
+            self.lower_ctx.block_successor_label(*block, succ)
+        }
     };
 }
 

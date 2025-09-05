@@ -1104,6 +1104,7 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::UnaryIeee32 => insert_const,
         InstructionFormat::UnaryIeee64 => insert_const,
         InstructionFormat::UnaryImm => insert_const,
+        InstructionFormat::ExceptionHandlerAddress => insert_const,
 
         InstructionFormat::BranchTable
         | InstructionFormat::Brif

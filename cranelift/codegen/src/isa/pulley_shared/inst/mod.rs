@@ -331,6 +331,10 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::Raw { raw } => generated::get_operands(raw, collector),
 
         Inst::EmitIsland { .. } => {}
+
+        Inst::LabelAddress { dst, label: _ } => {
+            collector.reg_def(dst);
+        }
     }
 }
 
@@ -825,6 +829,11 @@ impl Inst {
             Inst::Raw { raw } => generated::print(raw),
 
             Inst::EmitIsland { space_needed } => format!("emit_island {space_needed}"),
+
+            Inst::LabelAddress { dst, label } => {
+                let dst = format_reg(dst.to_reg().to_reg());
+                format!("label_address {dst}, {label:?}")
+            }
         }
     }
 }

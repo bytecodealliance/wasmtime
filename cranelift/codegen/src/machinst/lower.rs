@@ -1201,6 +1201,20 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             _ => false,
         }
     }
+
+    pub fn block_successor_label(&self, block: Block, succ: usize) -> MachLabel {
+        trace!("block_successor_label: block {block} succ {succ}");
+        let lowered = self
+            .vcode
+            .block_order()
+            .lowered_index_for_block(block)
+            .expect("Unreachable block");
+        trace!(" -> lowered block {lowered:?}");
+        let (_, succs) = self.vcode.block_order().succ_indices(lowered);
+        trace!(" -> succs {succs:?}");
+        let succ_block = *succs.get(succ).expect("Successor index out of range");
+        MachLabel::from_block(succ_block)
+    }
 }
 
 /// Pre-analysis: compute `value_ir_uses`. See comment on

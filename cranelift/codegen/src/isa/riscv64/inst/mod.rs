@@ -696,6 +696,9 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             vec_mask_operands(mask, collector);
         }
         Inst::EmitIsland { .. } => {}
+        Inst::LabelAddress { dst, .. } => {
+            collector.reg_def(dst);
+        }
     }
 }
 
@@ -1671,6 +1674,11 @@ impl Inst {
             }
             Inst::EmitIsland { needed_space } => {
                 format!("emit_island {needed_space}")
+            }
+
+            Inst::LabelAddress { dst, label } => {
+                let dst = format_reg(dst.to_reg());
+                format!("label_address {dst}, {label:?}")
             }
         }
     }

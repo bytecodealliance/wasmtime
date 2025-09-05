@@ -91,6 +91,10 @@
 
     ;; Island generation prior to variable-length instructions.
     (EmitIsland (space_needed u32))
+
+    ;; A pseudoinstruction that loads the address of a label.
+    (LabelAddress (dst WritableXReg)
+                  (label MachLabel))
   )
 )
 
@@ -781,3 +785,10 @@
 (rule (sext64 val @ (value_type $I16)) (pulley_sext16 val))
 (rule (sext64 val @ (value_type $I32)) (pulley_sext32 val))
 (rule (sext64 val @ (value_type $I64)) val)
+
+;; Helper for creating an `LabelAddress` instruction.
+(decl pulley_label_address (MachLabel) Reg)
+(rule (pulley_label_address label)
+      (let ((dst WritableReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
+        dst))

@@ -946,6 +946,10 @@ impl<'a> ir::instructions::InstructionMapper for InliningInstRemapper<'a> {
         ir::BlockCall::new(inlined_block, args, &mut self.func.dfg.value_lists)
     }
 
+    fn map_block(&mut self, block: ir::Block) -> ir::Block {
+        self.entity_map.inlined_block(block)
+    }
+
     fn map_func_ref(&mut self, func_ref: ir::FuncRef) -> ir::FuncRef {
         self.entity_map.inlined_func_ref(func_ref)
     }

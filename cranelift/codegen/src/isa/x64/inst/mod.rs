@@ -105,7 +105,8 @@ impl Inst {
             | Inst::MachOTlsGetAddr { .. }
             | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
-            | Inst::DummyUse { .. } => true,
+            | Inst::DummyUse { .. }
+            | Inst::LabelAddress { .. } => true,
 
             Inst::Atomic128RmwSeq { .. } | Inst::Atomic128XchgSeq { .. } => emit_info.cmpxchg16b(),
 
@@ -822,6 +823,11 @@ impl PrettyPrint for Inst {
                 format!("dummy_use {reg}")
             }
 
+            Inst::LabelAddress { dst, label } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
+                format!("label_address {dst}, {label:?}")
+            }
+
             Inst::External { inst } => {
                 format!("{inst}")
             }
@@ -1181,6 +1187,10 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::DummyUse { reg } => {
             collector.reg_use(reg);
+        }
+
+        Inst::LabelAddress { dst, .. } => {
+            collector.reg_def(dst);
         }
 
         Inst::External { inst } => {

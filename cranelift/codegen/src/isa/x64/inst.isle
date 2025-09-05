@@ -316,6 +316,10 @@
        ;; A pseudoinstruction that just keeps a value alive.
        (DummyUse (reg Reg))
 
+       ;; A pseudoinstruction that loads the address of a label.
+       (LabelAddress (dst WritableGpr)
+                     (label MachLabel))
+
        ;; An instruction assembled outside of cranelift-codegen.
        (External (inst AssemblerInst))))
 
@@ -3882,6 +3886,14 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (tmp WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.CoffTlsGetAddr name dst tmp))))
+        dst))
+
+;;;; Label Addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl x64_label_address (MachLabel) Gpr)
+(rule (x64_label_address label)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

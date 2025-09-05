@@ -3535,6 +3535,17 @@ impl MachInstEmit for Inst {
 
             &Inst::DummyUse { .. } => {}
 
+            &Inst::LabelAddress { dst, label } => {
+                // We emit an ADR only, which is +/- 2MiB range. This
+                // should be sufficient for the typical use-case of
+                // this instruction, which is insmall trampolines to
+                // get exception-handler addresses.
+                let inst = Inst::Adr { rd: dst, off: 0 };
+                let offset = sink.cur_offset();
+                inst.emit(sink, emit_info, state);
+                sink.use_label_at_offset(offset, label, LabelUse::Adr21);
+            }
+
             &Inst::StackProbeLoop { start, end, step } => {
                 assert!(emit_info.0.enable_probestack());
 

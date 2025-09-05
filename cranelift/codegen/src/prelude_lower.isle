@@ -381,6 +381,10 @@
 (decl sge (Value Value) Value)
 (extractor (sge x y) (icmp (IntCC.SignedGreaterThanOrEqual) x y))
 
+;; Get the MachLabel for a particular CLIF block's indexed exception-handling successor.
+(decl block_exn_successor_label (Block u64) MachLabel)
+(extern constructor block_exn_successor_label block_exn_successor_label)
+
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Emit an instruction.

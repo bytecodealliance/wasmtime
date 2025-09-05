@@ -993,6 +993,10 @@
        (DummyUse
         (reg Reg))
 
+       ;; A pseudoinstruction that loads the address of a label.
+       (LabelAddress (dst WritableReg)
+                     (label MachLabel))
+
        ;; Emits an inline stack probe loop.
        ;;
        ;; Note that this is emitted post-regalloc so `start` and `end` can be
@@ -5182,3 +5186,10 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.FpuLoad128 dst amode flags))))
        dst))
+
+;; Helper for creating an `LabelAddress` instruction.
+(decl a64_label_address (MachLabel) Reg)
+(rule (a64_label_address label)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
+        dst))
