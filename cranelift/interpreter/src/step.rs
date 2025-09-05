@@ -1319,6 +1319,8 @@ where
 
         Opcode::TryCall => unimplemented!("TryCall"),
         Opcode::TryCallIndirect => unimplemented!("TryCallIndirect"),
+
+        Opcode::GetExceptionHandlerAddress => unimplemented!("GetExceptionHandlerAddress"),
     })
 }
 

@@ -3347,6 +3347,12 @@ impl<'a> Parser<'a> {
                     code,
                 }
             }
+            InstructionFormat::ExceptionHandlerAddress => {
+                let block = self.match_block("expected block")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_imm64("expected immediate handler index")?;
+                InstructionData::ExceptionHandlerAddress { opcode, block, imm }
+            }
         };
         Ok(idata)
     }

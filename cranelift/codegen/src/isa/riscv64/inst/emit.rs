@@ -194,6 +194,7 @@ impl Inst {
             | Inst::TrapIf { .. }
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
+            | Inst::ExceptionHandlerAddress { .. }
             | Inst::Popcnt { .. }
             | Inst::Cltz { .. }
             | Inst::Brev8 { .. }
@@ -2104,6 +2105,26 @@ impl Inst {
                     imm12: Imm12::ZERO,
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
+            }
+
+            &Inst::ExceptionHandlerAddress { dst, label } => {
+                let offset = sink.cur_offset();
+                Inst::Auipc {
+                    rd: dst,
+                    imm: Imm20::from_i32(0),
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+                sink.use_label_at_offset(offset, label, LabelUse::PCRelHi20);
+
+                let offset = sink.cur_offset();
+                Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Addi,
+                    rd: dst,
+                    rs: dst.to_reg(),
+                    imm12: Imm12::ZERO,
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+                sink.use_label_at_offset(offset, label, LabelUse::PCRelLo12I);
             }
 
             &Inst::ElfTlsGetAddr { rd, ref name } => {

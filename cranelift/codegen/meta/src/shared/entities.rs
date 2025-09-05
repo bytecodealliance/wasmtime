@@ -23,6 +23,11 @@ pub(crate) struct EntityRefs {
     /// This is primarily used in control flow instructions.
     pub(crate) block_else: OperandKind,
 
+    /// A reference to a basic block in the same function, without any arguments.
+    /// This is primarily used to refer to block `try_call` terminators to get
+    /// exception metadata (e.g., resume PCs) as first-class values.
+    pub(crate) raw_block: OperandKind,
+
     /// A reference to a stack slot declared in the function preamble.
     pub(crate) stack_slot: OperandKind,
 
@@ -82,6 +87,12 @@ impl EntityRefs {
                 "block_else",
                 "ir::BlockCall",
                 "a basic block in the same function, with its arguments provided.",
+            ),
+
+            raw_block: new(
+                "raw_block",
+                "ir::Block",
+                "a basic block in the same function, with no arguments provided.",
             ),
 
             stack_slot: new("stack_slot", "ir::StackSlot", "A stack slot"),

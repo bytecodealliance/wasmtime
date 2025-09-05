@@ -282,6 +282,8 @@ impl Inst {
             | Inst::VecStoreLaneRev { .. } => InstructionSet::VXRS_EXT2,
 
             Inst::DummyUse { .. } => InstructionSet::Base,
+
+            Inst::ExceptionHandlerAddress { .. } => InstructionSet::Base,
         }
     }
 
@@ -1005,6 +1007,9 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         Inst::Unwind { .. } => {}
         Inst::DummyUse { reg } => {
             collector.reg_use(reg);
+        }
+        Inst::ExceptionHandlerAddress { dst, .. } => {
+            collector.reg_def(dst);
         }
     }
 }
@@ -3404,6 +3409,10 @@ impl Inst {
             &Inst::DummyUse { reg } => {
                 let reg = pretty_print_reg(reg);
                 format!("dummy_use {reg}")
+            }
+            &Inst::ExceptionHandlerAddress { dst, label } => {
+                let dst = pretty_print_reg(dst.to_reg());
+                format!("exception_handler_address {dst}, {label:?}")
             }
         }
     }
