@@ -223,7 +223,6 @@ async fn p3_http_outbound_request_response_build() -> anyhow::Result<()> {
     run_cli(P3_HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT, &server).await
 }
 
-#[ignore = "unimplemented"] // TODO: implement
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_content_length() -> anyhow::Result<()> {
     let server = Server::http1(3)?;
