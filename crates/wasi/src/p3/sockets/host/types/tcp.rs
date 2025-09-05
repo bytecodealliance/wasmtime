@@ -18,11 +18,11 @@ use std::net::{Shutdown, SocketAddr};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
-use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
     StreamProducer, StreamReader, StreamResult,
 };
+use wasmtime::{AsContextMut as _, StoreContextMut};
 
 fn get_socket<'a>(
     table: &'a ResourceTable,
@@ -62,9 +62,19 @@ where
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         mut store: StoreContextMut<'a, D>,
-        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
+        // If the destination buffer is empty then this is a request on
+        // behalf of the guest to wait for this socket to be ready to accept
+        // without actually accepting something. The `TcpListener` in Tokio does
+        // not have this capability so we're forced to lie here and say instead
+        // "yes we're ready to accept" as a fallback.
+        //
+        // See WebAssembly/component-model#561 for some more information.
+        if dst.remaining(&mut store) == Some(0) {
+            return Poll::Ready(Ok(StreamResult::Completed));
+        }
         let res = match self.listener.poll_accept(cx) {
             Poll::Ready(res) => res.map(|(stream, _)| stream),
             Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
@@ -111,45 +121,29 @@ impl<D> StreamProducer<D> for ReceiveStreamProducer {
     fn poll_produce<'a>(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        store: StoreContextMut<'a, D>,
-        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        mut store: StoreContextMut<'a, D>,
+        dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         let res = 'result: {
-            if let Some(mut dst) = dst.as_direct_destination(store) {
-                let buf = dst.remaining();
-                if !buf.is_empty() {
-                    loop {
-                        match self.stream.try_read(buf) {
-                            Ok(0) => break 'result Ok(()),
-                            Ok(n) => {
-                                dst.mark_written(n);
-                                return Poll::Ready(Ok(StreamResult::Completed));
-                            }
-                            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                                match self.stream.poll_read_ready(cx) {
-                                    Poll::Ready(Ok(())) => continue,
-                                    Poll::Ready(Err(err)) => break 'result Err(err.into()),
-                                    Poll::Pending if finish => {
-                                        return Poll::Ready(Ok(StreamResult::Cancelled));
-                                    }
-                                    Poll::Pending => return Poll::Pending,
-                                }
-                            }
-                            Err(err) => break 'result Err(err.into()),
-                        }
-                    }
-                }
+            // 0-length reads are an indication that we should wait for
+            // readiness here, so use `poll_read_ready`.
+            if dst.remaining(store.as_context_mut()) == Some(0) {
+                return match self.stream.poll_read_ready(cx) {
+                    Poll::Ready(Ok(())) => Poll::Ready(Ok(StreamResult::Completed)),
+                    Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                    Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+                    Poll::Pending => Poll::Pending,
+                };
             }
 
-            let mut buf = dst.take_buffer().into_inner();
-            buf.clear();
-            buf.reserve(DEFAULT_BUFFER_CAPACITY);
+            let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
+            let buf = dst.remaining();
             loop {
-                match self.stream.try_read_buf(&mut buf) {
+                match self.stream.try_read(buf) {
                     Ok(0) => break 'result Ok(()),
-                    Ok(..) => {
-                        dst.set_buffer(Cursor::new(buf));
+                    Ok(n) => {
+                        dst.mark_written(n);
                         return Poll::Ready(Ok(StreamResult::Completed));
                     }
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
@@ -201,18 +195,20 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<D>,
-        src: &mut Source<Self::Item>,
+        src: Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let mut src = src.as_direct_source(store);
+        let mut src = src.as_direct(store);
         let res = 'result: {
+            // A 0-length write is a request to wait for readiness so use
+            // `poll_write_ready` to wait for the underlying object to be ready.
             if src.remaining().is_empty() {
-                match self.stream.poll_write_ready(cx) {
-                    Poll::Ready(Ok(())) => return Poll::Ready(Ok(StreamResult::Completed)),
+                return match self.stream.poll_write_ready(cx) {
+                    Poll::Ready(Ok(())) => Poll::Ready(Ok(StreamResult::Completed)),
                     Poll::Ready(Err(err)) => break 'result Err(err.into()),
-                    Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
-                    Poll::Pending => return Poll::Pending,
-                }
+                    Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+                    Poll::Pending => Poll::Pending,
+                };
             }
             loop {
                 match self.stream.try_write(src.remaining()) {

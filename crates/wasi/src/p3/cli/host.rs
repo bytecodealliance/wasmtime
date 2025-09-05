@@ -12,11 +12,11 @@ use core::pin::Pin;
 use core::task::{Context, Poll};
 use std::io::Cursor;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Accessor, Destination, Resource, Source, StreamConsumer, StreamProducer, StreamReader,
     StreamResult,
 };
+use wasmtime::{AsContextMut as _, StoreContextMut};
 
 struct InputStreamProducer {
     rx: Pin<Box<dyn AsyncRead + Send + Sync>>,
@@ -29,45 +29,30 @@ impl<D> StreamProducer<D> for InputStreamProducer {
     fn poll_produce<'a>(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        store: StoreContextMut<'a, D>,
-        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        mut store: StoreContextMut<'a, D>,
+        dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        if let Some(mut dst) = dst.as_direct_destination(store) {
-            if !dst.remaining().is_empty() {
-                let mut buf = ReadBuf::new(dst.remaining());
-                match self.rx.as_mut().poll_read(cx, &mut buf) {
-                    Poll::Ready(Ok(())) if buf.filled().is_empty() => {
-                        return Poll::Ready(Ok(StreamResult::Dropped));
-                    }
-                    Poll::Ready(Ok(())) => {
-                        let n = buf.filled().len();
-                        dst.mark_written(n);
-                        return Poll::Ready(Ok(StreamResult::Completed));
-                    }
-                    Poll::Ready(Err(..)) => {
-                        // TODO: Report the error to the guest
-                        return Poll::Ready(Ok(StreamResult::Dropped));
-                    }
-                    Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
-                    Poll::Pending => return Poll::Pending,
-                }
-            }
+        // If the destination buffer is empty then this is a request on
+        // behalf of the guest to wait for this input stream to be readable.
+        // The `AsyncRead` trait abstraction does not provide the ability to
+        // await this event so we're forced to basically just lie here and
+        // say we're ready read data later.
+        //
+        // See WebAssembly/component-model#561 for some more information.
+        if dst.remaining(store.as_context_mut()) == Some(0) {
+            return Poll::Ready(Ok(StreamResult::Completed));
         }
-        let mut buf = dst.take_buffer().into_inner();
-        buf.clear();
-        buf.reserve(DEFAULT_BUFFER_CAPACITY);
-        let mut rbuf = ReadBuf::uninit(buf.spare_capacity_mut());
-        match self.rx.as_mut().poll_read(cx, &mut rbuf) {
-            Poll::Ready(Ok(())) if rbuf.filled().is_empty() => {
+
+        let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
+        let mut buf = ReadBuf::new(dst.remaining());
+        match self.rx.as_mut().poll_read(cx, &mut buf) {
+            Poll::Ready(Ok(())) if buf.filled().is_empty() => {
                 Poll::Ready(Ok(StreamResult::Dropped))
             }
             Poll::Ready(Ok(())) => {
-                let n = rbuf.filled().len();
-                // SAFETY: `ReadyBuf::filled` promised us `count` bytes have
-                // been initialized.
-                unsafe { buf.set_len(n) };
-                dst.set_buffer(Cursor::new(buf));
+                let n = buf.filled().len();
+                dst.mark_written(n);
                 Poll::Ready(Ok(StreamResult::Completed))
             }
             Poll::Ready(Err(..)) => {
@@ -91,22 +76,31 @@ impl<D> StreamConsumer<D> for OutputStreamConsumer {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<D>,
-        src: &mut Source<Self::Item>,
+        src: Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let mut src = src.as_direct_source(store);
+        let mut src = src.as_direct(store);
         let buf = src.remaining();
+
+        // If the source buffer is empty then this is a request on behalf of
+        // the guest to wait for this output stream to be writable. The
+        // `AsyncWrite` trait abstraction does not provide the ability to await
+        // this event so we're forced to basically just lie here and say we're
+        // ready write data later.
+        //
+        // See WebAssembly/component-model#561 for some more information.
+        if buf.len() == 0 {
+            return Poll::Ready(Ok(StreamResult::Completed));
+        }
         match self.tx.as_mut().poll_write(cx, buf) {
-            Poll::Ready(Ok(n)) if buf.is_empty() => {
-                debug_assert_eq!(n, 0);
-                Poll::Ready(Ok(StreamResult::Completed))
-            }
             Poll::Ready(Ok(n)) => {
                 src.mark_read(n);
                 Poll::Ready(Ok(StreamResult::Completed))
             }
-            Poll::Ready(Err(..)) => {
-                // TODO: Report the error to the guest
+            Poll::Ready(Err(e)) => {
+                // FIXME(WebAssembly/wasi-cli#81) should communicate this
+                // error to the guest somehow.
+                tracing::warn!("dropping stdin error: {e}");
                 Poll::Ready(Ok(StreamResult::Dropped))
             }
             Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
