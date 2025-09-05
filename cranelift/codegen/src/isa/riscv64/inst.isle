@@ -254,10 +254,9 @@
        (DummyUse
         (reg Reg))
 
-    ;; A pseudoinstruction that loads the address of an exception
-    ;; handler target.
-    (ExceptionHandlerAddress (dst WritableReg)
-                             (label MachLabel))
+    ;; A pseudoinstruction that loads the address of a label.
+    (LabelAddress (dst WritableReg)
+                  (label MachLabel))
 
     ;; popcnt  if target doesn't support extension B
     ;; use iteration to implement.
@@ -3257,9 +3256,9 @@
   (FloatCompare.One (rv_fge ty a b)))
 
 
-;; Helper for creating an `ExceptionHandlerAddress` instruction.
-(decl rv64_exception_handler_address (MachLabel) Reg)
-(rule (rv64_exception_handler_address label)
+;; Helper for creating an `LabelAddress` instruction.
+(decl rv64_label_address (MachLabel) Reg)
+(rule (rv64_label_address label)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.ExceptionHandlerAddress dst label))))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))

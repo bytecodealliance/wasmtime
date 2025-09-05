@@ -429,7 +429,7 @@ function %f5() -> i64 {
 ;   stp d8, d9, [sp, #-16]!
 ;   sub sp, sp, #16
 ; block0:
-;   exception_handler_address x0, MachLabel(3)
+;   label_address x0, MachLabel(3)
 ;   str x0, [sp]
 ;   b label1
 ; block1:

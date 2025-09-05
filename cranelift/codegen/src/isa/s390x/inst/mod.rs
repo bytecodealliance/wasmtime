@@ -283,7 +283,7 @@ impl Inst {
 
             Inst::DummyUse { .. } => InstructionSet::Base,
 
-            Inst::ExceptionHandlerAddress { .. } => InstructionSet::Base,
+            Inst::LabelAddress { .. } => InstructionSet::Base,
         }
     }
 
@@ -1008,7 +1008,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         Inst::DummyUse { reg } => {
             collector.reg_use(reg);
         }
-        Inst::ExceptionHandlerAddress { dst, .. } => {
+        Inst::LabelAddress { dst, .. } => {
             collector.reg_def(dst);
         }
     }
@@ -3410,9 +3410,9 @@ impl Inst {
                 let reg = pretty_print_reg(reg);
                 format!("dummy_use {reg}")
             }
-            &Inst::ExceptionHandlerAddress { dst, label } => {
+            &Inst::LabelAddress { dst, label } => {
                 let dst = pretty_print_reg(dst.to_reg());
-                format!("exception_handler_address {dst}, {label:?}")
+                format!("label_address {dst}, {label:?}")
             }
         }
     }

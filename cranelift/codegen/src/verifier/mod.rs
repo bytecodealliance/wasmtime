@@ -2010,6 +2010,10 @@ impl<'a> Verifier<'a> {
         };
 
         let etd = &self.func.dfg.exception_tables[et];
+        // The exception table's out-edges consist of all exceptional
+        // edges first, followed by the normal return last. For N
+        // out-edges, there are N-1 exception handlers that can be
+        // selected.
         let num_exceptional_edges = etd.all_branches().len() - 1;
         if index >= num_exceptional_edges {
             return errors.fatal((

@@ -194,7 +194,7 @@ impl Inst {
             | Inst::TrapIf { .. }
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
-            | Inst::ExceptionHandlerAddress { .. }
+            | Inst::LabelAddress { .. }
             | Inst::Popcnt { .. }
             | Inst::Cltz { .. }
             | Inst::Brev8 { .. }
@@ -2107,7 +2107,7 @@ impl Inst {
                 .emit_uncompressed(sink, emit_info, state, start_off);
             }
 
-            &Inst::ExceptionHandlerAddress { dst, label } => {
+            &Inst::LabelAddress { dst, label } => {
                 let offset = sink.cur_offset();
                 Inst::Auipc {
                     rd: dst,

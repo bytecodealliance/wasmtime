@@ -3537,7 +3537,7 @@ impl Inst {
 
             &Inst::DummyUse { .. } => {}
 
-            &Inst::ExceptionHandlerAddress { dst, label } => {
+            &Inst::LabelAddress { dst, label } => {
                 let inst = Inst::LoadAddr {
                     rd: dst,
                     mem: MemArg::Label { target: label },

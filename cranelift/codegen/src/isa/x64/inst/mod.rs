@@ -106,7 +106,7 @@ impl Inst {
             | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
-            | Inst::ExceptionHandlerAddress { .. } => true,
+            | Inst::LabelAddress { .. } => true,
 
             Inst::Atomic128RmwSeq { .. } | Inst::Atomic128XchgSeq { .. } => emit_info.cmpxchg16b(),
 
@@ -823,9 +823,9 @@ impl PrettyPrint for Inst {
                 format!("dummy_use {reg}")
             }
 
-            Inst::ExceptionHandlerAddress { dst, label } => {
+            Inst::LabelAddress { dst, label } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                format!("exception_handler_address {dst}, {label:?}")
+                format!("label_address {dst}, {label:?}")
             }
 
             Inst::External { inst } => {
@@ -1189,7 +1189,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(reg);
         }
 
-        Inst::ExceptionHandlerAddress { dst, .. } => {
+        Inst::LabelAddress { dst, .. } => {
             collector.reg_def(dst);
         }
 

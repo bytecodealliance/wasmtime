@@ -3535,10 +3535,11 @@ impl MachInstEmit for Inst {
 
             &Inst::DummyUse { .. } => {}
 
-            &Inst::ExceptionHandlerAddress { dst, label } => {
+            &Inst::LabelAddress { dst, label } => {
                 // We emit an ADR only, which is +/- 2MiB range. This
-                // should be sufficient for the small trampolines in
-                // which this is typically used.
+                // should be sufficient for the typical use-case of
+                // this instruction, which is insmall trampolines to
+                // get exception-handler addresses.
                 let inst = Inst::Adr { rd: dst, off: 0 };
                 let offset = sink.cur_offset();
                 inst.emit(sink, emit_info, state);

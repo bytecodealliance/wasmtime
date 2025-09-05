@@ -332,7 +332,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::EmitIsland { .. } => {}
 
-        Inst::ExceptionHandlerAddress { dst, label: _ } => {
+        Inst::LabelAddress { dst, label: _ } => {
             collector.reg_def(dst);
         }
     }
@@ -830,9 +830,9 @@ impl Inst {
 
             Inst::EmitIsland { space_needed } => format!("emit_island {space_needed}"),
 
-            Inst::ExceptionHandlerAddress { dst, label } => {
+            Inst::LabelAddress { dst, label } => {
                 let dst = format_reg(dst.to_reg().to_reg());
-                format!("exception_handler_address {dst}, {label:?}")
+                format!("label_address {dst}, {label:?}")
             }
         }
     }

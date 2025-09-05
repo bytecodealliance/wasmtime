@@ -916,7 +916,7 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::DummyUse { reg } => {
             collector.reg_use(reg);
         }
-        Inst::ExceptionHandlerAddress { dst, .. } => {
+        Inst::LabelAddress { dst, .. } => {
             collector.reg_def(dst);
         }
         Inst::StackProbeLoop { start, end, .. } => {
@@ -2890,9 +2890,9 @@ impl Inst {
                 let reg = pretty_print_reg(reg);
                 format!("dummy_use {reg}")
             }
-            &Inst::ExceptionHandlerAddress { dst, label } => {
+            &Inst::LabelAddress { dst, label } => {
                 let dst = pretty_print_reg(dst.to_reg());
-                format!("exception_handler_address {dst}, {label:?}")
+                format!("label_address {dst}, {label:?}")
             }
             &Inst::StackProbeLoop { start, end, step } => {
                 let start = pretty_print_reg(start.to_reg());

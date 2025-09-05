@@ -568,7 +568,7 @@ function %f5() -> i64 {
 ;   movq %r14, 0x28(%rsp)
 ;   movq %r15, 0x30(%rsp)
 ; block0:
-;   exception_handler_address %rax, MachLabel(3)
+;   label_address %rax, MachLabel(3)
 ;   movq %rax, <offset:1>+(%rsp)
 ;   jmp     label1
 ; block1:

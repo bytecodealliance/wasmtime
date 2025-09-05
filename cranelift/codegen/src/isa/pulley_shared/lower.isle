@@ -1835,4 +1835,4 @@
 
 (rule (lower (get_exception_handler_address (u64_from_imm64 idx) block))
       (let ((succ_label MachLabel (block_exn_successor_label block idx)))
-        (pulley_exception_handler_address succ_label)))
+        (pulley_label_address succ_label)))

@@ -1016,10 +1016,9 @@
       (got_offset Reg)
       (symbol BoxSymbolReloc))
 
-    ;; A pseudoinstruction that loads the address of an exception
-    ;; handler target.
-    (ExceptionHandlerAddress (dst WritableReg)
-                             (label MachLabel))
+    ;; A pseudoinstruction that loads the address of a label.
+    (LabelAddress (dst WritableReg)
+                  (label MachLabel))
 ))
 
 ;; Primitive types used in instruction formats.
@@ -4935,11 +4934,11 @@
 
 ;; Other helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Helper for creating an `ExceptionHandlerAddress` instruction.
-(decl s390x_exception_handler_address (MachLabel) Reg)
-(rule (s390x_exception_handler_address label)
+;; Helper for creating an `LabelAddress` instruction.
+(decl s390x_label_address (MachLabel) Reg)
+(rule (s390x_label_address label)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.ExceptionHandlerAddress dst label))))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))
 
 ;; Implicit conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

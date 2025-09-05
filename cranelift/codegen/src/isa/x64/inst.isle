@@ -316,10 +316,9 @@
        ;; A pseudoinstruction that just keeps a value alive.
        (DummyUse (reg Reg))
 
-       ;; A pseudoinstruction that loads the address of an exception
-       ;; handler target.
-       (ExceptionHandlerAddress (dst WritableGpr)
-                                (label MachLabel))
+       ;; A pseudoinstruction that loads the address of a label.
+       (LabelAddress (dst WritableGpr)
+                     (label MachLabel))
 
        ;; An instruction assembled outside of cranelift-codegen.
        (External (inst AssemblerInst))))
@@ -3889,12 +3888,12 @@
             (_ Unit (emit (MInst.CoffTlsGetAddr name dst tmp))))
         dst))
 
-;;;; Exception Handler Addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Label Addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl x64_exception_handler_address (MachLabel) Gpr)
-(rule (x64_exception_handler_address label)
+(decl x64_label_address (MachLabel) Gpr)
+(rule (x64_label_address label)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.ExceptionHandlerAddress dst label))))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

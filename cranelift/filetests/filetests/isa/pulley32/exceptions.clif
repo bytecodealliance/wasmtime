@@ -203,7 +203,7 @@ function %f5() -> i32 {
 ; VCode:
 ;   push_frame_save 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ; block0:
-;   exception_handler_address x0, MachLabel(3)
+;   label_address x0, MachLabel(3)
 ;   xstore64 Slot(0), x0 // flags =  notrap aligned
 ;   jump label1
 ; block1:

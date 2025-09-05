@@ -209,7 +209,7 @@ pub(crate) fn check(
 
         Inst::StackSwitchBasic { .. } => Err(PccError::UnimplementedInst),
 
-        Inst::ExceptionHandlerAddress { .. } => Err(PccError::UnimplementedInst),
+        Inst::LabelAddress { .. } => Err(PccError::UnimplementedInst),
 
         Inst::External { .. } => Ok(()), // TODO: unsure what to do about this!
     }

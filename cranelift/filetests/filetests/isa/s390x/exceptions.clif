@@ -426,7 +426,7 @@ function %f5() -> i64 {
 ;   std %f14, 216(%r15)
 ;   std %f15, 224(%r15)
 ; block0:
-;   exception_handler_address %r2, MachLabel(3)
+;   label_address %r2, MachLabel(3)
 ;   stg %r2, 160(%r15)
 ;   jg label1
 ; block1:

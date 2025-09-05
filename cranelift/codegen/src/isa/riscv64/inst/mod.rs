@@ -696,7 +696,7 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             vec_mask_operands(mask, collector);
         }
         Inst::EmitIsland { .. } => {}
-        Inst::ExceptionHandlerAddress { dst, .. } => {
+        Inst::LabelAddress { dst, .. } => {
             collector.reg_def(dst);
         }
     }
@@ -1676,9 +1676,9 @@ impl Inst {
                 format!("emit_island {needed_space}")
             }
 
-            Inst::ExceptionHandlerAddress { dst, label } => {
+            Inst::LabelAddress { dst, label } => {
                 let dst = format_reg(dst.to_reg());
-                format!("exception_handler_address {dst}, {label:?}")
+                format!("label_address {dst}, {label:?}")
             }
         }
     }

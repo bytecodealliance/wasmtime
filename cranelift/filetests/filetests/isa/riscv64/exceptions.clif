@@ -744,7 +744,7 @@ function %f5() -> i64 {
 ;   fsd fs10,32(sp)
 ;   fsd fs11,24(sp)
 ; block0:
-;   exception_handler_address a0, MachLabel(3)
+;   label_address a0, MachLabel(3)
 ;   sd a0,0(slot)
 ;   j label1
 ; block1:

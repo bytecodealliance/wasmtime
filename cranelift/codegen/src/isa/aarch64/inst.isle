@@ -993,10 +993,9 @@
        (DummyUse
         (reg Reg))
 
-       ;; A pseudoinstruction that loads the address of an exception
-       ;; handler target.
-       (ExceptionHandlerAddress (dst WritableReg)
-                                (label MachLabel))
+       ;; A pseudoinstruction that loads the address of a label.
+       (LabelAddress (dst WritableReg)
+                     (label MachLabel))
 
        ;; Emits an inline stack probe loop.
        ;;
@@ -5188,9 +5187,9 @@
             (_ Unit (emit (MInst.FpuLoad128 dst amode flags))))
        dst))
 
-;; Helper for creating an `ExceptionHandlerAddress` instruction.
-(decl a64_exception_handler_address (MachLabel) Reg)
-(rule (a64_exception_handler_address label)
+;; Helper for creating an `LabelAddress` instruction.
+(decl a64_label_address (MachLabel) Reg)
+(rule (a64_label_address label)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.ExceptionHandlerAddress dst label))))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))

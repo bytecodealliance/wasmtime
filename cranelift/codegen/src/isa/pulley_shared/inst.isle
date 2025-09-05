@@ -92,10 +92,9 @@
     ;; Island generation prior to variable-length instructions.
     (EmitIsland (space_needed u32))
 
-    ;; A pseudoinstruction that loads the address of an exception
-    ;; handler target.
-    (ExceptionHandlerAddress (dst WritableXReg)
-                             (label MachLabel))
+    ;; A pseudoinstruction that loads the address of a label.
+    (LabelAddress (dst WritableXReg)
+                  (label MachLabel))
   )
 )
 
@@ -787,9 +786,9 @@
 (rule (sext64 val @ (value_type $I32)) (pulley_sext32 val))
 (rule (sext64 val @ (value_type $I64)) val)
 
-;; Helper for creating an `ExceptionHandlerAddress` instruction.
-(decl pulley_exception_handler_address (MachLabel) Reg)
-(rule (pulley_exception_handler_address label)
+;; Helper for creating an `LabelAddress` instruction.
+(decl pulley_label_address (MachLabel) Reg)
+(rule (pulley_label_address label)
       (let ((dst WritableReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.ExceptionHandlerAddress dst label))))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))

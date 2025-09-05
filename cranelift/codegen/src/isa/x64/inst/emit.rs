@@ -1810,7 +1810,7 @@ pub(crate) fn emit(
             // Nothing.
         }
 
-        Inst::ExceptionHandlerAddress { dst, label } => {
+        Inst::LabelAddress { dst, label } => {
             // Emit an LEA with a LabelUse given this label.
             asm::inst::leaq_rm::new(*dst, Amode::rip_relative(*label)).emit(sink, info, state);
         }
