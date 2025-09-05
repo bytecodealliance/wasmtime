@@ -1,13 +1,12 @@
+use crate::p3::WasiHttpView;
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::p3::body::{Body, ConsumedBody, GuestBodyConsumer, GuestTrailerConsumer};
-use crate::p3::{WasiHttpView, body::GuestBody};
+use crate::p3::body::{Body, ConsumedBody, GuestBody};
 use bytes::Bytes;
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
-use tokio_util::sync::PollSender;
+use tokio::sync::oneshot;
 use wasmtime::AsContextMut;
 
 /// The concrete type behind a `wasi:http/types/response` resource.
@@ -42,60 +41,50 @@ impl Response {
         status: StatusCode,
         headers: impl Into<Arc<HeaderMap>>,
         body: impl Into<BoxBody<Bytes, ErrorCode>>,
-    ) -> Self {
-        Self {
-            status,
-            headers: headers.into(),
-            body: Body::Host(body.into()),
-        }
+    ) -> (
+        Self,
+        impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
+    ) {
+        let (tx, rx) = oneshot::channel();
+        (
+            Self {
+                status,
+                headers: headers.into(),
+                body: Body::Host {
+                    body: body.into(),
+                    result_tx: tx,
+                },
+            },
+            async {
+                let Ok(fut) = rx.await else { return Ok(()) };
+                Box::into_pin(fut).await
+            },
+        )
     }
 
     /// Convert [Response] into [http::Response].
     pub fn into_http<T: WasiHttpView + 'static>(
         self,
-        mut store: impl AsContextMut<Data = T>,
-    ) -> http::Result<(
-        http::Response<BoxBody<Bytes, ErrorCode>>,
-        Option<oneshot::Sender<Result<(), ErrorCode>>>,
-    )> {
+        store: impl AsContextMut<Data = T>,
+        fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
+    ) -> http::Result<http::Response<BoxBody<Bytes, ErrorCode>>> {
         let response = http::Response::try_from(self)?;
         let (response, body) = response.into_parts();
-        let (body, tx) = match body {
+        let body = match body {
             Body::Guest {
                 contents_rx,
                 trailers_rx,
                 result_tx,
             } => {
-                let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
-                trailers_rx.pipe(
-                    &mut store,
-                    GuestTrailerConsumer {
-                        tx: trailers_http_tx,
-                        getter: T::http,
-                    },
-                );
-                let contents_rx = contents_rx.map(|rx| {
-                    let (http_tx, http_rx) = mpsc::channel(1);
-                    rx.pipe(
-                        store,
-                        GuestBodyConsumer {
-                            tx: PollSender::new(http_tx),
-                        },
-                    );
-                    http_rx
-                });
-                (
-                    GuestBody {
-                        trailers_rx: Some(trailers_http_rx),
-                        contents_rx,
-                    }
-                    .boxed(),
-                    Some(result_tx),
-                )
+                _ = result_tx.send(Box::new(fut));
+                GuestBody::new(store, contents_rx, trailers_rx, T::http).boxed()
             }
-            Body::Host(body) => (body, None),
-            Body::Consumed => (ConsumedBody.boxed(), None),
+            Body::Host { body, result_tx } => {
+                _ = result_tx.send(Box::new(fut));
+                body
+            }
+            Body::Consumed => ConsumedBody.boxed(),
         };
-        Ok((http::Response::from_parts(response, body), tx))
+        Ok(http::Response::from_parts(response, body))
     }
 }

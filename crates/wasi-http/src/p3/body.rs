@@ -9,11 +9,11 @@ use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
-use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Accessor, FutureConsumer, FutureReader, Resource, Source, StreamConsumer, StreamReader,
     StreamResult,
 };
+use wasmtime::{AsContextMut, StoreContextMut};
 
 /// The concrete type behind a `wasi:http/types/body` resource.
 pub(crate) enum Body {
@@ -24,10 +24,14 @@ pub(crate) enum Body {
         /// Future, on which guest will write result and optional trailers
         trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
         /// Channel, on which transmission result will be written
-        result_tx: oneshot::Sender<Result<(), ErrorCode>>,
+        result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
     },
     /// Body constructed by the host.
-    Host(BoxBody<Bytes, ErrorCode>),
+    Host {
+        body: BoxBody<Bytes, ErrorCode>,
+        /// Channel, on which transmission result will be written
+        result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
+    },
     /// Body is consumed.
     Consumed,
 }
@@ -70,6 +74,38 @@ pub(crate) struct GuestBody {
     pub(crate) contents_rx: Option<mpsc::Receiver<Bytes>>,
     pub(crate) trailers_rx:
         Option<oneshot::Receiver<Result<Option<Arc<http::HeaderMap>>, ErrorCode>>>,
+}
+
+impl GuestBody {
+    pub fn new<T: 'static>(
+        mut store: impl AsContextMut<Data = T>,
+        contents_rx: Option<StreamReader<u8>>,
+        trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+        getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
+    ) -> Self {
+        let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
+        trailers_rx.pipe(
+            &mut store,
+            GuestTrailerConsumer {
+                tx: trailers_http_tx,
+                getter,
+            },
+        );
+        let contents_rx = contents_rx.map(|rx| {
+            let (http_tx, http_rx) = mpsc::channel(1);
+            rx.pipe(
+                store,
+                GuestBodyConsumer {
+                    tx: PollSender::new(http_tx),
+                },
+            );
+            http_rx
+        });
+        Self {
+            trailers_rx: Some(trailers_http_rx),
+            contents_rx,
+        }
+    }
 }
 
 impl http_body::Body for GuestBody {
@@ -179,5 +215,43 @@ where
                 Ok(())
             }
         }
+    }
+}
+
+pub(crate) struct IncomingResponseBody {
+    pub incoming: hyper::body::Incoming,
+    pub timeout: tokio::time::Interval,
+}
+
+impl http_body::Body for IncomingResponseBody {
+    type Data = <hyper::body::Incoming as http_body::Body>::Data;
+    type Error = ErrorCode;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        match Pin::new(&mut self.as_mut().incoming).poll_frame(cx) {
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Ready(Some(Err(err))) => {
+                Poll::Ready(Some(Err(ErrorCode::from_hyper_response_error(err))))
+            }
+            Poll::Ready(Some(Ok(frame))) => {
+                self.timeout.reset();
+                Poll::Ready(Some(Ok(frame)))
+            }
+            Poll::Pending => {
+                ready!(self.timeout.poll_tick(cx));
+                Poll::Ready(Some(Err(ErrorCode::ConnectionReadTimeout)))
+            }
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.incoming.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.incoming.size_hint()
     }
 }

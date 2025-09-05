@@ -16,14 +16,19 @@ mod proxy;
 mod request;
 mod response;
 
+#[cfg(feature = "default-send-request")]
+pub use request::default_send_request;
 pub use request::{Request, RequestOptions};
 pub use response::Response;
 
+use crate::p3::bindings::http::types::ErrorCode;
 use crate::types::DEFAULT_FORBIDDEN_HEADERS;
 use bindings::http::{handler, types};
+use bytes::Bytes;
 use core::ops::Deref;
 use http::HeaderName;
 use http::uri::Scheme;
+use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
 use wasmtime::component::{HasData, Linker, ResourceTable};
 use wasmtime_wasi::TrappableError;
@@ -62,11 +67,56 @@ pub trait WasiHttpCtx: Send {
     fn default_scheme(&mut self) -> Option<Scheme> {
         Some(Scheme::HTTPS)
     }
+
+    /// Send an outgoing request.
+    #[cfg(feature = "default-send-request")]
+    fn send_request(
+        &mut self,
+        request: http::Request<BoxBody<Bytes, ErrorCode>>,
+        options: Option<RequestOptions>,
+        fut: Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
+    ) -> Box<
+        dyn Future<
+                Output = HttpResult<(
+                    http::Response<BoxBody<Bytes, ErrorCode>>,
+                    Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
+                )>,
+            > + Send,
+    > {
+        _ = fut;
+        Box::new(async move {
+            use http_body_util::BodyExt;
+
+            let (res, io) = default_send_request(request, options).await?;
+            Ok((
+                res.map(BodyExt::boxed),
+                Box::new(io) as Box<dyn Future<Output = _> + Send>,
+            ))
+        })
+    }
+
+    /// Send an outgoing request.
+    #[cfg(not(feature = "default-send-request"))]
+    fn send_request(
+        &mut self,
+        request: http::Request<BoxBody<Bytes, ErrorCode>>,
+        options: Option<RequestOptions>,
+        fut: Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
+    ) -> Box<
+        dyn Future<
+                Output = HttpResult<(
+                    http::Response<BoxBody<Bytes, ErrorCode>>,
+                    Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
+                )>,
+            > + Send,
+    >;
 }
 
+#[cfg(feature = "default-send-request")]
 #[derive(Clone, Default)]
 pub struct DefaultWasiHttpCtx;
 
+#[cfg(feature = "default-send-request")]
 impl WasiHttpCtx for DefaultWasiHttpCtx {}
 
 pub struct WasiHttpCtxView<'a> {

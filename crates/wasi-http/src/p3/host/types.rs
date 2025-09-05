@@ -81,19 +81,24 @@ fn parse_header_value(
     }
 }
 
-struct GuestBodyResultProducer(oneshot::Receiver<Result<(), ErrorCode>>);
+struct GuestBodyResultProducer(
+    oneshot::Receiver<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
+);
 
 impl<D> FutureProducer<D> for GuestBodyResultProducer {
     type Item = Result<(), ErrorCode>;
 
     async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<Self::Item> {
-        Ok(self.0.await.unwrap_or(Ok(())))
+        let Ok(fut) = self.0.await else {
+            return Ok(Ok(()));
+        };
+        Ok(Box::into_pin(fut).await)
     }
 }
 
 struct HostBodyStreamProducer<T> {
     body: BoxBody<Bytes, ErrorCode>,
-    result: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
+    trailers: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
     getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
 }
 
@@ -105,7 +110,7 @@ impl<T> Drop for HostBodyStreamProducer<T> {
 
 impl<T> HostBodyStreamProducer<T> {
     fn close(&mut self, res: Result<Option<Resource<Trailers>>, ErrorCode>) {
-        if let Some(tx) = self.result.take() {
+        if let Some(tx) = self.trailers.take() {
             _ = tx.send(res);
         }
     }
@@ -408,7 +413,7 @@ impl HostRequestWithStore for WasiHttp {
                 } => {
                     // TODO: Use a result specified by the caller
                     // https://github.com/WebAssembly/wasi-http/issues/176
-                    _ = result_tx.send(Ok(()));
+                    _ = result_tx.send(Box::new(async { Ok(()) }));
                     Ok(Ok((contents_rx, trailers_rx)))
                 }
                 Body::Guest {
@@ -419,26 +424,29 @@ impl HostRequestWithStore for WasiHttp {
                     let instance = store.instance();
                     // TODO: Use a result specified by the caller
                     // https://github.com/WebAssembly/wasi-http/issues/176
-                    _ = result_tx.send(Ok(()));
+                    _ = result_tx.send(Box::new(async { Ok(()) }));
                     Ok(Ok((
                         StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
                         trailers_rx,
                     )))
                 }
-                Body::Host(body) => {
+                Body::Host { body, result_tx } => {
                     let instance = store.instance();
-                    let (result_tx, result_rx) = oneshot::channel();
+                    // TODO: Use a result specified by the caller
+                    // https://github.com/WebAssembly/wasi-http/issues/176
+                    _ = result_tx.send(Box::new(async { Ok(()) }));
+                    let (trailers_tx, trailers_rx) = oneshot::channel();
                     Ok(Ok((
                         StreamReader::new(
                             instance,
                             &mut store,
                             HostBodyStreamProducer {
                                 body,
-                                result: Some(result_tx),
+                                trailers: Some(trailers_tx),
                                 getter,
                             },
                         ),
-                        FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
+                        FutureReader::new(instance, &mut store, FutureOneshotProducer(trailers_rx)),
                     )))
                 }
                 Body::Consumed => Ok(Err(())),
@@ -721,7 +729,7 @@ impl HostResponseWithStore for WasiHttp {
                 } => {
                     // TODO: Use a result specified by the caller
                     // https://github.com/WebAssembly/wasi-http/issues/176
-                    _ = result_tx.send(Ok(()));
+                    _ = result_tx.send(Box::new(async { Ok(()) }));
                     Ok(Ok((contents_rx, trailers_rx)))
                 }
                 Body::Guest {
@@ -732,26 +740,29 @@ impl HostResponseWithStore for WasiHttp {
                     let instance = store.instance();
                     // TODO: Use a result specified by the caller
                     // https://github.com/WebAssembly/wasi-http/issues/176
-                    _ = result_tx.send(Ok(()));
+                    _ = result_tx.send(Box::new(async { Ok(()) }));
                     Ok(Ok((
                         StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
                         trailers_rx,
                     )))
                 }
-                Body::Host(body) => {
+                Body::Host { body, result_tx } => {
                     let instance = store.instance();
-                    let (result_tx, result_rx) = oneshot::channel();
+                    // TODO: Use a result specified by the caller
+                    // https://github.com/WebAssembly/wasi-http/issues/176
+                    _ = result_tx.send(Box::new(async { Ok(()) }));
+                    let (trailers_tx, trailers_rx) = oneshot::channel();
                     Ok(Ok((
                         StreamReader::new(
                             instance,
                             &mut store,
                             HostBodyStreamProducer {
                                 body,
-                                result: Some(result_tx),
+                                trailers: Some(trailers_tx),
                                 getter,
                             },
                         ),
-                        FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
+                        FutureReader::new(instance, &mut store, FutureOneshotProducer(trailers_rx)),
                     )))
                 }
                 Body::Consumed => Ok(Err(())),
