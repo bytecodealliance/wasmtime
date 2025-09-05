@@ -11,11 +11,11 @@ use http_body_util::{BodyExt as _, Collected, Empty};
 use std::io::Write;
 use std::path::Path;
 use test_programs_artifacts::*;
-use tokio::{fs, spawn};
+use tokio::fs;
 use wasm_compose::composer::ComponentComposer;
 use wasm_compose::config::{Config, Dependency, Instantiation, InstantiationArg};
 use wasmtime::Store;
-use wasmtime::component::{AccessorTask as _, Component, Linker, ResourceTable};
+use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p3::bindings::Command;
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::p3::bindings::Proxy;
@@ -120,19 +120,16 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
         Ok(res) => res,
         Err(err) => return Ok(Err(Some(err))),
     };
-    let (res, io) = res.into_http()?;
+    let (res, result_tx) = res.into_http(&mut store)?;
     let (parts, body) = res.into_parts();
-    let body = spawn(body.collect());
-    if let Some(io) = io {
-        let io = io.consume(async { Ok(()) });
-        instance
-            .run_concurrent(store, async |store| io.run(store).await)
-            .await??;
+    let body = instance
+        .run_concurrent(&mut store, async |_| {
+            body.collect().await.context("failed to collect body")
+        })
+        .await??;
+    if let Some(result_tx) = result_tx {
+        _ = result_tx.send(Ok(()));
     }
-    let body = body
-        .await
-        .context("failed to join task")?
-        .context("failed to collect body")?;
     Ok(Ok(http::Response::from_parts(parts, body)))
 }
 

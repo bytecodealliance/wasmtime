@@ -1,156 +1,68 @@
-use crate::p3::WasiHttpView;
 use crate::p3::bindings::http::types::{ErrorCode, Trailers};
+use crate::p3::{WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
-use bytes::{Bytes, BytesMut};
-use core::future::poll_fn;
-use core::pin::{Pin, pin};
+use bytes::Bytes;
+use core::pin::Pin;
 use core::task::{Context, Poll, ready};
+use http::HeaderMap;
 use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::PollSender;
+use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureReader, GuardedFutureWriter,
-    GuardedStreamReader, HasData, Resource, StreamReader,
+    Accessor, FutureConsumer, FutureReader, Resource, Source, StreamConsumer, StreamReader,
+    StreamResult,
 };
 
 /// The concrete type behind a `wasi:http/types/body` resource.
 pub(crate) enum Body {
     /// Body constructed by the guest
-    Guest(GuestBodyContext),
+    Guest {
+        /// The body stream
+        contents_rx: Option<StreamReader<u8>>,
+        /// Future, on which guest will write result and optional trailers
+        trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+        /// Channel, on which transmission result will be written
+        result_tx: oneshot::Sender<Result<(), ErrorCode>>,
+    },
     /// Body constructed by the host.
     Host(BoxBody<Bytes, ErrorCode>),
     /// Body is consumed.
     Consumed,
 }
 
-/// Context of a body constructed by the guest
-pub struct GuestBodyContext {
-    /// The body stream
-    pub(crate) contents_rx: Option<StreamReader<u8>>,
-    /// Future, on which guest will write result and optional trailers
-    pub(crate) trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-    /// Future, on which transmission result will be written
-    pub(crate) result_tx: FutureWriter<Result<(), ErrorCode>>,
+pub(crate) struct GuestBodyConsumer {
+    pub(crate) tx: PollSender<Bytes>,
 }
 
-pub struct GuestBodyTaskContext {
-    pub(crate) cx: GuestBodyContext,
-    pub(crate) contents_tx: mpsc::Sender<Bytes>,
-    pub(crate) trailers_tx: oneshot::Sender<Result<Option<Arc<http::HeaderMap>>, ErrorCode>>,
-}
+impl<D> StreamConsumer<D> for GuestBodyConsumer {
+    type Item = u8;
 
-impl GuestBodyTaskContext {
-    /// Consume the body given an I/O operation `io`.
-    ///
-    /// This function returns a [GuestBodyTask], which implements a [AccessorTask] and
-    /// must be run using the engine's event loop.
-    pub fn consume<Fut>(self, io: Fut) -> GuestBodyTask<Fut>
-    where
-        Fut: Future<Output = Result<(), ErrorCode>>,
-    {
-        GuestBodyTask { cx: self, io }
-    }
-}
-
-pub struct GuestBodyTask<T> {
-    cx: GuestBodyTaskContext,
-    io: T,
-}
-
-impl<T, U, Fut> AccessorTask<T, U, wasmtime::Result<()>> for GuestBodyTask<Fut>
-where
-    T: WasiHttpView,
-    U: HasData,
-    Fut: Future<Output = Result<(), ErrorCode>> + Send + 'static,
-{
-    async fn run(self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
-        let Self {
-            cx:
-                GuestBodyTaskContext {
-                    cx:
-                        GuestBodyContext {
-                            contents_rx,
-                            trailers_rx,
-                            result_tx,
-                        },
-                    contents_tx,
-                    mut trailers_tx,
-                },
-            io,
-        } = self;
-        let trailers_rx = GuardedFutureReader::new(store, trailers_rx);
-        let mut result_tx = GuardedFutureWriter::new(store, result_tx);
-        if let Some(contents_rx) = contents_rx {
-            let mut contents_rx = GuardedStreamReader::new(store, contents_rx);
-            // TODO: use content-length
-            let mut buf = BytesMut::with_capacity(8192);
-            while !contents_rx.is_closed() {
-                let mut tx = pin!(contents_tx.reserve());
-                let Some(Ok(tx)) = ({
-                    let mut contents_tx_dropped = pin!(contents_rx.watch_writer());
-                    poll_fn(|cx| match contents_tx_dropped.as_mut().poll(cx) {
-                        Poll::Ready(()) => return Poll::Ready(None),
-                        Poll::Pending => tx.as_mut().poll(cx).map(Some),
-                    })
-                    .await
-                }) else {
-                    // Either:
-                    // - body receiver has been closed
-                    // - guest writer has been closed
-                    break;
-                };
-                buf = contents_rx.read(buf).await;
-                if !buf.is_empty() {
-                    tx.send(buf.split().freeze());
+    fn poll_consume(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        src: Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        match self.tx.poll_reserve(cx) {
+            Poll::Ready(Ok(())) => {
+                let mut src = src.as_direct(store);
+                let buf = Bytes::copy_from_slice(src.remaining());
+                let n = buf.len();
+                match self.tx.send_item(buf) {
+                    Ok(()) => {
+                        src.mark_read(n);
+                        Poll::Ready(Ok(StreamResult::Completed))
+                    }
+                    Err(..) => Poll::Ready(Ok(StreamResult::Dropped)),
                 }
             }
+            Poll::Ready(Err(..)) => Poll::Ready(Ok(StreamResult::Dropped)),
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
         }
-        drop(contents_tx);
-
-        let mut rx = pin!(trailers_rx.read());
-        match poll_fn(|cx| match trailers_tx.poll_closed(cx) {
-            Poll::Ready(()) => return Poll::Ready(None),
-            Poll::Pending => rx.as_mut().poll(cx).map(Some),
-        })
-        .await
-        {
-            Some(Some(Ok(Some(trailers)))) => {
-                let trailers = store.with(|mut store| {
-                    store
-                        .data_mut()
-                        .http()
-                        .table
-                        .delete(trailers)
-                        .context("failed to delete trailers")
-                })?;
-                _ = trailers_tx.send(Ok(Some(trailers.into())));
-            }
-            Some(Some(Ok(None))) => {
-                _ = trailers_tx.send(Ok(None));
-            }
-            Some(Some(Err(err))) => {
-                _ = trailers_tx.send(Err(err));
-            }
-            Some(None) | None => {
-                // Either:
-                // - trailer receiver has been closed
-                // - guest writer has been closed
-                drop(trailers_tx);
-            }
-        }
-
-        let mut io = pin!(io);
-        if let Some(res) = {
-            let mut result_rx_dropped = pin!(result_tx.watch_reader());
-            poll_fn(|cx| match result_rx_dropped.as_mut().poll(cx) {
-                Poll::Ready(()) => return Poll::Ready(None),
-                Poll::Pending => io.as_mut().poll(cx).map(Some),
-            })
-            .await
-        } {
-            result_tx.write(res).await;
-        }
-        Ok(())
     }
 }
 
@@ -232,5 +144,40 @@ impl http_body::Body for ConsumedBody {
 
     fn size_hint(&self) -> http_body::SizeHint {
         http_body::SizeHint::with_exact(0)
+    }
+}
+
+pub(crate) struct GuestTrailerConsumer<T> {
+    pub(crate) tx: oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>,
+    pub(crate) getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
+}
+
+impl<D> FutureConsumer<D> for GuestTrailerConsumer<D>
+where
+    D: 'static,
+{
+    type Item = Result<Option<Resource<Trailers>>, ErrorCode>;
+
+    async fn consume(self, store: &Accessor<D>, res: Self::Item) -> wasmtime::Result<()> {
+        match res {
+            Ok(Some(trailers)) => store
+                .with_getter::<WasiHttp>(self.getter)
+                .with(|mut store| {
+                    let WasiHttpCtxView { table, .. } = store.get();
+                    let trailers = table
+                        .delete(trailers)
+                        .context("failed to delete trailers")?;
+                    _ = self.tx.send(Ok(Some(Arc::from(trailers))));
+                    Ok(())
+                }),
+            Ok(None) => {
+                _ = self.tx.send(Ok(None));
+                Ok(())
+            }
+            Err(err) => {
+                _ = self.tx.send(Err(err));
+                Ok(())
+            }
+        }
     }
 }

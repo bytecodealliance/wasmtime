@@ -8,24 +8,29 @@ use crate::p3::bindings::http::types::{
     HostRequestOptions, HostRequestWithStore, HostResponse, HostResponseWithStore, Method, Request,
     RequestOptions, RequestOptionsError, Response, Scheme, StatusCode, Trailers,
 };
-use crate::p3::body::{Body, GuestBodyContext};
-use crate::p3::{WasiHttp, WasiHttpCtxView};
+use crate::p3::body::Body;
+use crate::p3::{HttpError, WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
 use bytes::Bytes;
-use core::future::poll_fn;
 use core::mem;
-use core::pin::{Pin, pin};
+use core::num::NonZeroUsize;
+use core::pin::Pin;
+use core::task::Context;
 use core::task::Poll;
 use http::header::CONTENT_LENGTH;
 use http_body::Body as _;
 use http_body_util::combinators::BoxBody;
 use std::io::Cursor;
 use std::sync::Arc;
+use tokio::sync::oneshot;
+use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureWriter, GuardedStreamWriter,
-    Resource, StreamReader, StreamWriter,
+    Accessor, Destination, FutureProducer, FutureReader, Resource, StreamProducer, StreamReader,
+    StreamResult,
 };
 use wasmtime_wasi::ResourceTable;
+use wasmtime_wasi::p3::FutureOneshotProducer;
+use wasmtime_wasi::p3::StreamEmptyProducer;
 
 fn get_request_options<'a>(
     table: &'a ResourceTable,
@@ -76,75 +81,102 @@ fn parse_header_value(
     }
 }
 
-struct HostBodyTask {
+struct GuestBodyResultProducer(oneshot::Receiver<Result<(), ErrorCode>>);
+
+impl<D> FutureProducer<D> for GuestBodyResultProducer {
+    type Item = Result<(), ErrorCode>;
+
+    async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<Self::Item> {
+        Ok(self.0.await.unwrap_or(Ok(())))
+    }
+}
+
+struct HostBodyStreamProducer<T> {
     body: BoxBody<Bytes, ErrorCode>,
-    contents_tx: StreamWriter<u8>,
-    trailers_tx: FutureWriter<Result<Option<Resource<Trailers>>, ErrorCode>>,
+    result: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
+    getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
 }
 
-fn handle_host_trailers<T>(
-    store: &Accessor<T, WasiHttp>,
-    trailers: http::HeaderMap,
-) -> wasmtime::Result<Resource<Trailers>> {
-    store.with(|mut store| push_fields(store.get().table, Fields::new_mutable(trailers)))
+impl<T> Drop for HostBodyStreamProducer<T> {
+    fn drop(&mut self) {
+        self.close(Ok(None))
+    }
 }
 
-impl<T> AccessorTask<T, WasiHttp, wasmtime::Result<()>> for HostBodyTask {
-    async fn run(mut self, store: &Accessor<T, WasiHttp>) -> wasmtime::Result<()> {
-        let mut contents_tx = GuardedStreamWriter::new(store, self.contents_tx);
-        let mut trailers_tx = GuardedFutureWriter::new(store, self.trailers_tx);
-        let res = 'body: loop {
-            match {
-                let mut contents_rx = pin!(contents_tx.watch_reader());
-                poll_fn(|cx| match contents_rx.as_mut().poll(cx) {
-                    Poll::Ready(()) => return Poll::Ready(None),
-                    Poll::Pending => Pin::new(&mut self.body).poll_frame(cx).map(Some),
-                })
-                .await
-            } {
-                Some(Some(Ok(frame))) => {
+impl<T> HostBodyStreamProducer<T> {
+    fn close(&mut self, res: Result<Option<Resource<Trailers>>, ErrorCode>) {
+        if let Some(tx) = self.result.take() {
+            _ = tx.send(res);
+        }
+    }
+}
+
+impl<D> StreamProducer<D> for HostBodyStreamProducer<D>
+where
+    D: 'static,
+{
+    type Item = u8;
+    type Buffer = Cursor<Bytes>;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let res = 'result: {
+            let cap = match dst.remaining(&mut store).map(NonZeroUsize::new) {
+                Some(Some(cap)) => Some(cap),
+                Some(None) => {
+                    if self.body.is_end_stream() {
+                        break 'result Ok(None);
+                    } else {
+                        return Poll::Ready(Ok(StreamResult::Completed));
+                    }
+                }
+                None => None,
+            };
+            match Pin::new(&mut self.body).poll_frame(cx) {
+                Poll::Ready(Some(Ok(frame))) => {
                     match frame.into_data().map_err(http_body::Frame::into_trailers) {
-                        Ok(buf) => {
-                            contents_tx.write_all(Cursor::new(buf)).await;
+                        Ok(mut frame) => {
+                            if let Some(cap) = cap {
+                                let n = frame.len();
+                                let cap = cap.into();
+                                if n > cap {
+                                    dst.set_buffer(Cursor::new(frame.split_off(cap)));
+                                    let mut dst = dst.as_direct(store, cap);
+                                    dst.remaining().copy_from_slice(&frame);
+                                    dst.mark_written(cap);
+                                } else {
+                                    let mut dst = dst.as_direct(store, n);
+                                    dst.remaining()[..n].copy_from_slice(&frame);
+                                    dst.mark_written(n);
+                                }
+                            } else {
+                                dst.set_buffer(Cursor::new(frame));
+                            }
+                            return Poll::Ready(Ok(StreamResult::Completed));
                         }
                         Err(Ok(trailers)) => {
-                            let trailers = handle_host_trailers(store, trailers)?;
-                            break 'body Ok(Some(trailers));
+                            let trailers = push_fields(
+                                (self.getter)(store.data_mut()).table,
+                                Fields::new_mutable(trailers),
+                            )?;
+                            break 'result Ok(Some(trailers));
                         }
-                        Err(Err(..)) => break 'body Err(ErrorCode::HttpProtocolError),
+                        Err(Err(..)) => break 'result Err(ErrorCode::HttpProtocolError),
                     }
                 }
-                Some(Some(Err(err))) => break 'body Err(err),
-                Some(None) => break 'body Ok(None),
-                None => {
-                    let mut trailers_rx_dropped = pin!(trailers_tx.watch_reader());
-                    match poll_fn(|cx| match trailers_rx_dropped.as_mut().poll(cx) {
-                        Poll::Ready(()) => return Poll::Ready(None),
-                        Poll::Pending => Pin::new(&mut self.body).poll_frame(cx).map(Some),
-                    })
-                    .await
-                    {
-                        Some(Some(Ok(frame))) => {
-                            match frame.into_data().map_err(http_body::Frame::into_trailers) {
-                                Ok(..) => continue,
-                                Err(Ok(trailers)) => {
-                                    let trailers = handle_host_trailers(store, trailers)?;
-                                    break 'body Ok(Some(trailers));
-                                }
-                                Err(Err(..)) => break 'body Err(ErrorCode::HttpProtocolError),
-                            }
-                        }
-                        Some(Some(Err(err))) => break 'body Err(err),
-                        Some(None) => break 'body Ok(None),
-                        None => return Ok(()),
-                    }
-                }
+                Poll::Ready(Some(Err(err))) => break 'result Err(err),
+                Poll::Ready(None) => break 'result Ok(None),
+                Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+                Poll::Pending => return Poll::Pending,
             }
         };
-        drop(self.body);
-        drop(contents_tx);
-        trailers_tx.write(res).await;
-        Ok(())
+        self.close(res);
+        Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
 
@@ -323,21 +355,19 @@ impl HostRequestWithStore for WasiHttp {
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
         options: Option<Resource<RequestOptions>>,
     ) -> wasmtime::Result<(Resource<Request>, FutureReader<Result<(), ErrorCode>>)> {
+        let instance = store.instance();
         store.with(|mut store| {
-            let instance = store.instance();
-            let (result_tx, result_rx) = instance
-                .future(&mut store, || Ok(()))
-                .context("failed to create future")?;
-            let ctx = store.get();
-            let headers = delete_fields(ctx.table, headers)?;
+            let (result_tx, result_rx) = oneshot::channel();
+            let WasiHttpCtxView { table, .. } = store.get();
+            let headers = delete_fields(table, headers)?;
             let options = options
-                .map(|options| delete_request_options(ctx.table, options))
+                .map(|options| delete_request_options(table, options))
                 .transpose()?;
-            let body = Body::Guest(GuestBodyContext {
+            let body = Body::Guest {
                 contents_rx: contents,
                 trailers_rx: trailers,
                 result_tx,
-            });
+            };
             let req = Request {
                 method: http::Method::GET,
                 scheme: None,
@@ -347,8 +377,11 @@ impl HostRequestWithStore for WasiHttp {
                 options: options.map(Into::into),
                 body,
             };
-            let req = push_request(ctx.table, req)?;
-            Ok((req, result_rx))
+            let req = push_request(table, req)?;
+            Ok((
+                req,
+                FutureReader::new(instance, &mut store, GuestBodyResultProducer(result_rx)),
+            ))
         })
     }
 
@@ -364,41 +397,49 @@ impl HostRequestWithStore for WasiHttp {
             (),
         >,
     > {
+        let getter = store.getter();
         store.with(|mut store| {
             let req = get_request_mut(store.get().table, &req)?;
             match mem::replace(&mut req.body, Body::Consumed) {
-                Body::Guest(GuestBodyContext {
+                Body::Guest {
                     contents_rx: Some(contents_rx),
                     trailers_rx,
-                    result_tx: _result,
-                    // TODO: result
-                }) => Ok(Ok((contents_rx, trailers_rx))),
-                Body::Guest(GuestBodyContext {
+                    result_tx,
+                } => {
+                    // TODO: Use a result specified by the caller
+                    // https://github.com/WebAssembly/wasi-http/issues/176
+                    _ = result_tx.send(Ok(()));
+                    Ok(Ok((contents_rx, trailers_rx)))
+                }
+                Body::Guest {
                     contents_rx: None,
                     trailers_rx,
-                    result_tx: _result,
-                    // TODO: result
-                }) => {
+                    result_tx,
+                } => {
                     let instance = store.instance();
-                    let (_, contents_rx) = instance
-                        .stream(&mut store)
-                        .context("failed to create stream")?;
-                    Ok(Ok((contents_rx, trailers_rx)))
+                    // TODO: Use a result specified by the caller
+                    // https://github.com/WebAssembly/wasi-http/issues/176
+                    _ = result_tx.send(Ok(()));
+                    Ok(Ok((
+                        StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
+                        trailers_rx,
+                    )))
                 }
                 Body::Host(body) => {
                     let instance = store.instance();
-                    let (contents_tx, contents_rx) = instance
-                        .stream(&mut store)
-                        .context("failed to create stream")?;
-                    let (trailers_tx, trailers_rx) = instance
-                        .future(&mut store, || Ok(None))
-                        .context("failed to create future")?;
-                    store.spawn(HostBodyTask {
-                        body,
-                        contents_tx,
-                        trailers_tx,
-                    });
-                    Ok(Ok((contents_rx, trailers_rx)))
+                    let (result_tx, result_rx) = oneshot::channel();
+                    Ok(Ok((
+                        StreamReader::new(
+                            instance,
+                            &mut store,
+                            HostBodyStreamProducer {
+                                body,
+                                result: Some(result_tx),
+                                getter,
+                            },
+                        ),
+                        FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
+                    )))
                 }
                 Body::Consumed => Ok(Err(())),
             }
@@ -634,25 +675,26 @@ impl HostResponseWithStore for WasiHttp {
         contents: Option<StreamReader<u8>>,
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     ) -> wasmtime::Result<(Resource<Response>, FutureReader<Result<(), ErrorCode>>)> {
+        let instance = store.instance();
         store.with(|mut store| {
-            let instance = store.instance();
-            let (result_tx, result_rx) = instance
-                .future(&mut store, || Ok(()))
-                .context("failed to create future")?;
-            let ctx = store.get();
-            let headers = delete_fields(ctx.table, headers)?;
-            let body = Body::Guest(GuestBodyContext {
+            let (result_tx, result_rx) = oneshot::channel();
+            let WasiHttpCtxView { table, .. } = store.get();
+            let headers = delete_fields(table, headers)?;
+            let body = Body::Guest {
                 contents_rx: contents,
                 trailers_rx: trailers,
                 result_tx,
-            });
+            };
             let res = Response {
                 status: http::StatusCode::OK,
                 headers: headers.into(),
                 body,
             };
-            let req = push_response(ctx.table, res)?;
-            Ok((req, result_rx))
+            let res = push_response(table, res)?;
+            Ok((
+                res,
+                FutureReader::new(instance, &mut store, GuestBodyResultProducer(result_rx)),
+            ))
         })
     }
 
@@ -668,41 +710,49 @@ impl HostResponseWithStore for WasiHttp {
             (),
         >,
     > {
+        let getter = store.getter();
         store.with(|mut store| {
             let res = get_response_mut(store.get().table, &res)?;
             match mem::replace(&mut res.body, Body::Consumed) {
-                Body::Guest(GuestBodyContext {
+                Body::Guest {
                     contents_rx: Some(contents_rx),
                     trailers_rx,
-                    result_tx: _result,
-                    // TODO: result
-                }) => Ok(Ok((contents_rx, trailers_rx))),
-                Body::Guest(GuestBodyContext {
+                    result_tx,
+                } => {
+                    // TODO: Use a result specified by the caller
+                    // https://github.com/WebAssembly/wasi-http/issues/176
+                    _ = result_tx.send(Ok(()));
+                    Ok(Ok((contents_rx, trailers_rx)))
+                }
+                Body::Guest {
                     contents_rx: None,
                     trailers_rx,
-                    result_tx: _result,
-                    // TODO: result
-                }) => {
+                    result_tx,
+                } => {
                     let instance = store.instance();
-                    let (_, contents_rx) = instance
-                        .stream(&mut store)
-                        .context("failed to create stream")?;
-                    Ok(Ok((contents_rx, trailers_rx)))
+                    // TODO: Use a result specified by the caller
+                    // https://github.com/WebAssembly/wasi-http/issues/176
+                    _ = result_tx.send(Ok(()));
+                    Ok(Ok((
+                        StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
+                        trailers_rx,
+                    )))
                 }
                 Body::Host(body) => {
                     let instance = store.instance();
-                    let (contents_tx, contents_rx) = instance
-                        .stream(&mut store)
-                        .context("failed to create stream")?;
-                    let (trailers_tx, trailers_rx) = instance
-                        .future(&mut store, || Ok(None))
-                        .context("failed to create future")?;
-                    store.spawn(HostBodyTask {
-                        body,
-                        contents_tx,
-                        trailers_tx,
-                    });
-                    Ok(Ok((contents_rx, trailers_rx)))
+                    let (result_tx, result_rx) = oneshot::channel();
+                    Ok(Ok((
+                        StreamReader::new(
+                            instance,
+                            &mut store,
+                            HostBodyStreamProducer {
+                                body,
+                                result: Some(result_tx),
+                                getter,
+                            },
+                        ),
+                        FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
+                    )))
                 }
                 Body::Consumed => Ok(Err(())),
             }
@@ -740,4 +790,8 @@ impl HostResponse for WasiHttpCtxView<'_> {
     }
 }
 
-impl Host for WasiHttpCtxView<'_> {}
+impl Host for WasiHttpCtxView<'_> {
+    fn convert_error_code(&mut self, error: HttpError) -> wasmtime::Result<ErrorCode> {
+        error.downcast()
+    }
+}

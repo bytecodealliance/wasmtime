@@ -20,6 +20,9 @@ mod generated {
             "wasi:http/types/request-options": with::RequestOptions,
             "wasi:http/types/response": crate::p3::Response,
         },
+        trappable_error_type: {
+            "wasi:http/types/error-code" => crate::p3::HttpError,
+        },
     });
 
     mod with {

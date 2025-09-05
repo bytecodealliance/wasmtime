@@ -23,8 +23,13 @@ use crate::types::DEFAULT_FORBIDDEN_HEADERS;
 use bindings::http::{handler, types};
 use core::ops::Deref;
 use http::HeaderName;
+use http::uri::Scheme;
 use std::sync::Arc;
 use wasmtime::component::{HasData, Linker, ResourceTable};
+use wasmtime_wasi::TrappableError;
+
+pub type HttpResult<T> = Result<T, HttpError>;
+pub type HttpError = TrappableError<types::ErrorCode>;
 
 pub(crate) struct WasiHttp;
 
@@ -36,6 +41,26 @@ pub trait WasiHttpCtx: Send {
     /// Whether a given header should be considered forbidden and not allowed.
     fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
         DEFAULT_FORBIDDEN_HEADERS.contains(name)
+    }
+
+    /// Whether a given scheme should be considered supported.
+    ///
+    /// `handle` will return [ErrorCode::HttpProtocolError] for unsupported schemes.
+    fn is_supported_scheme(&mut self, scheme: &Scheme) -> bool {
+        *scheme == Scheme::HTTP || *scheme == Scheme::HTTPS
+    }
+
+    /// Whether to set `host` header in the request passed to `send_request`.
+    fn set_host_header(&mut self) -> bool {
+        true
+    }
+
+    /// Scheme to default to, when not set by the guest.
+    ///
+    /// If [None], `handle` will return [ErrorCode::HttpProtocolError]
+    /// for requests missing a scheme.
+    fn default_scheme(&mut self) -> Option<Scheme> {
+        Some(Scheme::HTTPS)
     }
 }
 
