@@ -122,7 +122,7 @@ where
             return Poll::Ready(Ok(StreamResult::Completed));
         }
 
-        // Drain `self.iter`. Successful rseults go into `buf`. Any errors make
+        // Drain `self.iter`. Successful results go into `buf`. Any errors make
         // their way to the `oneshot` result inside this structure. Otherwise
         // this only gets dropped if `None` is seen or an error. Also this'll
         // terminate once `buf` grows too large.
