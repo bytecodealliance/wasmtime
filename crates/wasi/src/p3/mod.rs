@@ -107,14 +107,11 @@ where
         _: &mut Context<'_>,
         mut store: StoreContextMut<'a, D>,
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
-        finish: bool,
+        // Explicitly ignore `_finish` because this implementation never
+        // returns `Poll::Pending` anyway meaning that it never "blocks" in the
+        // async sense.
+        _finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        // Bail out early if this is cancelled.
-        if finish {
-            self.close(Ok(()));
-            return Poll::Ready(Ok(StreamResult::Cancelled));
-        }
-
         // Take up to `count` items as requested by the guest, or pick some
         // reasonable-ish number for the host.
         let count = dst.remaining(&mut store).unwrap_or(32);
