@@ -1108,6 +1108,7 @@ mod test_programs {
     use http_body_util::BodyExt;
     use hyper::header::HeaderValue;
     use std::io::{BufRead, BufReader, Read, Write};
+    use std::iter;
     use std::net::SocketAddr;
     use std::process::{Child, Command, Stdio};
     use test_programs_artifacts::*;
@@ -2172,6 +2173,52 @@ start a print 1234
         ])?;
         assert_eq!(output, "\"hello?\"\n");
         Ok(())
+    }
+
+    fn run_much_stdout(component: &str, extra_flags: &[&str]) -> Result<()> {
+        let total_write_size = 1 << 19;
+        let expected = iter::repeat('a').take(total_write_size).collect::<String>();
+
+        for i in 0..15 {
+            let string = iter::repeat('a').take(1 << i).collect::<String>();
+            let times = (total_write_size >> i).to_string();
+            println!("writing {} bytes {times} times", string.len());
+
+            let mut args = Vec::new();
+            args.push("run");
+            args.extend_from_slice(extra_flags);
+            args.push(component);
+            args.push(&string);
+            args.push(&times);
+            let output = run_wasmtime(&args)?;
+            println!(
+                "expected {} bytes, got {} bytes",
+                expected.len(),
+                output.len()
+            );
+            assert!(output == expected);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn cli_p1_much_stdout() -> Result<()> {
+        run_much_stdout(CLI_P1_MUCH_STDOUT_COMPONENT, &[])
+    }
+
+    #[test]
+    fn cli_p2_much_stdout() -> Result<()> {
+        run_much_stdout(CLI_P2_MUCH_STDOUT_COMPONENT, &[])
+    }
+
+    #[test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    fn cli_p3_much_stdout() -> Result<()> {
+        run_much_stdout(
+            CLI_P3_MUCH_STDOUT_COMPONENT,
+            &["-Wcomponent-model-async", "-Sp3"],
+        )
     }
 }
 
