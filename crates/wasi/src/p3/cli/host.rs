@@ -33,27 +33,34 @@ impl<D> StreamProducer<D> for InputStreamProducer {
         dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        if let Some(0) = dst.remaining(store.as_context_mut()) {
-            Poll::Ready(Ok(StreamResult::Completed))
-        } else {
-            let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
-            let mut buf = ReadBuf::new(dst.remaining());
-            match self.rx.as_mut().poll_read(cx, &mut buf) {
-                Poll::Ready(Ok(())) if buf.filled().is_empty() => {
-                    Poll::Ready(Ok(StreamResult::Dropped))
-                }
-                Poll::Ready(Ok(())) => {
-                    let n = buf.filled().len();
-                    dst.mark_written(n);
-                    Poll::Ready(Ok(StreamResult::Completed))
-                }
-                Poll::Ready(Err(..)) => {
-                    // TODO: Report the error to the guest
-                    Poll::Ready(Ok(StreamResult::Dropped))
-                }
-                Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
-                Poll::Pending => Poll::Pending,
+        // If the destination buffer is empty then this is a request on
+        // behalf of the guest to wait for this input stream to be readable.
+        // The `AsyncRead` trait abstraction does not provide the ability to
+        // await this event so we're forced to basically just lie here and
+        // say we're ready read data later.
+        //
+        // See WebAssembly/component-model#561 for some more information.
+        if dst.remaining(store.as_context_mut()) == Some(0) {
+            return Poll::Ready(Ok(StreamResult::Completed));
+        }
+
+        let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
+        let mut buf = ReadBuf::new(dst.remaining());
+        match self.rx.as_mut().poll_read(cx, &mut buf) {
+            Poll::Ready(Ok(())) if buf.filled().is_empty() => {
+                Poll::Ready(Ok(StreamResult::Dropped))
             }
+            Poll::Ready(Ok(())) => {
+                let n = buf.filled().len();
+                dst.mark_written(n);
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Poll::Ready(Err(..)) => {
+                // TODO: Report the error to the guest
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -74,17 +81,26 @@ impl<D> StreamConsumer<D> for OutputStreamConsumer {
     ) -> Poll<wasmtime::Result<StreamResult>> {
         let mut src = src.as_direct(store);
         let buf = src.remaining();
+
+        // If the source buffer is empty then this is a request on behalf of
+        // the guest to wait for this output stream to be writable. The
+        // `AsyncWrite` trait abstraction does not provide the ability to await
+        // this event so we're forced to basically just lie here and say we're
+        // ready write data later.
+        //
+        // See WebAssembly/component-model#561 for some more information.
+        if buf.len() == 0 {
+            return Poll::Ready(Ok(StreamResult::Completed));
+        }
         match self.tx.as_mut().poll_write(cx, buf) {
-            Poll::Ready(Ok(n)) if buf.is_empty() => {
-                debug_assert_eq!(n, 0);
-                Poll::Ready(Ok(StreamResult::Completed))
-            }
             Poll::Ready(Ok(n)) => {
                 src.mark_read(n);
                 Poll::Ready(Ok(StreamResult::Completed))
             }
-            Poll::Ready(Err(..)) => {
-                // TODO: Report the error to the guest
+            Poll::Ready(Err(e)) => {
+                // FIXME(WebAssembly/wasi-cli#81) should communicate this
+                // error to the guest somehow.
+                tracing::warn!("dropping stdin error: {e}");
                 Poll::Ready(Ok(StreamResult::Dropped))
             }
             Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
