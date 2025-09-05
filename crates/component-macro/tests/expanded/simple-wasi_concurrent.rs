@@ -248,10 +248,10 @@ pub mod foo {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn create_directory_at<T: 'static>(
+                fn create_directory_at<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<(), Errno>> + Send;
-                fn stat<T: 'static>(
+                fn stat<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<DescriptorStat, Errno>,
@@ -273,8 +273,8 @@ pub mod foo {
                     "create-directory-at",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::create_directory_at(accessor)
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::create_directory_at(host)
                                 .await;
                             Ok((r,))
                         })
@@ -284,8 +284,8 @@ pub mod foo {
                     "stat",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::stat(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::stat(host).await;
                             Ok((r,))
                         })
                     },

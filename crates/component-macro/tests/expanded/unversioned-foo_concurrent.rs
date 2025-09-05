@@ -211,7 +211,7 @@ pub mod foo {
                 assert!(4 == < Error as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn g<T: 'static>(
+                fn g<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<(), Error>> + Send;
             }
@@ -231,8 +231,8 @@ pub mod foo {
                     "g",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::g(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::g(host).await;
                             Ok((r,))
                         })
                     },

@@ -275,7 +275,7 @@ pub mod foo {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn many_args<T: 'static>(
+                fn many_args<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a1: u64,
                     a2: u64,
@@ -294,7 +294,7 @@ pub mod foo {
                     a15: u64,
                     a16: u64,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn big_argument<T: 'static>(
+                fn big_argument<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: BigStruct,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
@@ -352,9 +352,9 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
+                            let host = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::many_args(
-                                    accessor,
+                                    host,
                                     arg0,
                                     arg1,
                                     arg2,
@@ -384,9 +384,8 @@ pub mod foo {
                         (arg0,): (BigStruct,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::big_argument(accessor, arg0)
-                                .await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::big_argument(host, arg0).await;
                             Ok(r)
                         })
                     },

@@ -194,18 +194,18 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn f32_param<T: 'static>(
+                fn f32_param<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: f32,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn f64_param<T: 'static>(
+                fn f64_param<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: f64,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn f32_result<T: 'static>(
+                fn f32_result<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = f32> + Send;
-                fn f64_result<T: 'static>(
+                fn f64_result<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = f64> + Send;
             }
@@ -225,9 +225,8 @@ pub mod foo {
                     "f32-param",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (f32,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::f32_param(accessor, arg0)
-                                .await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::f32_param(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -236,9 +235,8 @@ pub mod foo {
                     "f64-param",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (f64,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::f64_param(accessor, arg0)
-                                .await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::f64_param(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -247,8 +245,8 @@ pub mod foo {
                     "f32-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::f32_result(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::f32_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -257,8 +255,8 @@ pub mod foo {
                     "f64-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::f64_result(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::f64_result(host).await;
                             Ok((r,))
                         })
                     },
