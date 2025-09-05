@@ -181,7 +181,7 @@ pub mod imports {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::{anyhow, Box};
     pub trait HostWithStore: wasmtime::component::HasData + Send {
-        fn y<T: 'static>(
+        fn y<T>(
             accessor: &wasmtime::component::Accessor<T, Self>,
         ) -> impl ::core::future::Future<Output = ()> + Send;
     }
@@ -201,8 +201,8 @@ pub mod imports {
             "y",
             move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                 wasmtime::component::__internal::Box::pin(async move {
-                    let accessor = &caller.with_getter(host_getter);
-                    let r = <D as HostWithStore>::y(accessor).await;
+                    let host = &caller.with_getter(host_getter);
+                    let r = <D as HostWithStore>::y(host).await;
                     Ok(r)
                 })
             },

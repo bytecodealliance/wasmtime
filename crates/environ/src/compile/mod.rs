@@ -180,7 +180,7 @@ pub struct CompiledFunctionBody {
 ///
 /// The diagram below depicts typical usage of this trait:
 ///
-/// ```ignore
+/// ```text
 ///                     +------+
 ///                     | Wasm |
 ///                     +------+

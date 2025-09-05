@@ -30,6 +30,12 @@ macro_rules! gentest {
                     }
                 });
             }
+            mod imports_with_store {
+                wasmtime::component::bindgen!({
+                    path: $path,
+                    imports: { default: store },
+                });
+            }
         }
     };
 }

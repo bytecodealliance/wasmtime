@@ -204,8 +204,9 @@ const START_FLAG_ASYNC_CALLEE: u32 = wasmtime_environ::component::START_FLAG_ASY
 ///
 /// See [`Accessor::with`] for details.
 pub struct Access<'a, T: 'static, D: HasData + ?Sized = HasSelf<T>> {
-    accessor: &'a Accessor<T, D>,
     store: StoreContextMut<'a, T>,
+    get_data: fn(&mut T) -> D::Data<'_>,
+    instance: Option<Instance>,
 }
 
 impl<'a, T, D> Access<'a, T, D>
@@ -213,6 +214,15 @@ where
     D: HasData + ?Sized,
     T: 'static,
 {
+    /// Creates a new [`Access`] from its component parts.
+    pub fn new(store: StoreContextMut<'a, T>, get_data: fn(&mut T) -> D::Data<'_>) -> Self {
+        Self {
+            store,
+            get_data,
+            instance: None,
+        }
+    }
+
     /// Get mutable access to the store data.
     pub fn data_mut(&mut self) -> &mut T {
         self.store.data_mut()
@@ -220,8 +230,7 @@ where
 
     /// Get mutable access to the store data.
     pub fn get(&mut self) -> D::Data<'_> {
-        let get_data = self.accessor.get_data;
-        get_data(self.data_mut())
+        (self.get_data)(self.data_mut())
     }
 
     /// Spawn a background task.
@@ -231,16 +240,19 @@ where
     where
         T: 'static,
     {
-        self.accessor.instance.unwrap().spawn_with_accessor(
-            self.store.as_context_mut(),
-            self.accessor.clone_for_spawn(),
-            task,
-        )
+        let accessor = Accessor {
+            get_data: self.get_data,
+            instance: self.instance,
+            token: StoreToken::new(self.store.as_context_mut()),
+        };
+        self.instance
+            .unwrap()
+            .spawn_with_accessor(self.store.as_context_mut(), accessor, task)
     }
 
     /// Retrieve the component instance of the caller.
     pub fn instance(&self) -> Instance {
-        self.accessor.instance()
+        self.instance.unwrap()
     }
 }
 
@@ -452,7 +464,8 @@ where
         tls::get(|vmstore| {
             fun(Access {
                 store: self.token.as_context_mut(vmstore),
-                accessor: self,
+                get_data: self.get_data,
+                instance: self.instance,
             })
         })
     }
