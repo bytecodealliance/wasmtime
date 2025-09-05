@@ -135,7 +135,6 @@ async fn test_tcp_read_cancellation(family: IpAddressFamily) {
             },
             async {
                 for i in 0..CHUNKS {
-                    println!("write {i}");
                     let ret = client_tx.write_all(data.to_vec()).await;
                     assert!(ret.is_empty());
                 }
@@ -159,7 +158,6 @@ async fn test_tcp_read_cancellation(family: IpAddressFamily) {
                     buf = b;
                     match status {
                         StreamResult::Complete(n) => {
-                            eprintln!("read {n}");
                             assert_eq!(buf.len(), n);
                             for slot in buf.iter_mut() {
                                 assert_eq!(*slot, i as u8);
@@ -170,7 +168,6 @@ async fn test_tcp_read_cancellation(family: IpAddressFamily) {
                         }
                         StreamResult::Dropped => break,
                         StreamResult::Cancelled => {
-                            eprintln!("wait {consecutive_zero_length_reads}");
                             assert!(consecutive_zero_length_reads < 10);
                             consecutive_zero_length_reads += 1;
                             server_rx.read(Vec::new()).await;
