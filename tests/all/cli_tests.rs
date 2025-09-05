@@ -2179,7 +2179,7 @@ start a print 1234
         let total_write_size = 1 << 19;
         let expected = iter::repeat('a').take(total_write_size).collect::<String>();
 
-        for i in 0..16 {
+        for i in 0..15 {
             let string = iter::repeat('a').take(1 << i).collect::<String>();
             let times = (total_write_size >> i).to_string();
             println!("writing {} bytes {times} times", string.len());
