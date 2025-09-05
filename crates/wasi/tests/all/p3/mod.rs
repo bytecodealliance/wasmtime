@@ -142,3 +142,13 @@ async fn p3_readdir() -> anyhow::Result<()> {
 async fn p3_readdir_blocking() -> anyhow::Result<()> {
     run_allow_blocking_current_thread(P3_READDIR_COMPONENT, true).await
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_file_write() -> anyhow::Result<()> {
+    run(P3_FILE_WRITE_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_file_write_blocking() -> anyhow::Result<()> {
+    run_allow_blocking_current_thread(P3_FILE_WRITE_COMPONENT, true).await
+}
