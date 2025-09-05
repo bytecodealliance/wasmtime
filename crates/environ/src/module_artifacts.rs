@@ -196,7 +196,7 @@ impl CompiledFunctionsIndex {
         let subslice = &self.func_key_indices[start..end];
         let subslice_index = subslice.binary_search(&raw_index).ok()?;
         let index = start + subslice_index;
-        Some(usize::try_from(index).unwrap())
+        Some(index)
     }
 
     /// Get the location of the function associated with the given `key` inside
