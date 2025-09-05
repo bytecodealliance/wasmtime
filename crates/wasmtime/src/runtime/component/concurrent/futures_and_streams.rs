@@ -10,13 +10,13 @@ use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{Context as _, Result, anyhow, bail};
-use buffers::Extender;
-use buffers::UntypedWriteBuffer;
+use buffers::{Extender, SliceBuffer, UntypedWriteBuffer};
 use futures::FutureExt;
 use futures::channel::oneshot;
 use std::boxed::Box;
 use std::fmt;
 use std::future;
+use std::io::Cursor;
 use std::iter;
 use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
@@ -218,6 +218,7 @@ pub struct Destination<'a, T, B> {
     instance: Instance,
     id: TableId<TransmitState>,
     buffer: &'a mut B,
+    host_buffer: Option<&'a mut Cursor<Vec<u8>>>,
     _phantom: PhantomData<fn() -> T>,
 }
 
@@ -240,9 +241,9 @@ impl<'a, T, B> Destination<'a, T, B> {
     /// the `StreamProducer::poll_produce` call to which this `Destination` was
     /// passed returns (unless overwritten by another call to `set_buffer`).
     ///
-    /// If items are stored via a buffer _and_ written via a `DirectDestination`
-    /// view of `self`, then the items in the buffer will be delivered after the
-    /// ones written using `DirectDestination`.
+    /// If items are stored via this buffer _and_ written via a
+    /// `DirectDestination` view of `self`, then the items in the buffer will be
+    /// delivered after the ones written using `DirectDestination`.
     pub fn set_buffer(&mut self, buffer: B) {
         *self.buffer = buffer;
     }
@@ -279,25 +280,33 @@ impl<'a, T, B> Destination<'a, T, B> {
 }
 
 impl<'a, B> Destination<'a, u8, B> {
-    /// Return a `DirectDestination` view of `self` if the guest is reading.
-    pub fn as_direct_destination<D>(
-        &mut self,
+    /// Return a `DirectDestination` view of `self`.
+    ///
+    /// If the reader is a guest, this will provide direct access to the guest's
+    /// read buffer.  If the reader is a host, this will provide access to a
+    /// buffer which will be delivered to the host before any items stored using
+    /// `Destination::set_buffer`.
+    ///
+    /// `capacity` will only be used if the reader is a host, in which case it
+    /// will update the length of the buffer, possibly zero-initializing the new
+    /// elements if the new length is larger than the old length.
+    pub fn as_direct<D>(
+        mut self,
         store: StoreContextMut<'a, D>,
-    ) -> Option<DirectDestination<'a, D>> {
-        if let ReadState::GuestReady { .. } = self
-            .instance
-            .concurrent_state_mut(store.0)
-            .get_mut(self.id)
-            .unwrap()
-            .read
-        {
-            Some(DirectDestination {
-                instance: self.instance,
-                id: self.id,
-                store,
-            })
-        } else {
-            None
+        capacity: usize,
+    ) -> DirectDestination<'a, D> {
+        if let Some(buffer) = self.host_buffer.as_deref_mut() {
+            buffer.set_position(0);
+            if buffer.get_mut().is_empty() {
+                buffer.get_mut().resize(capacity, 0);
+            }
+        }
+
+        DirectDestination {
+            instance: self.instance,
+            id: self.id,
+            host_buffer: self.host_buffer,
+            store,
         }
     }
 }
@@ -307,37 +316,42 @@ impl<'a, B> Destination<'a, u8, B> {
 pub struct DirectDestination<'a, D: 'static> {
     instance: Instance,
     id: TableId<TransmitState>,
+    host_buffer: Option<&'a mut Cursor<Vec<u8>>>,
     store: StoreContextMut<'a, D>,
 }
 
 impl<D: 'static> DirectDestination<'_, D> {
     /// Provide direct access to the writer's buffer.
     pub fn remaining(&mut self) -> &mut [u8] {
-        let transmit = self
-            .instance
-            .concurrent_state_mut(self.store.as_context_mut().0)
-            .get_mut(self.id)
-            .unwrap();
+        if let Some(buffer) = self.host_buffer.as_deref_mut() {
+            buffer.get_mut()
+        } else {
+            let transmit = self
+                .instance
+                .concurrent_state_mut(self.store.as_context_mut().0)
+                .get_mut(self.id)
+                .unwrap();
 
-        let &ReadState::GuestReady {
-            address,
-            count,
-            options,
-            ..
-        } = &transmit.read
-        else {
-            unreachable!()
-        };
+            let &ReadState::GuestReady {
+                address,
+                count,
+                options,
+                ..
+            } = &transmit.read
+            else {
+                unreachable!();
+            };
 
-        let &WriteState::HostReady { guest_offset, .. } = &transmit.write else {
-            unreachable!()
-        };
+            let &WriteState::HostReady { guest_offset, .. } = &transmit.write else {
+                unreachable!()
+            };
 
-        options
-            .memory_mut(self.store.0)
-            .get_mut((address + guest_offset)..)
-            .and_then(|b| b.get_mut(..(count - guest_offset)))
-            .unwrap()
+            options
+                .memory_mut(self.store.0)
+                .get_mut((address + guest_offset)..)
+                .and_then(|b| b.get_mut(..(count - guest_offset)))
+                .unwrap()
+        }
     }
 
     /// Mark the specified number of bytes as written to the writer's buffer.
@@ -345,27 +359,38 @@ impl<D: 'static> DirectDestination<'_, D> {
     /// This will panic if the count is larger than the size of the
     /// buffer returned by `Self::remaining`.
     pub fn mark_written(&mut self, count: usize) {
-        let transmit = self
-            .instance
-            .concurrent_state_mut(self.store.as_context_mut().0)
-            .get_mut(self.id)
-            .unwrap();
-
-        let ReadState::GuestReady {
-            count: read_count, ..
-        } = &transmit.read
-        else {
-            unreachable!()
-        };
-
-        let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
-            unreachable!()
-        };
-
-        if *guest_offset + count > *read_count {
-            panic!("write count ({count}) must be less than or equal to read count ({read_count})")
+        if let Some(buffer) = self.host_buffer.as_deref_mut() {
+            buffer.set_position(
+                buffer
+                    .position()
+                    .checked_add(u64::try_from(count).unwrap())
+                    .unwrap(),
+            );
         } else {
-            *guest_offset += count;
+            let transmit = self
+                .instance
+                .concurrent_state_mut(self.store.as_context_mut().0)
+                .get_mut(self.id)
+                .unwrap();
+
+            let ReadState::GuestReady {
+                count: read_count, ..
+            } = &transmit.read
+            else {
+                unreachable!();
+            };
+
+            let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
+                unreachable!()
+            };
+
+            if *guest_offset + count > *read_count {
+                panic!(
+                    "write count ({count}) must be less than or equal to read count ({read_count})"
+                )
+            } else {
+                *guest_offset += count;
+            }
         }
     }
 }
@@ -443,21 +468,32 @@ pub trait StreamProducer<D>: Send + 'static {
     /// If more items are written to `destination` than the reader has immediate
     /// capacity to accept, they will be retained in memory by the caller and
     /// used to satisify future reads, in which case `poll_produce` will only be
-    /// called again once all those items have been delivered.  This is
-    /// particularly important for zero-length reads, in which case the
-    /// implementation is expected to either:
+    /// called again once all those items have been delivered.
     ///
-    /// 1. Produce at least one item (if possible, and if `finish` is false) so
-    /// that it is ready to be delivered immediately upon the next
-    /// non-zero-length read.
+    /// If this function is called with zero capacity
+    /// (i.e. `Destination::remaining` returns `Some(0)`), the implementation
+    /// should either:
     ///
-    /// 2. Produce at least one item the next time `poll_produce` is called with
-    /// non-zero capacity and `finish` set to false.
+    /// - Return `Poll::Ready(Ok(StreamResult::Completed))` without writing
+    /// anything if it expects to be able to produce items immediately
+    /// (i.e. without first returning `Poll::Pending`) the next time
+    /// `poll_produce` is called with non-zero capacity _or_ if that cannot be
+    /// reliably determined.
+    ///
+    /// - Return `Poll::Pending` if the next call to `poll_produce` with
+    /// non-zero capacity is likely to also return `Poll::Pending`.
+    ///
+    /// - Return `Poll::Ready(Ok(StreamResult::Completed))` after calling
+    /// `Destination::set_buffer` with one more more items.  Note, however, that
+    /// this creates the hazard that the items will never be received by the
+    /// guest if it decides not to do another non-zero-length read before
+    /// closing the stream.  Moreover, if `Self::Item` is e.g. a `Resource<_>`,
+    /// they may end up leaking in that scenario.
     fn poll_produce<'a>(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<'a, D>,
-        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        destination: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<Result<StreamResult>>;
 }
@@ -553,15 +589,13 @@ impl<T> Source<'_, T> {
     }
 }
 
-impl Source<'_, u8> {
+impl<'a> Source<'a, u8> {
     /// Return a `DirectSource` view of `self`.
-    pub fn as_direct_source<'a, D>(
-        &mut self,
-        store: StoreContextMut<'a, D>,
-    ) -> DirectSource<'a, D> {
+    pub fn as_direct<D>(self, store: StoreContextMut<'a, D>) -> DirectSource<'a, D> {
         DirectSource {
             instance: self.instance,
             id: self.id,
+            host_buffer: self.host_buffer,
             store,
         }
     }
@@ -572,37 +606,42 @@ impl Source<'_, u8> {
 pub struct DirectSource<'a, D: 'static> {
     instance: Instance,
     id: TableId<TransmitState>,
+    host_buffer: Option<&'a mut dyn WriteBuffer<u8>>,
     store: StoreContextMut<'a, D>,
 }
 
 impl<D: 'static> DirectSource<'_, D> {
     /// Provide direct access to the writer's buffer.
     pub fn remaining(&mut self) -> &[u8] {
-        let transmit = self
-            .instance
-            .concurrent_state_mut(self.store.as_context_mut().0)
-            .get_mut(self.id)
-            .unwrap();
+        if let Some(buffer) = self.host_buffer.as_deref_mut() {
+            buffer.remaining()
+        } else {
+            let transmit = self
+                .instance
+                .concurrent_state_mut(self.store.as_context_mut().0)
+                .get_mut(self.id)
+                .unwrap();
 
-        let &WriteState::GuestReady {
-            address,
-            count,
-            options,
-            ..
-        } = &transmit.write
-        else {
-            unreachable!()
-        };
+            let &WriteState::GuestReady {
+                address,
+                count,
+                options,
+                ..
+            } = &transmit.write
+            else {
+                unreachable!()
+            };
 
-        let &ReadState::HostReady { guest_offset, .. } = &transmit.read else {
-            unreachable!()
-        };
+            let &ReadState::HostReady { guest_offset, .. } = &transmit.read else {
+                unreachable!()
+            };
 
-        options
-            .memory(self.store.0)
-            .get((address + guest_offset)..)
-            .and_then(|b| b.get(..(count - guest_offset)))
-            .unwrap()
+            options
+                .memory(self.store.0)
+                .get((address + guest_offset)..)
+                .and_then(|b| b.get(..(count - guest_offset)))
+                .unwrap()
+        }
     }
 
     /// Mark the specified number of bytes as read from the writer's buffer.
@@ -610,27 +649,33 @@ impl<D: 'static> DirectSource<'_, D> {
     /// This will panic if the count is larger than the size of the buffer
     /// returned by `Self::remaining`.
     pub fn mark_read(&mut self, count: usize) {
-        let transmit = self
-            .instance
-            .concurrent_state_mut(self.store.as_context_mut().0)
-            .get_mut(self.id)
-            .unwrap();
-
-        let WriteState::GuestReady {
-            count: write_count, ..
-        } = &transmit.write
-        else {
-            unreachable!()
-        };
-
-        let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
-            unreachable!()
-        };
-
-        if *guest_offset + count > *write_count {
-            panic!("read count ({count}) must be less than or equal to write count ({write_count})")
+        if let Some(buffer) = self.host_buffer.as_deref_mut() {
+            buffer.skip(count);
         } else {
-            *guest_offset += count;
+            let transmit = self
+                .instance
+                .concurrent_state_mut(self.store.as_context_mut().0)
+                .get_mut(self.id)
+                .unwrap();
+
+            let WriteState::GuestReady {
+                count: write_count, ..
+            } = &transmit.write
+            else {
+                unreachable!()
+            };
+
+            let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
+                unreachable!()
+            };
+
+            if *guest_offset + count > *write_count {
+                panic!(
+                    "read count ({count}) must be less than or equal to write count ({write_count})"
+                )
+            } else {
+                *guest_offset += count;
+            }
         }
     }
 }
@@ -726,7 +771,7 @@ pub trait StreamConsumer<D>: Send + 'static {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<D>,
-        source: &mut Source<Self::Item>,
+        source: Source<'_, Self::Item>,
         finish: bool,
     ) -> Poll<Result<StreamResult>>;
 }
@@ -787,7 +832,7 @@ impl<T> FutureReader<T> {
                 self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
                 store: StoreContextMut<D>,
-                destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+                mut destination: Destination<'a, Self::Item, Self::Buffer>,
                 finish: bool,
             ) -> Poll<Result<StreamResult>> {
                 // SAFETY: This is a standard pin-projection, and we never move
@@ -864,7 +909,7 @@ impl<T> FutureReader<T> {
                 self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
                 mut store: StoreContextMut<D>,
-                source: &mut Source<Self::Item>,
+                mut source: Source<Self::Item>,
                 finish: bool,
             ) -> Poll<Result<StreamResult>> {
                 let me = self.get_mut();
@@ -1681,6 +1726,8 @@ enum ReadState {
                 + Send
                 + Sync,
         >,
+        buffer: Vec<u8>,
+        limit: usize,
     },
     /// The read end has been dropped.
     Dropped,
@@ -1731,23 +1778,45 @@ impl Instance {
                 let (result, cancelled) = if buffer.remaining().is_empty() {
                     future::poll_fn(|cx| {
                         tls::get(|store| {
-                            let &WriteState::HostReady { cancel, .. } =
-                                &self.concurrent_state_mut(store).get_mut(id).unwrap().write
-                            else {
+                            let transmit = self.concurrent_state_mut(store).get_mut(id).unwrap();
+
+                            let &WriteState::HostReady { cancel, .. } = &transmit.write else {
                                 unreachable!();
                             };
+
+                            let mut host_buffer =
+                                if let ReadState::HostToHost { buffer, .. } = &mut transmit.read {
+                                    Some(Cursor::new(mem::take(buffer)))
+                                } else {
+                                    None
+                                };
 
                             let poll = mine.as_mut().poll_produce(
                                 cx,
                                 token.as_context_mut(store),
-                                &mut Destination {
+                                Destination {
                                     instance: self,
                                     id,
                                     buffer: &mut buffer,
+                                    host_buffer: host_buffer.as_mut(),
                                     _phantom: PhantomData,
                                 },
                                 cancel,
                             );
+
+                            let transmit = self.concurrent_state_mut(store).get_mut(id).unwrap();
+
+                            let host_offset = if let (
+                                Some(host_buffer),
+                                ReadState::HostToHost { buffer, limit, .. },
+                            ) = (host_buffer, &mut transmit.read)
+                            {
+                                *limit = usize::try_from(host_buffer.position()).unwrap();
+                                *buffer = host_buffer.into_inner();
+                                *limit
+                            } else {
+                                0
+                            };
 
                             {
                                 let WriteState::HostReady {
@@ -1755,17 +1824,16 @@ impl Instance {
                                     cancel,
                                     cancel_waker,
                                     ..
-                                } = &mut self
-                                    .concurrent_state_mut(store)
-                                    .get_mut(id)
-                                    .unwrap()
-                                    .write
+                                } = &mut transmit.write
                                 else {
                                     unreachable!();
                                 };
 
                                 if let Poll::Pending = &poll {
-                                    if !buffer.remaining().is_empty() || *guest_offset > 0 {
+                                    if !buffer.remaining().is_empty()
+                                        || *guest_offset > 0
+                                        || host_offset > 0
+                                    {
                                         return Poll::Ready(Err(anyhow!(
                                             "StreamProducer::poll_produce returned Poll::Pending \
                                              after producing at least one item"
@@ -1787,24 +1855,27 @@ impl Instance {
                     (StreamResult::Completed, false)
                 };
 
-                let (guest_offset, count) = tls::get(|store| {
+                let (guest_offset, host_offset, count) = tls::get(|store| {
                     let transmit = self.concurrent_state_mut(store).get_mut(id).unwrap();
-                    (
-                        match &transmit.write {
-                            &WriteState::HostReady { guest_offset, .. } => guest_offset,
-                            _ => unreachable!(),
-                        },
-                        match &transmit.read {
-                            &ReadState::GuestReady { count, .. } => count,
-                            ReadState::HostToHost { .. } => 1,
-                            _ => unreachable!(),
-                        },
-                    )
+                    let (count, host_offset) = match &transmit.read {
+                        &ReadState::GuestReady { count, .. } => (count, 0),
+                        &ReadState::HostToHost { limit, .. } => (1, limit),
+                        _ => unreachable!(),
+                    };
+                    let guest_offset = match &transmit.write {
+                        &WriteState::HostReady { guest_offset, .. } => guest_offset,
+                        _ => unreachable!(),
+                    };
+                    (guest_offset, host_offset, count)
                 });
 
                 match result {
                     StreamResult::Completed => {
-                        if count > 1 && buffer.remaining().is_empty() && guest_offset == 0 {
+                        if count > 1
+                            && buffer.remaining().is_empty()
+                            && guest_offset == 0
+                            && host_offset == 0
+                        {
                             bail!(
                                 "StreamProducer::poll_produce returned StreamResult::Completed \
                                  without producing any items"
@@ -1822,11 +1893,11 @@ impl Instance {
                     StreamResult::Dropped => {}
                 }
 
-                let write = !buffer.remaining().is_empty();
+                let write_buffer = !buffer.remaining().is_empty() || host_offset > 0;
 
                 *producer.lock().unwrap() = Some((mine, buffer));
 
-                if write {
+                if write_buffer {
                     self.write(token, id, producer, kind).await?;
                 }
 
@@ -1876,7 +1947,7 @@ impl Instance {
                         let poll = mine.as_mut().poll_consume(
                             cx,
                             token.as_context_mut(store),
-                            &mut Source {
+                            Source {
                                 instance: self,
                                 id,
                                 host_buffer: host_buffer.as_deref_mut(),
@@ -1995,6 +2066,8 @@ impl Instance {
                         let consume = consume_with_buffer.clone();
                         async move { consume(Some(input.get_mut::<C::Item>())).await }.boxed()
                     }),
+                    buffer: Vec::new(),
+                    limit: 0,
                 };
 
                 let future = async move {
@@ -2141,18 +2214,40 @@ impl Instance {
                 Ok(())
             }
 
-            ReadState::HostToHost { accept } => {
-                let (mine, mut buffer) = pair.lock().unwrap().take().unwrap();
+            ReadState::HostToHost {
+                accept,
+                mut buffer,
+                limit,
+            } => {
+                let mut state = StreamResult::Completed;
+                let mut position = 0;
 
-                let state = accept(&mut UntypedWriteBuffer::new(&mut buffer)).await?;
+                while !matches!(state, StreamResult::Dropped) && position < limit {
+                    let mut slice_buffer = SliceBuffer::new(buffer, position, limit);
+                    state = accept(&mut UntypedWriteBuffer::new(&mut slice_buffer)).await?;
+                    (buffer, position, _) = slice_buffer.into_parts();
+                }
 
-                *pair.lock().unwrap() = Some((mine, buffer));
+                {
+                    let (mine, mut buffer) = pair.lock().unwrap().take().unwrap();
+
+                    while !(matches!(state, StreamResult::Dropped) || buffer.remaining().is_empty())
+                    {
+                        state = accept(&mut UntypedWriteBuffer::new(&mut buffer)).await?;
+                    }
+
+                    *pair.lock().unwrap() = Some((mine, buffer));
+                }
 
                 tls::get(|store| {
                     self.concurrent_state_mut(store).get_mut(id)?.read = match state {
                         StreamResult::Dropped => ReadState::Dropped,
                         StreamResult::Completed | StreamResult::Cancelled => {
-                            ReadState::HostToHost { accept }
+                            ReadState::HostToHost {
+                                accept,
+                                buffer,
+                                limit: 0,
+                            }
                         }
                     };
 

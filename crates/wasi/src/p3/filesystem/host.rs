@@ -145,7 +145,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<'a, D>,
-        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         if let Some(task) = self.task.as_mut() {
@@ -183,58 +183,33 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
             return Poll::Ready(Ok(StreamResult::Cancelled));
         }
         if let Some(file) = self.file.as_blocking_file() {
-            if let Some(mut dst) = dst.as_direct_destination(store) {
-                let buf = dst.remaining();
-                if !buf.is_empty() {
-                    match file.read_at(buf, self.offset) {
-                        Ok(0) => {
-                            self.close(Ok(()));
-                            return Poll::Ready(Ok(StreamResult::Dropped));
-                        }
-                        Ok(n) => {
-                            dst.mark_written(n);
-                            let Ok(n) = n.try_into() else {
-                                self.close(Err(ErrorCode::Overflow));
-                                return Poll::Ready(Ok(StreamResult::Dropped));
-                            };
-                            let Some(n) = self.offset.checked_add(n) else {
-                                self.close(Err(ErrorCode::Overflow));
-                                return Poll::Ready(Ok(StreamResult::Dropped));
-                            };
-                            self.offset = n;
-                            return Poll::Ready(Ok(StreamResult::Completed));
-                        }
-                        Err(err) => {
-                            self.close(Err(err.into()));
-                            return Poll::Ready(Ok(StreamResult::Dropped));
-                        }
+            let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
+            let buf = dst.remaining();
+            if buf.is_empty() {
+                return Poll::Ready(Ok(StreamResult::Completed));
+            } else {
+                match file.read_at(buf, self.offset) {
+                    Ok(0) => {
+                        self.close(Ok(()));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
                     }
-                }
-            }
-            let mut buf = dst.take_buffer().into_inner();
-            buf.resize(DEFAULT_BUFFER_CAPACITY, 0);
-            match file.read_at(&mut buf, self.offset) {
-                Ok(0) => {
-                    self.close(Ok(()));
-                    return Poll::Ready(Ok(StreamResult::Dropped));
-                }
-                Ok(n) => {
-                    buf.truncate(n);
-                    dst.set_buffer(Cursor::new(buf));
-                    let Ok(n) = n.try_into() else {
-                        self.close(Err(ErrorCode::Overflow));
+                    Ok(n) => {
+                        dst.mark_written(n);
+                        let Ok(n) = n.try_into() else {
+                            self.close(Err(ErrorCode::Overflow));
+                            return Poll::Ready(Ok(StreamResult::Dropped));
+                        };
+                        let Some(n) = self.offset.checked_add(n) else {
+                            self.close(Err(ErrorCode::Overflow));
+                            return Poll::Ready(Ok(StreamResult::Dropped));
+                        };
+                        self.offset = n;
+                        return Poll::Ready(Ok(StreamResult::Completed));
+                    }
+                    Err(err) => {
+                        self.close(Err(err.into()));
                         return Poll::Ready(Ok(StreamResult::Dropped));
-                    };
-                    let Some(n) = self.offset.checked_add(n) else {
-                        self.close(Err(ErrorCode::Overflow));
-                        return Poll::Ready(Ok(StreamResult::Dropped));
-                    };
-                    self.offset = n;
-                    return Poll::Ready(Ok(StreamResult::Completed));
-                }
-                Err(err) => {
-                    self.close(Err(err.into()));
-                    return Poll::Ready(Ok(StreamResult::Dropped));
+                    }
                 }
             }
         }
@@ -343,7 +318,7 @@ impl<D> StreamProducer<D> for BlockingDirectoryStreamProducer {
         mut self: Pin<&mut Self>,
         _: &mut Context<'_>,
         _: StoreContextMut<'a, D>,
-        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
         _finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         let entries = match self.dir.entries() {
@@ -407,7 +382,7 @@ impl<D> StreamProducer<D> for NonblockingDirectoryStreamProducer {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<'a, D>,
-        dst: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         match mem::replace(&mut self.0, DirStreamState::Closed) {
@@ -493,10 +468,10 @@ impl<D> StreamConsumer<D> for WriteStreamConsumer {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<D>,
-        src: &mut Source<Self::Item>,
+        src: Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let mut src = src.as_direct_source(store);
+        let mut src = src.as_direct(store);
         if let Some(task) = self.task.as_mut() {
             let res = ready!(Pin::new(task).poll(cx));
             self.task = None;
@@ -615,10 +590,10 @@ impl<D> StreamConsumer<D> for AppendStreamConsumer {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         store: StoreContextMut<D>,
-        src: &mut Source<Self::Item>,
+        src: Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let mut src = src.as_direct_source(store);
+        let mut src = src.as_direct(store);
         if let Some(task) = self.task.as_mut() {
             let res = ready!(Pin::new(task).poll(cx));
             self.task = None;

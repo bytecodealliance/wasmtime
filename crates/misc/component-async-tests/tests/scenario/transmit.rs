@@ -42,7 +42,7 @@ impl<D> StreamProducer<D> for ReadinessProducer {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         mut store: StoreContextMut<'a, D>,
-        destination: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        destination: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<Result<StreamResult>> {
         let me = self.get_mut();
@@ -62,7 +62,7 @@ impl<D> StreamProducer<D> for ReadinessProducer {
                     Poll::Ready(Ok(StreamResult::Completed))
                 } else {
                     assert_eq!(capacity, Some(me.buffer.len()));
-                    let mut destination = destination.as_direct_destination(store).unwrap();
+                    let mut destination = destination.as_direct(store, me.buffer.len());
                     destination.remaining().copy_from_slice(&me.buffer);
                     destination.mark_written(me.buffer.len());
 
@@ -85,7 +85,7 @@ impl<D> StreamConsumer<D> for ReadinessConsumer {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         mut store: StoreContextMut<D>,
-        source: &mut Source<Self::Item>,
+        source: Source<Self::Item>,
         finish: bool,
     ) -> Poll<Result<StreamResult>> {
         let me = self.get_mut();
@@ -105,7 +105,7 @@ impl<D> StreamConsumer<D> for ReadinessConsumer {
                     Poll::Ready(Ok(StreamResult::Completed))
                 } else {
                     assert_eq!(available, me.expected.len());
-                    let mut source = source.as_direct_source(store);
+                    let mut source = source.as_direct(store);
                     assert_eq!(&me.expected, source.remaining());
                     source.mark_read(me.expected.len());
 
