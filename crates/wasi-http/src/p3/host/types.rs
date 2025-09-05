@@ -445,7 +445,11 @@ impl HostRequestWithStore for WasiHttp {
                                 getter,
                             },
                         ),
-                        FutureReader::new(instance, &mut store, FutureOneshotProducer(trailers_rx)),
+                        FutureReader::new(
+                            instance,
+                            &mut store,
+                            FutureOneshotProducer::from(trailers_rx),
+                        ),
                     )))
                 }
                 Body::Consumed => Ok(Err(())),
@@ -761,7 +765,11 @@ impl HostResponseWithStore for WasiHttp {
                                 getter,
                             },
                         ),
-                        FutureReader::new(instance, &mut store, FutureOneshotProducer(trailers_rx)),
+                        FutureReader::new(
+                            instance,
+                            &mut store,
+                            FutureOneshotProducer::from(trailers_rx),
+                        ),
                     )))
                 }
                 Body::Consumed => Ok(Err(())),

@@ -30,7 +30,7 @@ use wasmtime::component::{
 // Default buffer capacity to use for reads of byte-sized values.
 const DEFAULT_BUFFER_CAPACITY: usize = 8192;
 
-pub struct StreamEmptyProducer<T>(pub PhantomData<fn(T) -> T>);
+pub struct StreamEmptyProducer<T>(PhantomData<fn(T) -> T>);
 
 impl<T> Default for StreamEmptyProducer<T> {
     fn default() -> Self {
@@ -66,7 +66,7 @@ where
     }
 }
 
-pub struct FutureOneshotProducer<T>(pub oneshot::Receiver<T>);
+pub struct FutureOneshotProducer<T>(oneshot::Receiver<T>);
 
 impl<T> From<oneshot::Receiver<T>> for FutureOneshotProducer<T> {
     fn from(rx: oneshot::Receiver<T>) -> Self {
