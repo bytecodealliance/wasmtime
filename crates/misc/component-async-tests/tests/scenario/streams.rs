@@ -6,17 +6,106 @@ use {
         util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer},
     },
     futures::{
-        SinkExt, StreamExt,
+        Sink, SinkExt, Stream, StreamExt,
         channel::{mpsc, oneshot},
         future,
     },
-    std::sync::{Arc, Mutex},
+    std::{
+        pin::Pin,
+        sync::{Arc, Mutex},
+        task::{Context, Poll},
+    },
     wasmtime::{
-        Engine, Store,
-        component::{FutureReader, Linker, ResourceTable, StreamReader},
+        Engine, Store, StoreContextMut,
+        component::{
+            Destination, FutureReader, Linker, ResourceTable, Source, StreamConsumer,
+            StreamProducer, StreamReader, StreamResult,
+        },
     },
     wasmtime_wasi::WasiCtxBuilder,
 };
+
+pub struct DirectPipeProducer<S>(S);
+
+impl<D, S: Stream<Item = u8> + Send + 'static> StreamProducer<D> for DirectPipeProducer<S> {
+    type Item = u8;
+    type Buffer = Option<u8>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        destination: Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>> {
+        // SAFETY: This is a standard pin-projection, and we never move
+        // out of `self`.
+        let stream = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
+
+        match stream.poll_next(cx) {
+            Poll::Pending => {
+                if finish {
+                    Poll::Ready(Ok(StreamResult::Cancelled))
+                } else {
+                    Poll::Pending
+                }
+            }
+            Poll::Ready(Some(item)) => {
+                let mut destination = destination.as_direct(store, 1);
+                destination.remaining()[0] = item;
+                destination.mark_written(1);
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Poll::Ready(None) => Poll::Ready(Ok(StreamResult::Dropped)),
+        }
+    }
+}
+
+pub struct DirectPipeConsumer<S>(S);
+
+impl<D, S: Sink<u8, Error: std::error::Error + Send + Sync> + Send + 'static> StreamConsumer<D>
+    for DirectPipeConsumer<S>
+{
+    type Item = u8;
+
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        source: Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>> {
+        // SAFETY: This is a standard pin-projection, and we never move
+        // out of `self`.
+        let mut sink = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
+
+        let on_pending = || {
+            if finish {
+                Poll::Ready(Ok(StreamResult::Cancelled))
+            } else {
+                Poll::Pending
+            }
+        };
+
+        match sink.as_mut().poll_flush(cx) {
+            Poll::Pending => on_pending(),
+            Poll::Ready(result) => {
+                result?;
+                match sink.as_mut().poll_ready(cx) {
+                    Poll::Pending => on_pending(),
+                    Poll::Ready(result) => {
+                        result?;
+                        let mut source = source.as_direct(store);
+                        let item = source.remaining()[0];
+                        source.mark_read(1);
+                        sink.start_send(item)?;
+                        Poll::Ready(Ok(StreamResult::Completed))
+                    }
+                }
+            }
+        }
+    }
+}
 
 #[tokio::test]
 pub async fn async_closed_streams() -> Result<()> {
@@ -49,35 +138,45 @@ pub async fn async_closed_streams() -> Result<()> {
     let value = 42_u8;
 
     // First, test stream host->host
-    {
-        let (mut input_tx, input_rx) = mpsc::channel(1);
-        let (output_tx, mut output_rx) = mpsc::channel(1);
-        StreamReader::new(instance, &mut store, PipeProducer::new(input_rx))
-            .pipe(&mut store, PipeConsumer::new(output_tx));
+    for direct_producer in [true, false] {
+        for direct_consumer in [true, false] {
+            let (mut input_tx, input_rx) = mpsc::channel(1);
+            let (output_tx, mut output_rx) = mpsc::channel(1);
+            let reader = if direct_producer {
+                StreamReader::new(instance, &mut store, DirectPipeProducer(input_rx))
+            } else {
+                StreamReader::new(instance, &mut store, PipeProducer::new(input_rx))
+            };
+            if direct_consumer {
+                reader.pipe(&mut store, DirectPipeConsumer(output_tx));
+            } else {
+                reader.pipe(&mut store, PipeConsumer::new(output_tx));
+            }
 
-        instance
-            .run_concurrent(&mut store, async |_| {
-                let (a, b) = future::join(
-                    async {
-                        for &value in &values {
-                            input_tx.send(value).await?;
-                        }
-                        drop(input_tx);
-                        anyhow::Ok(())
-                    },
-                    async {
-                        for &value in &values {
-                            assert_eq!(Some(value), output_rx.next().await);
-                        }
-                        assert!(output_rx.next().await.is_none());
-                        Ok(())
-                    },
-                )
-                .await;
+            instance
+                .run_concurrent(&mut store, async |_| {
+                    let (a, b) = future::join(
+                        async {
+                            for &value in &values {
+                                input_tx.send(value).await?;
+                            }
+                            drop(input_tx);
+                            anyhow::Ok(())
+                        },
+                        async {
+                            for &value in &values {
+                                assert_eq!(Some(value), output_rx.next().await);
+                            }
+                            assert!(output_rx.next().await.is_none());
+                            Ok(())
+                        },
+                    )
+                    .await;
 
-                a.and(b)
-            })
-            .await??;
+                    a.and(b)
+                })
+                .await??;
+        }
     }
 
     // Next, test futures host->host

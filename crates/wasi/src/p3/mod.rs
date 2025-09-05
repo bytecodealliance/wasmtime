@@ -46,7 +46,7 @@ impl<T: Send + Sync + 'static, D> StreamProducer<D> for StreamEmptyProducer<T> {
         self: Pin<&mut Self>,
         _: &mut Context<'_>,
         _: StoreContextMut<'a, D>,
-        _: &'a mut Destination<'a, Self::Item, Self::Buffer>,
+        _: Destination<'a, Self::Item, Self::Buffer>,
         _: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         Poll::Ready(Ok(StreamResult::Dropped))
