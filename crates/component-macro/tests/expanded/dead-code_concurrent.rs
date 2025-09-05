@@ -208,7 +208,7 @@ pub mod a {
                 );
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn f<T: 'static>(
+                fn f<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = LiveType> + Send;
             }
@@ -228,8 +228,8 @@ pub mod a {
                     "f",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::f(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::f(host).await;
                             Ok((r,))
                         })
                     },

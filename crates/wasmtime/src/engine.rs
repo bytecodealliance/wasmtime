@@ -735,8 +735,9 @@ impl Engine {
         crate::runtime::vm::tls_eager_initialize();
     }
 
-    /// Returns a [`PoolingAllocatorMetrics`] if this engine was configured with
-    /// [`InstanceAllocationStrategy::Pooling`].
+    /// Returns a [`PoolingAllocatorMetrics`](crate::PoolingAllocatorMetrics) if
+    /// this engine was configured with
+    /// [`InstanceAllocationStrategy::Pooling`](crate::InstanceAllocationStrategy::Pooling).
     #[cfg(feature = "pooling-allocator")]
     pub fn pooling_allocator_metrics(&self) -> Option<crate::vm::PoolingAllocatorMetrics> {
         crate::runtime::vm::PoolingAllocatorMetrics::new(self)

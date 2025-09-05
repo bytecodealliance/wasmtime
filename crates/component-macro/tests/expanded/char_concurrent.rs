@@ -193,12 +193,12 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub trait HostWithStore: wasmtime::component::HasData + Send {
                 /// A function that accepts a character
-                fn take_char<T: 'static>(
+                fn take_char<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: char,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
                 /// A function that returns a character
-                fn return_char<T: 'static>(
+                fn return_char<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = char> + Send;
             }
@@ -218,9 +218,8 @@ pub mod foo {
                     "take-char",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (char,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::take_char(accessor, arg0)
-                                .await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::take_char(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -229,8 +228,8 @@ pub mod foo {
                     "return-char",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::return_char(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::return_char(host).await;
                             Ok((r,))
                         })
                     },
