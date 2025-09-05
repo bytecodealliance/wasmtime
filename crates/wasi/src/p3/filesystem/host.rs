@@ -292,98 +292,94 @@ fn map_dir_entry(
     }
 }
 
-struct NonblockingDirectoryStreamProducer(DirStreamState);
+struct ReadDirStream {
+    rx: mpsc::Receiver<DirectoryEntry>,
+    task: JoinHandle<Result<(), ErrorCode>>,
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+}
 
-enum DirStreamState {
-    Init {
+impl ReadDirStream {
+    fn new(
         dir: Arc<cap_std::fs::Dir>,
         result: oneshot::Sender<Result<(), ErrorCode>>,
-    },
-    InProgress {
-        rx: mpsc::Receiver<DirectoryEntry>,
-        task: JoinHandle<Result<(), ErrorCode>>,
-        result: oneshot::Sender<Result<(), ErrorCode>>,
-    },
-    Closed,
-}
-
-impl Drop for NonblockingDirectoryStreamProducer {
-    fn drop(&mut self) {
-        self.close(Ok(()))
-    }
-}
-
-impl NonblockingDirectoryStreamProducer {
-    fn close(&mut self, res: Result<(), ErrorCode>) {
-        if let DirStreamState::Init { result, .. } | DirStreamState::InProgress { result, .. } =
-            mem::replace(&mut self.0, DirStreamState::Closed)
-        {
-            _ = result.send(res);
+    ) -> ReadDirStream {
+        let (tx, rx) = mpsc::channel(1);
+        ReadDirStream {
+            task: spawn_blocking(move || {
+                let entries = dir.entries()?;
+                for entry in entries {
+                    if let Some(entry) = map_dir_entry(entry)? {
+                        if let Err(_) = tx.blocking_send(entry) {
+                            break;
+                        }
+                    }
+                }
+                Ok(())
+            }),
+            rx,
+            result: Some(result),
         }
     }
+
+    fn close(&mut self, res: Result<(), ErrorCode>) {
+        self.rx.close();
+        self.task.abort();
+        let _ = self.result.take().unwrap().send(res);
+    }
 }
 
-impl<D> StreamProducer<D> for NonblockingDirectoryStreamProducer {
+impl<D> StreamProducer<D> for ReadDirStream {
     type Item = DirectoryEntry;
     type Buffer = Option<DirectoryEntry>;
 
     fn poll_produce<'a>(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        store: StoreContextMut<'a, D>,
+        mut store: StoreContextMut<'a, D>,
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        match mem::replace(&mut self.0, DirStreamState::Closed) {
-            DirStreamState::Init { .. } if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
-            DirStreamState::Init { dir, result } => {
-                let (entry_tx, entry_rx) = mpsc::channel(1);
-                let task = spawn_blocking(move || {
-                    let entries = dir.entries()?;
-                    for entry in entries {
-                        if let Some(entry) = map_dir_entry(entry)? {
-                            if let Err(_) = entry_tx.blocking_send(entry) {
-                                break;
-                            }
-                        }
-                    }
-                    Ok(())
-                });
-                self.0 = DirStreamState::InProgress {
-                    rx: entry_rx,
-                    task,
-                    result,
-                };
-                self.poll_produce(cx, store, dst, finish)
+        // If this is a 0-length read then `mpsc::Receiver` does not expose an
+        // API to wait for an item to be available without taking it out of the
+        // channel. In lieu of that just say that we're complete and ready for a
+        // read.
+        if dst.remaining(&mut store) == Some(0) {
+            return Poll::Ready(Ok(StreamResult::Completed));
+        }
+
+        match self.rx.poll_recv(cx) {
+            // If an item is on the channel then send that along and say that
+            // the read is now complete with one item being yielded.
+            Poll::Ready(Some(item)) => {
+                dst.set_buffer(Some(item));
+                Poll::Ready(Ok(StreamResult::Completed))
             }
-            DirStreamState::InProgress {
-                mut rx,
-                mut task,
-                result,
-            } => {
-                let Poll::Ready(res) = rx.poll_recv(cx) else {
-                    self.0 = DirStreamState::InProgress { rx, task, result };
-                    if finish {
-                        return Poll::Ready(Ok(StreamResult::Cancelled));
-                    }
-                    return Poll::Pending;
-                };
-                match res {
-                    Some(entry) => {
-                        self.0 = DirStreamState::InProgress { rx, task, result };
-                        dst.set_buffer(Some(entry));
-                        Poll::Ready(Ok(StreamResult::Completed))
-                    }
-                    None => {
-                        let res = ready!(Pin::new(&mut task).poll(cx))
-                            .context("failed to join I/O task")?;
-                        self.0 = DirStreamState::InProgress { rx, task, result };
-                        self.close(res);
-                        Poll::Ready(Ok(StreamResult::Dropped))
-                    }
-                }
+
+            // If there's nothing left on the channel then that means that an
+            // error occurred or the iterator is done. In both cases an
+            // un-cancellable wait for the spawned task is entered and we await
+            // its completion. Upon completion there our own stream is closed
+            // with the result (sending an error code on our oneshot) and then
+            // the stream is reported as dropped.
+            Poll::Ready(None) => {
+                let result = ready!(Pin::new(&mut self.task).poll(cx))
+                    .expect("spawned task should not panic");
+                self.close(result);
+                Poll::Ready(Ok(StreamResult::Dropped))
             }
-            DirStreamState::Closed => Poll::Ready(Ok(StreamResult::Dropped)),
+
+            // If an item isn't ready yet then cancel this outstanding request
+            // if `finish` is set, otherwise propagate the `Pending` status.
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl Drop for ReadDirStream {
+    fn drop(&mut self) {
+        if self.result.is_some() {
+            self.close(Ok(()));
         }
     }
 }
@@ -812,14 +808,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     }
                 }
             } else {
-                StreamReader::new(
-                    instance,
-                    &mut store,
-                    NonblockingDirectoryStreamProducer(DirStreamState::Init {
-                        dir,
-                        result: result_tx,
-                    }),
-                )
+                StreamReader::new(instance, &mut store, ReadDirStream::new(dir, result_tx))
             };
             Ok((
                 stream,
