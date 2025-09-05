@@ -291,6 +291,9 @@ impl TableSegmentElements {
 /// memory initializers.
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Module {
+    /// This module's index.
+    pub module_index: Option<StaticModuleIndex>,
+
     /// The name of this wasm module, often found in the wasm file.
     pub name: Option<String>,
 
@@ -587,8 +590,14 @@ impl Module {
 
     /// Returns an iterator over all of the defined function indices in this
     /// module.
-    pub fn defined_func_indices(&self) -> impl Iterator<Item = DefinedFuncIndex> + use<> {
+    pub fn defined_func_indices(&self) -> impl ExactSizeIterator<Item = DefinedFuncIndex> + use<> {
         (0..self.functions.len() - self.num_imported_funcs).map(|i| DefinedFuncIndex::new(i))
+    }
+
+    /// Returns the number of functions defined by this module itself: all
+    /// functions minus imported functions.
+    pub fn num_defined_funcs(&self) -> usize {
+        self.functions.len() - self.num_imported_funcs
     }
 
     /// Returns the number of tables defined by this module itself: all tables
@@ -624,6 +633,7 @@ impl TypeTrace for Module {
         // NB: Do not `..` elide unmodified fields so that we get compile errors
         // when adding new fields that might need re-canonicalization.
         let Self {
+            module_index: _,
             name: _,
             initializers: _,
             exports: _,
@@ -674,6 +684,7 @@ impl TypeTrace for Module {
         // NB: Do not `..` elide unmodified fields so that we get compile errors
         // when adding new fields that might need re-canonicalization.
         let Self {
+            module_index: _,
             name: _,
             initializers: _,
             exports: _,

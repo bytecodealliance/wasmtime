@@ -3,9 +3,8 @@
 
 use crate::prelude::*;
 use crate::{
-    CompiledFunctionInfo, CompiledModuleInfo, DebugInfoData, DefinedFuncIndex, FunctionLoc,
-    FunctionName, MemoryInitialization, Metadata, ModuleInternedTypeIndex, ModuleTranslation,
-    PrimaryMap, Tunables, obj,
+    CompiledModuleInfo, DebugInfoData, FunctionName, MemoryInitialization, Metadata,
+    ModuleTranslation, Tunables, obj,
 };
 use anyhow::{Result, bail};
 use object::SectionKind;
@@ -113,12 +112,7 @@ impl<'a> ObjectBuilder<'a> {
     /// Returns the `CompiledModuleInfo` corresponding to this core Wasm module
     /// as a result of this append operation. This is then serialized into the
     /// final artifact by the caller.
-    pub fn append(
-        &mut self,
-        translation: ModuleTranslation<'_>,
-        funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
-        wasm_to_array_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
-    ) -> Result<CompiledModuleInfo> {
+    pub fn append(&mut self, translation: ModuleTranslation<'_>) -> Result<CompiledModuleInfo> {
         let ModuleTranslation {
             mut module,
             debuginfo,
@@ -219,8 +213,6 @@ impl<'a> ObjectBuilder<'a> {
 
         Ok(CompiledModuleInfo {
             module,
-            funcs,
-            wasm_to_array_trampolines,
             func_names,
             meta: Metadata {
                 has_unparsed_debuginfo,
