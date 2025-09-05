@@ -81,17 +81,34 @@ fn parse_header_value(
 }
 
 struct GuestBodyResultProducer(
-    oneshot::Receiver<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
+    Pin<Box<dyn Future<Output = wasmtime::Result<Result<(), ErrorCode>>> + Send>>,
 );
+
+impl GuestBodyResultProducer {
+    fn new(rx: oneshot::Receiver<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>) -> Self {
+        Self(Box::pin(async move {
+            let Ok(fut) = rx.await else {
+                return Ok(Ok(()));
+            };
+            Ok(Box::into_pin(fut).await)
+        }))
+    }
+}
 
 impl<D> FutureProducer<D> for GuestBodyResultProducer {
     type Item = Result<(), ErrorCode>;
 
-    async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<Self::Item> {
-        let Ok(fut) = self.0.await else {
-            return Ok(Ok(()));
-        };
-        Ok(Box::into_pin(fut).await)
+    fn poll_produce(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        _: StoreContextMut<D>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<Option<Self::Item>>> {
+        match Pin::new(&mut self.get_mut().0).poll(cx) {
+            Poll::Pending if finish => Poll::Ready(Ok(None)),
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(result) => Poll::Ready(Ok(Some(result?))),
+        }
     }
 }
 
@@ -384,7 +401,11 @@ impl HostRequestWithStore for WasiHttp {
             let req = push_request(table, req)?;
             Ok((
                 req,
-                FutureReader::new(instance, &mut store, GuestBodyResultProducer(result_rx)),
+                FutureReader::new(
+                    instance,
+                    &mut store,
+                    GuestBodyResultProducer::new(result_rx),
+                ),
             ))
         })
     }
@@ -704,7 +725,11 @@ impl HostResponseWithStore for WasiHttp {
             let res = push_response(table, res)?;
             Ok((
                 res,
-                FutureReader::new(instance, &mut store, GuestBodyResultProducer(result_rx)),
+                FutureReader::new(
+                    instance,
+                    &mut store,
+                    GuestBodyResultProducer::new(result_rx),
+                ),
             ))
         })
     }

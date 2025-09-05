@@ -1,5 +1,5 @@
+use crate::p3::WasiHttpCtxView;
 use crate::p3::bindings::http::types::{ErrorCode, Trailers};
-use crate::p3::{WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
 use bytes::Bytes;
 use core::pin::Pin;
@@ -10,8 +10,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
 use wasmtime::component::{
-    Accessor, FutureConsumer, FutureReader, Resource, Source, StreamConsumer, StreamReader,
-    StreamResult,
+    FutureConsumer, FutureReader, Resource, Source, StreamConsumer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut, StoreContextMut};
 
@@ -87,7 +86,7 @@ impl GuestBody {
         trailers_rx.pipe(
             &mut store,
             GuestTrailerConsumer {
-                tx: trailers_http_tx,
+                tx: Some(trailers_http_tx),
                 getter,
             },
         );
@@ -184,7 +183,7 @@ impl http_body::Body for ConsumedBody {
 }
 
 pub(crate) struct GuestTrailerConsumer<T> {
-    pub(crate) tx: oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>,
+    pub(crate) tx: Option<oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>>,
     pub(crate) getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
 }
 
@@ -194,27 +193,33 @@ where
 {
     type Item = Result<Option<Resource<Trailers>>, ErrorCode>;
 
-    async fn consume(self, store: &Accessor<D>, res: Self::Item) -> wasmtime::Result<()> {
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        mut store: StoreContextMut<D>,
+        mut source: Source<'_, Self::Item>,
+        _: bool,
+    ) -> Poll<wasmtime::Result<()>> {
+        let value = &mut None;
+        source.read(store.as_context_mut(), value)?;
+        let res = value.take().unwrap();
+        let me = self.get_mut();
         match res {
-            Ok(Some(trailers)) => store
-                .with_getter::<WasiHttp>(self.getter)
-                .with(|mut store| {
-                    let WasiHttpCtxView { table, .. } = store.get();
-                    let trailers = table
-                        .delete(trailers)
-                        .context("failed to delete trailers")?;
-                    _ = self.tx.send(Ok(Some(Arc::from(trailers))));
-                    Ok(())
-                }),
+            Ok(Some(trailers)) => {
+                let WasiHttpCtxView { table, .. } = (me.getter)(store.data_mut());
+                let trailers = table
+                    .delete(trailers)
+                    .context("failed to delete trailers")?;
+                _ = me.tx.take().unwrap().send(Ok(Some(Arc::from(trailers))));
+            }
             Ok(None) => {
-                _ = self.tx.send(Ok(None));
-                Ok(())
+                _ = me.tx.take().unwrap().send(Ok(None));
             }
             Err(err) => {
-                _ = self.tx.send(Err(err));
-                Ok(())
+                _ = me.tx.take().unwrap().send(Err(err));
             }
         }
+        Poll::Ready(Ok(()))
     }
 }
 
