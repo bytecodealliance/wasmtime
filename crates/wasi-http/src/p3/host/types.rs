@@ -29,8 +29,7 @@ use wasmtime::component::{
     StreamResult,
 };
 use wasmtime_wasi::ResourceTable;
-use wasmtime_wasi::p3::FutureOneshotProducer;
-use wasmtime_wasi::p3::StreamEmptyProducer;
+use wasmtime_wasi::p3::{FutureOneshotProducer, StreamEmptyProducer};
 
 fn get_request_options<'a>(
     table: &'a ResourceTable,

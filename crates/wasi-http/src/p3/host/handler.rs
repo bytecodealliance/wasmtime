@@ -92,7 +92,9 @@ impl HostWithStore for WasiHttp {
         })?;
         let (res, io) = Box::into_pin(fut).await?;
         if let Some(req_result_tx) = req_result_tx {
-            _ = req_result_tx.send(io);
+            if let Err(io) = req_result_tx.send(io) {
+                Box::into_pin(io).await?;
+            }
         } else {
             Box::into_pin(io).await?;
         }
