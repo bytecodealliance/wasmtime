@@ -2048,7 +2048,7 @@ impl Config {
     /// This may result in faster execution at runtime, but adds additional
     /// compilation time. Inlining may also enlarge the size of compiled
     /// artifacts (for example, the size of the result of
-    /// [`Engine::precompile_component`]).
+    /// [`Engine::precompile_component`](crate::Engine::precompile_component)).
     ///
     /// Inlining is not supported by all of Wasmtime's compilation strategies;
     /// currently, it only Cranelift supports it. This setting will be ignored
