@@ -16,6 +16,8 @@ fn measure_execution_time(c: &mut Criterion) {
 
     #[cfg(feature = "component-model")]
     component::measure_execution_time(c);
+
+    indirect::measure_execution_time(c);
 }
 
 #[derive(Copy, Clone)]
@@ -893,5 +895,167 @@ mod component {
                 },
             );
         }
+    }
+}
+
+mod indirect {
+    use super::*;
+    use std::time::Duration;
+
+    pub fn measure_execution_time(c: &mut Criterion) {
+        let _ = env_logger::try_init();
+        let mut group = c.benchmark_group("call-indirect");
+        for lazy in [true, false] {
+            // Note: the seemingly useless loop over a single `calls` value is
+            // just there to make it easy to play around with different numbers
+            // of calls.
+            for calls in [65536] {
+                group.throughput(criterion::Throughput::Elements(calls));
+                same_callee(&mut group, lazy, calls);
+                different_callees(&mut group, lazy, calls);
+            }
+        }
+    }
+
+    fn same_callee(group: &mut BenchmarkGroup<'_, WallTime>, lazy: bool, calls: u64) {
+        let name = format!(
+            "same-callee/table-init-{}/{calls}-calls",
+            if lazy { "lazy" } else { "strict" }
+        );
+        group.bench_function(name, |b| {
+            let mut config = Config::new();
+            config.table_lazy_init(lazy);
+            let engine = Engine::new(&config).unwrap();
+
+            let table_module = Module::new(
+                &engine,
+                r#"
+                    (module
+                        (func)
+                        (table (export "table") 5 5 funcref)
+                        (elem (table 0) (i32.const 0) func 0 0 0 0 0)
+                    )
+                "#,
+            )
+            .unwrap();
+
+            let run_module = Module::new(
+                &engine,
+                r#"
+                    (module
+                        (type $ty (func))
+                        (import "" "table" (table 0 funcref))
+                        (func (export "run") (param $callee i32) (param $calls i32)
+                            loop
+                                (if (i32.eqz (local.get $calls))
+                                    (then (return)))
+                                (local.set $calls (i32.sub (local.get $calls) (i32.const 1)))
+                                (call_indirect (type $ty) (local.get $callee))
+                                br 0
+                            end
+                        )
+                    )
+                "#,
+            )
+            .unwrap();
+
+            b.iter_custom(move |iters| {
+                let mut total = Duration::from_millis(0);
+
+                for _ in 0..iters {
+                    let mut store = Store::new(&engine, ());
+
+                    let table_instance = Instance::new(&mut store, &table_module, &[]).unwrap();
+                    let table = table_instance.get_table(&mut store, "table").unwrap();
+
+                    let run_instance =
+                        Instance::new(&mut store, &run_module, &[table.into()]).unwrap();
+                    let run = run_instance
+                        .get_typed_func::<(u32, u32), ()>(&mut store, "run")
+                        .unwrap();
+
+                    let start = Instant::now();
+                    let result = run.call(&mut store, (0, calls.try_into().unwrap()));
+                    total += start.elapsed();
+
+                    result.unwrap();
+                }
+
+                total
+            });
+        });
+    }
+
+    fn different_callees(group: &mut BenchmarkGroup<'_, WallTime>, lazy: bool, calls: u64) {
+        let name = format!(
+            "different-callees/table-init-{}/{calls}-calls",
+            if lazy { "lazy" } else { "strict" }
+        );
+        group.bench_function(name, |b| {
+            let mut config = Config::new();
+            config.table_lazy_init(lazy);
+            let engine = Engine::new(&config).unwrap();
+
+            let mut table_wat = format!(
+                "
+                    (module
+                        (func)
+                        (table (export \"table\") {calls} {calls} funcref)
+                        (elem (table 0) (i32.const 0) func"
+            );
+            for _ in 0..calls {
+                table_wat.push_str(" 0");
+            }
+            table_wat.push_str("))");
+            let table_module = Module::new(&engine, &table_wat).unwrap();
+
+            let run_module = Module::new(
+                &engine,
+                r#"
+                    (module
+                        (type $ty (func))
+                        (import "" "table" (table 0 funcref))
+                        (func (export "run") (param $callee i32) (param $calls i32)
+                            loop
+                                (if (i32.eqz (local.get $calls))
+                                    (then (return)))
+                                (local.set $calls (i32.sub (local.get $calls) (i32.const 1)))
+
+                                (call_indirect (type $ty) (local.get $callee))
+                                (local.set $callee (i32.add (local.get $callee) (i32.const 1)))
+
+                                br 0
+                            end
+                        )
+                    )
+                "#,
+            )
+            .unwrap();
+
+            b.iter_custom(move |iters| {
+                let mut total = Duration::from_millis(0);
+
+                for _ in 0..iters {
+                    let mut store = Store::new(&engine, ());
+
+                    let table_instance = Instance::new(&mut store, &table_module, &[]).unwrap();
+                    let table = table_instance.get_table(&mut store, "table").unwrap();
+
+                    let run_instance =
+                        Instance::new(&mut store, &run_module, &[table.into()]).unwrap();
+                    let run = run_instance
+                        .get_typed_func::<(u32, u32), ()>(&mut store, "run")
+                        .unwrap();
+
+                    let start = Instant::now();
+                    let result = run.call(&mut store, (0, calls.try_into().unwrap()));
+                    total += start.elapsed();
+
+                    result.unwrap();
+                }
+
+                total
+            });
+        });
     }
 }
