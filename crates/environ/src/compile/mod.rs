@@ -3,10 +3,9 @@
 
 use crate::prelude::*;
 use crate::{
-    DefinedFuncIndex, FlagValue, FunctionLoc, ObjectKind, PrimaryMap, StaticModuleIndex, TripleExt,
-    WasmError, WasmFuncType,
+    DefinedFuncIndex, FlagValue, FuncKey, FunctionLoc, ObjectKind, PrimaryMap, StaticModuleIndex,
+    TripleExt, Tunables, WasmError, WasmFuncType, obj,
 };
-use crate::{Tunables, obj};
 use anyhow::Result;
 use object::write::{Object, SymbolId};
 use object::{Architecture, BinaryFormat, FileFlags};
@@ -17,7 +16,6 @@ use std::path;
 use std::sync::Arc;
 
 mod address_map;
-mod key;
 mod module_artifacts;
 mod module_environ;
 mod module_types;
@@ -25,7 +23,6 @@ mod stack_maps;
 mod trap_encoding;
 
 pub use self::address_map::*;
-pub use self::key::*;
 pub use self::module_artifacts::*;
 pub use self::module_environ::*;
 pub use self::module_types::*;
@@ -173,15 +170,6 @@ pub struct CompiledFunctionBody {
     /// Whether the compiled function needs a GC heap to run; that is, whether
     /// it reads a struct field, allocates, an array, or etc...
     pub needs_gc_heap: bool,
-}
-
-/// ABI signature of functions that are generated here.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Abi {
-    /// The "wasm" ABI, or suitable to be a `wasm_call` field of a `VMFuncRef`.
-    Wasm,
-    /// The "array" ABI, or suitable to be an `array_call` field.
-    Array,
 }
 
 /// An implementation of a compiler which can compile WebAssembly functions to

@@ -9,6 +9,15 @@ use crate::{
     BuiltinFunctionIndex, DefinedFuncIndex, HostCall, ModuleInternedTypeIndex, StaticModuleIndex,
 };
 
+/// ABI signature of functions that are generated here.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Abi {
+    /// The "wasm" ABI, or suitable to be a `wasm_call` field of a `VMFuncRef`.
+    Wasm,
+    /// The "array" ABI, or suitable to be an `array_call` field.
+    Array,
+}
+
 /// A sortable, comparable function key for compilation output, call graph
 /// edges, and relocations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -30,7 +39,7 @@ pub enum FuncKey {
 
     /// A Wasm-caller to component builtin trampoline.
     #[cfg(feature = "component-model")]
-    ComponentTrampoline(crate::Abi, component::TrampolineIndex),
+    ComponentTrampoline(Abi, component::TrampolineIndex),
 
     /// A Wasm-caller to array-callee `resource.drop` trampoline.
     #[cfg(feature = "component-model")]
