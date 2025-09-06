@@ -2274,6 +2274,32 @@ fn is_vtune_available() -> bool {
 }
 
 #[test]
+fn profile_guest() -> Result<()> {
+    let tmpdir = std::env::temp_dir();
+    let dir = tmpdir.to_string_lossy();
+
+    let output = run_wasmtime_for_output(
+        &[
+            &format!("--profile=guest,{dir}/out.json"),
+            "--env",
+            "FOO=bar",
+            "tests/all/cli_tests/print_env.wat",
+        ],
+        None,
+    )?;
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    println!("> stdout:\n{stdout}");
+    println!("> stderr:\n{stderr}");
+    assert!(!stderr.contains("Error"));
+    let out_json = std::fs::read_to_string(format!("{dir}/out.json")).unwrap();
+    println!("> out.json:\n{out_json}");
+    Ok(())
+}
+
+#[test]
 fn unreachable_without_wasi() -> Result<()> {
     let output = run_wasmtime_for_output(
         &[
