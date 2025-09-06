@@ -12,7 +12,7 @@ use std::{
 use target_lexicon::{Architecture, Triple};
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_cranelift::CompiledFunction;
-use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, Tunables, WasmFuncType};
+use wasmtime_environ::{FuncKey, ModuleTranslation, ModuleTypesBuilder, Tunables, WasmFuncType};
 
 #[cfg(feature = "x64")]
 pub(crate) mod x64;
@@ -168,6 +168,7 @@ pub trait TargetIsa: Send + Sync {
     /// Compile a function.
     fn compile_function(
         &self,
+        key: FuncKey,
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,

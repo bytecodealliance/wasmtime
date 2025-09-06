@@ -1653,9 +1653,9 @@ impl MachInstLabelUse for LabelUse {
         }
     }
 
-    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self> {
-        match (reloc, addend) {
-            (Reloc::X86CallPCRel4, -4) => Some(LabelUse::JmpRel32),
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<(Self, Addend)> {
+        match reloc {
+            Reloc::X86CallPCRel4 => Some((LabelUse::JmpRel32, addend + 4)),
             _ => None,
         }
     }

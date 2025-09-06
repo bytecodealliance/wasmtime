@@ -15,8 +15,9 @@
 
 use crate::CompiledFunction;
 use anyhow::Result;
-use cranelift_codegen::TextSectionBuilder;
+use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::unwind::{UnwindInfo, systemv};
+use cranelift_codegen::{FinalizedMachExceptionHandler, TextSectionBuilder};
 use cranelift_control::ControlPlane;
 use gimli::RunTimeEndian;
 use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
@@ -125,9 +126,10 @@ impl<'a> ModuleTextBuilder<'a> {
         let body = compiled_func.buffer.data();
         let alignment = compiled_func.alignment;
         let body_len = body.len() as u64;
-        let off = self
+        let (off, self_label) = self
             .text
             .append(true, &body, alignment, &mut self.ctrl_plane);
+        let self_label = self_label.unwrap();
 
         let symbol_id = self.obj.add_symbol(Symbol {
             name: name.as_bytes().to_vec(),
@@ -144,7 +146,8 @@ impl<'a> ModuleTextBuilder<'a> {
             self.unwind_info.push(off, body_len, info);
         }
 
-        for r in compiled_func.relocations() {
+        let relocs = compiled_func.relocations();
+        for (i, r) in relocs.clone().enumerate() {
             let reloc_offset = off + u64::from(r.offset);
 
             // This relocation is used to fill in which hostcall id is
@@ -178,10 +181,102 @@ impl<'a> ModuleTextBuilder<'a> {
                 continue;
             }
 
-            let target = resolve_reloc_target(r.reloc_target);
+            // Determines the function index that `target` points to, possibly
+            // updating `addend` along the way. Handles
+            // `TrampolineExceptionHandler` as a special case.
+            let resolve_reloc_target = |target: FuncKey, addend: &mut i64| {
+                match target {
+                    // If we're relocating against this function's exception
+                    // handler that means that this function has precisely one
+                    // try_call with precisely one handler. This handler's
+                    // address is what's plumbed through to the relocation (used
+                    // for entry trampolines).
+                    //
+                    // This locates the `offset` of the exception handler itself
+                    // and then adds it to the relocation's `addend` to get
+                    // registered in the text section.
+                    FuncKey::TrampolineExceptionHandler => {
+                        let mut exceptional_call_sites = compiled_func
+                            .buffer
+                            .call_sites()
+                            .filter(|s| !s.exception_handlers.is_empty());
+                        let call_site = exceptional_call_sites
+                            .next()
+                            .expect("failed to find a call site with a exception handlers");
+                        assert!(
+                            exceptional_call_sites.next().is_none(),
+                            "found more than one call site with exception handlers"
+                        );
+                        let [FinalizedMachExceptionHandler::Default(offset)] =
+                            call_site.exception_handlers
+                        else {
+                            panic!("must have exactly one default exception handler")
+                        };
+                        *addend += i64::from(*offset);
+                        self_label
+                    }
+
+                    // Otherwise fall back to this function's own argument of
+                    // how to resolve a relocation target to a function index.
+                    _ => resolve_reloc_target(target),
+                }
+            };
+
+            let mut addend = r.addend;
+            let target = match r.reloc {
+                // `RiscvPCRelLo12I` is handled in a special way compared to
+                // other relocations, so handle that here.
+                Reloc::RiscvPCRelLo12I => {
+                    // The target of this relocation should be a another
+                    // instruction in this function itself, so assert that this
+                    // target resolves to this function.
+                    assert_eq!(
+                        resolve_reloc_target(r.reloc_target, &mut addend),
+                        self_label
+                    );
+
+                    // The instruction that this relocation points to should
+                    // itself have a relocation. The true relocation for
+                    // `RiscvPCRelLo12I` is this indirect target.
+                    //
+                    // Currently the indirect target is always the previous
+                    // instruction which means that its relocation should have
+                    // been prior. Look up the previous relocation, assert that
+                    // it's `RiscvPCRelHi20` to pair with "Lo12" htere, and then
+                    // additionally assert that the previous relocation is
+                    // indeed the target of our relocation (this function +
+                    // addend)
+                    let prev_reloc = relocs.clone().nth(i - 1).unwrap();
+                    assert_eq!(prev_reloc.reloc, Reloc::RiscvPCRelHi20);
+                    assert_eq!(i64::from(prev_reloc.offset), r.addend);
+
+                    // Finally also assert that the previous relocation is
+                    // indeed the prior instruction to the instruction with this
+                    // relocation. This is required by `LabelUse::PCRelLo12I` in
+                    // the riscv64 backend currently and is what always happens
+                    // with Cranelift-generated code right now.
+                    assert_eq!(prev_reloc.offset + 4, r.offset);
+
+                    // And now after we've passed that gauntlet of assertions
+                    // it's now safe to assume that this `RiscvPCRelLo12I`'s
+                    // target is indeed the previous relocation's target, so
+                    // resolve that here.
+                    addend = prev_reloc.addend;
+                    resolve_reloc_target(prev_reloc.reloc_target, &mut addend)
+                }
+                _ => resolve_reloc_target(r.reloc_target, &mut addend),
+            };
+
+            // And now with all of the above out of the way we've converted the
+            // relocation to what the `MachBuffer` wants:
+            //
+            // * `reloc_offset` - where the relocation is located.
+            // * `r.reloc` - the style of relocation
+            // * `target` - the target function being relocated against
+            // * `addend` - the static offset from `target` that's relocated
             if self
                 .text
-                .resolve_reloc(reloc_offset, r.reloc, r.addend, target)
+                .resolve_reloc(reloc_offset, r.reloc, addend, target)
             {
                 continue;
             }

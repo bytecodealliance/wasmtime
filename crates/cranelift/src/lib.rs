@@ -283,6 +283,7 @@ fn clif_trap_to_env_trap(trap: ir::TrapCode) -> Option<Trap> {
 /// Converts machine relocations to relocation information
 /// to perform.
 fn mach_reloc_to_reloc(
+    func_with_reloc: FuncKey,
     reloc: &FinalizedMachReloc,
     name_map: &PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
 ) -> Relocation {
@@ -290,7 +291,7 @@ fn mach_reloc_to_reloc(
         offset,
         kind,
         ref target,
-        addend,
+        mut addend,
     } = reloc;
     let reloc_target = match *target {
         FinalizedRelocTarget::ExternalName(ExternalName::User(user_func_ref)) => {
@@ -302,7 +303,11 @@ fn mach_reloc_to_reloc(
             // in the Wasm-to-Cranelift translator.
             panic!("unexpected libcall {libcall:?}");
         }
-        _ => panic!("unrecognized external name"),
+        FinalizedRelocTarget::Func(offset) => {
+            addend += i64::from(offset);
+            func_with_reloc
+        }
+        _ => panic!("unrecognized external name {target:?}"),
     };
     Relocation {
         reloc: kind,

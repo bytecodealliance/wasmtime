@@ -16,7 +16,9 @@ use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_cranelift::CompiledFunction;
-use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, Tunables, VMOffsets, WasmFuncType};
+use wasmtime_environ::{
+    FuncKey, ModuleTranslation, ModuleTypesBuilder, Tunables, VMOffsets, WasmFuncType,
+};
 
 use self::regs::{fpr_bit_set, gpr_bit_set};
 
@@ -85,6 +87,7 @@ impl TargetIsa for X64 {
 
     fn compile_function(
         &self,
+        key: FuncKey,
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
@@ -129,6 +132,7 @@ impl TargetIsa for X64 {
 
         let names = body_codegen.env.take_name_map();
         Ok(CompiledFunction::new(
+            key,
             masm.finalize(base)?,
             names,
             self.function_alignment(),

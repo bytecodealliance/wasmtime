@@ -26,6 +26,14 @@ pub enum FuncKey {
     /// A Pulley-specific host call.
     PulleyHostCall(HostCall),
 
+    /// A key used as a relocation against the single exception handler in an
+    /// array-to-wasm entry trampoline.
+    ///
+    /// This variant is not used for defining a function but is used as a
+    /// relocation target in entry trampolines to refer to their exception
+    /// handler address.
+    TrampolineExceptionHandler,
+
     /// A Wasm-caller to component builtin trampoline.
     #[cfg(feature = "component-model")]
     ComponentTrampoline(component::TrampolineIndex),
@@ -51,11 +59,12 @@ impl FuncKey {
     const WASM_TO_ARRAY_TRAMPOLINE_KIND: u32 = Self::new_kind(2);
     const WASM_TO_BUILTIN_TRAMPOLINE_KIND: u32 = Self::new_kind(3);
     const PULLEY_HOST_CALL_KIND: u32 = Self::new_kind(4);
+    const TRAMPOLINE_EXCEPTION_HANDLER_KIND: u32 = Self::new_kind(5);
 
     #[cfg(feature = "component-model")]
-    const COMPONENT_TRAMPOLINE_KIND: u32 = Self::new_kind(5);
+    const COMPONENT_TRAMPOLINE_KIND: u32 = Self::new_kind(6);
     #[cfg(feature = "component-model")]
-    const RESOURCE_DROP_TRAMPOLINE_KIND: u32 = Self::new_kind(6);
+    const RESOURCE_DROP_TRAMPOLINE_KIND: u32 = Self::new_kind(7);
 
     /// Get the raw, underlying representation of this compilation key.
     ///
@@ -92,6 +101,11 @@ impl FuncKey {
             FuncKey::PulleyHostCall(host_call) => {
                 let namespace = Self::PULLEY_HOST_CALL_KIND;
                 let index = host_call.index();
+                (namespace, index)
+            }
+            FuncKey::TrampolineExceptionHandler => {
+                let namespace = Self::TRAMPOLINE_EXCEPTION_HANDLER_KIND;
+                let index = 0;
                 (namespace, index)
             }
 
@@ -140,6 +154,11 @@ impl FuncKey {
                 assert_eq!(a & Self::MODULE_MASK, 0);
                 let host_call = HostCall::from_index(b);
                 Self::PulleyHostCall(host_call)
+            }
+            Self::TRAMPOLINE_EXCEPTION_HANDLER_KIND => {
+                assert_eq!(a & Self::MODULE_MASK, 0);
+                assert_eq!(b, 0);
+                Self::TrampolineExceptionHandler
             }
 
             #[cfg(feature = "component-model")]
@@ -198,6 +217,14 @@ impl FuncKey {
         match self {
             Self::PulleyHostCall(host_call) => host_call,
             _ => panic!("`FuncKey::unwrap_pulley_host_call` called on {self:?}"),
+        }
+    }
+
+    /// Unwrap a `FuncKey::TrampolineExceptionHandler` or else panic.
+    pub fn unwrap_trampoline_exception_handler(self) {
+        match self {
+            Self::TrampolineExceptionHandler => {}
+            _ => panic!("`FuncKey::unwrap_trampoline_exception_handler` called on {self:?}"),
         }
     }
 

@@ -658,15 +658,8 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Bind a label to the current offset. A label can only be bound once.
     pub fn bind_label(&mut self, label: MachLabel, ctrl_plane: &mut ControlPlane) {
-        trace!(
-            "MachBuffer: bind label {:?} at offset {}",
-            label,
-            self.cur_offset()
-        );
-        debug_assert_eq!(self.label_offsets[label.0 as usize], UNKNOWN_LABEL_OFFSET);
-        debug_assert_eq!(self.label_aliases[label.0 as usize], UNKNOWN_LABEL);
         let offset = self.cur_offset();
-        self.label_offsets[label.0 as usize] = offset;
+        self.bind_label_at_offset(label, offset);
         self.lazily_clear_labels_at_tail();
         self.labels_at_tail.push(label);
 
@@ -679,6 +672,14 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.optimize_branches(ctrl_plane);
 
         // Post-invariant: by `optimize_branches()` (see argument there).
+    }
+
+    /// Bind a label to the specified offset. A label can only be bound once.
+    fn bind_label_at_offset(&mut self, label: MachLabel, offset: CodeOffset) {
+        trace!("MachBuffer: bind label {label:?} at offset {offset}");
+        debug_assert_eq!(self.label_offsets[label.0 as usize], UNKNOWN_LABEL_OFFSET);
+        debug_assert_eq!(self.label_aliases[label.0 as usize], UNKNOWN_LABEL);
+        self.label_offsets[label.0 as usize] = offset;
     }
 
     /// Lazily clear `labels_at_tail` if the tail offset has moved beyond the
@@ -2127,7 +2128,17 @@ impl MachBranch {
 pub struct MachTextSectionBuilder<I: VCodeInst> {
     buf: MachBuffer<I>,
     next_func: usize,
+    expected_funcs: usize,
     force_veneers: ForceVeneers,
+    /// A list of (new_label, label, offset_from_label) to bind once all
+    /// functions have been added.
+    ///
+    /// This list is pushed to in `resolve_reloc` below whenever the target of a
+    /// relocation is not a function itself but a relative location within a
+    /// function. When that happens `new_label` is created and binding it is
+    /// deferred until the end of the builder when all functions are known. This
+    /// is used to bind `new_label` to `offset(label) + offset_from_label`.
+    labels_to_bind: Vec<(MachLabel, MachLabel, i64)>,
 }
 
 impl<I: VCodeInst> MachTextSectionBuilder<I> {
@@ -2139,7 +2150,9 @@ impl<I: VCodeInst> MachTextSectionBuilder<I> {
         MachTextSectionBuilder {
             buf,
             next_func: 0,
+            expected_funcs: num_funcs,
             force_veneers: ForceVeneers::No,
+            labels_to_bind: Vec::new(),
         }
     }
 }
@@ -2151,7 +2164,7 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
         func: &[u8],
         align: u32,
         ctrl_plane: &mut ControlPlane,
-    ) -> u64 {
+    ) -> (u64, Option<usize>) {
         // Conditionally emit an island if it's necessary to resolve jumps
         // between functions which are too far away.
         let size = func.len() as u32;
@@ -2162,15 +2175,18 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
 
         self.buf.align_to(align);
         let pos = self.buf.cur_offset();
-        if labeled {
-            self.buf.bind_label(
-                MachLabel::from_block(BlockIndex::new(self.next_func)),
-                ctrl_plane,
-            );
+        let label = if labeled {
             self.next_func += 1;
+            Some(MachLabel::from_block(BlockIndex::new(self.next_func - 1)))
+        } else {
+            None
+        };
+
+        if let Some(label) = label {
+            self.buf.bind_label(label, ctrl_plane);
         }
         self.buf.put_data(func);
-        u64::from(pos)
+        (u64::from(pos), label.map(|l| l.0 as usize))
     }
 
     fn resolve_reloc(&mut self, offset: u64, reloc: Reloc, addend: Addend, target: usize) -> bool {
@@ -2180,8 +2196,19 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
         let label = MachLabel::from_block(BlockIndex::new(target));
         let offset = u32::try_from(offset).unwrap();
         match I::LabelUse::from_reloc(reloc, addend) {
-            Some(label_use) => {
+            // If the offset from `label` is exactly 0, we can bind to the
+            // existing label.
+            Some((label_use, 0)) => {
                 self.buf.use_label_at_offset(offset, label, label_use);
+                true
+            }
+
+            // If `addend` is nonzero, however, make a new label and defer its
+            // resolution while binding `label_use` to the new label.
+            Some((label_use, addend)) => {
+                let new_label = self.buf.get_label();
+                self.buf.use_label_at_offset(offset, new_label, label_use);
+                self.labels_to_bind.push((new_label, label, addend));
                 true
             }
             None => false,
@@ -2198,7 +2225,16 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
 
     fn finish(&mut self, ctrl_plane: &mut ControlPlane) -> Vec<u8> {
         // Double-check all functions were pushed.
-        assert_eq!(self.next_func, self.buf.label_offsets.len());
+        assert_eq!(self.next_func, self.expected_funcs);
+
+        // If any new labels were introduced relative to where functions ended
+        // up then bind those all here.
+        for (new_label, label, addend) in self.labels_to_bind.drain(..) {
+            let offset = self.buf.resolve_label_offset(label);
+            assert!(offset != UNKNOWN_LABEL_OFFSET);
+            let new_offset = u32::try_from(i64::from(offset) + addend).unwrap();
+            self.buf.bind_label_at_offset(new_label, new_offset);
+        }
 
         // Finish up any veneers, if necessary.
         self.buf

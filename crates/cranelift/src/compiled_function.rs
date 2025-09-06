@@ -1,4 +1,4 @@
-use crate::{Relocation, mach_reloc_to_reloc, mach_trap_to_trap};
+use crate::{FuncKey, Relocation, mach_reloc_to_reloc, mach_trap_to_trap};
 use cranelift_codegen::{
     Final, MachBufferFinalized, MachSrcLoc, ValueLabelsRanges, ir, isa::unwind::CfaUnwindInfo,
     isa::unwind::UnwindInfo,
@@ -54,6 +54,7 @@ pub struct CompiledFunctionMetadata {
 
 /// Compiled function: machine code body, jump table offsets, and unwind information.
 pub struct CompiledFunction {
+    key: FuncKey,
     /// The machine code buffer for this function.
     pub buffer: MachBufferFinalized<Final>,
     /// What names each name ref corresponds to.
@@ -70,11 +71,13 @@ impl CompiledFunction {
     /// This function uses the information in the machine buffer to derive the traps and relocations
     /// fields. The compiled function metadata is loaded with the default values.
     pub fn new(
+        key: FuncKey,
         buffer: MachBufferFinalized<Final>,
         name_map: PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
         alignment: u32,
     ) -> Self {
         Self {
+            key,
             buffer,
             name_map,
             alignment,
@@ -83,11 +86,11 @@ impl CompiledFunction {
     }
 
     /// Returns an iterator to the function's relocation information.
-    pub fn relocations(&self) -> impl Iterator<Item = Relocation> + '_ {
+    pub fn relocations(&self) -> impl ExactSizeIterator<Item = Relocation> + Clone + '_ {
         self.buffer
             .relocs()
             .iter()
-            .map(|r| mach_reloc_to_reloc(r, &self.name_map))
+            .map(|r| mach_reloc_to_reloc(self.key, r, &self.name_map))
     }
 
     /// Returns an iterator to the function's trap information.

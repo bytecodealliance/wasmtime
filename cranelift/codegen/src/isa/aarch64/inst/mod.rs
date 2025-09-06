@@ -2925,6 +2925,10 @@ pub enum LabelUse {
     /// 21-bit offset for ADR (get address of label). PC-rel, offset is not shifted. Immediate is
     /// 21 signed bits, with high 19 bits in bits 23:5 and low 2 bits in bits 30:29.
     Adr21,
+    /// Corresponds to `Reloc::Aarch64AdrPrelPgHi21`
+    AdrpHi21,
+    /// Corresponds to `Reloc::Aarch64AddAbsLo12Nc`
+    AddLo12,
     /// 32-bit PC relative constant offset (from address of constant itself),
     /// signed. Used in jump tables.
     PCRel32,
@@ -2948,6 +2952,10 @@ impl MachInstLabelUse for LabelUse {
             // range.
             LabelUse::Adr21 => (1 << 20) - 1,
             LabelUse::PCRel32 => 0x7fffffff,
+
+            // Similar to `PCRel32`
+            LabelUse::AdrpHi21 => 0x7fffffff,
+            LabelUse::AddLo12 => 0x7fffffff,
         }
     }
 
@@ -2978,6 +2986,8 @@ impl MachInstLabelUse for LabelUse {
             LabelUse::Ldr19 => 0x00ffffe0,    // bits 23..5 inclusive
             LabelUse::Adr21 => 0x60ffffe0,    // bits 30..29, 25..5 inclusive
             LabelUse::PCRel32 => 0xffffffff,
+            LabelUse::AdrpHi21 => (0x3 << 29) | (0x1ffffc << 3),
+            LabelUse::AddLo12 => 0xfff << 10,
         };
         let pc_rel_shifted = match self {
             LabelUse::Adr21 | LabelUse::PCRel32 => pc_rel,
@@ -2994,6 +3004,13 @@ impl MachInstLabelUse for LabelUse {
             // *high* bits (30, 29).
             LabelUse::Adr21 => (pc_rel_shifted & 0x1ffffc) << 3 | (pc_rel_shifted & 3) << 29,
             LabelUse::PCRel32 => pc_rel_shifted,
+            LabelUse::AdrpHi21 => {
+                let page = |offset| (offset & !0xfff) as i64;
+                let pc_rel = page(label_offset) - page(use_offset);
+                let pc_rel_shifted = (pc_rel >> 12) as u32;
+                ((pc_rel_shifted & 0x3) << 29) | ((pc_rel_shifted & 0x1ffffc) << 3)
+            }
+            LabelUse::AddLo12 => (label_offset & 0xfff) << 10,
         };
         let is_add = match self {
             LabelUse::PCRel32 => true,
@@ -3081,9 +3098,11 @@ impl MachInstLabelUse for LabelUse {
         }
     }
 
-    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
-        match (reloc, addend) {
-            (Reloc::Arm64Call, 0) => Some(LabelUse::Branch26),
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<(LabelUse, Addend)> {
+        match reloc {
+            Reloc::Arm64Call => Some((LabelUse::Branch26, addend)),
+            Reloc::Aarch64AdrPrelPgHi21 => Some((LabelUse::AdrpHi21, addend)),
+            Reloc::Aarch64AddAbsLo12Nc => Some((LabelUse::AddLo12, addend)),
             _ => None,
         }
     }

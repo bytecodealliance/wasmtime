@@ -1,23 +1,3 @@
-#[cfg(has_host_compiler_backend)]
-use crate::vm::VMContext;
-#[cfg(has_host_compiler_backend)]
-use core::ptr::NonNull;
-
-#[cfg(has_host_compiler_backend)]
-#[link(name = "wasmtime-helpers")]
-unsafe extern "C" {
-    #[wasmtime_versioned_export_macros::versioned_link]
-    pub fn wasmtime_setjmp(
-        jmp_buf: *mut *const u8,
-        callback: extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,
-        payload: *mut u8,
-        callee: NonNull<VMContext>,
-    ) -> bool;
-
-    #[wasmtime_versioned_export_macros::versioned_link]
-    pub fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
-}
-
 cfg_if::cfg_if! {
     if #[cfg(not(has_native_signals))] {
         // If signals-based traps are disabled statically then there's no
