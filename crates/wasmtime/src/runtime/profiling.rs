@@ -7,8 +7,9 @@ use crate::{AsContext, CallHook, Module};
 use core::cmp::Ordering;
 use fxprof_processed_profile::debugid::DebugId;
 use fxprof_processed_profile::{
-    CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, MarkerLocation, MarkerSchema,
-    MarkerTiming, Profile, ProfilerMarker, ReferenceTimestamp, Symbol, SymbolTable, Timestamp,
+    CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, MarkerLocations, MarkerTiming,
+    Profile, ReferenceTimestamp, StaticSchemaMarker, StaticSchemaMarkerField, StringHandle, Symbol,
+    SymbolTable, Timestamp,
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -189,8 +190,11 @@ impl GuestProfiler {
         );
         let backtrace = Backtrace::new(store.as_context().0);
         let frames = lookup_frames(&self.modules, &backtrace);
+        let stack = self
+            .profile
+            .intern_stack_frames(self.thread, frames.into_iter());
         self.profile
-            .add_sample(self.thread, now, frames, delta.into(), 1);
+            .add_sample(self.thread, now, stack, delta.into(), 1);
     }
 
     /// Add a marker for transitions between guest and host to the profile.
@@ -206,21 +210,19 @@ impl GuestProfiler {
             CallHook::CallingHost => {
                 let backtrace = Backtrace::new(store.as_context().0);
                 let frames = lookup_frames(&self.modules, &backtrace);
-                self.profile.add_marker_with_stack(
+                let marker = self.profile.add_marker(
                     self.thread,
-                    "hostcall",
-                    CallMarker,
                     MarkerTiming::IntervalStart(now),
-                    frames,
+                    CallMarker,
                 );
+                let stack = self
+                    .profile
+                    .intern_stack_frames(self.thread, frames.into_iter());
+                self.profile.set_marker_stack(self.thread, marker, stack);
             }
             CallHook::ReturningFromHost => {
-                self.profile.add_marker(
-                    self.thread,
-                    "hostcall",
-                    CallMarker,
-                    MarkerTiming::IntervalEnd(now),
-                );
+                self.profile
+                    .add_marker(self.thread, MarkerTiming::IntervalEnd(now), CallMarker);
             }
         }
     }
@@ -314,25 +316,22 @@ fn lookup_frames<'a>(
 
 struct CallMarker;
 
-impl ProfilerMarker for CallMarker {
-    const MARKER_TYPE_NAME: &'static str = "hostcall";
+impl StaticSchemaMarker for CallMarker {
+    const UNIQUE_MARKER_TYPE_NAME: &'static str = "hostcall";
+    const FIELDS: &'static [StaticSchemaMarkerField] = &[];
+    const LOCATIONS: MarkerLocations = MarkerLocations::MARKER_CHART
+        .union(MarkerLocations::MARKER_TABLE.union(MarkerLocations::TIMELINE_OVERVIEW));
 
-    fn schema() -> MarkerSchema {
-        MarkerSchema {
-            type_name: Self::MARKER_TYPE_NAME,
-            locations: vec![
-                MarkerLocation::MarkerChart,
-                MarkerLocation::MarkerTable,
-                MarkerLocation::TimelineOverview,
-            ],
-            chart_label: None,
-            tooltip_label: None,
-            table_label: None,
-            fields: vec![],
-        }
+    fn name(&self, _profile: &mut Profile) -> StringHandle {
+        unreachable!()
     }
-
-    fn json_marker_data(&self) -> serde_json::Value {
-        serde_json::json!({ "type": Self::MARKER_TYPE_NAME })
+    fn category(&self, _profile: &mut Profile) -> CategoryHandle {
+        CategoryHandle::OTHER
+    }
+    fn string_field_value(&self, _field_index: u32) -> StringHandle {
+        unreachable!("no fields")
+    }
+    fn number_field_value(&self, _field_index: u32) -> f64 {
+        unreachable!("no fields")
     }
 }
