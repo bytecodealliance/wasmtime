@@ -18,10 +18,10 @@ mod body {
     use hyper::body::Bytes;
 
     pub fn full(bytes: Bytes) -> BoxBody<Bytes, Error> {
-        BoxBody::new(Full::new(bytes).map_err(|_| unreachable!()))
+        BoxBody::new(Full::new(bytes).map_err(|x| match x {}))
     }
 
     pub fn empty() -> BoxBody<Bytes, Error> {
-        BoxBody::new(Empty::new().map_err(|_| unreachable!()))
+        BoxBody::new(Empty::new().map_err(|x| match x {}))
     }
 }
