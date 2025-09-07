@@ -75,11 +75,9 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         println!("writing too little");
         {
             let (request, mut contents_tx, trailers_tx, transmit) = make_request();
-            let (handle, (), ()) = join!(
+            let (handle, transmit, ()) = join!(
                 async { handler::handle(request).await },
-                async {
-                    transmit.await.unwrap();
-                },
+                async { transmit.await },
                 async {
                     let remaining = contents_tx.write_all(b"msg".to_vec()).await;
                     assert!(
@@ -91,24 +89,21 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                     trailers_tx.write(Ok(None)).await.unwrap();
                 },
             );
-            // FIXME(#11631) should have a more precise error like the one
-            // commented out.
-            assert!(matches!(handle.unwrap_err(), ErrorCode::HttpProtocolError));
-            // let err = transmit.expect_err("request transmission should have failed");
-            // assert!(
-            //     matches!(err, ErrorCode::HttpRequestBodySize(Some(3))),
-            //     "unexpected error: {err:#?}"
-            // );
+            let res = handle.unwrap();
+            drop(res);
+            let err = transmit.expect_err("request transmission should have failed");
+            assert!(
+                matches!(err, ErrorCode::HttpRequestBodySize(Some(3))),
+                "unexpected error: {err:#?}"
+            );
         }
 
         println!("writing too much");
         {
             let (request, mut contents_tx, trailers_tx, transmit) = make_request();
-            let (handle, (), ()) = join!(
+            let (handle, transmit, ()) = join!(
                 async { handler::handle(request).await },
-                async {
-                    transmit.await.unwrap();
-                },
+                async { transmit.await },
                 async {
                     let remaining = contents_tx.write_all(b"more than 11 bytes".to_vec()).await;
                     assert!(
@@ -121,16 +116,13 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                 },
             );
 
-            // FIXME(#11631) something here should fail, but all these unwraps
-            // pass... Previous error code is below.
-            handle.unwrap();
-            // let res = handle.unwrap();
-            // drop(res);
-            // let err = transmit.expect_err("request transmission should have failed");
-            // assert!(
-            //     matches!(err, ErrorCode::HttpRequestBodySize(Some(18))),
-            //     "unexpected error: {err:#?}"
-            // );
+            let res = handle.unwrap();
+            drop(res);
+            let err = transmit.expect_err("request transmission should have failed");
+            assert!(
+                matches!(err, ErrorCode::HttpRequestBodySize(Some(18))),
+                "unexpected error: {err:#?}"
+            );
         }
         Ok(())
     }
