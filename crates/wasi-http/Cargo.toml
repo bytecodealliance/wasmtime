@@ -14,7 +14,7 @@ workspace = true
 [features]
 default = ["default-send-request"]
 default-send-request = ["dep:tokio-rustls", "dep:rustls", "dep:webpki-roots"]
-p3 = ["wasmtime-wasi/p3"]
+p3 = ["wasmtime-wasi/p3", "dep:tokio-util"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -27,6 +27,7 @@ tokio = { workspace = true, features = [
     "rt-multi-thread",
     "time",
 ] }
+tokio-util = { workspace = true, optional = true }
 http = { workspace = true }
 http-body = { workspace = true }
 http-body-util = { workspace = true }
