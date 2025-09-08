@@ -1,6 +1,6 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{ConcurrentState, SuspendReason, WorkItem, tls};
+use crate::component::concurrent::{ConcurrentState, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
@@ -3262,19 +3262,13 @@ impl Instance {
             if async_ {
                 ReturnCode::Blocked
             } else {
-                let state = self.concurrent_state_mut(store);
-                let caller = state.guest_task.unwrap();
-                let waitable = Waitable::Transmit(state.get_mut(transmit_id)?.write_handle);
-                let old_set = waitable.common(state)?.set;
-                let set = state.get_mut(caller)?.sync_call_set;
-                waitable.join(state, Some(set))?;
-
-                self.suspend(store, SuspendReason::Waiting { set, task: caller })?;
-
-                let state = self.concurrent_state_mut(store);
-                waitable.join(state, old_set)?;
-
-                let event = waitable.take_event(state)?;
+                let waitable = Waitable::Transmit(
+                    self.concurrent_state_mut(store)
+                        .get_mut(transmit_id)?
+                        .write_handle,
+                );
+                self.wait_for_event(store, waitable)?;
+                let event = waitable.take_event(self.concurrent_state_mut(store))?;
                 if let Some(
                     event @ (Event::StreamWrite { code, .. } | Event::FutureWrite { code, .. }),
                 ) = event
@@ -3346,19 +3340,13 @@ impl Instance {
             if async_ {
                 ReturnCode::Blocked
             } else {
-                let state = self.concurrent_state_mut(store);
-                let caller = state.guest_task.unwrap();
-                let waitable = Waitable::Transmit(state.get_mut(transmit_id)?.read_handle);
-                let old_set = waitable.common(state)?.set;
-                let set = state.get_mut(caller)?.sync_call_set;
-                waitable.join(state, Some(set))?;
-
-                self.suspend(store, SuspendReason::Waiting { set, task: caller })?;
-
-                let state = self.concurrent_state_mut(store);
-                waitable.join(state, old_set)?;
-
-                let event = waitable.take_event(state)?;
+                let waitable = Waitable::Transmit(
+                    self.concurrent_state_mut(store)
+                        .get_mut(transmit_id)?
+                        .read_handle,
+                );
+                self.wait_for_event(store, waitable)?;
+                let event = waitable.take_event(self.concurrent_state_mut(store))?;
                 if let Some(
                     event @ (Event::StreamRead { code, .. } | Event::FutureRead { code, .. }),
                 ) = event
