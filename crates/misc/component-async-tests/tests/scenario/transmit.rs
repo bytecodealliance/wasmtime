@@ -903,22 +903,35 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
     Ok(())
 }
 
-mod cancel_transmit {
+mod synchronous_transmit {
     wasmtime::component::bindgen!({
         path: "wit",
-        world: "cancel-transmit-guest"
+        world: "synchronous-transmit-guest"
     });
 }
 
 #[tokio::test]
 pub async fn async_cancel_transmit() -> Result<()> {
+    test_synchronous_transmit(
+        test_programs_artifacts::ASYNC_CANCEL_TRANSMIT_COMPONENT,
+        true,
+    )
+    .await
+}
+
+#[tokio::test]
+pub async fn async_synchronous_transmit() -> Result<()> {
+    test_synchronous_transmit(
+        test_programs_artifacts::ASYNC_SYNCHRONOUS_TRANSMIT_COMPONENT,
+        false,
+    )
+    .await
+}
+
+async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Result<()> {
     let engine = Engine::new(&config())?;
 
-    let component = make_component(
-        &engine,
-        &[test_programs_artifacts::ASYNC_CANCEL_TRANSMIT_COMPONENT],
-    )
-    .await?;
+    let component = make_component(&engine, &[component]).await?;
 
     let mut linker = Linker::new(&engine);
 
@@ -935,55 +948,69 @@ pub async fn async_cancel_transmit() -> Result<()> {
     );
 
     let instance = linker.instantiate_async(&mut store, &component).await?;
-    let guest = cancel_transmit::CancelTransmitGuest::new(&mut store, &instance)?;
+    let guest = synchronous_transmit::SynchronousTransmitGuest::new(&mut store, &instance)?;
     let stream_expected = vec![2u8, 4, 6, 8, 9];
-    let stream = StreamReader::new(
-        instance,
-        &mut store,
-        ProcrastinatingStreamProducer(DelayedStreamProducer {
-            inner: BufferStreamProducer {
-                buffer: stream_expected.clone(),
-            },
-            sleep: sleep(),
-        }),
-    );
+    let producer = DelayedStreamProducer {
+        inner: BufferStreamProducer {
+            buffer: stream_expected.clone(),
+        },
+        sleep: sleep(),
+    };
+    let stream = if procrastinate {
+        StreamReader::new(
+            instance,
+            &mut store,
+            ProcrastinatingStreamProducer(producer),
+        )
+    } else {
+        StreamReader::new(instance, &mut store, producer)
+    };
     let future_expected = 10;
-    let future = FutureReader::new(
-        instance,
-        &mut store,
-        ProcrastinatingFutureProducer(DelayedFutureProducer {
-            inner: ValueFutureProducer {
-                value: future_expected,
-            },
-            sleep: sleep(),
-        }),
-    );
+    let producer = DelayedFutureProducer {
+        inner: ValueFutureProducer {
+            value: future_expected,
+        },
+        sleep: sleep(),
+    };
+    let future = if procrastinate {
+        FutureReader::new(
+            instance,
+            &mut store,
+            ProcrastinatingFutureProducer(producer),
+        )
+    } else {
+        FutureReader::new(instance, &mut store, producer)
+    };
     let result = instance
         .run_concurrent(&mut store, async move |accessor| {
             let (stream, stream_expected, future, future_expected) = guest
-                .local_local_cancel_transmit()
+                .local_local_synchronous_transmit()
                 .call_start(accessor, stream, stream_expected, future, future_expected)
                 .await?;
 
             accessor.with(|mut access| {
-                stream.pipe(
-                    &mut access,
-                    ProcrastinatingStreamConsumer(DelayedStreamConsumer {
-                        inner: BufferStreamConsumer {
-                            expected: stream_expected,
-                        },
-                        sleep: sleep(),
-                    }),
-                );
-                future.pipe(
-                    access,
-                    ProcrastinatingFutureConsumer(DelayedFutureConsumer {
-                        inner: ValueFutureConsumer {
-                            expected: future_expected,
-                        },
-                        sleep: sleep(),
-                    }),
-                );
+                let consumer = DelayedStreamConsumer {
+                    inner: BufferStreamConsumer {
+                        expected: stream_expected,
+                    },
+                    sleep: sleep(),
+                };
+                if procrastinate {
+                    stream.pipe(&mut access, ProcrastinatingStreamConsumer(consumer));
+                } else {
+                    stream.pipe(&mut access, consumer);
+                }
+                let consumer = DelayedFutureConsumer {
+                    inner: ValueFutureConsumer {
+                        expected: future_expected,
+                    },
+                    sleep: sleep(),
+                };
+                if procrastinate {
+                    future.pipe(access, ProcrastinatingFutureConsumer(consumer));
+                } else {
+                    future.pipe(access, consumer);
+                }
             });
 
             future::pending::<Result<()>>().await
@@ -994,10 +1021,13 @@ pub async fn async_cancel_transmit() -> Result<()> {
     // `Instance::run_concurrent` and expecting a `Trap::AsyncDeadlock` is
     // the only way to join all tasks for the `Instance`, so that's what we
     // do:
-    assert!(matches!(
-        result.unwrap_err().downcast::<Trap>(),
-        Ok(Trap::AsyncDeadlock)
-    ));
+    assert!(
+        matches!(
+            result.as_ref().unwrap_err().downcast_ref::<Trap>(),
+            Some(Trap::AsyncDeadlock)
+        ),
+        "unexpected error {result:?}"
+    );
 
     Ok(())
 }
