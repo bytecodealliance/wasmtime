@@ -1,3 +1,4 @@
+use crate::p3::HeaderResult;
 use crate::p3::bindings::http::types::{Fields, Request, Response};
 use anyhow::Context as _;
 use wasmtime::component::{Resource, ResourceTable};
@@ -17,10 +18,11 @@ fn get_fields<'a>(
 fn get_fields_mut<'a>(
     table: &'a mut ResourceTable,
     fields: &Resource<Fields>,
-) -> wasmtime::Result<&'a mut Fields> {
+) -> HeaderResult<&'a mut Fields> {
     table
         .get_mut(&fields)
         .context("failed to get fields from table")
+        .map_err(crate::p3::HeaderError::trap)
 }
 
 fn push_fields(table: &mut ResourceTable, fields: Fields) -> wasmtime::Result<Resource<Fields>> {

@@ -9,7 +9,7 @@ use crate::p3::bindings::http::types::{
     RequestOptions, RequestOptionsError, Response, Scheme, StatusCode, Trailers,
 };
 use crate::p3::body::Body;
-use crate::p3::{HttpError, WasiHttp, WasiHttpCtxView};
+use crate::p3::{HeaderResult, HttpError, RequestOptionsResult, WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
 use bytes::Bytes;
 use core::mem;
@@ -43,10 +43,11 @@ fn get_request_options<'a>(
 fn get_request_options_mut<'a>(
     table: &'a mut ResourceTable,
     opts: &Resource<RequestOptions>,
-) -> wasmtime::Result<&'a mut RequestOptions> {
+) -> RequestOptionsResult<&'a mut RequestOptions> {
     table
         .get_mut(opts)
         .context("failed to get request options from table")
+        .map_err(crate::p3::RequestOptionsError::trap)
 }
 
 fn push_request_options(
@@ -209,24 +210,19 @@ impl HostFields for WasiHttpCtxView<'_> {
     fn from_list(
         &mut self,
         entries: Vec<(FieldName, FieldValue)>,
-    ) -> wasmtime::Result<Result<Resource<Fields>, HeaderError>> {
+    ) -> HeaderResult<Resource<Fields>> {
         let mut fields = http::HeaderMap::default();
         for (name, value) in entries {
-            let Ok(name) = name.parse() else {
-                return Ok(Err(HeaderError::InvalidSyntax));
-            };
+            let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
             if self.ctx.is_forbidden_header(&name) {
-                return Ok(Err(HeaderError::Forbidden));
+                return Err(HeaderError::Forbidden.into());
             }
-            match parse_header_value(&name, value) {
-                Ok(value) => {
-                    fields.append(name, value);
-                }
-                Err(err) => return Ok(Err(err)),
-            }
+            let value = parse_header_value(&name, value)?;
+            fields.append(name, value);
         }
-        let fields = push_fields(self.table, Fields::new_mutable(fields))?;
-        Ok(Ok(fields))
+        let fields = push_fields(self.table, Fields::new_mutable(fields))
+            .map_err(crate::p3::HeaderError::trap)?;
+        Ok(fields)
     }
 
     fn get(
@@ -252,73 +248,52 @@ impl HostFields for WasiHttpCtxView<'_> {
         fields: Resource<Fields>,
         name: FieldName,
         value: Vec<FieldValue>,
-    ) -> wasmtime::Result<Result<(), HeaderError>> {
-        let Ok(name) = name.parse() else {
-            return Ok(Err(HeaderError::InvalidSyntax));
-        };
+    ) -> HeaderResult<()> {
+        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
         if self.ctx.is_forbidden_header(&name) {
-            return Ok(Err(HeaderError::Forbidden));
+            return Err(HeaderError::Forbidden.into());
         }
         let mut values = Vec::with_capacity(value.len());
         for value in value {
-            match parse_header_value(&name, value) {
-                Ok(value) => {
-                    values.push(value);
-                }
-                Err(err) => return Ok(Err(err)),
-            }
+            let value = parse_header_value(&name, value)?;
+            values.push(value);
         }
         let fields = get_fields_mut(self.table, &fields)?;
-        let Some(fields) = fields.get_mut() else {
-            return Ok(Err(HeaderError::Immutable));
-        };
+        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
         fields.remove(&name);
         for value in values {
             fields.append(&name, value);
         }
-        Ok(Ok(()))
+        Ok(())
     }
 
-    fn delete(
-        &mut self,
-        fields: Resource<Fields>,
-        name: FieldName,
-    ) -> wasmtime::Result<Result<(), HeaderError>> {
-        let header = match http::HeaderName::from_bytes(name.as_bytes()) {
-            Ok(header) => header,
-            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
-        };
-        if self.ctx.is_forbidden_header(&header) {
-            return Ok(Err(HeaderError::Forbidden));
+    fn delete(&mut self, fields: Resource<Fields>, name: FieldName) -> HeaderResult<()> {
+        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
+        if self.ctx.is_forbidden_header(&name) {
+            return Err(HeaderError::Forbidden.into());
         }
         let fields = get_fields_mut(self.table, &fields)?;
-        let Some(fields) = fields.get_mut() else {
-            return Ok(Err(HeaderError::Immutable));
-        };
+        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
         fields.remove(&name);
-        Ok(Ok(()))
+        Ok(())
     }
 
     fn get_and_delete(
         &mut self,
         fields: Resource<Fields>,
         name: FieldName,
-    ) -> wasmtime::Result<Result<Vec<FieldValue>, HeaderError>> {
-        let Ok(header) = http::header::HeaderName::from_bytes(name.as_bytes()) else {
-            return Ok(Err(HeaderError::InvalidSyntax));
-        };
-        if self.ctx.is_forbidden_header(&header) {
-            return Ok(Err(HeaderError::Forbidden));
+    ) -> HeaderResult<Vec<FieldValue>> {
+        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
+        if self.ctx.is_forbidden_header(&name) {
+            return Err(HeaderError::Forbidden.into());
         }
         let fields = get_fields_mut(self.table, &fields)?;
-        let Some(fields) = fields.get_mut() else {
-            return Ok(Err(HeaderError::Immutable));
-        };
-        let http::header::Entry::Occupied(entry) = fields.entry(header) else {
-            return Ok(Ok(vec![]));
+        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
+        let http::header::Entry::Occupied(entry) = fields.entry(name) else {
+            return Ok(Vec::default());
         };
         let (.., values) = entry.remove_entry_mult();
-        Ok(Ok(values.map(|header| header.as_bytes().into()).collect()))
+        Ok(values.map(|value| value.as_bytes().into()).collect())
     }
 
     fn append(
@@ -326,23 +301,16 @@ impl HostFields for WasiHttpCtxView<'_> {
         fields: Resource<Fields>,
         name: FieldName,
         value: FieldValue,
-    ) -> wasmtime::Result<Result<(), HeaderError>> {
-        let Ok(name) = name.parse() else {
-            return Ok(Err(HeaderError::InvalidSyntax));
-        };
+    ) -> HeaderResult<()> {
+        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
         if self.ctx.is_forbidden_header(&name) {
-            return Ok(Err(HeaderError::Forbidden));
+            return Err(HeaderError::Forbidden.into());
         }
-        let value = match parse_header_value(&name, value) {
-            Ok(value) => value,
-            Err(err) => return Ok(Err(err)),
-        };
+        let value = parse_header_value(&name, value)?;
         let fields = get_fields_mut(self.table, &fields)?;
-        let Some(fields) = fields.get_mut() else {
-            return Ok(Err(HeaderError::Immutable));
-        };
+        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
         fields.append(name, value);
-        Ok(Ok(()))
+        Ok(())
     }
 
     fn copy_all(
@@ -621,13 +589,11 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
         &mut self,
         opts: Resource<RequestOptions>,
         duration: Option<Duration>,
-    ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
+    ) -> RequestOptionsResult<()> {
         let opts = get_request_options_mut(self.table, &opts)?;
-        let Some(opts) = opts.get_mut() else {
-            return Ok(Err(RequestOptionsError::Immutable));
-        };
+        let opts = opts.get_mut().ok_or(RequestOptionsError::Immutable)?;
         opts.connect_timeout = duration.map(core::time::Duration::from_nanos);
-        Ok(Ok(()))
+        Ok(())
     }
 
     fn get_first_byte_timeout(
@@ -649,13 +615,11 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
         &mut self,
         opts: Resource<RequestOptions>,
         duration: Option<Duration>,
-    ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
+    ) -> RequestOptionsResult<()> {
         let opts = get_request_options_mut(self.table, &opts)?;
-        let Some(opts) = opts.get_mut() else {
-            return Ok(Err(RequestOptionsError::Immutable));
-        };
+        let opts = opts.get_mut().ok_or(RequestOptionsError::Immutable)?;
         opts.first_byte_timeout = duration.map(core::time::Duration::from_nanos);
-        Ok(Ok(()))
+        Ok(())
     }
 
     fn get_between_bytes_timeout(
@@ -677,13 +641,11 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
         &mut self,
         opts: Resource<RequestOptions>,
         duration: Option<Duration>,
-    ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
+    ) -> RequestOptionsResult<()> {
         let opts = get_request_options_mut(self.table, &opts)?;
-        let Some(opts) = opts.get_mut() else {
-            return Ok(Err(RequestOptionsError::Immutable));
-        };
+        let opts = opts.get_mut().ok_or(RequestOptionsError::Immutable)?;
         opts.between_bytes_timeout = duration.map(core::time::Duration::from_nanos);
-        Ok(Ok(()))
+        Ok(())
     }
 
     fn clone(
@@ -835,6 +797,20 @@ impl HostResponse for WasiHttpCtxView<'_> {
 
 impl Host for WasiHttpCtxView<'_> {
     fn convert_error_code(&mut self, error: HttpError) -> wasmtime::Result<ErrorCode> {
+        error.downcast()
+    }
+
+    fn convert_header_error(
+        &mut self,
+        error: crate::p3::HeaderError,
+    ) -> wasmtime::Result<HeaderError> {
+        error.downcast()
+    }
+
+    fn convert_request_options_error(
+        &mut self,
+        error: crate::p3::RequestOptionsError,
+    ) -> wasmtime::Result<RequestOptionsError> {
         error.downcast()
     }
 }

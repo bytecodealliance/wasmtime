@@ -36,6 +36,12 @@ use wasmtime_wasi::TrappableError;
 pub type HttpResult<T> = Result<T, HttpError>;
 pub type HttpError = TrappableError<types::ErrorCode>;
 
+pub type HeaderResult<T> = Result<T, HeaderError>;
+pub type HeaderError = TrappableError<types::HeaderError>;
+
+pub type RequestOptionsResult<T> = Result<T, RequestOptionsError>;
+pub type RequestOptionsError = TrappableError<types::RequestOptionsError>;
+
 pub(crate) struct WasiHttp;
 
 impl HasData for WasiHttp {

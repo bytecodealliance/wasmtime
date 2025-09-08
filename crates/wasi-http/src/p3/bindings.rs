@@ -22,6 +22,8 @@ mod generated {
         },
         trappable_error_type: {
             "wasi:http/types/error-code" => crate::p3::HttpError,
+            "wasi:http/types/header-error" => crate::p3::HeaderError,
+            "wasi:http/types/request-options-error" => crate::p3::RequestOptionsError,
         },
     });
 
