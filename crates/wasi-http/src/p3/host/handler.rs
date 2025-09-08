@@ -35,7 +35,7 @@ impl HostWithStore for WasiHttp {
         let (req_result_tx, mut req_result_rx) = mpsc::channel(1);
         let (res_result_tx, res_result_rx) = oneshot::channel();
         let fut = store.with(|mut store| {
-            let WasiHttpCtxView { ctx, table } = store.get();
+            let WasiHttpCtxView { table, .. } = store.get();
             let Request {
                 method,
                 scheme,
@@ -49,33 +49,6 @@ impl HostWithStore for WasiHttp {
                 .context("failed to delete request from table")
                 .map_err(HttpError::trap)?;
             let mut headers = Arc::unwrap_or_clone(headers);
-            if ctx.set_host_header() {
-                let host = if let Some(authority) = authority.as_ref() {
-                    HeaderValue::try_from(authority.as_str())
-                        .map_err(|err| ErrorCode::InternalError(Some(err.to_string())))?
-                } else {
-                    HeaderValue::from_static("")
-                };
-                headers.insert(HOST, host);
-            }
-
-            let scheme = match scheme {
-                None => ctx.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,
-                Some(scheme) if ctx.is_supported_scheme(&scheme) => scheme,
-                Some(..) => return Err(ErrorCode::HttpProtocolError.into()),
-            };
-            let mut uri = Uri::builder().scheme(scheme);
-            if let Some(authority) = authority {
-                uri = uri.authority(authority)
-            };
-            if let Some(path_with_query) = path_with_query {
-                uri = uri.path_and_query(path_with_query)
-            };
-            let uri = uri.build().map_err(|err| {
-                debug!(?err, "failed to build request URI");
-                ErrorCode::HttpRequestUriInvalid
-            })?;
-
             let body = match body {
                 Body::Guest {
                     contents_rx,
@@ -106,6 +79,33 @@ impl HostWithStore for WasiHttp {
                 }
                 Body::Consumed => ConsumedBody.boxed(),
             };
+
+            let WasiHttpCtxView { ctx, .. } = store.get();
+            if ctx.set_host_header() {
+                let host = if let Some(authority) = authority.as_ref() {
+                    HeaderValue::try_from(authority.as_str())
+                        .map_err(|err| ErrorCode::InternalError(Some(err.to_string())))?
+                } else {
+                    HeaderValue::from_static("")
+                };
+                headers.insert(HOST, host);
+            }
+            let scheme = match scheme {
+                None => ctx.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,
+                Some(scheme) if ctx.is_supported_scheme(&scheme) => scheme,
+                Some(..) => return Err(ErrorCode::HttpProtocolError.into()),
+            };
+            let mut uri = Uri::builder().scheme(scheme);
+            if let Some(authority) = authority {
+                uri = uri.authority(authority)
+            };
+            if let Some(path_with_query) = path_with_query {
+                uri = uri.path_and_query(path_with_query)
+            };
+            let uri = uri.build().map_err(|err| {
+                debug!(?err, "failed to build request URI");
+                ErrorCode::HttpRequestUriInvalid
+            })?;
             let mut req = http::Request::builder();
             *req.headers_mut().unwrap() = headers;
             let req = req
