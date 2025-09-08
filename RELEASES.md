@@ -4,7 +4,118 @@ Unreleased.
 
 ### Added
 
+* Wasmtime now fully implements the WebAssembly exception-handling proposal.
+  Support is still disabled by default but is ready for testing. The proposal
+  will be enabled by default in a future release of Wasmtime.
+  [#11326](https://github.com/bytecodealliance/wasmtime/pull/11326)
+
+* An initial implementation of WASIp3 is available for the `0.3.0-rc-2025-08-15`
+  tag made for the WASIp3 release. Note that this is not production ready yet
+  but is an excellent time to start kicking the tires in preparation for an
+  upcoming officialy WASIp3 0.3.0 release. Users of the CLI can opt-in with
+  `-Sp3 -Wcomponent-model-async`.
+  [#11406](https://github.com/bytecodealliance/wasmtime/pull/11406)
+  [#11423](https://github.com/bytecodealliance/wasmtime/pull/11423)
+  [#11443](https://github.com/bytecodealliance/wasmtime/pull/11443)
+
+* Wasmtime has initial support for the Linux `PAGEMAP_SCAN` ioctl which can
+  greatly improve instantiation throughput in scenarios with a high number of
+  instantiations and short instance lifetime. This support is disabled by
+  default but will likely be enabled by default in a future release.
+  [#11372](https://github.com/bytecodealliance/wasmtime/pull/11372)
+  [#11433](https://github.com/bytecodealliance/wasmtime/pull/11433)
+
+* GC support can now be configured in `Config` and not only through crate
+  features through `Config::gc_support`.
+  [#11463](https://github.com/bytecodealliance/wasmtime/pull/11463)
+
+* Wasmtime now supports reading metrics of the pooling allocator at runtime.
+  [#11490](https://github.com/bytecodealliance/wasmtime/pull/11490)
+
+* The `ManuallyRooted` type is now replaced with `OwnedRooted` which is intended
+  to make management of GC object lifetimes on the host easier.
+  [#11514](https://github.com/bytecodealliance/wasmtime/pull/11514)
+
+* Wasmtime's documentation of the C++ embedding API and examples has been
+  expanded.
+  [#11569](https://github.com/bytecodealliance/wasmtime/pull/11569)
+
+* Wasmtime's support for the stack-switching WebAssembly proposal continues to
+  progress on x86\_64 Linux.
+  [#11003](https://github.com/bytecodealliance/wasmtime/pull/11003)
+
 ### Changed
+
+* The `preview0` and `preview1` modules and features in the `wasmtime-wasi`
+  crate are now called `p0` and `p1`.
+  [#11380](https://github.com/bytecodealliance/wasmtime/pull/11380)
+
+* Release artifacts for the C API are now unconditionally built with unwind
+  tables.
+  [#11383](https://github.com/bytecodealliance/wasmtime/pull/11383)
+
+* Wasmtime now requires Rust 1.87.0 or later to build.
+  [#11396](https://github.com/bytecodealliance/wasmtime/pull/11396)
+
+* The component-model-async gated `AbortHandle` is now named `JoinHandle`.
+  [#11414](https://github.com/bytecodealliance/wasmtime/pull/11414)
+
+* Wasmtime's internal implementation details are now `async` in many more
+  locations to help ensure the implementation is more sound.
+  [#11411](https://github.com/bytecodealliance/wasmtime/pull/11411)
+  [#11416](https://github.com/bytecodealliance/wasmtime/pull/11416)
+  [#11442](https://github.com/bytecodealliance/wasmtime/pull/11442)
+  [#11444](https://github.com/bytecodealliance/wasmtime/pull/11444)
+  [#11457](https://github.com/bytecodealliance/wasmtime/pull/11457)
+  [#11460](https://github.com/bytecodealliance/wasmtime/pull/11460)
+  [#11461](https://github.com/bytecodealliance/wasmtime/pull/11461)
+  [#11468](https://github.com/bytecodealliance/wasmtime/pull/11468)
+  [#11470](https://github.com/bytecodealliance/wasmtime/pull/11470)
+  [#11481](https://github.com/bytecodealliance/wasmtime/pull/11481)
+  [#11496](https://github.com/bytecodealliance/wasmtime/pull/11496)
+
+* Component-model-async primitives such as streams, tasks, etc, now use the same
+  table as resources in a component. This means that guest-visible allocated
+  indices are updated slightly.
+  [#11374](https://github.com/bytecodealliance/wasmtime/pull/11374)
+
+* Wasmtime's precompiled binaries available from CI now include the
+  `component-model-async` feature.
+  [#11429](https://github.com/bytecodealliance/wasmtime/pull/11429)
+
+* C API release artifacts are now built with LTO so they have a smaller size.
+  [#11483](https://github.com/bytecodealliance/wasmtime/pull/11483)
+
+* Code can no longer be loaded on `x86_64-unknown-none` by default without
+  opting-in to a contract that either the host is compiled with SSE2 support or
+  wasm is compiled with enough features that libcalls aren't used.
+  [#11553](https://github.com/bytecodealliance/wasmtime/pull/11553)
+
+* Host support for component model async futures/streams has been updated to a
+  new API.
+  [#11515](https://github.com/bytecodealliance/wasmtime/pull/11515)
+
+### Fixed
+
+* GC of dead DWARF has been improved.
+  [#11402](https://github.com/bytecodealliance/wasmtime/pull/11402)
+
+* Wasm-gc branching instructions now correctly check for fuel.
+  [#11426](https://github.com/bytecodealliance/wasmtime/pull/11426)
+
+* The `array.new_default` instruction now checks for fuel/epochs in its inner
+  loop.
+  [#11428](https://github.com/bytecodealliance/wasmtime/pull/11428)
+
+* The "min" C API artifacts now have correct headers.
+  [#11479](https://github.com/bytecodealliance/wasmtime/pull/11479)
+
+* GC OOM during const eval no longer panics.
+  [#11557](https://github.com/bytecodealliance/wasmtime/pull/11557)
+
+* Wasmtime now properly respects a disabled `std` feature even on targets which
+  have `std` available.
+  [#11568](https://github.com/bytecodealliance/wasmtime/pull/11568)
 
 --------------------------------------------------------------------------------
 
