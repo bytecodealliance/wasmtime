@@ -131,7 +131,7 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
                         Ok(res) => res,
                         Err(err) => return Ok(Err(Some(err))),
                     };
-                    let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
+                    let (res, _result_tx) = store.with(|store| res.into_http(store))?;
                     let (parts, body) = res.into_parts();
                     let body = body.collect().await.context("failed to collect body")?;
                     Ok(Ok(http::Response::from_parts(parts, body)))
@@ -223,7 +223,6 @@ async fn p3_http_outbound_request_response_build() -> anyhow::Result<()> {
     run_cli(P3_HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT, &server).await
 }
 
-#[ignore = "unimplemented"] // FIXME(#11631)
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_content_length() -> anyhow::Result<()> {
     let server = Server::http1(3)?;

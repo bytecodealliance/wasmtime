@@ -35,8 +35,53 @@ pub(crate) enum Body {
     Consumed,
 }
 
-pub(crate) struct GuestBodyConsumer {
-    pub(crate) tx: PollSender<Bytes>,
+pub(crate) enum GuestBodyKind {
+    Request,
+    Response,
+}
+
+/// Represents `Content-Length` limit and state
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+struct ContentLength {
+    /// Limit of bytes to be sent
+    limit: u64,
+    /// Number of bytes sent
+    sent: u64,
+}
+
+impl ContentLength {
+    /// Constructs new [ContentLength]
+    fn new(limit: u64) -> Self {
+        Self { limit, sent: 0 }
+    }
+}
+
+struct GuestBodyConsumer {
+    contents_tx: PollSender<Result<Bytes, ErrorCode>>,
+    result_tx: mpsc::Sender<Result<(), ErrorCode>>,
+    content_length: Option<ContentLength>,
+    kind: GuestBodyKind,
+}
+
+impl GuestBodyConsumer {
+    fn body_size_error(&self, n: Option<u64>) -> ErrorCode {
+        match self.kind {
+            GuestBodyKind::Request => ErrorCode::HttpRequestBodySize(n),
+            GuestBodyKind::Response => ErrorCode::HttpResponseBodySize(n),
+        }
+    }
+}
+
+impl Drop for GuestBodyConsumer {
+    fn drop(&mut self) {
+        if let Some(ContentLength { limit, sent }) = self.content_length {
+            if limit != sent {
+                _ = self
+                    .result_tx
+                    .try_send(Err(self.body_size_error(Some(sent))));
+            }
+        }
+    }
 }
 
 impl<D> StreamConsumer<D> for GuestBodyConsumer {
@@ -49,12 +94,34 @@ impl<D> StreamConsumer<D> for GuestBodyConsumer {
         src: Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        match self.tx.poll_reserve(cx) {
+        match self.contents_tx.poll_reserve(cx) {
             Poll::Ready(Ok(())) => {
                 let mut src = src.as_direct(store);
-                let buf = Bytes::copy_from_slice(src.remaining());
+                let buf = src.remaining();
+                if let Some(ContentLength { limit, sent }) = self.content_length.as_mut() {
+                    let Ok(n) = buf.len().try_into() else {
+                        _ = self.result_tx.try_send(Err(self.body_size_error(None)));
+                        let err = self.body_size_error(None);
+                        _ = self.contents_tx.send_item(Err(err));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    };
+                    let Some(n) = sent.checked_add(n) else {
+                        _ = self.result_tx.try_send(Err(self.body_size_error(None)));
+                        let err = self.body_size_error(None);
+                        _ = self.contents_tx.send_item(Err(err));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    };
+                    if n > *limit {
+                        _ = self.result_tx.try_send(Err(self.body_size_error(Some(n))));
+                        let err = self.body_size_error(Some(n));
+                        _ = self.contents_tx.send_item(Err(err));
+                        return Poll::Ready(Ok(StreamResult::Dropped));
+                    }
+                    *sent = n;
+                }
+                let buf = Bytes::copy_from_slice(buf);
                 let n = buf.len();
-                match self.tx.send_item(buf) {
+                match self.contents_tx.send_item(Ok(buf)) {
                     Ok(()) => {
                         src.mark_read(n);
                         Poll::Ready(Ok(StreamResult::Completed))
@@ -70,9 +137,9 @@ impl<D> StreamConsumer<D> for GuestBodyConsumer {
 }
 
 pub(crate) struct GuestBody {
-    pub(crate) contents_rx: Option<mpsc::Receiver<Bytes>>,
-    pub(crate) trailers_rx:
-        Option<oneshot::Receiver<Result<Option<Arc<http::HeaderMap>>, ErrorCode>>>,
+    contents_rx: Option<mpsc::Receiver<Result<Bytes, ErrorCode>>>,
+    trailers_rx: Option<oneshot::Receiver<Result<Option<Arc<http::HeaderMap>>, ErrorCode>>>,
+    content_length: Option<u64>,
 }
 
 impl GuestBody {
@@ -80,6 +147,9 @@ impl GuestBody {
         mut store: impl AsContextMut<Data = T>,
         contents_rx: Option<StreamReader<u8>>,
         trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+        result_tx: mpsc::Sender<Result<(), ErrorCode>>,
+        content_length: Option<u64>,
+        kind: GuestBodyKind,
         getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
     ) -> Self {
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
@@ -95,7 +165,10 @@ impl GuestBody {
             rx.pipe(
                 store,
                 GuestBodyConsumer {
-                    tx: PollSender::new(http_tx),
+                    contents_tx: PollSender::new(http_tx),
+                    result_tx,
+                    content_length: content_length.map(ContentLength::new),
+                    kind,
                 },
             );
             http_rx
@@ -103,6 +176,7 @@ impl GuestBody {
         Self {
             trailers_rx: Some(trailers_http_rx),
             contents_rx,
+            content_length,
         }
     }
 }
@@ -116,8 +190,18 @@ impl http_body::Body for GuestBody {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         if let Some(contents_rx) = self.contents_rx.as_mut() {
-            while let Some(buf) = ready!(contents_rx.poll_recv(cx)) {
-                return Poll::Ready(Some(Ok(http_body::Frame::data(buf))));
+            while let Some(res) = ready!(contents_rx.poll_recv(cx)) {
+                match res {
+                    Ok(buf) => {
+                        if let Some(n) = self.content_length.as_mut() {
+                            *n = n.saturating_sub(buf.len().try_into().unwrap_or(u64::MAX));
+                        }
+                        return Poll::Ready(Some(Ok(http_body::Frame::data(buf))));
+                    }
+                    Err(err) => {
+                        return Poll::Ready(Some(Err(err)));
+                    }
+                }
             }
             self.contents_rx = None;
         }
@@ -140,7 +224,10 @@ impl http_body::Body for GuestBody {
 
     fn is_end_stream(&self) -> bool {
         if let Some(contents_rx) = self.contents_rx.as_ref() {
-            if !contents_rx.is_empty() || !contents_rx.is_closed() {
+            if !contents_rx.is_empty()
+                || !contents_rx.is_closed()
+                || self.content_length.is_some_and(|n| n > 0)
+            {
                 return false;
             }
         }
@@ -153,8 +240,11 @@ impl http_body::Body for GuestBody {
     }
 
     fn size_hint(&self) -> http_body::SizeHint {
-        // TODO: use content-length
-        http_body::SizeHint::default()
+        if let Some(n) = self.content_length {
+            http_body::SizeHint::with_exact(n)
+        } else {
+            http_body::SizeHint::default()
+        }
     }
 }
 

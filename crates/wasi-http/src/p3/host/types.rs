@@ -349,6 +349,7 @@ impl HostRequestWithStore for WasiHttp {
             let (result_tx, result_rx) = oneshot::channel();
             let WasiHttpCtxView { table, .. } = store.get();
             let headers = delete_fields(table, headers)?;
+            // `Content-Length` header value is validated in `fields` implementation
             let options = options
                 .map(|options| delete_request_options(table, options))
                 .transpose()?;
