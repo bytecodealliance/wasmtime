@@ -1,7 +1,3 @@
-use super::{
-    delete_fields, delete_request, delete_response, get_fields, get_fields_mut, get_request,
-    get_request_mut, get_response, get_response_mut, push_fields, push_request, push_response,
-};
 use crate::p3::bindings::clocks::monotonic_clock::Duration;
 use crate::p3::bindings::http::types::{
     ErrorCode, FieldName, FieldValue, Fields, HeaderError, Headers, Host, HostFields, HostRequest,
@@ -25,11 +21,71 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, Destination, FutureProducer, FutureReader, Resource, StreamProducer, StreamReader,
-    StreamResult,
+    Accessor, Destination, FutureProducer, FutureReader, Resource, ResourceTable, StreamProducer,
+    StreamReader, StreamResult,
 };
-use wasmtime_wasi::ResourceTable;
 use wasmtime_wasi::p3::{FutureOneshotProducer, StreamEmptyProducer};
+
+fn get_fields<'a>(
+    table: &'a ResourceTable,
+    fields: &Resource<Fields>,
+) -> wasmtime::Result<&'a Fields> {
+    table
+        .get(&fields)
+        .context("failed to get fields from table")
+}
+
+fn get_fields_mut<'a>(
+    table: &'a mut ResourceTable,
+    fields: &Resource<Fields>,
+) -> HeaderResult<&'a mut Fields> {
+    table
+        .get_mut(&fields)
+        .context("failed to get fields from table")
+        .map_err(crate::p3::HeaderError::trap)
+}
+
+fn push_fields(table: &mut ResourceTable, fields: Fields) -> wasmtime::Result<Resource<Fields>> {
+    table.push(fields).context("failed to push fields to table")
+}
+
+fn delete_fields(table: &mut ResourceTable, fields: Resource<Fields>) -> wasmtime::Result<Fields> {
+    table
+        .delete(fields)
+        .context("failed to delete fields from table")
+}
+
+fn get_request<'a>(
+    table: &'a ResourceTable,
+    req: &Resource<Request>,
+) -> wasmtime::Result<&'a Request> {
+    table.get(req).context("failed to get request from table")
+}
+
+fn get_request_mut<'a>(
+    table: &'a mut ResourceTable,
+    req: &Resource<Request>,
+) -> wasmtime::Result<&'a mut Request> {
+    table
+        .get_mut(req)
+        .context("failed to get request from table")
+}
+
+fn get_response<'a>(
+    table: &'a ResourceTable,
+    res: &Resource<Response>,
+) -> wasmtime::Result<&'a Response> {
+    table.get(res).context("failed to get response from table")
+}
+
+fn get_response_mut<'a>(
+    table: &'a mut ResourceTable,
+    res: &Resource<Response>,
+) -> wasmtime::Result<&'a mut Response> {
+    table
+        .get_mut(res)
+        .context("failed to get response from table")
+}
 
 fn get_request_options<'a>(
     table: &'a ResourceTable,
@@ -367,7 +423,7 @@ impl HostRequestWithStore for WasiHttp {
                 options: options.map(Into::into),
                 body,
             };
-            let req = push_request(table, req)?;
+            let req = table.push(req).context("failed to push request to table")?;
             Ok((
                 req,
                 FutureReader::new(
@@ -561,7 +617,9 @@ impl HostRequest for WasiHttpCtxView<'_> {
     }
 
     fn drop(&mut self, req: Resource<Request>) -> wasmtime::Result<()> {
-        delete_request(self.table, req)?;
+        self.table
+            .delete(req)
+            .context("failed to delete request from table")?;
         Ok(())
     }
 }
@@ -685,7 +743,9 @@ impl HostResponseWithStore for WasiHttp {
                 headers: headers.into(),
                 body,
             };
-            let res = push_response(table, res)?;
+            let res = table
+                .push(res)
+                .context("failed to push response to table")?;
             Ok((
                 res,
                 FutureReader::new(
@@ -791,7 +851,9 @@ impl HostResponse for WasiHttpCtxView<'_> {
     }
 
     fn drop(&mut self, res: Resource<Response>) -> wasmtime::Result<()> {
-        delete_response(self.table, res)?;
+        self.table
+            .delete(res)
+            .context("failed to delete response from table")?;
         Ok(())
     }
 }

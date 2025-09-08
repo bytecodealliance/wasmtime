@@ -1,8 +1,8 @@
 use crate::p3::bindings::http::handler::{Host, HostWithStore};
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
 use crate::p3::body::{Body, ConsumedBody, GuestBody, GuestBodyKind};
-use crate::p3::host::{delete_request, push_response};
 use crate::p3::{HttpError, HttpResult, WasiHttp, WasiHttpCtxView, get_content_length};
+use anyhow::Context as _;
 use core::pin::Pin;
 use http::header::HOST;
 use http::{HeaderValue, Uri};
@@ -44,7 +44,10 @@ impl HostWithStore for WasiHttp {
                 headers,
                 options,
                 body,
-            } = delete_request(table, req).map_err(HttpError::trap)?;
+            } = table
+                .delete(req)
+                .context("failed to delete request from table")
+                .map_err(HttpError::trap)?;
             let mut headers = Arc::unwrap_or_clone(headers);
             if ctx.set_host_header() {
                 let host = if let Some(authority) = authority.as_ref() {
@@ -140,7 +143,14 @@ impl HostWithStore for WasiHttp {
                 result_tx: res_result_tx,
             },
         };
-        store.with(|mut store| push_response(store.get().table, res).map_err(HttpError::trap))
+        store.with(|mut store| {
+            store
+                .get()
+                .table
+                .push(res)
+                .context("failed to push response to table")
+                .map_err(HttpError::trap)
+        })
     }
 }
 
