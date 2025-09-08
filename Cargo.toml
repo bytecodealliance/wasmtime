@@ -491,6 +491,7 @@ component-model-async = [
   "wasmtime-cli-flags/component-model-async",
   "component-model",
   "wasmtime-wasi?/p3",
+  "wasmtime-wasi-http?/p3",
 ]
 
 # This feature, when enabled, will statically compile out all logging statements
