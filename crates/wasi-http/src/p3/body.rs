@@ -1,18 +1,23 @@
-use crate::p3::WasiHttpCtxView;
-use crate::p3::bindings::http::types::{ErrorCode, Trailers};
+use crate::p3::bindings::http::types::{ErrorCode, Fields, Trailers};
+use crate::p3::{WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
 use bytes::Bytes;
+use core::num::NonZeroUsize;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
 use http::HeaderMap;
+use http_body::Body as _;
 use http_body_util::combinators::BoxBody;
+use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
 use wasmtime::component::{
-    FutureConsumer, FutureReader, Resource, Source, StreamConsumer, StreamReader, StreamResult,
+    Access, Accessor, Destination, FutureConsumer, FutureReader, Resource, Source, StreamConsumer,
+    StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut, StoreContextMut};
+use wasmtime_wasi::p3::{FutureOneshotProducer, StreamEmptyProducer};
 
 /// The concrete type behind a `wasi:http/types/body` resource.
 pub(crate) enum Body {
@@ -36,6 +41,69 @@ pub(crate) enum Body {
 }
 
 impl Body {
+    pub(crate) fn consume<T>(
+        self,
+        mut store: Access<'_, T, WasiHttp>,
+        getter: fn(&mut T) -> WasiHttpCtxView<'_>,
+    ) -> Result<
+        (
+            StreamReader<u8>,
+            FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+        ),
+        (),
+    > {
+        match self {
+            Body::Guest {
+                contents_rx: Some(contents_rx),
+                trailers_rx,
+                result_tx,
+            } => {
+                // TODO: Use a result specified by the caller
+                // https://github.com/WebAssembly/wasi-http/issues/176
+                _ = result_tx.send(Box::new(async { Ok(()) }));
+                Ok((contents_rx, trailers_rx))
+            }
+            Body::Guest {
+                contents_rx: None,
+                trailers_rx,
+                result_tx,
+            } => {
+                let instance = store.instance();
+                // TODO: Use a result specified by the caller
+                // https://github.com/WebAssembly/wasi-http/issues/176
+                _ = result_tx.send(Box::new(async { Ok(()) }));
+                Ok((
+                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
+                    trailers_rx,
+                ))
+            }
+            Body::Host { body, result_tx } => {
+                let instance = store.instance();
+                // TODO: Use a result specified by the caller
+                // https://github.com/WebAssembly/wasi-http/issues/176
+                _ = result_tx.send(Box::new(async { Ok(()) }));
+                let (trailers_tx, trailers_rx) = oneshot::channel();
+                Ok((
+                    StreamReader::new(
+                        instance,
+                        &mut store,
+                        HostBodyStreamProducer {
+                            body,
+                            trailers: Some(trailers_tx),
+                            getter,
+                        },
+                    ),
+                    FutureReader::new(
+                        instance,
+                        &mut store,
+                        FutureOneshotProducer::from(trailers_rx),
+                    ),
+                ))
+            }
+            Body::Consumed => Err(()),
+        }
+    }
+
     pub(crate) fn drop(self, mut store: impl AsContextMut) {
         if let Body::Guest {
             contents_rx,
@@ -364,5 +432,94 @@ impl http_body::Body for IncomingResponseBody {
 
     fn size_hint(&self) -> http_body::SizeHint {
         self.incoming.size_hint()
+    }
+}
+
+struct HostBodyStreamProducer<T> {
+    body: BoxBody<Bytes, ErrorCode>,
+    trailers: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
+    getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
+}
+
+impl<T> Drop for HostBodyStreamProducer<T> {
+    fn drop(&mut self) {
+        self.close(Ok(None))
+    }
+}
+
+impl<T> HostBodyStreamProducer<T> {
+    fn close(&mut self, res: Result<Option<Resource<Trailers>>, ErrorCode>) {
+        if let Some(tx) = self.trailers.take() {
+            _ = tx.send(res);
+        }
+    }
+}
+
+impl<D> StreamProducer<D> for HostBodyStreamProducer<D>
+where
+    D: 'static,
+{
+    type Item = u8;
+    type Buffer = Cursor<Bytes>;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let res = 'result: {
+            let cap = match dst.remaining(&mut store).map(NonZeroUsize::new) {
+                Some(Some(cap)) => Some(cap),
+                Some(None) => {
+                    if self.body.is_end_stream() {
+                        break 'result Ok(None);
+                    } else {
+                        return Poll::Ready(Ok(StreamResult::Completed));
+                    }
+                }
+                None => None,
+            };
+            match Pin::new(&mut self.body).poll_frame(cx) {
+                Poll::Ready(Some(Ok(frame))) => {
+                    match frame.into_data().map_err(http_body::Frame::into_trailers) {
+                        Ok(mut frame) => {
+                            if let Some(cap) = cap {
+                                let n = frame.len();
+                                let cap = cap.into();
+                                if n > cap {
+                                    dst.set_buffer(Cursor::new(frame.split_off(cap)));
+                                    let mut dst = dst.as_direct(store, cap);
+                                    dst.remaining().copy_from_slice(&frame);
+                                    dst.mark_written(cap);
+                                } else {
+                                    let mut dst = dst.as_direct(store, n);
+                                    dst.remaining()[..n].copy_from_slice(&frame);
+                                    dst.mark_written(n);
+                                }
+                            } else {
+                                dst.set_buffer(Cursor::new(frame));
+                            }
+                            return Poll::Ready(Ok(StreamResult::Completed));
+                        }
+                        Err(Ok(trailers)) => {
+                            let trailers = (self.getter)(store.data_mut())
+                                .table
+                                .push(Fields::new_mutable(trailers))
+                                .context("failed to push trailers to table")?;
+                            break 'result Ok(Some(trailers));
+                        }
+                        Err(Err(..)) => break 'result Err(ErrorCode::HttpProtocolError),
+                    }
+                }
+                Poll::Ready(Some(Err(err))) => break 'result Err(err),
+                Poll::Ready(None) => break 'result Ok(None),
+                Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+                Poll::Pending => return Poll::Pending,
+            }
+        };
+        self.close(res);
+        Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
