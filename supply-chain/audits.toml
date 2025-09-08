@@ -2321,6 +2321,11 @@ serialization support. All logic is trivial: either unit conversion, or
 hash-consing to support de-duplication required by the format.
 """
 
+[[audits.fxprof-processed-profile]]
+who = "Pat Hickey <p.hickey@f5.com>"
+criteria = "safe-to-deploy"
+delta = "0.6.0 -> 0.8.1"
+
 [[audits.gimli]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
