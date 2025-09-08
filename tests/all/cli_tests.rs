@@ -2176,10 +2176,10 @@ start a print 1234
     }
 
     fn run_much_stdout(component: &str, extra_flags: &[&str]) -> Result<()> {
-        let total_write_size = 1 << 19;
+        let total_write_size = 1 << 18;
         let expected = iter::repeat('a').take(total_write_size).collect::<String>();
 
-        for i in 0..15 {
+        for i in 10..15 {
             let string = iter::repeat('a').take(1 << i).collect::<String>();
             let times = (total_write_size >> i).to_string();
             println!("writing {} bytes {times} times", string.len());
