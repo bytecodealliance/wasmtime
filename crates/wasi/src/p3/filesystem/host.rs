@@ -502,7 +502,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     FutureReader::new(
                         instance,
                         &mut store,
-                        FutureReadyProducer(Err(ErrorCode::NotPermitted)),
+                        FutureReadyProducer(Some(Err(ErrorCode::NotPermitted))),
                     ),
                 ));
             }
@@ -648,7 +648,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     FutureReader::new(
                         instance,
                         &mut store,
-                        FutureReadyProducer(Err(ErrorCode::NotPermitted)),
+                        FutureReadyProducer(Some(Err(ErrorCode::NotPermitted))),
                     ),
                 ));
             }

@@ -978,7 +978,8 @@ fn future_cancel_write(
     async_: u8,
     writer: u32,
 ) -> Result<u32> {
-    instance.id().get_mut(store).future_cancel_write(
+    instance.future_cancel_write(
+        store,
         TypeFutureTableIndex::from_u32(ty),
         async_ != 0,
         writer,
@@ -993,7 +994,8 @@ fn future_cancel_read(
     async_: u8,
     reader: u32,
 ) -> Result<u32> {
-    instance.id().get_mut(store).future_cancel_read(
+    instance.future_cancel_read(
+        store,
         TypeFutureTableIndex::from_u32(ty),
         async_ != 0,
         reader,
@@ -1080,7 +1082,8 @@ fn stream_cancel_write(
     async_: u8,
     writer: u32,
 ) -> Result<u32> {
-    instance.id().get_mut(store).stream_cancel_write(
+    instance.stream_cancel_write(
+        store,
         TypeStreamTableIndex::from_u32(ty),
         async_ != 0,
         writer,
@@ -1095,7 +1098,8 @@ fn stream_cancel_read(
     async_: u8,
     reader: u32,
 ) -> Result<u32> {
-    instance.id().get_mut(store).stream_cancel_read(
+    instance.stream_cancel_read(
+        store,
         TypeStreamTableIndex::from_u32(ty),
         async_ != 0,
         reader,
