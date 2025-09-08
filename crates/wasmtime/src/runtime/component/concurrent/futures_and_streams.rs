@@ -2752,9 +2752,6 @@ impl Instance {
         let count = usize::try_from(count).unwrap();
         let options = Options::new_index(store.0, self, options);
         self.check_bounds(store.0, &options, ty, address, count)?;
-        if !options.async_() {
-            bail!("synchronous stream and future writes not yet supported");
-        }
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Write { done } = *state else {
             bail!(
@@ -2801,7 +2798,7 @@ impl Instance {
             Ok::<_, crate::Error>(())
         };
 
-        let result = match mem::replace(&mut transmit.read, new_state) {
+        let mut result = match mem::replace(&mut transmit.read, new_state) {
             ReadState::GuestReady {
                 ty: read_ty,
                 flat_abi: read_flat_abi,
@@ -2935,6 +2932,10 @@ impl Instance {
             }
         };
 
+        if result == ReturnCode::Blocked && !options.async_() {
+            result = self.wait_for_write(store.0, transmit_handle)?;
+        }
+
         if result != ReturnCode::Blocked {
             *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
                 TransmitLocalState::Write {
@@ -3004,9 +3005,6 @@ impl Instance {
         let count = usize::try_from(count).unwrap();
         let options = Options::new_index(store.0, self, options);
         self.check_bounds(store.0, &options, ty, address, count)?;
-        if !options.async_() {
-            bail!("synchronous stream and future reads not yet supported");
-        }
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Read { done } = *state else {
             bail!("invalid handle {handle}; expected `Read`; got {:?}", *state);
@@ -3050,7 +3048,7 @@ impl Instance {
             Ok::<_, crate::Error>(())
         };
 
-        let result = match mem::replace(&mut transmit.write, new_state) {
+        let mut result = match mem::replace(&mut transmit.write, new_state) {
             WriteState::GuestReady {
                 ty: write_ty,
                 flat_abi: write_flat_abi,
@@ -3166,6 +3164,10 @@ impl Instance {
             WriteState::Dropped => ReturnCode::Dropped(0),
         };
 
+        if result == ReturnCode::Blocked && !options.async_() {
+            result = self.wait_for_read(store.0, transmit_handle)?;
+        }
+
         if result != ReturnCode::Blocked {
             *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
                 TransmitLocalState::Read {
@@ -3220,6 +3222,24 @@ impl Instance {
         })
     }
 
+    fn wait_for_write(
+        self,
+        store: &mut dyn VMStore,
+        handle: TableId<TransmitHandle>,
+    ) -> Result<ReturnCode> {
+        let waitable = Waitable::Transmit(handle);
+        self.wait_for_event(store, waitable)?;
+        let event = waitable.take_event(self.concurrent_state_mut(store))?;
+        if let Some(event @ (Event::StreamWrite { code, .. } | Event::FutureWrite { code, .. })) =
+            event
+        {
+            waitable.on_delivery(self.id().get_mut(store), event);
+            Ok(code)
+        } else {
+            unreachable!()
+        }
+    }
+
     /// Cancel a pending stream or future write.
     fn cancel_write(
         self,
@@ -3262,22 +3282,11 @@ impl Instance {
             if async_ {
                 ReturnCode::Blocked
             } else {
-                let waitable = Waitable::Transmit(
-                    self.concurrent_state_mut(store)
-                        .get_mut(transmit_id)?
-                        .write_handle,
-                );
-                self.wait_for_event(store, waitable)?;
-                let event = waitable.take_event(self.concurrent_state_mut(store))?;
-                if let Some(
-                    event @ (Event::StreamWrite { code, .. } | Event::FutureWrite { code, .. }),
-                ) = event
-                {
-                    waitable.on_delivery(self.id().get_mut(store), event);
-                    code
-                } else {
-                    unreachable!()
-                }
+                let handle = self
+                    .concurrent_state_mut(store)
+                    .get_mut(transmit_id)?
+                    .write_handle;
+                self.wait_for_write(store, handle)?
             }
         } else {
             ReturnCode::Cancelled(0)
@@ -3296,6 +3305,24 @@ impl Instance {
         log::trace!("cancelled write {transmit_id:?}: {code:?}");
 
         Ok(code)
+    }
+
+    fn wait_for_read(
+        self,
+        store: &mut dyn VMStore,
+        handle: TableId<TransmitHandle>,
+    ) -> Result<ReturnCode> {
+        let waitable = Waitable::Transmit(handle);
+        self.wait_for_event(store, waitable)?;
+        let event = waitable.take_event(self.concurrent_state_mut(store))?;
+        if let Some(event @ (Event::StreamRead { code, .. } | Event::FutureRead { code, .. })) =
+            event
+        {
+            waitable.on_delivery(self.id().get_mut(store), event);
+            Ok(code)
+        } else {
+            unreachable!()
+        }
     }
 
     /// Cancel a pending stream or future read.
@@ -3340,22 +3367,11 @@ impl Instance {
             if async_ {
                 ReturnCode::Blocked
             } else {
-                let waitable = Waitable::Transmit(
-                    self.concurrent_state_mut(store)
-                        .get_mut(transmit_id)?
-                        .read_handle,
-                );
-                self.wait_for_event(store, waitable)?;
-                let event = waitable.take_event(self.concurrent_state_mut(store))?;
-                if let Some(
-                    event @ (Event::StreamRead { code, .. } | Event::FutureRead { code, .. }),
-                ) = event
-                {
-                    waitable.on_delivery(self.id().get_mut(store), event);
-                    code
-                } else {
-                    unreachable!()
-                }
+                let handle = self
+                    .concurrent_state_mut(store)
+                    .get_mut(transmit_id)?
+                    .read_handle;
+                self.wait_for_read(store, handle)?
             }
         } else {
             ReturnCode::Cancelled(0)

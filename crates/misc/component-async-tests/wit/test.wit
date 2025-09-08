@@ -166,7 +166,7 @@ interface readiness {
   start: async func(s: stream<u8>, expected: list<u8>) -> tuple<stream<u8>, list<u8>>;
 }
 
-interface cancel-transmit {
+interface synchronous-transmit {
   start: async func(s: stream<u8>, s-expected: list<u8>, f: future<u8>, f-expected: u8) -> tuple<stream<u8>, list<u8>, future<u8>, u8>;
 }
 
@@ -320,6 +320,6 @@ world readiness-guest {
   export readiness;
 }
 
-world cancel-transmit-guest {
-  export cancel-transmit;
+world synchronous-transmit-guest {
+  export synchronous-transmit;
 }

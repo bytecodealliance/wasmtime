@@ -6,13 +6,10 @@ mod bindings {
 }
 
 use {
-    std::{
-        mem::{self, ManuallyDrop},
-        slice,
-    },
+    std::mem,
     test_programs::async_::{
-        BLOCKED, CALLBACK_CODE_EXIT, CALLBACK_CODE_YIELD, COMPLETED, DROPPED, EVENT_NONE,
-        context_get, context_set,
+        CALLBACK_CODE_EXIT, CALLBACK_CODE_YIELD, COMPLETED, DROPPED, EVENT_NONE, context_get,
+        context_set,
     },
 };
 
@@ -41,7 +38,7 @@ unsafe extern "C" fn stream_new() -> u64 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][stream-write-0][async]start"]
+    #[link_name = "[stream-write-0][async]start"]
     fn stream_write(_: u32, _: *const u8, _: usize) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -52,33 +49,11 @@ unsafe extern "C" fn stream_write(_: u32, _: *const u8, _: usize) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][stream-read-0][async]start"]
+    #[link_name = "[stream-read-0][async]start"]
     fn stream_read(_: u32, _: *mut u8, _: usize) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
 unsafe extern "C" fn stream_read(_: u32, _: *mut u8, _: usize) -> u32 {
-    unreachable!()
-}
-
-#[cfg(target_arch = "wasm32")]
-#[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
-unsafe extern "C" {
-    #[link_name = "[stream-cancel-write-0][async]start"]
-    fn stream_cancel_write(_: u32) -> u32;
-}
-#[cfg(not(target_arch = "wasm32"))]
-unsafe extern "C" fn stream_cancel_write(_: u32) -> u32 {
-    unreachable!()
-}
-
-#[cfg(target_arch = "wasm32")]
-#[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
-unsafe extern "C" {
-    #[link_name = "[stream-cancel-read-0][async]start"]
-    fn stream_cancel_read(_: u32) -> u32;
-}
-#[cfg(not(target_arch = "wasm32"))]
-unsafe extern "C" fn stream_cancel_read(_: u32) -> u32 {
     unreachable!()
 }
 
@@ -118,7 +93,7 @@ unsafe extern "C" fn future_new() -> u64 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][future-write-1][async]start"]
+    #[link_name = "[future-write-1][async]start"]
     fn future_write(_: u32, _: *const u8) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -129,33 +104,11 @@ unsafe extern "C" fn future_write(_: u32, _: *const u8) -> u32 {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
 unsafe extern "C" {
-    #[link_name = "[async-lower][future-read-1][async]start"]
+    #[link_name = "[future-read-1][async]start"]
     fn future_read(_: u32, _: *mut u8) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
 unsafe extern "C" fn future_read(_: u32, _: *mut u8) -> u32 {
-    unreachable!()
-}
-
-#[cfg(target_arch = "wasm32")]
-#[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
-unsafe extern "C" {
-    #[link_name = "[future-cancel-write-1][async]start"]
-    fn future_cancel_write(_: u32) -> u32;
-}
-#[cfg(not(target_arch = "wasm32"))]
-unsafe extern "C" fn future_cancel_write(_: u32) -> u32 {
-    unreachable!()
-}
-
-#[cfg(target_arch = "wasm32")]
-#[link(wasm_import_module = "[export]local:local/synchronous-transmit")]
-unsafe extern "C" {
-    #[link_name = "[future-cancel-read-1][async]start"]
-    fn future_cancel_read(_: u32) -> u32;
-}
-#[cfg(not(target_arch = "wasm32"))]
-unsafe extern "C" fn future_cancel_read(_: u32) -> u32 {
     unreachable!()
 }
 
@@ -192,11 +145,9 @@ enum State {
         future_expected: u8,
     },
     S1 {
-        stream_read_buffer: *mut u8,
         stream_tx: u32,
         stream: u32,
         stream_expected: Vec<u8>,
-        future_read_buffer: *mut u8,
         future_tx: u32,
         future: u32,
         future_expected: u8,
@@ -245,22 +196,6 @@ unsafe extern "C" fn callback_start(event0: u32, _event1: u32, _event2: u32) -> 
             } => {
                 assert_eq!(event0, EVENT_NONE);
 
-                // Here we assume specific behavior from the writers, namely:
-                //
-                // - They will not send us anything until after we cancel the
-                // reads, and even then there will be a delay.
-                //
-                // - When they _do_ send, they will send us all the bytes it
-                // told us to expect at once.
-                let stream_read_buffer =
-                    ManuallyDrop::new(vec![0_u8; stream_expected.len()]).as_mut_ptr();
-                let status = stream_read(stream, stream_read_buffer, stream_expected.len());
-                assert_eq!(status, BLOCKED);
-
-                let future_read_buffer = Box::into_raw(Box::new(0_u8));
-                let status = future_read(future, future_read_buffer);
-                assert_eq!(status, BLOCKED);
-
                 let pair = stream_new();
                 let stream_tx = u32::try_from(pair >> 32).unwrap();
                 let stream_rx = u32::try_from(pair & 0xFFFFFFFF_u64).unwrap();
@@ -277,29 +212,10 @@ unsafe extern "C" fn callback_start(event0: u32, _event1: u32, _event2: u32) -> 
                     FUTURE_BYTE_TO_WRITE,
                 );
 
-                // Here we assume specific behavior from the readers, namely:
-                //
-                // - They will not read anything until after we cancel the
-                // write, and even then there will be a delay.
-                //
-                // - When they _do_ read, they will accept all the bytes we told
-                // it to expect at once.
-                let status = stream_write(
-                    stream_tx,
-                    STREAM_BYTES_TO_WRITE.as_ptr(),
-                    STREAM_BYTES_TO_WRITE.len(),
-                );
-                assert_eq!(status, BLOCKED);
-
-                let status = future_write(future_tx, &FUTURE_BYTE_TO_WRITE);
-                assert_eq!(status, BLOCKED);
-
                 *state = State::S1 {
-                    stream_read_buffer,
                     stream_tx,
                     stream,
                     stream_expected: mem::take(stream_expected),
-                    future_read_buffer,
                     future_tx,
                     future,
                     future_expected,
@@ -309,44 +225,43 @@ unsafe extern "C" fn callback_start(event0: u32, _event1: u32, _event2: u32) -> 
             }
 
             &mut State::S1 {
-                stream_read_buffer,
                 stream_tx,
                 stream,
                 ref mut stream_expected,
-                future_read_buffer,
                 future_tx,
                 future,
                 future_expected,
             } => {
-                // Now we synchronously cancel everything and expect that the
-                // reads and writes complete.
+                // Now we synchronously read and write and expect that the
+                // operations complete.
 
-                let status = stream_cancel_read(stream);
+                let mut buffer = vec![0_u8; stream_expected.len()];
+                let status = stream_read(stream, buffer.as_mut_ptr(), stream_expected.len());
                 assert_eq!(
                     status,
                     DROPPED | u32::try_from(stream_expected.len() << 4).unwrap()
                 );
-                let received = Box::from_raw(slice::from_raw_parts_mut(
-                    stream_read_buffer,
-                    stream_expected.len(),
-                ));
-                assert_eq!(&received[..], stream_expected);
+                assert_eq!(&buffer[..], stream_expected);
                 stream_drop_readable(stream);
 
-                let status = stream_cancel_write(stream_tx);
+                let status = stream_write(
+                    stream_tx,
+                    STREAM_BYTES_TO_WRITE.as_ptr(),
+                    STREAM_BYTES_TO_WRITE.len(),
+                );
                 assert_eq!(
                     status,
                     DROPPED | u32::try_from(STREAM_BYTES_TO_WRITE.len() << 4).unwrap()
                 );
                 stream_drop_writable(stream_tx);
 
-                let status = future_cancel_read(future);
+                let received = &mut 0_u8;
+                let status = future_read(future, received);
                 assert_eq!(status, COMPLETED);
-                let received = Box::from_raw(future_read_buffer);
                 assert_eq!(*received, future_expected);
                 future_drop_readable(future);
 
-                let status = future_cancel_write(future_tx);
+                let status = future_write(future_tx, &FUTURE_BYTE_TO_WRITE);
                 assert_eq!(status, COMPLETED);
                 future_drop_writable(future_tx);
 
