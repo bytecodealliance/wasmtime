@@ -359,7 +359,7 @@ impl HostTcpSocketWithStore for WasiSockets {
                     FutureReader::new(
                         instance,
                         &mut store,
-                        FutureReadyProducer(Err(ErrorCode::InvalidState)),
+                        FutureReadyProducer(Some(Err(ErrorCode::InvalidState))),
                     ),
                 )),
             }

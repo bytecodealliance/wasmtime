@@ -2936,14 +2936,7 @@ impl Instance {
                     if async_ {
                         return Ok(BLOCKED);
                     } else {
-                        let waitable = Waitable::Guest(guest_task);
-                        let old_set = waitable.common(concurrent_state)?.set;
-                        let set = concurrent_state.get_mut(caller)?.sync_call_set;
-                        waitable.join(concurrent_state, Some(set))?;
-
-                        self.suspend(store, SuspendReason::Waiting { set, task: caller })?;
-
-                        waitable.join(self.concurrent_state_mut(store), old_set)?;
+                        self.wait_for_event(store, Waitable::Guest(guest_task))?;
                     }
                 }
             }
@@ -2958,6 +2951,17 @@ impl Instance {
         } else {
             bail!("`subtask.cancel` called after terminal status delivered");
         }
+    }
+
+    fn wait_for_event(self, store: &mut dyn VMStore, waitable: Waitable) -> Result<()> {
+        let state = self.concurrent_state_mut(store);
+        let caller = state.guest_task.unwrap();
+        let old_set = waitable.common(state)?.set;
+        let set = state.get_mut(caller)?.sync_call_set;
+        waitable.join(state, Some(set))?;
+        self.suspend(store, SuspendReason::Waiting { set, task: caller })?;
+        let state = self.concurrent_state_mut(store);
+        waitable.join(state, old_set)
     }
 
     /// Configures TLS state so `store` will be available via `tls::get` within
