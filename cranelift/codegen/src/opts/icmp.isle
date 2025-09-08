@@ -298,3 +298,5 @@
 ;; (x < y) ? x : y != x == x > y, for both signed and unsigned.
 (rule (simplify (ne cty (select ty (slt cty x y) x y) x)) (sgt cty x y))
 (rule (simplify (ne cty (select ty (ult cty x y) x y) x)) (ugt cty x y))
+
+(rule (simplify (ult cty (bnot ty x) (bnot ty y))) (ugt cty x y))
