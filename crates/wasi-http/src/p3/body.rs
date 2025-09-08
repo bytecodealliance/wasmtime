@@ -159,7 +159,7 @@ pub(crate) struct GuestBody {
 }
 
 impl GuestBody {
-    pub fn new<T: 'static>(
+    pub(crate) fn new<T: 'static>(
         mut store: impl AsContextMut<Data = T>,
         contents_rx: Option<StreamReader<u8>>,
         trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
@@ -330,8 +330,8 @@ where
 }
 
 pub(crate) struct IncomingResponseBody {
-    pub incoming: hyper::body::Incoming,
-    pub timeout: tokio::time::Interval,
+    pub(crate) incoming: hyper::body::Incoming,
+    pub(crate) timeout: tokio::time::Interval,
 }
 
 impl http_body::Body for IncomingResponseBody {

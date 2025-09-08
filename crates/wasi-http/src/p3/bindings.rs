@@ -30,10 +30,7 @@ mod generated {
     });
 
     mod with {
-        /// The concrete type behind a `wasi:http/types/fields` resource.
         pub type Fields = crate::p3::MaybeMutable<http::HeaderMap>;
-
-        /// The concrete type behind a `wasi:http/types/request-options` resource.
         pub type RequestOptions = crate::p3::MaybeMutable<crate::p3::RequestOptions>;
     }
 }

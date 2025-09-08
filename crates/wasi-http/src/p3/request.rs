@@ -9,6 +9,7 @@ use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
+/// The concrete type behind a `wasi:http/types/request-options` resource.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct RequestOptions {
     /// How long to wait for a connection to be established.
