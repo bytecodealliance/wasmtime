@@ -32,6 +32,7 @@ pub(crate) enum Body {
     },
     /// Body constructed by the host.
     Host {
+        /// The [`http_body::Body`]
         body: BoxBody<Bytes, ErrorCode>,
         /// Channel, on which transmission result will be written
         result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
