@@ -237,7 +237,7 @@ impl GuestBody {
         result_tx: mpsc::Sender<Result<(), ErrorCode>>,
         content_length: Option<u64>,
         kind: GuestBodyKind,
-        getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
+        getter: fn(&mut T) -> WasiHttpCtxView<'_>,
     ) -> Self {
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
         trailers_rx.pipe(
@@ -361,7 +361,7 @@ impl http_body::Body for ConsumedBody {
 
 pub(crate) struct GuestTrailerConsumer<T> {
     pub(crate) tx: Option<oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>>,
-    pub(crate) getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
+    pub(crate) getter: fn(&mut T) -> WasiHttpCtxView<'_>,
 }
 
 impl<D> FutureConsumer<D> for GuestTrailerConsumer<D>
@@ -441,7 +441,7 @@ impl http_body::Body for IncomingResponseBody {
 struct HostBodyStreamProducer<T> {
     body: BoxBody<Bytes, ErrorCode>,
     trailers: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
-    getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
+    getter: fn(&mut T) -> WasiHttpCtxView<'_>,
 }
 
 impl<T> Drop for HostBodyStreamProducer<T> {
