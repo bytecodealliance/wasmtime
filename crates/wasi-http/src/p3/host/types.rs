@@ -21,8 +21,8 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, Destination, FutureProducer, FutureReader, Resource, ResourceTable, StreamProducer,
-    StreamReader, StreamResult,
+    Access, Accessor, Destination, FutureProducer, FutureReader, Resource, ResourceTable,
+    StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime_wasi::p3::{FutureOneshotProducer, StreamEmptyProducer};
 
@@ -502,6 +502,16 @@ impl HostRequestWithStore for WasiHttp {
             }
         })
     }
+
+    fn drop<T>(mut store: Access<'_, T, Self>, req: Resource<Request>) -> wasmtime::Result<()> {
+        let Request { body, .. } = store
+            .get()
+            .table
+            .delete(req)
+            .context("failed to delete request from table")?;
+        body.drop(store);
+        Ok(())
+    }
 }
 
 impl HostRequest for WasiHttpCtxView<'_> {
@@ -614,13 +624,6 @@ impl HostRequest for WasiHttpCtxView<'_> {
     fn get_headers(&mut self, req: Resource<Request>) -> wasmtime::Result<Resource<Headers>> {
         let Request { headers, .. } = get_request(self.table, &req)?;
         push_fields(self.table, Fields::new_immutable(Arc::clone(headers)))
-    }
-
-    fn drop(&mut self, req: Resource<Request>) -> wasmtime::Result<()> {
-        self.table
-            .delete(req)
-            .context("failed to delete request from table")?;
-        Ok(())
     }
 }
 
@@ -824,6 +827,16 @@ impl HostResponseWithStore for WasiHttp {
             }
         })
     }
+
+    fn drop<T>(mut store: Access<'_, T, Self>, res: Resource<Response>) -> wasmtime::Result<()> {
+        let Response { body, .. } = store
+            .get()
+            .table
+            .delete(res)
+            .context("failed to delete response from table")?;
+        body.drop(store);
+        Ok(())
+    }
 }
 
 impl HostResponse for WasiHttpCtxView<'_> {
@@ -848,13 +861,6 @@ impl HostResponse for WasiHttpCtxView<'_> {
     fn get_headers(&mut self, res: Resource<Response>) -> wasmtime::Result<Resource<Headers>> {
         let Response { headers, .. } = get_response(self.table, &res)?;
         push_fields(self.table, Fields::new_immutable(Arc::clone(headers)))
-    }
-
-    fn drop(&mut self, res: Resource<Response>) -> wasmtime::Result<()> {
-        self.table
-            .delete(res)
-            .context("failed to delete response from table")?;
-        Ok(())
     }
 }
 

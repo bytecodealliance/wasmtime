@@ -35,6 +35,22 @@ pub(crate) enum Body {
     Consumed,
 }
 
+impl Body {
+    pub(crate) fn drop(self, mut store: impl AsContextMut) {
+        if let Body::Guest {
+            contents_rx,
+            mut trailers_rx,
+            ..
+        } = self
+        {
+            if let Some(mut contents_rx) = contents_rx {
+                contents_rx.close(&mut store);
+            }
+            trailers_rx.close(store);
+        }
+    }
+}
+
 pub(crate) enum GuestBodyKind {
     Request,
     Response,
