@@ -164,3 +164,13 @@ block0(v0: i32, v1: i32):
 
 ; run: %test_and_and4(4, 3) == 0
 
+function %fold_and_xor_not(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v1
+    v3 = bxor v0, v2
+    v4 = band v3, v0
+    return v4
+}
+
+; run: %fold_and_xor_not(4, 5) == 4
+
