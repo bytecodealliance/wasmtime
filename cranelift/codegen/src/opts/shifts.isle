@@ -308,4 +308,5 @@
 
 (rule (simplify (band ty (ishl ty x z) (ishl ty y z))) (ishl ty (band ty x y) z))
 (rule (simplify (isub ty (ishl ty x z) (ishl ty y z))) (ishl ty (isub ty x y) z))
+(rule (simplify (iadd ty (ishl ty x z) (ishl ty y z))) (ishl ty (iadd ty x y) z))
 
