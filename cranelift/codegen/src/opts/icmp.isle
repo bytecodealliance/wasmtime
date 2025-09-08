@@ -300,3 +300,5 @@
 (rule (simplify (ne cty (select ty (ult cty x y) x y) x)) (ugt cty x y))
 
 (rule (simplify (ult cty (bnot ty x) (bnot ty y))) (ugt cty x y))
+(rule (simplify (slt cty (bnot ty x) (bnot ty y))) (sgt cty x y))
+
