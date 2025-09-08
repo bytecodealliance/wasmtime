@@ -154,6 +154,14 @@ impl GuestBodyConsumer {
             GuestBodyKind::Response => ErrorCode::HttpResponseBodySize(n),
         }
     }
+
+    // Sends the corresponding error constructed by [Self::body_size_error] on both
+    // error channels.
+    // [`PollSender::poll_reserve`] on `contents_tx` must have succeeed prior to this being called.
+    fn send_body_size_error(&mut self, n: Option<u64>) {
+        _ = self.result_tx.try_send(Err(self.body_size_error(n)));
+        _ = self.contents_tx.send_item(Err(self.body_size_error(n)));
+    }
 }
 
 impl Drop for GuestBodyConsumer {
@@ -163,6 +171,10 @@ impl Drop for GuestBodyConsumer {
                 _ = self
                     .result_tx
                     .try_send(Err(self.body_size_error(Some(sent))));
+                self.contents_tx.abort_send();
+                if let Some(tx) = self.contents_tx.get_ref() {
+                    _ = tx.try_send(Err(self.body_size_error(Some(sent))))
+                }
             }
         }
     }
@@ -183,22 +195,13 @@ impl<D> StreamConsumer<D> for GuestBodyConsumer {
                 let mut src = src.as_direct(store);
                 let buf = src.remaining();
                 if let Some(ContentLength { limit, sent }) = self.content_length.as_mut() {
-                    let Ok(n) = buf.len().try_into() else {
-                        _ = self.result_tx.try_send(Err(self.body_size_error(None)));
-                        let err = self.body_size_error(None);
-                        _ = self.contents_tx.send_item(Err(err));
-                        return Poll::Ready(Ok(StreamResult::Dropped));
-                    };
-                    let Some(n) = sent.checked_add(n) else {
-                        _ = self.result_tx.try_send(Err(self.body_size_error(None)));
-                        let err = self.body_size_error(None);
-                        _ = self.contents_tx.send_item(Err(err));
+                    let Some(n) = buf.len().try_into().ok().and_then(|n| sent.checked_add(n))
+                    else {
+                        self.send_body_size_error(None);
                         return Poll::Ready(Ok(StreamResult::Dropped));
                     };
                     if n > *limit {
-                        _ = self.result_tx.try_send(Err(self.body_size_error(Some(n))));
-                        let err = self.body_size_error(Some(n));
-                        _ = self.contents_tx.send_item(Err(err));
+                        self.send_body_size_error(Some(n));
                         return Poll::Ready(Ok(StreamResult::Dropped));
                     }
                     *sent = n;
