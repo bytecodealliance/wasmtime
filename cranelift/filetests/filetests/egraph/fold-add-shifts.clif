@@ -12,6 +12,9 @@ block0(v0: i8, v1: i8, v3: i8):
 
 ; function %test1(i8, i8, i8) -> i8 fast {
 ; block0(v0: i8, v1: i8, v3: i8):
+;     v6 = iadd v0, v3
+;     v7 = ishl v6, v1
+;     return v7
 ; }
 
 function %test2(i16, i16, i16) -> i16 {
@@ -24,6 +27,9 @@ block0(v0: i16, v1: i16, v3: i16):
 
 ; function %test2(i16, i16, i16) -> i16 fast {
 ; block0(v0: i16, v1: i16, v3: i16):
+;     v6 = iadd v0, v3
+;     v7 = ishl v6, v1
+;     return v7
 ; }
 
 function %test3(i32, i32, i32) -> i32 {
@@ -36,6 +42,9 @@ block0(v0: i32, v1: i32, v3: i32):
 
 ; function %test3(i32, i32, i32) -> i32 fast {
 ; block0(v0: i32, v1: i32, v3: i32):
+;     v6 = iadd v0, v3
+;     v7 = ishl v6, v1
+;     return v7
 ; }
 
 function %test4(i64, i64, i64) -> i64 {
@@ -48,5 +57,8 @@ block0(v0: i64, v1: i64, v3: i64):
 
 ; function %test4(i64, i64, i64) -> i64 fast {
 ; block0(v0: i64, v1: i64, v3: i64):
+;     v6 = iadd v0, v3
+;     v7 = ishl v6, v1
+;     return v7
 ; }
 
