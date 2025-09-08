@@ -134,7 +134,7 @@ async fn test_tcp_read_cancellation(family: IpAddressFamily) {
                 client.send(client_rx).await.unwrap();
             },
             async {
-                for i in 0..CHUNKS {
+                for _ in 0..CHUNKS {
                     let ret = client_tx.write_all(data.to_vec()).await;
                     assert!(ret.is_empty());
                 }
