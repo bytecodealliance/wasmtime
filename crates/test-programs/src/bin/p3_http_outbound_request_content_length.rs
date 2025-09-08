@@ -1,4 +1,3 @@
-use anyhow::Context as _;
 use futures::join;
 use test_programs::p3::wasi::http::handler;
 use test_programs::p3::wasi::http::types::{ErrorCode, Headers, Method, Request, Scheme, Trailers};
