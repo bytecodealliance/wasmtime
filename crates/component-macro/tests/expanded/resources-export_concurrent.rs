@@ -238,7 +238,7 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Y {}
             pub trait HostYWithStore: wasmtime::component::HasData {
-                fn drop<T: 'static>(
+                fn drop<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     rep: wasmtime::component::Resource<Y>,
                 ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
@@ -330,7 +330,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/simple-export` does \
-                  not have export `{name}`"
+                not have export `{name}`"
                                     )
                                 })
                         };
@@ -484,7 +484,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/export-using-import` does \
-                  not have export `{name}`"
+                not have export `{name}`"
                                     )
                                 })
                         };
@@ -643,7 +643,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/export-using-export1` does \
-                  not have export `{name}`"
+                not have export `{name}`"
                                     )
                                 })
                         };
@@ -738,7 +738,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/export-using-export2` does \
-                  not have export `{name}`"
+                not have export `{name}`"
                                     )
                                 })
                         };

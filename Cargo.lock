@@ -5011,6 +5011,7 @@ dependencies = [
  "test-programs-artifacts",
  "tokio",
  "tokio-rustls",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "wasm-compose",
