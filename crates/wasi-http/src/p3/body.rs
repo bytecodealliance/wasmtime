@@ -143,9 +143,11 @@ impl ContentLength {
 
 struct GuestBodyConsumer {
     contents_tx: PollSender<Result<Bytes, ErrorCode>>,
-    result_tx: mpsc::Sender<Result<(), ErrorCode>>,
+    result_tx: Option<oneshot::Sender<Result<(), ErrorCode>>>,
     content_length: Option<ContentLength>,
     kind: GuestBodyKind,
+    // `true` when the other side of `contents_tx` was unexpectedly closed
+    closed: bool,
 }
 
 impl GuestBodyConsumer {
@@ -160,21 +162,23 @@ impl GuestBodyConsumer {
     // error channels.
     // [`PollSender::poll_reserve`] on `contents_tx` must have succeeed prior to this being called.
     fn send_body_size_error(&mut self, n: Option<u64>) {
-        _ = self.result_tx.try_send(Err(self.body_size_error(n)));
-        _ = self.contents_tx.send_item(Err(self.body_size_error(n)));
+        if let Some(result_tx) = self.result_tx.take() {
+            _ = result_tx.send(Err(self.body_size_error(n)));
+            _ = self.contents_tx.send_item(Err(self.body_size_error(n)));
+        }
     }
 }
 
 impl Drop for GuestBodyConsumer {
     fn drop(&mut self) {
-        if let Some(ContentLength { limit, sent }) = self.content_length {
-            if limit != sent {
-                _ = self
-                    .result_tx
-                    .try_send(Err(self.body_size_error(Some(sent))));
-                self.contents_tx.abort_send();
-                if let Some(tx) = self.contents_tx.get_ref() {
-                    _ = tx.try_send(Err(self.body_size_error(Some(sent))))
+        if let Some(result_tx) = self.result_tx.take() {
+            if let Some(ContentLength { limit, sent }) = self.content_length {
+                if !self.closed && limit != sent {
+                    _ = result_tx.send(Err(self.body_size_error(Some(sent))));
+                    self.contents_tx.abort_send();
+                    if let Some(tx) = self.contents_tx.get_ref() {
+                        _ = tx.try_send(Err(self.body_size_error(Some(sent))))
+                    }
                 }
             }
         }
@@ -191,6 +195,7 @@ impl<D> StreamConsumer<D> for GuestBodyConsumer {
         src: Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
+        debug_assert!(!self.closed);
         match self.contents_tx.poll_reserve(cx) {
             Poll::Ready(Ok(())) => {
                 let mut src = src.as_direct(store);
@@ -214,10 +219,16 @@ impl<D> StreamConsumer<D> for GuestBodyConsumer {
                         src.mark_read(n);
                         Poll::Ready(Ok(StreamResult::Completed))
                     }
-                    Err(..) => Poll::Ready(Ok(StreamResult::Dropped)),
+                    Err(..) => {
+                        self.closed = true;
+                        Poll::Ready(Ok(StreamResult::Dropped))
+                    }
                 }
             }
-            Poll::Ready(Err(..)) => Poll::Ready(Ok(StreamResult::Dropped)),
+            Poll::Ready(Err(..)) => {
+                self.closed = true;
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
             Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
             Poll::Pending => Poll::Pending,
         }
@@ -235,7 +246,7 @@ impl GuestBody {
         mut store: impl AsContextMut<Data = T>,
         contents_rx: Option<StreamReader<u8>>,
         trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-        result_tx: mpsc::Sender<Result<(), ErrorCode>>,
+        result_tx: oneshot::Sender<Result<(), ErrorCode>>,
         content_length: Option<u64>,
         kind: GuestBodyKind,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
@@ -254,9 +265,10 @@ impl GuestBody {
                 store,
                 GuestBodyConsumer {
                     contents_tx: PollSender::new(http_tx),
-                    result_tx,
+                    result_tx: Some(result_tx),
                     content_length: content_length.map(ContentLength::new),
                     kind,
+                    closed: false,
                 },
             );
             http_rx

@@ -8,20 +8,20 @@ use http::header::HOST;
 use http::{HeaderValue, Uri};
 use http_body_util::BodyExt as _;
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::oneshot;
 use tracing::debug;
 use wasmtime::component::{Accessor, AccessorTask, Resource};
 
 struct SendRequestTask {
     io: Pin<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
-    result_tx: mpsc::Sender<Result<(), ErrorCode>>,
+    result_tx: oneshot::Sender<Result<(), ErrorCode>>,
 }
 
 impl<T> AccessorTask<T, WasiHttp, wasmtime::Result<()>> for SendRequestTask {
     async fn run(self, _: &Accessor<T, WasiHttp>) -> wasmtime::Result<()> {
         let res = self.io.await;
         debug!(?res, "`send_request` I/O future finished");
-        _ = self.result_tx.send(res).await;
+        _ = self.result_tx.send(res);
         Ok(())
     }
 }
@@ -32,7 +32,7 @@ impl HostWithStore for WasiHttp {
         req: Resource<Request>,
     ) -> HttpResult<Resource<Response>> {
         let getter = store.getter();
-        let (req_result_tx, mut req_result_rx) = mpsc::channel(1);
+        let (io_result_tx, io_result_rx) = oneshot::channel();
         let (res_result_tx, res_result_rx) = oneshot::channel();
         let fut = store.with(|mut store| {
             let WasiHttpCtxView { table, .. } = store.get();
@@ -55,16 +55,20 @@ impl HostWithStore for WasiHttp {
                     trailers_rx,
                     result_tx,
                 } => {
+                    let (http_result_tx, http_result_rx) = oneshot::channel();
                     let content_length = get_content_length(&headers)
                         .map_err(|err| ErrorCode::InternalError(Some(format!("{err:#}"))))?;
                     _ = result_tx.send(Box::new(async move {
-                        req_result_rx.recv().await.unwrap_or(Ok(()))
+                        if let Ok(Err(err)) = http_result_rx.await {
+                            return Err(err);
+                        };
+                        io_result_rx.await.unwrap_or(Ok(()))
                     }));
                     GuestBody::new(
                         &mut store,
                         contents_rx,
                         trailers_rx,
-                        req_result_tx.clone(),
+                        http_result_tx,
                         content_length,
                         GuestBodyKind::Request,
                         getter,
@@ -72,9 +76,9 @@ impl HostWithStore for WasiHttp {
                     .boxed()
                 }
                 Body::Host { body, result_tx } => {
-                    _ = result_tx.send(Box::new(async move {
-                        req_result_rx.recv().await.unwrap_or(Ok(()))
-                    }));
+                    _ = result_tx.send(Box::new(
+                        async move { io_result_rx.await.unwrap_or(Ok(())) },
+                    ));
                     body
                 }
                 Body::Consumed => ConsumedBody.boxed(),
@@ -127,7 +131,7 @@ impl HostWithStore for WasiHttp {
         let (res, io) = Box::into_pin(fut).await?;
         store.spawn(SendRequestTask {
             io: Box::into_pin(io),
-            result_tx: req_result_tx,
+            result_tx: io_result_tx,
         });
         let (
             http::response::Parts {

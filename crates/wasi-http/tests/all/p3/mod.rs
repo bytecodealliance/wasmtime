@@ -131,7 +131,7 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
                         Ok(res) => res,
                         Err(err) => return Ok(Err(Some(err))),
                     };
-                    let (res, _result_tx) = store.with(|store| res.into_http(store))?;
+                    let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
                     let (parts, body) = res.into_parts();
                     let body = body.collect().await.context("failed to collect body")?;
                     Ok(Ok(http::Response::from_parts(parts, body)))
