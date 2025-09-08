@@ -340,12 +340,6 @@ to operate correctly. The header file at
 symbols that the Wasmtime runtime requires to work which your platform will need
 to provide. Some important notes about this are:
 
-* `wasmtime_{setjmp,longjmp}` are required for trap handling at this time. These
-  are thin wrappers around the standard `setjmp` and `longjmp` symbols you'll
-  need to provide. An example implementation [looks like this][jumps]. In the
-  future this dependency is likely going to go away as trap handling and
-  unwinding is migrated to compiled code (e.g. Cranelift) itself.
-
 * `wasmtime_tls_{get,set}` are required for the runtime to operate. Effectively
   a single pointer of TLS storage is necessary. Whether or not this is actually
   stored in TLS is up to the embedder, for example [storage in `static`
@@ -385,6 +379,5 @@ embedding and some necessary steps. Combined with the above features about
 producing a minimal build currently produces a 400K library on Linux.
 
 [header]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/min-platform/embedding/wasmtime-platform.h
-[jumps]: https://github.com/bytecodealliance/wasmtime/blob/e1307216f2aa74fd60c621c8fa326ba80e2a2f75/examples/min-platform/embedding/wasmtime-platform.c#L60-L72
 [tls]: https://github.com/bytecodealliance/wasmtime/blob/e1307216f2aa74fd60c621c8fa326ba80e2a2f75/examples/min-platform/embedding/wasmtime-platform.c#L144-L150
 [example]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/min-platform/README.md

@@ -1097,10 +1097,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn get_regs_clobbered_by_call(call_conv: isa::CallConv, is_exception: bool) -> PRegSet {
-        match call_conv {
-            isa::CallConv::Winch => WINCH_CLOBBERS,
-            isa::CallConv::Tail if is_exception => ALL_CLOBBERS,
-            _ => DEFAULT_AAPCS_CLOBBERS,
+        match (call_conv, is_exception) {
+            (isa::CallConv::Tail, true) => ALL_CLOBBERS,
+            (isa::CallConv::Winch, true) => ALL_CLOBBERS,
+            (isa::CallConv::Winch, false) => WINCH_CLOBBERS,
+            (isa::CallConv::SystemV, _) => DEFAULT_AAPCS_CLOBBERS,
+            (_, false) => DEFAULT_AAPCS_CLOBBERS,
+            (_, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
         }
     }
 

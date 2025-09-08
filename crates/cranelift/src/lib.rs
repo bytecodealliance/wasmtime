@@ -302,7 +302,7 @@ fn mach_reloc_to_reloc(
             // in the Wasm-to-Cranelift translator.
             panic!("unexpected libcall {libcall:?}");
         }
-        _ => panic!("unrecognized external name"),
+        _ => panic!("unrecognized external name {target:?}"),
     };
     Relocation {
         reloc: kind,

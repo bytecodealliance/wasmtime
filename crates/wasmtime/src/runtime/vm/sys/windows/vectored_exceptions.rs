@@ -4,7 +4,6 @@ use std::ffi::c_void;
 use std::io;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Diagnostics::Debug::*;
-use windows_sys::Win32::System::Kernel::*;
 
 /// Function which may handle custom signals while processing traps.
 pub type SignalHandler = Box<dyn Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync>;
@@ -54,16 +53,17 @@ impl Drop for TrapHandler {
     reason = "too fiddly to handle and wouldn't help much anyway"
 )]
 unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINTERS) -> i32 {
+    let exception_info = unsafe { exception_info.as_mut().unwrap() };
     // Check the kind of exception, since we only handle a subset within
     // wasm code. If anything else happens we want to defer to whatever
     // the rest of the system wants to do for this exception.
-    let record = unsafe { &*(*exception_info).ExceptionRecord };
+    let record = unsafe { &*exception_info.ExceptionRecord };
     if record.ExceptionCode != EXCEPTION_ACCESS_VIOLATION
         && record.ExceptionCode != EXCEPTION_ILLEGAL_INSTRUCTION
         && record.ExceptionCode != EXCEPTION_INT_DIVIDE_BY_ZERO
         && record.ExceptionCode != EXCEPTION_INT_OVERFLOW
     {
-        return ExceptionContinueSearch;
+        return EXCEPTION_CONTINUE_SEARCH;
     }
 
     // FIXME: this is what the previous C++ did to make sure that TLS
@@ -75,7 +75,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
     // Rust.
     //
     // if (!NtCurrentTeb()->Reserved1[sThreadLocalArrayPointerIndex]) {
-    //     return ExceptionContinueSearch;
+    //     return EXCEPTION_CONTINUE_SEARCH;
     // }
 
     // This is basically the same as the unix version above, only with a
@@ -83,9 +83,9 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
     tls::with(|info| {
         let info = match info {
             Some(info) => info,
-            None => return ExceptionContinueSearch,
+            None => return EXCEPTION_CONTINUE_SEARCH,
         };
-        let context = unsafe { &*(*exception_info).ContextRecord };
+        let context = unsafe { exception_info.ContextRecord.as_ref().unwrap() };
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "x86_64")] {
                 let regs = TrapRegisters {
@@ -96,11 +96,6 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
                 let regs = TrapRegisters {
                     pc: context.Pc as usize,
                     fp: unsafe { context.Anonymous.Anonymous.Fp as usize },
-                };
-            } else if #[cfg(target_arch = "x86")] {
-                let regs = TrapRegisters {
-                    pc: context.Eip as usize,
-                    fp: context.Ebp as usize,
                 };
             } else {
                 compile_error!("unsupported platform");
@@ -117,9 +112,30 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
             None
         };
         match info.test_if_trap(regs, faulting_addr, |handler| handler(exception_info)) {
-            TrapTest::NotWasm => ExceptionContinueSearch,
-            TrapTest::HandledByEmbedder => ExceptionContinueExecution,
-            TrapTest::Trap { jmp_buf } => unsafe { super::traphandlers::wasmtime_longjmp(jmp_buf) },
+            TrapTest::NotWasm => EXCEPTION_CONTINUE_SEARCH,
+            TrapTest::HandledByEmbedder => EXCEPTION_CONTINUE_EXECUTION,
+            TrapTest::Trap(handler) => {
+                let context = unsafe { exception_info.ContextRecord.as_mut().unwrap() };
+                cfg_if::cfg_if! {
+                    if #[cfg(target_arch = "x86_64")] {
+                        context.Rip = handler.pc as _;
+                        context.Rbp = handler.fp as _;
+                        context.Rsp = handler.sp as _;
+                        context.Rax = 0;
+                        context.Rdx = 0;
+                    } else if #[cfg(target_arch = "aarch64")] {
+                        context.Pc = handler.pc as _;
+                        context.Sp = handler.sp as _;
+                        context.Anonymous.Anonymous.Fp = handler.fp as _;
+                        context.Anonymous.Anonymous.X0 = 0;
+                        context.Anonymous.Anonymous.X1 = 0;
+                    } else {
+                        compile_error!("unsupported platform");
+                    }
+                }
+
+                EXCEPTION_CONTINUE_EXECUTION
+            }
         }
     })
 }

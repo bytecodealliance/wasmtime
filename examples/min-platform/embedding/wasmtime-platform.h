@@ -83,8 +83,8 @@ typedef struct wasmtime_memory_image wasmtime_memory_image;
  * meaning of a trap that's not handled by Wasmtime depends on the context in
  * which the trap was generated.
  *
- * When this function does not return it's because `wasmtime_longjmp` is
- * used to handle a Wasm-based trap.
+ * When this function does not return it's because a native exception handler
+ * was resumed to.
  */
 typedef void (*wasmtime_trap_handler_t)(uintptr_t ip,
                                         uintptr_t fp,
@@ -160,40 +160,6 @@ extern int32_t wasmtime_mprotect(uint8_t *ptr, uintptr_t size, uint32_t prot_fla
  */
 extern uintptr_t wasmtime_page_size(void);
 #endif
-
-/**
- * Used to setup a frame on the stack to longjmp back to in the future.
- *
- * This function is used for handling traps in WebAssembly and is paried
- * with `wasmtime_longjmp`.
- *
- * * `jmp_buf` - this argument is filled in with a pointer which if used
- *   will be passed to `wasmtime_longjmp` later on by the runtime.
- * * `callback` - this callback should be invoked after `jmp_buf` is
- *   configured.
- * * `payload` and `callee` - the two arguments to pass to `callback`.
- *
- * Returns false if `wasmtime_longjmp` was used to return to this function.
- * Returns true if `wasmtime_longjmp` was not called and `callback` returned.
- */
-extern bool wasmtime_setjmp(const uint8_t **jmp_buf,
-                            bool (*callback)(uint8_t*, uint8_t*),
-                            uint8_t *payload,
-                            uint8_t *callee);
-
-/**
- * Paired with `wasmtime_setjmp` this is used to jump back to the `setjmp`
- * point.
- *
- * The argument here was originally passed to `wasmtime_setjmp` through its
- * out-param.
- *
- * This function cannot return.
- *
- * This function may be invoked from the `wasmtime_trap_handler_t`
- * configured by `wasmtime_init_traps`.
- */
-extern void wasmtime_longjmp(const uint8_t *jmp_buf);
 
 #if defined(WASMTIME_NATIVE_SIGNALS)
 /**

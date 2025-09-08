@@ -218,14 +218,24 @@ pub trait PtrSize {
         self.vmstore_context_last_wasm_exit_trampoline_fp() + self.size()
     }
 
+    /// Return the offset of the `last_wasm_entry_sp` field of `VMStoreContext`.
+    fn vmstore_context_last_wasm_entry_sp(&self) -> u8 {
+        self.vmstore_context_last_wasm_exit_pc() + self.size()
+    }
+
     /// Return the offset of the `last_wasm_entry_fp` field of `VMStoreContext`.
     fn vmstore_context_last_wasm_entry_fp(&self) -> u8 {
-        self.vmstore_context_last_wasm_exit_pc() + self.size()
+        self.vmstore_context_last_wasm_entry_sp() + self.size()
+    }
+
+    /// Return the offset of the `last_wasm_entry_trap_handler` field of `VMStoreContext`.
+    fn vmstore_context_last_wasm_entry_trap_handler(&self) -> u8 {
+        self.vmstore_context_last_wasm_entry_fp() + self.size()
     }
 
     /// Return the offset of the `stack_chain` field of `VMStoreContext`.
     fn vmstore_context_stack_chain(&self) -> u8 {
-        self.vmstore_context_last_wasm_entry_fp() + self.size()
+        self.vmstore_context_last_wasm_entry_trap_handler() + self.size()
     }
 
     // Offsets within `VMMemoryDefinition`
