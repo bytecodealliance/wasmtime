@@ -40,6 +40,9 @@ pub struct Request {
 
 impl Request {
     /// Construct a new [Request]
+    ///
+    /// This returns a [Future] that the guest will use to communicate
+    /// a request processing error, if any.
     pub fn new(
         method: Method,
         scheme: Option<Scheme>,
@@ -74,6 +77,9 @@ impl Request {
     }
 
     /// Construct a new [Request] from [http::Request].
+    ///
+    /// This returns a [Future] that the guest will use to communicate
+    /// a request processing error, if any.
     pub fn from_http<T>(
         req: http::Request<T>,
     ) -> (
@@ -113,7 +119,7 @@ impl Request {
 
 /// The default implementation of how an outgoing request is sent.
 ///
-/// This implementation is used by the `wasi:http/outgoing-handler` interface
+/// This implementation is used by the `wasi:http/handler` interface
 /// default implementation.
 #[cfg(feature = "default-send-request")]
 pub async fn default_send_request(
@@ -249,7 +255,44 @@ pub async fn default_send_request(
         .expect("comes from valid request");
 
     let send = async move {
-        use crate::p3::body::IncomingResponseBody;
+        use core::task::Context;
+
+        /// Wrapper around [hyper::body::Incoming] used to
+        /// account for request option timeout configuration
+        struct IncomingResponseBody {
+            incoming: hyper::body::Incoming,
+            timeout: tokio::time::Interval,
+        }
+        impl http_body::Body for IncomingResponseBody {
+            type Data = <hyper::body::Incoming as http_body::Body>::Data;
+            type Error = ErrorCode;
+
+            fn poll_frame(
+                mut self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+            ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+                match Pin::new(&mut self.as_mut().incoming).poll_frame(cx) {
+                    Poll::Ready(None) => Poll::Ready(None),
+                    Poll::Ready(Some(Err(err))) => {
+                        Poll::Ready(Some(Err(ErrorCode::from_hyper_response_error(err))))
+                    }
+                    Poll::Ready(Some(Ok(frame))) => {
+                        self.timeout.reset();
+                        Poll::Ready(Some(Ok(frame)))
+                    }
+                    Poll::Pending => {
+                        ready!(self.timeout.poll_tick(cx));
+                        Poll::Ready(Some(Err(ErrorCode::ConnectionReadTimeout)))
+                    }
+                }
+            }
+            fn is_end_stream(&self) -> bool {
+                self.incoming.is_end_stream()
+            }
+            fn size_hint(&self) -> http_body::SizeHint {
+                self.incoming.size_hint()
+            }
+        }
 
         let res = tokio::time::timeout(first_byte_timeout, sender.send_request(req))
             .await
@@ -261,28 +304,31 @@ pub async fn default_send_request(
     };
     let mut send = pin!(send);
     let mut conn = Some(conn);
+    // Wait for response while driving connection I/O
     let res = poll_fn(|cx| match send.as_mut().poll(cx) {
         Poll::Ready(Ok(res)) => Poll::Ready(Ok(res)),
         Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
         Poll::Pending => {
-            if let Some(fut) = conn.as_mut() {
-                let res = ready!(Pin::new(fut).poll(cx));
-                conn = None;
-                match res {
-                    Ok(()) => match ready!(send.as_mut().poll(cx)) {
-                        Ok(res) => Poll::Ready(Ok(res)),
-                        Err(err) => Poll::Ready(Err(err)),
-                    },
-                    Err(err) => Poll::Ready(Err(ErrorCode::from_hyper_request_error(err))),
-                }
-            } else {
-                Poll::Pending
+            // Response is not ready, poll `hyper` connection to drive I/O if it has not completed yet
+            let Some(fut) = conn.as_mut() else {
+                // `hyper` connection already completed
+                return Poll::Pending;
+            };
+            let res = ready!(Pin::new(fut).poll(cx));
+            // `hyper` connection completed, record that to prevent repeated poll
+            conn = None;
+            match res {
+                // `hyper` connection has successfully completed, optimistically poll for response
+                Ok(()) => send.as_mut().poll(cx),
+                // `hyper` connection has failed, return the error
+                Err(err) => Poll::Ready(Err(ErrorCode::from_hyper_request_error(err))),
             }
         }
     })
     .await?;
     Ok((res, async move {
         let Some(conn) = conn.take() else {
+            // `hyper` connection has already completed
             return Ok(());
         };
         conn.await.map_err(ErrorCode::from_hyper_response_error)

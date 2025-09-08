@@ -64,6 +64,9 @@ impl Response {
     }
 
     /// Convert [Response] into [http::Response].
+    ///
+    /// This returns an [mpsc::Sender] that can be used to communicate
+    /// a response processing error, if any.
     pub fn into_http<T: WasiHttpView + 'static>(
         self,
         store: impl AsContextMut<Data = T>,

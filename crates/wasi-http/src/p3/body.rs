@@ -400,44 +400,6 @@ where
     }
 }
 
-pub(crate) struct IncomingResponseBody {
-    pub(crate) incoming: hyper::body::Incoming,
-    pub(crate) timeout: tokio::time::Interval,
-}
-
-impl http_body::Body for IncomingResponseBody {
-    type Data = <hyper::body::Incoming as http_body::Body>::Data;
-    type Error = ErrorCode;
-
-    fn poll_frame(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-        match Pin::new(&mut self.as_mut().incoming).poll_frame(cx) {
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Ready(Some(Err(err))) => {
-                Poll::Ready(Some(Err(ErrorCode::from_hyper_response_error(err))))
-            }
-            Poll::Ready(Some(Ok(frame))) => {
-                self.timeout.reset();
-                Poll::Ready(Some(Ok(frame)))
-            }
-            Poll::Pending => {
-                ready!(self.timeout.poll_tick(cx));
-                Poll::Ready(Some(Err(ErrorCode::ConnectionReadTimeout)))
-            }
-        }
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.incoming.is_end_stream()
-    }
-
-    fn size_hint(&self) -> http_body::SizeHint {
-        self.incoming.size_hint()
-    }
-}
-
 struct HostBodyStreamProducer<T> {
     body: BoxBody<Bytes, ErrorCode>,
     trailers: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
