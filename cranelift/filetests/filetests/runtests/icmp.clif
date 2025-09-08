@@ -44,3 +44,24 @@ block0(v0: i32, v1: i32):
 ; run: %ule_sub_swap(1, -88) == 0
 ; run: %ule_sub_swap(1, 2) == 0
 ; run: %ule_sub_swap(2, 1) == 1
+
+function %fold_cmp_over_nots1(i8, i8) -> i8 {
+block0(v0: i8, v2: i8):
+    v1 = bnot v0
+    v3 = bnot v2
+    v4 = icmp ult v1, v3
+    return v4
+}
+
+; run: %fold_cmp_over_nots1(2, 1) == 1
+
+function %fold_cmp_over_nots2(i8, i8) -> i8 {
+block0(v0: i8, v2: i8):
+    v1 = bnot v0
+    v3 = bnot v2
+    v4 = icmp slt v1, v3
+    return v4
+}
+
+; run: %fold_cmp_over_nots2(2, 1) == 1
+
