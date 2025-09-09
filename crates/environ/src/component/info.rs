@@ -734,6 +734,18 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
     },
 
+    /// A `backpressure.inc` intrinsic.
+    BackpressureInc {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// A `backpressure.dec` intrinsic.
+    BackpressureDec {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
     /// A `task.return` intrinsic, which returns a result to the caller of a
     /// lifted export function.  This allows the callee to continue executing
     /// after returning a result.
@@ -1066,6 +1078,8 @@ impl Trampoline {
             ResourceRep(i) => format!("component-resource-rep[{}]", i.as_u32()),
             ResourceDrop(i) => format!("component-resource-drop[{}]", i.as_u32()),
             BackpressureSet { .. } => format!("backpressure-set"),
+            BackpressureInc { .. } => format!("backpressure-inc"),
+            BackpressureDec { .. } => format!("backpressure-dec"),
             TaskReturn { .. } => format!("task-return"),
             TaskCancel { .. } => format!("task-cancel"),
             WaitableSetNew { .. } => format!("waitable-set-new"),

@@ -240,6 +240,28 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
+            Trampoline::BackpressureInc { instance } => {
+                self.translate_libcall(
+                    host::backpressure_modify,
+                    TrapSentinel::Falsy,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                        params.push(me.builder.ins().iconst(ir::types::I8, 1));
+                    },
+                );
+            }
+            Trampoline::BackpressureDec { instance } => {
+                self.translate_libcall(
+                    host::backpressure_modify,
+                    TrapSentinel::Falsy,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                        params.push(me.builder.ins().iconst(ir::types::I8, 0));
+                    },
+                );
+            }
             Trampoline::TaskReturn { results, options } => {
                 self.translate_libcall(
                     host::task_return,

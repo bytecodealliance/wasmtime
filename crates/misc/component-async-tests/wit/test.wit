@@ -58,6 +58,8 @@ interface run {
 
 interface backpressure {
   set-backpressure: func(enabled: bool);
+  inc-backpressure: func();
+  dec-backpressure: func();
 }
 
 interface transmit {

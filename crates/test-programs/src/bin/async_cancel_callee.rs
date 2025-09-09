@@ -84,6 +84,16 @@ unsafe extern "C" fn export_set_backpressure(enabled: bool) {
     wit_bindgen::backpressure_set(enabled);
 }
 
+#[unsafe(export_name = "local:local/backpressure#inc-backpressure")]
+unsafe extern "C" fn export_inc_backpressure() {
+    wit_bindgen::backpressure_inc();
+}
+
+#[unsafe(export_name = "local:local/backpressure#dec-backpressure")]
+unsafe extern "C" fn export_dec_backpressure() {
+    wit_bindgen::backpressure_dec();
+}
+
 #[unsafe(export_name = "local:local/sleep#[async]sleep-millis")]
 unsafe extern "C" fn export_sleep_sleep_millis(time_in_millis: u64) {
     unsafe {

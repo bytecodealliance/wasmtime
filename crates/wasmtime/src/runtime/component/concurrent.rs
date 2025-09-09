@@ -652,7 +652,7 @@ impl GuestCall {
         let state = state.instance_state(task_instance);
         let ready = match &self.kind {
             GuestCallKind::DeliverEvent { .. } => !state.do_not_enter,
-            GuestCallKind::Start(_) => !(state.do_not_enter || state.backpressure),
+            GuestCallKind::Start(_) => !(state.do_not_enter || state.backpressure > 0),
         };
         log::trace!(
             "call {self:?} ready? {ready} (do_not_enter: {}; backpressure: {})",
@@ -3935,8 +3935,8 @@ impl Default for AsyncState {
 /// Represents the Component Model Async state of a (sub-)component instance.
 #[derive(Default)]
 struct InstanceState {
-    /// Whether backpressure is set for this instance
-    backpressure: bool,
+    /// Whether backpressure is set for this instance (enabled if >0)
+    backpressure: u16,
     /// Whether this instance can be entered
     do_not_enter: bool,
     /// Pending calls for this instance which require `Self::backpressure` to be
@@ -4201,18 +4201,18 @@ impl ConcurrentState {
         Ok(())
     }
 
-    /// Implements the `backpressure.set` intrinsic.
-    pub(crate) fn backpressure_set(
+    /// Implements the `backpressure.{set,inc,dec}` intrinsics.
+    pub(crate) fn backpressure_modify(
         &mut self,
         caller_instance: RuntimeComponentInstanceIndex,
-        enabled: u32,
+        modify: impl FnOnce(u16) -> Option<u16>,
     ) -> Result<()> {
         let state = self.instance_state(caller_instance);
         let old = state.backpressure;
-        let new = enabled != 0;
+        let new = modify(old).ok_or_else(|| anyhow!("backpressure counter overflow"))?;
         state.backpressure = new;
 
-        if old && !new {
+        if old > 0 && new == 0 {
             // Backpressure was previously enabled and is now disabled; move any
             // newly-eligible guest calls to the "high priority" queue.
             self.partition_pending(caller_instance)?;
