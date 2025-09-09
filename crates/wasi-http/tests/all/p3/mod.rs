@@ -155,21 +155,18 @@ async fn p3_http_outbound_request_timeout() -> anyhow::Result<()> {
     run_cli(P3_HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server).await
 }
 
-#[ignore = "unimplemented"] // TODO: implement
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_post() -> anyhow::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_POST_COMPONENT, &server).await
 }
 
-#[ignore = "unimplemented"] // TODO: implement
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_large_post() -> anyhow::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_LARGE_POST_COMPONENT, &server).await
 }
 
-#[ignore = "unimplemented"] // TODO: implement
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_put() -> anyhow::Result<()> {
     let server = Server::http1(1)?;
@@ -216,15 +213,14 @@ async fn p3_http_outbound_request_invalid_dnsname() -> anyhow::Result<()> {
     run_cli(P3_HTTP_OUTBOUND_REQUEST_INVALID_DNSNAME_COMPONENT, &server).await
 }
 
-#[ignore = "unimplemented"] // TODO: implement
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_response_build() -> anyhow::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT, &server).await
 }
 
-#[ignore = "unimplemented"] // FIXME(#11631)
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[ignore = "FIXME #11656"]
 async fn p3_http_outbound_request_content_length() -> anyhow::Result<()> {
     let server = Server::http1(3)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await

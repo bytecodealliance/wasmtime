@@ -24,7 +24,7 @@ use core::task::{Context, Poll};
 use tokio::sync::oneshot;
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, Destination, FutureProducer, Linker, StreamProducer, StreamResult, VecBuffer,
+    Destination, FutureProducer, Linker, StreamProducer, StreamResult, VecBuffer,
 };
 
 // Default buffer capacity to use for reads of byte-sized values.
@@ -53,16 +53,26 @@ impl<T: Send + Sync + 'static, D> StreamProducer<D> for StreamEmptyProducer<T> {
     }
 }
 
-struct FutureReadyProducer<T>(T);
+struct FutureReadyProducer<T>(Option<T>);
 
 impl<T, D> FutureProducer<D> for FutureReadyProducer<T>
 where
-    T: Send + 'static,
+    T: Send + Unpin + 'static,
 {
     type Item = T;
 
-    async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<T> {
-        Ok(self.0)
+    fn poll_produce(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<D>,
+        _: bool,
+    ) -> Poll<wasmtime::Result<Option<T>>> {
+        let v = self
+            .get_mut()
+            .0
+            .take()
+            .context("polled after returning `Ready`")?;
+        Poll::Ready(Ok(Some(v)))
     }
 }
 
@@ -80,8 +90,18 @@ where
 {
     type Item = T;
 
-    async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<T> {
-        self.0.await.context("oneshot sender dropped")
+    fn poll_produce(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        _: StoreContextMut<D>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<Option<T>>> {
+        match Pin::new(&mut self.get_mut().0).poll(cx) {
+            Poll::Ready(Ok(v)) => Poll::Ready(Ok(Some(v))),
+            Poll::Ready(Err(err)) => Poll::Ready(Err(err).context("oneshot sender dropped")),
+            Poll::Pending if finish => Poll::Ready(Ok(None)),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 

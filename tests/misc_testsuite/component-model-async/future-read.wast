@@ -53,7 +53,8 @@
     (canon lift (core func $i "run")))
 )
 
-(assert_trap (invoke "run") "synchronous stream and future reads not yet supported")
+;; We expect deadlock since the write end is leaked:
+(assert_trap (invoke "run") "deadlock detected: event loop cannot make further progress")
 
 ;; asynchronous future.read; sync lift
 (component
@@ -161,7 +162,8 @@
     (canon lift (core func $i "run")))
 )
 
-(assert_trap (invoke "run") "synchronous stream and future reads not yet supported")
+;; We expect deadlock since the write end is leaked:
+(assert_trap (invoke "run") "deadlock detected: event loop cannot make further progress")
 
 ;; asynchronous future.read; async lift
 (component

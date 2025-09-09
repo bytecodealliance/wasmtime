@@ -1,7 +1,3 @@
-use super::{
-    delete_fields, delete_request, delete_response, get_fields, get_fields_mut, get_request,
-    get_request_mut, get_response, get_response_mut, push_fields, push_request, push_response,
-};
 use crate::p3::bindings::clocks::monotonic_clock::Duration;
 use crate::p3::bindings::http::types::{
     ErrorCode, FieldName, FieldValue, Fields, HeaderError, Headers, Host, HostFields, HostRequest,
@@ -9,27 +5,79 @@ use crate::p3::bindings::http::types::{
     RequestOptions, RequestOptionsError, Response, Scheme, StatusCode, Trailers,
 };
 use crate::p3::body::Body;
-use crate::p3::{HttpError, WasiHttp, WasiHttpCtxView};
+use crate::p3::{HeaderResult, HttpError, RequestOptionsResult, WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
-use bytes::Bytes;
 use core::mem;
-use core::num::NonZeroUsize;
 use core::pin::Pin;
-use core::task::Context;
-use core::task::Poll;
+use core::task::{Context, Poll};
 use http::header::CONTENT_LENGTH;
-use http_body::Body as _;
-use http_body_util::combinators::BoxBody;
-use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, Destination, FutureProducer, FutureReader, Resource, StreamProducer, StreamReader,
-    StreamResult,
+    Access, Accessor, FutureProducer, FutureReader, Resource, ResourceTable, StreamReader,
 };
-use wasmtime_wasi::ResourceTable;
-use wasmtime_wasi::p3::{FutureOneshotProducer, StreamEmptyProducer};
+
+fn get_fields<'a>(
+    table: &'a ResourceTable,
+    fields: &Resource<Fields>,
+) -> wasmtime::Result<&'a Fields> {
+    table
+        .get(&fields)
+        .context("failed to get fields from table")
+}
+
+fn get_fields_mut<'a>(
+    table: &'a mut ResourceTable,
+    fields: &Resource<Fields>,
+) -> HeaderResult<&'a mut Fields> {
+    table
+        .get_mut(&fields)
+        .context("failed to get fields from table")
+        .map_err(crate::p3::HeaderError::trap)
+}
+
+fn push_fields(table: &mut ResourceTable, fields: Fields) -> wasmtime::Result<Resource<Fields>> {
+    table.push(fields).context("failed to push fields to table")
+}
+
+fn delete_fields(table: &mut ResourceTable, fields: Resource<Fields>) -> wasmtime::Result<Fields> {
+    table
+        .delete(fields)
+        .context("failed to delete fields from table")
+}
+
+fn get_request<'a>(
+    table: &'a ResourceTable,
+    req: &Resource<Request>,
+) -> wasmtime::Result<&'a Request> {
+    table.get(req).context("failed to get request from table")
+}
+
+fn get_request_mut<'a>(
+    table: &'a mut ResourceTable,
+    req: &Resource<Request>,
+) -> wasmtime::Result<&'a mut Request> {
+    table
+        .get_mut(req)
+        .context("failed to get request from table")
+}
+
+fn get_response<'a>(
+    table: &'a ResourceTable,
+    res: &Resource<Response>,
+) -> wasmtime::Result<&'a Response> {
+    table.get(res).context("failed to get response from table")
+}
+
+fn get_response_mut<'a>(
+    table: &'a mut ResourceTable,
+    res: &Resource<Response>,
+) -> wasmtime::Result<&'a mut Response> {
+    table
+        .get_mut(res)
+        .context("failed to get response from table")
+}
 
 fn get_request_options<'a>(
     table: &'a ResourceTable,
@@ -43,10 +91,11 @@ fn get_request_options<'a>(
 fn get_request_options_mut<'a>(
     table: &'a mut ResourceTable,
     opts: &Resource<RequestOptions>,
-) -> wasmtime::Result<&'a mut RequestOptions> {
+) -> RequestOptionsResult<&'a mut RequestOptions> {
     table
         .get_mut(opts)
         .context("failed to get request options from table")
+        .map_err(crate::p3::RequestOptionsError::trap)
 }
 
 fn push_request_options(
@@ -80,107 +129,42 @@ fn parse_header_value(
     }
 }
 
-struct GuestBodyResultProducer(
-    oneshot::Receiver<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
-);
+enum GuestBodyResultProducer {
+    Receiver(oneshot::Receiver<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>),
+    Future(Pin<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>),
+}
 
 impl<D> FutureProducer<D> for GuestBodyResultProducer {
     type Item = Result<(), ErrorCode>;
 
-    async fn produce(self, _: &Accessor<D>) -> wasmtime::Result<Self::Item> {
-        let Ok(fut) = self.0.await else {
-            return Ok(Ok(()));
-        };
-        Ok(Box::into_pin(fut).await)
-    }
-}
-
-struct HostBodyStreamProducer<T> {
-    body: BoxBody<Bytes, ErrorCode>,
-    trailers: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
-    getter: for<'a> fn(&'a mut T) -> WasiHttpCtxView<'a>,
-}
-
-impl<T> Drop for HostBodyStreamProducer<T> {
-    fn drop(&mut self) {
-        self.close(Ok(None))
-    }
-}
-
-impl<T> HostBodyStreamProducer<T> {
-    fn close(&mut self, res: Result<Option<Resource<Trailers>>, ErrorCode>) {
-        if let Some(tx) = self.trailers.take() {
-            _ = tx.send(res);
-        }
-    }
-}
-
-impl<D> StreamProducer<D> for HostBodyStreamProducer<D>
-where
-    D: 'static,
-{
-    type Item = u8;
-    type Buffer = Cursor<Bytes>;
-
-    fn poll_produce<'a>(
+    fn poll_produce(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        mut store: StoreContextMut<'a, D>,
-        mut dst: Destination<'a, Self::Item, Self::Buffer>,
+        _: StoreContextMut<D>,
         finish: bool,
-    ) -> Poll<wasmtime::Result<StreamResult>> {
-        let res = 'result: {
-            let cap = match dst.remaining(&mut store).map(NonZeroUsize::new) {
-                Some(Some(cap)) => Some(cap),
-                Some(None) => {
-                    if self.body.is_end_stream() {
-                        break 'result Ok(None);
-                    } else {
-                        return Poll::Ready(Ok(StreamResult::Completed));
+    ) -> Poll<wasmtime::Result<Option<Self::Item>>> {
+        match &mut *self {
+            Self::Receiver(rx) => match Pin::new(rx).poll(cx) {
+                Poll::Ready(Ok(fut)) => {
+                    let mut fut = Box::into_pin(fut);
+                    match fut.as_mut().poll(cx) {
+                        Poll::Ready(res) => Poll::Ready(Ok(Some(res))),
+                        Poll::Pending => {
+                            *self = Self::Future(fut);
+                            Poll::Pending
+                        }
                     }
                 }
-                None => None,
-            };
-            match Pin::new(&mut self.body).poll_frame(cx) {
-                Poll::Ready(Some(Ok(frame))) => {
-                    match frame.into_data().map_err(http_body::Frame::into_trailers) {
-                        Ok(mut frame) => {
-                            if let Some(cap) = cap {
-                                let n = frame.len();
-                                let cap = cap.into();
-                                if n > cap {
-                                    dst.set_buffer(Cursor::new(frame.split_off(cap)));
-                                    let mut dst = dst.as_direct(store, cap);
-                                    dst.remaining().copy_from_slice(&frame);
-                                    dst.mark_written(cap);
-                                } else {
-                                    let mut dst = dst.as_direct(store, n);
-                                    dst.remaining()[..n].copy_from_slice(&frame);
-                                    dst.mark_written(n);
-                                }
-                            } else {
-                                dst.set_buffer(Cursor::new(frame));
-                            }
-                            return Poll::Ready(Ok(StreamResult::Completed));
-                        }
-                        Err(Ok(trailers)) => {
-                            let trailers = push_fields(
-                                (self.getter)(store.data_mut()).table,
-                                Fields::new_mutable(trailers),
-                            )?;
-                            break 'result Ok(Some(trailers));
-                        }
-                        Err(Err(..)) => break 'result Err(ErrorCode::HttpProtocolError),
-                    }
-                }
-                Poll::Ready(Some(Err(err))) => break 'result Err(err),
-                Poll::Ready(None) => break 'result Ok(None),
-                Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
-                Poll::Pending => return Poll::Pending,
-            }
-        };
-        self.close(res);
-        Poll::Ready(Ok(StreamResult::Dropped))
+                Poll::Ready(Err(..)) => Poll::Ready(Ok(Some(Ok(())))),
+                Poll::Pending if finish => Poll::Ready(Ok(None)),
+                Poll::Pending => Poll::Pending,
+            },
+            Self::Future(fut) => match fut.as_mut().poll(cx) {
+                Poll::Ready(res) => Poll::Ready(Ok(Some(res))),
+                Poll::Pending if finish => Poll::Ready(Ok(None)),
+                Poll::Pending => Poll::Pending,
+            },
+        }
     }
 }
 
@@ -192,24 +176,19 @@ impl HostFields for WasiHttpCtxView<'_> {
     fn from_list(
         &mut self,
         entries: Vec<(FieldName, FieldValue)>,
-    ) -> wasmtime::Result<Result<Resource<Fields>, HeaderError>> {
+    ) -> HeaderResult<Resource<Fields>> {
         let mut fields = http::HeaderMap::default();
         for (name, value) in entries {
-            let Ok(name) = name.parse() else {
-                return Ok(Err(HeaderError::InvalidSyntax));
-            };
+            let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
             if self.ctx.is_forbidden_header(&name) {
-                return Ok(Err(HeaderError::Forbidden));
+                return Err(HeaderError::Forbidden.into());
             }
-            match parse_header_value(&name, value) {
-                Ok(value) => {
-                    fields.append(name, value);
-                }
-                Err(err) => return Ok(Err(err)),
-            }
+            let value = parse_header_value(&name, value)?;
+            fields.append(name, value);
         }
-        let fields = push_fields(self.table, Fields::new_mutable(fields))?;
-        Ok(Ok(fields))
+        let fields = push_fields(self.table, Fields::new_mutable(fields))
+            .map_err(crate::p3::HeaderError::trap)?;
+        Ok(fields)
     }
 
     fn get(
@@ -235,73 +214,52 @@ impl HostFields for WasiHttpCtxView<'_> {
         fields: Resource<Fields>,
         name: FieldName,
         value: Vec<FieldValue>,
-    ) -> wasmtime::Result<Result<(), HeaderError>> {
-        let Ok(name) = name.parse() else {
-            return Ok(Err(HeaderError::InvalidSyntax));
-        };
+    ) -> HeaderResult<()> {
+        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
         if self.ctx.is_forbidden_header(&name) {
-            return Ok(Err(HeaderError::Forbidden));
+            return Err(HeaderError::Forbidden.into());
         }
         let mut values = Vec::with_capacity(value.len());
         for value in value {
-            match parse_header_value(&name, value) {
-                Ok(value) => {
-                    values.push(value);
-                }
-                Err(err) => return Ok(Err(err)),
-            }
+            let value = parse_header_value(&name, value)?;
+            values.push(value);
         }
         let fields = get_fields_mut(self.table, &fields)?;
-        let Some(fields) = fields.get_mut() else {
-            return Ok(Err(HeaderError::Immutable));
-        };
+        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
         fields.remove(&name);
         for value in values {
             fields.append(&name, value);
         }
-        Ok(Ok(()))
+        Ok(())
     }
 
-    fn delete(
-        &mut self,
-        fields: Resource<Fields>,
-        name: FieldName,
-    ) -> wasmtime::Result<Result<(), HeaderError>> {
-        let header = match http::HeaderName::from_bytes(name.as_bytes()) {
-            Ok(header) => header,
-            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
-        };
-        if self.ctx.is_forbidden_header(&header) {
-            return Ok(Err(HeaderError::Forbidden));
+    fn delete(&mut self, fields: Resource<Fields>, name: FieldName) -> HeaderResult<()> {
+        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
+        if self.ctx.is_forbidden_header(&name) {
+            return Err(HeaderError::Forbidden.into());
         }
         let fields = get_fields_mut(self.table, &fields)?;
-        let Some(fields) = fields.get_mut() else {
-            return Ok(Err(HeaderError::Immutable));
-        };
+        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
         fields.remove(&name);
-        Ok(Ok(()))
+        Ok(())
     }
 
     fn get_and_delete(
         &mut self,
         fields: Resource<Fields>,
         name: FieldName,
-    ) -> wasmtime::Result<Result<Vec<FieldValue>, HeaderError>> {
-        let Ok(header) = http::header::HeaderName::from_bytes(name.as_bytes()) else {
-            return Ok(Err(HeaderError::InvalidSyntax));
-        };
-        if self.ctx.is_forbidden_header(&header) {
-            return Ok(Err(HeaderError::Forbidden));
+    ) -> HeaderResult<Vec<FieldValue>> {
+        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
+        if self.ctx.is_forbidden_header(&name) {
+            return Err(HeaderError::Forbidden.into());
         }
         let fields = get_fields_mut(self.table, &fields)?;
-        let Some(fields) = fields.get_mut() else {
-            return Ok(Err(HeaderError::Immutable));
-        };
-        let http::header::Entry::Occupied(entry) = fields.entry(header) else {
-            return Ok(Ok(vec![]));
+        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
+        let http::header::Entry::Occupied(entry) = fields.entry(name) else {
+            return Ok(Vec::default());
         };
         let (.., values) = entry.remove_entry_mult();
-        Ok(Ok(values.map(|header| header.as_bytes().into()).collect()))
+        Ok(values.map(|value| value.as_bytes().into()).collect())
     }
 
     fn append(
@@ -309,23 +267,16 @@ impl HostFields for WasiHttpCtxView<'_> {
         fields: Resource<Fields>,
         name: FieldName,
         value: FieldValue,
-    ) -> wasmtime::Result<Result<(), HeaderError>> {
-        let Ok(name) = name.parse() else {
-            return Ok(Err(HeaderError::InvalidSyntax));
-        };
+    ) -> HeaderResult<()> {
+        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
         if self.ctx.is_forbidden_header(&name) {
-            return Ok(Err(HeaderError::Forbidden));
+            return Err(HeaderError::Forbidden.into());
         }
-        let value = match parse_header_value(&name, value) {
-            Ok(value) => value,
-            Err(err) => return Ok(Err(err)),
-        };
+        let value = parse_header_value(&name, value)?;
         let fields = get_fields_mut(self.table, &fields)?;
-        let Some(fields) = fields.get_mut() else {
-            return Ok(Err(HeaderError::Immutable));
-        };
+        let fields = fields.get_mut().ok_or(HeaderError::Immutable)?;
         fields.append(name, value);
-        Ok(Ok(()))
+        Ok(())
     }
 
     fn copy_all(
@@ -381,10 +332,14 @@ impl HostRequestWithStore for WasiHttp {
                 options: options.map(Into::into),
                 body,
             };
-            let req = push_request(table, req)?;
+            let req = table.push(req).context("failed to push request to table")?;
             Ok((
                 req,
-                FutureReader::new(instance, &mut store, GuestBodyResultProducer(result_rx)),
+                FutureReader::new(
+                    instance,
+                    &mut store,
+                    GuestBodyResultProducer::Receiver(result_rx),
+                ),
             ))
         })
     }
@@ -403,58 +358,20 @@ impl HostRequestWithStore for WasiHttp {
     > {
         let getter = store.getter();
         store.with(|mut store| {
-            let req = get_request_mut(store.get().table, &req)?;
-            match mem::replace(&mut req.body, Body::Consumed) {
-                Body::Guest {
-                    contents_rx: Some(contents_rx),
-                    trailers_rx,
-                    result_tx,
-                } => {
-                    // TODO: Use a result specified by the caller
-                    // https://github.com/WebAssembly/wasi-http/issues/176
-                    _ = result_tx.send(Box::new(async { Ok(()) }));
-                    Ok(Ok((contents_rx, trailers_rx)))
-                }
-                Body::Guest {
-                    contents_rx: None,
-                    trailers_rx,
-                    result_tx,
-                } => {
-                    let instance = store.instance();
-                    // TODO: Use a result specified by the caller
-                    // https://github.com/WebAssembly/wasi-http/issues/176
-                    _ = result_tx.send(Box::new(async { Ok(()) }));
-                    Ok(Ok((
-                        StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
-                        trailers_rx,
-                    )))
-                }
-                Body::Host { body, result_tx } => {
-                    let instance = store.instance();
-                    // TODO: Use a result specified by the caller
-                    // https://github.com/WebAssembly/wasi-http/issues/176
-                    _ = result_tx.send(Box::new(async { Ok(()) }));
-                    let (trailers_tx, trailers_rx) = oneshot::channel();
-                    Ok(Ok((
-                        StreamReader::new(
-                            instance,
-                            &mut store,
-                            HostBodyStreamProducer {
-                                body,
-                                trailers: Some(trailers_tx),
-                                getter,
-                            },
-                        ),
-                        FutureReader::new(
-                            instance,
-                            &mut store,
-                            FutureOneshotProducer::from(trailers_rx),
-                        ),
-                    )))
-                }
-                Body::Consumed => Ok(Err(())),
-            }
+            let Request { body, .. } = get_request_mut(store.get().table, &req)?;
+            let body = mem::replace(body, Body::Consumed);
+            Ok(body.consume(store, getter))
         })
+    }
+
+    fn drop<T>(mut store: Access<'_, T, Self>, req: Resource<Request>) -> wasmtime::Result<()> {
+        let Request { body, .. } = store
+            .get()
+            .table
+            .delete(req)
+            .context("failed to delete request from table")?;
+        body.drop(store);
+        Ok(())
     }
 }
 
@@ -569,11 +486,6 @@ impl HostRequest for WasiHttpCtxView<'_> {
         let Request { headers, .. } = get_request(self.table, &req)?;
         push_fields(self.table, Fields::new_immutable(Arc::clone(headers)))
     }
-
-    fn drop(&mut self, req: Resource<Request>) -> wasmtime::Result<()> {
-        delete_request(self.table, req)?;
-        Ok(())
-    }
 }
 
 impl HostRequestOptions for WasiHttpCtxView<'_> {
@@ -600,13 +512,11 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
         &mut self,
         opts: Resource<RequestOptions>,
         duration: Option<Duration>,
-    ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
+    ) -> RequestOptionsResult<()> {
         let opts = get_request_options_mut(self.table, &opts)?;
-        let Some(opts) = opts.get_mut() else {
-            return Ok(Err(RequestOptionsError::Immutable));
-        };
+        let opts = opts.get_mut().ok_or(RequestOptionsError::Immutable)?;
         opts.connect_timeout = duration.map(core::time::Duration::from_nanos);
-        Ok(Ok(()))
+        Ok(())
     }
 
     fn get_first_byte_timeout(
@@ -628,13 +538,11 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
         &mut self,
         opts: Resource<RequestOptions>,
         duration: Option<Duration>,
-    ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
+    ) -> RequestOptionsResult<()> {
         let opts = get_request_options_mut(self.table, &opts)?;
-        let Some(opts) = opts.get_mut() else {
-            return Ok(Err(RequestOptionsError::Immutable));
-        };
+        let opts = opts.get_mut().ok_or(RequestOptionsError::Immutable)?;
         opts.first_byte_timeout = duration.map(core::time::Duration::from_nanos);
-        Ok(Ok(()))
+        Ok(())
     }
 
     fn get_between_bytes_timeout(
@@ -656,13 +564,11 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
         &mut self,
         opts: Resource<RequestOptions>,
         duration: Option<Duration>,
-    ) -> wasmtime::Result<Result<(), RequestOptionsError>> {
+    ) -> RequestOptionsResult<()> {
         let opts = get_request_options_mut(self.table, &opts)?;
-        let Some(opts) = opts.get_mut() else {
-            return Ok(Err(RequestOptionsError::Immutable));
-        };
+        let opts = opts.get_mut().ok_or(RequestOptionsError::Immutable)?;
         opts.between_bytes_timeout = duration.map(core::time::Duration::from_nanos);
-        Ok(Ok(()))
+        Ok(())
     }
 
     fn clone(
@@ -701,10 +607,16 @@ impl HostResponseWithStore for WasiHttp {
                 headers: headers.into(),
                 body,
             };
-            let res = push_response(table, res)?;
+            let res = table
+                .push(res)
+                .context("failed to push response to table")?;
             Ok((
                 res,
-                FutureReader::new(instance, &mut store, GuestBodyResultProducer(result_rx)),
+                FutureReader::new(
+                    instance,
+                    &mut store,
+                    GuestBodyResultProducer::Receiver(result_rx),
+                ),
             ))
         })
     }
@@ -723,58 +635,20 @@ impl HostResponseWithStore for WasiHttp {
     > {
         let getter = store.getter();
         store.with(|mut store| {
-            let res = get_response_mut(store.get().table, &res)?;
-            match mem::replace(&mut res.body, Body::Consumed) {
-                Body::Guest {
-                    contents_rx: Some(contents_rx),
-                    trailers_rx,
-                    result_tx,
-                } => {
-                    // TODO: Use a result specified by the caller
-                    // https://github.com/WebAssembly/wasi-http/issues/176
-                    _ = result_tx.send(Box::new(async { Ok(()) }));
-                    Ok(Ok((contents_rx, trailers_rx)))
-                }
-                Body::Guest {
-                    contents_rx: None,
-                    trailers_rx,
-                    result_tx,
-                } => {
-                    let instance = store.instance();
-                    // TODO: Use a result specified by the caller
-                    // https://github.com/WebAssembly/wasi-http/issues/176
-                    _ = result_tx.send(Box::new(async { Ok(()) }));
-                    Ok(Ok((
-                        StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
-                        trailers_rx,
-                    )))
-                }
-                Body::Host { body, result_tx } => {
-                    let instance = store.instance();
-                    // TODO: Use a result specified by the caller
-                    // https://github.com/WebAssembly/wasi-http/issues/176
-                    _ = result_tx.send(Box::new(async { Ok(()) }));
-                    let (trailers_tx, trailers_rx) = oneshot::channel();
-                    Ok(Ok((
-                        StreamReader::new(
-                            instance,
-                            &mut store,
-                            HostBodyStreamProducer {
-                                body,
-                                trailers: Some(trailers_tx),
-                                getter,
-                            },
-                        ),
-                        FutureReader::new(
-                            instance,
-                            &mut store,
-                            FutureOneshotProducer::from(trailers_rx),
-                        ),
-                    )))
-                }
-                Body::Consumed => Ok(Err(())),
-            }
+            let Response { body, .. } = get_response_mut(store.get().table, &res)?;
+            let body = mem::replace(body, Body::Consumed);
+            Ok(body.consume(store, getter))
         })
+    }
+
+    fn drop<T>(mut store: Access<'_, T, Self>, res: Resource<Response>) -> wasmtime::Result<()> {
+        let Response { body, .. } = store
+            .get()
+            .table
+            .delete(res)
+            .context("failed to delete response from table")?;
+        body.drop(store);
+        Ok(())
     }
 }
 
@@ -801,15 +675,24 @@ impl HostResponse for WasiHttpCtxView<'_> {
         let Response { headers, .. } = get_response(self.table, &res)?;
         push_fields(self.table, Fields::new_immutable(Arc::clone(headers)))
     }
-
-    fn drop(&mut self, res: Resource<Response>) -> wasmtime::Result<()> {
-        delete_response(self.table, res)?;
-        Ok(())
-    }
 }
 
 impl Host for WasiHttpCtxView<'_> {
     fn convert_error_code(&mut self, error: HttpError) -> wasmtime::Result<ErrorCode> {
+        error.downcast()
+    }
+
+    fn convert_header_error(
+        &mut self,
+        error: crate::p3::HeaderError,
+    ) -> wasmtime::Result<HeaderError> {
+        error.downcast()
+    }
+
+    fn convert_request_options_error(
+        &mut self,
+        error: crate::p3::RequestOptionsError,
+    ) -> wasmtime::Result<RequestOptionsError> {
         error.downcast()
     }
 }

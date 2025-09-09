@@ -9,7 +9,7 @@ use std::{
 use wasmtime::{
     StoreContextMut,
     component::{
-        Accessor, Destination, FutureConsumer, FutureProducer, Lift, Lower, Source, StreamConsumer,
+        Destination, FutureConsumer, FutureProducer, Lift, Lower, Source, StreamConsumer,
         StreamProducer, StreamResult,
     },
 };
@@ -139,24 +139,41 @@ impl<T> OneshotProducer<T> {
 impl<D, T: Send + 'static> FutureProducer<D> for OneshotProducer<T> {
     type Item = T;
 
-    async fn produce(self, _: &Accessor<D>) -> Result<T> {
-        Ok(self.0.await?)
+    fn poll_produce(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        _: StoreContextMut<D>,
+        finish: bool,
+    ) -> Poll<Result<Option<T>>> {
+        match Pin::new(&mut self.get_mut().0).poll(cx) {
+            Poll::Pending if finish => Poll::Ready(Ok(None)),
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(result) => Poll::Ready(Ok(Some(result?))),
+        }
     }
 }
 
-pub struct OneshotConsumer<T>(oneshot::Sender<T>);
+pub struct OneshotConsumer<T>(Option<oneshot::Sender<T>>);
 
 impl<T> OneshotConsumer<T> {
     pub fn new(tx: oneshot::Sender<T>) -> Self {
-        Self(tx)
+        Self(Some(tx))
     }
 }
 
-impl<D, T: Send + 'static> FutureConsumer<D> for OneshotConsumer<T> {
+impl<D, T: Lift + Send + 'static> FutureConsumer<D> for OneshotConsumer<T> {
     type Item = T;
 
-    async fn consume(self, _: &Accessor<D>, value: T) -> Result<()> {
-        _ = self.0.send(value);
-        Ok(())
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        mut source: Source<'_, T>,
+        _: bool,
+    ) -> Poll<Result<()>> {
+        let value = &mut None;
+        source.read(store, value)?;
+        _ = self.get_mut().0.take().unwrap().send(value.take().unwrap());
+        Poll::Ready(Ok(()))
     }
 }

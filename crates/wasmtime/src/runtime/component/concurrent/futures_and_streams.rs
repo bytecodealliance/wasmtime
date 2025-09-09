@@ -1,6 +1,6 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{Accessor, ConcurrentState, WorkItem, tls};
+use crate::component::concurrent::{ConcurrentState, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::values::{ErrorContextAny, FutureAny, StreamAny};
@@ -23,7 +23,7 @@ use std::mem::{self, MaybeUninit};
 use std::pin::Pin;
 use std::string::{String, ToString};
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, Waker};
+use std::task::{self, Context, Poll, Waker};
 use std::vec::Vec;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex,
@@ -223,6 +223,17 @@ pub struct Destination<'a, T, B> {
 }
 
 impl<'a, T, B> Destination<'a, T, B> {
+    /// Reborrow `self` so it can be used again later.
+    pub fn reborrow(&mut self) -> Destination<'_, T, B> {
+        Destination {
+            instance: self.instance,
+            id: self.id,
+            buffer: &mut *self.buffer,
+            host_buffer: self.host_buffer.as_deref_mut(),
+            _phantom: PhantomData,
+        }
+    }
+
     /// Take the buffer out of `self`, leaving a default-initialized one in its
     /// place.
     ///
@@ -505,7 +516,16 @@ pub struct Source<'a, T> {
     host_buffer: Option<&'a mut dyn WriteBuffer<T>>,
 }
 
-impl<T> Source<'_, T> {
+impl<'a, T> Source<'a, T> {
+    /// Reborrow `self` so it can be used again later.
+    pub fn reborrow(&mut self) -> Source<'_, T> {
+        Source {
+            instance: self.instance,
+            id: self.id,
+            host_buffer: self.host_buffer.as_deref_mut(),
+        }
+    }
+
     /// Accept zero or more items from the writer.
     pub fn read<B, S: AsContextMut>(&mut self, mut store: S, buffer: &mut B) -> Result<()>
     where
@@ -782,7 +802,20 @@ pub trait FutureProducer<D>: Send + 'static {
     type Item;
 
     /// Handle a host- or guest-initiated read by producing a value.
-    fn produce(self, accessor: &Accessor<D>) -> impl Future<Output = Result<Self::Item>> + Send;
+    ///
+    /// This is equivalent to `StreamProducer::poll_produce`, but with a
+    /// simplified interface for futures.
+    ///
+    /// If `finish` is true, the implementation may return
+    /// `Poll::Ready(Ok(None))` to indicate the operation was canceled before it
+    /// could produce a value.  Otherwise, it must either return
+    /// `Poll::Ready(Ok(Some(_)))`, `Poll::Ready(Err(_))`, or `Poll::Pending`.
+    fn poll_produce(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        finish: bool,
+    ) -> Poll<Result<Option<Self::Item>>>;
 }
 
 /// Represents a host-owned read end of a future.
@@ -791,11 +824,23 @@ pub trait FutureConsumer<D>: Send + 'static {
     type Item;
 
     /// Handle a host- or guest-initiated write by consuming a value.
-    fn consume(
-        self,
-        accessor: &Accessor<D>,
-        value: Self::Item,
-    ) -> impl Future<Output = Result<()>> + Send;
+    ///
+    /// This is equivalent to `StreamProducer::poll_produce`, but with a
+    /// simplified interface for futures.
+    ///
+    /// If `finish` is true, the implementation may return `Poll::Ready(Ok(()))`
+    /// without taking the item from `source`, which indicates the operation was
+    /// canceled before it could consume the value.  Otherwise, it must either
+    /// take the item from `source` and return `Poll::Ready(Ok(()))`, or else
+    /// return `Poll::Ready(Err(_))` or `Poll::Pending` (with or without taking
+    /// the item).
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        source: Source<'_, Self::Item>,
+        finish: bool,
+    ) -> Poll<Result<()>>;
 }
 
 /// Represents the readable end of a Component Model `future`.
@@ -820,13 +865,13 @@ impl<T> FutureReader<T> {
     where
         T: func::Lower + func::Lift + Send + Sync + 'static,
     {
-        struct Producer<F>(F);
+        struct Producer<P>(P);
 
-        impl<D, T: func::Lower + 'static, F: Future<Output = Result<T>> + Send + 'static>
-            StreamProducer<D> for Producer<F>
+        impl<D, T: func::Lower + 'static, P: FutureProducer<D, Item = T>> StreamProducer<D>
+            for Producer<P>
         {
-            type Item = T;
-            type Buffer = Option<T>;
+            type Item = P::Item;
+            type Buffer = Option<P::Item>;
 
             fn poll_produce<'a>(
                 self: Pin<&mut Self>,
@@ -837,18 +882,11 @@ impl<T> FutureReader<T> {
             ) -> Poll<Result<StreamResult>> {
                 // SAFETY: This is a standard pin-projection, and we never move
                 // out of `self`.
-                let future = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
+                let producer = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
 
-                match tls::set(store.0, || future.poll(cx)) {
-                    Poll::Pending => {
-                        if finish {
-                            Poll::Ready(Ok(StreamResult::Cancelled))
-                        } else {
-                            Poll::Pending
-                        }
-                    }
-                    Poll::Ready(value) => {
-                        destination.set_buffer(Some(value?));
+                Poll::Ready(Ok(
+                    if let Some(value) = task::ready!(producer.poll_produce(cx, store, finish))? {
+                        destination.set_buffer(Some(value));
 
                         // Here we return `StreamResult::Completed` even though
                         // we've produced the last item we'll ever produce.
@@ -856,23 +894,19 @@ impl<T> FutureReader<T> {
                         // `ReturnCode::Completed(1)` rather than
                         // `ReturnCode::Dropped(1)`.  In any case, we won't be
                         // called again since the future will have resolved.
-                        Poll::Ready(Ok(StreamResult::Completed))
-                    }
-                }
+                        StreamResult::Completed
+                    } else {
+                        StreamResult::Cancelled
+                    },
+                ))
             }
         }
 
-        let mut store = store.as_context_mut();
-        let token = StoreToken::new(store.as_context_mut());
         Self::new_(
             instance.new_transmit(
-                store,
+                store.as_context_mut(),
                 TransmitKind::Future,
-                Producer(async move {
-                    producer
-                        .produce(&Accessor::new(token, Some(instance)))
-                        .await
-                }),
+                Producer(producer),
             ),
             instance,
         )
@@ -894,14 +928,10 @@ impl<T> FutureReader<T> {
     ) where
         T: func::Lift + 'static,
     {
-        enum Consumer<C> {
-            Start(C, Instance),
-            Poll(Pin<Box<dyn Future<Output = Result<()>> + Send>>),
-            Invalid,
-        }
+        struct Consumer<C>(C);
 
-        impl<D: 'static, T: func::Lift + 'static, C: FutureConsumer<D, Item = T> + Unpin>
-            StreamConsumer<D> for Consumer<C>
+        impl<D: 'static, T: func::Lift + 'static, C: FutureConsumer<D, Item = T>> StreamConsumer<D>
+            for Consumer<C>
         {
             type Item = T;
 
@@ -912,53 +942,32 @@ impl<T> FutureReader<T> {
                 mut source: Source<Self::Item>,
                 finish: bool,
             ) -> Poll<Result<StreamResult>> {
-                let me = self.get_mut();
+                // SAFETY: This is a standard pin-projection, and we never move
+                // out of `self`.
+                let consumer = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
 
-                if let Consumer::Start(consumer, instance) = mem::replace(me, Consumer::Invalid) {
-                    let token = StoreToken::new(store.as_context_mut());
-                    let value = &mut None;
-                    source.read(store.as_context_mut(), value)?;
-                    let value = value.take().unwrap();
-                    *me = Consumer::Poll(Box::pin(async move {
-                        consumer
-                            .consume(&Accessor::new(token, Some(instance)), value)
-                            .await
-                    }));
-                }
+                task::ready!(consumer.poll_consume(
+                    cx,
+                    store.as_context_mut(),
+                    source.reborrow(),
+                    finish
+                ))?;
 
-                let Consumer::Poll(future) = me else {
-                    unreachable!();
-                };
-
-                match tls::set(store.0, || future.as_mut().poll(cx)) {
-                    Poll::Pending => {
-                        if finish {
-                            Poll::Ready(Ok(StreamResult::Cancelled))
-                        } else {
-                            Poll::Pending
-                        }
-                    }
-                    Poll::Ready(result) => {
-                        result?;
-
-                        // Here we return `StreamResult::Completed` even though
-                        // we've consumed the last item we'll ever consume.
-                        // That's because the ABI expects
-                        // `ReturnCode::Completed(1)` rather than
-                        // `ReturnCode::Dropped(1)`.  In any case, we won't be
-                        // called again since the future will have resolved.
-                        Poll::Ready(Ok(StreamResult::Completed))
-                    }
-                }
+                Poll::Ready(Ok(if source.remaining(store) == 0 {
+                    // Here we return `StreamResult::Completed` even though
+                    // we've consumed the last item we'll ever consume.  That's
+                    // because the ABI expects `ReturnCode::Completed(1)` rather
+                    // than `ReturnCode::Dropped(1)`.  In any case, we won't be
+                    // called again since the future will have resolved.
+                    StreamResult::Completed
+                } else {
+                    StreamResult::Cancelled
+                }))
             }
         }
 
-        self.instance.set_consumer(
-            store,
-            self.id,
-            TransmitKind::Future,
-            Consumer::Start(consumer, self.instance),
-        );
+        self.instance
+            .set_consumer(store, self.id, TransmitKind::Future, Consumer(consumer));
     }
 
     /// Convert this `FutureReader` into a [`Val`].
@@ -1653,6 +1662,10 @@ impl TableDebug for TransmitState {
     }
 }
 
+type PollStream = Box<
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>> + Send + Sync,
+>;
+
 /// Represents the state of the write end of a stream or future.
 enum WriteState {
     /// The write end is open, but no write is pending.
@@ -1668,11 +1681,7 @@ enum WriteState {
     },
     /// The write end is owned by the host, which is ready to produce items.
     HostReady {
-        produce: Box<
-            dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>
-                + Send
-                + Sync,
-        >,
+        produce: PollStream,
         guest_offset: usize,
         cancel: bool,
         cancel_waker: Option<Waker>,
@@ -1707,11 +1716,7 @@ enum ReadState {
     },
     /// The read end is owned by a host task, and it is ready to consume items.
     HostReady {
-        consume: Box<
-            dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>
-                + Send
-                + Sync,
-        >,
+        consume: PollStream,
         guest_offset: usize,
         cancel: bool,
         cancel_waker: Option<Waker>,
@@ -1829,7 +1834,7 @@ impl Instance {
                                     unreachable!();
                                 };
 
-                                if let Poll::Pending = &poll {
+                                if poll.is_pending() {
                                     if !buffer.remaining().is_empty()
                                         || *guest_offset > 0
                                         || host_offset > 0
@@ -1839,7 +1844,6 @@ impl Instance {
                                              after producing at least one item"
                                         )));
                                     }
-
                                     *cancel_waker = Some(cx.waker().clone());
                                 } else {
                                     *cancel_waker = None;
@@ -1961,7 +1965,7 @@ impl Instance {
                             ..
                         } = &mut self.concurrent_state_mut(store).get_mut(id).unwrap().read
                         {
-                            if let Poll::Pending = &poll {
+                            if poll.is_pending() {
                                 *cancel_waker = Some(cx.waker().clone());
                             } else {
                                 *cancel_waker = None;
@@ -2003,6 +2007,12 @@ impl Instance {
                                 "StreamConsumer::poll_consume returned StreamResult::Completed \
                                  without consuming any items"
                             );
+                        }
+
+                        if let TransmitKind::Future = kind {
+                            tls::get(|store| {
+                                self.concurrent_state_mut(store).get_mut(id).unwrap().done = true;
+                            });
                         }
                     }
                     StreamResult::Cancelled => {
@@ -2046,7 +2056,7 @@ impl Instance {
                     cancel: false,
                     cancel_waker: None,
                 };
-                self.pipe_from_guest(store, kind, id, future);
+                self.pipe_from_guest(store.0, kind, id, future);
             }
             WriteState::HostReady { .. } => {
                 let WriteState::HostReady { produce, .. } = mem::replace(
@@ -2262,7 +2272,7 @@ impl Instance {
 
     fn pipe_from_guest(
         self,
-        mut store: impl AsContextMut,
+        store: &mut dyn VMStore,
         kind: TransmitKind,
         id: TableId<TransmitState>,
         future: Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>,
@@ -2300,13 +2310,12 @@ impl Instance {
             })
         };
 
-        self.concurrent_state_mut(store.as_context_mut().0)
-            .push_future(future.boxed());
+        self.concurrent_state_mut(store).push_future(future.boxed());
     }
 
     fn pipe_to_guest(
         self,
-        mut store: impl AsContextMut,
+        store: &mut dyn VMStore,
         kind: TransmitKind,
         id: TableId<TransmitState>,
         future: Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>,
@@ -2344,8 +2353,7 @@ impl Instance {
             })
         };
 
-        self.concurrent_state_mut(store.as_context_mut().0)
-            .push_future(future.boxed());
+        self.concurrent_state_mut(store).push_future(future.boxed());
     }
 
     /// Drop the read end of a stream or future read from the host.
@@ -2744,9 +2752,6 @@ impl Instance {
         let count = usize::try_from(count).unwrap();
         let options = Options::new_index(store.0, self, options);
         self.check_bounds(store.0, &options, ty, address, count)?;
-        if !options.async_() {
-            bail!("synchronous stream and future writes not yet supported");
-        }
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Write { done } = *state else {
             bail!(
@@ -2793,7 +2798,7 @@ impl Instance {
             Ok::<_, crate::Error>(())
         };
 
-        let result = match mem::replace(&mut transmit.read, new_state) {
+        let mut result = match mem::replace(&mut transmit.read, new_state) {
             ReadState::GuestReady {
                 ty: read_ty,
                 flat_abi: read_flat_abi,
@@ -2907,40 +2912,8 @@ impl Instance {
                     transmit.done = true;
                 }
 
-                let mut future = consume();
-                transmit.read = ReadState::HostReady {
-                    consume,
-                    guest_offset: 0,
-                    cancel: false,
-                    cancel_waker: None,
-                };
                 set_guest_ready(concurrent_state)?;
-                let poll = self.set_tls(store.0, || {
-                    future
-                        .as_mut()
-                        .poll(&mut Context::from_waker(&Waker::noop()))
-                });
-
-                match poll {
-                    Poll::Ready(state) => {
-                        let transmit = self.concurrent_state_mut(store.0).get_mut(transmit_id)?;
-                        let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
-                            unreachable!();
-                        };
-                        let code = return_code(ty.kind(), state?, mem::replace(guest_offset, 0));
-                        transmit.write = WriteState::Open;
-                        code
-                    }
-                    Poll::Pending => {
-                        self.pipe_from_guest(
-                            store.as_context_mut(),
-                            ty.kind(),
-                            transmit_id,
-                            future,
-                        );
-                        ReturnCode::Blocked
-                    }
-                }
+                self.consume(store.0, ty.kind(), transmit_id, consume, 0, false)?
             }
 
             ReadState::HostToHost { .. } => unreachable!(),
@@ -2959,6 +2932,10 @@ impl Instance {
             }
         };
 
+        if result == ReturnCode::Blocked && !options.async_() {
+            result = self.wait_for_write(store.0, transmit_handle)?;
+        }
+
         if result != ReturnCode::Blocked {
             *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
                 TransmitLocalState::Write {
@@ -2969,7 +2946,52 @@ impl Instance {
                 };
         }
 
+        log::trace!(
+            "guest_write result for {transmit_handle:?} (handle {handle}; state {transmit_id:?}): {result:?}",
+        );
+
         Ok(result)
+    }
+
+    /// Handle a host- or guest-initiated write by delivering the item(s) to the
+    /// `StreamConsumer` for the specified stream or future.
+    fn consume(
+        self,
+        store: &mut dyn VMStore,
+        kind: TransmitKind,
+        transmit_id: TableId<TransmitState>,
+        consume: PollStream,
+        guest_offset: usize,
+        cancel: bool,
+    ) -> Result<ReturnCode> {
+        let mut future = consume();
+        self.concurrent_state_mut(store).get_mut(transmit_id)?.read = ReadState::HostReady {
+            consume,
+            guest_offset,
+            cancel,
+            cancel_waker: None,
+        };
+        let poll = self.set_tls(store, || {
+            future
+                .as_mut()
+                .poll(&mut Context::from_waker(&Waker::noop()))
+        });
+
+        Ok(match poll {
+            Poll::Ready(state) => {
+                let transmit = self.concurrent_state_mut(store).get_mut(transmit_id)?;
+                let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
+                    unreachable!();
+                };
+                let code = return_code(kind, state?, mem::replace(guest_offset, 0));
+                transmit.write = WriteState::Open;
+                code
+            }
+            Poll::Pending => {
+                self.pipe_from_guest(store, kind, transmit_id, future);
+                ReturnCode::Blocked
+            }
+        })
     }
 
     /// Read from the specified stream or future from the guest.
@@ -2987,9 +3009,6 @@ impl Instance {
         let count = usize::try_from(count).unwrap();
         let options = Options::new_index(store.0, self, options);
         self.check_bounds(store.0, &options, ty, address, count)?;
-        if !options.async_() {
-            bail!("synchronous stream and future reads not yet supported");
-        }
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Read { done } = *state else {
             bail!("invalid handle {handle}; expected `Read`; got {:?}", *state);
@@ -3033,7 +3052,7 @@ impl Instance {
             Ok::<_, crate::Error>(())
         };
 
-        let result = match mem::replace(&mut transmit.write, new_state) {
+        let mut result = match mem::replace(&mut transmit.write, new_state) {
             WriteState::GuestReady {
                 ty: write_ty,
                 flat_abi: write_flat_abi,
@@ -3136,35 +3155,9 @@ impl Instance {
                     transmit.done = true;
                 }
 
-                let mut future = produce();
-                transmit.write = WriteState::HostReady {
-                    produce,
-                    guest_offset: 0,
-                    cancel: false,
-                    cancel_waker: None,
-                };
                 set_guest_ready(concurrent_state)?;
-                let poll = self.set_tls(store.0, || {
-                    future
-                        .as_mut()
-                        .poll(&mut Context::from_waker(&Waker::noop()))
-                });
 
-                match poll {
-                    Poll::Ready(state) => {
-                        let transmit = self.concurrent_state_mut(store.0).get_mut(transmit_id)?;
-                        let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
-                            unreachable!();
-                        };
-                        let code = return_code(ty.kind(), state?, mem::replace(guest_offset, 0));
-                        transmit.read = ReadState::Open;
-                        code
-                    }
-                    Poll::Pending => {
-                        self.pipe_to_guest(store.as_context_mut(), ty.kind(), transmit_id, future);
-                        ReturnCode::Blocked
-                    }
-                }
+                self.produce(store.0, ty.kind(), transmit_id, produce, 0, false)?
             }
 
             WriteState::Open => {
@@ -3174,6 +3167,10 @@ impl Instance {
 
             WriteState::Dropped => ReturnCode::Dropped(0),
         };
+
+        if result == ReturnCode::Blocked && !options.async_() {
+            result = self.wait_for_read(store.0, transmit_handle)?;
+        }
 
         if result != ReturnCode::Blocked {
             *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
@@ -3185,7 +3182,292 @@ impl Instance {
                 };
         }
 
+        log::trace!(
+            "guest_read result for {transmit_handle:?} (handle {handle}; state {transmit_id:?}): {result:?}",
+        );
+
         Ok(result)
+    }
+
+    /// Handle a host- or guest-initiated read by polling the `StreamProducer`
+    /// for the specified stream or future for items.
+    fn produce(
+        self,
+        store: &mut dyn VMStore,
+        kind: TransmitKind,
+        transmit_id: TableId<TransmitState>,
+        produce: PollStream,
+        guest_offset: usize,
+        cancel: bool,
+    ) -> Result<ReturnCode> {
+        let mut future = produce();
+        self.concurrent_state_mut(store).get_mut(transmit_id)?.write = WriteState::HostReady {
+            produce,
+            guest_offset,
+            cancel,
+            cancel_waker: None,
+        };
+        let poll = self.set_tls(store, || {
+            future
+                .as_mut()
+                .poll(&mut Context::from_waker(&Waker::noop()))
+        });
+
+        Ok(match poll {
+            Poll::Ready(state) => {
+                let transmit = self.concurrent_state_mut(store).get_mut(transmit_id)?;
+                let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
+                    unreachable!();
+                };
+                let code = return_code(kind, state?, mem::replace(guest_offset, 0));
+                transmit.read = ReadState::Open;
+                code
+            }
+            Poll::Pending => {
+                self.pipe_to_guest(store, kind, transmit_id, future);
+                ReturnCode::Blocked
+            }
+        })
+    }
+
+    fn wait_for_write(
+        self,
+        store: &mut dyn VMStore,
+        handle: TableId<TransmitHandle>,
+    ) -> Result<ReturnCode> {
+        let waitable = Waitable::Transmit(handle);
+        self.wait_for_event(store, waitable)?;
+        let event = waitable.take_event(self.concurrent_state_mut(store))?;
+        if let Some(event @ (Event::StreamWrite { code, .. } | Event::FutureWrite { code, .. })) =
+            event
+        {
+            waitable.on_delivery(self.id().get_mut(store), event);
+            Ok(code)
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// Cancel a pending stream or future write.
+    fn cancel_write(
+        self,
+        store: &mut dyn VMStore,
+        transmit_id: TableId<TransmitState>,
+        async_: bool,
+    ) -> Result<ReturnCode> {
+        let state = self.concurrent_state_mut(store);
+        let transmit = state.get_mut(transmit_id)?;
+        log::trace!(
+            "host_cancel_write state {transmit_id:?}; write state {:?} read state {:?}",
+            transmit.read,
+            transmit.write
+        );
+
+        let code = if let Some(event) =
+            Waitable::Transmit(transmit.write_handle).take_event(state)?
+        {
+            let (Event::FutureWrite { code, .. } | Event::StreamWrite { code, .. }) = event else {
+                unreachable!();
+            };
+            match (code, event) {
+                (ReturnCode::Completed(count), Event::StreamWrite { .. }) => {
+                    ReturnCode::Cancelled(count)
+                }
+                (ReturnCode::Dropped(_) | ReturnCode::Completed(_), _) => code,
+                _ => unreachable!(),
+            }
+        } else if let ReadState::HostReady {
+            cancel,
+            cancel_waker,
+            ..
+        } = &mut state.get_mut(transmit_id)?.read
+        {
+            *cancel = true;
+            if let Some(waker) = cancel_waker.take() {
+                waker.wake();
+            }
+
+            if async_ {
+                ReturnCode::Blocked
+            } else {
+                let handle = self
+                    .concurrent_state_mut(store)
+                    .get_mut(transmit_id)?
+                    .write_handle;
+                self.wait_for_write(store, handle)?
+            }
+        } else {
+            ReturnCode::Cancelled(0)
+        };
+
+        let transmit = self.concurrent_state_mut(store).get_mut(transmit_id)?;
+
+        match &transmit.write {
+            WriteState::GuestReady { .. } => {
+                transmit.write = WriteState::Open;
+            }
+            WriteState::HostReady { .. } => todo!("support host write cancellation"),
+            WriteState::Open | WriteState::Dropped => {}
+        }
+
+        log::trace!("cancelled write {transmit_id:?}: {code:?}");
+
+        Ok(code)
+    }
+
+    fn wait_for_read(
+        self,
+        store: &mut dyn VMStore,
+        handle: TableId<TransmitHandle>,
+    ) -> Result<ReturnCode> {
+        let waitable = Waitable::Transmit(handle);
+        self.wait_for_event(store, waitable)?;
+        let event = waitable.take_event(self.concurrent_state_mut(store))?;
+        if let Some(event @ (Event::StreamRead { code, .. } | Event::FutureRead { code, .. })) =
+            event
+        {
+            waitable.on_delivery(self.id().get_mut(store), event);
+            Ok(code)
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// Cancel a pending stream or future read.
+    fn cancel_read(
+        self,
+        store: &mut dyn VMStore,
+        transmit_id: TableId<TransmitState>,
+        async_: bool,
+    ) -> Result<ReturnCode> {
+        let state = self.concurrent_state_mut(store);
+        let transmit = state.get_mut(transmit_id)?;
+        log::trace!(
+            "host_cancel_read state {transmit_id:?}; read state {:?} write state {:?}",
+            transmit.read,
+            transmit.write
+        );
+
+        let code = if let Some(event) =
+            Waitable::Transmit(transmit.read_handle).take_event(state)?
+        {
+            let (Event::FutureRead { code, .. } | Event::StreamRead { code, .. }) = event else {
+                unreachable!();
+            };
+            match (code, event) {
+                (ReturnCode::Completed(count), Event::StreamRead { .. }) => {
+                    ReturnCode::Cancelled(count)
+                }
+                (ReturnCode::Dropped(_) | ReturnCode::Completed(_), _) => code,
+                _ => unreachable!(),
+            }
+        } else if let WriteState::HostReady {
+            cancel,
+            cancel_waker,
+            ..
+        } = &mut state.get_mut(transmit_id)?.write
+        {
+            *cancel = true;
+            if let Some(waker) = cancel_waker.take() {
+                waker.wake();
+            }
+
+            if async_ {
+                ReturnCode::Blocked
+            } else {
+                let handle = self
+                    .concurrent_state_mut(store)
+                    .get_mut(transmit_id)?
+                    .read_handle;
+                self.wait_for_read(store, handle)?
+            }
+        } else {
+            ReturnCode::Cancelled(0)
+        };
+
+        let transmit = self.concurrent_state_mut(store).get_mut(transmit_id)?;
+
+        match &transmit.read {
+            ReadState::GuestReady { .. } => {
+                transmit.read = ReadState::Open;
+            }
+            ReadState::HostReady { .. } | ReadState::HostToHost { .. } => {
+                todo!("support host read cancellation")
+            }
+            ReadState::Open | ReadState::Dropped => {}
+        }
+
+        log::trace!("cancelled read {transmit_id:?}: {code:?}");
+
+        Ok(code)
+    }
+
+    /// Cancel a pending write for the specified stream or future from the guest.
+    fn guest_cancel_write(
+        self,
+        store: &mut dyn VMStore,
+        ty: TransmitIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<ReturnCode> {
+        let (rep, state) =
+            get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?;
+        let id = TableId::<TransmitHandle>::new(rep);
+        log::trace!("guest cancel write {id:?} (handle {writer})");
+        match state {
+            TransmitLocalState::Write { .. } => {
+                bail!("stream or future write cancelled when no write is pending")
+            }
+            TransmitLocalState::Read { .. } => {
+                bail!("passed read end to `{{stream|future}}.cancel-write`")
+            }
+            TransmitLocalState::Busy => {}
+        }
+        let transmit_id = self.concurrent_state_mut(store).get_mut(id)?.state;
+        let code = self.cancel_write(store, transmit_id, async_)?;
+        if !matches!(code, ReturnCode::Blocked) {
+            let state =
+                get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?
+                    .1;
+            if let TransmitLocalState::Busy = state {
+                *state = TransmitLocalState::Write { done: false };
+            }
+        }
+        Ok(code)
+    }
+
+    /// Cancel a pending read for the specified stream or future from the guest.
+    fn guest_cancel_read(
+        self,
+        store: &mut dyn VMStore,
+        ty: TransmitIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<ReturnCode> {
+        let (rep, state) =
+            get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?;
+        let id = TableId::<TransmitHandle>::new(rep);
+        log::trace!("guest cancel read {id:?} (handle {reader})");
+        match state {
+            TransmitLocalState::Read { .. } => {
+                bail!("stream or future read cancelled when no read is pending")
+            }
+            TransmitLocalState::Write { .. } => {
+                bail!("passed write end to `{{stream|future}}.cancel-read`")
+            }
+            TransmitLocalState::Busy => {}
+        }
+        let transmit_id = self.concurrent_state_mut(store).get_mut(id)?.state;
+        let code = self.cancel_read(store, transmit_id, async_)?;
+        if !matches!(code, ReturnCode::Blocked) {
+            let state =
+                get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?
+                    .1;
+            if let TransmitLocalState::Busy = state {
+                *state = TransmitLocalState::Read { done: false };
+            }
+        }
+        Ok(code)
     }
 
     /// Drop the readable end of the specified stream or future from the guest.
@@ -3301,6 +3583,54 @@ impl Instance {
         Ok(())
     }
 
+    /// Implements the `future.cancel-read` intrinsic.
+    pub(crate) fn future_cancel_read(
+        self,
+        store: &mut dyn VMStore,
+        ty: TypeFutureTableIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_read(store, TransmitIndex::Future(ty), async_, reader)
+            .map(|v| v.encode())
+    }
+
+    /// Implements the `future.cancel-write` intrinsic.
+    pub(crate) fn future_cancel_write(
+        self,
+        store: &mut dyn VMStore,
+        ty: TypeFutureTableIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_write(store, TransmitIndex::Future(ty), async_, writer)
+            .map(|v| v.encode())
+    }
+
+    /// Implements the `stream.cancel-read` intrinsic.
+    pub(crate) fn stream_cancel_read(
+        self,
+        store: &mut dyn VMStore,
+        ty: TypeStreamTableIndex,
+        async_: bool,
+        reader: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_read(store, TransmitIndex::Stream(ty), async_, reader)
+            .map(|v| v.encode())
+    }
+
+    /// Implements the `stream.cancel-write` intrinsic.
+    pub(crate) fn stream_cancel_write(
+        self,
+        store: &mut dyn VMStore,
+        ty: TypeStreamTableIndex,
+        async_: bool,
+        writer: u32,
+    ) -> Result<u32> {
+        self.guest_cancel_write(store, TransmitIndex::Stream(ty), async_, writer)
+            .map(|v| v.encode())
+    }
+
     /// Implements the `future.drop-readable` intrinsic.
     pub(crate) fn future_drop_readable(
         self,
@@ -3377,58 +3707,6 @@ impl ComponentInstance {
         })
     }
 
-    /// Cancel a pending write for the specified stream or future from the guest.
-    fn guest_cancel_write(
-        mut self: Pin<&mut Self>,
-        ty: TransmitIndex,
-        writer: u32,
-        _async_: bool,
-    ) -> Result<ReturnCode> {
-        let (rep, state) = get_mut_by_index_from(self.as_mut().table_for_transmit(ty), ty, writer)?;
-        let id = TableId::<TransmitHandle>::new(rep);
-        log::trace!("guest cancel write {id:?} (handle {writer})");
-        match state {
-            TransmitLocalState::Write { .. } => {
-                bail!("stream or future write cancelled when no write is pending")
-            }
-            TransmitLocalState::Read { .. } => {
-                bail!("passed read end to `{{stream|future}}.cancel-write`")
-            }
-            TransmitLocalState::Busy => {
-                *state = TransmitLocalState::Write { done: false };
-            }
-        }
-        let state = self.concurrent_state_mut();
-        let rep = state.get_mut(id)?.state.rep();
-        state.host_cancel_write(rep)
-    }
-
-    /// Cancel a pending read for the specified stream or future from the guest.
-    fn guest_cancel_read(
-        mut self: Pin<&mut Self>,
-        ty: TransmitIndex,
-        reader: u32,
-        _async_: bool,
-    ) -> Result<ReturnCode> {
-        let (rep, state) = get_mut_by_index_from(self.as_mut().table_for_transmit(ty), ty, reader)?;
-        let id = TableId::<TransmitHandle>::new(rep);
-        log::trace!("guest cancel read {id:?} (handle {reader})");
-        match state {
-            TransmitLocalState::Read { .. } => {
-                bail!("stream or future read cancelled when no read is pending")
-            }
-            TransmitLocalState::Write { .. } => {
-                bail!("passed write end to `{{stream|future}}.cancel-read`")
-            }
-            TransmitLocalState::Busy => {
-                *state = TransmitLocalState::Read { done: false };
-            }
-        }
-        let state = self.concurrent_state_mut();
-        let rep = state.get_mut(id)?.state.rep();
-        state.host_cancel_read(rep)
-    }
-
     /// Drop the specified error context.
     pub(crate) fn error_context_drop(
         mut self: Pin<&mut Self>,
@@ -3499,56 +3777,12 @@ impl ComponentInstance {
         self.guest_new(TransmitIndex::Future(ty))
     }
 
-    /// Implements the `future.cancel-write` intrinsic.
-    pub(crate) fn future_cancel_write(
-        self: Pin<&mut Self>,
-        ty: TypeFutureTableIndex,
-        async_: bool,
-        writer: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_write(TransmitIndex::Future(ty), writer, async_)
-            .map(|result| result.encode())
-    }
-
-    /// Implements the `future.cancel-read` intrinsic.
-    pub(crate) fn future_cancel_read(
-        self: Pin<&mut Self>,
-        ty: TypeFutureTableIndex,
-        async_: bool,
-        reader: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_read(TransmitIndex::Future(ty), reader, async_)
-            .map(|result| result.encode())
-    }
-
     /// Implements the `stream.new` intrinsic.
     pub(crate) fn stream_new(
         self: Pin<&mut Self>,
         ty: TypeStreamTableIndex,
     ) -> Result<ResourcePair> {
         self.guest_new(TransmitIndex::Stream(ty))
-    }
-
-    /// Implements the `stream.cancel-write` intrinsic.
-    pub(crate) fn stream_cancel_write(
-        self: Pin<&mut Self>,
-        ty: TypeStreamTableIndex,
-        async_: bool,
-        writer: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_write(TransmitIndex::Stream(ty), writer, async_)
-            .map(|result| result.encode())
-    }
-
-    /// Implements the `stream.cancel-read` intrinsic.
-    pub(crate) fn stream_cancel_read(
-        self: Pin<&mut Self>,
-        ty: TypeStreamTableIndex,
-        async_: bool,
-        reader: u32,
-    ) -> Result<u32> {
-        self.guest_cancel_read(TransmitIndex::Stream(ty), reader, async_)
-            .map(|result| result.encode())
     }
 
     /// Transfer ownership of the specified future read end from one guest to
@@ -3754,120 +3988,6 @@ impl ConcurrentState {
         );
 
         Ok(())
-    }
-
-    /// Cancel a pending stream or future write from the host.
-    ///
-    /// # Arguments
-    ///
-    /// * `rep` - The `TransmitState` rep for the stream or future.
-    fn host_cancel_write(&mut self, rep: u32) -> Result<ReturnCode> {
-        let transmit_id = TableId::<TransmitState>::new(rep);
-        let transmit = self.get_mut(transmit_id)?;
-        log::trace!(
-            "host_cancel_write state {transmit_id:?}; write state {:?} read state {:?}",
-            transmit.read,
-            transmit.write
-        );
-
-        let code = if let Some(event) =
-            Waitable::Transmit(transmit.write_handle).take_event(self)?
-        {
-            let (Event::FutureWrite { code, .. } | Event::StreamWrite { code, .. }) = event else {
-                unreachable!();
-            };
-            match (code, event) {
-                (ReturnCode::Completed(count), Event::StreamWrite { .. }) => {
-                    ReturnCode::Cancelled(count)
-                }
-                (ReturnCode::Dropped(_) | ReturnCode::Completed(_), _) => code,
-                _ => unreachable!(),
-            }
-        } else if let ReadState::HostReady {
-            cancel,
-            cancel_waker,
-            ..
-        } = &mut self.get_mut(transmit_id)?.read
-        {
-            *cancel = true;
-            if let Some(waker) = cancel_waker.take() {
-                waker.wake()
-            }
-            ReturnCode::Blocked
-        } else {
-            ReturnCode::Cancelled(0)
-        };
-
-        let transmit = self.get_mut(transmit_id)?;
-
-        match &transmit.write {
-            WriteState::GuestReady { .. } => {
-                transmit.write = WriteState::Open;
-            }
-            WriteState::HostReady { .. } => todo!("support host write cancellation"),
-            WriteState::Open | WriteState::Dropped => {}
-        }
-
-        log::trace!("cancelled write {transmit_id:?}");
-
-        Ok(code)
-    }
-
-    /// Cancel a pending stream or future read from the host.
-    ///
-    /// # Arguments
-    ///
-    /// * `rep` - The `TransmitState` rep for the stream or future.
-    fn host_cancel_read(&mut self, rep: u32) -> Result<ReturnCode> {
-        let transmit_id = TableId::<TransmitState>::new(rep);
-        let transmit = self.get_mut(transmit_id)?;
-        log::trace!(
-            "host_cancel_read state {transmit_id:?}; read state {:?} write state {:?}",
-            transmit.read,
-            transmit.write
-        );
-
-        let code = if let Some(event) = Waitable::Transmit(transmit.read_handle).take_event(self)? {
-            let (Event::FutureRead { code, .. } | Event::StreamRead { code, .. }) = event else {
-                unreachable!();
-            };
-            match (code, event) {
-                (ReturnCode::Completed(count), Event::StreamRead { .. }) => {
-                    ReturnCode::Cancelled(count)
-                }
-                (ReturnCode::Dropped(_) | ReturnCode::Completed(_), _) => code,
-                _ => unreachable!(),
-            }
-        } else if let WriteState::HostReady {
-            cancel,
-            cancel_waker,
-            ..
-        } = &mut self.get_mut(transmit_id)?.write
-        {
-            *cancel = true;
-            if let Some(waker) = cancel_waker.take() {
-                waker.wake()
-            }
-            ReturnCode::Blocked
-        } else {
-            ReturnCode::Cancelled(0)
-        };
-
-        let transmit = self.get_mut(transmit_id)?;
-
-        match &transmit.read {
-            ReadState::GuestReady { .. } => {
-                transmit.read = ReadState::Open;
-            }
-            ReadState::HostReady { .. } | ReadState::HostToHost { .. } => {
-                todo!("support host read cancellation")
-            }
-            ReadState::Open | ReadState::Dropped => {}
-        }
-
-        log::trace!("cancelled read {transmit_id:?}");
-
-        Ok(code)
     }
 }
 
