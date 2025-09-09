@@ -67,7 +67,12 @@ where
         _: StoreContextMut<D>,
         _: bool,
     ) -> Poll<wasmtime::Result<Option<T>>> {
-        Poll::Ready(Ok(Some(self.get_mut().0.take().unwrap())))
+        let v = self
+            .get_mut()
+            .0
+            .take()
+            .context("polled after returning `Ready`")?;
+        Poll::Ready(Ok(Some(v)))
     }
 }
 
@@ -92,9 +97,10 @@ where
         finish: bool,
     ) -> Poll<wasmtime::Result<Option<T>>> {
         match Pin::new(&mut self.get_mut().0).poll(cx) {
+            Poll::Ready(Ok(v)) => Poll::Ready(Ok(Some(v))),
+            Poll::Ready(Err(err)) => Poll::Ready(Err(err).context("oneshot sender dropped")),
             Poll::Pending if finish => Poll::Ready(Ok(None)),
             Poll::Pending => Poll::Pending,
-            Poll::Ready(result) => Poll::Ready(Ok(Some(result.context("oneshot sender dropped")?))),
         }
     }
 }

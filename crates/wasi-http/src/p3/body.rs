@@ -42,6 +42,7 @@ pub(crate) enum Body {
 }
 
 impl Body {
+    /// Implementation of `consume-body` shared between requests and responses
     pub(crate) fn consume<T>(
         self,
         mut store: Access<'_, T, WasiHttp>,
@@ -105,6 +106,7 @@ impl Body {
         }
     }
 
+    /// Implementation of `drop` shared between requests and responses
     pub(crate) fn drop(self, mut store: impl AsContextMut) {
         if let Body::Guest {
             contents_rx,
@@ -120,7 +122,8 @@ impl Body {
     }
 }
 
-pub(crate) enum GuestBodyKind {
+/// The kind of body, used for error reporting
+pub(crate) enum BodyKind {
     Request,
     Response,
 }
@@ -141,20 +144,22 @@ impl ContentLength {
     }
 }
 
+/// [StreamConsumer] implementation for bodies originating in the guest.
 struct GuestBodyConsumer {
     contents_tx: PollSender<Result<Bytes, ErrorCode>>,
     result_tx: Option<oneshot::Sender<Result<(), ErrorCode>>>,
     content_length: Option<ContentLength>,
-    kind: GuestBodyKind,
+    kind: BodyKind,
     // `true` when the other side of `contents_tx` was unexpectedly closed
     closed: bool,
 }
 
 impl GuestBodyConsumer {
+    /// Constructs the approprite body size error given the [BodyKind]
     fn body_size_error(&self, n: Option<u64>) -> ErrorCode {
         match self.kind {
-            GuestBodyKind::Request => ErrorCode::HttpRequestBodySize(n),
-            GuestBodyKind::Response => ErrorCode::HttpResponseBodySize(n),
+            BodyKind::Request => ErrorCode::HttpRequestBodySize(n),
+            BodyKind::Response => ErrorCode::HttpResponseBodySize(n),
         }
     }
 
@@ -235,6 +240,7 @@ impl<D> StreamConsumer<D> for GuestBodyConsumer {
     }
 }
 
+/// [http_body::Body] implementation for bodies originating in the guest.
 pub(crate) struct GuestBody {
     contents_rx: Option<mpsc::Receiver<Result<Bytes, ErrorCode>>>,
     trailers_rx: Option<oneshot::Receiver<Result<Option<Arc<http::HeaderMap>>, ErrorCode>>>,
@@ -242,13 +248,14 @@ pub(crate) struct GuestBody {
 }
 
 impl GuestBody {
+    /// Construct a new [GuestBody]
     pub(crate) fn new<T: 'static>(
         mut store: impl AsContextMut<Data = T>,
         contents_rx: Option<StreamReader<u8>>,
         trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
         result_tx: oneshot::Sender<Result<(), ErrorCode>>,
         content_length: Option<u64>,
-        kind: GuestBodyKind,
+        kind: BodyKind,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
     ) -> Self {
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
@@ -290,10 +297,15 @@ impl http_body::Body for GuestBody {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         if let Some(contents_rx) = self.contents_rx.as_mut() {
+            // `contents_rx` has not been closed yet, poll it
             while let Some(res) = ready!(contents_rx.poll_recv(cx)) {
                 match res {
                     Ok(buf) => {
                         if let Some(n) = self.content_length.as_mut() {
+                            // Substract frame length from `content_length`,
+                            // [GuestBodyConsumer] already performs the validation, so
+                            // just keep count as optimization for
+                            // `is_end_stream` and `size_hint`
                             *n = n.saturating_sub(buf.len().try_into().unwrap_or(u64::MAX));
                         }
                         return Poll::Ready(Some(Ok(http_body::Frame::data(buf))));
@@ -303,14 +315,17 @@ impl http_body::Body for GuestBody {
                     }
                 }
             }
+            // Record that `contents_rx` is closed
             self.contents_rx = None;
         }
 
         let Some(trailers_rx) = self.trailers_rx.as_mut() else {
+            // `trailers_rx` has already terminated - this is the end of stream
             return Poll::Ready(None);
         };
 
         let res = ready!(Pin::new(trailers_rx).poll(cx));
+        // Record that `trailers_rx` has terminated
         self.trailers_rx = None;
         match res {
             Ok(Ok(Some(trailers))) => Poll::Ready(Some(Ok(http_body::Frame::trailers(
@@ -328,14 +343,18 @@ impl http_body::Body for GuestBody {
                 || !contents_rx.is_closed()
                 || self.content_length.is_some_and(|n| n > 0)
             {
+                // `contents_rx` might still produce data frames
                 return false;
             }
         }
         if let Some(trailers_rx) = self.trailers_rx.as_ref() {
             if !trailers_rx.is_terminated() {
+                // `trailers_rx` has not terminated yet
                 return false;
             }
         }
+
+        // no data left
         return true;
     }
 
@@ -348,6 +367,7 @@ impl http_body::Body for GuestBody {
     }
 }
 
+/// [http_body::Body] that has been consumed.
 pub(crate) struct ConsumedBody;
 
 impl http_body::Body for ConsumedBody {
@@ -372,9 +392,10 @@ impl http_body::Body for ConsumedBody {
     }
 }
 
-pub(crate) struct GuestTrailerConsumer<T> {
-    pub(crate) tx: Option<oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>>,
-    pub(crate) getter: fn(&mut T) -> WasiHttpCtxView<'_>,
+/// [FutureConsumer] implementation for trailers originating in the guest.
+struct GuestTrailerConsumer<T> {
+    tx: Option<oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>>,
+    getter: fn(&mut T) -> WasiHttpCtxView<'_>,
 }
 
 impl<D> FutureConsumer<D> for GuestTrailerConsumer<D>
@@ -387,12 +408,13 @@ where
         mut self: Pin<&mut Self>,
         _: &mut Context<'_>,
         mut store: StoreContextMut<D>,
-        mut source: Source<'_, Self::Item>,
+        mut src: Source<'_, Self::Item>,
         _: bool,
     ) -> Poll<wasmtime::Result<()>> {
-        let value = &mut None;
-        source.read(store.as_context_mut(), value)?;
-        let res = match value.take().unwrap() {
+        let mut result = None;
+        src.read(store.as_context_mut(), &mut result)
+            .context("failed to read result")?;
+        let res = match result.context("result value missing")? {
             Ok(Some(trailers)) => {
                 let WasiHttpCtxView { table, .. } = (self.getter)(store.data_mut());
                 let trailers = table
@@ -408,6 +430,7 @@ where
     }
 }
 
+/// [StreamProducer] implementation for bodies originating in the host.
 struct HostBodyStreamProducer<T> {
     body: BoxBody<Bytes, ErrorCode>,
     trailers: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
@@ -446,6 +469,8 @@ where
             let cap = match dst.remaining(&mut store).map(NonZeroUsize::new) {
                 Some(Some(cap)) => Some(cap),
                 Some(None) => {
+                    // On 0-length the best we can do is check that underlying stream has not
+                    // reached the end yet
                     if self.body.is_end_stream() {
                         break 'result Ok(None);
                     } else {
@@ -462,11 +487,13 @@ where
                                 let n = frame.len();
                                 let cap = cap.into();
                                 if n > cap {
+                                    // data frame does not fit in destination, fill it and buffer the rest
                                     dst.set_buffer(Cursor::new(frame.split_off(cap)));
                                     let mut dst = dst.as_direct(store, cap);
                                     dst.remaining().copy_from_slice(&frame);
                                     dst.mark_written(cap);
                                 } else {
+                                    // copy the whole frame into the destination
                                     let mut dst = dst.as_direct(store, n);
                                     dst.remaining()[..n].copy_from_slice(&frame);
                                     dst.mark_written(n);

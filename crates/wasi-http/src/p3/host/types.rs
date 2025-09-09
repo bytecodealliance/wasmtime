@@ -129,34 +129,41 @@ fn parse_header_value(
     }
 }
 
-struct GuestBodyResultProducer(
-    Pin<Box<dyn Future<Output = wasmtime::Result<Result<(), ErrorCode>>> + Send>>,
-);
-
-impl GuestBodyResultProducer {
-    fn new(rx: oneshot::Receiver<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>) -> Self {
-        Self(Box::pin(async move {
-            let Ok(fut) = rx.await else {
-                return Ok(Ok(()));
-            };
-            Ok(Box::into_pin(fut).await)
-        }))
-    }
+enum GuestBodyResultProducer {
+    Receiver(oneshot::Receiver<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>),
+    Future(Pin<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>),
 }
 
 impl<D> FutureProducer<D> for GuestBodyResultProducer {
     type Item = Result<(), ErrorCode>;
 
     fn poll_produce(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         _: StoreContextMut<D>,
         finish: bool,
     ) -> Poll<wasmtime::Result<Option<Self::Item>>> {
-        match Pin::new(&mut self.get_mut().0).poll(cx) {
-            Poll::Pending if finish => Poll::Ready(Ok(None)),
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(result) => Poll::Ready(Ok(Some(result?))),
+        match &mut *self {
+            Self::Receiver(rx) => match Pin::new(rx).poll(cx) {
+                Poll::Ready(Ok(fut)) => {
+                    let mut fut = Box::into_pin(fut);
+                    match fut.as_mut().poll(cx) {
+                        Poll::Ready(res) => Poll::Ready(Ok(Some(res))),
+                        Poll::Pending => {
+                            *self = Self::Future(fut);
+                            Poll::Pending
+                        }
+                    }
+                }
+                Poll::Ready(Err(..)) => Poll::Ready(Ok(Some(Ok(())))),
+                Poll::Pending if finish => Poll::Ready(Ok(None)),
+                Poll::Pending => Poll::Pending,
+            },
+            Self::Future(fut) => match fut.as_mut().poll(cx) {
+                Poll::Ready(res) => Poll::Ready(Ok(Some(res))),
+                Poll::Pending if finish => Poll::Ready(Ok(None)),
+                Poll::Pending => Poll::Pending,
+            },
         }
     }
 }
@@ -308,7 +315,6 @@ impl HostRequestWithStore for WasiHttp {
             let (result_tx, result_rx) = oneshot::channel();
             let WasiHttpCtxView { table, .. } = store.get();
             let headers = delete_fields(table, headers)?;
-            // `Content-Length` header value is validated in `fields` implementation
             let options = options
                 .map(|options| delete_request_options(table, options))
                 .transpose()?;
@@ -332,7 +338,7 @@ impl HostRequestWithStore for WasiHttp {
                 FutureReader::new(
                     instance,
                     &mut store,
-                    GuestBodyResultProducer::new(result_rx),
+                    GuestBodyResultProducer::Receiver(result_rx),
                 ),
             ))
         })
@@ -609,7 +615,7 @@ impl HostResponseWithStore for WasiHttp {
                 FutureReader::new(
                     instance,
                     &mut store,
-                    GuestBodyResultProducer::new(result_rx),
+                    GuestBodyResultProducer::Receiver(result_rx),
                 ),
             ))
         })
