@@ -372,9 +372,9 @@ impl http_body::Body for ConsumedBody {
     }
 }
 
-pub(crate) struct GuestTrailerConsumer<T> {
-    pub(crate) tx: Option<oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>>,
-    pub(crate) getter: fn(&mut T) -> WasiHttpCtxView<'_>,
+struct GuestTrailerConsumer<T> {
+    tx: Option<oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>>,
+    getter: fn(&mut T) -> WasiHttpCtxView<'_>,
 }
 
 impl<D> FutureConsumer<D> for GuestTrailerConsumer<D>
@@ -387,12 +387,13 @@ where
         mut self: Pin<&mut Self>,
         _: &mut Context<'_>,
         mut store: StoreContextMut<D>,
-        mut source: Source<'_, Self::Item>,
+        mut src: Source<'_, Self::Item>,
         _: bool,
     ) -> Poll<wasmtime::Result<()>> {
-        let value = &mut None;
-        source.read(store.as_context_mut(), value)?;
-        let res = match value.take().unwrap() {
+        let mut result = None;
+        src.read(store.as_context_mut(), &mut result)
+            .context("failed to read result")?;
+        let res = match result.context("result value missing")? {
             Ok(Some(trailers)) => {
                 let WasiHttpCtxView { table, .. } = (self.getter)(store.data_mut());
                 let trailers = table
