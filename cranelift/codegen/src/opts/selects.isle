@@ -98,3 +98,5 @@
         (select ty c
             (iconst ty (imm64_masked ty (u64_wrapping_add x z)))
             (iconst ty (imm64_masked ty (u64_wrapping_add y z)))))
+
+(rule (simplify (select ty d (select ty c x y) (select ty d y x))) (select ty d (select ty c x y) x))
