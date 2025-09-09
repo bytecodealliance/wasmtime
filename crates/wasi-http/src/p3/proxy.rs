@@ -5,7 +5,7 @@ use anyhow::Context as _;
 use wasmtime::component::Accessor;
 
 impl Proxy {
-    /// Call `handle` on [Proxy] getting a [Future] back.
+    /// Call `wasi:http/handler#handle` on [Proxy] getting a [Response] back.
     pub async fn handle(
         &self,
         store: &Accessor<impl WasiHttpView>,

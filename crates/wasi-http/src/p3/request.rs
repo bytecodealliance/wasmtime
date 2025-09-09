@@ -41,7 +41,7 @@ pub struct Request {
 impl Request {
     /// Construct a new [Request]
     ///
-    /// This returns a [Future] that the guest will use to communicate
+    /// This returns a [Future] that the will be used to communicate
     /// a request processing error, if any.
     pub fn new(
         method: Method,
@@ -78,7 +78,7 @@ impl Request {
 
     /// Construct a new [Request] from [http::Request].
     ///
-    /// This returns a [Future] that the guest will use to communicate
+    /// This returns a [Future] that will be used to communicate
     /// a request processing error, if any.
     pub fn from_http<T>(
         req: http::Request<T>,
@@ -121,6 +121,11 @@ impl Request {
 ///
 /// This implementation is used by the `wasi:http/handler` interface
 /// default implementation.
+///
+/// The returned [Future] can be used to communicate
+/// a request processing error, if any, to the constructor of the request.
+/// For example, if the request was constructed via `wasi:http/types.request#new`,
+/// a result resolved from it will be forwarded to the guest on the future handle returned.
 #[cfg(feature = "default-send-request")]
 pub async fn default_send_request(
     mut req: http::Request<impl http_body::Body<Data = Bytes, Error = ErrorCode> + Send + 'static>,
@@ -202,7 +207,10 @@ pub async fn default_send_request(
         {
             return Err(dns_error("address not available".to_string(), 0));
         }
-        Ok(Err(..)) => return Err(ErrorCode::ConnectionRefused),
+        Ok(Err(err)) => {
+            tracing::warn!(?err, "connection refused");
+            return Err(ErrorCode::ConnectionRefused);
+        }
         Err(..) => return Err(ErrorCode::ConnectionTimeout),
     };
     let stream = if use_tls {
