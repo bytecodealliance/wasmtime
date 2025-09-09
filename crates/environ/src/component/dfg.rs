@@ -344,8 +344,8 @@ pub enum Trampoline {
     WaitableJoin {
         instance: RuntimeComponentInstanceIndex,
     },
-    Yield {
-        async_: bool,
+    ThreadYield {
+        cancellable: bool,
     },
     SubtaskDrop {
         instance: RuntimeComponentInstanceIndex,
@@ -470,6 +470,7 @@ pub struct CanonicalOptions {
     pub callback: Option<CallbackId>,
     pub post_return: Option<PostReturnId>,
     pub async_: bool,
+    pub cancellable: bool,
     pub core_type: ModuleInternedTypeIndex,
     pub data_model: CanonicalOptionsDataModel,
 }
@@ -764,6 +765,7 @@ impl LinearizeDfg<'_> {
             callback,
             post_return,
             async_: options.async_,
+            cancellable: options.cancellable,
             core_type: options.core_type,
             data_model,
         };
@@ -880,7 +882,9 @@ impl LinearizeDfg<'_> {
             Trampoline::WaitableJoin { instance } => info::Trampoline::WaitableJoin {
                 instance: *instance,
             },
-            Trampoline::Yield { async_ } => info::Trampoline::Yield { async_: *async_ },
+            Trampoline::ThreadYield { cancellable } => info::Trampoline::ThreadYield {
+                cancellable: *cancellable,
+            },
             Trampoline::SubtaskDrop { instance } => info::Trampoline::SubtaskDrop {
                 instance: *instance,
             },

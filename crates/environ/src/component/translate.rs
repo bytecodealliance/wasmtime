@@ -215,9 +215,9 @@ enum LocalInitializer<'data> {
     WaitableJoin {
         func: ModuleInternedTypeIndex,
     },
-    Yield {
+    ThreadYield {
         func: ModuleInternedTypeIndex,
-        async_: bool,
+        cancellable: bool,
     },
     SubtaskDrop {
         func: ModuleInternedTypeIndex,
@@ -386,6 +386,7 @@ struct LocalCanonicalOptions {
     string_encoding: StringEncoding,
     post_return: Option<FuncIndex>,
     async_: bool,
+    cancellable: bool,
     callback: Option<FuncIndex>,
     /// The type index of the core GC types signature.
     core_type: ModuleInternedTypeIndex,
@@ -839,13 +840,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::WaitableSetNew { func }
                         }
-                        wasmparser::CanonicalFunction::WaitableSetWait { async_, memory } => {
+                        wasmparser::CanonicalFunction::WaitableSetWait {
+                            cancellable,
+                            memory,
+                        } => {
                             let core_type = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::WaitableSetWait {
                                 options: LocalCanonicalOptions {
                                     core_type,
-                                    async_,
+                                    cancellable,
+                                    async_: false,
                                     data_model: LocalDataModel::LinearMemory {
                                         memory: Some(MemoryIndex::from_u32(memory)),
                                         realloc: None,
@@ -856,13 +861,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 },
                             }
                         }
-                        wasmparser::CanonicalFunction::WaitableSetPoll { async_, memory } => {
+                        wasmparser::CanonicalFunction::WaitableSetPoll {
+                            cancellable,
+                            memory,
+                        } => {
                             let core_type = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::WaitableSetPoll {
                                 options: LocalCanonicalOptions {
                                     core_type,
-                                    async_,
+                                    async_: false,
+                                    cancellable,
                                     data_model: LocalDataModel::LinearMemory {
                                         memory: Some(MemoryIndex::from_u32(memory)),
                                         realloc: None,
@@ -883,10 +892,10 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::WaitableJoin { func }
                         }
-                        wasmparser::CanonicalFunction::Yield { async_ } => {
+                        wasmparser::CanonicalFunction::ThreadYield { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::Yield { func, async_ }
+                            LocalInitializer::ThreadYield { func, cancellable }
                         }
                         wasmparser::CanonicalFunction::SubtaskDrop => {
                             let func = self.core_func_signature(core_func_index)?;
@@ -1062,6 +1071,32 @@ impl<'a, 'data> Translator<'a, 'data> {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ContextSet { i, func }
+                        }
+
+                        wasmparser::CanonicalFunction::BackpressureInc => {
+                            bail!("unimplemented `backpressure.inc`");
+                        }
+                        wasmparser::CanonicalFunction::BackpressureDec => {
+                            bail!("unimplemented `backpressure.dec`");
+                        }
+
+                        wasmparser::CanonicalFunction::ThreadIndex => {
+                            bail!("unimplemented `thread.index`");
+                        }
+                        wasmparser::CanonicalFunction::ThreadNewIndirect { .. } => {
+                            bail!("unimplemented `thread.new-indirect`");
+                        }
+                        wasmparser::CanonicalFunction::ThreadSwitchTo { .. } => {
+                            bail!("unimplemented `thread.switch-to`");
+                        }
+                        wasmparser::CanonicalFunction::ThreadSuspend { .. } => {
+                            bail!("unimplemented `thread.suspend`");
+                        }
+                        wasmparser::CanonicalFunction::ThreadResumeLater => {
+                            bail!("unimplemented `thread.resume-later`");
+                        }
+                        wasmparser::CanonicalFunction::ThreadYieldTo { .. } => {
+                            bail!("unimplemented `thread.yield-to`");
                         }
                     };
                     self.result.initializers.push(init);
@@ -1492,6 +1527,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         Ok(LocalCanonicalOptions {
             string_encoding,
             post_return,
+            cancellable: false,
             async_,
             callback,
             core_type,

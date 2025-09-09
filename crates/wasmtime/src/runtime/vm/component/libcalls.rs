@@ -758,8 +758,8 @@ fn waitable_join(
 }
 
 #[cfg(feature = "component-model-async")]
-fn yield_(store: &mut dyn VMStore, instance: Instance, async_: u8) -> Result<bool> {
-    instance.yield_(store, async_ != 0)
+fn thread_yield(store: &mut dyn VMStore, instance: Instance, cancellable: u8) -> Result<bool> {
+    instance.thread_yield(store, cancellable != 0)
 }
 
 #[cfg(feature = "component-model-async")]
