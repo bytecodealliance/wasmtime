@@ -164,3 +164,13 @@ block0(v0: i32, v1: i32):
 
 ; run: %test_and_and4(4, 3) == 0
 
+function %fold_add_neg_or(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = ineg v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; run: %fold_add_neg_or(0xffffffff, 0) == 0xffffffff
+
