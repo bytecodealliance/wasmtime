@@ -7,6 +7,8 @@ mod generated {
         world: "wasi:http/proxy",
         imports: {
             "wasi:http/handler/[async]handle": async | store | trappable | tracing,
+            "wasi:http/types/[drop]request": store | trappable | tracing,
+            "wasi:http/types/[drop]response": store | trappable | tracing,
             "wasi:http/types/[method]request.consume-body": async | store | trappable | tracing,
             "wasi:http/types/[method]response.consume-body": async | store | trappable | tracing,
             "wasi:http/types/[static]request.new": async | store | trappable | tracing,
@@ -22,14 +24,13 @@ mod generated {
         },
         trappable_error_type: {
             "wasi:http/types/error-code" => crate::p3::HttpError,
+            "wasi:http/types/header-error" => crate::p3::HeaderError,
+            "wasi:http/types/request-options-error" => crate::p3::RequestOptionsError,
         },
     });
 
     mod with {
-        /// The concrete type behind a `wasi:http/types/fields` resource.
         pub type Fields = crate::p3::MaybeMutable<http::HeaderMap>;
-
-        /// The concrete type behind a `wasi:http/types/request-options` resource.
         pub type RequestOptions = crate::p3::MaybeMutable<crate::p3::RequestOptions>;
     }
 }

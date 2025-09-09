@@ -1,29 +1,30 @@
 use anyhow::{Context, Result};
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
-use hyper::{Request, Response, body::Bytes, service::service_fn};
-use std::{
-    future::Future,
-    net::{SocketAddr, TcpStream},
-    thread::JoinHandle,
-};
+use http::header::CONTENT_LENGTH;
+use hyper::service::service_fn;
+use hyper::{Request, Response};
+use std::future::Future;
+use std::net::{SocketAddr, TcpStream};
+use std::thread::JoinHandle;
 use tokio::net::TcpListener;
 use tracing::{debug, trace, warn};
 use wasmtime_wasi_http::io::TokioIo;
 
 async fn test(
-    mut req: Request<hyper::body::Incoming>,
-) -> http::Result<Response<BoxBody<Bytes, std::convert::Infallible>>> {
-    debug!("preparing mocked response",);
+    req: Request<hyper::body::Incoming>,
+) -> http::Result<Response<hyper::body::Incoming>> {
+    debug!(?req, "preparing mocked response for request");
     let method = req.method().to_string();
-    let body = req.body_mut().collect().await.unwrap();
-    let buf = body.to_bytes();
-    trace!("hyper request body size {:?}", buf.len());
-
-    Response::builder()
-        .status(http::StatusCode::OK)
+    let uri = req.uri().to_string();
+    let resp = Response::builder()
         .header("x-wasmtime-test-method", method)
-        .header("x-wasmtime-test-uri", req.uri().to_string())
-        .body(Full::<Bytes>::from(buf).boxed())
+        .header("x-wasmtime-test-uri", uri);
+    let resp = if let Some(content_length) = req.headers().get(CONTENT_LENGTH) {
+        resp.header(CONTENT_LENGTH, content_length)
+    } else {
+        resp
+    };
+    let body = req.into_body();
+    resp.body(body)
 }
 
 pub struct Server {

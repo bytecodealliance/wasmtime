@@ -9,7 +9,7 @@
 //! Documentation of this module may be incorrect or out-of-sync with the implementation.
 
 pub mod bindings;
-pub mod body;
+mod body;
 mod conv;
 mod host;
 mod proxy;
@@ -27,14 +27,33 @@ use bindings::http::{handler, types};
 use bytes::Bytes;
 use core::ops::Deref;
 use http::HeaderName;
+use http::header::CONTENT_LENGTH;
 use http::uri::Scheme;
 use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
 use wasmtime::component::{HasData, Linker, ResourceTable};
 use wasmtime_wasi::TrappableError;
 
-pub type HttpResult<T> = Result<T, HttpError>;
-pub type HttpError = TrappableError<types::ErrorCode>;
+pub(crate) type HttpResult<T> = Result<T, HttpError>;
+pub(crate) type HttpError = TrappableError<types::ErrorCode>;
+
+pub(crate) type HeaderResult<T> = Result<T, HeaderError>;
+pub(crate) type HeaderError = TrappableError<types::HeaderError>;
+
+pub(crate) type RequestOptionsResult<T> = Result<T, RequestOptionsError>;
+pub(crate) type RequestOptionsError = TrappableError<types::RequestOptionsError>;
+
+/// Extract the `Content-Length` header value from a [`http::HeaderMap`], returning `None` if it's not
+/// present. This function will return `Err` if it's not possible to parse the `Content-Length`
+/// header.
+fn get_content_length(headers: &http::HeaderMap) -> wasmtime::Result<Option<u64>> {
+    let Some(v) = headers.get(CONTENT_LENGTH) else {
+        return Ok(None);
+    };
+    let v = v.to_str()?;
+    let v = v.parse()?;
+    Ok(Some(v))
+}
 
 pub(crate) struct WasiHttp;
 
@@ -42,6 +61,7 @@ impl HasData for WasiHttp {
     type Data<'a> = WasiHttpCtxView<'a>;
 }
 
+/// A trait which provides internal WASI HTTP state.
 pub trait WasiHttpCtx: Send {
     /// Whether a given header should be considered forbidden and not allowed.
     fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
@@ -112,6 +132,7 @@ pub trait WasiHttpCtx: Send {
     >;
 }
 
+/// Default implementation of [WasiHttpCtx].
 #[cfg(feature = "default-send-request")]
 #[derive(Clone, Default)]
 pub struct DefaultWasiHttpCtx;
@@ -119,12 +140,18 @@ pub struct DefaultWasiHttpCtx;
 #[cfg(feature = "default-send-request")]
 impl WasiHttpCtx for DefaultWasiHttpCtx {}
 
+/// View into [WasiHttpCtx] implementation and [ResourceTable].
 pub struct WasiHttpCtxView<'a> {
+    /// Mutable reference to the WASI HTTP context.
     pub ctx: &'a mut dyn WasiHttpCtx,
+
+    /// Mutable reference to table used to manage resources.
     pub table: &'a mut ResourceTable,
 }
 
+/// A trait which provides internal WASI HTTP state.
 pub trait WasiHttpView: Send {
+    /// Return a [WasiHttpCtxView] from mutable reference to self.
     fn http(&mut self) -> WasiHttpCtxView<'_>;
 }
 
@@ -186,8 +213,13 @@ where
 }
 
 /// An [Arc], which may be immutable.
+///
+/// In `wasi:http` resources like `fields` or `request-options` may be
+/// mutable or immutable. This construct is used to model them efficiently.
 pub enum MaybeMutable<T> {
+    /// Clone-on-write, mutable [Arc]
     Mutable(Arc<T>),
+    /// Immutable [Arc]
     Immutable(Arc<T>),
 }
 
@@ -201,15 +233,19 @@ impl<T> Deref for MaybeMutable<T> {
     type Target = Arc<T>;
 
     fn deref(&self) -> &Self::Target {
-        self.as_arc()
+        match self {
+            Self::Mutable(v) | Self::Immutable(v) => v,
+        }
     }
 }
 
 impl<T> MaybeMutable<T> {
+    /// Construct a mutable [`MaybeMutable`].
     pub fn new_mutable(v: impl Into<Arc<T>>) -> Self {
         Self::Mutable(v.into())
     }
 
+    /// Construct a mutable [`MaybeMutable`] filling it with default `T`.
     pub fn new_mutable_default() -> Self
     where
         T: Default,
@@ -217,26 +253,23 @@ impl<T> MaybeMutable<T> {
         Self::new_mutable(T::default())
     }
 
+    /// Construct an immutable [`MaybeMutable`].
     pub fn new_immutable(v: impl Into<Arc<T>>) -> Self {
         Self::Immutable(v.into())
     }
 
-    fn as_arc(&self) -> &Arc<T> {
+    /// Unwrap [`MaybeMutable`] into [`Arc`].
+    pub fn into_arc(self) -> Arc<T> {
         match self {
             Self::Mutable(v) | Self::Immutable(v) => v,
         }
     }
 
-    fn into_arc(self) -> Arc<T> {
-        match self {
-            Self::Mutable(v) | Self::Immutable(v) => v,
-        }
-    }
-
-    pub fn get(&self) -> &T {
-        self
-    }
-
+    /// If this [`MaybeMutable`] is [`Mutable`](MaybeMutable::Mutable),
+    /// return a mutable reference to it, otherwise return `None`.
+    ///
+    /// Internally, this will use [`Arc::make_mut`] and will clone the underlying
+    /// value, if multiple strong references to the inner [`Arc`] exist.
     pub fn get_mut(&mut self) -> Option<&mut T>
     where
         T: Clone,
