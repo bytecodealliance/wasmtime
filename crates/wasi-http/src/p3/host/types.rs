@@ -8,9 +8,12 @@ use crate::p3::body::Body;
 use crate::p3::{HeaderResult, HttpError, RequestOptionsResult, WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
 use core::mem;
+use core::pin::Pin;
+use core::task::{Context, Poll};
 use http::header::CONTENT_LENGTH;
 use std::sync::Arc;
 use tokio::sync::oneshot;
+use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Access, Accessor, FutureProducer, FutureReader, Resource, ResourceTable, StreamReader,
 };
