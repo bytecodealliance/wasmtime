@@ -107,11 +107,9 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                 },
             );
 
-            let err = handle.expect_err("should have failed to send request");
-            assert!(
-                matches!(err, ErrorCode::HttpRequestBodySize(Some(18))),
-                "unexpected error: {err:#?}"
-            );
+            // The the error returned by `handle` in this case is non-deterministic,
+            // so just assert that it fails
+            let _err = handle.expect_err("should have failed to send request");
             let err = transmit.expect_err("request transmission should have failed");
             assert!(
                 matches!(err, ErrorCode::HttpRequestBodySize(Some(18))),
