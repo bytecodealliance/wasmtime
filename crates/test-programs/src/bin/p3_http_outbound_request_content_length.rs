@@ -67,7 +67,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         println!("writing too little");
         {
             let (request, mut contents_tx, trailers_tx, transmit) = make_request();
-            let (_, transmit, ()) = join!(
+            let (handle, transmit, ()) = join!(
                 async { handler::handle(request).await },
                 async { transmit.await },
                 async {
@@ -81,6 +81,11 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                     trailers_tx.write(Ok(None)).await.unwrap();
                 },
             );
+            let err = handle.expect_err("should have failed to send request");
+            assert!(
+                matches!(err, ErrorCode::HttpProtocolError),
+                "unexpected error: {err:#?}"
+            );
             let err = transmit.expect_err("request transmission should have failed");
             assert!(
                 matches!(err, ErrorCode::HttpRequestBodySize(Some(3))),
@@ -91,7 +96,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         println!("writing too much");
         {
             let (request, mut contents_tx, trailers_tx, transmit) = make_request();
-            let (_, transmit, ()) = join!(
+            let (handle, transmit, ()) = join!(
                 async { handler::handle(request).await },
                 async { transmit.await },
                 async {
@@ -102,6 +107,11 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                 },
             );
 
+            let err = handle.expect_err("should have failed to send request");
+            assert!(
+                matches!(err, ErrorCode::HttpRequestBodySize(Some(18))),
+                "unexpected error: {err:#?}"
+            );
             let err = transmit.expect_err("request transmission should have failed");
             assert!(
                 matches!(err, ErrorCode::HttpRequestBodySize(Some(18))),
