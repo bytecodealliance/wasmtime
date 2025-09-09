@@ -1,6 +1,6 @@
 use crate::p3::bindings::http::handler::{Host, HostWithStore};
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
-use crate::p3::body::{Body, ConsumedBody, GuestBody, GuestBodyKind};
+use crate::p3::body::{Body, BodyKind, ConsumedBody, GuestBody};
 use crate::p3::{HttpError, HttpResult, WasiHttp, WasiHttpCtxView, get_content_length};
 use anyhow::Context as _;
 use core::pin::Pin;
@@ -135,6 +135,7 @@ impl HostWithStore for WasiHttp {
                     result_tx,
                 } => {
                     let (http_result_tx, http_result_rx) = oneshot::channel();
+                    // `Content-Length` header value is validated in `fields` implementation
                     let content_length = get_content_length(&headers)
                         .map_err(|err| ErrorCode::InternalError(Some(format!("{err:#}"))))?;
                     _ = result_tx.send(Box::new(async move {
@@ -149,7 +150,7 @@ impl HostWithStore for WasiHttp {
                         trailers_rx,
                         http_result_tx,
                         content_length,
-                        GuestBodyKind::Request,
+                        BodyKind::Request,
                         getter,
                     )
                     .with_state(io_task_rx)
@@ -199,6 +200,7 @@ impl HostWithStore for WasiHttp {
                 req,
                 options.as_deref().copied(),
                 Box::new(async {
+                    // Forward the response processing result to `WasiHttpCtx` implementation
                     let Ok(fut) = res_result_rx.await else {
                         return Ok(());
                     };

@@ -1,5 +1,5 @@
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::p3::body::{Body, ConsumedBody, GuestBody, GuestBodyKind};
+use crate::p3::body::{Body, BodyKind, ConsumedBody, GuestBody};
 use crate::p3::{WasiHttpView, get_content_length};
 use anyhow::Context as _;
 use bytes::Bytes;
@@ -40,7 +40,9 @@ impl Response {
     /// Convert [Response] into [http::Response].
     ///
     /// The specified [Future] `fut` can be used to communicate
-    /// a response processing error, if any, to the guest.
+    /// a response processing error, if any, to the constructor of the response.
+    /// For example, if the response was constructed via `wasi:http/types.response#new`,
+    /// a result sent on `fut` will be forwarded to the guest on the future handle returned.
     pub fn into_http<T: WasiHttpView + 'static>(
         self,
         store: impl AsContextMut<Data = T>,
@@ -55,6 +57,7 @@ impl Response {
                 result_tx,
             } => {
                 let (http_result_tx, http_result_rx) = oneshot::channel();
+                // `Content-Length` header value is validated in `fields` implementation
                 let content_length =
                     get_content_length(&res.headers).context("failed to parse `content-length`")?;
                 _ = result_tx.send(Box::new(async move {
@@ -69,7 +72,7 @@ impl Response {
                     trailers_rx,
                     http_result_tx,
                     content_length,
-                    GuestBodyKind::Response,
+                    BodyKind::Response,
                     T::http,
                 )
                 .boxed()
