@@ -174,3 +174,13 @@ block0(v0: i32, v1: i32):
 
 ; run: %fold_and_xor_not(4, 5) == 4
 
+function %fold_add_or_and3(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = band v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; run: %fold_add_or_and3(4, 5) == 9
+
