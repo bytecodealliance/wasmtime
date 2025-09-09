@@ -2,7 +2,7 @@ test optimize precise-output
 set opt_level=speed
 target x86_64
 
-function %fold-add-and-xor1(i8, i8) -> i8 {
+function %fold_add_and_xor1(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
     v2 = band v0, v1
     v3 = bxor v0, v1
@@ -10,7 +10,7 @@ block0(v0: i8, v1: i8):
     return v4
 }
 
-; function %fold-add-and-xor1(i8, i8) -> i8 fast {
+; function %fold_add_and_xor1(i8, i8) -> i8 fast {
 ; block0(v0: i8, v1: i8):
 ;     v5 = bor v0, v1
 ;     return v5
@@ -18,7 +18,7 @@ block0(v0: i8, v1: i8):
 
 
 
-function %fold-add-and-xor2(i16, i16) -> i16 {
+function %fold_add_and_xor2(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
     v2 = band v0, v1
     v3 = bxor v0, v1
@@ -26,7 +26,7 @@ block0(v0: i16, v1: i16):
     return v4
 }
 
-; function %fold-add-and-xor2(i16, i16) -> i16 fast {
+; function %fold_add_and_xor2(i16, i16) -> i16 fast {
 ; block0(v0: i16, v1: i16):
 ;     v5 = bor v0, v1
 ;     return v5
@@ -34,7 +34,7 @@ block0(v0: i16, v1: i16):
 
 
 
-function %fold-add-and-xor3(i32, i32) -> i32 {
+function %fold_add_and_xor3(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
     v2 = band v0, v1
     v3 = bxor v0, v1
@@ -42,7 +42,7 @@ block0(v0: i32, v1: i32):
     return v4
 }
 
-; function %fold-add-and-xor3(i32, i32) -> i32 fast {
+; function %fold_add_and_xor3(i32, i32) -> i32 fast {
 ; block0(v0: i32, v1: i32):
 ;     v5 = bor v0, v1
 ;     return v5
@@ -50,7 +50,7 @@ block0(v0: i32, v1: i32):
 
 
 
-function %fold-add-and-xor4(i64, i64) -> i64 {
+function %fold_add_and_xor4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
     v2 = band v0, v1
     v3 = bxor v0, v1
@@ -58,7 +58,7 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; function %fold-add-and-xor4(i64, i64) -> i64 fast {
+; function %fold_add_and_xor4(i64, i64) -> i64 fast {
 ; block0(v0: i64, v1: i64):
 ;     v5 = bor v0, v1
 ;     return v5
