@@ -15,9 +15,8 @@ impl Handler for Component {
     /// Return a response which echoes the request headers, body, and trailers.
     async fn handle(request: Request) -> Result<Response, ErrorCode> {
         let headers = request.get_headers();
-        let (body, trailers) = request.consume_body().unwrap();
-
-        // let (headers, body) = Request::into_parts(request);
+        let (_, result_rx) = wit_future::new(|| Ok(()));
+        let (body, trailers) = Request::consume_body(request, result_rx);
 
         let (response, _result) = if false {
             // This is the easy and efficient way to do it...
@@ -47,7 +46,6 @@ impl Handler for Component {
                 drop(pipe_tx);
 
                 trailers_tx.write(trailers.await).await.unwrap();
-                drop(request);
             });
 
             Response::new(headers, Some(pipe_rx), trailers_rx)

@@ -37,8 +37,33 @@ pub(crate) enum Body {
         /// Channel, on which transmission result will be written
         result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
     },
-    /// Body is consumed.
-    Consumed,
+}
+
+/// [FutureConsumer] implementation for future passed to `consume-body`.
+struct BodyResultConsumer(
+    Option<oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>>,
+);
+
+impl<D> FutureConsumer<D> for BodyResultConsumer
+where
+    D: 'static,
+{
+    type Item = Result<(), ErrorCode>;
+
+    fn poll_consume(
+        mut self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        mut src: Source<'_, Self::Item>,
+        _: bool,
+    ) -> Poll<wasmtime::Result<()>> {
+        let mut res = None;
+        src.read(store, &mut res).context("failed to read result")?;
+        let res = res.context("result value missing")?;
+        let tx = self.0.take().context("polled after returning `Ready`")?;
+        _ = tx.send(Box::new(async { res }));
+        Poll::Ready(Ok(()))
+    }
 }
 
 impl Body {
@@ -46,46 +71,38 @@ impl Body {
     pub(crate) fn consume<T>(
         self,
         mut store: Access<'_, T, WasiHttp>,
+        fut: FutureReader<Result<(), ErrorCode>>,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
-    ) -> Result<
-        (
-            StreamReader<u8>,
-            FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-        ),
-        (),
-    > {
+    ) -> (
+        StreamReader<u8>,
+        FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+    ) {
         match self {
             Body::Guest {
                 contents_rx: Some(contents_rx),
                 trailers_rx,
                 result_tx,
             } => {
-                // TODO: Use a result specified by the caller
-                // https://github.com/WebAssembly/wasi-http/issues/176
-                _ = result_tx.send(Box::new(async { Ok(()) }));
-                Ok((contents_rx, trailers_rx))
+                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
+                (contents_rx, trailers_rx)
             }
             Body::Guest {
                 contents_rx: None,
                 trailers_rx,
                 result_tx,
             } => {
+                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
                 let instance = store.instance();
-                // TODO: Use a result specified by the caller
-                // https://github.com/WebAssembly/wasi-http/issues/176
-                _ = result_tx.send(Box::new(async { Ok(()) }));
-                Ok((
+                (
                     StreamReader::new(instance, &mut store, iter::empty()),
                     trailers_rx,
-                ))
+                )
             }
             Body::Host { body, result_tx } => {
+                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
                 let instance = store.instance();
-                // TODO: Use a result specified by the caller
-                // https://github.com/WebAssembly/wasi-http/issues/176
-                _ = result_tx.send(Box::new(async { Ok(()) }));
                 let (trailers_tx, trailers_rx) = oneshot::channel();
-                Ok((
+                (
                     StreamReader::new(
                         instance,
                         &mut store,
@@ -96,9 +113,8 @@ impl Body {
                         },
                     ),
                     FutureReader::new(instance, &mut store, trailers_rx),
-                ))
+                )
             }
-            Body::Consumed => Err(()),
         }
     }
 
@@ -390,31 +406,6 @@ impl http_body::Body for GuestBody {
     }
 }
 
-/// [http_body::Body] that has been consumed.
-pub(crate) struct ConsumedBody;
-
-impl http_body::Body for ConsumedBody {
-    type Data = Bytes;
-    type Error = ErrorCode;
-
-    fn poll_frame(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-        Poll::Ready(Some(Err(ErrorCode::InternalError(Some(
-            "body consumed".into(),
-        )))))
-    }
-
-    fn is_end_stream(&self) -> bool {
-        true
-    }
-
-    fn size_hint(&self) -> http_body::SizeHint {
-        http_body::SizeHint::with_exact(0)
-    }
-}
-
 /// [FutureConsumer] implementation for trailers originating in the guest.
 struct GuestTrailerConsumer<T> {
     tx: Option<oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>>,
@@ -434,10 +425,10 @@ where
         mut src: Source<'_, Self::Item>,
         _: bool,
     ) -> Poll<wasmtime::Result<()>> {
-        let mut result = None;
-        src.read(store.as_context_mut(), &mut result)
+        let mut res = None;
+        src.read(&mut store, &mut res)
             .context("failed to read result")?;
-        let res = match result.context("result value missing")? {
+        let res = match res.context("result value missing")? {
             Ok(Some(trailers)) => {
                 let WasiHttpCtxView { table, .. } = (self.getter)(store.data_mut());
                 let trailers = table
