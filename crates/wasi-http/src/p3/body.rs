@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
 use wasmtime::component::{
-    Access, Accessor, Destination, FutureConsumer, FutureReader, Resource, Source, StreamConsumer,
+    Access, Destination, FutureConsumer, FutureReader, Resource, Source, StreamConsumer,
     StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut, StoreContextMut};
@@ -384,7 +384,7 @@ where
     type Item = Result<Option<Resource<Trailers>>, ErrorCode>;
 
     fn poll_consume(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         _: &mut Context<'_>,
         mut store: StoreContextMut<D>,
         mut source: Source<'_, Self::Item>,
@@ -392,23 +392,18 @@ where
     ) -> Poll<wasmtime::Result<()>> {
         let value = &mut None;
         source.read(store.as_context_mut(), value)?;
-        let res = value.take().unwrap();
-        let me = self.get_mut();
-        match res {
+        let res = match value.take().unwrap() {
             Ok(Some(trailers)) => {
-                let WasiHttpCtxView { table, .. } = (me.getter)(store.data_mut());
+                let WasiHttpCtxView { table, .. } = (self.getter)(store.data_mut());
                 let trailers = table
                     .delete(trailers)
                     .context("failed to delete trailers")?;
-                _ = me.tx.take().unwrap().send(Ok(Some(Arc::from(trailers))));
+                Ok(Some(Arc::from(trailers)))
             }
-            Ok(None) => {
-                _ = me.tx.take().unwrap().send(Ok(None));
-            }
-            Err(err) => {
-                _ = me.tx.take().unwrap().send(Err(err));
-            }
-        }
+            Ok(None) => Ok(None),
+            Err(err) => Err(err),
+        };
+        _ = self.tx.take().unwrap().send(res);
         Poll::Ready(Ok(()))
     }
 }
