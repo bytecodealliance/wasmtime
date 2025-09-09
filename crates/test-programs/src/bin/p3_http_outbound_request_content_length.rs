@@ -51,11 +51,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                 async { transmit.await },
                 async {
                     let remaining = contents_tx.write_all(b"long enough".to_vec()).await;
-                    assert!(
-                        remaining.is_empty(),
-                        "{}",
-                        String::from_utf8_lossy(&remaining)
-                    );
+                    assert_eq!(String::from_utf8_lossy(&remaining), "");
                     trailers_tx.write(Ok(None)).await.unwrap();
                     drop(contents_tx);
                 },
@@ -72,13 +68,9 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                 async { transmit.await },
                 async {
                     let remaining = contents_tx.write_all(b"msg".to_vec()).await;
-                    assert!(
-                        remaining.is_empty(),
-                        "{}",
-                        String::from_utf8_lossy(&remaining)
-                    );
-                    drop(contents_tx);
+                    assert_eq!(String::from_utf8_lossy(&remaining), "");
                     trailers_tx.write(Ok(None)).await.unwrap();
+                    drop(contents_tx);
                 },
             );
             let err = handle.expect_err("should have failed to send request");
@@ -101,8 +93,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                 async { transmit.await },
                 async {
                     let remaining = contents_tx.write_all(b"more than 11 bytes".to_vec()).await;
-                    assert_eq!(String::from_utf8_lossy(&remaining), "more than 11 bytes",);
-                    drop(contents_tx);
+                    assert_eq!(String::from_utf8_lossy(&remaining), "more than 11 bytes");
                     _ = trailers_tx.write(Ok(None)).await;
                 },
             );
