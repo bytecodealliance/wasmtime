@@ -2946,6 +2946,10 @@ impl Instance {
                 };
         }
 
+        log::trace!(
+            "guest_write result for {transmit_handle:?} (handle {handle}; state {transmit_id:?}): {result:?}",
+        );
+
         Ok(result)
     }
 
@@ -3177,6 +3181,10 @@ impl Instance {
                     ),
                 };
         }
+
+        log::trace!(
+            "guest_read result for {transmit_handle:?} (handle {handle}; state {transmit_id:?}): {result:?}",
+        );
 
         Ok(result)
     }

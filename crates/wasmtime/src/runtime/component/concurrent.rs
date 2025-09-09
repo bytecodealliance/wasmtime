@@ -1004,7 +1004,7 @@ impl Instance {
         assert!(
             state.table.get_mut().is_empty(),
             "non-empty table: {:?}",
-            state.table
+            state.table.get_mut()
         );
         assert!(state.high_priority.is_empty());
         assert!(state.low_priority.is_empty());
@@ -2243,12 +2243,15 @@ impl Instance {
             // The caller used a sync-lowered import to call an async-lifted
             // export, in which case the result, if any, has been stashed in
             // `GuestTask::sync_result`.
-            if let Some(result) = state.get_mut(guest_task)?.sync_result.take() {
+            let task = state.get_mut(guest_task)?;
+            if let Some(result) = task.sync_result.take() {
                 if let Some(result) = result {
                     storage[0] = MaybeUninit::new(result);
                 }
 
-                Waitable::Guest(guest_task).delete_from(state)?;
+                if task.exited {
+                    Waitable::Guest(guest_task).delete_from(state)?;
+                }
             } else {
                 // This means the callee failed to call either `task.return` or
                 // `task.cancel` before exiting.
