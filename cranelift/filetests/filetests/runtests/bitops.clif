@@ -184,3 +184,13 @@ block0(v0: i32, v1: i32):
 
 ; run: %fold_add_or_and3(4, 5) == 9
 
+function %fold_add_and_xor4(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = band v0, v1
+    v3 = bxor v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; run: %fold_add_and_xor4(1, 2) == 3
+
