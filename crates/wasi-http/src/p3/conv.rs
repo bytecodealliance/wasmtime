@@ -11,7 +11,7 @@ impl From<Infallible> for ErrorCode {
 
 impl ErrorCode {
     /// Translate a [`hyper::Error`] to a wasi-http [ErrorCode] in the context of a request.
-    pub fn from_hyper_request_error(err: hyper::Error) -> Self {
+    pub(crate) fn from_hyper_request_error(err: hyper::Error) -> Self {
         // If there's a source, we might be able to extract a wasi-http error from it.
         if let Some(cause) = err.source() {
             if let Some(err) = cause.downcast_ref::<Self>() {
@@ -25,7 +25,7 @@ impl ErrorCode {
     }
 
     /// Translate a [`hyper::Error`] to a wasi-http [ErrorCode] in the context of a response.
-    pub fn from_hyper_response_error(err: hyper::Error) -> Self {
+    pub(crate) fn from_hyper_response_error(err: hyper::Error) -> Self {
         if err.is_timeout() {
             return ErrorCode::HttpResponseTimeout;
         }

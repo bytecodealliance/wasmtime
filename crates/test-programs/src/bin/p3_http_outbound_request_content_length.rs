@@ -1,4 +1,3 @@
-use anyhow::Context as _;
 use futures::join;
 use test_programs::p3::wasi::http::handler;
 use test_programs::p3::wasi::http::types::{ErrorCode, Headers, Method, Request, Scheme, Trailers};
@@ -47,13 +46,9 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         println!("writing enough");
         {
             let (request, mut contents_tx, trailers_tx, transmit) = make_request();
-            let (handle, (), ()) = join!(
-                async {
-                    let res = handler::handle(request)
-                        .await
-                        .context("failed to send request")?;
-                    anyhow::Ok(res)
-                },
+            let (handle, transmit, ()) = join!(
+                async { handler::handle(request).await },
+                async { transmit.await },
                 async {
                     let remaining = contents_tx.write_all(b"long enough".to_vec()).await;
                     assert!(
@@ -64,12 +59,9 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                     trailers_tx.write(Ok(None)).await.unwrap();
                     drop(contents_tx);
                 },
-                async {
-                    transmit.await.unwrap();
-                },
             );
-            let res = handle.unwrap();
-            drop(res);
+            let _res = handle.expect("failed to send request");
+            transmit.expect("failed to transmit request");
         }
 
         println!("writing too little");
@@ -89,8 +81,11 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                     trailers_tx.write(Ok(None)).await.unwrap();
                 },
             );
-            let res = handle.unwrap();
-            drop(res);
+            let err = handle.expect_err("should have failed to send request");
+            assert!(
+                matches!(err, ErrorCode::HttpProtocolError),
+                "unexpected error: {err:#?}"
+            );
             let err = transmit.expect_err("request transmission should have failed");
             assert!(
                 matches!(err, ErrorCode::HttpRequestBodySize(Some(3))),
@@ -106,18 +101,15 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                 async { transmit.await },
                 async {
                     let remaining = contents_tx.write_all(b"more than 11 bytes".to_vec()).await;
-                    assert!(
-                        remaining.is_empty(),
-                        "{}",
-                        String::from_utf8_lossy(&remaining)
-                    );
+                    assert_eq!(String::from_utf8_lossy(&remaining), "more than 11 bytes",);
                     drop(contents_tx);
                     _ = trailers_tx.write(Ok(None)).await;
                 },
             );
 
-            let res = handle.unwrap();
-            drop(res);
+            // The the error returned by `handle` in this case is non-deterministic,
+            // so just assert that it fails
+            let _err = handle.expect_err("should have failed to send request");
             let err = transmit.expect_err("request transmission should have failed");
             assert!(
                 matches!(err, ErrorCode::HttpRequestBodySize(Some(18))),
