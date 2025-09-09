@@ -170,6 +170,10 @@ interface synchronous-transmit {
   start: async func(s: stream<u8>, s-expected: list<u8>, f: future<u8>, f-expected: u8) -> tuple<stream<u8>, list<u8>, future<u8>, u8>;
 }
 
+interface sleep-post-return {
+  run: async func(sleep-time-millis: u64);
+}
+
 world yield-caller {
   import continue;
   import ready;
@@ -322,4 +326,15 @@ world readiness-guest {
 
 world synchronous-transmit-guest {
   export synchronous-transmit;
+}
+
+world sleep-post-return-callee {
+  import sleep;
+  export sleep-post-return;
+}
+
+world sleep-post-return-caller {
+  import sleep;
+  import sleep-post-return;
+  export sleep-post-return;
 }

@@ -8,6 +8,7 @@ use crate::runtime::vm::component::{ComponentInstance, InstanceFlags, ResourceTa
 use crate::runtime::vm::{Export, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
+use anyhow::Context as _;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
@@ -17,6 +18,10 @@ use wasmtime_environ::component::{
 
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{self, AsAccessor, PreparedCall};
+#[cfg(feature = "component-model-async")]
+use core::pin::Pin;
+#[cfg(feature = "component-model-async")]
+use core::task::{Context, Poll};
 
 mod host;
 mod options;
@@ -283,6 +288,7 @@ impl Func {
                 .run_concurrent(&mut store, async |store| {
                     self.call_concurrent_dynamic(store, params, results, false)
                         .await
+                        .map(drop)
                 })
                 .await?
         }
@@ -340,27 +346,26 @@ impl Func {
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this function.
     #[cfg(feature = "component-model-async")]
-    pub async fn call_concurrent(
+    pub async fn call_concurrent<A: AsAccessor<Data: Send>>(
         self,
-        accessor: impl AsAccessor<Data: Send>,
+        accessor: A,
         params: &[Val],
         results: &mut [Val],
-    ) -> Result<()> {
-        self.call_concurrent_dynamic(accessor.as_accessor(), params, results, true)
+    ) -> Result<TaskExit<A>> {
+        self.call_concurrent_dynamic(accessor, params, results, true)
             .await
     }
 
     /// Internal helper function for `call_async` and `call_concurrent`.
     #[cfg(feature = "component-model-async")]
-    async fn call_concurrent_dynamic(
+    async fn call_concurrent_dynamic<A: AsAccessor<Data: Send>>(
         self,
-        store: impl AsAccessor<Data: Send>,
+        accessor: A,
         params: &[Val],
         results: &mut [Val],
         call_post_return_automatically: bool,
-    ) -> Result<()> {
-        let store = store.as_accessor();
-        let result = store.with(|mut store| {
+    ) -> Result<TaskExit<A>> {
+        let result = accessor.as_accessor().with(|mut store| {
             assert!(
                 store.as_context_mut().0.async_support(),
                 "cannot use `call_concurrent` when async support is not enabled on the config"
@@ -374,12 +379,15 @@ impl Func {
             concurrent::queue_call(store.as_context_mut(), prepared)
         })?;
 
-        let run_results = result.await?;
+        let (run_results, rx) = result.await?;
         assert_eq!(run_results.len(), results.len());
         for (result, slot) in run_results.into_iter().zip(results) {
             *slot = result;
         }
-        Ok(())
+        Ok(TaskExit {
+            _accessor: accessor,
+            rx,
+        })
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
@@ -932,5 +940,36 @@ impl Func {
         let mut cx = LiftContext::new(store, &options, self.instance);
         let ty = InterfaceType::Tuple(cx.types[ty].results);
         lift(&mut cx, ty)
+    }
+}
+
+/// Represents the completion of a task created using
+/// `[Typed]Func::call_concurrent`.
+///
+/// In general, a guest task may continue running after returning a value.
+/// Moreover, any given guest task may create its own subtasks before or after
+/// returning and may exit before some or all of those subtasks have finished
+/// running.  In that case, the still-running subtasks will be "reparented" to
+/// the nearest surviving caller, which may be the original host call.  This
+/// future will resolve once all transitive subtasks created directly or
+/// indirectly by the original call to `Instance::call_concurrent` have exited.
+#[cfg(feature = "component-model-async")]
+pub struct TaskExit<A> {
+    _accessor: A,
+    rx: futures::channel::oneshot::Receiver<()>,
+}
+
+#[cfg(feature = "component-model-async")]
+impl<A: AsAccessor<Data: Send>> Future for TaskExit<A> {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // SAFETY: This is a standard pin-projection, and we never move
+        // out of `self`.
+        let rx = unsafe { self.map_unchecked_mut(|v| &mut v.rx) };
+        // We don't care whether the sender sent us a value or was dropped
+        // first; either one counts as a notification, so we ignore the result
+        // once the future resolves:
+        rx.poll(cx).map(drop)
     }
 }

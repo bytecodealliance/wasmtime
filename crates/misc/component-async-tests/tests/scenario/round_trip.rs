@@ -376,10 +376,10 @@ pub async fn test_round_trip(
             .ok_or_else(|| anyhow!("can't find `local:local/baz` in instance"))?;
         let foo_function = instance
             .get_export_index(&mut store, Some(&baz_instance), "[async]foo")
-            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
+            .ok_or_else(|| anyhow!("can't find `[async]foo` in instance"))?;
         let foo_function = instance
             .get_func(&mut store, foo_function)
-            .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
+            .ok_or_else(|| anyhow!("can't find `[async]foo` in instance"))?;
 
         if call_style == 3 || !cfg!(miri) {
             instance
