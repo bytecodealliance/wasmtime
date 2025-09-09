@@ -420,9 +420,10 @@ impl<'a> FunctionBuilder<'a> {
     /// map metadata.
     ///
     /// All values that are uses of this variable will be spilled to the stack
-    /// before each safepoint and their location on the stack included in stack
-    /// maps. Stack maps allow the garbage collector to identify the on-stack GC
-    /// roots.
+    /// before each safepoint and reloaded afterwards. Stack maps allow the
+    /// garbage collector to identify the on-stack GC roots. Between spilling
+    /// the stack and it being reloading again, the stack can be updated to
+    /// facilitate moving GCs.
     ///
     /// This does not affect any pre-existing uses of the variable.
     ///
@@ -536,10 +537,11 @@ impl<'a> FunctionBuilder<'a> {
     /// Declare that the given value is a GC reference that requires inclusion
     /// in a stack map when it is live across GC safepoints.
     ///
-    /// At the current moment, values that need inclusion in stack maps are
-    /// spilled before safepoints, but they are not reloaded afterwards. This
-    /// means that moving GCs are not yet supported, however the intention is to
-    /// add this support in the near future.
+    /// All values that are uses of this variable will be spilled to the stack
+    /// before each safepoint and reloaded afterwards. Stack maps allow the
+    /// garbage collector to identify the on-stack GC roots. Between spilling
+    /// the stack and it being reloading again, the stack can be updated to
+    /// facilitate moving GCs.
     ///
     /// # Panics
     ///
