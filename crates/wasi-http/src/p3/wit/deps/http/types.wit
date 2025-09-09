@@ -316,20 +316,12 @@ interface types {
     /// future to determine whether the body was received successfully.
     /// The future will only resolve after the stream is reported as closed.
     ///
-    /// The stream and future returned by this method are children:
-    /// they should be closed or consumed before the parent `response`
-    /// is dropped, or its ownership is transferred to another component
-    /// by e.g. `handler.handle`.
+    /// This function takes a `res` future as a parameter, which can be used to
+    /// communicate an error in handling of the request.
     ///
-    /// This method may be called multiple times.
-    ///
-    /// This method will return an error if it is called while either:
-    /// - a stream or future returned by a previous call to this method is still open
-    /// - a stream returned by a previous call to this method has reported itself as closed
-    /// Thus there will always be at most one readable stream open for a given body.
-    /// Each subsequent stream picks up where the previous one left off,
-    /// continuing until the entire body has been consumed.
-    consume-body: func() -> result<tuple<stream<u8>, future<result<option<trailers>, error-code>>>>;
+    /// Note that function will move the `request`, but references to headers or
+    /// request options acquired from it previously will remain valid.
+    consume-body: static func(this: request, res: future<result<_, error-code>>) -> tuple<stream<u8>, future<result<option<trailers>, error-code>>>;
   }
 
   /// Parameters for making an HTTP Request. Each of these parameters is
@@ -417,19 +409,11 @@ interface types {
     /// future to determine whether the body was received successfully.
     /// The future will only resolve after the stream is reported as closed.
     ///
-    /// The stream and future returned by this method are children:
-    /// they should be closed or consumed before the parent `response`
-    /// is dropped, or its ownership is transferred to another component
-    /// by e.g. `handler.handle`.
+    /// This function takes a `res` future as a parameter, which can be used to
+    /// communicate an error in handling of the response.
     ///
-    /// This method may be called multiple times.
-    ///
-    /// This method will return an error if it is called while either:
-    /// - a stream or future returned by a previous call to this method is still open
-    /// - a stream returned by a previous call to this method has reported itself as closed
-    /// Thus there will always be at most one readable stream open for a given body.
-    /// Each subsequent stream picks up where the previous one left off,
-    /// continuing until the entire body has been consumed.
-    consume-body: func() -> result<tuple<stream<u8>, future<result<option<trailers>, error-code>>>>;
+    /// Note that function will move the `response`, but references to headers
+    /// acquired from it previously will remain valid.
+    consume-body: static func(this: response, res: future<result<_, error-code>>) -> tuple<stream<u8>, future<result<option<trailers>, error-code>>>;
   }
 }
