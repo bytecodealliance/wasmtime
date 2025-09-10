@@ -73,10 +73,14 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                     drop(contents_tx);
                 },
             );
-            let err = handle.expect_err("should have failed to send request");
+            // The request body will be polled before `handle` returns.
+            // Due to the way implementation is structured, by the time it happens
+            // the error will be already available in most cases and `handle` will fail,
+            // but it is a race condition, since `handle` may also succeed if
+            // polling body returns `Poll::Pending`
             assert!(
-                matches!(err, ErrorCode::HttpProtocolError),
-                "unexpected error: {err:#?}"
+                matches!(handle, Ok(..) | Err(ErrorCode::HttpProtocolError)),
+                "unexpected handle result: {handle:#?}"
             );
             let err = transmit.expect_err("request transmission should have failed");
             assert!(
@@ -97,11 +101,17 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                     _ = trailers_tx.write(Ok(None)).await;
                 },
             );
-
-            let err = handle.expect_err("should have failed to send request");
+            // The request body will be polled before `handle` returns.
+            // Due to the way implementation is structured, by the time it happens
+            // the error will be already available in most cases and `handle` will fail,
+            // but it is a race condition, since `handle` may also succeed if
+            // polling body returns `Poll::Pending`
             assert!(
-                matches!(err, ErrorCode::HttpRequestBodySize(Some(18))),
-                "unexpected error: {err:#?}"
+                matches!(
+                    handle,
+                    Ok(..) | Err(ErrorCode::HttpRequestBodySize(Some(18)))
+                ),
+                "unexpected handle result: {handle:#?}"
             );
             let err = transmit.expect_err("request transmission should have failed");
             assert!(
