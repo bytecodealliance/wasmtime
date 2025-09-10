@@ -478,7 +478,7 @@ pub trait StreamProducer<D>: Send + 'static {
     ///
     /// If more items are written to `destination` than the reader has immediate
     /// capacity to accept, they will be retained in memory by the caller and
-    /// used to satisify future reads, in which case `poll_produce` will only be
+    /// used to satisfy future reads, in which case `poll_produce` will only be
     /// called again once all those items have been delivered.
     ///
     /// If this function is called with zero capacity
@@ -780,7 +780,7 @@ pub trait StreamConsumer<D>: Send + 'static {
     /// upstream sink, `poll_consume` will be called with `finish` set to true,
     /// and the implementation may either:
     ///
-    /// - Interrupt the forwarding process gracefully.  This may be preferrable
+    /// - Interrupt the forwarding process gracefully.  This may be preferable
     /// if there is an out-of-band channel for communicating to the writer how
     /// many items were forwarded before being interrupted.
     ///
