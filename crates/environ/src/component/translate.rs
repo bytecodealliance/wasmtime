@@ -193,6 +193,12 @@ enum LocalInitializer<'data> {
     BackpressureSet {
         func: ModuleInternedTypeIndex,
     },
+    BackpressureInc {
+        func: ModuleInternedTypeIndex,
+    },
+    BackpressureDec {
+        func: ModuleInternedTypeIndex,
+    },
     TaskReturn {
         result: Option<ComponentValType>,
         options: LocalCanonicalOptions,
@@ -814,6 +820,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::BackpressureSet { func: core_type }
                         }
+                        wasmparser::CanonicalFunction::BackpressureInc => {
+                            let core_type = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::BackpressureInc { func: core_type }
+                        }
+                        wasmparser::CanonicalFunction::BackpressureDec => {
+                            let core_type = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::BackpressureDec { func: core_type }
+                        }
+
                         wasmparser::CanonicalFunction::TaskReturn { result, options } => {
                             let result = result.map(|ty| match ty {
                                 wasmparser::ComponentValType::Primitive(ty) => {
@@ -1071,13 +1088,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ContextSet { i, func }
-                        }
-
-                        wasmparser::CanonicalFunction::BackpressureInc => {
-                            bail!("unimplemented `backpressure.inc`");
-                        }
-                        wasmparser::CanonicalFunction::BackpressureDec => {
-                            bail!("unimplemented `backpressure.dec`");
                         }
 
                         wasmparser::CanonicalFunction::ThreadIndex => {

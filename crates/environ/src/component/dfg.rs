@@ -322,6 +322,12 @@ pub enum Trampoline {
     BackpressureSet {
         instance: RuntimeComponentInstanceIndex,
     },
+    BackpressureInc {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    BackpressureDec {
+        instance: RuntimeComponentInstanceIndex,
+    },
     TaskReturn {
         results: TypeTupleIndex,
         options: OptionsId,
@@ -858,6 +864,12 @@ impl LinearizeDfg<'_> {
             Trampoline::ResourceDrop(ty) => info::Trampoline::ResourceDrop(*ty),
             Trampoline::ResourceRep(ty) => info::Trampoline::ResourceRep(*ty),
             Trampoline::BackpressureSet { instance } => info::Trampoline::BackpressureSet {
+                instance: *instance,
+            },
+            Trampoline::BackpressureInc { instance } => info::Trampoline::BackpressureInc {
+                instance: *instance,
+            },
+            Trampoline::BackpressureDec { instance } => info::Trampoline::BackpressureDec {
                 instance: *instance,
             },
             Trampoline::TaskReturn { results, options } => info::Trampoline::TaskReturn {

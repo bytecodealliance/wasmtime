@@ -664,9 +664,28 @@ fn backpressure_set(
     caller_instance: u32,
     enabled: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).backpressure_set(
+    instance.concurrent_state_mut(store).backpressure_modify(
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        enabled,
+        |_| Some(if enabled != 0 { 1 } else { 0 }),
+    )
+}
+
+#[cfg(feature = "component-model-async")]
+fn backpressure_modify(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    caller_instance: u32,
+    increment: u8,
+) -> Result<()> {
+    instance.concurrent_state_mut(store).backpressure_modify(
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        |old| {
+            if increment != 0 {
+                old.checked_add(1)
+            } else {
+                old.checked_sub(1)
+            }
+        },
     )
 }
 

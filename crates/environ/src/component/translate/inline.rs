@@ -681,6 +681,24 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
+            BackpressureInc { func } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::BackpressureInc {
+                        instance: frame.instance,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            BackpressureDec { func } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::BackpressureDec {
+                        instance: frame.instance,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
             TaskReturn { result, options } => {
                 let results = result
                     .iter()

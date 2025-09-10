@@ -15,20 +15,20 @@
 (component
 
   (component $A
-    (core func $backpressure.set (canon backpressure.set))
+    (core func $backpressure.inc (canon backpressure.inc))
     (core module $m
-      (import "" "backpressure.set" (func $backpressure.set (param i32)))
+      (import "" "backpressure.inc" (func $backpressure.inc))
 
       (func (export "f") (result i32) unreachable)
       (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
 
       (func (export "turn-on-backpressure")
-        (call $backpressure.set (i32.const 1)))
+        (call $backpressure.inc))
     )
 
     (core instance $i (instantiate $m
       (with "" (instance
-        (export "backpressure.set" (func $backpressure.set))
+        (export "backpressure.inc" (func $backpressure.inc))
       ))
     ))
 
