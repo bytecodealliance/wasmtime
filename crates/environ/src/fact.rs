@@ -322,7 +322,9 @@ impl<'a> Module<'a> {
             async_,
             core_type,
             data_model,
+            cancellable,
         } = options;
+        assert!(!cancellable);
 
         let flags = self.import_global(
             "flags",
