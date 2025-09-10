@@ -220,7 +220,6 @@ async fn p3_http_outbound_request_response_build() -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[ignore = "FIXME #11656"]
 async fn p3_http_outbound_request_content_length() -> anyhow::Result<()> {
     let server = Server::http1(3)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await
