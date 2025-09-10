@@ -2,7 +2,7 @@ use crate::p3::WasiHttpView;
 use crate::p3::bindings::Proxy;
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
 use anyhow::Context as _;
-use wasmtime::component::Accessor;
+use wasmtime::component::{Accessor, TaskExit};
 
 impl Proxy {
     /// Call `wasi:http/handler#handle` on [Proxy] getting a [Response] back.
@@ -10,7 +10,7 @@ impl Proxy {
         &self,
         store: &Accessor<impl WasiHttpView>,
         req: impl Into<Request>,
-    ) -> wasmtime::Result<Result<Response, ErrorCode>> {
+    ) -> wasmtime::Result<Result<(Response, TaskExit), ErrorCode>> {
         let req = store.with(|mut store| {
             store
                 .data_mut()
@@ -20,7 +20,7 @@ impl Proxy {
                 .context("failed to push request to table")
         })?;
         match self.wasi_http_handler().call_handle(store, req).await? {
-            Ok(res) => {
+            (Ok(res), task) => {
                 let res = store.with(|mut store| {
                     store
                         .data_mut()
@@ -29,9 +29,9 @@ impl Proxy {
                         .delete(res)
                         .context("failed to delete response from table")
                 })?;
-                Ok(Ok(res))
+                Ok(Ok((res, task)))
             }
-            Err(err) => Ok(Err(err)),
+            (Err(err), _) => Ok(Err(err)),
         }
     }
 }
