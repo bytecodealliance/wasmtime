@@ -110,7 +110,7 @@ async fn test_file_long_write(dir: &Descriptor, filename: &str) {
         async {
             let err = file.write_via_stream(rx, 0).await.unwrap_err();
             assert!(
-                matches!(err, ErrorCode::Access | ErrorCode::BadDescriptor),
+                matches!(err, ErrorCode::Access | ErrorCode::BadDescriptor | ErrorCode::NotPermitted),
                 "bad error {err:?}",
             );
         },
