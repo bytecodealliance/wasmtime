@@ -1,0 +1,30 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %fold_three_selects1(i8, i8, i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i8):
+    v5 = select v0, v3, v2
+    v6 = select v0, v4, v5
+    return v6
+}
+
+; function %fold_three_selects1(i8, i8, i8, i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i8):
+;     v7 = select v0, v4, v2
+;     return v7
+; }
+
+function %fold_three_selects1(i8, i8, i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i8):
+    v5 = select v0, v3, v2
+    v6 = select v0, v5, v4
+    return v6
+}
+
+; function %fold_three_selects1(i8, i8, i8, i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i8):
+;     v7 = select v0, v3, v4
+;     return v7
+; }
+
