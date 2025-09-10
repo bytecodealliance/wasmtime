@@ -1,0 +1,82 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %fold_add_or_and1(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bor v0, v1
+    v3 = band v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %fold_add_or_and1(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = iadd v0, v1
+;     return v5
+; }
+
+
+
+function %fold_add_or_and2(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = bor v0, v1
+    v3 = band v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %fold_add_or_and2(i16, i16) -> i16 fast {
+; block0(v0: i16, v1: i16):
+;     v5 = iadd v0, v1
+;     return v5
+; }
+
+
+
+function %fold_add_or_and3(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = band v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %fold_add_or_and3(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iadd v0, v1
+;     return v5
+; }
+
+
+
+function %fold_add_or_and4(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = bor v0, v1
+    v3 = band v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %fold_add_or_and4(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = iadd v0, v1
+;     return v5
+; }
+
+
+
+function %fold_add_or_and4(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = bor v0, v1
+    v3 = band v0, v1
+    v4 = iadd v3, v2
+    return v4
+}
+
+; function %fold_add_or_and4(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = iadd v0, v1
+;     return v5
+; }
+
