@@ -421,7 +421,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.f1)
                         };
-                        let () = callee.call_concurrent(accessor, ()).await?.0;
+                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                     pub async fn call_f2<_T, _D>(
@@ -439,7 +439,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.f2)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?.0;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_f3<_T, _D>(
@@ -458,7 +458,9 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.f3)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0, arg1)).await?.0;
+                        let ((), _) = callee
+                            .call_concurrent(accessor, (arg0, arg1))
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_f4<_T, _D>(
@@ -475,7 +477,7 @@ pub mod exports {
                                 (u32,),
                             >::new_unchecked(self.f4)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?.0;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_f5<_T, _D>(
@@ -492,7 +494,7 @@ pub mod exports {
                                 ((u32, u32),),
                             >::new_unchecked(self.f5)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?.0;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_f6<_T, _D>(
@@ -512,10 +514,9 @@ pub mod exports {
                                 ((u32, u32, u32),),
                             >::new_unchecked(self.f6)
                         };
-                        let (ret0,) = callee
+                        let ((ret0,), _) = callee
                             .call_concurrent(accessor, (arg0, arg1, arg2))
-                            .await?
-                            .0;
+                            .await?;
                         Ok(ret0)
                     }
                 }
