@@ -23,6 +23,12 @@ impl Backpressure for Component {
         #[expect(deprecated, reason = "will replace with backpressure.inc/dec soon")]
         wit_bindgen::backpressure_set(enabled);
     }
+    fn inc_backpressure() {
+        wit_bindgen::backpressure_inc();
+    }
+    fn dec_backpressure() {
+        wit_bindgen::backpressure_dec();
+    }
 }
 
 // Unused function; required since this file is built as a `bin`:

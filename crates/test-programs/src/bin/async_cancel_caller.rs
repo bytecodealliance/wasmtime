@@ -26,11 +26,17 @@ unsafe extern "C" fn task_return_run() {
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "local:local/backpressure")]
 unsafe extern "C" {
-    #[link_name = "set-backpressure"]
-    fn set_backpressure(_: bool);
+    #[link_name = "inc-backpressure"]
+    fn inc_backpressure();
+    #[link_name = "dec-backpressure"]
+    fn dec_backpressure();
 }
 #[cfg(not(target_arch = "wasm32"))]
-unsafe fn set_backpressure(_: bool) {
+unsafe fn inc_backpressure() {
+    unreachable!()
+}
+#[cfg(not(target_arch = "wasm32"))]
+unsafe fn dec_backpressure() {
     unreachable!()
 }
 
@@ -137,7 +143,7 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
                 // with backpressure enabled.  Cancelling should not block since
                 // the call will not even have started.
 
-                set_backpressure(true);
+                inc_backpressure();
 
                 let params = Box::into_raw(Box::new(SleepParams {
                     time_in_millis: 60 * 60 * 1000,
@@ -171,7 +177,7 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
                 // backpressure disabled.  Cancelling should not block since we
                 // specified zero cancel delay to the callee.
 
-                set_backpressure(false);
+                dec_backpressure();
 
                 let status = sleep_with_options::sleep_millis(params.cast());
 
