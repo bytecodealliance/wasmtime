@@ -80,19 +80,24 @@ pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
                     let frame_vmctx =
                         NonNull::new(frame_vmctx as *mut VMContext).expect("null vmctx in frame");
 
-                    // SAFETY: we use `Instance::from_vmctx` to get an
-                    // `&Instance` from a raw vmctx we read off the
-                    // stack frame. That method's safety requirements
-                    // are that the `vmctx` is a valid vmctx belonging
-                    // to an instance in the store (`nogc`). This is
-                    // satisfied because every Wasm frame in this
-                    // activation must belong to an instance in this
-                    // store: we do not permit cross-store calls
-                    // without exiting through host code.
+                    // SAFETY: we use `Instance::from_vmctx` to get a
+                    // `NonNull<Instance>` from a raw vmctx we read off the
+                    // stack frame. That method's safety requirements are that
+                    // the `vmctx` is a valid vmctx allocation which should be
+                    // true of all frames on the stack.
+                    //
+                    // Next the `.as_ref()` call enables reading this pointer,
+                    // and the validity of this relies on the fact that all wasm
+                    // frames for this activation belong to the same store and
+                    // there's no other active instance borrows at this time.
+                    // This function takes `&mut dyn VMStore` representing no
+                    // other active borrows, and internally the borrow is scoped
+                    // to this one block.
                     let (handler_tag_instance, handler_tag_index) = unsafe {
                         let store_id = nogc.id();
-                        let instance = Instance::from_vmctx(&nogc, frame_vmctx);
+                        let instance = Instance::from_vmctx(frame_vmctx);
                         let tag = instance
+                            .as_ref()
                             .get_exported_tag(store_id, TagIndex::from_u32(module_local_tag_index));
                         tag.to_raw_indices()
                     };
