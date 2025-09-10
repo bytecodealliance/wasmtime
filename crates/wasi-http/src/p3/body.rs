@@ -122,72 +122,44 @@ impl Body {
     }
 }
 
-/// The kind of body, used for error reporting
-pub(crate) enum BodyKind {
-    Request,
-    Response,
-}
-
-/// Represents `Content-Length` limit and state
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-struct ContentLength {
+/// [StreamConsumer] implementation for bodies originating in the guest with `Content-Length`
+/// header set.
+struct LimitedGuestBodyConsumer {
+    contents_tx: PollSender<Result<Bytes, ErrorCode>>,
+    error_tx: Option<oneshot::Sender<ErrorCode>>,
+    make_error: fn(Option<u64>) -> ErrorCode,
     /// Limit of bytes to be sent
     limit: u64,
     /// Number of bytes sent
     sent: u64,
-}
-
-impl ContentLength {
-    /// Constructs new [ContentLength]
-    fn new(limit: u64) -> Self {
-        Self { limit, sent: 0 }
-    }
-}
-
-/// [StreamConsumer] implementation for bodies originating in the guest.
-struct GuestBodyConsumer {
-    contents_tx: PollSender<Result<Bytes, ErrorCode>>,
-    result_tx: Option<oneshot::Sender<Result<(), ErrorCode>>>,
-    content_length: Option<ContentLength>,
-    kind: BodyKind,
     // `true` when the other side of `contents_tx` was unexpectedly closed
     closed: bool,
 }
 
-impl GuestBodyConsumer {
-    /// Constructs the approprite body size error given the [BodyKind]
-    fn body_size_error(&self, sent: Option<u64>) -> ErrorCode {
-        match self.kind {
-            BodyKind::Request => ErrorCode::HttpRequestBodySize(sent),
-            BodyKind::Response => ErrorCode::HttpResponseBodySize(sent),
-        }
-    }
-
+impl LimitedGuestBodyConsumer {
     // Sends the corresponding error constructed by [Self::body_size_error] on both
     // error channels.
     fn send_body_size_error(&mut self, sent: Option<u64>) {
-        if let Some(result_tx) = self.result_tx.take() {
-            _ = result_tx.send(Err(self.body_size_error(sent)));
+        if let Some(error_tx) = self.error_tx.take() {
+            _ = error_tx.send((self.make_error)(sent));
             self.contents_tx.abort_send();
             if let Some(tx) = self.contents_tx.get_ref() {
-                _ = tx.try_send(Err(self.body_size_error(sent)))
+                _ = tx.try_send(Err((self.make_error)(sent)))
             }
             self.contents_tx.close();
         }
     }
 }
 
-impl Drop for GuestBodyConsumer {
+impl Drop for LimitedGuestBodyConsumer {
     fn drop(&mut self) {
-        if let Some(ContentLength { limit, sent }) = self.content_length {
-            if !self.closed && limit != sent {
-                self.send_body_size_error(Some(sent))
-            }
+        if !self.closed && self.limit != self.sent {
+            self.send_body_size_error(Some(self.sent))
         }
     }
 }
 
-impl<D> StreamConsumer<D> for GuestBodyConsumer {
+impl<D> StreamConsumer<D> for LimitedGuestBodyConsumer {
     type Item = u8;
 
     fn poll_consume(
@@ -203,23 +175,18 @@ impl<D> StreamConsumer<D> for GuestBodyConsumer {
         let n = buf.len();
 
         // Perform `content-length` check early and precompute the next value
-        let content_length = self.content_length.map(|ContentLength { limit, sent }| {
-            let n = n.try_into().or(Err(None))?;
-            let sent = sent.checked_add(n).ok_or(None)?;
-            if sent > limit {
-                Err(Some(sent))
-            } else {
-                Ok(ContentLength { limit, sent })
-            }
-        });
-        let content_length = match content_length {
-            Some(Ok(content_length)) => Some(content_length),
-            Some(Err(sent)) => {
-                self.send_body_size_error(sent);
-                return Poll::Ready(Ok(StreamResult::Dropped));
-            }
-            None => None,
+        let Ok(sent) = n.try_into() else {
+            self.send_body_size_error(None);
+            return Poll::Ready(Ok(StreamResult::Dropped));
         };
+        let Some(sent) = self.sent.checked_add(sent) else {
+            self.send_body_size_error(None);
+            return Poll::Ready(Ok(StreamResult::Dropped));
+        };
+        if sent > self.limit {
+            self.send_body_size_error(Some(sent));
+            return Poll::Ready(Ok(StreamResult::Dropped));
+        }
         match self.contents_tx.poll_reserve(cx) {
             Poll::Ready(Ok(())) => {
                 let buf = Bytes::copy_from_slice(buf);
@@ -227,7 +194,7 @@ impl<D> StreamConsumer<D> for GuestBodyConsumer {
                     Ok(()) => {
                         src.mark_read(n);
                         // Record new `content-length` only on successful send
-                        self.content_length = content_length;
+                        self.sent = sent;
                         Poll::Ready(Ok(StreamResult::Completed))
                     }
                     Err(..) => {
@@ -240,6 +207,41 @@ impl<D> StreamConsumer<D> for GuestBodyConsumer {
                 self.closed = true;
                 Poll::Ready(Ok(StreamResult::Dropped))
             }
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// [StreamConsumer] implementation for bodies originating in the guest without `Content-Length`
+/// header set.
+struct UnlimitedGuestBodyConsumer(PollSender<Result<Bytes, ErrorCode>>);
+
+impl<D> StreamConsumer<D> for UnlimitedGuestBodyConsumer {
+    type Item = u8;
+
+    fn poll_consume(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        src: Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        match self.0.poll_reserve(cx) {
+            Poll::Ready(Ok(())) => {
+                let mut src = src.as_direct(store);
+                let buf = src.remaining();
+                let n = buf.len();
+                let buf = Bytes::copy_from_slice(buf);
+                match self.0.send_item(Ok(buf)) {
+                    Ok(()) => {
+                        src.mark_read(n);
+                        Poll::Ready(Ok(StreamResult::Completed))
+                    }
+                    Err(..) => Poll::Ready(Ok(StreamResult::Dropped)),
+                }
+            }
+            Poll::Ready(Err(..)) => Poll::Ready(Ok(StreamResult::Dropped)),
             Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
             Poll::Pending => Poll::Pending,
         }
@@ -259,9 +261,10 @@ impl GuestBody {
         mut store: impl AsContextMut<Data = T>,
         contents_rx: Option<StreamReader<u8>>,
         trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-        result_tx: oneshot::Sender<Result<(), ErrorCode>>,
+        result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
+        result_fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
         content_length: Option<u64>,
-        kind: BodyKind,
+        make_error: fn(Option<u64>) -> ErrorCode,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
     ) -> Self {
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
@@ -272,20 +275,38 @@ impl GuestBody {
                 getter,
             },
         );
-        let contents_rx = contents_rx.map(|rx| {
+
+        let contents_rx = if let Some(rx) = contents_rx {
             let (http_tx, http_rx) = mpsc::channel(1);
-            rx.pipe(
-                store,
-                GuestBodyConsumer {
-                    contents_tx: PollSender::new(http_tx),
-                    result_tx: Some(result_tx),
-                    content_length: content_length.map(ContentLength::new),
-                    kind,
-                    closed: false,
-                },
-            );
-            http_rx
-        });
+            let contents_tx = PollSender::new(http_tx);
+            if let Some(limit) = content_length {
+                let (error_tx, error_rx) = oneshot::channel();
+                _ = result_tx.send(Box::new(async move {
+                    if let Ok(err) = error_rx.await {
+                        return Err(err);
+                    };
+                    result_fut.await
+                }));
+                rx.pipe(
+                    store,
+                    LimitedGuestBodyConsumer {
+                        contents_tx,
+                        error_tx: Some(error_tx),
+                        make_error,
+                        limit,
+                        sent: 0,
+                        closed: false,
+                    },
+                );
+            } else {
+                _ = result_tx.send(Box::new(result_fut));
+                rx.pipe(store, UnlimitedGuestBodyConsumer(contents_tx));
+            };
+            Some(http_rx)
+        } else {
+            _ = result_tx.send(Box::new(result_fut));
+            None
+        };
         Self {
             trailers_rx: Some(trailers_http_rx),
             contents_rx,
@@ -309,7 +330,7 @@ impl http_body::Body for GuestBody {
                     Ok(buf) => {
                         if let Some(n) = self.content_length.as_mut() {
                             // Substract frame length from `content_length`,
-                            // [GuestBodyConsumer] already performs the validation, so
+                            // [LimitedGuestBodyConsumer] already performs the validation, so
                             // just keep count as optimization for
                             // `is_end_stream` and `size_hint`
                             *n = n.saturating_sub(buf.len().try_into().unwrap_or(u64::MAX));
