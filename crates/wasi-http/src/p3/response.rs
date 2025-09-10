@@ -1,6 +1,7 @@
+use crate::get_content_length;
+use crate::p3::WasiHttpView;
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, BodyKind, ConsumedBody, GuestBody};
-use crate::p3::{WasiHttpView, get_content_length};
 use anyhow::Context as _;
 use bytes::Bytes;
 use http::{HeaderMap, StatusCode};

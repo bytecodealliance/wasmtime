@@ -1,7 +1,8 @@
+use crate::get_content_length;
 use crate::p3::bindings::http::handler::{Host, HostWithStore};
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
 use crate::p3::body::{Body, BodyKind, ConsumedBody, GuestBody};
-use crate::p3::{HttpError, HttpResult, WasiHttp, WasiHttpCtxView, get_content_length};
+use crate::p3::{HttpError, HttpResult, WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker};

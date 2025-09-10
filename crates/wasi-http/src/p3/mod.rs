@@ -27,7 +27,6 @@ use bindings::http::{handler, types};
 use bytes::Bytes;
 use core::ops::Deref;
 use http::HeaderName;
-use http::header::CONTENT_LENGTH;
 use http::uri::Scheme;
 use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
@@ -42,18 +41,6 @@ pub(crate) type HeaderError = TrappableError<types::HeaderError>;
 
 pub(crate) type RequestOptionsResult<T> = Result<T, RequestOptionsError>;
 pub(crate) type RequestOptionsError = TrappableError<types::RequestOptionsError>;
-
-/// Extract the `Content-Length` header value from a [`http::HeaderMap`], returning `None` if it's not
-/// present. This function will return `Err` if it's not possible to parse the `Content-Length`
-/// header.
-fn get_content_length(headers: &http::HeaderMap) -> wasmtime::Result<Option<u64>> {
-    let Some(v) = headers.get(CONTENT_LENGTH) else {
-        return Ok(None);
-    };
-    let v = v.to_str()?;
-    let v = v.parse()?;
-    Ok(Some(v))
-}
 
 pub(crate) struct WasiHttp;
 
