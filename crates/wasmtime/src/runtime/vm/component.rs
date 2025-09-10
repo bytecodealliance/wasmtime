@@ -223,11 +223,8 @@ impl ComponentInstance {
     {
         // SAFETY: it's a contract of this function that `vmctx` is a valid
         // allocation which can go backwards to a `ComponentInstance`.
-        let mut ptr = unsafe {
-            vmctx
-                .byte_sub(mem::size_of::<ComponentInstance>())
-                .cast::<ComponentInstance>()
-        };
+        let mut ptr = unsafe { Self::from_vmctx(vmctx) };
+
         // SAFETY: it's a contract of this function that it's safe to use `ptr`
         // as a mutable reference.
         let reference = unsafe { ptr.as_mut() };
@@ -244,6 +241,23 @@ impl ComponentInstance {
     ///
     /// # Safety
     ///
+    /// The `vmctx` pointer must be a valid pointer and allocation within a
+    /// `ComponentInstance`. See `Instance::from_vmctx` for some more
+    /// information.
+    unsafe fn from_vmctx(vmctx: NonNull<VMComponentContext>) -> NonNull<ComponentInstance> {
+        // SAFETY: it's a contract of this function that `vmctx` is a valid
+        // pointer to do this pointer arithmetic on.
+        unsafe {
+            vmctx
+                .byte_sub(mem::size_of::<ComponentInstance>())
+                .cast::<ComponentInstance>()
+        }
+    }
+
+    /// Returns the `InstanceId` associated with the `vmctx` provided.
+    ///
+    /// # Safety
+    ///
     /// The `vmctx` pointer must be a valid pointer to read the
     /// `ComponentInstanceId` from.
     pub(crate) unsafe fn vmctx_instance_id(
@@ -251,13 +265,7 @@ impl ComponentInstance {
     ) -> ComponentInstanceId {
         // SAFETY: it's a contract of this function that `vmctx` is a valid
         // pointer with a `ComponentInstance` in front which can be read.
-        unsafe {
-            vmctx
-                .byte_sub(mem::size_of::<ComponentInstance>())
-                .cast::<ComponentInstance>()
-                .as_ref()
-                .id
-        }
+        unsafe { Self::from_vmctx(vmctx).as_ref().id }
     }
 
     /// Returns the layout corresponding to what would be an allocation of a
