@@ -367,7 +367,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.a)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(())
                     }
                     pub async fn call_b<_T, _D>(
@@ -384,7 +384,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::String,),
                             >::new_unchecked(self.b)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_c<_T, _D>(
@@ -408,7 +408,8 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_concurrent(accessor, (arg0, arg1))
-                            .await?;
+                            .await?
+                            .0;
                         Ok(ret0)
                     }
                 }

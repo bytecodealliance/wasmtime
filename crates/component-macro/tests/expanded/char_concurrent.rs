@@ -331,7 +331,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.take_char)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(())
                     }
                     /// A function that returns a character
@@ -349,7 +349,7 @@ pub mod exports {
                                 (char,),
                             >::new_unchecked(self.return_char)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?.0;
                         Ok(ret0)
                     }
                 }

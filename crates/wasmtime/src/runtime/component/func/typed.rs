@@ -16,6 +16,8 @@ use wasmtime_environ::component::{
 
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{self, AsAccessor, PreparedCall};
+#[cfg(feature = "component-model-async")]
+use crate::component::func::TaskExit;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -232,7 +234,9 @@ where
             let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
             self.func
                 .instance
-                .run_concurrent(wrapper.store.as_context_mut(), async |_| result.await)
+                .run_concurrent(wrapper.store.as_context_mut(), async |_| {
+                    Ok(result.await?.0)
+                })
                 .await?
         }
         #[cfg(not(feature = "component-model-async"))]
@@ -252,6 +256,10 @@ where
     /// (if any) automatically when the guest task completes -- no need to
     /// explicitly call `Func::post_return` afterward.
     ///
+    /// Besides the task's return value, this returns a [`TaskExit`]
+    /// representing the completion of the guest task and any transitive
+    /// subtasks it might create.
+    ///
     /// # Panics
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
@@ -261,13 +269,12 @@ where
         self,
         accessor: impl AsAccessor<Data: Send>,
         params: Params,
-    ) -> Result<Return>
+    ) -> Result<(Return, TaskExit)>
     where
         Params: 'static,
         Return: 'static,
     {
-        let accessor = accessor.as_accessor();
-        let result = accessor.with(|mut store| {
+        let result = accessor.as_accessor().with(|mut store| {
             let mut store = store.as_context_mut();
             assert!(
                 store.0.async_support(),
@@ -280,8 +287,8 @@ where
                 })?;
             concurrent::queue_call(store, prepared)
         });
-
-        result?.await
+        let (result, rx) = result?.await?;
+        Ok((result, TaskExit(rx)))
     }
 
     fn lower_args<T>(
