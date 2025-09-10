@@ -335,7 +335,7 @@ impl Compiler {
             }
 
             Compiler::Winch => {
-                let unsupported_base = config.gc()
+                if config.gc()
                     || config.tail_call()
                     || config.function_references()
                     || config.gc()
@@ -344,20 +344,19 @@ impl Compiler {
                     || config.exceptions()
                     || config.legacy_exceptions()
                     || config.stack_switching()
-                    || config.legacy_exceptions();
-
-                if cfg!(target_arch = "x86_64") {
-                    return unsupported_base;
+                    || config.legacy_exceptions()
+                    || config.component_model_async()
+                {
+                    return true;
                 }
 
                 if cfg!(target_arch = "aarch64") {
-                    return unsupported_base
-                        || config.wide_arithmetic()
+                    return config.wide_arithmetic()
                         || (config.simd() && !config.spec_test())
                         || config.threads();
                 }
 
-                true
+                !cfg!(target_arch = "x86_64")
             }
 
             Compiler::CraneliftPulley => {
