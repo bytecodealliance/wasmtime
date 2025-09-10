@@ -668,8 +668,6 @@ impl WastTest {
         }
 
         let failing_component_model_tests = [
-            // FIXME(#11675)
-            "component-model/test/async/sync-streams.wast",
             // FIXME(#11676)
             "component-model/test/values/trap-in-post-return.wast",
         ];
