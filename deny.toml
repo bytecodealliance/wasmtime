@@ -58,5 +58,7 @@ skip-tree = [
     # right now terminal_size pulls in an older version of io-lifetimes
     { name = "io-lifetimes" },
 
-    { name = "file-per-thread-logger", reason = "this uses an old version of env-logger; may be unmaintained?" }
+    { name = "file-per-thread-logger", reason = "this uses an old version of env-logger; may be unmaintained?" },
+    { name = "io-extras", reason = "waiting on cap-std crates to update" },
+    { name = "mach2", reason = "waiting on region crate to update" },
 ]

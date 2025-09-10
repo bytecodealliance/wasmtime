@@ -321,8 +321,8 @@ cap-time-ext = "3.4.4"
 cap-tempfile = "3.4.4"
 fs-set-times = "0.20.1"
 system-interface = { version = "0.27.1", features = ["cap_std_impls"] }
-io-lifetimes = { version = "2.0.3", default-features = false }
-io-extras = "0.18.1"
+io-lifetimes = { version = "3.0.1", default-features = false }
+io-extras = "0.19.0"
 rustix = "1.0.3"
 # wit-bindgen:
 wit-bindgen = { version = "0.46.0", default-features = false }
@@ -356,7 +356,7 @@ env_logger = "0.11.5"
 log = { version = "0.4.27", default-features = false }
 clap = { version = "4.5.17", default-features = false, features = ["std", "derive"] }
 clap_complete = "4.4.7"
-hashbrown = { version = "0.15", default-features = false }
+hashbrown = { version = "0.16.0", default-features = false }
 capstone = "0.13.0"
 smallvec = { version = "1.6.1", features = ["union"] }
 tracing = "0.1.26"
@@ -366,7 +366,7 @@ async-trait = "0.1.71"
 heck = "0.5"
 similar = "2.1.0"
 toml = "0.8.10"
-mach2 = "0.4.2"
+mach2 = "0.5.0"
 memfd = "0.6.2"
 psm = "0.1.11"
 proptest = "1.0.0"
@@ -398,7 +398,7 @@ test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter', 'ansi', 'tracing-log'] }
 url = "2.3.1"
 postcard = { version = "1.0.8", default-features = false, features = ['alloc'] }
-criterion = { version = "0.6.0", default-features = false, features = ["html_reports", "rayon"] }
+criterion = { version = "0.7.0", default-features = false, features = ["html_reports", "rayon"] }
 rustc-hash = "2.0.0"
 libtest-mimic = "0.8.1"
 semver = { version = "1.0.17", default-features = false }

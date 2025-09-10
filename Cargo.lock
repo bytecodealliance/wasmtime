@@ -347,7 +347,7 @@ checksum = "e41cc18551193fe8fa6f15c1e3c799bc5ec9e2cfbfaa8ed46f37013e3e6c173c"
 dependencies = [
  "cap-primitives",
  "cap-std",
- "io-lifetimes",
+ "io-lifetimes 2.0.3",
  "windows-sys 0.59.0",
 ]
 
@@ -371,8 +371,8 @@ checksum = "0a1e394ed14f39f8bc26f59d4c0c010dbe7f0a1b9bafff451b1f98b67c8af62a"
 dependencies = [
  "ambient-authority",
  "fs-set-times",
- "io-extras",
- "io-lifetimes",
+ "io-extras 0.18.3",
+ "io-lifetimes 2.0.3",
  "ipnet",
  "maybe-owned",
  "rustix 1.0.3",
@@ -398,8 +398,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07c0355ca583dd58f176c3c12489d684163861ede3c9efa6fd8bba314c984189"
 dependencies = [
  "cap-primitives",
- "io-extras",
- "io-lifetimes",
+ "io-extras 0.18.3",
+ "io-lifetimes 2.0.3",
  "rustix 1.0.3",
 ]
 
@@ -763,7 +763,7 @@ dependencies = [
  "criterion",
  "env_logger 0.11.5",
  "gimli 0.32.0",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.0",
  "log",
  "postcard",
  "proptest",
@@ -848,7 +848,7 @@ version = "0.125.0"
 dependencies = [
  "cranelift-codegen",
  "env_logger 0.11.5",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.0",
  "log",
  "similar",
  "smallvec",
@@ -919,7 +919,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-control",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.0",
  "serde",
  "serde_derive",
 ]
@@ -1018,9 +1018,9 @@ dependencies = [
 
 [[package]]
 name = "criterion"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bf7af66b0989381bd0be551bd7cc91912a655a58c6918420c9527b1fd8b4679"
+checksum = "e1c047a62b0cc3e145fa84415a3191f628e980b194c2755aa12300a4e6cbd928"
 dependencies = [
  "anes",
  "cast",
@@ -1040,12 +1040,12 @@ dependencies = [
 
 [[package]]
 name = "criterion-plot"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
+checksum = "9b1bcc0dc7dfae599d84ad0b1a55f80cde8af3725da8313b528da95ef783e338"
 dependencies = [
  "cast",
- "itertools 0.10.5",
+ "itertools 0.13.0",
 ]
 
 [[package]]
@@ -1425,6 +1425,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f81ec6369c545a7d40e4589b5597581fa1c441fe1cce96dd1de43159910a36a2"
 
 [[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
 name = "foreign-types"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1454,7 +1460,7 @@ version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "033b337d725b97690d86893f9de22b67b80dcc4e9ad815f348254c38119db8fb"
 dependencies = [
- "io-lifetimes",
+ "io-lifetimes 2.0.3",
  "rustix 0.38.43",
  "windows-sys 0.52.0",
 ]
@@ -1689,8 +1695,17 @@ version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 dependencies = [
- "foldhash",
+ "foldhash 0.1.3",
  "serde",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5419bdc4f6a9207fbeba6d11b604d481addf78ecd10c11ad51e76c2f6482748d"
+dependencies = [
+ "foldhash 0.2.0",
 ]
 
 [[package]]
@@ -2040,8 +2055,18 @@ version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d45fd7584f9b67ac37bc041212d06bfac0700b36456b05890d36a3b626260eb"
 dependencies = [
- "io-lifetimes",
+ "io-lifetimes 2.0.3",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "io-extras"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20fd6de4ccfcc187e38bc21cfa543cb5a302cb86a8b114eb7f0bf0dc9f8ac00f"
+dependencies = [
+ "io-lifetimes 3.0.1",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2049,6 +2074,12 @@ name = "io-lifetimes"
 version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a611371471e98973dbcab4e0ec66c31a10bc356eeb4d54a0e05eac8158fe38c"
+
+[[package]]
+name = "io-lifetimes"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f0fb0570afe1fed943c5c3d4102d5358592d8625fda6a0007fdbe65a92fba96"
 
 [[package]]
 name = "ipnet"
@@ -2090,15 +2121,6 @@ dependencies = [
  "clap",
  "cranelift-isle",
  "env_logger 0.11.5",
-]
-
-[[package]]
-name = "itertools"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
-dependencies = [
- "either",
 ]
 
 [[package]]
@@ -2311,6 +2333,15 @@ name = "mach2"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b955cdeb2a02b9117f121ce63aa52d08ade45de53e48fe6a38b39c10f6f709"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "mach2"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a1b95cd5421ec55b445b5ae102f5ea0e768de1f82bd3001e11f426c269c3aea"
 dependencies = [
  "libc",
 ]
@@ -3068,7 +3099,7 @@ checksum = "e6b6ebd13bc009aef9cd476c1310d49ac354d36e240cf1bd753290f3dc7199a7"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
- "mach2",
+ "mach2 0.4.2",
  "windows-sys 0.52.0",
 ]
 
@@ -3537,7 +3568,7 @@ dependencies = [
  "cap-fs-ext",
  "cap-std",
  "fd-lock",
- "io-lifetimes",
+ "io-lifetimes 2.0.3",
  "rustix 0.38.43",
  "windows-sys 0.52.0",
  "winx",
@@ -4144,8 +4175,8 @@ dependencies = [
  "cap-std",
  "cap-time-ext",
  "fs-set-times",
- "io-extras",
- "io-lifetimes",
+ "io-extras 0.19.0",
+ "io-lifetimes 3.0.1",
  "libc",
  "log",
  "rustix 1.0.3",
@@ -4427,13 +4458,13 @@ dependencies = [
  "futures",
  "fxprof-processed-profile",
  "gimli 0.32.0",
- "hashbrown 0.15.2",
+ "hashbrown 0.16.0",
  "indexmap 2.7.0",
  "ittapi",
  "libc",
  "libtest-mimic",
  "log",
- "mach2",
+ "mach2 0.5.0",
  "memfd",
  "object 0.37.3",
  "once_cell",
@@ -4952,8 +4983,8 @@ dependencies = [
  "env_logger 0.11.5",
  "fs-set-times",
  "futures",
- "io-extras",
- "io-lifetimes",
+ "io-extras 0.19.0",
+ "io-lifetimes 3.0.1",
  "rustix 1.0.3",
  "system-interface",
  "tempfile",
