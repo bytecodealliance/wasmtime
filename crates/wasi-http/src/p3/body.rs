@@ -156,35 +156,32 @@ struct GuestBodyConsumer {
 
 impl GuestBodyConsumer {
     /// Constructs the approprite body size error given the [BodyKind]
-    fn body_size_error(&self, n: Option<u64>) -> ErrorCode {
+    fn body_size_error(&self, sent: Option<u64>) -> ErrorCode {
         match self.kind {
-            BodyKind::Request => ErrorCode::HttpRequestBodySize(n),
-            BodyKind::Response => ErrorCode::HttpResponseBodySize(n),
+            BodyKind::Request => ErrorCode::HttpRequestBodySize(sent),
+            BodyKind::Response => ErrorCode::HttpResponseBodySize(sent),
         }
     }
 
     // Sends the corresponding error constructed by [Self::body_size_error] on both
     // error channels.
-    // [`PollSender::poll_reserve`] on `contents_tx` must have succeeed prior to this being called.
-    fn send_body_size_error(&mut self, n: Option<u64>) {
+    fn send_body_size_error(&mut self, sent: Option<u64>) {
         if let Some(result_tx) = self.result_tx.take() {
-            _ = result_tx.send(Err(self.body_size_error(n)));
-            _ = self.contents_tx.send_item(Err(self.body_size_error(n)));
+            _ = result_tx.send(Err(self.body_size_error(sent)));
+            self.contents_tx.abort_send();
+            if let Some(tx) = self.contents_tx.get_ref() {
+                _ = tx.try_send(Err(self.body_size_error(sent)))
+            }
+            self.contents_tx.close();
         }
     }
 }
 
 impl Drop for GuestBodyConsumer {
     fn drop(&mut self) {
-        if let Some(result_tx) = self.result_tx.take() {
-            if let Some(ContentLength { limit, sent }) = self.content_length {
-                if !self.closed && limit != sent {
-                    _ = result_tx.send(Err(self.body_size_error(Some(sent))));
-                    self.contents_tx.abort_send();
-                    if let Some(tx) = self.contents_tx.get_ref() {
-                        _ = tx.try_send(Err(self.body_size_error(Some(sent))))
-                    }
-                }
+        if let Some(ContentLength { limit, sent }) = self.content_length {
+            if !self.closed && limit != sent {
+                self.send_body_size_error(Some(sent))
             }
         }
     }
@@ -201,27 +198,36 @@ impl<D> StreamConsumer<D> for GuestBodyConsumer {
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         debug_assert!(!self.closed);
+        let mut src = src.as_direct(store);
+        let buf = src.remaining();
+        let n = buf.len();
+
+        // Perform `content-length` check early and precompute the next value
+        let content_length = self.content_length.map(|ContentLength { limit, sent }| {
+            let n = n.try_into().or(Err(None))?;
+            let sent = sent.checked_add(n).ok_or(None)?;
+            if sent > limit {
+                Err(Some(sent))
+            } else {
+                Ok(ContentLength { limit, sent })
+            }
+        });
+        let content_length = match content_length {
+            Some(Ok(content_length)) => Some(content_length),
+            Some(Err(sent)) => {
+                self.send_body_size_error(sent);
+                return Poll::Ready(Ok(StreamResult::Dropped));
+            }
+            None => None,
+        };
         match self.contents_tx.poll_reserve(cx) {
             Poll::Ready(Ok(())) => {
-                let mut src = src.as_direct(store);
-                let buf = src.remaining();
-                if let Some(ContentLength { limit, sent }) = self.content_length.as_mut() {
-                    let Some(n) = buf.len().try_into().ok().and_then(|n| sent.checked_add(n))
-                    else {
-                        self.send_body_size_error(None);
-                        return Poll::Ready(Ok(StreamResult::Dropped));
-                    };
-                    if n > *limit {
-                        self.send_body_size_error(Some(n));
-                        return Poll::Ready(Ok(StreamResult::Dropped));
-                    }
-                    *sent = n;
-                }
                 let buf = Bytes::copy_from_slice(buf);
-                let n = buf.len();
                 match self.contents_tx.send_item(Ok(buf)) {
                     Ok(()) => {
                         src.mark_read(n);
+                        // Record new `content-length` only on successful send
+                        self.content_length = content_length;
                         Poll::Ready(Ok(StreamResult::Completed))
                     }
                     Err(..) => {
