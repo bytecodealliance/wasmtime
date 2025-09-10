@@ -137,9 +137,9 @@ struct LimitedGuestBodyConsumer {
 }
 
 impl LimitedGuestBodyConsumer {
-    // Sends the corresponding error constructed by [Self::body_size_error] on both
-    // error channels.
-    fn send_body_size_error(&mut self, sent: Option<u64>) {
+    /// Sends the error constructed by [Self::make_error] on both error channels.
+    /// Does nothing if an error has already been sent on [Self::error_tx].
+    fn send_error(&mut self, sent: Option<u64>) {
         if let Some(error_tx) = self.error_tx.take() {
             _ = error_tx.send((self.make_error)(sent));
             self.contents_tx.abort_send();
@@ -154,7 +154,7 @@ impl LimitedGuestBodyConsumer {
 impl Drop for LimitedGuestBodyConsumer {
     fn drop(&mut self) {
         if !self.closed && self.limit != self.sent {
-            self.send_body_size_error(Some(self.sent))
+            self.send_error(Some(self.sent))
         }
     }
 }
@@ -176,15 +176,15 @@ impl<D> StreamConsumer<D> for LimitedGuestBodyConsumer {
 
         // Perform `content-length` check early and precompute the next value
         let Ok(sent) = n.try_into() else {
-            self.send_body_size_error(None);
+            self.send_error(None);
             return Poll::Ready(Ok(StreamResult::Dropped));
         };
         let Some(sent) = self.sent.checked_add(sent) else {
-            self.send_body_size_error(None);
+            self.send_error(None);
             return Poll::Ready(Ok(StreamResult::Dropped));
         };
         if sent > self.limit {
-            self.send_body_size_error(Some(sent));
+            self.send_error(Some(sent));
             return Poll::Ready(Ok(StreamResult::Dropped));
         }
         match self.contents_tx.poll_reserve(cx) {
