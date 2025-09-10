@@ -390,7 +390,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // return the raw WIT error (`ErrorType` here) or a trap.
 ///     //
 ///     // By default this option is not specified. This option only takes
-///     // effect when `trappable_imports` is set for some imports.
+///     // effect when `trappable` is set for some imports.
 ///     trappable_error_type: {
 ///         "wasi:io/streams/stream-error" => RustErrorType,
 ///     },
