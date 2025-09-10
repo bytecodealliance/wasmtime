@@ -88,6 +88,9 @@ pub trait WasiHttpCtx: Send {
     /// a request processing error, if any, to the constructor of the request.
     /// For example, if the request was constructed via `wasi:http/types.request#new`,
     /// a result resolved from it will be forwarded to the guest on the future handle returned.
+    ///
+    /// `Content-Length` of the request passed to this function will be validated, however no
+    /// `Content-Length` validation will be performed for the received response.
     #[cfg(feature = "default-send-request")]
     fn send_request(
         &mut self,
