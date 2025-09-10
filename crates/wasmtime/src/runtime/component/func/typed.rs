@@ -265,11 +265,11 @@ where
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this function.
     #[cfg(feature = "component-model-async")]
-    pub async fn call_concurrent<A: AsAccessor<Data: Send>>(
+    pub async fn call_concurrent(
         self,
-        accessor: A,
+        accessor: impl AsAccessor<Data: Send>,
         params: Params,
-    ) -> Result<(Return, TaskExit<A>)>
+    ) -> Result<(Return, TaskExit)>
     where
         Params: 'static,
         Return: 'static,
@@ -288,13 +288,7 @@ where
             concurrent::queue_call(store, prepared)
         });
         let (result, rx) = result?.await?;
-        Ok((
-            result,
-            TaskExit {
-                _accessor: accessor,
-                rx,
-            },
-        ))
+        Ok((result, TaskExit(rx)))
     }
 
     fn lower_args<T>(

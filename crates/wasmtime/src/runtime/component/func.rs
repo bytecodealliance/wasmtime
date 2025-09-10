@@ -18,10 +18,6 @@ use wasmtime_environ::component::{
 
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{self, AsAccessor, PreparedCall};
-#[cfg(feature = "component-model-async")]
-use core::pin::Pin;
-#[cfg(feature = "component-model-async")]
-use core::task::{Context, Poll};
 
 mod host;
 mod options;
@@ -341,30 +337,33 @@ impl Func {
     /// (if any) automatically when the guest task completes -- no need to
     /// explicitly call `Func::post_return` afterward.
     ///
+    /// This returns a [`TaskExit`] representing the completion of the guest
+    /// task and any transitive subtasks it might create.
+    ///
     /// # Panics
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
     /// this function.
     #[cfg(feature = "component-model-async")]
-    pub async fn call_concurrent<A: AsAccessor<Data: Send>>(
+    pub async fn call_concurrent(
         self,
-        accessor: A,
+        accessor: impl AsAccessor<Data: Send>,
         params: &[Val],
         results: &mut [Val],
-    ) -> Result<TaskExit<A>> {
+    ) -> Result<TaskExit> {
         self.call_concurrent_dynamic(accessor, params, results, true)
             .await
     }
 
     /// Internal helper function for `call_async` and `call_concurrent`.
     #[cfg(feature = "component-model-async")]
-    async fn call_concurrent_dynamic<A: AsAccessor<Data: Send>>(
+    async fn call_concurrent_dynamic(
         self,
-        accessor: A,
+        accessor: impl AsAccessor<Data: Send>,
         params: &[Val],
         results: &mut [Val],
         call_post_return_automatically: bool,
-    ) -> Result<TaskExit<A>> {
+    ) -> Result<TaskExit> {
         let result = accessor.as_accessor().with(|mut store| {
             assert!(
                 store.as_context_mut().0.async_support(),
@@ -384,10 +383,7 @@ impl Func {
         for (result, slot) in run_results.into_iter().zip(results) {
             *slot = result;
         }
-        Ok(TaskExit {
-            _accessor: accessor,
-            rx,
-        })
+        Ok(TaskExit(rx))
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
@@ -950,26 +946,27 @@ impl Func {
 /// Moreover, any given guest task may create its own subtasks before or after
 /// returning and may exit before some or all of those subtasks have finished
 /// running.  In that case, the still-running subtasks will be "reparented" to
-/// the nearest surviving caller, which may be the original host call.  This
-/// future will resolve once all transitive subtasks created directly or
-/// indirectly by the original call to `Instance::call_concurrent` have exited.
+/// the nearest surviving caller, which may be the original host call.  The
+/// future returned by `TaskExit::block` will resolve once all transitive
+/// subtasks created directly or indirectly by the original call to
+/// `Instance::call_concurrent` have exited.
 #[cfg(feature = "component-model-async")]
-pub struct TaskExit<A> {
-    _accessor: A,
-    rx: futures::channel::oneshot::Receiver<()>,
-}
+pub struct TaskExit(futures::channel::oneshot::Receiver<()>);
 
 #[cfg(feature = "component-model-async")]
-impl<A: AsAccessor<Data: Send>> Future for TaskExit<A> {
-    type Output = ();
+impl TaskExit {
+    /// Returns a future which will resolve once all transitive subtasks created
+    /// directly or indirectly by the original call to
+    /// `Instance::call_concurrent` have exited.
+    pub async fn block(self, accessor: impl AsAccessor<Data: Send>) {
+        // The current implementation makes no use of `accessor`, but future
+        // implementations might (e.g. by using a more efficient mechanism than
+        // a oneshot channel).
+        _ = accessor;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // SAFETY: This is a standard pin-projection, and we never move
-        // out of `self`.
-        let rx = unsafe { self.map_unchecked_mut(|v| &mut v.rx) };
         // We don't care whether the sender sent us a value or was dropped
         // first; either one counts as a notification, so we ignore the result
         // once the future resolves:
-        rx.poll(cx).map(drop)
+        _ = self.0.await;
     }
 }

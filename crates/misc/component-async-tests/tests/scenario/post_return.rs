@@ -76,7 +76,7 @@ async fn test_sleep_post_return(components: &[&str]) -> Result<()> {
             let exit = run_function.call_concurrent(accessor, (100,)).await?.1;
             // The function has returned, now we wait for it (and any subtasks
             // it may have spawned) to exit.
-            exit.await;
+            exit.block(accessor).await;
             anyhow::Ok(())
         })
         .await??;
