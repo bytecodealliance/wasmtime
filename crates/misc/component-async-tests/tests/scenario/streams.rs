@@ -249,3 +249,50 @@ pub async fn async_closed_streams() -> Result<()> {
 
     Ok(())
 }
+
+mod closed_stream {
+    wasmtime::component::bindgen!({
+        path: "wit",
+        world: "closed-stream-guest",
+        exports: { default: store | async },
+    });
+}
+
+#[tokio::test]
+pub async fn async_closed_stream() -> Result<()> {
+    let engine = Engine::new(&config())?;
+
+    let component = make_component(
+        &engine,
+        &[test_programs_artifacts::ASYNC_CLOSED_STREAM_COMPONENT],
+    )
+    .await?;
+
+    let mut linker = Linker::new(&engine);
+
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            continue_: false,
+            wakers: Arc::new(Mutex::new(None)),
+        },
+    );
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let guest = closed_stream::ClosedStreamGuest::new(&mut store, &instance)?;
+    instance
+        .run_concurrent(&mut store, async move |accessor| {
+            let stream = guest.local_local_closed_stream().call_get(accessor).await?;
+
+            let (tx, mut rx) = mpsc::channel(1);
+            accessor.with(move |store| stream.pipe(store, PipeConsumer::new(tx)));
+            assert!(rx.next().await.is_none());
+
+            Ok(())
+        })
+        .await?
+}
