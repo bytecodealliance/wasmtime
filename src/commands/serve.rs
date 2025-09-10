@@ -863,7 +863,7 @@ async fn handle_request(
             let (tx, rx) = tokio::sync::oneshot::channel();
 
             tokio::task::spawn(async move {
-                instance
+                let guest_result = instance
                     .run_concurrent(&mut store, async move |store| {
                         let (req, body) = req.into_parts();
                         let body = body.map_err(ErrorCode::from_hyper_request_error);
@@ -878,7 +878,11 @@ async fn handle_request(
                         task.block(store).await;
                         anyhow::Ok(())
                     })
-                    .await??;
+                    .await?;
+                if let Err(e) = guest_result {
+                    log::error!("[{req_id}] :: {e:?}");
+                    return Err(e);
+                }
 
                 write_profile(&mut store);
                 drop(epoch_thread);
