@@ -205,6 +205,11 @@
 
 (rule (simplify (band ty (bxor ty x (bnot ty y)) x)) (band ty x y))
 
-(rule (simplify (iadd ty (band ty y x) (bxor ty y x))) (bor ty y x))
+; (x & y) + (x ^ y) --> x | y
+(rule (simplify (iadd ty (band ty x y) (bxor ty x y))) (bor ty x y))
+(rule (simplify (iadd ty (bxor ty x y) (band ty x y))) (bor ty x y))
+
+; (x | y) + (x & y) --> x + y
 (rule (simplify (iadd ty (bor ty x y) (band ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (band ty x y) (bor ty x y))) (iadd ty x y))
 
