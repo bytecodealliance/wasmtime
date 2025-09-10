@@ -127,13 +127,14 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
         .run_concurrent(&mut store, async |store| {
             try_join!(
                 async {
-                    let res = match proxy.handle(store, req).await? {
-                        Ok(res) => res,
+                    let (res, task) = match proxy.handle(store, req).await? {
+                        Ok(pair) => pair,
                         Err(err) => return Ok(Err(Some(err))),
                     };
                     let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
                     let (parts, body) = res.into_parts();
                     let body = body.collect().await.context("failed to collect body")?;
+                    task.block(store).await;
                     Ok(Ok(http::Response::from_parts(parts, body)))
                 },
                 async { io.await.context("failed to consume request body") }
