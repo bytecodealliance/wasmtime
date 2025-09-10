@@ -231,6 +231,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.isa.pointer_type()
     }
 
+    /// Retrieves the VMContext, creating it first if necessary.
     pub(crate) fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
         self.vmctx.unwrap_or_else(|| {
             let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
@@ -257,6 +258,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         })
     }
 
+    /// Codegens a reference to the VMContext, and return it as well.
     pub(crate) fn vmctx_val(&mut self, pos: &mut FuncCursor<'_>) -> ir::Value {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);
@@ -327,7 +329,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         ptr
     }
 
-    /// Get the `*mut VMStoreContext` value for our `VMContext`.
+    /// Codegens and returns the `*mut VMStoreContext` value for our `VMContext`.
     fn get_vmstore_context_ptr(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let global = self.get_vmstore_context_ptr_global(&mut builder.func);
         builder.ins().global_value(self.pointer_type(), global)
