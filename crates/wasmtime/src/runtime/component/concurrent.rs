@@ -836,15 +836,22 @@ impl ComponentInstance {
         mut self: Pin<&mut Self>,
         guest_task: TableId<GuestTask>,
         set: Option<TableId<WaitableSet>>,
+        cancellable: bool,
     ) -> Result<Option<(Event, Option<(Waitable, u32)>)>> {
         let state = self.as_mut().concurrent_state_mut();
 
-        Ok(
-            if let Some(event) = state.get_mut(guest_task)?.event.take() {
-                log::trace!("deliver event {event:?} to {guest_task:?}");
+        if let Some(event) = state.get_mut(guest_task)?.event.take() {
+            log::trace!("deliver event {event:?} to {guest_task:?}");
 
-                Some((event, None))
-            } else if let Some((set, waitable)) = set
+            if cancellable || !matches!(event, Event::Cancelled) {
+                return Ok(Some((event, None)));
+            } else {
+                state.get_mut(guest_task)?.event = Some(event);
+            }
+        }
+
+        Ok(
+            if let Some((set, waitable)) = set
                 .and_then(|set| {
                     state
                         .get_mut(set)
@@ -1445,8 +1452,11 @@ impl Instance {
     fn handle_guest_call(self, store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
         match call.kind {
             GuestCallKind::DeliverEvent { set } => {
-                let (event, waitable) =
-                    self.id().get_mut(store).get_event(call.task, set)?.unwrap();
+                let (event, waitable) = self
+                    .id()
+                    .get_mut(store)
+                    .get_event(call.task, set, true)?
+                    .unwrap();
                 let state = self.concurrent_state_mut(store);
                 let task = state.get_mut(call.task)?;
                 let runtime_instance = task.instance;
@@ -2734,11 +2744,15 @@ impl Instance {
     pub(crate) fn thread_yield(self, store: &mut dyn VMStore, cancellable: bool) -> Result<bool> {
         self.waitable_check(store, cancellable, WaitableCheck::Yield)
             .map(|_| {
-                let state = self.concurrent_state_mut(store);
-                let task = state.guest_task.unwrap();
-                if let Some(event) = state.get_mut(task).unwrap().event.take() {
-                    assert!(matches!(event, Event::Cancelled));
-                    true
+                if cancellable {
+                    let state = self.concurrent_state_mut(store);
+                    let task = state.guest_task.unwrap();
+                    if let Some(event) = state.get_mut(task).unwrap().event.take() {
+                        assert!(matches!(event, Event::Cancelled));
+                        true
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }
@@ -2753,13 +2767,6 @@ impl Instance {
         cancellable: bool,
         check: WaitableCheck,
     ) -> Result<u32> {
-        if cancellable {
-            bail!(
-                "todo: cancellable `waitable-set.wait`, `waitable-set.poll`, \
-                 and `yield` not yet implemented"
-            );
-        }
-
         let guest_task = self.concurrent_state_mut(store).guest_task.unwrap();
 
         let (wait, set) = match &check {
@@ -2785,9 +2792,14 @@ impl Instance {
         if wait {
             let set = set.unwrap();
 
-            if task.event.is_none() && state.get_mut(set)?.ready.is_empty() {
-                let old = state.get_mut(guest_task)?.wake_on_cancel.replace(set);
-                assert!(old.is_none());
+            if (task.event.is_none()
+                || (matches!(task.event, Some(Event::Cancelled)) && !cancellable))
+                && state.get_mut(set)?.ready.is_empty()
+            {
+                if cancellable {
+                    let old = state.get_mut(guest_task)?.wake_on_cancel.replace(set);
+                    assert!(old.is_none());
+                }
 
                 self.suspend(
                     store,
@@ -2804,10 +2816,11 @@ impl Instance {
         let result = match check {
             // Deliver any pending events to the guest and return.
             WaitableCheck::Wait(params) | WaitableCheck::Poll(params) => {
-                let event = self
-                    .id()
-                    .get_mut(store)
-                    .get_event(guest_task, Some(params.set))?;
+                let event = self.id().get_mut(store).get_event(
+                    guest_task,
+                    Some(params.set),
+                    cancellable,
+                )?;
 
                 let (ordinal, handle, result) = if wait {
                     let (event, waitable) = event.unwrap();
