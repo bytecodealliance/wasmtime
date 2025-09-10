@@ -817,4 +817,5 @@ block0(v0: i32, v1: i32, v3: i32):
 }
 
 ; run: %fold_shifts_over_and1(0, 0, 0) == 0
+; run: %fold_shifts_over_and1(1, 31, 0x80000000) == 1
 
