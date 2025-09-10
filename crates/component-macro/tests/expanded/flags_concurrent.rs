@@ -730,7 +730,7 @@ pub mod exports {
                                 (Flag1,),
                             >::new_unchecked(self.roundtrip_flag1)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag2<_T, _D>(
@@ -748,7 +748,7 @@ pub mod exports {
                                 (Flag2,),
                             >::new_unchecked(self.roundtrip_flag2)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag4<_T, _D>(
@@ -766,7 +766,7 @@ pub mod exports {
                                 (Flag4,),
                             >::new_unchecked(self.roundtrip_flag4)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag8<_T, _D>(
@@ -784,7 +784,7 @@ pub mod exports {
                                 (Flag8,),
                             >::new_unchecked(self.roundtrip_flag8)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag16<_T, _D>(
@@ -802,7 +802,7 @@ pub mod exports {
                                 (Flag16,),
                             >::new_unchecked(self.roundtrip_flag16)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag32<_T, _D>(
@@ -820,7 +820,7 @@ pub mod exports {
                                 (Flag32,),
                             >::new_unchecked(self.roundtrip_flag32)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_roundtrip_flag64<_T, _D>(
@@ -838,7 +838,7 @@ pub mod exports {
                                 (Flag64,),
                             >::new_unchecked(self.roundtrip_flag64)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(ret0)
                     }
                 }

@@ -645,7 +645,8 @@ pub mod exports {
                                     arg15,
                                 ),
                             )
-                            .await?;
+                            .await?
+                            .0;
                         Ok(())
                     }
                     pub async fn call_big_argument<_T, _D>(
@@ -663,7 +664,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.big_argument)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(())
                     }
                 }

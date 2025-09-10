@@ -2790,14 +2790,20 @@ impl<'a> InterfaceGenerator<'a> {
         if func.result.is_some() {
             uwrite!(self.src, "ret0,");
         }
-        if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
+
+        let field = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
+            // TODO: Add an option to support returning the `TaskExit` from
+            // `call_concurrent` as well as the result.
             uwrite!(self.src, ") = callee.call_concurrent(accessor, (");
+            ".0"
         } else {
             uwrite!(
                 self.src,
                 ") = callee.call{async__}(store.as_context_mut(), ("
             );
-        }
+            ""
+        };
+
         for (i, _) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{}, ", i);
         }
@@ -2807,7 +2813,7 @@ impl<'a> InterfaceGenerator<'a> {
         } else {
             ""
         };
-        uwriteln!(self.src, ")){instrument}{await_}?;");
+        uwriteln!(self.src, ")){instrument}{await_}?{field};");
 
         let instrument = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::TRACING) {
             ".instrument(span)"

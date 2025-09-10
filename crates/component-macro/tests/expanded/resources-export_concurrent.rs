@@ -399,7 +399,7 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_static_a<_T, _D>(
@@ -416,7 +416,7 @@ pub mod exports {
                                 (u32,),
                             >::new_unchecked(self.funcs.static_a_static_a)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_method_a<_T, _D>(
@@ -434,7 +434,7 @@ pub mod exports {
                                 (u32,),
                             >::new_unchecked(self.funcs.method_a_method_a)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(ret0)
                     }
                 }
@@ -557,7 +557,7 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_static_a<_T, _D>(
@@ -574,7 +574,7 @@ pub mod exports {
                                 (wasmtime::component::Resource<Y>,),
                             >::new_unchecked(self.funcs.static_a_static_a)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?.0;
                         Ok(ret0)
                     }
                     pub async fn call_method_a<_T, _D>(
@@ -598,7 +598,8 @@ pub mod exports {
                         };
                         let (ret0,) = callee
                             .call_concurrent(accessor, (arg0, arg1))
-                            .await?;
+                            .await?
+                            .0;
                         Ok(ret0)
                     }
                 }
@@ -692,7 +693,7 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?.0;
                         Ok(ret0)
                     }
                 }
@@ -788,7 +789,7 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_b_constructor)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?.0;
                         Ok(ret0)
                     }
                 }
