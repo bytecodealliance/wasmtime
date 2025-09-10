@@ -153,6 +153,10 @@ pub struct FuncEnvironment<'module_environment> {
     /// any yield.
     epoch_deadline_var: cranelift_frontend::Variable,
 
+    // A cached pointer to the epoch interrupt page so we don't have to
+    // continually dig it out of the `VMStoreContext`
+    epoch_interrupt_page_ptr_var: cranelift_frontend::Variable,
+
     /// A cached pointer to the per-Engine epoch counter, when
     /// performing epoch-based interruption. Initialized in the
     /// function prologue. We prefer to use a variable here rather
@@ -216,6 +220,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             fuel_var: Variable::reserved_value(),
             epoch_deadline_var: Variable::reserved_value(),
             epoch_ptr_var: Variable::reserved_value(),
+            epoch_interrupt_page_ptr_var: Variable::reserved_value(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
@@ -587,6 +592,43 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let continuation_block = builder.create_block();
         let cur_epoch_value = self.epoch_load_current(builder);
         self.epoch_check_full(builder, cur_epoch_value, continuation_block);
+    }
+
+    /// Codegens what needs to go at the top of a function to support
+    /// epoch_interrupt_via_mmu.
+    fn epoch_mmu_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
+        debug_assert!(self.epoch_interrupt_page_ptr_var.is_reserved_value());
+        self.epoch_interrupt_page_ptr_var = builder.declare_var(self.pointer_type());
+
+        // Cache ptr to interrupt page in a local (and hopefully a register, at
+        // the discretion of regalloc), rather than digging it out of the
+        // `VMStoreContext` every time.
+        let vmstore_ctx = self.get_vmstore_context_ptr(builder);
+        let epoch_interrupt_page_ptr = builder.ins().load(
+            self.pointer_type(),
+            ir::MemFlags::trusted(),
+            vmstore_ctx,
+            ir::immediates::Offset32::new(
+                self.offsets.ptr.vmstore_context_epoch_interrupt_page_ptr() as i32,
+            ),
+        );
+        builder.def_var(self.epoch_interrupt_page_ptr_var, epoch_interrupt_page_ptr);
+
+        Self::epoch_mmu_interruption_check(epoch_interrupt_page_ptr, builder);
+    }
+
+    /// Codegens a dead load from the epoch interrupt page, which causes a trap
+    /// if an interrupt is due.
+    fn epoch_mmu_interruption_check(
+        epoch_interrupt_page_ptr: ir::Value,
+        builder: &mut FunctionBuilder<'_>,
+    ) {
+        let _ = builder.ins().load(
+            ir::types::I32, // Arbitrary. Pick whatever works on all ISAs and is fastest.
+            ir::MemFlags::new().with_aligned().with_readonly(),
+            epoch_interrupt_page_ptr,
+            ir::immediates::Offset32::new(0),
+        );
     }
 
     #[cfg(feature = "wmemcheck")]
@@ -3314,6 +3356,13 @@ impl FuncEnvironment<'_> {
             self.epoch_check(builder);
         }
 
+        // If we're using MMU-based epoch detection, provoke an interrupt if
+        // it's time.
+        if self.tunables.epoch_interruption_via_mmu {
+            let page_ptr = builder.use_var(self.epoch_interrupt_page_ptr_var);
+            Self::epoch_mmu_interruption_check(page_ptr, builder);
+        }
+
         Ok(())
     }
 
@@ -3375,8 +3424,7 @@ impl FuncEnvironment<'_> {
         }
 
         if self.tunables.epoch_interruption_via_mmu {
-            builder.ins().iconst(I32, 33); // a useless constant, hopefully not optimized out
-            // NEXT: Dead-load something from the vmctx instead.
+            self.epoch_mmu_function_entry(builder);
         }
 
         #[cfg(feature = "wmemcheck")]
