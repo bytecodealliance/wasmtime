@@ -124,6 +124,8 @@ pub use self::concurrent::{
     GuardedStreamReader, JoinHandle, ReadBuffer, Source, StreamConsumer, StreamProducer,
     StreamReader, StreamResult, VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
+#[cfg(feature = "component-model-async")]
+pub use self::func::TaskExit;
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
@@ -364,8 +366,20 @@ pub(crate) use self::store::ComponentStoreData;
 ///         default: async | trappable,
 ///     },
 ///
-///     // Same as `imports` above, but applies to exported functions.
-///     exports: { /* ... */ },
+///     // Mostly the same as `imports` above, but applies to exported functions.
+///     //
+///     // The one difference here is that, whereas the `task_exit` flag has no
+///     // effect for `imports`, it changes how bindings are generated for
+///     // exported functions as described below.
+///     exports: {
+///         /* ... */
+///
+///         // The `task_exit` flag indicates that the generated binding for
+///         // this function should return a tuple of the result produced by the
+///         // callee and a `TaskExit` future which will resolve when the task
+///         // (and any transitively created subtasks) have exited.
+///         "my:local/api/[async]does-stuff-after-returning": task_exit,
+///     },
 ///
 ///     // This can be used to translate WIT return values of the form
 ///     // `result<T, error-type>` into `Result<T, RustErrorType>` in Rust.

@@ -261,6 +261,7 @@ mod kw {
     syn::custom_keyword!(trappable);
     syn::custom_keyword!(ignore_wit);
     syn::custom_keyword!(exact);
+    syn::custom_keyword!(task_exit);
 }
 
 enum Opt {
@@ -530,6 +531,9 @@ fn parse_function_config(input: ParseStream<'_>) -> Result<FunctionConfig> {
                 } else if l.peek(kw::exact) {
                     input.parse::<kw::exact>()?;
                     flags |= FunctionFlags::EXACT;
+                } else if l.peek(kw::task_exit) {
+                    input.parse::<kw::task_exit>()?;
+                    flags |= FunctionFlags::TASK_EXIT;
                 } else {
                     return Err(l.error());
                 }

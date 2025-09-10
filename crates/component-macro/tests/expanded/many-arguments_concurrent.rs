@@ -623,7 +623,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.many_args)
                         };
-                        let () = callee
+                        let ((), _) = callee
                             .call_concurrent(
                                 accessor,
                                 (
@@ -645,8 +645,7 @@ pub mod exports {
                                     arg15,
                                 ),
                             )
-                            .await?
-                            .0;
+                            .await?;
                         Ok(())
                     }
                     pub async fn call_big_argument<_T, _D>(
@@ -664,7 +663,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.big_argument)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?.0;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                 }
