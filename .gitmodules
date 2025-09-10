@@ -8,3 +8,6 @@
 	path = tests/wasi_testsuite/wasi-common
 	url = https://github.com/WebAssembly/wasi-testsuite.git
 	branch = prod/testsuite-base
+[submodule "tests/component-model"]
+	path = tests/component-model
+	url = https://github.com/WebAssembly/component-model
