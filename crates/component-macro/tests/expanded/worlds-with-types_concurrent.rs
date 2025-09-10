@@ -232,7 +232,7 @@ const _: () = {
             let callee = unsafe {
                 wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
             };
-            let (ret0,) = callee.call_concurrent(accessor, ()).await?.0;
+            let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
             Ok(ret0)
         }
     }

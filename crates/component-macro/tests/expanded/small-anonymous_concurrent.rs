@@ -419,7 +419,7 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.option_test)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?.0;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                 }
