@@ -80,6 +80,7 @@ enum State {
 
 #[unsafe(export_name = "local:local/backpressure#set-backpressure")]
 unsafe extern "C" fn export_set_backpressure(enabled: bool) {
+    #[expect(deprecated, reason = "will replace with backpressure.inc/dec soon")]
     wit_bindgen::backpressure_set(enabled);
 }
 

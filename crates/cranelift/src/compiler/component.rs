@@ -311,13 +311,17 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::Yield { async_ } => {
+            Trampoline::ThreadYield { cancellable } => {
                 self.translate_libcall(
-                    host::yield_,
+                    host::thread_yield,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
-                        params.push(me.builder.ins().iconst(ir::types::I8, i64::from(*async_)));
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
                     },
                 );
             }

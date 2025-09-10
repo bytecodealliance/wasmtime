@@ -2689,14 +2689,14 @@ impl Instance {
         payload: u32,
     ) -> Result<u32> {
         let opts = self.concurrent_state_mut(store).options(options);
-        let async_ = opts.async_;
+        let cancellable = opts.cancellable;
         let caller_instance = opts.instance;
         let rep =
             self.id().get_mut(store).guest_tables().0[caller_instance].waitable_set_rep(set)?;
 
         self.waitable_check(
             store,
-            async_,
+            cancellable,
             WaitableCheck::Wait(WaitableCheckParams {
                 set: TableId::new(rep),
                 options,
@@ -2714,14 +2714,14 @@ impl Instance {
         payload: u32,
     ) -> Result<u32> {
         let opts = self.concurrent_state_mut(store).options(options);
-        let async_ = opts.async_;
+        let cancellable = opts.cancellable;
         let caller_instance = opts.instance;
         let rep =
             self.id().get_mut(store).guest_tables().0[caller_instance].waitable_set_rep(set)?;
 
         self.waitable_check(
             store,
-            async_,
+            cancellable,
             WaitableCheck::Poll(WaitableCheckParams {
                 set: TableId::new(rep),
                 options,
@@ -2730,9 +2730,9 @@ impl Instance {
         )
     }
 
-    /// Implements the `yield` intrinsic.
-    pub(crate) fn yield_(self, store: &mut dyn VMStore, async_: bool) -> Result<bool> {
-        self.waitable_check(store, async_, WaitableCheck::Yield)
+    /// Implements the `thread.yield` intrinsic.
+    pub(crate) fn thread_yield(self, store: &mut dyn VMStore, cancellable: bool) -> Result<bool> {
+        self.waitable_check(store, cancellable, WaitableCheck::Yield)
             .map(|_| {
                 let state = self.concurrent_state_mut(store);
                 let task = state.guest_task.unwrap();
@@ -2750,12 +2750,13 @@ impl Instance {
     fn waitable_check(
         self,
         store: &mut dyn VMStore,
-        async_: bool,
+        cancellable: bool,
         check: WaitableCheck,
     ) -> Result<u32> {
-        if async_ {
+        if cancellable {
             bail!(
-                "todo: async `waitable-set.wait`, `waitable-set.poll`, and `yield` not yet implemented"
+                "todo: cancellable `waitable-set.wait`, `waitable-set.poll`, \
+                 and `yield` not yet implemented"
             );
         }
 

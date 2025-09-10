@@ -521,6 +521,10 @@ pub struct CanonicalOptions {
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
 
+    /// Whether or not this function can consume a task cancellation
+    /// notification.
+    pub cancellable: bool,
+
     /// The core function type that is being lifted from / lowered to.
     pub core_type: ModuleInternedTypeIndex,
 
@@ -783,11 +787,11 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
     },
 
-    /// A `yield` intrinsic, which yields control to the host so that other
+    /// A `thread.yield` intrinsic, which yields control to the host so that other
     /// tasks are able to make progress, if any.
-    Yield {
+    ThreadYield {
         /// If `true`, indicates the caller instance maybe reentered.
-        async_: bool,
+        cancellable: bool,
     },
 
     /// A `subtask.drop` intrinsic to drop a specified task which has completed.
@@ -1069,7 +1073,7 @@ impl Trampoline {
             WaitableSetPoll { .. } => format!("waitable-set-poll"),
             WaitableSetDrop { .. } => format!("waitable-set-drop"),
             WaitableJoin { .. } => format!("waitable-join"),
-            Yield { .. } => format!("yield"),
+            ThreadYield { .. } => format!("thread-yield"),
             SubtaskDrop { .. } => format!("subtask-drop"),
             SubtaskCancel { .. } => format!("subtask-cancel"),
             StreamNew { .. } => format!("stream-new"),
