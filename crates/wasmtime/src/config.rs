@@ -2130,7 +2130,8 @@ impl Config {
                     | WasmFeatures::GC_TYPES
                     | WasmFeatures::EXCEPTIONS
                     | WasmFeatures::LEGACY_EXCEPTIONS
-                    | WasmFeatures::STACK_SWITCHING;
+                    | WasmFeatures::STACK_SWITCHING
+                    | WasmFeatures::CM_ASYNC;
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
                         unsupported |= WasmFeatures::THREADS;
