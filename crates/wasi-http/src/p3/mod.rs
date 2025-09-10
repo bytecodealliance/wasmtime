@@ -77,12 +77,12 @@ pub trait WasiHttpCtx: Send {
 
     /// Send an outgoing request.
     ///
-    /// This implementation will be used by the `wasi:http/handler#handle` implementation.
+    /// This function will be used by the `wasi:http/handler#handle` implementation.
     ///
-    /// The specified [Future] `fut` can be used to communicate
-    /// a request processing error, if any, to the constructor of the request.
-    /// For example, if the request was constructed via `wasi:http/types.request#new`,
-    /// a result sent on `fut` will be forwarded to the guest on the future handle returned.
+    /// The specified [Future] `fut` will be used to communicate
+    /// a response processing error, if any.
+    /// For example, if the response body is consumed via `wasi:http/types.response#consume-body`,
+    /// a result will be sent on `fut`.
     ///
     /// The returned [Future] can be used to communicate
     /// a request processing error, if any, to the constructor of the request.
@@ -119,12 +119,12 @@ pub trait WasiHttpCtx: Send {
 
     /// Send an outgoing request.
     ///
-    /// This implementation will be used by the `wasi:http/handler#handle` implementation.
+    /// This function will be used by the `wasi:http/handler#handle` implementation.
     ///
-    /// The specified [Future] `fut` can be used to communicate
-    /// a request processing error, if any, to the constructor of the request.
-    /// For example, if the request was constructed via `wasi:http/types.request#new`,
-    /// a result sent on `fut` will be forwarded to the guest on the future handle returned.
+    /// The specified [Future] `fut` will be used to communicate
+    /// a response processing error, if any.
+    /// For example, if the response body is consumed via `wasi:http/types.response#consume-body`,
+    /// a result will be sent on `fut`.
     ///
     /// The returned [Future] can be used to communicate
     /// a request processing error, if any, to the constructor of the request.
