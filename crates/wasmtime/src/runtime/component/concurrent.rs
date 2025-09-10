@@ -1295,8 +1295,33 @@ impl Instance {
                 // The future we were passed has not yet completed, so handle
                 // any work items and then loop again.
                 Either::Right(ready) => {
-                    for item in ready {
-                        self.handle_work_item(store.as_context_mut(), item).await?;
+                    struct Dispose<'a, T: 'static, I: Iterator<Item = WorkItem>> {
+                        store: StoreContextMut<'a, T>,
+                        ready: I,
+                    }
+
+                    impl<'a, T, I: Iterator<Item = WorkItem>> Drop for Dispose<'a, T, I> {
+                        fn drop(&mut self) {
+                            while let Some(item) = self.ready.next() {
+                                match item {
+                                    WorkItem::ResumeFiber(mut fiber) => fiber.dispose(self.store.0),
+                                    WorkItem::PushFuture(future) => {
+                                        tls::set(self.store.0, move || drop(future))
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+
+                    let mut dispose = Dispose {
+                        store: store.as_context_mut(),
+                        ready: ready.into_iter(),
+                    };
+
+                    while let Some(item) = dispose.ready.next() {
+                        self.handle_work_item(dispose.store.as_context_mut(), item)
+                            .await?;
                     }
                 }
             }
