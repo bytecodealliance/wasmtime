@@ -26,9 +26,9 @@
 ;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;       ld      a1, 0x10(a0)
 ;;       ld      a3, 0(s0)
-;;       sd      a3, 0x28(a1)
-;;       ld      a3, 8(s0)
 ;;       sd      a3, 0x30(a1)
+;;       ld      a3, 8(s0)
+;;       sd      a3, 0x38(a1)
 ;;       ld      a3, 8(a0)
 ;;       ld      a3, 0x10(a3)
 ;;       mv      a4, zero

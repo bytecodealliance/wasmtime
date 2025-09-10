@@ -15,7 +15,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r10
-;;       movq    0x10(%r10), %r10
+;;       movq    0x18(%r10), %r10
 ;;       addq    $0x50, %r10
 ;;       cmpq    %rsp, %r10
 ;;       ja      0xc7
@@ -35,7 +35,7 @@
 ;;       callq   0x15f
 ;;       movq    8(%r13), %r8
 ;;       ╰─╼ stack_map: frame_size=64, frame_offsets=[0]
-;;       movq    0x18(%r8), %r8
+;;       movq    0x20(%r8), %r8
 ;;       movq    %rax, %r10
 ;;       movl    %r10d, %r9d
 ;;       movdqu  8(%rsp), %xmm0

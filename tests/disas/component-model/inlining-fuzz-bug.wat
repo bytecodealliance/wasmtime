@@ -40,18 +40,18 @@
 ;; function u2:0(i64 vmctx, i64) -> i32 tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
+;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = vmctx
 ;;     gv5 = load.i64 notrap aligned readonly gv4+8
-;;     gv6 = load.i64 notrap aligned gv5+16
+;;     gv6 = load.i64 notrap aligned gv5+24
 ;;     gv7 = vmctx
 ;;     gv8 = vmctx
 ;;     gv9 = load.i64 notrap aligned readonly gv8+8
-;;     gv10 = load.i64 notrap aligned gv9+16
+;;     gv10 = load.i64 notrap aligned gv9+24
 ;;     gv11 = vmctx
 ;;     gv12 = load.i64 notrap aligned readonly gv11+8
-;;     gv13 = load.i64 notrap aligned gv12+16
+;;     gv13 = load.i64 notrap aligned gv12+24
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) -> i32 tail
 ;;     fn0 = colocated u1:0 sig0

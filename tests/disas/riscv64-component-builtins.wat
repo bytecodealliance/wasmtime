@@ -22,9 +22,9 @@
 ;;     v5 = load.i64 notrap aligned v0+16
 ;;     v6 = get_frame_pointer.i64 
 ;;     v7 = load.i64 notrap aligned v6
-;;     store notrap aligned v7, v5+40
+;;     store notrap aligned v7, v5+48
 ;;     v8 = get_return_address.i64 
-;;     store notrap aligned v8, v5+48
+;;     store notrap aligned v8, v5+56
 ;;     v10 = load.i64 notrap aligned readonly v0+8
 ;;     v11 = load.i64 notrap aligned readonly v10+16
 ;;     v9 = iconst.i32 0
