@@ -30,7 +30,7 @@ async fn test(
 pub struct Server {
     conns: usize,
     addr: SocketAddr,
-    worker: Option<JoinHandle<Result<()>>>,
+    worker: Option<JoinHandle<()>>,
 }
 
 impl Server {
@@ -59,13 +59,18 @@ impl Server {
             rt.block_on(async move {
                 for i in 0..conns {
                     debug!(i, "preparing to accept connection");
-                    let (stream, _) = listener.accept().await.map_err(anyhow::Error::from)?;
-                    if let Err(err) = run(TokioIo::new(stream)).await {
-                        warn!(i, ?err, "failed to serve connection");
-                        return Err(err);
-                    }
+                    match listener.accept().await {
+                        Ok((stream, ..)) => {
+                            debug!(i, "accepted connection");
+                            if let Err(err) = run(TokioIo::new(stream)).await {
+                                warn!(i, ?err, "failed to serve connection");
+                            }
+                        }
+                        Err(err) => {
+                            warn!(i, ?err, "failed to accept connection");
+                        }
+                    };
                 }
-                Ok(())
             })
         });
         Ok(Self {
@@ -123,16 +128,7 @@ impl Drop for Server {
             // Force a connection to happen in case one hasn't happened already.
             let _ = TcpStream::connect(&self.addr);
         }
-
-        // If the worker fails with an error, report it here but don't panic.
-        // Some tests don't make a connection so the error will be that the tcp
-        // stream created above is closed immediately afterwards. Let the test
-        // independently decide if it failed or not, and this should be in the
-        // logs to assist with debugging if necessary.
-        let worker = self.worker.take().unwrap();
-        if let Err(e) = worker.join().unwrap() {
-            eprintln!("worker failed with error {e:?}");
-        }
+        self.worker.take().unwrap().join().unwrap();
     }
 }
 

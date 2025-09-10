@@ -1,13 +1,13 @@
+use crate::get_content_length;
+use crate::p3::WasiHttpView;
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::p3::body::{Body, BodyKind, ConsumedBody, GuestBody};
-use crate::p3::{WasiHttpView, get_content_length};
+use crate::p3::body::{Body, ConsumedBody, GuestBody};
 use anyhow::Context as _;
 use bytes::Bytes;
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
-use tokio::sync::oneshot;
 use wasmtime::AsContextMut;
 
 /// The concrete type behind a `wasi:http/types/response` resource.
@@ -56,23 +56,17 @@ impl Response {
                 trailers_rx,
                 result_tx,
             } => {
-                let (http_result_tx, http_result_rx) = oneshot::channel();
                 // `Content-Length` header value is validated in `fields` implementation
                 let content_length =
                     get_content_length(&res.headers).context("failed to parse `content-length`")?;
-                _ = result_tx.send(Box::new(async move {
-                    if let Ok(Err(err)) = http_result_rx.await {
-                        return Err(err);
-                    };
-                    fut.await
-                }));
                 GuestBody::new(
                     store,
                     contents_rx,
                     trailers_rx,
-                    http_result_tx,
+                    result_tx,
+                    fut,
                     content_length,
-                    BodyKind::Response,
+                    ErrorCode::HttpResponseBodySize,
                     T::http,
                 )
                 .boxed()
