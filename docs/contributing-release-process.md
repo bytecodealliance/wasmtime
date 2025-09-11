@@ -85,6 +85,17 @@ of criteria. It's done on an as-needed basis. Two requirements, however are:
   Wasmtime will not release a patch release until all versions have been
   equally patched to ensure that releases remain consistent.
 
+* Patch releases must not contain API-breaking changes in public crates. The
+  list of `PUBLIC_CRATES` in `scripts/publish.rs` is the list of crates to worry
+  about in terms of breaking changes.
+
+* Wasm-level ABI-breaking changes are by default not allowed in patch releases.
+  Users are expected to, for example, be able to load `*.cwasm` artifacts from
+  before the patch release is made. If an ABI-breaking change is necessary then
+  be sure to update `crates/wasmtime/src/engine/serialization.rs` and the
+  `WasmtimeVersion` matching strategy to modify the string to ensure older
+  artifacts cannot be loaded.
+
 Making a patch release is somewhat more manual than a major version, but like
 before there's automation to help guide the process as well and take care of
 more mundane bits.

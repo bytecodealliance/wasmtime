@@ -97,7 +97,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     match &engine.config().module_version {
         ModuleVersionStrategy::WasmtimeVersion => {
             let version = core::str::from_utf8(version)?;
-            if version != env!("CARGO_PKG_VERSION") {
+            if version != env!("CARGO_PKG_VERSION_MAJOR") {
                 bail!(
                     "Module was compiled with incompatible Wasmtime version '{}'",
                     version
@@ -128,7 +128,7 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Me
     let mut data = Vec::new();
     data.push(VERSION);
     let version = match &engine.config().module_version {
-        ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION"),
+        ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION_MAJOR"),
         ModuleVersionStrategy::Custom(c) => c,
         ModuleVersionStrategy::None => "",
     };
