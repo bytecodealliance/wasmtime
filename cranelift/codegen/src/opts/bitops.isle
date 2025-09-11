@@ -213,4 +213,7 @@
 (rule (simplify (iadd ty (bor ty x y) (band ty x y))) (iadd ty x y))
 (rule (simplify (iadd ty (band ty x y) (bor ty x y))) (iadd ty x y))
 
+; (x & y) | x --> x
 (rule (simplify (bor ty (band ty x y) x)) x)
+(rule (simplify (bor ty x (band ty x y))) x)
+

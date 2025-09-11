@@ -57,4 +57,15 @@ block0(v0: i64, v1: i64):
 ; }
 
 
+function %fold_or_and14(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = band v0, v1
+    v3 = bor v0, v2
+    return v3
+}
+
+; function %fold_or_and14(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     return v0
+; }
 
