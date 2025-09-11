@@ -2715,6 +2715,9 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "<S: {wt}::AsContextMut>(&self, mut store: S, ",);
         }
 
+        let task_exit =
+            flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE | FunctionFlags::TASK_EXIT);
+
         let param_mode = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
             TypeMode::Owned
         } else {
@@ -2728,7 +2731,13 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         uwrite!(self.src, ") -> {wt}::Result<");
+        if task_exit {
+            self.src.push_str("(");
+        }
         self.print_result_ty(func.result, TypeMode::Owned);
+        if task_exit {
+            uwrite!(self.src, ", {wt}::component::TaskExit)");
+        }
         uwrite!(self.src, ">");
 
         if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
@@ -2787,17 +2796,26 @@ impl<'a> InterfaceGenerator<'a> {
         self.src.push_str("};\n");
 
         self.src.push_str("let (");
+        if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
+            self.src.push_str("(");
+        }
         if func.result.is_some() {
             uwrite!(self.src, "ret0,");
         }
+
         if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
-            uwrite!(self.src, ") = callee.call_concurrent(accessor, (");
+            let task_exit = if task_exit { "task_exit" } else { "_" };
+            uwrite!(
+                self.src,
+                "), {task_exit}) = callee.call_concurrent(accessor, ("
+            );
         } else {
             uwrite!(
                 self.src,
                 ") = callee.call{async__}(store.as_context_mut(), ("
             );
-        }
+        };
+
         for (i, _) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{}, ", i);
         }
@@ -2823,10 +2841,16 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         self.src.push_str("Ok(");
+        if task_exit {
+            self.src.push_str("(");
+        }
         if func.result.is_some() {
             self.src.push_str("ret0");
         } else {
             self.src.push_str("()");
+        }
+        if task_exit {
+            self.src.push_str(", task_exit)");
         }
         self.src.push_str(")\n");
 

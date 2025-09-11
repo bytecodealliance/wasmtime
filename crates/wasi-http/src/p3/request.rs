@@ -43,6 +43,8 @@ impl Request {
     ///
     /// This returns a [Future] that the will be used to communicate
     /// a request processing error, if any.
+    ///
+    /// Requests constructed this way will not perform any `Content-Length` validation.
     pub fn new(
         method: Method,
         scheme: Option<Scheme>,
@@ -80,6 +82,8 @@ impl Request {
     ///
     /// This returns a [Future] that will be used to communicate
     /// a request processing error, if any.
+    ///
+    /// Requests constructed this way will not perform any `Content-Length` validation.
     pub fn from_http<T>(
         req: http::Request<T>,
     ) -> (
@@ -126,6 +130,8 @@ impl Request {
 /// a request processing error, if any, to the constructor of the request.
 /// For example, if the request was constructed via `wasi:http/types.request#new`,
 /// a result resolved from it will be forwarded to the guest on the future handle returned.
+///
+/// This function performs no `Content-Length` validation.
 #[cfg(feature = "default-send-request")]
 pub async fn default_send_request(
     mut req: http::Request<impl http_body::Body<Data = Bytes, Error = ErrorCode> + Send + 'static>,

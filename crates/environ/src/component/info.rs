@@ -521,6 +521,10 @@ pub struct CanonicalOptions {
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
 
+    /// Whether or not this function can consume a task cancellation
+    /// notification.
+    pub cancellable: bool,
+
     /// The core function type that is being lifted from / lowered to.
     pub core_type: ModuleInternedTypeIndex,
 
@@ -730,6 +734,18 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
     },
 
+    /// A `backpressure.inc` intrinsic.
+    BackpressureInc {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// A `backpressure.dec` intrinsic.
+    BackpressureDec {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
     /// A `task.return` intrinsic, which returns a result to the caller of a
     /// lifted export function.  This allows the callee to continue executing
     /// after returning a result.
@@ -783,11 +799,11 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
     },
 
-    /// A `yield` intrinsic, which yields control to the host so that other
+    /// A `thread.yield` intrinsic, which yields control to the host so that other
     /// tasks are able to make progress, if any.
-    Yield {
+    ThreadYield {
         /// If `true`, indicates the caller instance maybe reentered.
-        async_: bool,
+        cancellable: bool,
     },
 
     /// A `subtask.drop` intrinsic to drop a specified task which has completed.
@@ -1062,6 +1078,8 @@ impl Trampoline {
             ResourceRep(i) => format!("component-resource-rep[{}]", i.as_u32()),
             ResourceDrop(i) => format!("component-resource-drop[{}]", i.as_u32()),
             BackpressureSet { .. } => format!("backpressure-set"),
+            BackpressureInc { .. } => format!("backpressure-inc"),
+            BackpressureDec { .. } => format!("backpressure-dec"),
             TaskReturn { .. } => format!("task-return"),
             TaskCancel { .. } => format!("task-cancel"),
             WaitableSetNew { .. } => format!("waitable-set-new"),
@@ -1069,7 +1087,7 @@ impl Trampoline {
             WaitableSetPoll { .. } => format!("waitable-set-poll"),
             WaitableSetDrop { .. } => format!("waitable-set-drop"),
             WaitableJoin { .. } => format!("waitable-join"),
-            Yield { .. } => format!("yield"),
+            ThreadYield { .. } => format!("thread-yield"),
             SubtaskDrop { .. } => format!("subtask-drop"),
             SubtaskCancel { .. } => format!("subtask-cancel"),
             StreamNew { .. } => format!("stream-new"),

@@ -15,7 +15,7 @@ mod generated {
             "wasi:http/types/[static]response.new": async | store | trappable | tracing,
             default: trappable | tracing,
         },
-        exports: { default: async | store },
+        exports: { default: async | store | task_exit },
         with: {
             "wasi:http/types/fields": with::Fields,
             "wasi:http/types/request": crate::p3::Request,

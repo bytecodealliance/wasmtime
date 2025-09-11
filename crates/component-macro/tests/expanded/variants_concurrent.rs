@@ -1538,7 +1538,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.e1_arg)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_e1_result<_T, _D>(
@@ -1555,7 +1555,7 @@ pub mod exports {
                                 (E1,),
                             >::new_unchecked(self.e1_result)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_v1_arg<_T, _D>(
@@ -1573,7 +1573,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.v1_arg)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_v1_result<_T, _D>(
@@ -1590,7 +1590,7 @@ pub mod exports {
                                 (V1,),
                             >::new_unchecked(self.v1_result)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_bool_arg<_T, _D>(
@@ -1608,7 +1608,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.bool_arg)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_bool_result<_T, _D>(
@@ -1625,7 +1625,7 @@ pub mod exports {
                                 (bool,),
                             >::new_unchecked(self.bool_result)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_option_arg<_T, _D>(
@@ -1655,7 +1655,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.option_arg)
                         };
-                        let () = callee
+                        let ((), _) = callee
                             .call_concurrent(
                                 accessor,
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
@@ -1695,7 +1695,7 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.option_result)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_casts<_T, _D>(
@@ -1720,7 +1720,7 @@ pub mod exports {
                                 ((Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),),
                             >::new_unchecked(self.casts)
                         };
-                        let (ret0,) = callee
+                        let ((ret0,), _) = callee
                             .call_concurrent(
                                 accessor,
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
@@ -1761,7 +1761,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.result_arg)
                         };
-                        let () = callee
+                        let ((), _) = callee
                             .call_concurrent(
                                 accessor,
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
@@ -1807,7 +1807,7 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.result_result)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar<_T, _D>(
@@ -1824,7 +1824,7 @@ pub mod exports {
                                 (Result<i32, MyErrno>,),
                             >::new_unchecked(self.return_result_sugar)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar2<_T, _D>(
@@ -1841,7 +1841,7 @@ pub mod exports {
                                 (Result<(), MyErrno>,),
                             >::new_unchecked(self.return_result_sugar2)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar3<_T, _D>(
@@ -1858,7 +1858,7 @@ pub mod exports {
                                 (Result<MyErrno, MyErrno>,),
                             >::new_unchecked(self.return_result_sugar3)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar4<_T, _D>(
@@ -1875,7 +1875,7 @@ pub mod exports {
                                 (Result<(i32, u32), MyErrno>,),
                             >::new_unchecked(self.return_result_sugar4)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_option_sugar<_T, _D>(
@@ -1892,7 +1892,7 @@ pub mod exports {
                                 (Option<i32>,),
                             >::new_unchecked(self.return_option_sugar)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_option_sugar2<_T, _D>(
@@ -1909,7 +1909,7 @@ pub mod exports {
                                 (Option<MyErrno>,),
                             >::new_unchecked(self.return_option_sugar2)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_result_simple<_T, _D>(
@@ -1926,7 +1926,7 @@ pub mod exports {
                                 (Result<u32, i32>,),
                             >::new_unchecked(self.result_simple)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_is_clone_arg<_T, _D>(
@@ -1944,7 +1944,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.is_clone_arg)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_is_clone_return<_T, _D>(
@@ -1961,7 +1961,7 @@ pub mod exports {
                                 (IsClone,),
                             >::new_unchecked(self.is_clone_return)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                 }

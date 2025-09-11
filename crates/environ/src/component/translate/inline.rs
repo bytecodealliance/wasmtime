@@ -681,6 +681,24 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
+            BackpressureInc { func } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::BackpressureInc {
+                        instance: frame.instance,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            BackpressureDec { func } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::BackpressureDec {
+                        instance: frame.instance,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
             TaskReturn { result, options } => {
                 let results = result
                     .iter()
@@ -752,11 +770,13 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            Yield { func, async_ } => {
-                let index = self
-                    .result
-                    .trampolines
-                    .push((*func, dfg::Trampoline::Yield { async_: *async_ }));
+            ThreadYield { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadYield {
+                        cancellable: *cancellable,
+                    },
+                ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             SubtaskDrop { func } => {
@@ -1410,6 +1430,7 @@ impl<'a> Inliner<'a> {
             callback,
             post_return,
             async_: options.async_,
+            cancellable: options.cancellable,
             core_type: options.core_type,
             data_model,
         }
@@ -1441,6 +1462,7 @@ impl<'a> Inliner<'a> {
             callback,
             post_return,
             async_: options.async_,
+            cancellable: options.cancellable,
             core_type: options.core_type,
             data_model,
         })

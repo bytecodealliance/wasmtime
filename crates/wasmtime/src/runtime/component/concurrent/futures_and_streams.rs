@@ -2108,7 +2108,10 @@ impl Instance {
 
                 state.push_future(Box::pin(future));
             }
-            WriteState::Dropped => unreachable!(),
+            WriteState::Dropped => {
+                let reader = transmit.read_handle;
+                self.host_drop_reader(store.0, reader, kind).unwrap();
+            }
         }
     }
 

@@ -127,13 +127,14 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
         .run_concurrent(&mut store, async |store| {
             try_join!(
                 async {
-                    let res = match proxy.handle(store, req).await? {
-                        Ok(res) => res,
+                    let (res, task) = match proxy.handle(store, req).await? {
+                        Ok(pair) => pair,
                         Err(err) => return Ok(Err(Some(err))),
                     };
                     let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
                     let (parts, body) = res.into_parts();
                     let body = body.collect().await.context("failed to collect body")?;
+                    task.block(store).await;
                     Ok(Ok(http::Response::from_parts(parts, body)))
                 },
                 async { io.await.context("failed to consume request body") }
@@ -220,7 +221,6 @@ async fn p3_http_outbound_request_response_build() -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[ignore = "FIXME #11656"]
 async fn p3_http_outbound_request_content_length() -> anyhow::Result<()> {
     let server = Server::http1(3)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await

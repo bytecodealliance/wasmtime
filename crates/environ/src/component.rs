@@ -100,6 +100,8 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             backpressure_set(vmctx: vmctx, caller_instance: u32, enabled: u32) -> bool;
             #[cfg(feature = "component-model-async")]
+            backpressure_modify(vmctx: vmctx, caller_instance: u32, increment: u8) -> bool;
+            #[cfg(feature = "component-model-async")]
             task_return(vmctx: vmctx, ty: u32, options: u32, storage: ptr_u8, storage_len: size) -> bool;
             #[cfg(feature = "component-model-async")]
             task_cancel(vmctx: vmctx, caller_instance: u32) -> bool;
@@ -114,7 +116,7 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             waitable_join(vmctx: vmctx, caller_instance: u32, set: u32, waitable: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            yield_(vmctx: vmctx, async_: u8) -> u32;
+            thread_yield(vmctx: vmctx, cancellable: u8) -> u32;
             #[cfg(feature = "component-model-async")]
             subtask_drop(vmctx: vmctx, caller_instance: u32, task_id: u32) -> bool;
             #[cfg(feature = "component-model-async")]

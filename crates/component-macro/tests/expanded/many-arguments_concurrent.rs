@@ -623,7 +623,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.many_args)
                         };
-                        let () = callee
+                        let ((), _) = callee
                             .call_concurrent(
                                 accessor,
                                 (
@@ -663,7 +663,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.big_argument)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                 }

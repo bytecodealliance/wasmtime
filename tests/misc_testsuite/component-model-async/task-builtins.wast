@@ -10,6 +10,24 @@
   (core instance $i (instantiate $m (with "" (instance (export "backpressure.set" (func $backpressure-set))))))
 )
 
+;; backpressure.inc
+(component
+  (core module $m
+    (import "" "backpressure.inc" (func $backpressure-inc))
+  )
+  (core func $backpressure-inc (canon backpressure.inc))
+  (core instance $i (instantiate $m (with "" (instance (export "backpressure.inc" (func $backpressure-inc))))))
+)
+
+;; backpressure.dec
+(component
+  (core module $m
+    (import "" "backpressure.dec" (func $backpressure-dec))
+  )
+  (core func $backpressure-dec (canon backpressure.dec))
+  (core instance $i (instantiate $m (with "" (instance (export "backpressure.dec" (func $backpressure-dec))))))
+)
+
 ;; task.return
 (component
   (core module $m
@@ -26,7 +44,7 @@
   (core module $m
     (import "" "waitable-set.wait" (func $waitable-set-wait (param i32 i32) (result i32)))
   )
-  (core func $waitable-set-wait (canon waitable-set.wait async (memory $libc "memory")))
+  (core func $waitable-set-wait (canon waitable-set.wait cancellable (memory $libc "memory")))
   (core instance $i (instantiate $m (with "" (instance (export "waitable-set.wait" (func $waitable-set-wait))))))
 )
 
@@ -37,7 +55,7 @@
   (core module $m
     (import "" "waitable-set.poll" (func $waitable-set-poll (param i32 i32) (result i32)))
   )
-  (core func $waitable-set-poll (canon waitable-set.poll async (memory $libc "memory")))
+  (core func $waitable-set-poll (canon waitable-set.poll cancellable (memory $libc "memory")))
   (core instance $i (instantiate $m (with "" (instance (export "waitable-set.poll" (func $waitable-set-poll))))))
 )
 
@@ -46,7 +64,7 @@
   (core module $m
     (import "" "yield" (func $yield (result i32)))
   )
-  (core func $yield (canon yield async))
+  (core func $yield (canon thread.yield cancellable))
   (core instance $i (instantiate $m (with "" (instance (export "yield" (func $yield))))))
 )
 

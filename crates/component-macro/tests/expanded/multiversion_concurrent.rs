@@ -348,7 +348,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.x)
                         };
-                        let () = callee.call_concurrent(accessor, ()).await?;
+                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                 }
@@ -430,7 +430,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.x)
                         };
-                        let () = callee.call_concurrent(accessor, ()).await?;
+                        let ((), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
                 }

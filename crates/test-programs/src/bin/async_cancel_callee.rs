@@ -80,7 +80,18 @@ enum State {
 
 #[unsafe(export_name = "local:local/backpressure#set-backpressure")]
 unsafe extern "C" fn export_set_backpressure(enabled: bool) {
+    #[expect(deprecated, reason = "will replace with backpressure.inc/dec soon")]
     wit_bindgen::backpressure_set(enabled);
+}
+
+#[unsafe(export_name = "local:local/backpressure#inc-backpressure")]
+unsafe extern "C" fn export_inc_backpressure() {
+    wit_bindgen::backpressure_inc();
+}
+
+#[unsafe(export_name = "local:local/backpressure#dec-backpressure")]
+unsafe extern "C" fn export_dec_backpressure() {
+    wit_bindgen::backpressure_dec();
 }
 
 #[unsafe(export_name = "local:local/sleep#[async]sleep-millis")]

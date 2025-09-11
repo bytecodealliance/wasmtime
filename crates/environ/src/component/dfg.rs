@@ -322,6 +322,12 @@ pub enum Trampoline {
     BackpressureSet {
         instance: RuntimeComponentInstanceIndex,
     },
+    BackpressureInc {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    BackpressureDec {
+        instance: RuntimeComponentInstanceIndex,
+    },
     TaskReturn {
         results: TypeTupleIndex,
         options: OptionsId,
@@ -344,8 +350,8 @@ pub enum Trampoline {
     WaitableJoin {
         instance: RuntimeComponentInstanceIndex,
     },
-    Yield {
-        async_: bool,
+    ThreadYield {
+        cancellable: bool,
     },
     SubtaskDrop {
         instance: RuntimeComponentInstanceIndex,
@@ -470,6 +476,7 @@ pub struct CanonicalOptions {
     pub callback: Option<CallbackId>,
     pub post_return: Option<PostReturnId>,
     pub async_: bool,
+    pub cancellable: bool,
     pub core_type: ModuleInternedTypeIndex,
     pub data_model: CanonicalOptionsDataModel,
 }
@@ -764,6 +771,7 @@ impl LinearizeDfg<'_> {
             callback,
             post_return,
             async_: options.async_,
+            cancellable: options.cancellable,
             core_type: options.core_type,
             data_model,
         };
@@ -858,6 +866,12 @@ impl LinearizeDfg<'_> {
             Trampoline::BackpressureSet { instance } => info::Trampoline::BackpressureSet {
                 instance: *instance,
             },
+            Trampoline::BackpressureInc { instance } => info::Trampoline::BackpressureInc {
+                instance: *instance,
+            },
+            Trampoline::BackpressureDec { instance } => info::Trampoline::BackpressureDec {
+                instance: *instance,
+            },
             Trampoline::TaskReturn { results, options } => info::Trampoline::TaskReturn {
                 results: *results,
                 options: self.options(*options),
@@ -880,7 +894,9 @@ impl LinearizeDfg<'_> {
             Trampoline::WaitableJoin { instance } => info::Trampoline::WaitableJoin {
                 instance: *instance,
             },
-            Trampoline::Yield { async_ } => info::Trampoline::Yield { async_: *async_ },
+            Trampoline::ThreadYield { cancellable } => info::Trampoline::ThreadYield {
+                cancellable: *cancellable,
+            },
             Trampoline::SubtaskDrop { instance } => info::Trampoline::SubtaskDrop {
                 instance: *instance,
             },

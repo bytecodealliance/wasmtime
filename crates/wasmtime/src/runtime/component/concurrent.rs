@@ -78,6 +78,7 @@ use std::ops::DerefMut;
 use std::pin::{Pin, pin};
 use std::ptr::{self, NonNull};
 use std::slice;
+use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::vec::Vec;
 use table::{TableDebug, TableId};
@@ -651,7 +652,7 @@ impl GuestCall {
         let state = state.instance_state(task_instance);
         let ready = match &self.kind {
             GuestCallKind::DeliverEvent { .. } => !state.do_not_enter,
-            GuestCallKind::Start(_) => !(state.do_not_enter || state.backpressure),
+            GuestCallKind::Start(_) => !(state.do_not_enter || state.backpressure > 0),
         };
         log::trace!(
             "call {self:?} ready? {ready} (do_not_enter: {}; backpressure: {})",
@@ -835,15 +836,22 @@ impl ComponentInstance {
         mut self: Pin<&mut Self>,
         guest_task: TableId<GuestTask>,
         set: Option<TableId<WaitableSet>>,
+        cancellable: bool,
     ) -> Result<Option<(Event, Option<(Waitable, u32)>)>> {
         let state = self.as_mut().concurrent_state_mut();
 
-        Ok(
-            if let Some(event) = state.get_mut(guest_task)?.event.take() {
-                log::trace!("deliver event {event:?} to {guest_task:?}");
+        if let Some(event) = state.get_mut(guest_task)?.event.take() {
+            log::trace!("deliver event {event:?} to {guest_task:?}");
 
-                Some((event, None))
-            } else if let Some((set, waitable)) = set
+            if cancellable || !matches!(event, Event::Cancelled) {
+                return Ok(Some((event, None)));
+            } else {
+                state.get_mut(guest_task)?.event = Some(event);
+            }
+        }
+
+        Ok(
+            if let Some((set, waitable)) = set
                 .and_then(|set| {
                     state
                         .get_mut(set)
@@ -1055,7 +1063,7 @@ impl Instance {
     /// # let bar = instance.get_typed_func::<(u32,), ()>(&mut store, "bar")?;
     /// instance.run_concurrent(&mut store, async |accessor| -> wasmtime::Result<_> {
     ///    let resource = accessor.with(|mut access| access.get().table.push(MyResource(42)))?;
-    ///    let (another_resource,) = foo.call_concurrent(accessor, (resource,)).await?;
+    ///    let (another_resource,) = foo.call_concurrent(accessor, (resource,)).await?.0;
     ///    let value = accessor.with(|mut access| access.get().table.delete(another_resource))?;
     ///    bar.call_concurrent(accessor, (value.0,)).await?;
     ///    Ok(())
@@ -1287,8 +1295,33 @@ impl Instance {
                 // The future we were passed has not yet completed, so handle
                 // any work items and then loop again.
                 Either::Right(ready) => {
-                    for item in ready {
-                        self.handle_work_item(store.as_context_mut(), item).await?;
+                    struct Dispose<'a, T: 'static, I: Iterator<Item = WorkItem>> {
+                        store: StoreContextMut<'a, T>,
+                        ready: I,
+                    }
+
+                    impl<'a, T, I: Iterator<Item = WorkItem>> Drop for Dispose<'a, T, I> {
+                        fn drop(&mut self) {
+                            while let Some(item) = self.ready.next() {
+                                match item {
+                                    WorkItem::ResumeFiber(mut fiber) => fiber.dispose(self.store.0),
+                                    WorkItem::PushFuture(future) => {
+                                        tls::set(self.store.0, move || drop(future))
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+
+                    let mut dispose = Dispose {
+                        store: store.as_context_mut(),
+                        ready: ready.into_iter(),
+                    };
+
+                    while let Some(item) = dispose.ready.next() {
+                        self.handle_work_item(dispose.store.as_context_mut(), item)
+                            .await?;
                     }
                 }
             }
@@ -1444,8 +1477,11 @@ impl Instance {
     fn handle_guest_call(self, store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
         match call.kind {
             GuestCallKind::DeliverEvent { set } => {
-                let (event, waitable) =
-                    self.id().get_mut(store).get_event(call.task, set)?.unwrap();
+                let (event, waitable) = self
+                    .id()
+                    .get_mut(store)
+                    .get_event(call.task, set, true)?
+                    .unwrap();
                 let state = self.concurrent_state_mut(store);
                 let task = state.get_mut(call.task)?;
                 let runtime_instance = task.instance;
@@ -2688,14 +2724,14 @@ impl Instance {
         payload: u32,
     ) -> Result<u32> {
         let opts = self.concurrent_state_mut(store).options(options);
-        let async_ = opts.async_;
+        let cancellable = opts.cancellable;
         let caller_instance = opts.instance;
         let rep =
             self.id().get_mut(store).guest_tables().0[caller_instance].waitable_set_rep(set)?;
 
         self.waitable_check(
             store,
-            async_,
+            cancellable,
             WaitableCheck::Wait(WaitableCheckParams {
                 set: TableId::new(rep),
                 options,
@@ -2713,14 +2749,14 @@ impl Instance {
         payload: u32,
     ) -> Result<u32> {
         let opts = self.concurrent_state_mut(store).options(options);
-        let async_ = opts.async_;
+        let cancellable = opts.cancellable;
         let caller_instance = opts.instance;
         let rep =
             self.id().get_mut(store).guest_tables().0[caller_instance].waitable_set_rep(set)?;
 
         self.waitable_check(
             store,
-            async_,
+            cancellable,
             WaitableCheck::Poll(WaitableCheckParams {
                 set: TableId::new(rep),
                 options,
@@ -2729,15 +2765,19 @@ impl Instance {
         )
     }
 
-    /// Implements the `yield` intrinsic.
-    pub(crate) fn yield_(self, store: &mut dyn VMStore, async_: bool) -> Result<bool> {
-        self.waitable_check(store, async_, WaitableCheck::Yield)
+    /// Implements the `thread.yield` intrinsic.
+    pub(crate) fn thread_yield(self, store: &mut dyn VMStore, cancellable: bool) -> Result<bool> {
+        self.waitable_check(store, cancellable, WaitableCheck::Yield)
             .map(|_| {
-                let state = self.concurrent_state_mut(store);
-                let task = state.guest_task.unwrap();
-                if let Some(event) = state.get_mut(task).unwrap().event.take() {
-                    assert!(matches!(event, Event::Cancelled));
-                    true
+                if cancellable {
+                    let state = self.concurrent_state_mut(store);
+                    let task = state.guest_task.unwrap();
+                    if let Some(event) = state.get_mut(task).unwrap().event.take() {
+                        assert!(matches!(event, Event::Cancelled));
+                        true
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }
@@ -2749,15 +2789,9 @@ impl Instance {
     fn waitable_check(
         self,
         store: &mut dyn VMStore,
-        async_: bool,
+        cancellable: bool,
         check: WaitableCheck,
     ) -> Result<u32> {
-        if async_ {
-            bail!(
-                "todo: async `waitable-set.wait`, `waitable-set.poll`, and `yield` not yet implemented"
-            );
-        }
-
         let guest_task = self.concurrent_state_mut(store).guest_task.unwrap();
 
         let (wait, set) = match &check {
@@ -2783,9 +2817,14 @@ impl Instance {
         if wait {
             let set = set.unwrap();
 
-            if task.event.is_none() && state.get_mut(set)?.ready.is_empty() {
-                let old = state.get_mut(guest_task)?.wake_on_cancel.replace(set);
-                assert!(old.is_none());
+            if (task.event.is_none()
+                || (matches!(task.event, Some(Event::Cancelled)) && !cancellable))
+                && state.get_mut(set)?.ready.is_empty()
+            {
+                if cancellable {
+                    let old = state.get_mut(guest_task)?.wake_on_cancel.replace(set);
+                    assert!(old.is_none());
+                }
 
                 self.suspend(
                     store,
@@ -2802,10 +2841,11 @@ impl Instance {
         let result = match check {
             // Deliver any pending events to the guest and return.
             WaitableCheck::Wait(params) | WaitableCheck::Poll(params) => {
-                let event = self
-                    .id()
-                    .get_mut(store)
-                    .get_event(guest_task, Some(params.set))?;
+                let event = self.id().get_mut(store).get_event(
+                    guest_task,
+                    Some(params.set),
+                    cancellable,
+                )?;
 
                 let (ordinal, handle, result) = if wait {
                     let (event, waitable) = event.unwrap();
@@ -3467,6 +3507,13 @@ enum Caller {
     Host {
         /// If present, may be used to deliver the result.
         tx: Option<oneshot::Sender<LiftedResult>>,
+        /// Channel to notify once all subtasks spawned by this caller have
+        /// completed.
+        ///
+        /// Note that we'll never actually send anything to this channel;
+        /// dropping it when the refcount goes to zero is sufficient to notify
+        /// the receiver.
+        exit_tx: Arc<oneshot::Sender<()>>,
         /// If true, remove the task from the concurrent state that owns it
         /// automatically after it completes.
         remove_task_automatically: bool,
@@ -3601,32 +3648,38 @@ impl GuestTask {
         state.delete(self.sync_call_set)?;
 
         // Reparent any pending subtasks to the caller.
-        if let Caller::Guest {
-            task,
-            instance: runtime_instance,
-        } = &self.caller
-        {
-            let task_mut = state.get_mut(*task)?;
-            let present = task_mut.subtasks.remove(&me);
-            assert!(present);
+        match &self.caller {
+            Caller::Guest {
+                task,
+                instance: runtime_instance,
+            } => {
+                let task_mut = state.get_mut(*task)?;
+                let present = task_mut.subtasks.remove(&me);
+                assert!(present);
 
-            for subtask in &self.subtasks {
-                task_mut.subtasks.insert(*subtask);
-            }
+                for subtask in &self.subtasks {
+                    task_mut.subtasks.insert(*subtask);
+                }
 
-            for subtask in &self.subtasks {
-                state.get_mut(*subtask)?.caller = Caller::Guest {
-                    task: *task,
-                    instance: *runtime_instance,
-                };
+                for subtask in &self.subtasks {
+                    state.get_mut(*subtask)?.caller = Caller::Guest {
+                        task: *task,
+                        instance: *runtime_instance,
+                    };
+                }
             }
-        } else {
-            for subtask in &self.subtasks {
-                state.get_mut(*subtask)?.caller = Caller::Host {
-                    tx: None,
-                    remove_task_automatically: true,
-                    call_post_return_automatically: true,
-                };
+            Caller::Host { exit_tx, .. } => {
+                for subtask in &self.subtasks {
+                    state.get_mut(*subtask)?.caller = Caller::Host {
+                        tx: None,
+                        // Clone `exit_tx` to ensure that it is only dropped
+                        // once all transitive subtasks of the host call have
+                        // exited:
+                        exit_tx: exit_tx.clone(),
+                        remove_task_automatically: true,
+                        call_post_return_automatically: true,
+                    };
+                }
             }
         }
 
@@ -3920,8 +3973,8 @@ impl Default for AsyncState {
 /// Represents the Component Model Async state of a (sub-)component instance.
 #[derive(Default)]
 struct InstanceState {
-    /// Whether backpressure is set for this instance
-    backpressure: bool,
+    /// Whether backpressure is set for this instance (enabled if >0)
+    backpressure: u16,
     /// Whether this instance can be entered
     do_not_enter: bool,
     /// Pending calls for this instance which require `Self::backpressure` to be
@@ -4186,18 +4239,18 @@ impl ConcurrentState {
         Ok(())
     }
 
-    /// Implements the `backpressure.set` intrinsic.
-    pub(crate) fn backpressure_set(
+    /// Implements the `backpressure.{set,inc,dec}` intrinsics.
+    pub(crate) fn backpressure_modify(
         &mut self,
         caller_instance: RuntimeComponentInstanceIndex,
-        enabled: u32,
+        modify: impl FnOnce(u16) -> Option<u16>,
     ) -> Result<()> {
         let state = self.instance_state(caller_instance);
         let old = state.backpressure;
-        let new = enabled != 0;
+        let new = modify(old).ok_or_else(|| anyhow!("backpressure counter overflow"))?;
         state.backpressure = new;
 
-        if old && !new {
+        if old > 0 && new == 0 {
             // Backpressure was previously enabled and is now disabled; move any
             // newly-eligible guest calls to the "high priority" queue.
             self.partition_pending(caller_instance)?;
@@ -4325,6 +4378,9 @@ pub(crate) struct PreparedCall<R> {
     /// The `oneshot::Receiver` to which the result of the call will be
     /// delivered when it is available.
     rx: oneshot::Receiver<LiftedResult>,
+    /// The `oneshot::Receiver` which will resolve when the task -- and any
+    /// transitive subtasks -- have all exited.
+    exit_rx: oneshot::Receiver<()>,
     _phantom: PhantomData<R>,
 }
 
@@ -4393,6 +4449,7 @@ pub(crate) fn prepare_call<T, R>(
     assert!(state.guest_task.is_none());
 
     let (tx, rx) = oneshot::channel();
+    let (exit_tx, exit_rx) = oneshot::channel();
 
     let mut task = GuestTask::new(
         state,
@@ -4411,6 +4468,7 @@ pub(crate) fn prepare_call<T, R>(
         },
         Caller::Host {
             tx: Some(tx),
+            exit_tx: Arc::new(exit_tx),
             remove_task_automatically,
             call_post_return_automatically,
         },
@@ -4449,6 +4507,7 @@ pub(crate) fn prepare_call<T, R>(
         task,
         param_count,
         rx,
+        exit_rx,
         _phantom: PhantomData,
     })
 }
@@ -4462,12 +4521,13 @@ pub(crate) fn prepare_call<T, R>(
 pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
     mut store: StoreContextMut<T>,
     prepared: PreparedCall<R>,
-) -> Result<impl Future<Output = Result<R>> + Send + 'static + use<T, R>> {
+) -> Result<impl Future<Output = Result<(R, oneshot::Receiver<()>)>> + Send + 'static + use<T, R>> {
     let PreparedCall {
         handle,
         task,
         param_count,
         rx,
+        exit_rx,
         ..
     } = prepared;
 
@@ -4475,9 +4535,9 @@ pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
 
     Ok(checked(
         handle.instance(),
-        rx.map(|result| {
+        rx.map(move |result| {
             result
-                .map(|v| *v.downcast().unwrap())
+                .map(|v| (*v.downcast().unwrap(), exit_rx))
                 .map_err(anyhow::Error::from)
         }),
     ))

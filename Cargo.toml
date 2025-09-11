@@ -325,22 +325,22 @@ io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.1"
 rustix = "1.0.3"
 # wit-bindgen:
-wit-bindgen = { version = "0.45.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.45.0", default-features = false }
+wit-bindgen = { version = "0.46.0", default-features = false }
+wit-bindgen-rust-macro = { version = "0.46.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.238.1", default-features = false, features = ['simd'] }
-wat = "1.238.1"
-wast = "238.0.1"
-wasmprinter = "0.238.1"
-wasm-encoder = "0.238.1"
-wasm-smith = "0.238.1"
-wasm-mutate = "0.238.1"
-wit-parser = "0.238.1"
-wit-component = "0.238.1"
-wasm-wave = "0.238.1"
-wasm-compose = "0.238.1"
-json-from-wast = "0.238.1"
+wasmparser = { version = "0.239.0", default-features = false, features = ['simd'] }
+wat = "1.239.0"
+wast = "239.0.0"
+wasmprinter = "0.239.0"
+wasm-encoder = "0.239.0"
+wasm-smith = "0.239.0"
+wasm-mutate = "0.239.0"
+wit-parser = "0.239.0"
+wit-component = "0.239.0"
+wasm-wave = "0.239.0"
+wasm-compose = "0.239.0"
+json-from-wast = "0.239.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -491,6 +491,7 @@ component-model-async = [
   "wasmtime-cli-flags/component-model-async",
   "component-model",
   "wasmtime-wasi?/p3",
+  "wasmtime-wasi-http?/p3",
 ]
 
 # This feature, when enabled, will statically compile out all logging statements

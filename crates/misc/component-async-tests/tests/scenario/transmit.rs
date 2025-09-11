@@ -1,4 +1,4 @@
-use std::future::{self, Future};
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{self, Context, Poll};
@@ -20,7 +20,7 @@ use wasmtime::component::{
     Instance, Linker, ResourceTable, Source, StreamConsumer, StreamProducer, StreamReader,
     StreamResult, Val,
 };
-use wasmtime::{AsContextMut, Engine, Store, StoreContextMut, Trap};
+use wasmtime::{AsContextMut, Engine, Store, StoreContextMut};
 use wasmtime_wasi::WasiCtxBuilder;
 
 struct BufferStreamProducer {
@@ -327,7 +327,8 @@ fn sleep() -> Pin<Box<dyn Future<Output = ()> + Send>> {
 mod readiness {
     wasmtime::component::bindgen!({
         path: "wit",
-        world: "readiness-guest"
+        world: "readiness-guest",
+        exports: { default: task_exit },
     });
 }
 
@@ -366,9 +367,9 @@ pub async fn async_readiness() -> Result<()> {
             sleep: sleep(),
         },
     );
-    let result = instance
+    instance
         .run_concurrent(&mut store, async move |accessor| {
-            let (rx, expected) = readiness_guest
+            let ((rx, expected), task_exit) = readiness_guest
                 .local_local_readiness()
                 .call_start(accessor, rx, expected)
                 .await?;
@@ -383,20 +384,11 @@ pub async fn async_readiness() -> Result<()> {
                 )
             });
 
-            future::pending::<Result<()>>().await
+            task_exit.block(accessor).await;
+
+            Ok(())
         })
-        .await;
-
-    // As of this writing, passing a future which never resolves to
-    // `Instance::run_concurrent` and expecting a `Trap::AsyncDeadlock` is
-    // the only way to join all tasks for the `Instance`, so that's what we
-    // do:
-    assert!(matches!(
-        result.unwrap_err().downcast::<Trap>(),
-        Ok(Trap::AsyncDeadlock)
-    ));
-
-    Ok(())
+        .await?
 }
 
 #[tokio::test]
@@ -906,7 +898,8 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
 mod synchronous_transmit {
     wasmtime::component::bindgen!({
         path: "wit",
-        world: "synchronous-transmit-guest"
+        world: "synchronous-transmit-guest",
+        exports: { default: task_exit },
     });
 }
 
@@ -981,9 +974,9 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
     } else {
         FutureReader::new(instance, &mut store, producer)
     };
-    let result = instance
+    instance
         .run_concurrent(&mut store, async move |accessor| {
-            let (stream, stream_expected, future, future_expected) = guest
+            let ((stream, stream_expected, future, future_expected), task_exit) = guest
                 .local_local_synchronous_transmit()
                 .call_start(accessor, stream, stream_expected, future, future_expected)
                 .await?;
@@ -1013,21 +1006,9 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
                 }
             });
 
-            future::pending::<Result<()>>().await
+            task_exit.block(accessor).await;
+
+            Ok(())
         })
-        .await;
-
-    // As of this writing, passing a future which never resolves to
-    // `Instance::run_concurrent` and expecting a `Trap::AsyncDeadlock` is
-    // the only way to join all tasks for the `Instance`, so that's what we
-    // do:
-    assert!(
-        matches!(
-            result.as_ref().unwrap_err().downcast_ref::<Trap>(),
-            Some(Trap::AsyncDeadlock)
-        ),
-        "unexpected error {result:?}"
-    );
-
-    Ok(())
+        .await?
 }

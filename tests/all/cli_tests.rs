@@ -2220,6 +2220,30 @@ start a print 1234
             &["-Wcomponent-model-async", "-Sp3"],
         )
     }
+
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn cli_serve_p3_hello_world() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_P3_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })?;
+
+        let result = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(result.status().is_success());
+        assert_eq!(result.body(), "Hello, WASI!");
+
+        server.finish()?;
+        Ok(())
+    }
 }
 
 #[test]
