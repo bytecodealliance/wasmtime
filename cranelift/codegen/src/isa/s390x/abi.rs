@@ -1100,8 +1100,8 @@ impl S390xMachineDeps {
 fn is_reg_saved_in_prologue(call_conv: isa::CallConv, r: RealReg) -> bool {
     match (call_conv, r.class()) {
         (isa::CallConv::Tail, RegClass::Int) => {
-            // r8 - r15 inclusive are callee-saves.
-            r.hw_enc() >= 8 && r.hw_enc() <= 15
+            // r8 - r14 inclusive are callee-saves.
+            r.hw_enc() >= 8 && r.hw_enc() <= 14
         }
         (_, RegClass::Int) => {
             // r6 - r15 inclusive are callee-saves.

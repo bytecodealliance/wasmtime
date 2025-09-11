@@ -326,13 +326,7 @@ impl Compiler {
     /// `Config::compiler_panicking_wasm_features`.
     pub fn should_fail(&self, config: &TestConfig) -> bool {
         match self {
-            Compiler::CraneliftNative => {
-                // FIXME(#11602) temporarily disabled
-                if cfg!(target_arch = "s390x") && config.exceptions() {
-                    return true;
-                }
-                config.legacy_exceptions()
-            }
+            Compiler::CraneliftNative => config.legacy_exceptions(),
 
             Compiler::Winch => {
                 if config.gc()
