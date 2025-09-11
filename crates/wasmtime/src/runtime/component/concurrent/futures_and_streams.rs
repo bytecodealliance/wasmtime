@@ -26,7 +26,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{self, Context, Poll, Waker};
 use std::vec::Vec;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex, RuntimeComponentInstanceIndex,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
     TypeFutureTableIndex, TypeStreamTableIndex,
 };
@@ -3498,11 +3498,13 @@ impl Instance {
     pub(crate) fn error_context_new(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeComponentLocalErrorContextTableIndex,
         options: OptionsIndex,
         debug_msg_address: u32,
         debug_msg_len: u32,
     ) -> Result<u32> {
+        self.id().get(store).check_may_leave(caller)?;
         let options = Options::new_index(store, self, options);
         let lift_ctx = &mut LiftContext::new(store, &options, self);
         //  Read string from guest memory
@@ -3590,10 +3592,12 @@ impl Instance {
     pub(crate) fn future_cancel_read(
         self,
         store: &mut dyn VMStore,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         async_: bool,
         reader: u32,
     ) -> Result<u32> {
+        self.id().get(store).check_may_leave(caller)?;
         self.guest_cancel_read(store, TransmitIndex::Future(ty), async_, reader)
             .map(|v| v.encode())
     }
@@ -3602,10 +3606,12 @@ impl Instance {
     pub(crate) fn future_cancel_write(
         self,
         store: &mut dyn VMStore,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         async_: bool,
         writer: u32,
     ) -> Result<u32> {
+        self.id().get(store).check_may_leave(caller)?;
         self.guest_cancel_write(store, TransmitIndex::Future(ty), async_, writer)
             .map(|v| v.encode())
     }
@@ -3614,10 +3620,12 @@ impl Instance {
     pub(crate) fn stream_cancel_read(
         self,
         store: &mut dyn VMStore,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         async_: bool,
         reader: u32,
     ) -> Result<u32> {
+        self.id().get(store).check_may_leave(caller)?;
         self.guest_cancel_read(store, TransmitIndex::Stream(ty), async_, reader)
             .map(|v| v.encode())
     }
@@ -3626,10 +3634,12 @@ impl Instance {
     pub(crate) fn stream_cancel_write(
         self,
         store: &mut dyn VMStore,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         async_: bool,
         writer: u32,
     ) -> Result<u32> {
+        self.id().get(store).check_may_leave(caller)?;
         self.guest_cancel_write(store, TransmitIndex::Stream(ty), async_, writer)
             .map(|v| v.encode())
     }
@@ -3638,9 +3648,11 @@ impl Instance {
     pub(crate) fn future_drop_readable(
         self,
         store: &mut dyn VMStore,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         reader: u32,
     ) -> Result<()> {
+        self.id().get(store).check_may_leave(caller)?;
         self.guest_drop_readable(store, TransmitIndex::Future(ty), reader)
     }
 
@@ -3648,9 +3660,11 @@ impl Instance {
     pub(crate) fn stream_drop_readable(
         self,
         store: &mut dyn VMStore,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         reader: u32,
     ) -> Result<()> {
+        self.id().get(store).check_may_leave(caller)?;
         self.guest_drop_readable(store, TransmitIndex::Stream(ty), reader)
     }
 }
@@ -3713,9 +3727,12 @@ impl ComponentInstance {
     /// Drop the specified error context.
     pub(crate) fn error_context_drop(
         mut self: Pin<&mut Self>,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeComponentLocalErrorContextTableIndex,
         error_context: u32,
     ) -> Result<()> {
+        self.check_may_leave(caller)?;
+
         let local_handle_table = self.as_mut().table_for_error_context(ty);
 
         let rep = local_handle_table.error_context_drop(error_context)?;
@@ -3775,16 +3792,20 @@ impl ComponentInstance {
     /// Implements the `future.new` intrinsic.
     pub(crate) fn future_new(
         self: Pin<&mut Self>,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
     ) -> Result<ResourcePair> {
+        self.check_may_leave(caller)?;
         self.guest_new(TransmitIndex::Future(ty))
     }
 
     /// Implements the `stream.new` intrinsic.
     pub(crate) fn stream_new(
         self: Pin<&mut Self>,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
     ) -> Result<ResourcePair> {
+        self.check_may_leave(caller)?;
         self.guest_new(TransmitIndex::Stream(ty))
     }
 

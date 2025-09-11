@@ -118,25 +118,23 @@ fn invoke_post_return() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, false);
+    let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
-    linker.root().func_wrap(
-        "f",
-        |mut store: StoreContextMut<'_, bool>, _: ()| -> Result<()> {
-            assert!(!*store.data());
-            *store.data_mut() = true;
-            Ok(())
-        },
-    )?;
+    linker
+        .root()
+        .func_wrap("f", |_: StoreContextMut<'_, ()>, _: ()| -> Result<()> {
+            unreachable!()
+        })?;
 
     let instance = linker.instantiate(&mut store, &component)?;
     let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
 
-    assert!(!*store.data());
     thunk.call(&mut store, ())?;
-    assert!(!*store.data());
-    thunk.post_return(&mut store)?;
-    assert!(*store.data());
+    let result = thunk.post_return(&mut store);
+    assert!(matches!(
+        result.unwrap_err().downcast::<Trap>(),
+        Ok(Trap::CannotLeaveComponent)
+    ));
 
     Ok(())
 }

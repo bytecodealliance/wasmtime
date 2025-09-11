@@ -1311,60 +1311,48 @@ fn pass_host_borrow_to_guest() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn drop_on_owned_resource() -> Result<()> {
-    let engine = super::engine();
+#[tokio::test]
+async fn drop_on_owned_resource() -> Result<()> {
+    let mut config = wasmtime::Config::new();
+    config.wasm_component_model_async(true);
+    config.async_support(true);
+    let engine = &wasmtime::Engine::new(&config)?;
     let c = Component::new(
         &engine,
         r#"
             (component
                 (import "t" (type $t (sub resource)))
                 (import "[constructor]t" (func $ctor (result (own $t))))
-                (import "[method]t.foo" (func $foo (param "self" (borrow $t)) (result (list u8))))
+                (import "[method]t.foo" (func $foo (param "self" (borrow $t))))
 
                 (core func $ctor (canon lower (func $ctor)))
                 (core func $drop (canon resource.drop $t))
+                (core func $foo (canon lower (func $foo) async))
 
-                (core module $m1
-                    (import "" "drop" (func $drop (param i32)))
-                    (memory (export "memory") 1)
-                    (global $to-drop (export "to-drop") (mut i32) (i32.const 0))
-                    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
-                        (call $drop (global.get $to-drop))
-                        unreachable)
-                )
-                (core instance $i1 (instantiate $m1
-                    (with "" (instance
-                        (export "drop" (func $drop))
-                    ))
-                ))
-
-                (core func $foo (canon lower (func $foo)
-                    (memory $i1 "memory")
-                    (realloc (func $i1 "realloc"))))
-
-                (core module $m2
+                (core module $m
                     (import "" "ctor" (func $ctor (result i32)))
-                    (import "" "foo" (func $foo (param i32 i32)))
-                    (import "i1" "to-drop" (global $to-drop (mut i32)))
+                    (import "" "foo" (func $foo (param i32) (result i32)))
+                    (import "" "drop" (func $drop (param i32)))
 
                     (func (export "f")
                         (local $r i32)
+                        (local $status i32)
                         (local.set $r (call $ctor))
-                        (global.set $to-drop (local.get $r))
-                        (call $foo
-                            (local.get $r)
-                            (i32.const 200))
+                        (local.set $status (call $foo (local.get $r)))
+                        (if (i32.ne (i32.const 1 (; STARTED ;)) (i32.and (local.get $status) (i32.const 0xf)))
+                           (then unreachable))
+                        (call $drop (local.get $r))
+                        (unreachable)
                     )
                 )
-                (core instance $i2 (instantiate $m2
+                (core instance $i (instantiate $m
                     (with "" (instance
                         (export "ctor" (func $ctor))
                         (export "foo" (func $foo))
+                        (export "drop" (func $drop))
                     ))
-                    (with "i1" (instance $i1))
                 ))
-                (func (export "f") (canon lift (core func $i2 "f")))
+                (func (export "f") (canon lift (core func $i "f")))
             )
         "#,
     )?;
@@ -1376,19 +1364,21 @@ fn drop_on_owned_resource() -> Result<()> {
     linker
         .root()
         .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
-    linker.root().func_wrap("[constructor]t", |_cx, ()| {
-        Ok((Resource::<MyType>::new_own(300),))
-    })?;
     linker
         .root()
-        .func_wrap("[method]t.foo", |_cx, (r,): (Resource<MyType>,)| {
-            assert!(!r.owned());
-            Ok((vec![2u8],))
+        .func_wrap_concurrent("[constructor]t", |_cx, ()| {
+            Box::pin(async { Ok((Resource::<MyType>::new_own(300),)) })
         })?;
-    let i = linker.instantiate(&mut store, &c)?;
+    linker
+        .root()
+        .func_wrap_concurrent("[method]t.foo", |_cx, (r,): (Resource<MyType>,)| {
+            assert!(!r.owned());
+            Box::pin(core::future::pending::<Result<()>>())
+        })?;
+    let i = linker.instantiate_async(&mut store, &c).await?;
     let f = i.get_typed_func::<(), ()>(&mut store, "f")?;
 
-    let err = f.call(&mut store, ()).unwrap_err();
+    let err = f.call_async(&mut store, ()).await.unwrap_err();
     assert!(
         format!("{err:?}").contains("cannot remove owned resource while borrowed"),
         "bad error: {err:?}"

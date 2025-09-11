@@ -250,7 +250,7 @@ where
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
     if unsafe { !flags.may_leave() } {
-        bail!("cannot leave component instance");
+        return Err(anyhow!(crate::Trap::CannotLeaveComponent));
     }
 
     let types = vminstance.component().types().clone();
@@ -724,7 +724,7 @@ where
     // the component is disallowed, for example, when the `realloc` function
     // calls a canonical import.
     if unsafe { !flags.may_leave() } {
-        bail!("cannot leave component instance");
+        return Err(anyhow!(crate::Trap::CannotLeaveComponent));
     }
 
     let types = instance.id().get(store.0).component().types().clone();

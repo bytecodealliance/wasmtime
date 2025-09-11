@@ -83,14 +83,14 @@ pub use self::types_builder::*;
 macro_rules! foreach_builtin_component_function {
     ($mac:ident) => {
         $mac! {
-            resource_new32(vmctx: vmctx, resource: u32, rep: u32) -> u64;
-            resource_rep32(vmctx: vmctx, resource: u32, idx: u32) -> u64;
+            resource_new32(vmctx: vmctx, caller_instance: u32, resource: u32, rep: u32) -> u64;
+            resource_rep32(vmctx: vmctx, caller_instance: u32, resource: u32, idx: u32) -> u64;
 
             // Returns an `Option<u32>` where `None` is "no destructor needed"
             // and `Some(val)` is "run the destructor on this rep". The option
             // is encoded as a 64-bit integer where the low bit is Some/None
             // and bits 1-33 are the payload.
-            resource_drop(vmctx: vmctx, resource: u32, idx: u32) -> u64;
+            resource_drop(vmctx: vmctx, caller_instance: u32, resource: u32, idx: u32) -> u64;
 
             resource_transfer_own(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             resource_transfer_borrow(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
@@ -102,21 +102,21 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             backpressure_modify(vmctx: vmctx, caller_instance: u32, increment: u8) -> bool;
             #[cfg(feature = "component-model-async")]
-            task_return(vmctx: vmctx, ty: u32, options: u32, storage: ptr_u8, storage_len: size) -> bool;
+            task_return(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, storage: ptr_u8, storage_len: size) -> bool;
             #[cfg(feature = "component-model-async")]
             task_cancel(vmctx: vmctx, caller_instance: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             waitable_set_new(vmctx: vmctx, caller_instance: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            waitable_set_wait(vmctx: vmctx, options: u32, set: u32, payload: u32) -> u64;
+            waitable_set_wait(vmctx: vmctx, caller_instance: u32, options: u32, set: u32, payload: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            waitable_set_poll(vmctx: vmctx, options: u32, set: u32, payload: u32) -> u64;
+            waitable_set_poll(vmctx: vmctx, caller_instance: u32, options: u32, set: u32, payload: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             waitable_set_drop(vmctx: vmctx, caller_instance: u32, set: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             waitable_join(vmctx: vmctx, caller_instance: u32, set: u32, waitable: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            thread_yield(vmctx: vmctx, cancellable: u8) -> u32;
+            thread_yield(vmctx: vmctx, caller_instance: u32, cancellable: u8) -> u32;
             #[cfg(feature = "component-model-async")]
             subtask_drop(vmctx: vmctx, caller_instance: u32, task_id: u32) -> bool;
             #[cfg(feature = "component-model-async")]
@@ -140,43 +140,43 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             async_start(vmctx: vmctx, callback: ptr_u8, post_return: ptr_u8, callee: ptr_u8, param_count: u32, result_count: u32, flags: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            future_new(vmctx: vmctx, ty: u32) -> u64;
+            future_new(vmctx: vmctx, caller_instance: u32, ty: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            future_write(vmctx: vmctx, ty: u32, options: u32, future: u32, address: u32) -> u64;
+            future_write(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, future: u32, address: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            future_read(vmctx: vmctx, ty: u32, options: u32, future: u32, address: u32) -> u64;
+            future_read(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, future: u32, address: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            future_cancel_write(vmctx: vmctx, ty: u32, async_: u8, writer: u32) -> u64;
+            future_cancel_write(vmctx: vmctx, caller_instance: u32, ty: u32, async_: u8, writer: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            future_cancel_read(vmctx: vmctx, ty: u32, async_: u8, reader: u32) -> u64;
+            future_cancel_read(vmctx: vmctx, caller_instance: u32, ty: u32, async_: u8, reader: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            future_drop_writable(vmctx: vmctx, ty: u32, writer: u32) -> bool;
+            future_drop_writable(vmctx: vmctx, caller_instance: u32, ty: u32, writer: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            future_drop_readable(vmctx: vmctx, ty: u32, reader: u32) -> bool;
+            future_drop_readable(vmctx: vmctx, caller_instance: u32, ty: u32, reader: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            stream_new(vmctx: vmctx, ty: u32) -> u64;
+            stream_new(vmctx: vmctx, caller_instance: u32, ty: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            stream_write(vmctx: vmctx, ty: u32, options: u32, stream: u32, address: u32, count: u32) -> u64;
+            stream_write(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            stream_read(vmctx: vmctx, ty: u32, options: u32, stream: u32, address: u32, count: u32) -> u64;
+            stream_read(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            stream_cancel_write(vmctx: vmctx, ty: u32, async_: u8, writer: u32) -> u64;
+            stream_cancel_write(vmctx: vmctx, caller_instance: u32, ty: u32, async_: u8, writer: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            stream_cancel_read(vmctx: vmctx, ty: u32, async_: u8, reader: u32) -> u64;
+            stream_cancel_read(vmctx: vmctx, caller_instance: u32, ty: u32, async_: u8, reader: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            stream_drop_writable(vmctx: vmctx, ty: u32, writer: u32) -> bool;
+            stream_drop_writable(vmctx: vmctx, caller_instance: u32, ty: u32, writer: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            stream_drop_readable(vmctx: vmctx, ty: u32, reader: u32) -> bool;
+            stream_drop_readable(vmctx: vmctx, caller_instance: u32, ty: u32, reader: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            flat_stream_write(vmctx: vmctx, ty: u32, options:u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
+            flat_stream_write(vmctx: vmctx, caller_instance: u32, ty: u32, options:u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            flat_stream_read(vmctx: vmctx, ty: u32, options: u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
+            flat_stream_read(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            error_context_new(vmctx: vmctx, ty: u32, options: u32, debug_msg_address: u32, debug_msg_len: u32) -> u64;
+            error_context_new(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, debug_msg_address: u32, debug_msg_len: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            error_context_debug_message(vmctx: vmctx, ty: u32, options: u32, err_ctx_handle: u32, debug_msg_address: u32) -> bool;
+            error_context_debug_message(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, err_ctx_handle: u32, debug_msg_address: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            error_context_drop(vmctx: vmctx, ty: u32, err_ctx_handle: u32) -> bool;
+            error_context_drop(vmctx: vmctx, caller_instance: u32, ty: u32, err_ctx_handle: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             future_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             #[cfg(feature = "component-model-async")]
@@ -184,9 +184,9 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             error_context_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            context_get(vmctx: vmctx, slot: u32) -> u64;
+            context_get(vmctx: vmctx, caller_instance: u32, slot: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            context_set(vmctx: vmctx, slot: u32, val: u32) -> bool;
+            context_set(vmctx: vmctx, caller_instance: u32, slot: u32, val: u32) -> bool;
 
             trap(vmctx: vmctx, code: u8) -> bool;
 

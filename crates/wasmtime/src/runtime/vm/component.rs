@@ -890,6 +890,18 @@ impl ComponentInstance {
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().concurrent_state }
     }
+
+    pub(crate) fn check_may_leave(
+        &self,
+        instance: RuntimeComponentInstanceIndex,
+    ) -> anyhow::Result<()> {
+        let flags = self.instance_flags(instance);
+        if unsafe { flags.may_leave() } {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(crate::Trap::CannotLeaveComponent))
+        }
+    }
 }
 
 // SAFETY: `layout` should describe this accurately and `OwnedVMContext` is the
