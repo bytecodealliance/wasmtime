@@ -217,5 +217,7 @@
 (rule (simplify (bor ty (band ty x y) x)) x)
 (rule (simplify (bor ty x (band ty x y))) x)
 
+; (x ^ y) ^ y --> x
 (rule (simplify (bxor ty (bxor ty x y) y)) x)
+(rule (simplify (bxor ty y (bxor ty x y))) x)
 
