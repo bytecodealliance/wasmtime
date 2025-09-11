@@ -7,7 +7,6 @@ use crate::p3::bindings::filesystem::types::{
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::p3::{
     DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer, FutureOneshotProducer, FutureReadyProducer,
-    StreamEmptyProducer,
 };
 use crate::{DirPerms, FilePerms};
 use anyhow::Context as _;
@@ -22,8 +21,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
-    StreamProducer, StreamReader, StreamResult,
+    Accessor, Destination, EmptyProducer, FutureReader, Resource, ResourceTable, Source,
+    StreamConsumer, StreamProducer, StreamReader, StreamResult,
 };
 
 fn get_descriptor<'a>(
@@ -498,7 +497,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let file = get_file(store.get().table, &fd)?;
             if !file.perms.contains(FilePerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
+                    StreamReader::new(instance, &mut store, EmptyProducer::default()),
                     FutureReader::new(
                         instance,
                         &mut store,
@@ -644,7 +643,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let dir = get_dir(store.get().table, &fd)?;
             if !dir.perms.contains(DirPerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
+                    StreamReader::new(instance, &mut store, EmptyProducer::default()),
                     FutureReader::new(
                         instance,
                         &mut store,
@@ -667,7 +666,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     ),
                     Err(e) => {
                         result_tx.send(Err(e.into())).unwrap();
-                        StreamReader::new(instance, &mut store, StreamEmptyProducer::default())
+                        StreamReader::new(instance, &mut store, EmptyProducer::default())
                     }
                 }
             } else {

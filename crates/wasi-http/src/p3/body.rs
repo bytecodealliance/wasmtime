@@ -13,11 +13,11 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
 use wasmtime::component::{
-    Access, Destination, FutureConsumer, FutureReader, Resource, Source, StreamConsumer,
-    StreamProducer, StreamReader, StreamResult,
+    Access, Destination, EmptyProducer, FutureConsumer, FutureReader, Resource, Source,
+    StreamConsumer, StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut, StoreContextMut};
-use wasmtime_wasi::p3::{FutureOneshotProducer, StreamEmptyProducer};
+use wasmtime_wasi::p3::FutureOneshotProducer;
 
 /// The concrete type behind a `wasi:http/types/body` resource.
 pub(crate) enum Body {
@@ -75,7 +75,7 @@ impl Body {
                 // https://github.com/WebAssembly/wasi-http/issues/176
                 _ = result_tx.send(Box::new(async { Ok(()) }));
                 Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
+                    StreamReader::new(instance, &mut store, EmptyProducer::default()),
                     trailers_rx,
                 ))
             }

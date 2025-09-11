@@ -509,6 +509,40 @@ pub trait StreamProducer<D>: Send + 'static {
     ) -> Poll<Result<StreamResult>>;
 }
 
+/// An empty producer, which will never produce any elements.
+///
+/// [StreamProducer::poll_produce] will always report the stream as dropped.
+#[derive(Copy, Clone, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub struct EmptyProducer<T>(PhantomData<fn(T) -> T>);
+
+impl<T> EmptyProducer<T> {
+    /// Constructs a new [EmptyProducer]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<T> Default for EmptyProducer<T> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T: Send + Sync + 'static, D> StreamProducer<D> for EmptyProducer<T> {
+    type Item = T;
+    type Buffer = Option<Self::Item>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        _: Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
 /// Represents the buffer for a host- or guest-initiated stream write.
 pub struct Source<'a, T> {
     instance: Instance,
@@ -816,6 +850,26 @@ pub trait FutureProducer<D>: Send + 'static {
         store: StoreContextMut<D>,
         finish: bool,
     ) -> Poll<Result<Option<Self::Item>>>;
+}
+
+impl<T, D, Fut> FutureProducer<D> for Fut
+where
+    Fut: Future<Output = T> + ?Sized + Send + 'static,
+{
+    type Item = T;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        finish: bool,
+    ) -> Poll<Result<Option<T>>> {
+        match self.poll(cx) {
+            Poll::Ready(v) => Poll::Ready(Ok(Some(v))),
+            Poll::Pending if finish => Poll::Ready(Ok(None)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
 }
 
 /// Represents a host-owned read end of a future.

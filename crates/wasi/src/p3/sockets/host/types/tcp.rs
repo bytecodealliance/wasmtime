@@ -4,9 +4,7 @@ use crate::p3::bindings::sockets::types::{
     TcpSocket,
 };
 use crate::p3::sockets::{SocketError, SocketResult, WasiSockets};
-use crate::p3::{
-    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, StreamEmptyProducer,
-};
+use crate::p3::{DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer};
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
 use anyhow::Context as _;
 use bytes::BytesMut;
@@ -19,8 +17,8 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use wasmtime::component::{
-    Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
-    StreamProducer, StreamReader, StreamResult,
+    Accessor, Destination, EmptyProducer, FutureReader, Resource, ResourceTable, Source,
+    StreamConsumer, StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut as _, StoreContextMut};
 
@@ -355,7 +353,7 @@ impl HostTcpSocketWithStore for WasiSockets {
                     ))
                 }
                 None => Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
+                    StreamReader::new(instance, &mut store, EmptyProducer::default()),
                     FutureReader::new(
                         instance,
                         &mut store,
