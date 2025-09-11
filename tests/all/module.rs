@@ -649,3 +649,19 @@ fn deserialize_raw_fails_for_native() {
         );
     }
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn too_large_function_fails() {
+    // Generate a module with a single function body that is too large
+    // to meet the 7_654_321 byte implementation limit.
+    let mut module = "(module (func".to_owned();
+    for _ in 0..8_000_000 {
+        module.push_str(" unreachable");
+    }
+    module.push_str("))");
+
+    let engine = Engine::default();
+    let result = Module::new(&engine, &module);
+    assert!(result.is_err());
+}

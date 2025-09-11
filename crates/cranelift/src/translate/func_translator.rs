@@ -14,7 +14,7 @@ use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use wasmparser::{BinaryReader, FuncValidator, FunctionBody, OperatorsReader, WasmModuleResources};
-use wasmtime_environ::{TypeConvert, WasmResult};
+use wasmtime_environ::{TypeConvert, WasmError, WasmResult};
 
 /// WebAssembly to Cranelift IR function translator.
 ///
@@ -68,6 +68,16 @@ impl FuncTranslator {
         );
         debug_assert_eq!(func.dfg.num_blocks(), 0, "Function must be empty");
         debug_assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
+
+        // Enforce the implementation limit on the Wasm function body
+        // size of 7_654_321 bytes. (See
+        // https://webassembly.github.io/spec/js-api/index.html#limits
+        // for more -- that spec applies to a JS embedding of Wasm,
+        // but we follow the same limits.)
+        const MAX_FUNCTION_BODY_SIZE: usize = 7_654_321;
+        if reader.range().len() > MAX_FUNCTION_BODY_SIZE {
+            return Err(WasmError::ImplLimitExceeded);
+        }
 
         let mut builder = FunctionBuilder::new(func, &mut self.func_ctx);
         builder.set_srcloc(cur_srcloc(&reader));
