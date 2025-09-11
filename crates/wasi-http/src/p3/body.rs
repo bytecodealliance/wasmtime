@@ -13,11 +13,10 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
 use wasmtime::component::{
-    Access, Destination, EmptyProducer, FutureConsumer, FutureReader, Resource, Source,
-    StreamConsumer, StreamProducer, StreamReader, StreamResult,
+    Access, Destination, EmptyProducer, FutureConsumer, FutureReader, OneshotProducer, Resource,
+    Source, StreamConsumer, StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut, StoreContextMut};
-use wasmtime_wasi::p3::FutureOneshotProducer;
 
 /// The concrete type behind a `wasi:http/types/body` resource.
 pub(crate) enum Body {
@@ -95,11 +94,7 @@ impl Body {
                             getter,
                         },
                     ),
-                    FutureReader::new(
-                        instance,
-                        &mut store,
-                        FutureOneshotProducer::from(trailers_rx),
-                    ),
+                    FutureReader::new(instance, &mut store, OneshotProducer::from(trailers_rx)),
                 ))
             }
             Body::Consumed => Err(()),

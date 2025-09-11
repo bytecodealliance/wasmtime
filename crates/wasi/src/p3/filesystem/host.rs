@@ -5,9 +5,7 @@ use crate::p3::bindings::filesystem::types::{
     Filesize, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
-use crate::p3::{
-    DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer, FutureOneshotProducer, FutureReadyProducer,
-};
+use crate::p3::{DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer};
 use crate::{DirPerms, FilePerms};
 use anyhow::Context as _;
 use bytes::BytesMut;
@@ -21,8 +19,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, Destination, EmptyProducer, FutureReader, Resource, ResourceTable, Source,
-    StreamConsumer, StreamProducer, StreamReader, StreamResult,
+    Accessor, Destination, EmptyProducer, FutureReader, OneshotProducer, ReadyProducer, Resource,
+    ResourceTable, Source, StreamConsumer, StreamProducer, StreamReader, StreamResult,
 };
 
 fn get_descriptor<'a>(
@@ -501,7 +499,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     FutureReader::new(
                         instance,
                         &mut store,
-                        FutureReadyProducer(Some(Err(ErrorCode::NotPermitted))),
+                        ReadyProducer::from(Err(ErrorCode::NotPermitted)),
                     ),
                 ));
             }
@@ -519,7 +517,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                         task: None,
                     },
                 ),
-                FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
+                FutureReader::new(instance, &mut store, OneshotProducer::from(result_rx)),
             ))
         })
     }
@@ -647,7 +645,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     FutureReader::new(
                         instance,
                         &mut store,
-                        FutureReadyProducer(Some(Err(ErrorCode::NotPermitted))),
+                        ReadyProducer::from(Err(ErrorCode::NotPermitted)),
                     ),
                 ));
             }
@@ -674,7 +672,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             };
             Ok((
                 stream,
-                FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
+                FutureReader::new(instance, &mut store, OneshotProducer::from(result_rx)),
             ))
         })
     }

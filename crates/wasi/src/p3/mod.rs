@@ -17,68 +17,14 @@ pub mod sockets;
 
 use crate::WasiView;
 use crate::p3::bindings::LinkOptions;
-use anyhow::Context as _;
 use core::pin::Pin;
-use core::task::{Context, Poll, ready};
+use core::task::{Context, Poll};
 use tokio::sync::oneshot;
 use wasmtime::StoreContextMut;
-use wasmtime::component::{
-    Destination, FutureProducer, Linker, StreamProducer, StreamResult, VecBuffer,
-};
+use wasmtime::component::{Destination, Linker, StreamProducer, StreamResult, VecBuffer};
 
 // Default buffer capacity to use for reads of byte-sized values.
 const DEFAULT_BUFFER_CAPACITY: usize = 8192;
-
-struct FutureReadyProducer<T>(Option<T>);
-
-impl<T, D> FutureProducer<D> for FutureReadyProducer<T>
-where
-    T: Send + Unpin + 'static,
-{
-    type Item = T;
-
-    fn poll_produce(
-        self: Pin<&mut Self>,
-        _: &mut Context<'_>,
-        _: StoreContextMut<D>,
-        _: bool,
-    ) -> Poll<wasmtime::Result<Option<T>>> {
-        let v = self
-            .get_mut()
-            .0
-            .take()
-            .context("polled after returning `Ready`")?;
-        Poll::Ready(Ok(Some(v)))
-    }
-}
-
-pub struct FutureOneshotProducer<T>(oneshot::Receiver<T>);
-
-impl<T> From<oneshot::Receiver<T>> for FutureOneshotProducer<T> {
-    fn from(rx: oneshot::Receiver<T>) -> Self {
-        Self(rx)
-    }
-}
-
-impl<T, D> FutureProducer<D> for FutureOneshotProducer<T>
-where
-    T: Send + 'static,
-{
-    type Item = T;
-
-    fn poll_produce(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        store: StoreContextMut<D>,
-        finish: bool,
-    ) -> Poll<wasmtime::Result<Option<T>>> {
-        match ready!(Pin::new(&mut self.get_mut().0).poll_produce(cx, store, finish))? {
-            Some(Ok(v)) => Poll::Ready(Ok(Some(v))),
-            Some(Err(err)) => Poll::Ready(Err(err).context("oneshot sender dropped")),
-            None => Poll::Ready(Ok(None)),
-        }
-    }
-}
 
 /// Helper structure to convert an iterator of `Result<T, E>` into a `stream<T>`
 /// plus a `future<result<_, T>>` in WIT.

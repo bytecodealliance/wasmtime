@@ -63,6 +63,7 @@ p2 = ["wasmtime/component-model", "wasmtime/async"]
 p3 = [
     "wasmtime/component-model-async",
     "wasmtime/component-model-async-bytes",
+    "wasmtime/component-model-async-tokio",
 ]
 
 [[test]]
