@@ -459,7 +459,12 @@ impl Config {
     /// Configures a store based on this configuration.
     pub fn configure_store(&self, store: &mut Store<StoreLimits>) {
         store.limiter(|s| s as &mut dyn wasmtime::ResourceLimiter);
+        self.configure_store_epoch_and_fuel(store);
+    }
 
+    /// Configures everything unrelated to `T` in a store, such as epochs and
+    /// fuel.
+    pub fn configure_store_epoch_and_fuel<T>(&self, store: &mut Store<T>) {
         // Configure the store to never abort by default, that is it'll have
         // max fuel or otherwise trap on an epoch change but the epoch won't
         // ever change.

@@ -3,7 +3,7 @@
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use std::path::PathBuf;
-use wasmtime::{Engine, Store};
+use wasmtime::Engine;
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wast::{SpectestConfig, WastContext};
 
@@ -40,15 +40,16 @@ impl WastCommand {
 
         let mut config = self.common.config(None)?;
         config.async_support(true);
-        let mut store = Store::new(&Engine::new(&config)?, ());
-        if let Some(fuel) = self.common.wasm.fuel {
-            store.set_fuel(fuel)?;
-        }
-        if let Some(true) = self.common.wasm.epoch_interruption {
-            store.epoch_deadline_trap();
-            store.set_epoch_deadline(1);
-        }
-        let mut wast_context = WastContext::new(store, wasmtime_wast::Async::Yes);
+        let engine = Engine::new(&config)?;
+        let mut wast_context = WastContext::new(&engine, wasmtime_wast::Async::Yes, move |store| {
+            if let Some(fuel) = self.common.wasm.fuel {
+                store.set_fuel(fuel).unwrap();
+            }
+            if let Some(true) = self.common.wasm.epoch_interruption {
+                store.epoch_deadline_trap();
+                store.set_epoch_deadline(1);
+            }
+        });
 
         wast_context.generate_dwarf(optional_flag_with_default(self.generate_dwarf, true));
         wast_context
