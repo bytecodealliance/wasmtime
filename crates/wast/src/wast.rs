@@ -311,12 +311,15 @@ impl WastContext {
                     };
                     Ok(match result {
                         Ok(()) => {
-                            match &replace.rt {
-                                Some(rt) => rt.block_on(func.post_return_async(&mut *store))?,
-                                None => func.post_return(&mut *store)?,
-                            }
+                            let result = match &replace.rt {
+                                Some(rt) => rt.block_on(func.post_return_async(&mut *store)),
+                                None => func.post_return(&mut *store),
+                            };
 
-                            Outcome::Ok(Results::Component(results))
+                            match result {
+                                Ok(()) => Outcome::Ok(Results::Component(results)),
+                                Err(e) => Outcome::Trap(e),
+                            }
                         }
                         Err(e) => Outcome::Trap(e),
                     })

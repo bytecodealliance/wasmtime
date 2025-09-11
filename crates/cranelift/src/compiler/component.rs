@@ -197,7 +197,7 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::ResourceNew(ty) => {
+            Trampoline::ResourceNew { instance, ty } => {
                 // Currently this only supports resources represented by `i32`
                 assert_eq!(
                     self.types[self.signature].unwrap_func().params()[0],
@@ -208,11 +208,12 @@ impl<'a> TrampolineCompiler<'a> {
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                     },
                 );
             }
-            Trampoline::ResourceRep(ty) => {
+            Trampoline::ResourceRep { instance, ty } => {
                 // Currently this only supports resources represented by `i32`
                 assert_eq!(
                     self.types[self.signature].unwrap_func().returns()[0],
@@ -223,12 +224,13 @@ impl<'a> TrampolineCompiler<'a> {
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                     },
                 );
             }
-            Trampoline::ResourceDrop(ty) => {
-                self.translate_resource_drop(*ty);
+            Trampoline::ResourceDrop { instance, ty } => {
+                self.translate_resource_drop(*instance, *ty);
             }
             Trampoline::BackpressureSet { instance } => {
                 self.translate_libcall(
@@ -262,12 +264,17 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::TaskReturn { results, options } => {
+            Trampoline::TaskReturn {
+                instance,
+                results,
+                options,
+            } => {
                 self.translate_libcall(
                     host::task_return,
                     TrapSentinel::Falsy,
                     WasmArgs::ValRawList,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*results));
                         params.push(me.index_value(*options));
                     },
@@ -293,22 +300,24 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::WaitableSetWait { options } => {
+            Trampoline::WaitableSetWait { instance, options } => {
                 self.translate_libcall(
                     host::waitable_set_wait,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*options));
                     },
                 );
             }
-            Trampoline::WaitableSetPoll { options } => {
+            Trampoline::WaitableSetPoll { instance, options } => {
                 self.translate_libcall(
                     host::waitable_set_poll,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*options));
                     },
                 );
@@ -333,12 +342,16 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::ThreadYield { cancellable } => {
+            Trampoline::ThreadYield {
+                instance,
+                cancellable,
+            } => {
                 self.translate_libcall(
                     host::thread_yield,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(
                             me.builder
                                 .ins()
@@ -368,17 +381,22 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::StreamNew { ty } => {
+            Trampoline::StreamNew { instance, ty } => {
                 self.translate_libcall(
                     host::stream_new,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                     },
                 );
             }
-            Trampoline::StreamRead { ty, options } => {
+            Trampoline::StreamRead {
+                instance,
+                ty,
+                options,
+            } => {
                 if let Some(info) = self.flat_stream_element_info(*ty).cloned() {
                     self.translate_libcall(
                         host::flat_stream_read,
@@ -386,6 +404,7 @@ impl<'a> TrampolineCompiler<'a> {
                         WasmArgs::InRegisters,
                         |me, params| {
                             params.extend([
+                                me.index_value(*instance),
                                 me.index_value(*ty),
                                 me.index_value(*options),
                                 me.builder
@@ -403,13 +422,18 @@ impl<'a> TrampolineCompiler<'a> {
                         TrapSentinel::NegativeOne,
                         WasmArgs::InRegisters,
                         |me, params| {
+                            params.push(me.index_value(*instance));
                             params.push(me.index_value(*ty));
                             params.push(me.index_value(*options));
                         },
                     );
                 }
             }
-            Trampoline::StreamWrite { ty, options } => {
+            Trampoline::StreamWrite {
+                instance,
+                ty,
+                options,
+            } => {
                 if let Some(info) = self.flat_stream_element_info(*ty).cloned() {
                     self.translate_libcall(
                         host::flat_stream_write,
@@ -417,6 +441,7 @@ impl<'a> TrampolineCompiler<'a> {
                         WasmArgs::InRegisters,
                         |me, params| {
                             params.extend([
+                                me.index_value(*instance),
                                 me.index_value(*ty),
                                 me.index_value(*options),
                                 me.builder
@@ -434,156 +459,203 @@ impl<'a> TrampolineCompiler<'a> {
                         TrapSentinel::NegativeOne,
                         WasmArgs::InRegisters,
                         |me, params| {
+                            params.push(me.index_value(*instance));
                             params.push(me.index_value(*ty));
                             params.push(me.index_value(*options));
                         },
                     );
                 }
             }
-            Trampoline::StreamCancelRead { ty, async_ } => {
+            Trampoline::StreamCancelRead {
+                instance,
+                ty,
+                async_,
+            } => {
                 self.translate_libcall(
                     host::stream_cancel_read,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                         params.push(me.builder.ins().iconst(ir::types::I8, i64::from(*async_)));
                     },
                 );
             }
-            Trampoline::StreamCancelWrite { ty, async_ } => {
+            Trampoline::StreamCancelWrite {
+                instance,
+                ty,
+                async_,
+            } => {
                 self.translate_libcall(
                     host::stream_cancel_write,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                         params.push(me.builder.ins().iconst(ir::types::I8, i64::from(*async_)));
                     },
                 );
             }
-            Trampoline::StreamDropReadable { ty } => {
+            Trampoline::StreamDropReadable { instance, ty } => {
                 self.translate_libcall(
                     host::stream_drop_readable,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                     },
                 );
             }
-            Trampoline::StreamDropWritable { ty } => {
+            Trampoline::StreamDropWritable { instance, ty } => {
                 self.translate_libcall(
                     host::stream_drop_writable,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                     },
                 );
             }
-            Trampoline::FutureNew { ty } => {
+            Trampoline::FutureNew { instance, ty } => {
                 self.translate_libcall(
                     host::future_new,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                     },
                 );
             }
-            Trampoline::FutureRead { ty, options } => {
+            Trampoline::FutureRead {
+                instance,
+                ty,
+                options,
+            } => {
                 self.translate_libcall(
                     host::future_read,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                         params.push(me.index_value(*options));
                     },
                 );
             }
-            Trampoline::FutureWrite { ty, options } => {
+            Trampoline::FutureWrite {
+                instance,
+                ty,
+                options,
+            } => {
                 self.translate_libcall(
                     host::future_write,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                         params.push(me.index_value(*options));
                     },
                 );
             }
-            Trampoline::FutureCancelRead { ty, async_ } => {
+            Trampoline::FutureCancelRead {
+                instance,
+                ty,
+                async_,
+            } => {
                 self.translate_libcall(
                     host::future_cancel_read,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                         params.push(me.builder.ins().iconst(ir::types::I8, i64::from(*async_)));
                     },
                 );
             }
-            Trampoline::FutureCancelWrite { ty, async_ } => {
+            Trampoline::FutureCancelWrite {
+                instance,
+                ty,
+                async_,
+            } => {
                 self.translate_libcall(
                     host::future_cancel_write,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                         params.push(me.builder.ins().iconst(ir::types::I8, i64::from(*async_)));
                     },
                 );
             }
-            Trampoline::FutureDropReadable { ty } => {
+            Trampoline::FutureDropReadable { instance, ty } => {
                 self.translate_libcall(
                     host::future_drop_readable,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                     },
                 );
             }
-            Trampoline::FutureDropWritable { ty } => {
+            Trampoline::FutureDropWritable { instance, ty } => {
                 self.translate_libcall(
                     host::future_drop_writable,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                     },
                 );
             }
-            Trampoline::ErrorContextNew { ty, options } => {
+            Trampoline::ErrorContextNew {
+                instance,
+                ty,
+                options,
+            } => {
                 self.translate_libcall(
                     host::error_context_new,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                         params.push(me.index_value(*options));
                     },
                 );
             }
-            Trampoline::ErrorContextDebugMessage { ty, options } => {
+            Trampoline::ErrorContextDebugMessage {
+                instance,
+                ty,
+                options,
+            } => {
                 self.translate_libcall(
                     host::error_context_debug_message,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                         params.push(me.index_value(*options));
                     },
                 );
             }
-            Trampoline::ErrorContextDrop { ty } => {
+            Trampoline::ErrorContextDrop { instance, ty } => {
                 self.translate_libcall(
                     host::error_context_drop,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                     },
                 );
@@ -699,23 +771,25 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
-            Trampoline::ContextGet(i) => {
+            Trampoline::ContextGet { instance, slot } => {
                 self.translate_libcall(
                     host::context_get,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
-                        params.push(me.builder.ins().iconst(ir::types::I32, i64::from(*i)));
+                        params.push(me.index_value(*instance));
+                        params.push(me.builder.ins().iconst(ir::types::I32, i64::from(*slot)));
                     },
                 );
             }
-            Trampoline::ContextSet(i) => {
+            Trampoline::ContextSet { instance, slot } => {
                 self.translate_libcall(
                     host::context_set,
                     TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |me, params| {
-                        params.push(me.builder.ins().iconst(ir::types::I32, i64::from(*i)));
+                        params.push(me.index_value(*instance));
+                        params.push(me.builder.ins().iconst(ir::types::I32, i64::from(*slot)));
                     },
                 );
             }
@@ -952,7 +1026,11 @@ impl<'a> TrampolineCompiler<'a> {
             .iconst(ir::types::I32, i64::try_from(index.index()).unwrap())
     }
 
-    fn translate_resource_drop(&mut self, resource: TypeResourceTableIndex) {
+    fn translate_resource_drop(
+        &mut self,
+        instance: RuntimeComponentInstanceIndex,
+        resource: TypeResourceTableIndex,
+    ) {
         let args = self.abi_load_params();
         let vmctx = args[0];
         let caller_vmctx = args[1];
@@ -961,10 +1039,16 @@ impl<'a> TrampolineCompiler<'a> {
         // The arguments this shim passes along to the libcall are:
         //
         //   * the vmctx
+        //   * the calling component instance index
         //   * a constant value for this `ResourceDrop` intrinsic
         //   * the wasm handle index to drop
         let mut host_args = Vec::new();
         host_args.push(vmctx);
+        host_args.push(
+            self.builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(instance.as_u32())),
+        );
         host_args.push(
             self.builder
                 .ins()

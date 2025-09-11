@@ -667,7 +667,7 @@ impl WastTest {
         }
 
         let failing_component_model_tests = [
-            // FIXME(#11676)
+            // FIXME(#11683)
             "component-model/test/values/trap-in-post-return.wast",
         ];
         if failing_component_model_tests
