@@ -203,7 +203,11 @@
 (rule (simplify (band ty x (band ty x y))) (band ty x y))
 (rule (simplify (band ty y (band ty x y))) (band ty x y))
 
+;; (x ^ ~y) & x --> x & y
 (rule (simplify (band ty (bxor ty x (bnot ty y)) x)) (band ty x y))
+(rule (simplify (band ty (bxor ty (bnot ty y) x) x)) (band ty x y))
+(rule (simplify (band ty x (bxor ty x (bnot ty y)))) (band ty x y))
+(rule (simplify (band ty x (bxor ty (bnot ty y) x))) (band ty x y))
 
 ; (x & y) + (x ^ y) --> x | y
 (rule (simplify (iadd ty (band ty x y) (bxor ty x y))) (bor ty x y))
