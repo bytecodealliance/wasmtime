@@ -331,3 +331,4 @@
 
 ;; x * (1 << y) == x << y
 (rule (simplify (imul ty x (ishl ty (iconst_s ty 1) y))) (ishl ty x y))
+(rule (simplify (iadd ty (isub ty x y) y)) x)
