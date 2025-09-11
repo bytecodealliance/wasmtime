@@ -588,3 +588,13 @@ block0(v0: i32, v1: i32):
 ; run: %mul_one_shl(2, 3) == 16
 ; run: %mul_one_shl(4, 5) == 128
 ; run: %mul_one_shl(8, 6) == 512
+
+function %fold_add_sub3(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = iadd v2, v1
+    return v3
+}
+
+; run: %fold_add_sub3(0xdead0000, 0x0000beef) == 0xdead0000
+
