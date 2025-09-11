@@ -2096,11 +2096,6 @@ impl Config {
                     unsupported |= WasmFeatures::STACK_SWITCHING;
                 }
 
-                // FIXME(#11602) temporarily disabled
-                if self.compiler_target().architecture == target_lexicon::Architecture::S390x {
-                    unsupported |= WasmFeatures::EXCEPTIONS;
-                }
-
                 use target_lexicon::*;
                 match self.compiler_target() {
                     Triple {
