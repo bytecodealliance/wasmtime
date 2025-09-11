@@ -15,21 +15,27 @@ use wast::parser::{self, ParseBuffer};
 
 /// The wast test script language allows modules to be defined and actions
 /// to be performed on them.
-pub struct WastContext<T: 'static> {
+pub struct WastContext {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
     current: Option<InstanceKind>,
-    core_linker: Linker<T>,
+    core_linker: Linker<()>,
     modules: HashMap<String, ModuleKind>,
     #[cfg(feature = "component-model")]
-    component_linker: component::Linker<T>,
-    pub(crate) store: Store<T>,
+    component_linker: component::Linker<()>,
+
+    /// The store used for core wasm tests/primitives.
+    ///
+    /// Note that components each get their own store so this is not used for
+    /// component-model testing.
+    pub(crate) core_store: Store<()>,
     pub(crate) async_runtime: Option<tokio::runtime::Runtime>,
     generate_dwarf: bool,
     precompile_save: Option<PathBuf>,
     precompile_load: Option<PathBuf>,
 
     modules_by_filename: Arc<HashMap<String, Vec<u8>>>,
+    configure_store: Arc<dyn Fn(&mut Store<()>) + Send + Sync>,
 }
 
 enum Outcome<T = Results> {
@@ -70,13 +76,17 @@ enum ModuleKind {
 enum InstanceKind {
     Core(Instance),
     #[cfg(feature = "component-model")]
-    Component(component::Instance),
+    Component(Store<()>, component::Instance),
 }
 
-enum Export {
+enum Export<'a> {
     Core(Extern),
     #[cfg(feature = "component-model")]
-    Component(component::Func),
+    Component(&'a mut Store<()>, component::Func),
+
+    /// Impossible-to-construct variant to consider `'a` used when the
+    /// `component-model` feature is disabled.
+    _Unused(std::convert::Infallible, &'a ()),
 }
 
 /// Whether or not to use async APIs when calling wasm during wast testing.
@@ -89,31 +99,38 @@ pub enum Async {
     No,
 }
 
-impl<T> WastContext<T>
-where
-    T: Clone + Send + 'static,
-{
+impl WastContext {
     /// Construct a new instance of `WastContext`.
     ///
-    /// Note that the provided `Store<T>` must have `Config::async_support`
-    /// enabled as all functions will be run with `call_async`. This is done to
-    /// support the component model async features that tests might use.
-    pub fn new(store: Store<T>, async_: Async) -> Self {
+    /// The `engine` provided is used for all store/module/component creation
+    /// and should be appropriately configured by the caller. The `async_`
+    /// configuration indicates whether functions are invoked either async or
+    /// sync, and then the `configure` callback is used whenever a store is
+    /// created to further configure its settings.
+    pub fn new(
+        engine: &Engine,
+        async_: Async,
+        configure: impl Fn(&mut Store<()>) + Send + Sync + 'static,
+    ) -> Self {
         // Spec tests will redefine the same module/name sometimes, so we need
         // to allow shadowing in the linker which picks the most recent
         // definition as what to link when linking.
-        let mut core_linker = Linker::new(store.engine());
+        let mut core_linker = Linker::new(engine);
         core_linker.allow_shadowing(true);
         Self {
             current: None,
             core_linker,
             #[cfg(feature = "component-model")]
             component_linker: {
-                let mut linker = component::Linker::new(store.engine());
+                let mut linker = component::Linker::new(engine);
                 linker.allow_shadowing(true);
                 linker
             },
-            store,
+            core_store: {
+                let mut store = Store::new(engine, ());
+                configure(&mut store);
+                store
+            },
             modules: Default::default(),
             async_runtime: if async_ == Async::Yes {
                 Some(
@@ -128,7 +145,12 @@ where
             precompile_save: None,
             precompile_load: None,
             modules_by_filename: Arc::default(),
+            configure_store: Arc::new(configure),
         }
+    }
+
+    fn engine(&self) -> &Engine {
+        self.core_linker.engine()
     }
 
     /// Saves precompiled modules/components into `path` instead of executing
@@ -145,36 +167,41 @@ where
         self
     }
 
-    fn get_export(&mut self, module: Option<&str>, name: &str) -> Result<Export> {
+    fn get_export(&mut self, module: Option<&str>, name: &str) -> Result<Export<'_>> {
         if let Some(module) = module {
             return Ok(Export::Core(
                 self.core_linker
-                    .get(&mut self.store, module, name)
+                    .get(&mut self.core_store, module, name)
                     .ok_or_else(|| anyhow!("no item named `{}::{}` found", module, name))?,
             ));
         }
 
         let cur = self
             .current
-            .as_ref()
+            .as_mut()
             .ok_or_else(|| anyhow!("no previous instance found"))?;
         Ok(match cur {
             InstanceKind::Core(i) => Export::Core(
-                i.get_export(&mut self.store, name)
+                i.get_export(&mut self.core_store, name)
                     .ok_or_else(|| anyhow!("no item named `{}` found", name))?,
             ),
             #[cfg(feature = "component-model")]
-            InstanceKind::Component(i) => Export::Component(
-                i.get_func(&mut self.store, name)
-                    .ok_or_else(|| anyhow!("no func named `{}` found", name))?,
-            ),
+            InstanceKind::Component(store, i) => {
+                let export = i
+                    .get_func(&mut *store, name)
+                    .ok_or_else(|| anyhow!("no func named `{}` found", name))?;
+                Export::Component(store, export)
+            }
         })
     }
 
     fn instantiate_module(&mut self, module: &Module) -> Result<Outcome<Instance>> {
         let instance = match &self.async_runtime {
-            Some(rt) => rt.block_on(self.core_linker.instantiate_async(&mut self.store, &module)),
-            None => self.core_linker.instantiate(&mut self.store, &module),
+            Some(rt) => rt.block_on(
+                self.core_linker
+                    .instantiate_async(&mut self.core_store, &module),
+            ),
+            None => self.core_linker.instantiate(&mut self.core_store, &module),
         };
         Ok(match instance {
             Ok(i) => Outcome::Ok(i),
@@ -186,25 +213,25 @@ where
     fn instantiate_component(
         &mut self,
         component: &component::Component,
-    ) -> Result<Outcome<(component::Component, component::Instance)>> {
+    ) -> Result<Outcome<(component::Component, Store<()>, component::Instance)>> {
+        let mut store = Store::new(self.engine(), ());
+        (self.configure_store)(&mut store);
         let instance = match &self.async_runtime {
             Some(rt) => rt.block_on(
                 self.component_linker
-                    .instantiate_async(&mut self.store, &component),
+                    .instantiate_async(&mut store, &component),
             ),
-            None => self
-                .component_linker
-                .instantiate(&mut self.store, &component),
+            None => self.component_linker.instantiate(&mut store, &component),
         };
         Ok(match instance {
-            Ok(i) => Outcome::Ok((component.clone(), i)),
+            Ok(i) => Outcome::Ok((component.clone(), store, i)),
             Err(e) => Outcome::Trap(e),
         })
     }
 
     /// Register "spectest" which is used by the spec testsuite.
     pub fn register_spectest(&mut self, config: &SpectestConfig) -> Result<()> {
-        link_spectest(&mut self.core_linker, &mut self.store, config)?;
+        link_spectest(&mut self.core_linker, &mut self.core_store, config)?;
         #[cfg(feature = "component-model")]
         link_component_spectest(&mut self.component_linker)?;
         Ok(())
@@ -212,13 +239,32 @@ where
 
     /// Perform the action portion of a command.
     fn perform_action(&mut self, action: &Action<'_>) -> Result<Outcome> {
+        // Need to simultaneously borrow `self.async_runtime` and a `&mut
+        // Store` from components so work around the borrow checker issues by
+        // taking out the async runtime here and putting it back through a
+        // destructor.
+        struct ReplaceRuntime<'a> {
+            ctx: &'a mut WastContext,
+            rt: Option<tokio::runtime::Runtime>,
+        }
+        impl Drop for ReplaceRuntime<'_> {
+            fn drop(&mut self) {
+                self.ctx.async_runtime = self.rt.take();
+            }
+        }
+        let replace = ReplaceRuntime {
+            rt: self.async_runtime.take(),
+            ctx: self,
+        };
+        let me = &mut *replace.ctx;
         match action {
             Action::Invoke {
                 module,
                 field,
                 args,
-            } => match self.get_export(module.as_deref(), field)? {
+            } => match me.get_export(module.as_deref(), field)? {
                 Export::Core(export) => {
+                    drop(replace);
                     let func = export
                         .into_func()
                         .ok_or_else(|| anyhow!("no function named `{field}`"))?;
@@ -231,12 +277,14 @@ where
                         .collect::<Result<Vec<_>>>()?;
 
                     let mut results =
-                        vec![Val::null_func_ref(); func.ty(&self.store).results().len()];
+                        vec![Val::null_func_ref(); func.ty(&self.core_store).results().len()];
                     let result = match &self.async_runtime {
-                        Some(rt) => {
-                            rt.block_on(func.call_async(&mut self.store, &values, &mut results))
-                        }
-                        None => func.call(&mut self.store, &values, &mut results),
+                        Some(rt) => rt.block_on(func.call_async(
+                            &mut self.core_store,
+                            &values,
+                            &mut results,
+                        )),
+                        None => func.call(&mut self.core_store, &values, &mut results),
                     };
 
                     Ok(match result {
@@ -245,7 +293,7 @@ where
                     })
                 }
                 #[cfg(feature = "component-model")]
-                Export::Component(func) => {
+                Export::Component(store, func) => {
                     let values = args
                         .iter()
                         .map(|v| match v {
@@ -254,19 +302,18 @@ where
                         })
                         .collect::<Result<Vec<_>>>()?;
 
-                    let mut results =
-                        vec![component::Val::Bool(false); func.results(&self.store).len()];
-                    let result = match &self.async_runtime {
+                    let mut results = vec![component::Val::Bool(false); func.results(&store).len()];
+                    let result = match &replace.rt {
                         Some(rt) => {
-                            rt.block_on(func.call_async(&mut self.store, &values, &mut results))
+                            rt.block_on(func.call_async(&mut *store, &values, &mut results))
                         }
-                        None => func.call(&mut self.store, &values, &mut results),
+                        None => func.call(&mut *store, &values, &mut results),
                     };
                     Ok(match result {
                         Ok(()) => {
-                            match &self.async_runtime {
-                                Some(rt) => rt.block_on(func.post_return_async(&mut self.store))?,
-                                None => func.post_return(&mut self.store)?,
+                            match &replace.rt {
+                                Some(rt) => rt.block_on(func.post_return_async(&mut *store))?,
+                                None => func.post_return(&mut *store)?,
                             }
 
                             Outcome::Ok(Results::Component(results))
@@ -275,7 +322,7 @@ where
                     })
                 }
             },
-            Action::Get { module, field, .. } => self.get(module.as_deref(), field),
+            Action::Get { module, field, .. } => me.get(module.as_deref(), field),
         }
     }
 
@@ -289,29 +336,29 @@ where
                     Outcome::Trap(e) => return Err(e).context("instantiation failed"),
                 };
                 if let Some(name) = name {
-                    self.core_linker.instance(&mut self.store, name, instance)?;
+                    self.core_linker
+                        .instance(&mut self.core_store, name, instance)?;
                 }
                 self.current = Some(InstanceKind::Core(instance));
             }
             #[cfg(feature = "component-model")]
             ModuleKind::Component(module) => {
-                let (component, instance) = match self.instantiate_component(&module)? {
+                let (component, mut store, instance) = match self.instantiate_component(&module)? {
                     Outcome::Ok(i) => i,
                     Outcome::Trap(e) => return Err(e).context("instantiation failed"),
                 };
                 if let Some(name) = name {
                     let ty = component.component_type();
+                    let engine = self.engine().clone();
                     let mut linker = self.component_linker.instance(name)?;
-                    let engine = self.store.engine().clone();
                     for (name, item) in ty.exports(&engine) {
                         match item {
                             component::types::ComponentItem::Module(_) => {
-                                let module = instance.get_module(&mut self.store, name).unwrap();
+                                let module = instance.get_module(&mut store, name).unwrap();
                                 linker.module(name, &module)?;
                             }
                             component::types::ComponentItem::Resource(_) => {
-                                let resource =
-                                    instance.get_resource(&mut self.store, name).unwrap();
+                                let resource = instance.get_resource(&mut store, name).unwrap();
                                 linker.resource(name, resource, |_, _| Ok(()))?;
                             }
                             // TODO: should ideally reflect more than just
@@ -324,7 +371,7 @@ where
                         }
                     }
                 }
-                self.current = Some(InstanceKind::Component(instance));
+                self.current = Some(InstanceKind::Component(store, instance));
             }
         }
         Ok(())
@@ -350,14 +397,13 @@ where
                     .with_context(|| format!("failed to read {cwasm:?}"))?
                 {
                     Some(Precompiled::Module) => {
-                        let module =
-                            unsafe { Module::deserialize_file(self.store.engine(), &cwasm)? };
+                        let module = unsafe { Module::deserialize_file(self.engine(), &cwasm)? };
                         Ok(ModuleKind::Core(module))
                     }
                     #[cfg(feature = "component-model")]
                     Some(Precompiled::Component) => {
                         let component = unsafe {
-                            component::Component::deserialize_file(self.store.engine(), &cwasm)?
+                            component::Component::deserialize_file(self.engine(), &cwasm)?
                         };
                         Ok(ModuleKind::Component(component))
                     }
@@ -372,12 +418,12 @@ where
                 let bytes = &self.modules_by_filename[&name[..]];
 
                 if wasmparser::Parser::is_core_wasm(&bytes) {
-                    let module = Module::new(self.store.engine(), &bytes)?;
+                    let module = Module::new(self.engine(), &bytes)?;
                     Ok(ModuleKind::Core(module))
                 } else {
                     #[cfg(feature = "component-model")]
                     {
-                        let component = component::Component::new(self.store.engine(), &bytes)?;
+                        let component = component::Component::new(self.engine(), &bytes)?;
                         Ok(ModuleKind::Component(component))
                     }
                     #[cfg(not(feature = "component-model"))]
@@ -399,10 +445,10 @@ where
                 match current {
                     InstanceKind::Core(current) => {
                         self.core_linker
-                            .instance(&mut self.store, as_name, *current)?;
+                            .instance(&mut self.core_store, as_name, *current)?;
                     }
                     #[cfg(feature = "component-model")]
-                    InstanceKind::Component(_) => {
+                    InstanceKind::Component(..) => {
                         bail!("register not implemented for components");
                     }
                 }
@@ -418,10 +464,10 @@ where
                 .into_global()
                 .ok_or_else(|| anyhow!("no global named `{field}`"))?,
             #[cfg(feature = "component-model")]
-            Export::Component(_) => bail!("no global named `{field}`"),
+            Export::Component(..) => bail!("no global named `{field}`"),
         };
         Ok(Outcome::Ok(Results::Core(vec![
-            global.get(&mut self.store),
+            global.get(&mut self.core_store),
         ])))
     }
 
@@ -436,7 +482,7 @@ where
                         Const::Core(core) => core,
                         _ => bail!("expected core value found other value {e:?}"),
                     };
-                    core::match_val(&mut self.store, v, e)
+                    core::match_val(&mut self.core_store, v, e)
                         .with_context(|| format!("result {i} didn't match"))?;
                 }
             }
@@ -485,7 +531,7 @@ where
             Outcome::Trap(err) if err.is::<ThrownException>() => {
                 // Discard the thrown exception.
                 let _ = self
-                    .store
+                    .core_store
                     .take_pending_exception()
                     .expect("there should be a pending exception on the store");
                 Ok(())
@@ -530,11 +576,11 @@ where
                 for (name, bytes) in self.modules_by_filename.iter() {
                     let cwasm_path = path.join(name).with_extension("cwasm");
                     let cwasm = if wasmparser::Parser::is_core_wasm(&bytes) {
-                        self.store.engine().precompile_module(bytes)
+                        self.engine().precompile_module(bytes)
                     } else {
                         #[cfg(feature = "component-model")]
                         {
-                            self.store.engine().precompile_component(bytes)
+                            self.engine().precompile_component(bytes)
                         }
                         #[cfg(not(feature = "component-model"))]
                         bail!("component-model support not enabled");
@@ -570,10 +616,7 @@ where
         // wast: &'a str,
         scope: &'a thread::Scope<'a, '_>,
         threads: &mut HashMap<String, thread::ScopedJoinHandle<'a, Result<()>>>,
-    ) -> Result<()>
-    where
-        T: 'a,
-    {
+    ) -> Result<()> {
         use Command::*;
 
         match directive {
@@ -702,23 +745,27 @@ where
                 commands,
                 line: _,
             } => {
-                let mut core_linker = Linker::new(self.store.engine());
+                let mut core_linker = Linker::new(self.engine());
                 if let Some(id) = shared_module {
                     let items = self
                         .core_linker
-                        .iter(&mut self.store)
+                        .iter(&mut self.core_store)
                         .filter(|(module, _, _)| *module == &id[..])
                         .collect::<Vec<_>>();
                     for (module, name, item) in items {
-                        core_linker.define(&mut self.store, module, name, item)?;
+                        core_linker.define(&mut self.core_store, module, name, item)?;
                     }
                 }
                 let mut child_cx = WastContext {
                     current: None,
                     core_linker,
                     #[cfg(feature = "component-model")]
-                    component_linker: component::Linker::new(self.store.engine()),
-                    store: Store::new(self.store.engine(), self.store.data().clone()),
+                    component_linker: component::Linker::new(self.engine()),
+                    core_store: {
+                        let mut store = Store::new(self.engine(), ());
+                        (self.configure_store)(&mut store);
+                        store
+                    },
                     modules: self.modules.clone(),
                     async_runtime: self.async_runtime.as_ref().map(|_| {
                         tokio::runtime::Builder::new_current_thread()
@@ -729,6 +776,7 @@ where
                     modules_by_filename: self.modules_by_filename.clone(),
                     precompile_load: self.precompile_load.clone(),
                     precompile_save: self.precompile_save.clone(),
+                    configure_store: self.configure_store.clone(),
                 };
                 let child = scope.spawn(move || child_cx.run_directives(commands, filename));
                 threads.insert(name.to_string(), child);
