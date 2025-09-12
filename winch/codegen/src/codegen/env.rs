@@ -361,7 +361,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
 
     /// Creates a name to reference the wasm function `index` provided.
     pub fn name_wasm(&mut self, def_func: DefinedFuncIndex) -> UserExternalNameRef {
-        let key = FuncKey::DefinedWasmFunction(self.translation.module_index, def_func);
+        let key = FuncKey::DefinedWasmFunction(self.translation.module_index(), def_func);
         let (namespace, index) = key.into_raw_parts();
         self.intern_name(UserExternalName { namespace, index })
     }

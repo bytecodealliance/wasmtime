@@ -1290,7 +1290,7 @@ impl FuncEnvironment<'_> {
             .unwrap_module_type_index();
         let signature = self.get_or_create_interned_sig_ref(func, ty);
 
-        let key = FuncKey::DefinedWasmFunction(self.translation.module_index, def_func_index);
+        let key = FuncKey::DefinedWasmFunction(self.translation.module_index(), def_func_index);
         let (namespace, index) = key.into_raw_parts();
         let name = ir::ExternalName::User(
             func.declare_imported_user_function(ir::UserExternalName { namespace, index }),

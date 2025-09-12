@@ -5,11 +5,12 @@ use crate::runtime::vm::{self, Imports, ModuleRuntimeInfo, OnDemandInstanceAlloc
 use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque};
 use alloc::sync::Arc;
 use wasmtime_environ::EngineOrModuleTypeIndex;
+use wasmtime_environ::StaticModuleIndex;
 use wasmtime_environ::Tag;
 use wasmtime_environ::{EntityIndex, Module, TypeTrace};
 
 pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
-    let mut module = Module::new();
+    let mut module = Module::new(StaticModuleIndex::from_u32(0));
     let func_ty = ty.ty().clone().into_registered_type();
     let exn_ty = ExnType::from_tag_type(ty)?.registered_type().clone();
 

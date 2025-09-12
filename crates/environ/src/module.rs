@@ -289,8 +289,11 @@ impl TableSegmentElements {
 
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Module {
+    /// This module's index.
+    pub module_index: StaticModuleIndex,
+
     /// The name of this wasm module, often found in the wasm file.
     pub name: Option<String>,
 
@@ -383,8 +386,33 @@ pub enum Initializer {
 
 impl Module {
     /// Allocates the module data structures.
-    pub fn new() -> Self {
-        Module::default()
+    pub fn new(module_index: StaticModuleIndex) -> Self {
+        Self {
+            module_index,
+            name: Default::default(),
+            initializers: Default::default(),
+            exports: Default::default(),
+            start_func: Default::default(),
+            table_initialization: Default::default(),
+            memory_initialization: Default::default(),
+            passive_elements: Default::default(),
+            passive_elements_map: Default::default(),
+            passive_data_map: Default::default(),
+            types: Default::default(),
+            num_imported_funcs: Default::default(),
+            num_imported_tables: Default::default(),
+            num_imported_memories: Default::default(),
+            num_imported_globals: Default::default(),
+            num_imported_tags: Default::default(),
+            needs_gc_heap: Default::default(),
+            num_escaped_funcs: Default::default(),
+            functions: Default::default(),
+            tables: Default::default(),
+            memories: Default::default(),
+            globals: Default::default(),
+            global_initializers: Default::default(),
+            tags: Default::default(),
+        }
     }
 
     /// Convert a `DefinedFuncIndex` into a `FuncIndex`.
@@ -587,8 +615,14 @@ impl Module {
 
     /// Returns an iterator over all of the defined function indices in this
     /// module.
-    pub fn defined_func_indices(&self) -> impl Iterator<Item = DefinedFuncIndex> + use<> {
+    pub fn defined_func_indices(&self) -> impl ExactSizeIterator<Item = DefinedFuncIndex> + use<> {
         (0..self.functions.len() - self.num_imported_funcs).map(|i| DefinedFuncIndex::new(i))
+    }
+
+    /// Returns the number of functions defined by this module itself: all
+    /// functions minus imported functions.
+    pub fn num_defined_funcs(&self) -> usize {
+        self.functions.len() - self.num_imported_funcs
     }
 
     /// Returns the number of tables defined by this module itself: all tables
@@ -624,6 +658,7 @@ impl TypeTrace for Module {
         // NB: Do not `..` elide unmodified fields so that we get compile errors
         // when adding new fields that might need re-canonicalization.
         let Self {
+            module_index: _,
             name: _,
             initializers: _,
             exports: _,
@@ -674,6 +709,7 @@ impl TypeTrace for Module {
         // NB: Do not `..` elide unmodified fields so that we get compile errors
         // when adding new fields that might need re-canonicalization.
         let Self {
+            module_index: _,
             name: _,
             initializers: _,
             exports: _,

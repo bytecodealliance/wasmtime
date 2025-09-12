@@ -17,9 +17,9 @@ use core::ptr::NonNull;
 use std::path::Path;
 use wasmtime_environ::TypeTrace;
 use wasmtime_environ::component::{
-    AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export,
-    ExportIndex, GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex,
-    StaticModuleIndex, TrampolineIndex, TypeComponentIndex, TypeFuncIndex, VMComponentOffsets,
+    CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export, ExportIndex,
+    GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
+    TrampolineIndex, TypeComponentIndex, TypeFuncIndex, VMComponentOffsets,
 };
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 
@@ -492,10 +492,8 @@ impl Component {
     }
 
     pub(crate) fn trampoline_ptrs(&self, index: TrampolineIndex) -> AllCallFuncPointers {
-        let AllCallFunc {
-            wasm_call,
-            array_call,
-        } = &self.inner.info.trampolines[index];
+        let wasm_call = &self.inner.info.wasm_call_trampolines[index];
+        let array_call = &self.inner.info.array_call_trampolines[index];
         AllCallFuncPointers {
             wasm_call: self.func(wasm_call).cast(),
             array_call: self.func(array_call).cast(),
