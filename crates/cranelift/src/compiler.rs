@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::obj::ELF_WASMTIME_EXCEPTIONS;
 use wasmtime_environ::{
-    AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
+    Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
     DefinedFuncIndex, FlagValue, FuncKey, FunctionBodyData, FunctionLoc, HostCall,
     InliningCompiler, ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection,
     StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, VMOffsets,
@@ -46,19 +46,6 @@ struct IncrementalCacheContext {
     cache_store: Arc<dyn CacheStore>,
     num_hits: usize,
     num_cached: usize,
-}
-
-/// ABI signature of functions that are generated here.
-#[derive(Debug, Copy, Clone)]
-#[cfg_attr(
-    not(feature = "component-model"),
-    expect(dead_code, reason = "only used with component model compiler")
-)]
-enum Abi {
-    /// The "wasm" ABI, or suitable to be a `wasm_call` field of a `VMFuncRef`.
-    Wasm,
-    /// The "array" ABI, or suitable to be an `array_call` field.
-    Array,
 }
 
 struct CompilerContext {
@@ -246,7 +233,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let module = &translation.module;
 
         let (module_index, def_func_index) = key.unwrap_defined_wasm_function();
-        debug_assert_eq!(translation.module_index, module_index);
+        debug_assert_eq!(translation.module_index(), module_index);
 
         let func_index = module.func_index(def_func_index);
         let sig = translation.module.functions[func_index]
@@ -359,7 +346,7 @@ impl wasmtime_environ::Compiler for Compiler {
         log::trace!("compiling array-to-wasm trampoline: {key:?} = {symbol:?}");
 
         let (module_index, def_func_index) = key.unwrap_array_to_wasm_trampoline();
-        debug_assert_eq!(translation.module_index, module_index);
+        debug_assert_eq!(translation.module_index(), module_index);
 
         let func_index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[func_index]
