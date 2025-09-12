@@ -9,9 +9,9 @@ use crate::p3::{DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer};
 use crate::{DirPerms, FilePerms};
 use anyhow::Context as _;
 use bytes::BytesMut;
-use core::mem;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
+use core::{iter, mem};
 use std::io::{self, Cursor};
 use std::sync::Arc;
 use system_interface::fs::FileIoExt as _;
@@ -19,8 +19,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, Destination, EmptyProducer, FutureReader, ReadyProducer, Resource, ResourceTable,
-    Source, StreamConsumer, StreamProducer, StreamReader, StreamResult,
+    Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
+    StreamProducer, StreamReader, StreamResult,
 };
 
 fn get_descriptor<'a>(
@@ -495,12 +495,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let file = get_file(store.get().table, &fd)?;
             if !file.perms.contains(FilePerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, EmptyProducer::default()),
-                    FutureReader::new(
-                        instance,
-                        &mut store,
-                        ReadyProducer::from(Err(ErrorCode::NotPermitted)),
-                    ),
+                    StreamReader::new(instance, &mut store, iter::empty()),
+                    FutureReader::new(instance, &mut store, async {
+                        anyhow::Ok(Err(ErrorCode::NotPermitted))
+                    }),
                 ));
             }
 
@@ -641,12 +639,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let dir = get_dir(store.get().table, &fd)?;
             if !dir.perms.contains(DirPerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, EmptyProducer::default()),
-                    FutureReader::new(
-                        instance,
-                        &mut store,
-                        ReadyProducer::from(Err(ErrorCode::NotPermitted)),
-                    ),
+                    StreamReader::new(instance, &mut store, iter::empty()),
+                    FutureReader::new(instance, &mut store, async {
+                        anyhow::Ok(Err(ErrorCode::NotPermitted))
+                    }),
                 ));
             }
             let allow_blocking_current_thread = dir.allow_blocking_current_thread;
@@ -664,7 +660,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     ),
                     Err(e) => {
                         result_tx.send(Err(e.into())).unwrap();
-                        StreamReader::new(instance, &mut store, EmptyProducer::default())
+                        StreamReader::new(instance, &mut store, iter::empty())
                     }
                 }
             } else {

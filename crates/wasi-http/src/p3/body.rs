@@ -2,6 +2,7 @@ use crate::p3::bindings::http::types::{ErrorCode, Fields, Trailers};
 use crate::p3::{WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
 use bytes::Bytes;
+use core::iter;
 use core::num::NonZeroUsize;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
@@ -13,8 +14,8 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
 use wasmtime::component::{
-    Access, Destination, EmptyProducer, FutureConsumer, FutureReader, Resource, Source,
-    StreamConsumer, StreamProducer, StreamReader, StreamResult,
+    Access, Destination, FutureConsumer, FutureReader, Resource, Source, StreamConsumer,
+    StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut, StoreContextMut};
 
@@ -74,7 +75,7 @@ impl Body {
                 // https://github.com/WebAssembly/wasi-http/issues/176
                 _ = result_tx.send(Box::new(async { Ok(()) }));
                 Ok((
-                    StreamReader::new(instance, &mut store, EmptyProducer::default()),
+                    StreamReader::new(instance, &mut store, iter::empty()),
                     trailers_rx,
                 ))
             }

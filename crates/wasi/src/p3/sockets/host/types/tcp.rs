@@ -8,6 +8,7 @@ use crate::p3::sockets::{SocketError, SocketResult, WasiSockets};
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
 use anyhow::Context as _;
 use bytes::BytesMut;
+use core::iter;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use io_lifetimes::AsSocketlike as _;
@@ -17,8 +18,8 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use wasmtime::component::{
-    Accessor, Destination, EmptyProducer, FutureReader, ReadyProducer, Resource, ResourceTable,
-    Source, StreamConsumer, StreamProducer, StreamReader, StreamResult,
+    Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
+    StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut as _, StoreContextMut};
 
@@ -353,12 +354,10 @@ impl HostTcpSocketWithStore for WasiSockets {
                     ))
                 }
                 None => Ok((
-                    StreamReader::new(instance, &mut store, EmptyProducer::default()),
-                    FutureReader::new(
-                        instance,
-                        &mut store,
-                        ReadyProducer::from(Err(ErrorCode::InvalidState)),
-                    ),
+                    StreamReader::new(instance, &mut store, iter::empty()),
+                    FutureReader::new(instance, &mut store, async {
+                        anyhow::Ok(Err(ErrorCode::InvalidState))
+                    }),
                 )),
             }
         })

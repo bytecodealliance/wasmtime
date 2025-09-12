@@ -18,8 +18,8 @@ use core::marker::PhantomData;
 use core::mem::{self, MaybeUninit};
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker, ready};
-use futures::FutureExt;
 use futures::channel::oneshot;
+use futures::{FutureExt as _, stream};
 use std::boxed::Box;
 use std::io::Cursor;
 use std::string::{String, ToString};
@@ -509,26 +509,25 @@ pub trait StreamProducer<D>: Send + 'static {
     ) -> Poll<Result<StreamResult>>;
 }
 
-/// An empty [`StreamProducer`], which will never produce any elements.
-///
-/// [StreamProducer::poll_produce] will always report the stream as dropped.
-#[derive(Copy, Clone, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-pub struct EmptyProducer<T>(PhantomData<fn(T) -> T>);
+impl<T, D> StreamProducer<D> for iter::Empty<T>
+where
+    T: Send + Sync + 'static,
+{
+    type Item = T;
+    type Buffer = Option<Self::Item>;
 
-impl<T> EmptyProducer<T> {
-    /// Constructs a new [EmptyProducer]
-    pub fn new() -> Self {
-        Self::default()
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        _: Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
 
-impl<T> Default for EmptyProducer<T> {
-    fn default() -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<T, D> StreamProducer<D> for EmptyProducer<T>
+impl<T, D> StreamProducer<D> for stream::Empty<T>
 where
     T: Send + Sync + 'static,
 {
@@ -637,44 +636,6 @@ impl<D> StreamProducer<D> for bytes::BytesMut {
         dst.remaining().copy_from_slice(&self);
         dst.mark_written(cap);
         Poll::Ready(Ok(StreamResult::Dropped))
-    }
-}
-
-/// A [`FutureProducer`], which is ready to produce an element.
-#[derive(Copy, Clone, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-pub struct ReadyProducer<T>(Option<T>);
-
-impl<T> ReadyProducer<T> {
-    /// Constructs a new [ReadyProducer].
-    pub fn new(v: T) -> Self {
-        Self(Some(v))
-    }
-}
-
-impl<T> From<T> for ReadyProducer<T> {
-    fn from(v: T) -> Self {
-        Self(Some(v))
-    }
-}
-
-impl<T, D> FutureProducer<D> for ReadyProducer<T>
-where
-    T: Unpin + Send + 'static,
-{
-    type Item = T;
-
-    fn poll_produce(
-        self: Pin<&mut Self>,
-        _: &mut Context<'_>,
-        _: StoreContextMut<D>,
-        _: bool,
-    ) -> Poll<Result<Option<T>>> {
-        let v = self
-            .get_mut()
-            .0
-            .take()
-            .context("polled after returning `Ready`")?;
-        Poll::Ready(Ok(Some(v)))
     }
 }
 
@@ -4234,22 +4195,7 @@ mod tests {
             poll_future_producer(fut.as_mut(), true),
             Poll::Ready(Ok(None)),
         ));
-    }
 
-    #[test]
-    fn ready_producer() {
-        assert!(matches!(
-            poll_future_producer(pin!(ReadyProducer::from(())), false),
-            Poll::Ready(Ok(Some(()))),
-        ));
-        assert!(matches!(
-            poll_future_producer(pin!(ReadyProducer::from(())), true),
-            Poll::Ready(Ok(Some(()))),
-        ));
-    }
-
-    #[test]
-    fn oneshot_producer() {
         let (tx, rx) = oneshot::channel();
         let mut rx = pin!(rx);
         assert!(matches!(
