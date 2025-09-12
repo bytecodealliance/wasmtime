@@ -17,8 +17,8 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use wasmtime::component::{
-    Accessor, Destination, EmptyProducer, FutureReader, OneshotProducer, ReadyProducer, Resource,
-    ResourceTable, Source, StreamConsumer, StreamProducer, StreamReader, StreamResult,
+    Accessor, Destination, EmptyProducer, FutureReader, ReadyProducer, Resource, ResourceTable,
+    Source, StreamConsumer, StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut as _, StoreContextMut};
 
@@ -349,7 +349,7 @@ impl HostTcpSocketWithStore for WasiSockets {
                                 result: Some(result_tx),
                             },
                         ),
-                        FutureReader::new(instance, &mut store, OneshotProducer::from(result_rx)),
+                        FutureReader::new(instance, &mut store, result_rx),
                     ))
                 }
                 None => Ok((

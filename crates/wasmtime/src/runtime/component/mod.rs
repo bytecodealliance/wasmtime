@@ -121,9 +121,8 @@ pub use self::component::{Component, ComponentExportIndex};
 pub use self::concurrent::{
     Access, Accessor, AccessorTask, AsAccessor, Destination, DirectDestination, DirectSource,
     EmptyProducer, ErrorContext, FutureConsumer, FutureProducer, FutureReader, GuardedFutureReader,
-    GuardedStreamReader, JoinHandle, OneshotProducer, ReadBuffer, ReadyProducer, Source,
-    StreamConsumer, StreamProducer, StreamReader, StreamResult, VMComponentAsyncStore, VecBuffer,
-    WriteBuffer,
+    GuardedStreamReader, JoinHandle, ReadBuffer, ReadyProducer, Source, StreamConsumer,
+    StreamProducer, StreamReader, StreamResult, VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
 #[cfg(feature = "component-model-async")]
 pub use self::func::TaskExit;

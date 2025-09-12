@@ -13,10 +13,10 @@ use core::task::{Context, Poll, ready};
 use http::header::CONTENT_LENGTH;
 use std::sync::Arc;
 use tokio::sync::oneshot;
+use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Access, Accessor, FutureProducer, FutureReader, Resource, ResourceTable, StreamReader,
 };
-use wasmtime::{AsContextMut as _, StoreContextMut};
 
 fn get_fields<'a>(
     table: &'a ResourceTable,
@@ -134,24 +134,36 @@ enum GuestBodyResultProducer {
     Future(Pin<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>),
 }
 
+fn poll_future<T>(
+    cx: &mut Context<'_>,
+    fut: Pin<&mut (impl Future<Output = T> + ?Sized)>,
+    finish: bool,
+) -> Poll<Option<T>> {
+    match fut.poll(cx) {
+        Poll::Ready(v) => Poll::Ready(Some(v)),
+        Poll::Pending if finish => Poll::Ready(None),
+        Poll::Pending => Poll::Pending,
+    }
+}
+
 impl<D> FutureProducer<D> for GuestBodyResultProducer {
     type Item = Result<(), ErrorCode>;
 
     fn poll_produce(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        mut store: StoreContextMut<D>,
+        _: StoreContextMut<D>,
         finish: bool,
     ) -> Poll<wasmtime::Result<Option<Self::Item>>> {
         match &mut *self {
             Self::Receiver(rx) => {
-                match ready!(Pin::new(rx).poll_produce(cx, store.as_context_mut(), finish))? {
+                match ready!(poll_future(cx, Pin::new(rx), finish)) {
                     Some(Ok(fut)) => {
                         let mut fut = Box::into_pin(fut);
                         // poll the received future once and update state
-                        let res = fut.as_mut().poll_produce(cx, store, finish);
+                        let res = poll_future(cx, fut.as_mut(), finish);
                         *self = Self::Future(fut);
-                        res
+                        res.map(Ok)
                     }
                     Some(Err(..)) => {
                         // oneshot sender dropped, treat as success
@@ -160,7 +172,7 @@ impl<D> FutureProducer<D> for GuestBodyResultProducer {
                     None => Poll::Ready(Ok(None)),
                 }
             }
-            Self::Future(fut) => fut.as_mut().poll_produce(cx, store, finish),
+            Self::Future(fut) => poll_future(cx, fut.as_mut(), finish).map(Ok),
         }
     }
 }

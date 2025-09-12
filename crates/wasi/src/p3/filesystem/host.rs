@@ -19,8 +19,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, Destination, EmptyProducer, FutureReader, OneshotProducer, ReadyProducer, Resource,
-    ResourceTable, Source, StreamConsumer, StreamProducer, StreamReader, StreamResult,
+    Accessor, Destination, EmptyProducer, FutureReader, ReadyProducer, Resource, ResourceTable,
+    Source, StreamConsumer, StreamProducer, StreamReader, StreamResult,
 };
 
 fn get_descriptor<'a>(
@@ -517,7 +517,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                         task: None,
                     },
                 ),
-                FutureReader::new(instance, &mut store, OneshotProducer::from(result_rx)),
+                FutureReader::new(instance, &mut store, result_rx),
             ))
         })
     }
@@ -670,10 +670,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             } else {
                 StreamReader::new(instance, &mut store, ReadDirStream::new(dir, result_tx))
             };
-            Ok((
-                stream,
-                FutureReader::new(instance, &mut store, OneshotProducer::from(result_rx)),
-            ))
+            Ok((stream, FutureReader::new(instance, &mut store, result_rx)))
         })
     }
 

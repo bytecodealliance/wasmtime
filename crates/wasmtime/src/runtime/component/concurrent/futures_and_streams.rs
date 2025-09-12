@@ -9,7 +9,7 @@ use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Error, Result, anyhow, bail};
 use buffers::{Extender, SliceBuffer, UntypedWriteBuffer};
 use core::fmt;
 use core::future;
@@ -678,82 +678,6 @@ where
     }
 }
 
-/// A [`FutureProducer`] implementation for a [`oneshot::Receiver`], which will cause a trap on
-/// [`FutureProducer::poll_produce`] if the corresponding [`oneshot::Sender`] is dropped
-#[derive(Debug)]
-pub struct OneshotProducer<T>(T);
-
-impl<T> OneshotProducer<oneshot::Receiver<T>> {
-    /// Constructs a new [OneshotProducer] from [oneshot::Receiver]
-    pub fn new(rx: oneshot::Receiver<T>) -> Self {
-        Self(rx)
-    }
-}
-
-#[cfg(feature = "component-model-async-tokio")]
-impl<T> OneshotProducer<tokio::sync::oneshot::Receiver<T>> {
-    /// Constructs a new [OneshotProducer] from [tokio::sync::oneshot::Receiver]
-    pub fn new(rx: tokio::sync::oneshot::Receiver<T>) -> Self {
-        Self(rx)
-    }
-}
-
-impl<T> From<oneshot::Receiver<T>> for OneshotProducer<oneshot::Receiver<T>> {
-    fn from(rx: oneshot::Receiver<T>) -> Self {
-        Self(rx)
-    }
-}
-
-#[cfg(feature = "component-model-async-tokio")]
-impl<T> From<tokio::sync::oneshot::Receiver<T>>
-    for OneshotProducer<tokio::sync::oneshot::Receiver<T>>
-{
-    fn from(rx: tokio::sync::oneshot::Receiver<T>) -> Self {
-        Self(rx)
-    }
-}
-
-impl<T, D> FutureProducer<D> for OneshotProducer<oneshot::Receiver<T>>
-where
-    T: Send + 'static,
-{
-    type Item = T;
-
-    fn poll_produce(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        store: StoreContextMut<D>,
-        finish: bool,
-    ) -> Poll<Result<Option<T>>> {
-        match ready!(Pin::new(&mut self.get_mut().0).poll_produce(cx, store, finish))? {
-            Some(Ok(v)) => Poll::Ready(Ok(Some(v))),
-            Some(Err(err)) => Poll::Ready(Err(err).context("oneshot sender dropped")),
-            None => Poll::Ready(Ok(None)),
-        }
-    }
-}
-
-#[cfg(feature = "component-model-async-tokio")]
-impl<T, D> FutureProducer<D> for OneshotProducer<tokio::sync::oneshot::Receiver<T>>
-where
-    T: Send + 'static,
-{
-    type Item = T;
-
-    fn poll_produce(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        store: StoreContextMut<D>,
-        finish: bool,
-    ) -> Poll<Result<Option<T>>> {
-        match ready!(Pin::new(&mut self.get_mut().0).poll_produce(cx, store, finish))? {
-            Some(Ok(v)) => Poll::Ready(Ok(Some(v))),
-            Some(Err(err)) => Poll::Ready(Err(err).context("oneshot sender dropped")),
-            None => Poll::Ready(Ok(None)),
-        }
-    }
-}
-
 /// Represents the buffer for a host- or guest-initiated stream write.
 pub struct Source<'a, T> {
     instance: Instance,
@@ -1063,9 +987,10 @@ pub trait FutureProducer<D>: Send + 'static {
     ) -> Poll<Result<Option<Self::Item>>>;
 }
 
-impl<T, D, Fut> FutureProducer<D> for Fut
+impl<T, E, D, Fut> FutureProducer<D> for Fut
 where
-    Fut: Future<Output = T> + ?Sized + Send + 'static,
+    E: Into<Error>,
+    Fut: Future<Output = Result<T, E>> + ?Sized + Send + 'static,
 {
     type Item = T;
 
@@ -1076,7 +1001,8 @@ where
         finish: bool,
     ) -> Poll<Result<Option<T>>> {
         match self.poll(cx) {
-            Poll::Ready(v) => Poll::Ready(Ok(Some(v))),
+            Poll::Ready(Ok(v)) => Poll::Ready(Ok(Some(v))),
+            Poll::Ready(Err(err)) => Poll::Ready(Err(err.into())),
             Poll::Pending if finish => Poll::Ready(Ok(None)),
             Poll::Pending => Poll::Pending,
         }
@@ -4287,19 +4213,19 @@ mod tests {
 
     #[test]
     fn future_producer() {
-        let mut fut = pin!(async { () });
+        let mut fut = pin!(async { anyhow::Ok(()) });
         assert!(matches!(
             poll_future_producer(fut.as_mut(), false),
             Poll::Ready(Ok(Some(()))),
         ));
 
-        let mut fut = pin!(async { () });
+        let mut fut = pin!(async { anyhow::Ok(()) });
         assert!(matches!(
             poll_future_producer(fut.as_mut(), true),
             Poll::Ready(Ok(Some(()))),
         ));
 
-        let mut fut = pin!(pending::<()>());
+        let mut fut = pin!(pending::<Result<()>>());
         assert!(matches!(
             poll_future_producer(fut.as_mut(), false),
             Poll::Pending,
@@ -4323,9 +4249,9 @@ mod tests {
     }
 
     #[test]
-    fn futures_oneshot_producer() {
+    fn oneshot_producer() {
         let (tx, rx) = oneshot::channel();
-        let mut rx = pin!(OneshotProducer::from(rx));
+        let mut rx = pin!(rx);
         assert!(matches!(
             poll_future_producer(rx.as_mut(), false),
             Poll::Pending,
@@ -4341,7 +4267,7 @@ mod tests {
         ));
 
         let (tx, rx) = oneshot::channel();
-        let mut rx = pin!(OneshotProducer::from(rx));
+        let mut rx = pin!(rx);
         tx.send(()).unwrap();
         assert!(matches!(
             poll_future_producer(rx.as_mut(), false),
@@ -4349,7 +4275,7 @@ mod tests {
         ));
 
         let (tx, rx) = oneshot::channel::<()>();
-        let mut rx = pin!(OneshotProducer::from(rx));
+        let mut rx = pin!(rx);
         drop(tx);
         assert!(matches!(
             poll_future_producer(rx.as_mut(), false),
@@ -4357,51 +4283,7 @@ mod tests {
         ));
 
         let (tx, rx) = oneshot::channel::<()>();
-        let mut rx = pin!(OneshotProducer::from(rx));
-        drop(tx);
-        assert!(matches!(
-            poll_future_producer(rx.as_mut(), true),
-            Poll::Ready(Err(..)),
-        ));
-    }
-
-    #[cfg(feature = "component-model-async-tokio")]
-    #[test]
-    fn tokio_oneshot_producer() {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let mut rx = pin!(OneshotProducer::from(rx));
-        assert!(matches!(
-            poll_future_producer(rx.as_mut(), false),
-            Poll::Pending,
-        ));
-        assert!(matches!(
-            poll_future_producer(rx.as_mut(), true),
-            Poll::Ready(Ok(None)),
-        ));
-        tx.send(()).unwrap();
-        assert!(matches!(
-            poll_future_producer(rx.as_mut(), true),
-            Poll::Ready(Ok(Some(()))),
-        ));
-
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let mut rx = pin!(OneshotProducer::from(rx));
-        tx.send(()).unwrap();
-        assert!(matches!(
-            poll_future_producer(rx.as_mut(), false),
-            Poll::Ready(Ok(Some(()))),
-        ));
-
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        let mut rx = pin!(OneshotProducer::from(rx));
-        drop(tx);
-        assert!(matches!(
-            poll_future_producer(rx.as_mut(), false),
-            Poll::Ready(Err(..)),
-        ));
-
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        let mut rx = pin!(OneshotProducer::from(rx));
+        let mut rx = pin!(rx);
         drop(tx);
         assert!(matches!(
             poll_future_producer(rx.as_mut(), true),

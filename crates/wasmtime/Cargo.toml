@@ -62,7 +62,6 @@ hashbrown = { workspace = true, features = ["default-hasher"] }
 bitflags = { workspace = true }
 futures = { workspace = true, features = ["alloc"], optional = true }
 bytes = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -410,11 +409,4 @@ component-model-async = [
 component-model-async-bytes = [
   "component-model-async",
   "dep:bytes",
-]
-
-# Enables support for `stream` interop with the `tokio` crate.
-component-model-async-tokio = [
-  "component-model-async",
-  "dep:tokio",
-  "tokio/sync",
 ]
