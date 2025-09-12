@@ -1,20 +1,16 @@
 //! Compilation support for the component model.
 
-use crate::{
-    TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT,
-    compiler::{Abi, Compiler},
-};
+use crate::{TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT, compiler::Compiler};
 use anyhow::Result;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::{CompiledFunctionBody, component::*};
 use wasmtime_environ::{
-    EntityRef, HostCall, ModuleInternedTypeIndex, PtrSize, TrapSentinel, Tunables, WasmFuncType,
-    WasmValType,
+    Abi, CompiledFunctionBody, EntityRef, FuncKey, HostCall, ModuleInternedTypeIndex, PtrSize,
+    TrapSentinel, Tunables, WasmFuncType, WasmValType, component::*,
+    fact::PREPARE_CALL_FIXED_PARAMS,
 };
-use wasmtime_environ::{FuncKey, fact::PREPARE_CALL_FIXED_PARAMS};
 
 struct TrampolineCompiler<'a> {
     compiler: &'a Compiler,
@@ -1282,61 +1278,58 @@ impl ComponentCompiler for Compiler {
         component: &ComponentTranslation,
         types: &ComponentTypesBuilder,
         key: FuncKey,
+        abi: Abi,
         tunables: &Tunables,
         _symbol: &str,
-    ) -> Result<AllCallFunc<CompiledFunctionBody>> {
-        let compile = |abi: Abi| -> Result<_> {
-            let mut compiler = self.function_compiler();
-            let mut c = TrampolineCompiler::new(
-                self,
-                &mut compiler,
-                &component.component,
-                types,
-                key.unwrap_component_trampoline(),
-                abi,
-                tunables,
-            );
+    ) -> Result<CompiledFunctionBody> {
+        let (abi2, trampoline_index) = key.unwrap_component_trampoline();
+        debug_assert_eq!(abi, abi2);
 
-            // If we are crossing the Wasm-to-native boundary, we need to save the
-            // exit FP and return address for stack walking purposes. However, we
-            // always debug assert that our vmctx is a component context, regardless
-            // whether we are actually crossing that boundary because it should
-            // always hold.
-            let vmctx = c.builder.block_params(c.block0)[0];
-            let pointer_type = self.isa.pointer_type();
-            self.debug_assert_vmctx_kind(
-                &mut c.builder,
+        let mut compiler = self.function_compiler();
+        let mut c = TrampolineCompiler::new(
+            self,
+            &mut compiler,
+            &component.component,
+            types,
+            trampoline_index,
+            abi,
+            tunables,
+        );
+
+        // If we are crossing the Wasm-to-native boundary, we need to save the
+        // exit FP and return address for stack walking purposes. However, we
+        // always debug assert that our vmctx is a component context, regardless
+        // whether we are actually crossing that boundary because it should
+        // always hold.
+        let vmctx = c.builder.block_params(c.block0)[0];
+        let pointer_type = self.isa.pointer_type();
+        self.debug_assert_vmctx_kind(
+            &mut c.builder,
+            vmctx,
+            wasmtime_environ::component::VMCOMPONENT_MAGIC,
+        );
+        if let Abi::Wasm = abi {
+            let vm_store_context = c.builder.ins().load(
+                pointer_type,
+                MemFlags::trusted(),
                 vmctx,
-                wasmtime_environ::component::VMCOMPONENT_MAGIC,
+                i32::try_from(c.offsets.vm_store_context()).unwrap(),
             );
-            if let Abi::Wasm = abi {
-                let vm_store_context = c.builder.ins().load(
-                    pointer_type,
-                    MemFlags::trusted(),
-                    vmctx,
-                    i32::try_from(c.offsets.vm_store_context()).unwrap(),
-                );
-                super::save_last_wasm_exit_fp_and_pc(
-                    &mut c.builder,
-                    pointer_type,
-                    &c.offsets.ptr,
-                    vm_store_context,
-                );
-            }
+            super::save_last_wasm_exit_fp_and_pc(
+                &mut c.builder,
+                pointer_type,
+                &c.offsets.ptr,
+                vm_store_context,
+            );
+        }
 
-            c.translate(&component.trampolines[key.unwrap_component_trampoline()]);
-            c.builder.finalize();
-            compiler.cx.abi = Some(abi);
+        c.translate(&component.trampolines[trampoline_index]);
+        c.builder.finalize();
+        compiler.cx.abi = Some(abi);
 
-            Ok(CompiledFunctionBody {
-                code: super::box_dyn_any_compiler_context(Some(compiler.cx)),
-                needs_gc_heap: false,
-            })
-        };
-
-        Ok(AllCallFunc {
-            wasm_call: compile(Abi::Wasm)?,
-            array_call: compile(Abi::Array)?,
+        Ok(CompiledFunctionBody {
+            code: super::box_dyn_any_compiler_context(Some(compiler.cx)),
+            needs_gc_heap: false,
         })
     }
 }

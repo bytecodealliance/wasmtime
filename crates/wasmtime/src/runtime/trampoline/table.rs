@@ -3,6 +3,7 @@ use crate::prelude::*;
 use crate::runtime::vm::{Imports, ModuleRuntimeInfo, OnDemandInstanceAllocator};
 use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque, StoreResourceLimiter};
 use alloc::sync::Arc;
+use wasmtime_environ::StaticModuleIndex;
 use wasmtime_environ::{EntityIndex, Module, TypeTrace};
 
 pub async fn create_table(
@@ -10,7 +11,7 @@ pub async fn create_table(
     limiter: Option<&mut StoreResourceLimiter<'_>>,
     table: &TableType,
 ) -> Result<InstanceId> {
-    let mut module = Module::new();
+    let mut module = Module::new(StaticModuleIndex::from_u32(0));
 
     let wasmtime_table = *table.wasmtime_table();
 

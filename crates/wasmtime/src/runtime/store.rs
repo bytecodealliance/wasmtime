@@ -110,6 +110,7 @@ use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
 use core::ptr::NonNull;
+use wasmtime_environ::StaticModuleIndex;
 use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, PrimaryMap, TripleExt};
 
 mod context;
@@ -715,7 +716,9 @@ impl<T> Store<T> {
         // single "default callee" for the entire `Store`. This is then used as
         // part of `Func::call` to guarantee that the `callee: *mut VMContext`
         // is never null.
-        let module = Arc::new(wasmtime_environ::Module::default());
+        let module = Arc::new(wasmtime_environ::Module::new(StaticModuleIndex::from_u32(
+            0,
+        )));
         let shim = ModuleRuntimeInfo::bare(module);
         let allocator = OnDemandInstanceAllocator::default();
 
@@ -1666,7 +1669,7 @@ impl StoreOpaque {
             store: &mut StoreOpaque,
             limiter: Option<&mut StoreResourceLimiter<'_>>,
         ) -> Result<GcStore> {
-            use wasmtime_environ::packed_option::ReservedValue;
+            use wasmtime_environ::{StaticModuleIndex, packed_option::ReservedValue};
 
             let engine = store.engine();
             let mem_ty = engine.tunables().gc_heap_memory_type();
@@ -1678,9 +1681,9 @@ impl StoreOpaque {
             // First, allocate the memory that will be our GC heap's storage.
             let mut request = InstanceAllocationRequest {
                 id: InstanceId::reserved_value(),
-                runtime_info: &ModuleRuntimeInfo::bare(Arc::new(
-                    wasmtime_environ::Module::default(),
-                )),
+                runtime_info: &ModuleRuntimeInfo::bare(Arc::new(wasmtime_environ::Module::new(
+                    StaticModuleIndex::from_u32(0),
+                ))),
                 imports: vm::Imports::default(),
                 store,
                 limiter,
