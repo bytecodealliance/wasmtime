@@ -1,7 +1,7 @@
 use crate::get_content_length;
 use crate::p3::bindings::http::handler::{Host, HostWithStore};
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
-use crate::p3::body::{Body, ConsumedBody, GuestBody};
+use crate::p3::body::{Body, GuestBody};
 use crate::p3::{HttpError, HttpResult, WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
 use bytes::Bytes;
@@ -275,7 +275,6 @@ impl HostWithStore for WasiHttp {
                         body.with_state(io_task_rx).boxed()
                     }
                 }
-                Body::Consumed => ConsumedBody.boxed(),
             };
 
             let WasiHttpCtxView { ctx, .. } = store.get();

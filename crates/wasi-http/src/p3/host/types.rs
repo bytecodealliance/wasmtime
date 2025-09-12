@@ -7,7 +7,6 @@ use crate::p3::bindings::http::types::{
 use crate::p3::body::Body;
 use crate::p3::{HeaderResult, HttpError, RequestOptionsResult, WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
-use core::mem;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
 use http::header::CONTENT_LENGTH;
@@ -356,20 +355,19 @@ impl HostRequestWithStore for WasiHttp {
     async fn consume_body<T>(
         store: &Accessor<T, Self>,
         req: Resource<Request>,
-    ) -> wasmtime::Result<
-        Result<
-            (
-                StreamReader<u8>,
-                FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-            ),
-            (),
-        >,
-    > {
+        fut: FutureReader<Result<(), ErrorCode>>,
+    ) -> wasmtime::Result<(
+        StreamReader<u8>,
+        FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+    )> {
         let getter = store.getter();
         store.with(|mut store| {
-            let Request { body, .. } = get_request_mut(store.get().table, &req)?;
-            let body = mem::replace(body, Body::Consumed);
-            Ok(body.consume(store, getter))
+            let Request { body, .. } = store
+                .get()
+                .table
+                .delete(req)
+                .context("failed to delete request from table")?;
+            Ok(body.consume(store, fut, getter))
         })
     }
 
@@ -633,20 +631,19 @@ impl HostResponseWithStore for WasiHttp {
     async fn consume_body<T>(
         store: &Accessor<T, Self>,
         res: Resource<Response>,
-    ) -> wasmtime::Result<
-        Result<
-            (
-                StreamReader<u8>,
-                FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-            ),
-            (),
-        >,
-    > {
+        fut: FutureReader<Result<(), ErrorCode>>,
+    ) -> wasmtime::Result<(
+        StreamReader<u8>,
+        FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+    )> {
         let getter = store.getter();
         store.with(|mut store| {
-            let Response { body, .. } = get_response_mut(store.get().table, &res)?;
-            let body = mem::replace(body, Body::Consumed);
-            Ok(body.consume(store, getter))
+            let Response { body, .. } = store
+                .get()
+                .table
+                .delete(res)
+                .context("failed to delete response from table")?;
+            Ok(body.consume(store, fut, getter))
         })
     }
 
