@@ -42,7 +42,8 @@ pub(crate) type HeaderError = TrappableError<types::HeaderError>;
 pub(crate) type RequestOptionsResult<T> = Result<T, RequestOptionsError>;
 pub(crate) type RequestOptionsError = TrappableError<types::RequestOptionsError>;
 
-pub(crate) struct WasiHttp;
+/// The type for which this crate implements the `wasi:http` interfaces.
+pub struct WasiHttp;
 
 impl HasData for WasiHttp {
     type Data<'a> = WasiHttpCtxView<'a>;
