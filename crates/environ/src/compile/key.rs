@@ -29,15 +29,15 @@ pub enum FuncKeyKind {
     WasmToBuiltinTrampoline = FuncKey::new_kind(0b011),
 
     /// A Pulley-specific host call.
-    PulleyHostCall = FuncKey::new_kind(0b101),
+    PulleyHostCall = FuncKey::new_kind(0b100),
 
     /// A Wasm-caller to component builtin trampoline.
     #[cfg(feature = "component-model")]
-    ComponentTrampoline = FuncKey::new_kind(0b110),
+    ComponentTrampoline = FuncKey::new_kind(0b101),
 
     /// A Wasm-caller to array-callee `resource.drop` trampoline.
     #[cfg(feature = "component-model")]
-    ResourceDropTrampoline = FuncKey::new_kind(0b111),
+    ResourceDropTrampoline = FuncKey::new_kind(0b110),
 }
 
 impl From<FuncKeyKind> for u32 {
@@ -160,6 +160,7 @@ pub enum Abi {
     Array = 1,
 }
 
+#[cfg(feature = "component-model")]
 impl Abi {
     fn from_raw(raw: u32) -> Self {
         match raw {
