@@ -1,7 +1,7 @@
 use crate::get_content_length;
-use crate::p3::WasiHttpView;
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, ConsumedBody, GuestBody};
+use crate::p3::{WasiHttpCtxView, WasiHttpView};
 use anyhow::Context as _;
 use bytes::Bytes;
 use http::{HeaderMap, StatusCode};
@@ -48,6 +48,17 @@ impl Response {
         store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
     ) -> wasmtime::Result<http::Response<BoxBody<Bytes, ErrorCode>>> {
+        self.into_http_with_getter(store, fut, T::http)
+    }
+
+    /// Like [`Self::into_http`], but with a custom function for converting `T`
+    /// to a [`WasiHttpCtxView`].
+    pub fn into_http_with_getter<T: 'static>(
+        self,
+        store: impl AsContextMut<Data = T>,
+        fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
+        getter: fn(&mut T) -> WasiHttpCtxView<'_>,
+    ) -> wasmtime::Result<http::Response<BoxBody<Bytes, ErrorCode>>> {
         let res = http::Response::try_from(self)?;
         let (res, body) = res.into_parts();
         let body = match body {
@@ -67,7 +78,7 @@ impl Response {
                     fut,
                     content_length,
                     ErrorCode::HttpResponseBodySize,
-                    T::http,
+                    getter,
                 )
                 .boxed()
             }
