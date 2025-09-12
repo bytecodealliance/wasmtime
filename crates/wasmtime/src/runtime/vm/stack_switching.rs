@@ -545,7 +545,7 @@ pub enum VMStackState {
 mod tests {
     use core::mem::{offset_of, size_of};
 
-    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
+    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
 
     use super::*;
 
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn check_vm_stack_limits_offsets() {
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             offset_of!(VMStackLimits, stack_limit),
@@ -572,7 +572,7 @@ mod tests {
 
     #[test]
     fn check_vm_common_stack_information_offsets() {
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             size_of::<VMCommonStackInformation>(),
@@ -603,7 +603,7 @@ mod tests {
     #[test]
     fn check_vm_array_offsets() {
         // Note that the type parameter has no influence on the size and offsets.
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             size_of::<VMHostArray<()>>(),
@@ -625,7 +625,7 @@ mod tests {
 
     #[test]
     fn check_vm_contobj_offsets() {
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             offset_of!(VMContObj, contref),
@@ -643,7 +643,7 @@ mod tests {
 
     #[test]
     fn check_vm_contref_offsets() {
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             offset_of!(VMContRef, common_stack_information),
@@ -681,7 +681,7 @@ mod tests {
 
     #[test]
     fn check_vm_stack_chain_offsets() {
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             size_of::<VMStackChain>(),
