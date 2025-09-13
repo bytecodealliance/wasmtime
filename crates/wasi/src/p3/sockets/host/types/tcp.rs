@@ -1,15 +1,14 @@
 use super::is_addr_allowed;
+use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::sockets::types::{
     Duration, ErrorCode, HostTcpSocket, HostTcpSocketWithStore, IpAddressFamily, IpSocketAddress,
     TcpSocket,
 };
 use crate::p3::sockets::{SocketError, SocketResult, WasiSockets};
-use crate::p3::{
-    DEFAULT_BUFFER_CAPACITY, FutureOneshotProducer, FutureReadyProducer, StreamEmptyProducer,
-};
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
 use anyhow::Context as _;
 use bytes::BytesMut;
+use core::iter;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use io_lifetimes::AsSocketlike as _;
@@ -351,16 +350,14 @@ impl HostTcpSocketWithStore for WasiSockets {
                                 result: Some(result_tx),
                             },
                         ),
-                        FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
+                        FutureReader::new(instance, &mut store, result_rx),
                     ))
                 }
                 None => Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
-                    FutureReader::new(
-                        instance,
-                        &mut store,
-                        FutureReadyProducer(Some(Err(ErrorCode::InvalidState))),
-                    ),
+                    StreamReader::new(instance, &mut store, iter::empty()),
+                    FutureReader::new(instance, &mut store, async {
+                        anyhow::Ok(Err(ErrorCode::InvalidState))
+                    }),
                 )),
             }
         })

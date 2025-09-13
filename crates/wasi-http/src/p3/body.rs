@@ -2,6 +2,7 @@ use crate::p3::bindings::http::types::{ErrorCode, Fields, Trailers};
 use crate::p3::{WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
 use bytes::Bytes;
+use core::iter;
 use core::num::NonZeroUsize;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
@@ -17,7 +18,6 @@ use wasmtime::component::{
     StreamProducer, StreamReader, StreamResult,
 };
 use wasmtime::{AsContextMut, StoreContextMut};
-use wasmtime_wasi::p3::{FutureOneshotProducer, StreamEmptyProducer};
 
 /// The concrete type behind a `wasi:http/types/body` resource.
 pub(crate) enum Body {
@@ -75,7 +75,7 @@ impl Body {
                 // https://github.com/WebAssembly/wasi-http/issues/176
                 _ = result_tx.send(Box::new(async { Ok(()) }));
                 Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
+                    StreamReader::new(instance, &mut store, iter::empty()),
                     trailers_rx,
                 ))
             }
@@ -95,11 +95,7 @@ impl Body {
                             getter,
                         },
                     ),
-                    FutureReader::new(
-                        instance,
-                        &mut store,
-                        FutureOneshotProducer::from(trailers_rx),
-                    ),
+                    FutureReader::new(instance, &mut store, trailers_rx),
                 ))
             }
             Body::Consumed => Err(()),
