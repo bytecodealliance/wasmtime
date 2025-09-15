@@ -17,93 +17,14 @@ pub mod sockets;
 
 use crate::WasiView;
 use crate::p3::bindings::LinkOptions;
-use anyhow::Context as _;
-use core::marker::PhantomData;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use tokio::sync::oneshot;
 use wasmtime::StoreContextMut;
-use wasmtime::component::{
-    Destination, FutureProducer, Linker, StreamProducer, StreamResult, VecBuffer,
-};
+use wasmtime::component::{Destination, Linker, StreamProducer, StreamResult, VecBuffer};
 
 // Default buffer capacity to use for reads of byte-sized values.
 const DEFAULT_BUFFER_CAPACITY: usize = 8192;
-
-pub struct StreamEmptyProducer<T>(PhantomData<fn(T) -> T>);
-
-impl<T> Default for StreamEmptyProducer<T> {
-    fn default() -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<T: Send + Sync + 'static, D> StreamProducer<D> for StreamEmptyProducer<T> {
-    type Item = T;
-    type Buffer = Option<Self::Item>;
-
-    fn poll_produce<'a>(
-        self: Pin<&mut Self>,
-        _: &mut Context<'_>,
-        _: StoreContextMut<'a, D>,
-        _: Destination<'a, Self::Item, Self::Buffer>,
-        _: bool,
-    ) -> Poll<wasmtime::Result<StreamResult>> {
-        Poll::Ready(Ok(StreamResult::Dropped))
-    }
-}
-
-struct FutureReadyProducer<T>(Option<T>);
-
-impl<T, D> FutureProducer<D> for FutureReadyProducer<T>
-where
-    T: Send + Unpin + 'static,
-{
-    type Item = T;
-
-    fn poll_produce(
-        self: Pin<&mut Self>,
-        _: &mut Context<'_>,
-        _: StoreContextMut<D>,
-        _: bool,
-    ) -> Poll<wasmtime::Result<Option<T>>> {
-        let v = self
-            .get_mut()
-            .0
-            .take()
-            .context("polled after returning `Ready`")?;
-        Poll::Ready(Ok(Some(v)))
-    }
-}
-
-pub struct FutureOneshotProducer<T>(oneshot::Receiver<T>);
-
-impl<T> From<oneshot::Receiver<T>> for FutureOneshotProducer<T> {
-    fn from(rx: oneshot::Receiver<T>) -> Self {
-        Self(rx)
-    }
-}
-
-impl<T, D> FutureProducer<D> for FutureOneshotProducer<T>
-where
-    T: Send + 'static,
-{
-    type Item = T;
-
-    fn poll_produce(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        _: StoreContextMut<D>,
-        finish: bool,
-    ) -> Poll<wasmtime::Result<Option<T>>> {
-        match Pin::new(&mut self.get_mut().0).poll(cx) {
-            Poll::Ready(Ok(v)) => Poll::Ready(Ok(Some(v))),
-            Poll::Ready(Err(err)) => Poll::Ready(Err(err).context("oneshot sender dropped")),
-            Poll::Pending if finish => Poll::Ready(Ok(None)),
-            Poll::Pending => Poll::Pending,
-        }
-    }
-}
 
 /// Helper structure to convert an iterator of `Result<T, E>` into a `stream<T>`
 /// plus a `future<result<_, T>>` in WIT.
