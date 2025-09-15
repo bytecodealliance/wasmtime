@@ -9,19 +9,20 @@ use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
 use alloc::sync::Arc;
 use core::str;
 use wasmtime_environ::{
-    CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FilePos, FuncIndex, FunctionLoc,
-    FunctionName, Metadata, Module, ModuleInternedTypeIndex, PrimaryMap,
+    CompiledFunctionsTable, CompiledModuleInfo, DefinedFuncIndex, EntityRef, FilePos, FuncIndex,
+    FuncKey, FunctionLoc, FunctionName, Metadata, Module, ModuleInternedTypeIndex,
+    StaticModuleIndex,
 };
 
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
-    module: Arc<Module>,
-    funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
-    wasm_to_array_trampolines: Vec<(ModuleInternedTypeIndex, FunctionLoc)>,
-    meta: Metadata,
-    code_memory: Arc<CodeMemory>,
     /// A unique ID used to register this module with the engine.
     unique_id: CompiledModuleId,
+    code_memory: Arc<CodeMemory>,
+    module: Arc<Module>,
+    meta: Metadata,
+    index: Arc<CompiledFunctionsTable>,
+    /// Sorted list, by function index, of names we have for this module.
     func_names: Vec<FunctionName>,
 }
 
@@ -45,15 +46,15 @@ impl CompiledModule {
     pub fn from_artifacts(
         code_memory: Arc<CodeMemory>,
         info: CompiledModuleInfo,
+        index: Arc<CompiledFunctionsTable>,
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self> {
         let mut ret = Self {
-            module: Arc::new(info.module),
-            funcs: info.funcs,
-            wasm_to_array_trampolines: info.wasm_to_array_trampolines,
-            code_memory,
-            meta: info.meta,
             unique_id: CompiledModuleId::new(),
+            code_memory,
+            module: Arc::new(info.module),
+            meta: info.meta,
+            index,
             func_names: info.func_names,
         };
         ret.register_profiling(profiler)?;
@@ -65,7 +66,7 @@ impl CompiledModule {
         // TODO-Bug?: "code_memory" is not exclusive for this module in the case of components,
         // so we may be registering the same code range multiple times here.
         profiler.register_module(&self.code_memory.mmap()[..], &|addr| {
-            let (idx, _) = self.func_by_text_offset(addr)?;
+            let idx = self.func_by_text_offset(addr)?;
             let idx = self.module.func_index(idx);
             let name = self.func_name(idx)?;
             let mut demangled = String::new();
@@ -105,6 +106,10 @@ impl CompiledModule {
         &self.module
     }
 
+    fn module_index(&self) -> StaticModuleIndex {
+        self.module.module_index
+    }
+
     /// Looks up the `name` section name for the function index `idx`, if one
     /// was specified in the original wasm module.
     pub fn func_name(&self, idx: FuncIndex) -> Option<&str> {
@@ -126,15 +131,15 @@ impl CompiledModule {
     pub fn finished_functions(
         &self,
     ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
-        self.funcs
-            .iter()
-            .map(move |(i, _)| (i, self.finished_function(i)))
+        self.module
+            .defined_func_indices()
+            .map(|i| (i, self.finished_function(i)))
     }
 
     /// Returns the body of the function that `index` points to.
     #[inline]
-    pub fn finished_function(&self, index: DefinedFuncIndex) -> &[u8] {
-        let loc = self.funcs[index].wasm_func_loc;
+    pub fn finished_function(&self, def_func_index: DefinedFuncIndex) -> &[u8] {
+        let loc = self.func_loc(def_func_index);
         &self.text()[loc.start as usize..][..loc.length as usize]
     }
 
@@ -145,8 +150,10 @@ impl CompiledModule {
     ///
     /// These trampolines are used for array callers (e.g. `Func::new`)
     /// calling Wasm callees.
-    pub fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
-        let loc = self.funcs[index].array_to_wasm_trampoline?;
+    pub fn array_to_wasm_trampoline(&self, def_func_index: DefinedFuncIndex) -> Option<&[u8]> {
+        assert!(def_func_index.index() < self.module.num_defined_funcs());
+        let key = FuncKey::ArrayToWasmTrampoline(self.module_index(), def_func_index);
+        let loc = self.index.func_loc(key)?;
         Some(&self.text()[loc.start as usize..][..loc.length as usize])
     }
 
@@ -155,67 +162,45 @@ impl CompiledModule {
     /// These trampolines are used for filling in
     /// `VMFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
     /// that don't have access to a compiler when created.
-    pub fn wasm_to_array_trampoline(&self, signature: ModuleInternedTypeIndex) -> &[u8] {
-        let idx = match self
-            .wasm_to_array_trampolines
-            .binary_search_by_key(&signature, |entry| entry.0)
-        {
-            Ok(idx) => idx,
-            Err(_) => panic!("missing trampoline for {signature:?}"),
-        };
-
-        let (_, loc) = self.wasm_to_array_trampolines[idx];
-        &self.text()[loc.start as usize..][..loc.length as usize]
+    pub fn wasm_to_array_trampoline(&self, signature: ModuleInternedTypeIndex) -> Option<&[u8]> {
+        let key = FuncKey::WasmToArrayTrampoline(signature);
+        let loc = self.index.func_loc(key)?;
+        Some(&self.text()[loc.start as usize..][..loc.length as usize])
     }
 
     /// Lookups a defined function by a program counter value.
     ///
     /// Returns the defined function index and the relative address of
     /// `text_offset` within the function itself.
-    pub fn func_by_text_offset(&self, text_offset: usize) -> Option<(DefinedFuncIndex, u32)> {
+    pub fn func_by_text_offset(&self, text_offset: usize) -> Option<DefinedFuncIndex> {
         let text_offset = u32::try_from(text_offset).unwrap();
-
-        let index = match self.funcs.binary_search_values_by_key(&text_offset, |e| {
-            debug_assert!(e.wasm_func_loc.length > 0);
-            // Return the inclusive "end" of the function
-            e.wasm_func_loc.start + e.wasm_func_loc.length - 1
-        }) {
-            Ok(k) => {
-                // Exact match, pc is at the end of this function
-                k
+        let key = self.index.func_by_text_offset(text_offset)?;
+        match key {
+            FuncKey::DefinedWasmFunction(module, def_func_index) => {
+                debug_assert_eq!(module, self.module_index());
+                Some(def_func_index)
             }
-            Err(k) => {
-                // Not an exact match, k is where `pc` would be "inserted"
-                // Since we key based on the end, function `k` might contain `pc`,
-                // so we'll validate on the range check below
-                k
-            }
-        };
-
-        let CompiledFunctionInfo { wasm_func_loc, .. } = self.funcs.get(index)?;
-        let start = wasm_func_loc.start;
-        let end = wasm_func_loc.start + wasm_func_loc.length;
-
-        if text_offset < start || end < text_offset {
-            return None;
+            _ => None,
         }
-
-        Some((index, text_offset - wasm_func_loc.start))
     }
 
     /// Gets the function location information for a given function index.
-    pub fn func_loc(&self, index: DefinedFuncIndex) -> &FunctionLoc {
-        &self
-            .funcs
-            .get(index)
+    pub fn func_loc(&self, def_func_index: DefinedFuncIndex) -> &FunctionLoc {
+        assert!(def_func_index.index() < self.module.num_defined_funcs());
+        let key = FuncKey::DefinedWasmFunction(self.module_index(), def_func_index);
+        self.index
+            .func_loc(key)
             .expect("defined function should be present")
-            .wasm_func_loc
     }
 
     /// Returns the original binary offset in the file that `index` was defined
     /// at.
-    pub fn func_start_srcloc(&self, index: DefinedFuncIndex) -> FilePos {
-        self.funcs[index].start_srcloc
+    pub fn func_start_srcloc(&self, def_func_index: DefinedFuncIndex) -> FilePos {
+        assert!(def_func_index.index() < self.module.num_defined_funcs());
+        let key = FuncKey::DefinedWasmFunction(self.module_index(), def_func_index);
+        self.index
+            .src_loc(key)
+            .expect("defined function should be present")
     }
 
     /// Creates a new symbolication context which can be used to further

@@ -67,6 +67,11 @@ where
         self.elems.get(k.index())
     }
 
+    /// Get the slice of values associated with the given range of keys, if any.
+    pub fn get_range(&self, range: core::ops::Range<K>) -> Option<&[V]> {
+        self.elems.get(range.start.index()..range.end.index())
+    }
+
     /// Get the element at `k` if it exists, mutable version.
     pub fn get_mut(&mut self, k: K) -> Option<&mut V> {
         self.elems.get_mut(k.index())
@@ -95,6 +100,11 @@ where
     /// Iterate over all the values in this map, mutable edition.
     pub fn values_mut(&mut self) -> slice::IterMut<'_, V> {
         self.elems.iter_mut()
+    }
+
+    /// Get this map's underlying values as a slice.
+    pub fn as_values_slice(&self) -> &[V] {
+        &self.elems
     }
 
     /// Iterate over all the keys and values in this map.
@@ -291,6 +301,18 @@ where
             elems: Vec::from_iter(iter),
             unused: PhantomData,
         }
+    }
+}
+
+impl<K, V> Extend<V> for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = V>,
+    {
+        self.elems.extend(iter);
     }
 }
 

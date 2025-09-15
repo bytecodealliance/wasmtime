@@ -15,12 +15,12 @@ use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::path::Path;
-use wasmtime_environ::TypeTrace;
 use wasmtime_environ::component::{
     CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export, ExportIndex,
     GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
     TrampolineIndex, TypeComponentIndex, TypeFuncIndex, VMComponentOffsets,
 };
+use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace};
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 
 /// A compiled WebAssembly Component.
@@ -85,6 +85,10 @@ struct ComponentInner {
 
     /// Metadata produced during compilation.
     info: CompiledComponentInfo,
+
+    /// The index of compiled functions and their locations in the text section
+    /// for this component.
+    index: Arc<CompiledFunctionsTable>,
 
     /// A cached handle to the `wasmtime::FuncType` for the canonical ABI's
     /// `realloc`, to avoid the need to look up types in the registry and take
@@ -400,12 +404,14 @@ impl Component {
         let ComponentArtifacts {
             ty,
             info,
+            table: index,
             mut types,
             mut static_modules,
         } = match artifacts {
             Some(artifacts) => artifacts,
             None => postcard::from_bytes(code_memory.wasmtime_info())?,
         };
+        let index = Arc::new(index);
 
         // Validate that the component can be used with the current instance
         // allocator.
@@ -434,7 +440,9 @@ impl Component {
         // `types` type information, and the code memory to a runtime object.
         let static_modules = static_modules
             .into_iter()
-            .map(|(_, info)| Module::from_parts_raw(engine, code.clone(), info, false))
+            .map(|(_, info)| {
+                Module::from_parts_raw(engine, code.clone(), info, index.clone(), false)
+            })
             .collect::<Result<_>>()?;
 
         let realloc_func_type = Arc::new(FuncType::new(
@@ -451,6 +459,7 @@ impl Component {
                 static_modules,
                 code,
                 info,
+                index,
                 realloc_func_type,
             }),
         })
@@ -492,8 +501,16 @@ impl Component {
     }
 
     pub(crate) fn trampoline_ptrs(&self, index: TrampolineIndex) -> AllCallFuncPointers {
-        let wasm_call = &self.inner.info.wasm_call_trampolines[index];
-        let array_call = &self.inner.info.array_call_trampolines[index];
+        let wasm_call = self
+            .inner
+            .index
+            .func_loc(FuncKey::ComponentTrampoline(Abi::Wasm, index))
+            .unwrap();
+        let array_call = self
+            .inner
+            .index
+            .func_loc(FuncKey::ComponentTrampoline(Abi::Array, index))
+            .unwrap();
         AllCallFuncPointers {
             wasm_call: self.func(wasm_call).cast(),
             array_call: self.func(array_call).cast(),
@@ -537,10 +554,10 @@ impl Component {
         // blank.
         let wasm_call = self
             .inner
-            .info
-            .resource_drop_wasm_to_array_trampoline
-            .as_ref()
-            .map(|i| self.func(i).cast().into());
+            .index
+            .func_loc(FuncKey::ResourceDropTrampoline)
+            .map(|loc| self.func(loc).cast().into());
+
         VMFuncRef {
             wasm_call,
             ..*dtor.func_ref()

@@ -3,10 +3,9 @@
 
 use crate::prelude::*;
 use crate::{
-    DefinedFuncIndex, FlagValue, FunctionLoc, ObjectKind, PrimaryMap, StaticModuleIndex, TripleExt,
-    WasmError, WasmFuncType,
+    DefinedFuncIndex, FlagValue, FuncKey, FunctionLoc, ObjectKind, PrimaryMap, StaticModuleIndex,
+    TripleExt, Tunables, WasmError, WasmFuncType, obj,
 };
-use crate::{Tunables, obj};
 use anyhow::Result;
 use object::write::{Object, SymbolId};
 use object::{Architecture, BinaryFormat, FileFlags};
@@ -17,7 +16,6 @@ use std::path;
 use std::sync::Arc;
 
 mod address_map;
-mod key;
 mod module_artifacts;
 mod module_environ;
 mod module_types;
@@ -25,7 +23,6 @@ mod stack_maps;
 mod trap_encoding;
 
 pub use self::address_map::*;
-pub use self::key::*;
 pub use self::module_artifacts::*;
 pub use self::module_environ::*;
 pub use self::module_types::*;
