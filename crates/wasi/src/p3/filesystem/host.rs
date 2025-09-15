@@ -5,16 +5,13 @@ use crate::p3::bindings::filesystem::types::{
     Filesize, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
-use crate::p3::{
-    DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer, FutureOneshotProducer, FutureReadyProducer,
-    StreamEmptyProducer,
-};
+use crate::p3::{DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer};
 use crate::{DirPerms, FilePerms};
 use anyhow::Context as _;
 use bytes::BytesMut;
-use core::mem;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
+use core::{iter, mem};
 use std::io::{self, Cursor};
 use std::sync::Arc;
 use system_interface::fs::FileIoExt as _;
@@ -498,12 +495,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let file = get_file(store.get().table, &fd)?;
             if !file.perms.contains(FilePerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
-                    FutureReader::new(
-                        instance,
-                        &mut store,
-                        FutureReadyProducer(Some(Err(ErrorCode::NotPermitted))),
-                    ),
+                    StreamReader::new(instance, &mut store, iter::empty()),
+                    FutureReader::new(instance, &mut store, async {
+                        anyhow::Ok(Err(ErrorCode::NotPermitted))
+                    }),
                 ));
             }
 
@@ -520,7 +515,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                         task: None,
                     },
                 ),
-                FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
+                FutureReader::new(instance, &mut store, result_rx),
             ))
         })
     }
@@ -644,12 +639,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let dir = get_dir(store.get().table, &fd)?;
             if !dir.perms.contains(DirPerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, StreamEmptyProducer::default()),
-                    FutureReader::new(
-                        instance,
-                        &mut store,
-                        FutureReadyProducer(Some(Err(ErrorCode::NotPermitted))),
-                    ),
+                    StreamReader::new(instance, &mut store, iter::empty()),
+                    FutureReader::new(instance, &mut store, async {
+                        anyhow::Ok(Err(ErrorCode::NotPermitted))
+                    }),
                 ));
             }
             let allow_blocking_current_thread = dir.allow_blocking_current_thread;
@@ -667,16 +660,13 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     ),
                     Err(e) => {
                         result_tx.send(Err(e.into())).unwrap();
-                        StreamReader::new(instance, &mut store, StreamEmptyProducer::default())
+                        StreamReader::new(instance, &mut store, iter::empty())
                     }
                 }
             } else {
                 StreamReader::new(instance, &mut store, ReadDirStream::new(dir, result_tx))
             };
-            Ok((
-                stream,
-                FutureReader::new(instance, &mut store, FutureOneshotProducer(result_rx)),
-            ))
+            Ok((stream, FutureReader::new(instance, &mut store, result_rx)))
         })
     }
 

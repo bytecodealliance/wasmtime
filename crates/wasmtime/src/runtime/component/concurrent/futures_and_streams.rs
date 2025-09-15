@@ -9,21 +9,21 @@ use crate::store::{StoreOpaque, StoreToken};
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Error, Result, anyhow, bail};
 use buffers::{Extender, SliceBuffer, UntypedWriteBuffer};
-use futures::FutureExt;
+use core::fmt;
+use core::future;
+use core::iter;
+use core::marker::PhantomData;
+use core::mem::{self, MaybeUninit};
+use core::pin::Pin;
+use core::task::{Context, Poll, Waker, ready};
 use futures::channel::oneshot;
+use futures::{FutureExt as _, stream};
 use std::boxed::Box;
-use std::fmt;
-use std::future;
 use std::io::Cursor;
-use std::iter;
-use std::marker::PhantomData;
-use std::mem::{self, MaybeUninit};
-use std::pin::Pin;
 use std::string::{String, ToString};
 use std::sync::{Arc, Mutex};
-use std::task::{self, Context, Poll, Waker};
 use std::vec::Vec;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex, RuntimeComponentInstanceIndex,
@@ -509,6 +509,136 @@ pub trait StreamProducer<D>: Send + 'static {
     ) -> Poll<Result<StreamResult>>;
 }
 
+impl<T, D> StreamProducer<D> for iter::Empty<T>
+where
+    T: Send + Sync + 'static,
+{
+    type Item = T;
+    type Buffer = Option<Self::Item>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        _: Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
+impl<T, D> StreamProducer<D> for stream::Empty<T>
+where
+    T: Send + Sync + 'static,
+{
+    type Item = T;
+    type Buffer = Option<Self::Item>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        _: Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
+impl<T, D> StreamProducer<D> for Vec<T>
+where
+    T: Unpin + Send + Sync + 'static,
+{
+    type Item = T;
+    type Buffer = VecBuffer<T>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        dst.set_buffer(mem::take(self.get_mut()).into());
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
+impl<T, D> StreamProducer<D> for Box<[T]>
+where
+    T: Unpin + Send + Sync + 'static,
+{
+    type Item = T;
+    type Buffer = VecBuffer<T>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        dst.set_buffer(mem::take(self.get_mut()).into_vec().into());
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
+#[cfg(feature = "component-model-async-bytes")]
+impl<D> StreamProducer<D> for bytes::Bytes {
+    type Item = u8;
+    type Buffer = Cursor<Self>;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        let cap = dst.remaining(&mut store);
+        let Some(cap) = cap.and_then(core::num::NonZeroUsize::new) else {
+            // on 0-length or host reads, buffer the bytes
+            dst.set_buffer(Cursor::new(mem::take(self.get_mut())));
+            return Poll::Ready(Ok(StreamResult::Dropped));
+        };
+        let cap = cap.into();
+        // data does not fit in destination, fill it and buffer the rest
+        dst.set_buffer(Cursor::new(self.split_off(cap)));
+        let mut dst = dst.as_direct(store, cap);
+        dst.remaining().copy_from_slice(&self);
+        dst.mark_written(cap);
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
+#[cfg(feature = "component-model-async-bytes")]
+impl<D> StreamProducer<D> for bytes::BytesMut {
+    type Item = u8;
+    type Buffer = Cursor<Self>;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        let cap = dst.remaining(&mut store);
+        let Some(cap) = cap.and_then(core::num::NonZeroUsize::new) else {
+            // on 0-length or host reads, buffer the bytes
+            dst.set_buffer(Cursor::new(mem::take(self.get_mut())));
+            return Poll::Ready(Ok(StreamResult::Dropped));
+        };
+        let cap = cap.into();
+        // data does not fit in destination, fill it and buffer the rest
+        dst.set_buffer(Cursor::new(self.split_off(cap)));
+        let mut dst = dst.as_direct(store, cap);
+        dst.remaining().copy_from_slice(&self);
+        dst.mark_written(cap);
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
 /// Represents the buffer for a host- or guest-initiated stream write.
 pub struct Source<'a, T> {
     instance: Instance,
@@ -818,6 +948,28 @@ pub trait FutureProducer<D>: Send + 'static {
     ) -> Poll<Result<Option<Self::Item>>>;
 }
 
+impl<T, E, D, Fut> FutureProducer<D> for Fut
+where
+    E: Into<Error>,
+    Fut: Future<Output = Result<T, E>> + ?Sized + Send + 'static,
+{
+    type Item = T;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        finish: bool,
+    ) -> Poll<Result<Option<T>>> {
+        match self.poll(cx) {
+            Poll::Ready(Ok(v)) => Poll::Ready(Ok(Some(v))),
+            Poll::Ready(Err(err)) => Poll::Ready(Err(err.into())),
+            Poll::Pending if finish => Poll::Ready(Ok(None)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
 /// Represents a host-owned read end of a future.
 pub trait FutureConsumer<D>: Send + 'static {
     /// The payload type of this future.
@@ -885,7 +1037,7 @@ impl<T> FutureReader<T> {
                 let producer = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
 
                 Poll::Ready(Ok(
-                    if let Some(value) = task::ready!(producer.poll_produce(cx, store, finish))? {
+                    if let Some(value) = ready!(producer.poll_produce(cx, store, finish))? {
                         destination.set_buffer(Some(value));
 
                         // Here we return `StreamResult::Completed` even though
@@ -946,7 +1098,7 @@ impl<T> FutureReader<T> {
                 // out of `self`.
                 let consumer = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
 
-                task::ready!(consumer.poll_consume(
+                ready!(consumer.poll_consume(
                     cx,
                     store.as_context_mut(),
                     source.reborrow(),
@@ -4018,4 +4170,91 @@ impl ConcurrentState {
 pub(crate) struct ResourcePair {
     pub(crate) write: u32,
     pub(crate) read: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Engine, Store};
+    use core::future::pending;
+    use core::pin::pin;
+    use std::sync::LazyLock;
+
+    static ENGINE: LazyLock<Engine> = LazyLock::new(Engine::default);
+
+    fn poll_future_producer<T>(rx: Pin<&mut T>, finish: bool) -> Poll<Result<Option<T::Item>>>
+    where
+        T: FutureProducer<()>,
+    {
+        rx.poll_produce(
+            &mut Context::from_waker(Waker::noop()),
+            Store::new(&ENGINE, ()).as_context_mut(),
+            finish,
+        )
+    }
+
+    #[test]
+    fn future_producer() {
+        let mut fut = pin!(async { anyhow::Ok(()) });
+        assert!(matches!(
+            poll_future_producer(fut.as_mut(), false),
+            Poll::Ready(Ok(Some(()))),
+        ));
+
+        let mut fut = pin!(async { anyhow::Ok(()) });
+        assert!(matches!(
+            poll_future_producer(fut.as_mut(), true),
+            Poll::Ready(Ok(Some(()))),
+        ));
+
+        let mut fut = pin!(pending::<Result<()>>());
+        assert!(matches!(
+            poll_future_producer(fut.as_mut(), false),
+            Poll::Pending,
+        ));
+        assert!(matches!(
+            poll_future_producer(fut.as_mut(), true),
+            Poll::Ready(Ok(None)),
+        ));
+
+        let (tx, rx) = oneshot::channel();
+        let mut rx = pin!(rx);
+        assert!(matches!(
+            poll_future_producer(rx.as_mut(), false),
+            Poll::Pending,
+        ));
+        assert!(matches!(
+            poll_future_producer(rx.as_mut(), true),
+            Poll::Ready(Ok(None)),
+        ));
+        tx.send(()).unwrap();
+        assert!(matches!(
+            poll_future_producer(rx.as_mut(), true),
+            Poll::Ready(Ok(Some(()))),
+        ));
+
+        let (tx, rx) = oneshot::channel();
+        let mut rx = pin!(rx);
+        tx.send(()).unwrap();
+        assert!(matches!(
+            poll_future_producer(rx.as_mut(), false),
+            Poll::Ready(Ok(Some(()))),
+        ));
+
+        let (tx, rx) = oneshot::channel::<()>();
+        let mut rx = pin!(rx);
+        drop(tx);
+        assert!(matches!(
+            poll_future_producer(rx.as_mut(), false),
+            Poll::Ready(Err(..)),
+        ));
+
+        let (tx, rx) = oneshot::channel::<()>();
+        let mut rx = pin!(rx);
+        drop(tx);
+        assert!(matches!(
+            poll_future_producer(rx.as_mut(), true),
+            Poll::Ready(Err(..)),
+        ));
+    }
 }
