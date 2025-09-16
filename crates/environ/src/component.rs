@@ -106,15 +106,15 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             waitable_set_new(vmctx: vmctx, caller_instance: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            waitable_set_wait(vmctx: vmctx, options: u32, set: u32, payload: u32) -> u64;
+            waitable_set_wait(vmctx: vmctx, options: u32, cancellable: u8, set: u32, payload: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            waitable_set_poll(vmctx: vmctx, options: u32, set: u32, payload: u32) -> u64;
+            waitable_set_poll(vmctx: vmctx, options: u32, cancellable: u8, set: u32, payload: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             waitable_set_drop(vmctx: vmctx, caller_instance: u32, set: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             waitable_join(vmctx: vmctx, caller_instance: u32, set: u32, waitable: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            yield_(vmctx: vmctx, async_: u8) -> u32;
+            thread_yield(vmctx: vmctx, cancellable: u8) -> u32;
             #[cfg(feature = "component-model-async")]
             subtask_drop(vmctx: vmctx, caller_instance: u32, task_id: u32) -> bool;
             #[cfg(feature = "component-model-async")]
@@ -185,6 +185,18 @@ macro_rules! foreach_builtin_component_function {
             context_get(vmctx: vmctx, slot: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             context_set(vmctx: vmctx, slot: u32, val: u32) -> bool;
+            #[cfg(feature = "component-model-async")]
+            thread_index(vmctx: vmctx) -> u64;
+            #[cfg(feature = "component-model-async")]
+            thread_new_indirect(vmctx: vmctx, func_ty_id: u32, func_table_idx: u32, func_idx: u32, context: u32) -> u64;
+            #[cfg(feature = "component-model-async")]
+            thread_switch_to(vmctx: vmctx, cancellable: u8, thread_idx: u32) -> u64;
+            #[cfg(feature = "component-model-async")]
+            thread_suspend(vmctx: vmctx, cancellable: u8) -> u64;
+            #[cfg(feature = "component-model-async")]
+            thread_resume_later(vmctx: vmctx, thread_idx: u32) -> bool;
+            #[cfg(feature = "component-model-async")]
+            thread_yield_to(vmctx: vmctx, cancellable: u8, thread_idx: u32) -> u64;
 
             trap(vmctx: vmctx, code: u8) -> bool;
 

@@ -334,9 +334,11 @@ pub enum Trampoline {
     },
     WaitableSetWait {
         options: OptionsId,
+        cancellable: bool,
     },
     WaitableSetPoll {
         options: OptionsId,
+        cancellable: bool,
     },
     WaitableSetDrop {
         instance: RuntimeComponentInstanceIndex,
@@ -344,8 +346,8 @@ pub enum Trampoline {
     WaitableJoin {
         instance: RuntimeComponentInstanceIndex,
     },
-    Yield {
-        async_: bool,
+    ThreadYield {
+        cancellable: bool,
     },
     SubtaskDrop {
         instance: RuntimeComponentInstanceIndex,
@@ -434,6 +436,21 @@ pub enum Trampoline {
     ErrorContextTransfer,
     ContextGet(u32),
     ContextSet(u32),
+    ThreadIndex,
+    ThreadNewIndirect {
+        start_func_ty_idx: ComponentTypeIndex,
+        start_func_table_idx: TableIndex,
+    },
+    ThreadSwitchTo {
+        cancellable: bool,
+    },
+    ThreadSuspend {
+        cancellable: bool,
+    },
+    ThreadResumeLater,
+    ThreadYieldTo {
+        cancellable: bool,
+    },
 }
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
@@ -868,11 +885,19 @@ impl LinearizeDfg<'_> {
             Trampoline::WaitableSetNew { instance } => info::Trampoline::WaitableSetNew {
                 instance: *instance,
             },
-            Trampoline::WaitableSetWait { options } => info::Trampoline::WaitableSetWait {
+            Trampoline::WaitableSetWait {
+                options,
+                cancellable,
+            } => info::Trampoline::WaitableSetWait {
                 options: self.options(*options),
+                cancellable: *cancellable,
             },
-            Trampoline::WaitableSetPoll { options } => info::Trampoline::WaitableSetPoll {
+            Trampoline::WaitableSetPoll {
+                options,
+                cancellable,
+            } => info::Trampoline::WaitableSetPoll {
                 options: self.options(*options),
+                cancellable: *cancellable,
             },
             Trampoline::WaitableSetDrop { instance } => info::Trampoline::WaitableSetDrop {
                 instance: *instance,
@@ -880,7 +905,9 @@ impl LinearizeDfg<'_> {
             Trampoline::WaitableJoin { instance } => info::Trampoline::WaitableJoin {
                 instance: *instance,
             },
-            Trampoline::Yield { async_ } => info::Trampoline::Yield { async_: *async_ },
+            Trampoline::ThreadYield { cancellable } => info::Trampoline::ThreadYield {
+                cancellable: *cancellable,
+            },
             Trampoline::SubtaskDrop { instance } => info::Trampoline::SubtaskDrop {
                 instance: *instance,
             },
@@ -967,6 +994,24 @@ impl LinearizeDfg<'_> {
             Trampoline::ErrorContextTransfer => info::Trampoline::ErrorContextTransfer,
             Trampoline::ContextGet(i) => info::Trampoline::ContextGet(*i),
             Trampoline::ContextSet(i) => info::Trampoline::ContextSet(*i),
+            Trampoline::ThreadIndex => info::Trampoline::ThreadIndex,
+            Trampoline::ThreadNewIndirect {
+                start_func_ty_idx,
+                start_func_table_idx,
+            } => info::Trampoline::ThreadNewIndirect {
+                start_func_ty_idx: *start_func_ty_idx,
+                start_func_table_idx: *start_func_table_idx,
+            },
+            Trampoline::ThreadSwitchTo { cancellable } => info::Trampoline::ThreadSwitchTo {
+                cancellable: *cancellable,
+            },
+            Trampoline::ThreadSuspend { cancellable } => info::Trampoline::ThreadSuspend {
+                cancellable: *cancellable,
+            },
+            Trampoline::ThreadResumeLater => info::Trampoline::ThreadResumeLater,
+            Trampoline::ThreadYieldTo { cancellable } => info::Trampoline::ThreadYieldTo {
+                cancellable: *cancellable,
+            },
         };
         let i1 = self.trampolines.push(*signature);
         let i2 = self.trampoline_defs.push(trampoline);

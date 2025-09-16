@@ -712,10 +712,17 @@ fn waitable_set_wait(
     store: &mut dyn VMStore,
     instance: Instance,
     options: u32,
+    cancellable: u8,
     set: u32,
     payload: u32,
 ) -> Result<u32> {
-    instance.waitable_set_wait(store, OptionsIndex::from_u32(options), set, payload)
+    instance.waitable_set_wait(
+        store,
+        OptionsIndex::from_u32(options),
+        cancellable != 0,
+        set,
+        payload,
+    )
 }
 
 #[cfg(feature = "component-model-async")]
@@ -723,10 +730,17 @@ fn waitable_set_poll(
     store: &mut dyn VMStore,
     instance: Instance,
     options: u32,
+    cancellable: u8,
     set: u32,
     payload: u32,
 ) -> Result<u32> {
-    instance.waitable_set_poll(store, OptionsIndex::from_u32(options), set, payload)
+    instance.waitable_set_poll(
+        store,
+        OptionsIndex::from_u32(options),
+        cancellable != 0,
+        set,
+        payload,
+    )
 }
 
 #[cfg(feature = "component-model-async")]
@@ -758,8 +772,8 @@ fn waitable_join(
 }
 
 #[cfg(feature = "component-model-async")]
-fn yield_(store: &mut dyn VMStore, instance: Instance, async_: u8) -> Result<bool> {
-    instance.yield_(store, async_ != 0)
+fn thread_yield(store: &mut dyn VMStore, instance: Instance, cancellable: u8) -> Result<bool> {
+    instance.thread_yield(store, cancellable != 0)
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1231,4 +1245,57 @@ fn context_get(store: &mut dyn VMStore, instance: Instance, slot: u32) -> Result
 #[cfg(feature = "component-model-async")]
 fn context_set(store: &mut dyn VMStore, instance: Instance, slot: u32, val: u32) -> Result<()> {
     instance.concurrent_state_mut(store).context_set(slot, val)
+}
+
+#[cfg(feature = "component-model-async")]
+fn thread_index(store: &mut dyn VMStore, instance: Instance) -> Result<u32> {
+    instance.concurrent_state_mut(store).thread_index()
+}
+
+#[cfg(feature = "component-model-async")]
+fn thread_new_indirect(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    func_ty_id: u32,
+    func_table_idx: u32,
+    func_idx: u32,
+    context: u32,
+) -> Result<u32> {
+    instance.thread_new_indirect(
+        store,
+        TypeFuncIndex::from_u32(func_ty_id),
+        func_table_idx,
+        func_idx,
+        context,
+    )
+}
+
+#[cfg(feature = "component-model-async")]
+fn thread_switch_to(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    cancellable: u8,
+    thread_idx: u32,
+) -> Result<u32> {
+    todo!()
+}
+
+#[cfg(feature = "component-model-async")]
+fn thread_suspend(store: &mut dyn VMStore, instance: Instance, cancellable: u8) -> Result<u32> {
+    todo!()
+}
+
+#[cfg(feature = "component-model-async")]
+fn thread_resume_later(store: &mut dyn VMStore, instance: Instance, thread_idx: u32) -> Result<()> {
+    todo!()
+}
+
+#[cfg(feature = "component-model-async")]
+fn thread_yield_to(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    cancellable: u8,
+    thread_idx: u32,
+) -> Result<u32> {
+    todo!()
 }

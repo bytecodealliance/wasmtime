@@ -761,6 +761,8 @@ pub enum Trampoline {
     WaitableSetWait {
         /// Configuration options for this intrinsic call.
         options: OptionsIndex,
+        /// If `true`, indicates the caller instance maybe reentered.
+        cancellable: bool,
     },
 
     /// A `waitable-set.poll` intrinsic, which checks whether any outstanding
@@ -769,6 +771,8 @@ pub enum Trampoline {
     WaitableSetPoll {
         /// Configuration options for this intrinsic call.
         options: OptionsIndex,
+        /// If `true`, indicates the caller instance maybe reentered.
+        cancellable: bool,
     },
 
     /// A `waitable-set.drop` intrinsic.
@@ -783,11 +787,11 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
     },
 
-    /// A `yield` intrinsic, which yields control to the host so that other
+    /// A `thread.yield` intrinsic, which yields control to the host so that other
     /// tasks are able to make progress, if any.
-    Yield {
+    ThreadYield {
         /// If `true`, indicates the caller instance maybe reentered.
-        async_: bool,
+        cancellable: bool,
     },
 
     /// A `subtask.drop` intrinsic to drop a specified task which has completed.
@@ -1038,6 +1042,38 @@ pub enum Trampoline {
     /// The payload here represents that this is accessing the Nth slot of local
     /// storage.
     ContextSet(u32),
+
+    /// Intrinsic used to implement the `thread.index` component model builtin.
+    ThreadIndex,
+
+    /// Intrinsic used to implement the `thread.new_indirect` component model builtin.
+    ThreadNewIndirect {
+        /// The type index for the start function of the thread.
+        start_func_ty_idx: ComponentTypeIndex,
+        /// The index of the table that stores the start function.
+        start_func_table_idx: TableIndex,
+    },
+
+    /// Intrinsic used to implement the `thread.switch-to` component model builtin.
+    ThreadSwitchTo {
+        /// If `true`, indicates the caller instance maybe reentered.
+        cancellable: bool,
+    },
+
+    /// Intrinsic used to implement the `thread.suspend` component model builtin.
+    ThreadSuspend {
+        /// If `true`, indicates the caller instance maybe reentered.
+        cancellable: bool,
+    },
+
+    /// Intrinsic used to implement the `thread.resume-later` component model builtin.
+    ThreadResumeLater,
+
+    /// Intrinsic used to implement the `thread.yield-to` component model builtin.
+    ThreadYieldTo {
+        /// If `true`, indicates the caller instance maybe reentered.
+        cancellable: bool,
+    },
 }
 
 impl Trampoline {
@@ -1069,7 +1105,7 @@ impl Trampoline {
             WaitableSetPoll { .. } => format!("waitable-set-poll"),
             WaitableSetDrop { .. } => format!("waitable-set-drop"),
             WaitableJoin { .. } => format!("waitable-join"),
-            Yield { .. } => format!("yield"),
+            ThreadYield { .. } => format!("thread-yield"),
             SubtaskDrop { .. } => format!("subtask-drop"),
             SubtaskCancel { .. } => format!("subtask-cancel"),
             StreamNew { .. } => format!("stream-new"),
@@ -1101,6 +1137,12 @@ impl Trampoline {
             ErrorContextTransfer => format!("error-context-transfer"),
             ContextGet(_) => format!("context-get"),
             ContextSet(_) => format!("context-set"),
+            ThreadIndex => format!("thread-index"),
+            ThreadNewIndirect { .. } => format!("thread-new-indirect"),
+            ThreadSwitchTo { .. } => format!("thread-switch-to"),
+            ThreadSuspend { .. } => format!("thread-suspend"),
+            ThreadResumeLater => format!("thread-resume-later"),
+            ThreadYieldTo { .. } => format!("thread-yield-to"),
         }
     }
 }

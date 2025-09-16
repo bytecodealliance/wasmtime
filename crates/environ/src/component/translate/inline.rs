@@ -714,24 +714,36 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            WaitableSetWait { options } => {
+            WaitableSetWait {
+                options,
+                cancellable,
+            } => {
                 let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
-                let index = self
-                    .result
-                    .trampolines
-                    .push((func, dfg::Trampoline::WaitableSetWait { options }));
+                let index = self.result.trampolines.push((
+                    func,
+                    dfg::Trampoline::WaitableSetWait {
+                        options,
+                        cancellable: *cancellable,
+                    },
+                ));
                 frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
-            WaitableSetPoll { options } => {
+            WaitableSetPoll {
+                options,
+                cancellable,
+            } => {
                 let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
-                let index = self
-                    .result
-                    .trampolines
-                    .push((func, dfg::Trampoline::WaitableSetPoll { options }));
+                let index = self.result.trampolines.push((
+                    func,
+                    dfg::Trampoline::WaitableSetPoll {
+                        options,
+                        cancellable: *cancellable,
+                    },
+                ));
                 frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
             WaitableSetDrop { func } => {
@@ -752,11 +764,13 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            Yield { func, async_ } => {
-                let index = self
-                    .result
-                    .trampolines
-                    .push((*func, dfg::Trampoline::Yield { async_: *async_ }));
+            ThreadYield { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadYield {
+                        cancellable: *cancellable,
+                    },
+                ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             SubtaskDrop { func } => {
@@ -1014,7 +1028,62 @@ impl<'a> Inliner<'a> {
                     .push((*func, dfg::Trampoline::ContextSet(*i)));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-
+            ThreadIndex { func } => {
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::ThreadIndex));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadNewIndirect {
+                func,
+                start_func_table_idx,
+                start_func_ty,
+            } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadNewIndirect {
+                        start_func_ty_idx: *start_func_ty,
+                        start_func_table_idx: *start_func_table_idx,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadSwitchTo { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadSwitchTo {
+                        cancellable: *cancellable,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadSuspend { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadSuspend {
+                        cancellable: *cancellable,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadResumeLater { func } => {
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::ThreadResumeLater));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadYieldTo { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadYieldTo {
+                        cancellable: *cancellable,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            // A static module is being defined within this component, so it's
             ModuleStatic(idx, ty) => {
                 frame.modules.push(ModuleDef::Static(*idx, *ty));
             }

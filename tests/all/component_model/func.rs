@@ -1039,7 +1039,7 @@ async fn task_return_string_encoding_mismatch() -> Result<()> {
 async fn task_return_trap(component: &str, substring: &str) -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_async(true);
-    config.wasm_component_model_async_stackful(true);
+    config.wasm_component_model_threading(true);
     config.async_support(true);
     let engine = &Engine::new(&config)?;
     let component = Component::new(&engine, component)?;

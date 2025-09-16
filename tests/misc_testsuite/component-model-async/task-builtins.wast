@@ -1,5 +1,5 @@
 ;;! component_model_async = true
-;;! component_model_async_stackful = true
+;;! component_model_threading = true
 
 ;; backpressure.set
 (component
@@ -26,7 +26,7 @@
   (core module $m
     (import "" "waitable-set.wait" (func $waitable-set-wait (param i32 i32) (result i32)))
   )
-  (core func $waitable-set-wait (canon waitable-set.wait async (memory $libc "memory")))
+  (core func $waitable-set-wait (canon waitable-set.wait cancellable (memory $libc "memory")))
   (core instance $i (instantiate $m (with "" (instance (export "waitable-set.wait" (func $waitable-set-wait))))))
 )
 
@@ -37,17 +37,17 @@
   (core module $m
     (import "" "waitable-set.poll" (func $waitable-set-poll (param i32 i32) (result i32)))
   )
-  (core func $waitable-set-poll (canon waitable-set.poll async (memory $libc "memory")))
+  (core func $waitable-set-poll (canon waitable-set.poll cancellable (memory $libc "memory")))
   (core instance $i (instantiate $m (with "" (instance (export "waitable-set.poll" (func $waitable-set-poll))))))
 )
 
-;; yield
+;; thread.yield
 (component
   (core module $m
-    (import "" "yield" (func $yield (result i32)))
+    (import "" "thread.yield" (func $thread-yield (result i32)))
   )
-  (core func $yield (canon yield async))
-  (core instance $i (instantiate $m (with "" (instance (export "yield" (func $yield))))))
+  (core func $thread-yield (canon thread.yield cancellable))
+  (core instance $i (instantiate $m (with "" (instance (export "thread.yield" (func $thread-yield))))))
 )
 
 ;; subtask.drop

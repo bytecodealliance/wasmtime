@@ -50,21 +50,26 @@
 use crate::component::func::{self, Func, Options};
 use crate::component::{
     Component, ComponentInstanceId, HasData, HasSelf, Instance, Resource, ResourceTable,
-    ResourceTableError,
+    ResourceTableError, store,
 };
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::store::{StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{
     CallContext, ComponentInstance, InstanceFlags, ResourceTables, TransmitLocalState,
 };
-use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
-use crate::{AsContext, AsContextMut, StoreContext, StoreContextMut, ValRaw};
+use crate::vm::{self, AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
+use crate::{
+    AsContext, AsContextMut, FuncType, StoreContext, StoreContextMut, Table, ValRaw, ValType,
+    runtime,
+};
 use anyhow::{Context as _, Result, anyhow, bail};
 use error_contexts::GlobalErrorContextRefCount;
 use futures::channel::oneshot;
 use futures::future::{self, Either, FutureExt};
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
+use log::trace;
+use mach2::vm_sync::vm_sync_t;
 use std::any::Any;
 use std::borrow::ToOwned;
 use std::boxed::Box;
@@ -79,15 +84,17 @@ use std::pin::{Pin, pin};
 use std::ptr::{self, NonNull};
 use std::slice;
 use std::task::{Context, Poll, Waker};
+use std::thread::current;
 use std::vec::Vec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::component::{
-    CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
-    OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
-    RuntimeComponentInstanceIndex, StringEncoding, TypeComponentGlobalErrorContextTableIndex,
-    TypeComponentLocalErrorContextTableIndex, TypeFutureTableIndex, TypeStreamTableIndex,
-    TypeTupleIndex,
+    CanonicalOptions, CanonicalOptionsDataModel, CoreDef, ExportIndex, MAX_FLAT_PARAMS,
+    MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
+    RuntimeComponentInstanceIndex, RuntimeTableIndex, StringEncoding,
+    TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
+    TypeFuncIndex, TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
 };
+use wasmtime_environ::{FuncIndex, TableIndex};
 
 pub use abort::JoinHandle;
 pub use futures_and_streams::{
@@ -588,7 +595,15 @@ enum SuspendReason {
     NeedWork,
     /// The fiber is yielding and should be resumed once other tasks have had a
     /// chance to run.
-    Yielding { task: TableId<GuestTask> },
+    Yielding {
+        task: TableId<GuestTask>,
+        to: Option<TableId<GuestTask>>,
+    },
+    /// The fiber was explicitly suspended with a call to `thread.suspend` or `thread.switch-to`.
+    ExplicitlySuspending {
+        task: TableId<GuestTask>,
+        to: Option<TableId<GuestTask>>,
+    },
 }
 
 /// Represents a pending call into guest code for a given guest task.
@@ -1379,7 +1394,11 @@ impl Instance {
 
     /// Resume the specified fiber, giving it exclusive access to the specified
     /// store.
-    async fn resume_fiber(self, store: &mut StoreOpaque, fiber: StoreFiber<'static>) -> Result<()> {
+    async fn resume_fiber(
+        self,
+        store: &mut StoreContextMut,
+        fiber: StoreFiber<'static>,
+    ) -> Result<()> {
         let old_task = self.concurrent_state_mut(store).guest_task;
         log::trace!("resume_fiber: save current task {old_task:?}");
 
@@ -1392,16 +1411,24 @@ impl Instance {
 
         if let Some(mut fiber) = fiber {
             // See the `SuspendReason` documentation for what each case means.
-            match state.suspend_reason.take().unwrap() {
+            let next = match state.suspend_reason.take().unwrap() {
                 SuspendReason::NeedWork => {
                     if state.worker.is_none() {
                         state.worker = Some(fiber);
                     } else {
                         fiber.dispose(store);
                     }
+                    None
                 }
-                SuspendReason::Yielding { .. } => {
+                SuspendReason::Yielding { to, .. } => {
                     state.push_low_priority(WorkItem::ResumeFiber(fiber));
+                    to
+                }
+                SuspendReason::ExplicitlySuspending { to, task } => {
+                    state
+                        .unscheduled_guest_tasks
+                        .insert(task, UnscheduledTaskState::Started(fiber));
+                    to
                 }
                 SuspendReason::Waiting { set, task } => {
                     let old = state
@@ -1409,7 +1436,18 @@ impl Instance {
                         .waiting
                         .insert(task, WaitMode::Fiber(fiber));
                     assert!(old.is_none());
+                    None
                 }
+            };
+            if let Some(next) = next {
+                self.handle_work_item(
+                    store.as_context_mut(),
+                    WorkItem::GuestCall(GuestCall {
+                        task: next,
+                        kind: GuestCallKind::DeliverEvent { set: None },
+                    }),
+                )
+                .await?;
             }
         }
 
@@ -1513,7 +1551,9 @@ impl Instance {
         // pop the call context which manages resource borrows before suspending
         // and then push it again once we've resumed.
         let task = match &reason {
-            SuspendReason::Yielding { task } | SuspendReason::Waiting { task, .. } => Some(*task),
+            SuspendReason::Yielding { task, .. }
+            | SuspendReason::Waiting { task, .. }
+            | SuspendReason::ExplicitlySuspending { task, .. } => Some(*task),
             SuspendReason::NeedWork => None,
         };
 
@@ -2675,18 +2715,18 @@ impl Instance {
         self,
         store: &mut dyn VMStore,
         options: OptionsIndex,
+        cancellable: bool,
         set: u32,
         payload: u32,
     ) -> Result<u32> {
         let opts = self.concurrent_state_mut(store).options(options);
-        let async_ = opts.async_;
         let caller_instance = opts.instance;
         let rep =
             self.id().get_mut(store).guest_tables().0[caller_instance].waitable_set_rep(set)?;
 
         self.waitable_check(
             store,
-            async_,
+            cancellable,
             WaitableCheck::Wait(WaitableCheckParams {
                 set: TableId::new(rep),
                 options,
@@ -2700,18 +2740,18 @@ impl Instance {
         self,
         store: &mut dyn VMStore,
         options: OptionsIndex,
+        cancellable: bool,
         set: u32,
         payload: u32,
     ) -> Result<u32> {
         let opts = self.concurrent_state_mut(store).options(options);
-        let async_ = opts.async_;
         let caller_instance = opts.instance;
         let rep =
             self.id().get_mut(store).guest_tables().0[caller_instance].waitable_set_rep(set)?;
 
         self.waitable_check(
             store,
-            async_,
+            cancellable,
             WaitableCheck::Poll(WaitableCheckParams {
                 set: TableId::new(rep),
                 options,
@@ -2720,32 +2760,215 @@ impl Instance {
         )
     }
 
-    /// Implements the `yield` intrinsic.
-    pub(crate) fn yield_(self, store: &mut dyn VMStore, async_: bool) -> Result<bool> {
-        self.waitable_check(store, async_, WaitableCheck::Yield)
-            .map(|_| {
-                let state = self.concurrent_state_mut(store);
-                let task = state.guest_task.unwrap();
-                if let Some(event) = state.get_mut(task).unwrap().event.take() {
-                    assert!(matches!(event, Event::Cancelled));
-                    true
-                } else {
-                    false
+    /// Implements the `thread.yield` and `thread.yield-to` intrinsics.
+    pub(crate) fn thread_yield_to(
+        self,
+        store: &mut dyn VMStore,
+        cancellable: bool,
+        task: Option<TableId<GuestTask>>,
+    ) -> Result<bool> {
+        let check = if let Some(task) = task {
+            // TODO: validation
+            WaitableCheck::YieldTo { task }
+        } else {
+            WaitableCheck::Yield
+        };
+        self.waitable_check(store, cancellable, check).map(|_| {
+            let state = self.concurrent_state_mut(store);
+            let task = state.guest_task.unwrap();
+            if let Some(event) = state.get_mut(task).unwrap().event.take() {
+                assert!(matches!(event, Event::Cancelled));
+                true
+            } else {
+                false
+            }
+        })
+    }
+
+    pub(crate) fn thread_switch_to(
+        self,
+        store: &mut dyn VMStore,
+        _cancellable: bool,
+        task: TableId<GuestTask>,
+    ) -> Result<()> {
+        let state = self.concurrent_state_mut(store);
+        let current_task = state.guest_task.unwrap();
+        self.suspend(
+            store,
+            SuspendReason::ExplicitlySuspending {
+                task: current_task,
+                to: Some(task),
+            },
+        )
+    }
+
+    unsafe fn read_funcref_from_table(
+        self,
+        store: &mut dyn VMStore,
+        table_idx: RuntimeTableIndex,
+        func_idx: u64,
+    ) -> Result<NonNull<VMFuncRef>> {
+        let table_import = self.id().get_mut(store).runtime_table(table_idx);
+        let vmctx = table_import.vmctx.as_non_null();
+        // SAFETY: `vmctx` is a valid pointer, and the `Instance` is
+        // located immediately before the `vmctx`. See `vm::Instance::sibling_vmctx`,
+        // which we can't call here as we don't have a `vm::Instance` to bind the lifetime to.
+        let mut instance_ptr = unsafe {
+            vmctx
+                .byte_sub(mem::size_of::<vm::Instance>())
+                .cast::<vm::Instance>()
+        };
+        // SAFETY: We just constructed `instance_ptr` from a valid pointer. This pointer won't leave
+        // this call, so we don't need a lifetime to bind it to.
+        let instance = unsafe { Pin::new_unchecked(instance_ptr.as_mut()) };
+        let table = instance.get_defined_table_with_lazy_init(table_import.index, [func_idx]);
+        match table.get_func(func_idx) {
+            // SAFETY: The `VMFuncRef` is not null, properly aligned, and points to a valid
+            // `VMFuncRef` because it came from a `Table` in a `vm::Instance`.
+            // We clone it here so that we don't need to worry about its lifetime.
+            Ok(Some(func)) => Ok(func),
+            Ok(None) => Err(anyhow!("function index {func_idx} out of bounds")),
+            Err(e) => Err(anyhow!("failed to get function from table: {e}")),
+        }
+    }
+
+    /// Implements the `thread.new_indirect` intrinsic.
+    pub(crate) fn thread_new_indirect(
+        self,
+        store: &mut dyn VMStore,
+        _func_ty_idx: TypeFuncIndex, // currently unused
+        table_idx: RuntimeTableIndex,
+        func_idx: FuncIndex,
+        context: i32,
+    ) -> Result<u32> {
+        log::trace!("creating new thread");
+
+        let start_func_ty = FuncType::new(store.engine(), [ValType::I32], []);
+        let funcref =
+            unsafe { self.read_funcref_from_table(store, table_idx, func_idx.as_u32() as u64) }?;
+        if unsafe { funcref.as_ref().type_index } != start_func_ty.type_index() {
+            bail!(
+                "start function does not match expected type (currently only `(i32) -> ()` is supported)"
+            );
+        }
+
+        let state = self.concurrent_state_mut(store);
+        let current_task = state.guest_task.unwrap();
+        let instance = state.get_mut(current_task)?.instance;
+
+        // TODO check can_leave?
+
+        let memory = state
+            .get_mut(current_task)?
+            .lift_result
+            .as_ref()
+            .and_then(|lift| lift.memory.map(|v| v.as_ptr()))
+            .ok_or_else(|| anyhow!("missing memory for thread start function"))?;
+        let new_task = GuestTask::new(
+            state,
+            Box::new(move |store, instance, params| {
+                if params.len() != 1 {
+                    return Err(anyhow!("expected 1 parameter for thread start function"));
                 }
-            })
+                params[0].write(ValRaw::i32(context));
+                Ok(())
+            }),
+            LiftResult {
+                lift: Box::new(|store, instance, result| {
+                    Ok(Box::new(DummyResult) as Box<dyn Any + Send + Sync>)
+                }),
+                ty: TypeTupleIndex::from_u32(0),
+                memory: NonNull::new(memory).map(SendSyncPtr::new),
+                string_encoding: StringEncoding::Utf8,
+            },
+            Caller::Guest {
+                task: current_task,
+                instance: instance,
+            },
+            None,
+            instance,
+        )?;
+
+        let guest_task = state.push(new_task)?;
+        state
+            .unscheduled_guest_tasks
+            .insert(guest_task, UnscheduledTaskState::NotStarted(funcref));
+
+        state.get_mut(current_task)?.subtasks.insert(guest_task);
+
+        log::trace!("new thread with index {} created", guest_task.rep());
+
+        Ok(guest_task.rep())
+    }
+
+    pub(crate) fn thread_resume_later(
+        self,
+        store: &mut dyn VMStore,
+        task: TableId<GuestTask>,
+    ) -> Result<()> {
+        let state = self.concurrent_state_mut(store);
+        let guest_task = state.get_mut(task)?;
+        let suspended_task = state.unscheduled_guest_tasks.get_mut(&task);
+        if !suspended_task.is_some() {
+            bail!("can only resume a thread which is currently suspended");
+        }
+
+        match suspended_task.unwrap() {
+            UnscheduledTaskState::NotStarted(callee) => {
+                log::trace!("resuming thread {task:?} which was not started");
+                if !state.may_enter(task) {
+                    bail!(crate::Trap::CannotEnterComponent);
+                }
+                unsafe {
+                    self.start_call(
+                        StoreContextMut(self),
+                        ptr::null_mut(),
+                        ptr::null_mut(),
+                        callee.as_mut(),
+                        1,
+                        0,
+                        0, //TODO maybe async
+                        None,
+                    );
+                }
+            }
+            UnscheduledTaskState::Started(fiber) => {
+                log::trace!("resuming thread {task:?} which was suspended");
+                self.resume_fiber(store, fiber);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn thread_suspend(self, store: &mut dyn VMStore, cancellable: bool) -> Result<()> {
+        if cancellable {
+            bail!("todo: cancellable `thread.suspend` not implemented yet");
+        }
+
+        let guest_task = self.concurrent_state_mut(store).guest_task.unwrap();
+        self.suspend(
+            store,
+            SuspendReason::ExplicitlySuspending {
+                task: guest_task,
+                to: None,
+            },
+        )?;
+
+        Ok(())
     }
 
     /// Helper function for the `waitable-set.wait`, `waitable-set.poll`, and
-    /// `yield` intrinsics.
+    /// `thread.yield` intrinsics.
     fn waitable_check(
         self,
         store: &mut dyn VMStore,
-        async_: bool,
+        cancellable: bool,
         check: WaitableCheck,
     ) -> Result<u32> {
-        if async_ {
+        if cancellable {
             bail!(
-                "todo: async `waitable-set.wait`, `waitable-set.poll`, and `yield` not yet implemented"
+                "todo: cancellable `waitable-set.wait`, `waitable-set.poll`, and `thread.yield` not yet implemented"
             );
         }
 
@@ -2755,10 +2978,17 @@ impl Instance {
             WaitableCheck::Wait(params) => (true, Some(params.set)),
             WaitableCheck::Poll(params) => (false, Some(params.set)),
             WaitableCheck::Yield => (false, None),
+            WaitableCheck::YieldTo { task } => (false, None),
         };
 
         // First, suspend this fiber, allowing any other tasks to run.
-        self.suspend(store, SuspendReason::Yielding { task: guest_task })?;
+        self.suspend(
+            store,
+            SuspendReason::Yielding {
+                task: guest_task,
+                to: None,
+            },
+        )?;
 
         log::trace!("waitable check for {guest_task:?}; set {set:?}");
 
@@ -2828,6 +3058,7 @@ impl Instance {
                 Ok(ordinal)
             }
             WaitableCheck::Yield => Ok(0),
+            WaitableCheck::YieldTo { .. } => Ok(0),
         };
 
         result
@@ -2919,7 +3150,13 @@ impl Instance {
                     };
                     concurrent_state.push_high_priority(item);
 
-                    self.suspend(store, SuspendReason::Yielding { task: caller })?;
+                    self.suspend(
+                        store,
+                        SuspendReason::Yielding {
+                            task: caller,
+                            to: None,
+                        },
+                    )?;
                 }
 
                 let concurrent_state = self.concurrent_state_mut(store);
@@ -3936,11 +4173,19 @@ struct InstanceState {
     pending: BTreeMap<TableId<GuestTask>, GuestCallKind>,
 }
 
+enum UnscheduledTaskState {
+    Started(StoreFiber<'static>),
+    NotStarted(NonNull<VMFuncRef>),
+}
+
 /// Represents the Component Model Async state of a top-level component instance
 /// (i.e. a `super::ComponentInstance`).
 pub struct ConcurrentState {
     /// The currently running guest task, if any.
     guest_task: Option<TableId<GuestTask>>,
+
+    unscheduled_guest_tasks: BTreeMap<TableId<GuestTask>, UnscheduledTaskState>,
+
     /// The set of pending host and background tasks, if any.
     ///
     /// See `ComponentInstance::poll_until` for where we temporarily take this
@@ -3956,7 +4201,7 @@ pub struct ConcurrentState {
     instance_states: HashMap<RuntimeComponentInstanceIndex, InstanceState>,
     /// The "high priority" work queue for this instance's event loop.
     high_priority: Vec<WorkItem>,
-    /// The "high priority" work queue for this instance's event loop.
+    /// The "low priority" work queue for this instance's event loop.
     low_priority: Vec<WorkItem>,
     /// A place to stash the reason a fiber is suspending so that the code which
     /// resumed it will know under what conditions the fiber should be resumed
@@ -3993,6 +4238,7 @@ impl ConcurrentState {
     pub(crate) fn new(component: &Component) -> Self {
         Self {
             guest_task: None,
+            unscheduled_guest_tasks: BTreeMap::new(),
             table: AlwaysMut::new(ResourceTable::new()),
             futures: AlwaysMut::new(Some(FuturesUnordered::new())),
             instance_states: HashMap::new(),
@@ -4229,6 +4475,11 @@ impl ConcurrentState {
         Ok(())
     }
 
+    /// Implements the `thread.index` intrinsic.
+    pub(crate) fn thread_index(&self) -> Result<u32> {
+        Ok(self.guest_task.unwrap().rep())
+    }
+
     fn options(&self, options: OptionsIndex) -> &CanonicalOptions {
         &self.component.env_component().options[options]
     }
@@ -4319,6 +4570,7 @@ enum WaitableCheck {
     Wait(WaitableCheckParams),
     Poll(WaitableCheckParams),
     Yield,
+    YieldTo { task: TableId<GuestTask> },
 }
 
 /// Represents a guest task called from the host, prepared using `prepare_call`.

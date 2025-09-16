@@ -868,6 +868,8 @@ pub enum Import {
     /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of an `error-context`.
     ErrorContextTransfer,
+    /// Get the index of the current thread.
+    ThreadIndex,
 }
 
 impl Options {

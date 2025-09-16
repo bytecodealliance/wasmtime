@@ -307,3 +307,16 @@ world intertask-communication {
   import intertask;
   export run;
 }
+
+interface coop {
+  get-index: async func() -> u32;
+}
+
+world coop-threads-callee {
+  export coop;
+}
+
+world coop-threads-caller {
+  import coop;
+  export run;
+}

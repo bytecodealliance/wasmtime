@@ -342,6 +342,7 @@ fn fact_import_to_core_def(
         fact::Import::ErrorContextTransfer => {
             simple_intrinsic(dfg::Trampoline::ErrorContextTransfer)
         }
+        fact::Import::ThreadIndex => simple_intrinsic(dfg::Trampoline::ThreadIndex),
     }
 }
 

@@ -89,6 +89,11 @@ pub enum Trap {
     /// triggering a trap instead.
     CannotEnterComponent,
 
+    /// When the `component-model` feature is enabled this trap represents a
+    /// scenario where one component tried to call an import at a time when it
+    /// was not legal to do so.
+    CannotLeaveComponent,
+
     /// Async-lifted export failed to produce a result by calling `task.return`
     /// before returning `STATUS_DONE` and/or after all host tasks completed.
     NoAsyncResult,
@@ -178,6 +183,7 @@ impl fmt::Display for Trap {
             AllocationTooLarge => "allocation size too large",
             CastFailure => "cast failure",
             CannotEnterComponent => "cannot enter component instance",
+            CannotLeaveComponent => "cannot leave component instance",
             NoAsyncResult => "async-lifted export failed to produce a result",
             UnhandledTag => "unhandled tag",
             ContinuationAlreadyConsumed => "continuation already consumed",

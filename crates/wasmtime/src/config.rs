@@ -1137,28 +1137,16 @@ impl Config {
         self
     }
 
-    /// This corresponds to the 🚝 emoji in the component model specification.
+    /// This corresponds to the 🧵 emoji in the component model specification.
     ///
     /// Please note that Wasmtime's support for this feature is _very_
     /// incomplete.
     ///
     /// [proposal]:
-    ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
+    ///     https://github.com/WebAssembly/component-model/pull/557
     #[cfg(feature = "component-model-async")]
-    pub fn wasm_component_model_async_builtins(&mut self, enable: bool) -> &mut Self {
-        self.wasm_feature(WasmFeatures::CM_ASYNC_BUILTINS, enable);
-        self
-    }
-
-    /// This corresponds to the 🚟 emoji in the component model specification.
-    ///
-    /// Please note that Wasmtime's support for this feature is _very_
-    /// incomplete.
-    ///
-    /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
-    #[cfg(feature = "component-model-async")]
-    pub fn wasm_component_model_async_stackful(&mut self, enable: bool) -> &mut Self {
-        self.wasm_feature(WasmFeatures::CM_ASYNC_STACKFUL, enable);
+    pub fn wasm_component_model_threading(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::CM_THREADING, enable);
         self
     }
 

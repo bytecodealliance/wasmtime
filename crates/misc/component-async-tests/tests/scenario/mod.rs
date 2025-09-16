@@ -2,6 +2,7 @@ mod util;
 
 pub mod backpressure;
 pub mod borrowing;
+pub mod coop_threads;
 pub mod error_context;
 pub mod post_return;
 pub mod read_resource_stream;

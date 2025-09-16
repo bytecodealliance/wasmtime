@@ -271,23 +271,39 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::WaitableSetWait { options } => {
+            Trampoline::WaitableSetWait {
+                options,
+                cancellable,
+            } => {
                 self.translate_libcall(
                     host::waitable_set_wait,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
                         params.push(me.index_value(*options));
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
                     },
                 );
             }
-            Trampoline::WaitableSetPoll { options } => {
+            Trampoline::WaitableSetPoll {
+                options,
+                cancellable,
+            } => {
                 self.translate_libcall(
                     host::waitable_set_poll,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
                         params.push(me.index_value(*options));
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
                     },
                 );
             }
@@ -311,13 +327,17 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::Yield { async_ } => {
+            Trampoline::ThreadYield { cancellable } => {
                 self.translate_libcall(
-                    host::yield_,
+                    host::thread_yield,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
-                        params.push(me.builder.ins().iconst(ir::types::I8, i64::from(*async_)));
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
                     },
                 );
             }
@@ -690,6 +710,78 @@ impl<'a> TrampolineCompiler<'a> {
                     WasmArgs::InRegisters,
                     |me, params| {
                         params.push(me.builder.ins().iconst(ir::types::I32, i64::from(*i)));
+                    },
+                );
+            }
+            Trampoline::ThreadIndex => {
+                self.translate_libcall(
+                    host::thread_index,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
+            Trampoline::ThreadNewIndirect {
+                start_func_table_idx,
+                start_func_ty_idx,
+            } => {
+                self.translate_libcall(
+                    host::thread_new_indirect,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*start_func_table_idx));
+                        params.push(me.index_value(*start_func_ty_idx));
+                    },
+                );
+            }
+            Trampoline::ThreadSwitchTo { cancellable } => {
+                self.translate_libcall(
+                    host::thread_switch_to,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
+                    },
+                );
+            }
+            Trampoline::ThreadSuspend { cancellable } => {
+                self.translate_libcall(
+                    host::thread_suspend,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
+                    },
+                );
+            }
+            Trampoline::ThreadResumeLater => {
+                self.translate_libcall(
+                    host::thread_resume_later,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
+            Trampoline::ThreadYieldTo { cancellable } => {
+                self.translate_libcall(
+                    host::thread_yield_to,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(
+                            me.builder
+                                .ins()
+                                .iconst(ir::types::I8, i64::from(*cancellable)),
+                        );
                     },
                 );
             }

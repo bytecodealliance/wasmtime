@@ -234,7 +234,7 @@ fn select_world(
     world: Option<&str>,
 ) -> anyhow::Result<WorldId> {
     if pkgs.len() == 1 {
-        resolve.select_world(pkgs[0], world)
+        resolve.select_world(pkgs, world)
     } else {
         assert!(!pkgs.is_empty());
         match world {
@@ -248,12 +248,12 @@ fn select_world(
 
                 // This will ignore the package argument due to the fully
                 // qualified name being used.
-                resolve.select_world(pkgs[0], world)
+                resolve.select_world(pkgs, world)
             }
             None => {
                 let worlds = pkgs
                     .iter()
-                    .filter_map(|p| resolve.select_world(*p, None).ok())
+                    .filter_map(|p| resolve.select_world(pkgs, None).ok())
                     .collect::<Vec<_>>();
                 match &worlds[..] {
                     [] => anyhow::bail!("no packages have a world"),

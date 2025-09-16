@@ -85,8 +85,7 @@ fn provenance_test_config() -> Config {
     config.memory_guard_size(0);
     config.signals_based_traps(false);
     config.wasm_component_model_async(true);
-    config.wasm_component_model_async_stackful(true);
-    config.wasm_component_model_async_builtins(true);
+    config.wasm_component_model_threading(true);
     config.wasm_component_model_error_context(true);
     config
 }

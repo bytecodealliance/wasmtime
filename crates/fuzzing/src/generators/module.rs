@@ -17,8 +17,7 @@ pub struct ModuleConfig {
     // config-to-`wasmtime::Config` translation.
     pub function_references_enabled: bool,
     pub component_model_async: bool,
-    pub component_model_async_builtins: bool,
-    pub component_model_async_stackful: bool,
+    pub component_model_threading: bool,
     pub component_model_error_context: bool,
     pub component_model_gc: bool,
     pub legacy_exceptions: bool,
@@ -68,8 +67,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
 
         Ok(ModuleConfig {
             component_model_async: false,
-            component_model_async_builtins: false,
-            component_model_async_stackful: false,
+            component_model_threading: false,
             component_model_error_context: false,
             component_model_gc: false,
             legacy_exceptions: false,
