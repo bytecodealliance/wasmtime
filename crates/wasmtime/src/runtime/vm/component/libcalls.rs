@@ -4,6 +4,7 @@ use crate::component::Instance;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::component::concurrent::ResourcePair;
+use crate::runtime::component::concurrent::table::TableId;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::{HostResultHasUnwindSentinel, VMStore, VmSafe};
 use core::cell::Cell;
@@ -773,7 +774,7 @@ fn waitable_join(
 
 #[cfg(feature = "component-model-async")]
 fn thread_yield(store: &mut dyn VMStore, instance: Instance, cancellable: u8) -> Result<bool> {
-    instance.thread_yield(store, cancellable != 0)
+    instance.thread_yield_to(store, cancellable != 0, None)
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1264,9 +1265,9 @@ fn thread_new_indirect(
     instance.thread_new_indirect(
         store,
         TypeFuncIndex::from_u32(func_ty_id),
-        func_table_idx,
+        RuntimeTableIndex::from_u32(func_table_idx),
         func_idx,
-        context,
+        context as i32,
     )
 }
 
@@ -1296,6 +1297,6 @@ fn thread_yield_to(
     instance: Instance,
     cancellable: u8,
     thread_idx: u32,
-) -> Result<u32> {
-    todo!()
+) -> Result<bool> {
+    instance.thread_yield_to(store, cancellable != 0, Some(TableId::new(thread_idx)))
 }

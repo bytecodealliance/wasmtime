@@ -50,7 +50,7 @@
 use crate::component::func::{self, Func, Options};
 use crate::component::{
     Component, ComponentInstanceId, HasData, HasSelf, Instance, Resource, ResourceTable,
-    ResourceTableError, store,
+    ResourceTableError,
 };
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::store::{StoreInner, StoreOpaque, StoreToken};
@@ -58,18 +58,13 @@ use crate::vm::component::{
     CallContext, ComponentInstance, InstanceFlags, ResourceTables, TransmitLocalState,
 };
 use crate::vm::{self, AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
-use crate::{
-    AsContext, AsContextMut, FuncType, StoreContext, StoreContextMut, Table, ValRaw, ValType,
-    runtime,
-};
+use crate::{AsContext, AsContextMut, FuncType, StoreContext, StoreContextMut, ValRaw, ValType};
 use anyhow::{Context as _, Result, anyhow, bail};
 use error_contexts::GlobalErrorContextRefCount;
 use futures::channel::oneshot;
 use futures::future::{self, Either, FutureExt};
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
-use log::trace;
-use mach2::vm_sync::vm_sync_t;
 use std::any::Any;
 use std::borrow::ToOwned;
 use std::boxed::Box;
@@ -84,17 +79,15 @@ use std::pin::{Pin, pin};
 use std::ptr::{self, NonNull};
 use std::slice;
 use std::task::{Context, Poll, Waker};
-use std::thread::current;
 use std::vec::Vec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::component::{
-    CanonicalOptions, CanonicalOptionsDataModel, CoreDef, ExportIndex, MAX_FLAT_PARAMS,
-    MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
+    CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
     RuntimeComponentInstanceIndex, RuntimeTableIndex, StringEncoding,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
     TypeFuncIndex, TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
 };
-use wasmtime_environ::{FuncIndex, TableIndex};
 
 pub use abort::JoinHandle;
 pub use futures_and_streams::{
@@ -109,7 +102,7 @@ pub(crate) use futures_and_streams::{
 mod abort;
 mod error_contexts;
 mod futures_and_streams;
-mod table;
+pub(crate) mod table;
 pub(crate) mod tls;
 
 /// Constant defined in the Component Model spec to indicate that the async
@@ -1394,11 +1387,7 @@ impl Instance {
 
     /// Resume the specified fiber, giving it exclusive access to the specified
     /// store.
-    async fn resume_fiber(
-        self,
-        store: &mut StoreContextMut,
-        fiber: StoreFiber<'static>,
-    ) -> Result<()> {
+    async fn resume_fiber(self, store: &mut StoreOpaque, fiber: StoreFiber<'static>) -> Result<()> {
         let old_task = self.concurrent_state_mut(store).guest_task;
         log::trace!("resume_fiber: save current task {old_task:?}");
 
@@ -1439,15 +1428,12 @@ impl Instance {
                     None
                 }
             };
+
             if let Some(next) = next {
-                self.handle_work_item(
-                    store.as_context_mut(),
-                    WorkItem::GuestCall(GuestCall {
-                        task: next,
-                        kind: GuestCallKind::DeliverEvent { set: None },
-                    }),
-                )
-                .await?;
+                state.push_high_priority(WorkItem::GuestCall(GuestCall {
+                    task: next,
+                    kind: GuestCallKind::DeliverEvent { set: None },
+                }));
             }
         }
 
@@ -2838,14 +2824,13 @@ impl Instance {
         store: &mut dyn VMStore,
         _func_ty_idx: TypeFuncIndex, // currently unused
         table_idx: RuntimeTableIndex,
-        func_idx: FuncIndex,
+        func_idx: u32,
         context: i32,
     ) -> Result<u32> {
         log::trace!("creating new thread");
 
         let start_func_ty = FuncType::new(store.engine(), [ValType::I32], []);
-        let funcref =
-            unsafe { self.read_funcref_from_table(store, table_idx, func_idx.as_u32() as u64) }?;
+        let funcref = unsafe { self.read_funcref_from_table(store, table_idx, func_idx as u64) }?;
         if unsafe { funcref.as_ref().type_index } != start_func_ty.type_index() {
             bail!(
                 "start function does not match expected type (currently only `(i32) -> ()` is supported)"
@@ -2866,7 +2851,7 @@ impl Instance {
             .ok_or_else(|| anyhow!("missing memory for thread start function"))?;
         let new_task = GuestTask::new(
             state,
-            Box::new(move |store, instance, params| {
+            Box::new(move |_store, _instance, params| {
                 if params.len() != 1 {
                     return Err(anyhow!("expected 1 parameter for thread start function"));
                 }
@@ -2874,7 +2859,7 @@ impl Instance {
                 Ok(())
             }),
             LiftResult {
-                lift: Box::new(|store, instance, result| {
+                lift: Box::new(|_store, _instance, _result| {
                     Ok(Box::new(DummyResult) as Box<dyn Any + Send + Sync>)
                 }),
                 ty: TypeTupleIndex::from_u32(0),
@@ -2890,9 +2875,13 @@ impl Instance {
         )?;
 
         let guest_task = state.push(new_task)?;
-        state
-            .unscheduled_guest_tasks
-            .insert(guest_task, UnscheduledTaskState::NotStarted(funcref));
+        state.unscheduled_guest_tasks.insert(
+            guest_task,
+            UnscheduledTaskState::NotStarted {
+                table_idx,
+                func_idx,
+            },
+        );
 
         state.get_mut(current_task)?.subtasks.insert(guest_task);
 
@@ -2906,29 +2895,31 @@ impl Instance {
         store: &mut dyn VMStore,
         task: TableId<GuestTask>,
     ) -> Result<()> {
-        let state = self.concurrent_state_mut(store);
-        let guest_task = state.get_mut(task)?;
-        let suspended_task = state.unscheduled_guest_tasks.get_mut(&task);
+        let suspended_task = self
+            .concurrent_state_mut(store)
+            .unscheduled_guest_tasks
+            .remove(&task);
         if !suspended_task.is_some() {
             bail!("can only resume a thread which is currently suspended");
         }
-
         match suspended_task.unwrap() {
-            UnscheduledTaskState::NotStarted(callee) => {
+            UnscheduledTaskState::NotStarted {
+                table_idx,
+                func_idx,
+            } => {
                 log::trace!("resuming thread {task:?} which was not started");
-                if !state.may_enter(task) {
-                    bail!(crate::Trap::CannotEnterComponent);
-                }
+                let mut callee =
+                    unsafe { self.read_funcref_from_table(store, table_idx, func_idx as u64)? };
+                // TODO check can_enter?
                 unsafe {
-                    self.start_call(
-                        StoreContextMut(self),
+                    store.component_async_store().async_start(
+                        self,
                         ptr::null_mut(),
                         ptr::null_mut(),
                         callee.as_mut(),
                         1,
                         0,
                         0, //TODO maybe async
-                        None,
                     );
                 }
             }
@@ -4175,7 +4166,10 @@ struct InstanceState {
 
 enum UnscheduledTaskState {
     Started(StoreFiber<'static>),
-    NotStarted(NonNull<VMFuncRef>),
+    NotStarted {
+        table_idx: RuntimeTableIndex,
+        func_idx: u32,
+    },
 }
 
 /// Represents the Component Model Async state of a top-level component instance
