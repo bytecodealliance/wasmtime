@@ -252,8 +252,8 @@ impl generated::inference::HostGraphExecutionContext for WasiNnView<'_> {
         for (name, tensor_resopurce) in inputs.into_iter() {
             let tensor = self.table.delete(tensor_resopurce)?;
             named_tensors.push(crate::backend::NamedTensor {
-                name: name,
-                tensor: tensor,
+                name,
+                tensor,
             });
         }
 
