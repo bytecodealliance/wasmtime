@@ -417,16 +417,21 @@ impl Generate<TableOps> for TableOpsMutator {
                 max_rec_groups,
                 max_types,
             },
-            ops: vec![
-                TableOp::Null(),
-                TableOp::Drop(),
-                TableOp::Gc(),
-                TableOp::LocalSet(0),
-                TableOp::LocalGet(0),
-                TableOp::GlobalSet(0),
-                TableOp::GlobalGet(0),
-                TableOp::StructNew(0),
-            ],
+            ops: {
+                let mut v = vec![TableOp::Null(), TableOp::Drop(), TableOp::Gc()];
+                if num_params > 0 {
+                    v.push(TableOp::LocalSet(0));
+                    v.push(TableOp::LocalGet(0));
+                }
+                if num_globals > 0 {
+                    v.push(TableOp::GlobalSet(0));
+                    v.push(TableOp::GlobalGet(0));
+                }
+                if max_types > 0 {
+                    v.push(TableOp::StructNew(0));
+                }
+                v
+            },
             types: Types::new(),
         };
 
