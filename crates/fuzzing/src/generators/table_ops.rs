@@ -206,7 +206,7 @@ impl TableOps {
         let encode_ty_id = |ty_id: &TypeId| -> wasm_encoder::SubType {
             let def = &self.types.type_defs[ty_id];
             match &def.composite_type {
-                CompositeType::Struct(_s) => wasm_encoder::SubType {
+                CompositeType::Struct(StructType {}) => wasm_encoder::SubType {
                     is_final: true,
                     supertype_idx: None,
                     composite_type: wasm_encoder::CompositeType {
@@ -656,6 +656,7 @@ impl TableOp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
     /// Creates empty TableOps
