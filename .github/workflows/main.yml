@@ -678,7 +678,7 @@ jobs:
     - name: Set up cargo cache
       uses: Swatinem/rust-cache@94b28bf00e42c2b783e7dd289d30da129b46838b
       with:
-        shared-key: "test-${{ matrix.bucket }}"
+        shared-key: "test-${{ matrix.cache_key }}"
 
     # Fix an ICE for now in gcc when compiling zstd with debuginfo (??)
     - run: echo CFLAGS=-g0 >> $GITHUB_ENV
