@@ -48,7 +48,8 @@ impl Handler for Component {
             }
             _ => true,
         });
-        let (mut body, trailers) = request.consume_body().unwrap();
+        let (_, result_rx) = wit_future::new(|| Ok(()));
+        let (mut body, trailers) = Request::consume_body(request, result_rx);
 
         let (body, trailers) = if content_deflated {
             // Next, spawn a task to pipe and decode the original request body and trailers into a new request
@@ -77,8 +78,6 @@ impl Handler for Component {
                 }
 
                 trailers_tx.write(trailers.await).await.unwrap();
-
-                drop(request);
             });
 
             (pipe_rx, trailers_rx)
@@ -110,7 +109,8 @@ impl Handler for Component {
             headers.push(("content-encoding".into(), b"deflate".into()));
         }
 
-        let (mut body, trailers) = response.consume_body().unwrap();
+        let (_, result_rx) = wit_future::new(|| Ok(()));
+        let (mut body, trailers) = Response::consume_body(response, result_rx);
         let (body, trailers) = if accept_deflated {
             headers.retain(|(name, _value)| name != "content-length");
 
@@ -141,7 +141,6 @@ impl Handler for Component {
                 }
 
                 trailers_tx.write(trailers.await).await.unwrap();
-                drop(response);
             });
 
             (pipe_rx, trailers_rx)

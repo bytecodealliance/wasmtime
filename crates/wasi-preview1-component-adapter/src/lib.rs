@@ -1406,7 +1406,10 @@ pub unsafe extern "C" fn fd_readdir(
                     match iter.next() {
                         Some(Ok(_)) => {}
                         Some(Err(e)) => return Err(e),
-                        None => return Ok(()),
+                        None => {
+                            *bufused = 0;
+                            return Ok(());
+                        }
                     }
                 }
             }
