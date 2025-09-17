@@ -320,7 +320,7 @@ async fn p3_http_middleware_with_chain() -> Result<()> {
                         "local:local/chain-http".to_owned(),
                         InstantiationArg {
                             instance: "local:local/chain-http".into(),
-                            export: Some("wasi:http/handler@0.3.0-rc-2025-08-15".into()),
+                            export: Some("wasi:http/handler@0.3.0-rc-2025-09-16".into()),
                         },
                     )]
                     .into_iter()

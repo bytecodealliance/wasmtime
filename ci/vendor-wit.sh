@@ -70,20 +70,20 @@ make_vendor "wasi-config" "config@f4d699b"
 make_vendor "wasi-keyvalue" "keyvalue@219ea36"
 
 make_vendor "wasi/src/p3" "
-    cli@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
-    clocks@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
-    filesystem@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
-    random@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
-    sockets@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    cli@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+    clocks@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+    filesystem@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+    random@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+    sockets@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
 "
 
 make_vendor "wasi-http/src/p3" "
-    cli@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
-    clocks@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
-    filesystem@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
-    http@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
-    random@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
-    sockets@v0.3.0-rc-2025-08-15@wit-0.3.0-draft
+    cli@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+    clocks@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+    filesystem@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+    http@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+    random@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
+    sockets@v0.3.0-rc-2025-09-16@wit-0.3.0-draft
 "
 
 rm -rf $cache_dir

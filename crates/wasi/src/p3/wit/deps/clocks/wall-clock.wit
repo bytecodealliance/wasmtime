@@ -1,4 +1,4 @@
-package wasi:clocks@0.3.0-rc-2025-08-15;
+package wasi:clocks@0.3.0-rc-2025-09-16;
 /// WASI Wall Clock is a clock API intended to let users query the current
 /// time. The name "wall" makes an analogy to a "clock on the wall", which
 /// is not necessarily monotonic as it may be reset.
@@ -13,10 +13,10 @@ package wasi:clocks@0.3.0-rc-2025-08-15;
 /// monotonic, making it unsuitable for measuring elapsed time.
 ///
 /// It is intended for reporting the current date and time for humans.
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface wall-clock {
     /// A time and date in seconds plus nanoseconds.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     record datetime {
         seconds: u64,
         nanoseconds: u32,
@@ -35,12 +35,12 @@ interface wall-clock {
     ///
     /// [POSIX's Seconds Since the Epoch]: https://pubs.opengroup.org/onlinepubs/9699919799/xrat/V4_xbd_chap04.html#tag_21_04_16
     /// [Unix Time]: https://en.wikipedia.org/wiki/Unix_time
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     now: func() -> datetime;
 
     /// Query the resolution of the clock.
     ///
     /// The nanoseconds field of the output is always less than 1000000000.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     get-resolution: func() -> datetime;
 }

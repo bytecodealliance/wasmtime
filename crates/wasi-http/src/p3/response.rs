@@ -1,6 +1,6 @@
 use crate::get_content_length;
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::p3::body::{Body, ConsumedBody, GuestBody};
+use crate::p3::body::{Body, GuestBody};
 use crate::p3::{WasiHttpCtxView, WasiHttpView};
 use anyhow::Context as _;
 use bytes::Bytes;
@@ -86,7 +86,6 @@ impl Response {
                 _ = result_tx.send(Box::new(fut));
                 body
             }
-            Body::Consumed => ConsumedBody.boxed(),
         };
         Ok(http::Response::from_parts(res, body))
     }
