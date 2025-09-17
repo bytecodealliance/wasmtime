@@ -1351,15 +1351,14 @@
 ;; Note that bitwise negation is implemented here as
 ;;
 ;;      NOT rd, rm ==> ORR_NOT rd, zero, rm
-(rule bnot_base_case -1 (lower (has_type (fits_in_64 ty) (bnot x)))
+(rule bnot_base_case -3 (lower (has_type (fits_in_64 ty) (bnot x)))
       (orr_not ty (zero_reg) x))
 
-;; Special case to use `orr_not_shift` if it's a `bnot` of a const-left-shifted
-;; value.
-(rule bnot_ishl 1 (lower (has_type (fits_in_64 ty)
-                       (bnot (ishl x (iconst k)))))
-      (if-let amt (lshl_from_imm64 ty k))
-      (orr_not_shift ty (zero_reg) x amt))
+;; Implementation of `bnot` for vector types.
+(rule -2 (lower (has_type (ty_vec64 ty) (bnot x))) 
+      (not x (vector_size ty)))
+(rule -1 (lower (has_type (ty_vec128 ty) (bnot x))) 
+      (not x (vector_size ty)))
 
 ;; Implementation of `bnot` for `i128`.
 (rule (lower (has_type $I128 (bnot x)))
@@ -1370,9 +1369,12 @@
             (new_hi Reg (orr_not $I64 (zero_reg) x_hi)))
         (value_regs new_lo new_hi)))
 
-;; Implementation of `bnot` for vector types.
-(rule -2 (lower (has_type (ty_vec128 ty) (bnot x)))
-      (not x (vector_size ty)))
+;; Special case to use `orr_not_shift` if it's a `bnot` of a const-left-shifted
+;; value.
+(rule bnot_ishl 1 (lower (has_type (fits_in_64 ty)
+                       (bnot (ishl x (iconst k)))))
+      (if-let amt (lshl_from_imm64 ty k))
+      (orr_not_shift ty (zero_reg) x amt))
 
 ;; Special-cases for fusing a bnot with bxor
 (rule 2 (lower (has_type (fits_in_64 ty) (bnot (bxor x y))))
@@ -1381,13 +1383,16 @@
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule band_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (band x y)))
+(rule band_fits_in_64 -3 (lower (has_type (fits_in_64 ty) (band x y)))
       (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))
 
-(rule (lower (has_type $I128 (band x y))) (i128_alu_bitop (ALUOp.And) $I64 x y))
-
-(rule -2 (lower (has_type (ty_vec128 ty) (band x y)))
+;; Implementation of `band` for vector types.
+(rule -2 (lower (has_type (ty_vec64 ty) (band x y))) 
       (and_vec x y (vector_size ty)))
+(rule -1 (lower (has_type (ty_vec128 ty) (band x y))) 
+      (and_vec x y (vector_size ty)))
+
+(rule (lower (has_type $I128 (band x y))) (i128_alu_bitop (ALUOp.And) $I64 x y))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
 ;; by Cranelift's `band_not` instruction that is legalized into the simpler
@@ -1407,13 +1412,16 @@
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule bor_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (bor x y)))
+(rule bor_fits_in_64 -3 (lower (has_type (fits_in_64 ty) (bor x y)))
       (alu_rs_imm_logic_commutative (ALUOp.Orr) ty x y))
 
-(rule (lower (has_type $I128 (bor x y))) (i128_alu_bitop (ALUOp.Orr) $I64 x y))
-
-(rule -2 (lower (has_type (ty_vec128 ty) (bor x y)))
+;; Implementation of `bor` for vector types.
+(rule -2 (lower (has_type (ty_vec64 ty) (bor x y))) 
       (orr_vec x y (vector_size ty)))
+(rule -1 (lower (has_type (ty_vec128 ty) (bor x y))) 
+      (orr_vec x y (vector_size ty)))
+
+(rule (lower (has_type $I128 (bor x y))) (i128_alu_bitop (ALUOp.Orr) $I64 x y))
 
 ;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
 ;; by Cranelift's `bor_not` instruction that is legalized into the simpler
@@ -1425,6 +1433,17 @@
 
 (rule 3 (lower (has_type $I128 (bor x (bnot y)))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
 (rule 4 (lower (has_type $I128 (bor (bnot y) x))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
+
+(rule bor_not_right_vec64 5 (lower (has_type (ty_vec64 ty) (bor x (bnot y)))) 
+      (orn_vec x y (vector_size ty)))
+(rule bor_not_left_vec64 6 (lower (has_type (ty_vec64 ty) (bor (bnot y) x))) 
+      (orn_vec x y (vector_size ty)))
+
+(rule bor_not_right_vec128 7 (lower (has_type (ty_vec128 ty) (bor x (bnot y)))) 
+      (orn_vec x y (vector_size ty)))
+(rule bor_not_left_vec128 8 (lower (has_type (ty_vec128 ty) (bor (bnot y) x))) 
+      (orn_vec x y (vector_size ty)))
+
 
 ;; Specialized lowerings to generate the `extr` instruction.
 ;;
@@ -1448,13 +1467,16 @@
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule bxor_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (bxor x y)))
+(rule bxor_fits_in_64 -3 (lower (has_type (fits_in_64 ty) (bxor x y)))
       (alu_rs_imm_logic_commutative (ALUOp.Eor) ty x y))
 
-(rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
-
-(rule -2 (lower (has_type (ty_vec128 ty) (bxor x y)))
+;; Implementation of `bxor` for vector types.
+(rule -2 (lower (has_type (ty_vec64 ty) (bxor x y))) 
       (eor_vec x y (vector_size ty)))
+(rule -1 (lower (has_type (ty_vec128 ty) (bxor x y))) 
+      (eor_vec x y (vector_size ty)))
+
+(rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
 
 ;; Specialized lowerings for `(bxor x (bnot y))` which is additionally produced
 ;; by Cranelift's `bxor_not` instruction that is legalized into the simpler
