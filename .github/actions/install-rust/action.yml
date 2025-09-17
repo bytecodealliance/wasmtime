@@ -74,3 +74,9 @@ runs:
     - name: Install the WASI target
       shell: bash
       run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
+
+    - name: Set up cargo cache
+      uses: Swatinem/rust-cache@94b28bf00e42c2b783e7dd289d30da129b46838b
+      with:
+        cache-all-crates: "true"
+        cache-workspace-crates: "true"
