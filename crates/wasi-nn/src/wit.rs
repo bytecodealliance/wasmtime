@@ -251,10 +251,7 @@ impl generated::inference::HostGraphExecutionContext for WasiNnView<'_> {
         let mut named_tensors = Vec::new();
         for (name, tensor_resopurce) in inputs.into_iter() {
             let tensor = self.table.delete(tensor_resopurce)?;
-            named_tensors.push(crate::backend::NamedTensor {
-                name,
-                tensor,
-            });
+            named_tensors.push(crate::backend::NamedTensor { name, tensor });
         }
 
         let exec_context = &mut self.table.get_mut(&exec_context)?;
