@@ -4,6 +4,7 @@ use test_programs::p3::wasi::sockets::types::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, TcpSocket,
 };
 use test_programs::p3::wit_stream;
+use test_programs::sockets::supports_ipv6;
 
 struct Component;
 
@@ -152,32 +153,28 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             IpAddress::Ipv6((0x2001, 0x0db8, 0, 0, 0, 0, 0, 0)); // Reserved for documentation and examples.
 
         test_tcp_bind_ephemeral_port(IpAddress::IPV4_LOOPBACK);
-        test_tcp_bind_ephemeral_port(IpAddress::IPV6_LOOPBACK);
         test_tcp_bind_ephemeral_port(IpAddress::IPV4_UNSPECIFIED);
-        test_tcp_bind_ephemeral_port(IpAddress::IPV6_UNSPECIFIED);
-
         test_tcp_bind_specific_port(IpAddress::IPV4_LOOPBACK);
-        test_tcp_bind_specific_port(IpAddress::IPV6_LOOPBACK);
         test_tcp_bind_specific_port(IpAddress::IPV4_UNSPECIFIED);
-        test_tcp_bind_specific_port(IpAddress::IPV6_UNSPECIFIED);
-
         test_tcp_bind_reuseaddr(IpAddress::IPV4_LOOPBACK).await;
-        test_tcp_bind_reuseaddr(IpAddress::IPV6_LOOPBACK).await;
-
         test_tcp_bind_addrinuse(IpAddress::IPV4_LOOPBACK);
-        test_tcp_bind_addrinuse(IpAddress::IPV6_LOOPBACK);
         test_tcp_bind_addrinuse(IpAddress::IPV4_UNSPECIFIED);
-        test_tcp_bind_addrinuse(IpAddress::IPV6_UNSPECIFIED);
-
         test_tcp_bind_addrnotavail(RESERVED_IPV4_ADDRESS);
-        test_tcp_bind_addrnotavail(RESERVED_IPV6_ADDRESS);
-
         test_tcp_bind_wrong_family(IpAddressFamily::Ipv4);
-        test_tcp_bind_wrong_family(IpAddressFamily::Ipv6);
 
-        test_tcp_bind_non_unicast();
-
-        test_tcp_bind_dual_stack();
+        if supports_ipv6() {
+            test_tcp_bind_ephemeral_port(IpAddress::IPV6_LOOPBACK);
+            test_tcp_bind_ephemeral_port(IpAddress::IPV6_UNSPECIFIED);
+            test_tcp_bind_specific_port(IpAddress::IPV6_LOOPBACK);
+            test_tcp_bind_specific_port(IpAddress::IPV6_UNSPECIFIED);
+            test_tcp_bind_reuseaddr(IpAddress::IPV6_LOOPBACK).await;
+            test_tcp_bind_addrinuse(IpAddress::IPV6_LOOPBACK);
+            test_tcp_bind_addrinuse(IpAddress::IPV6_UNSPECIFIED);
+            test_tcp_bind_addrnotavail(RESERVED_IPV6_ADDRESS);
+            test_tcp_bind_wrong_family(IpAddressFamily::Ipv6);
+            test_tcp_bind_non_unicast();
+            test_tcp_bind_dual_stack();
+        }
 
         Ok(())
     }

@@ -1,3 +1,4 @@
+use test_programs::sockets::supports_ipv6;
 use test_programs::wasi::io::streams::{InputStream, OutputStream, StreamError};
 use test_programs::wasi::sockets::network::{IpAddress, IpAddressFamily, IpSocketAddress, Network};
 use test_programs::wasi::sockets::tcp::{ShutdownType, TcpSocket};
@@ -113,16 +114,16 @@ fn main() {
     let net = Network::default();
 
     test_tcp_input_stream_should_be_closed_by_remote_shutdown(&net, IpAddressFamily::Ipv4);
-    test_tcp_input_stream_should_be_closed_by_remote_shutdown(&net, IpAddressFamily::Ipv6);
-
     test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
-    test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
-
     test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
-    test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
-
     test_tcp_shutdown_should_not_lose_data(&net, IpAddressFamily::Ipv4);
-    test_tcp_shutdown_should_not_lose_data(&net, IpAddressFamily::Ipv6);
+
+    if supports_ipv6() {
+        test_tcp_input_stream_should_be_closed_by_remote_shutdown(&net, IpAddressFamily::Ipv6);
+        test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
+        test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
+        test_tcp_shutdown_should_not_lose_data(&net, IpAddressFamily::Ipv6);
+    }
 }
 
 struct Connection {

@@ -1,3 +1,4 @@
+use test_programs::sockets::supports_ipv6;
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -123,18 +124,17 @@ fn main() {
     let net = Network::default();
 
     test_tcp_connect_unspec(&net, IpAddressFamily::Ipv4);
-    test_tcp_connect_unspec(&net, IpAddressFamily::Ipv6);
-
     test_tcp_connect_port_0(&net, IpAddressFamily::Ipv4);
-    test_tcp_connect_port_0(&net, IpAddressFamily::Ipv6);
-
     test_tcp_connect_wrong_family(&net, IpAddressFamily::Ipv4);
-    test_tcp_connect_wrong_family(&net, IpAddressFamily::Ipv6);
-
-    test_tcp_connect_non_unicast(&net);
-
-    test_tcp_connect_dual_stack(&net);
-
     test_tcp_connect_explicit_bind(&net, IpAddressFamily::Ipv4);
-    test_tcp_connect_explicit_bind(&net, IpAddressFamily::Ipv6);
+
+    if supports_ipv6() {
+        test_tcp_connect_unspec(&net, IpAddressFamily::Ipv6);
+        test_tcp_connect_port_0(&net, IpAddressFamily::Ipv6);
+        test_tcp_connect_wrong_family(&net, IpAddressFamily::Ipv6);
+        test_tcp_connect_non_unicast(&net);
+
+        test_tcp_connect_dual_stack(&net);
+        test_tcp_connect_explicit_bind(&net, IpAddressFamily::Ipv6);
+    }
 }
