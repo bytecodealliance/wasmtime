@@ -936,13 +936,13 @@ pub fn table_ops(
 
         for imp in module.imports() {
             if imp.module() == "" {
-                let name = imp.name(); // &str
+                let name = imp.name();
                 if name.starts_with("take_struct_") {
                     if let wasmtime::ExternType::Func(ft) = imp.ty() {
                         let imp_name = name.to_string();
                         let func =
                             Func::new(&mut store, ft.clone(), move |_caller, _params, _results| {
-                                log::info!("table_ops: {}(<typed structref>)", imp_name);
+                                log::info!("table_ops: {imp_name}(<typed structref>)");
                                 Ok(())
                             });
                         linker.define(&store, "", name, func).unwrap();

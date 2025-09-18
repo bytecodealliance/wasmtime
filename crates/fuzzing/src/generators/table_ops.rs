@@ -261,7 +261,7 @@ impl TableOps {
         for i in 0..struct_count {
             let concrete = STRUCT_BASE + i;
             let ty_idx = typed_ft_base + i; //
-            let name = format!("take_struct_{}", concrete);
+            let name = format!("take_struct_{concrete}");
             typed_names.push(name);
             imports.import(
                 "",
