@@ -9,14 +9,13 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::Instant;
 use std::{
     path::PathBuf,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::io::{self, AsyncWrite};
 use tokio::sync::Notify;
@@ -25,6 +24,9 @@ use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::bindings as p2;
+#[cfg(feature = "component-model-async")]
+use wasmtime_wasi_http::handler::Task;
+use wasmtime_wasi_http::handler::{HandlerState, ProxyHandler, ProxyPre};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
@@ -171,20 +173,25 @@ impl ServeCommand {
         Ok(())
     }
 
-    fn new_store(&self, engine: &Engine, req_id: u64) -> Result<Store<Host>> {
+    fn new_store(&self, engine: &Engine, req_id: Option<u64>) -> Result<Store<Host>> {
         let mut builder = WasiCtxBuilder::new();
         self.run.configure_wasip2(&mut builder)?;
 
-        builder.env("REQUEST_ID", req_id.to_string());
+        if let Some(req_id) = req_id {
+            builder.env("REQUEST_ID", req_id.to_string());
+        }
 
         let stdout_prefix: String;
         let stderr_prefix: String;
-        if self.no_logging_prefix {
-            stdout_prefix = "".to_string();
-            stderr_prefix = "".to_string();
-        } else {
-            stdout_prefix = format!("stdout [{req_id}] :: ");
-            stderr_prefix = format!("stderr [{req_id}] :: ");
+        match req_id {
+            Some(req_id) if !self.no_logging_prefix => {
+                stdout_prefix = format!("stdout [{req_id}] :: ");
+                stderr_prefix = format!("stderr [{req_id}] :: ");
+            }
+            _ => {
+                stdout_prefix = "".to_string();
+                stderr_prefix = "".to_string();
+            }
         }
         builder.stdout(LogStream::new(stdout_prefix, Output::Stdout));
         builder.stderr(LogStream::new(stderr_prefix, Output::Stderr));
@@ -449,7 +456,7 @@ impl ServeCommand {
         };
         let _epoch_thread = epoch_interval.map(|t| EpochThread::spawn(t, engine.clone()));
 
-        let handler = ProxyHandler::new(self, engine, instance);
+        let handler = ProxyHandler::new(HostHandlerState { cmd: self, engine }, instance);
 
         loop {
             // Wait for a socket, but also "race" against shutdown to break out
@@ -460,6 +467,14 @@ impl ServeCommand {
                 v = listener.accept() => v?,
             };
             let comp = component.clone();
+
+            // The Nagle algorithm can impose a significant latency penalty
+            // (e.g. 40ms on Linux) on guests which write small, intermittent
+            // response body chunks (e.g. SSE streams).  Here we disable that
+            // algorithm and rely on the guest to buffer if appropriate to avoid
+            // TCP fragmentation.
+            stream.set_nodelay(true)?;
+
             let stream = TokioIo::new(stream);
             let h = handler.clone();
             let shutdown_guard = shutdown.clone().increment();
@@ -528,6 +543,19 @@ impl ServeCommand {
         }
 
         Ok(())
+    }
+}
+
+struct HostHandlerState {
+    cmd: ServeCommand,
+    engine: Engine,
+}
+
+impl HandlerState for HostHandlerState {
+    type StoreData = Host;
+
+    fn new_store(&self) -> Result<Store<Host>> {
+        self.cmd.new_store(&self.engine, None)
     }
 }
 
@@ -720,65 +748,14 @@ fn setup_guest_profiler(
     Ok(write_profile)
 }
 
-struct ProxyHandlerInner {
-    cmd: ServeCommand,
-    engine: Engine,
-    instance_pre: ProxyPre,
-    next_id: AtomicU64,
-}
-
-enum ProxyPre {
-    P2(p2::ProxyPre<Host>),
-    #[cfg(feature = "component-model-async")]
-    P3(wasmtime_wasi_http::p3::bindings::ProxyPre<Host>),
-}
-
-impl ProxyPre {
-    async fn instantiate(&self, store: &mut Store<Host>) -> Result<Proxy> {
-        Ok(match self {
-            ProxyPre::P2(pre) => Proxy::P2(pre.instantiate_async(store).await?),
-            #[cfg(feature = "component-model-async")]
-            ProxyPre::P3(pre) => Proxy::P3(pre.instantiate_async(store).await?),
-        })
-    }
-}
-
-enum Proxy {
-    P2(p2::Proxy),
-    #[cfg(feature = "component-model-async")]
-    P3(wasmtime_wasi_http::p3::bindings::Proxy),
-}
-
-impl ProxyHandlerInner {
-    fn next_req_id(&self) -> u64 {
-        self.next_id.fetch_add(1, Ordering::Relaxed)
-    }
-}
-
-#[derive(Clone)]
-struct ProxyHandler(Arc<ProxyHandlerInner>);
-
-impl ProxyHandler {
-    fn new(cmd: ServeCommand, engine: Engine, instance_pre: ProxyPre) -> Self {
-        Self(Arc::new(ProxyHandlerInner {
-            cmd,
-            engine,
-            instance_pre,
-            next_id: AtomicU64::from(0),
-        }))
-    }
-}
-
 type Request = hyper::Request<hyper::body::Incoming>;
 
 async fn handle_request(
-    ProxyHandler(inner): ProxyHandler,
+    handler: ProxyHandler<HostHandlerState, Host>,
     req: Request,
     component: Component,
 ) -> Result<hyper::Response<BoxBody<Bytes, anyhow::Error>>> {
-    let (sender, receiver) = tokio::sync::oneshot::channel();
-
-    let req_id = inner.next_req_id();
+    let req_id = handler.next_req_id();
 
     log::info!(
         "Request {req_id} handling {} to {}",
@@ -786,16 +763,29 @@ async fn handle_request(
         req.uri()
     );
 
-    let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
+    match &handler.instance_pre() {
+        ProxyPre::P2(pre) => {
+            let mut store = handler
+                .state()
+                .cmd
+                .new_store(&handler.state().engine, Some(req_id))?;
 
-    let write_profile = setup_epoch_handler(&inner.cmd, &mut store, component.clone())?;
-    let timeout = inner.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX);
+            let write_profile =
+                setup_epoch_handler(&handler.state().cmd, &mut store, component.clone())?;
+            let timeout = handler
+                .state()
+                .cmd
+                .run
+                .common
+                .wasm
+                .timeout
+                .unwrap_or(Duration::MAX);
 
-    match inner.instance_pre.instantiate(&mut store).await? {
-        Proxy::P2(proxy) => {
+            let proxy = pre.instantiate_async(&mut store).await?;
             let req = store
                 .data_mut()
                 .new_incoming_request(p2::http::types::Scheme::Http, req)?;
+            let (sender, receiver) = tokio::sync::oneshot::channel();
             let out = store.data_mut().new_response_outparam(sender)?;
             let task = tokio::task::spawn(async move {
                 let result = tokio::time::timeout(
@@ -841,39 +831,30 @@ async fn handle_request(
             Ok(result.map(|body| body.map_err(|e| e.into()).boxed()))
         }
         #[cfg(feature = "component-model-async")]
-        Proxy::P3(proxy) => {
+        ProxyPre::P3(..) => {
             use wasmtime_wasi_http::p3::bindings::http::types::{ErrorCode, Request};
 
             let (tx, rx) = tokio::sync::oneshot::channel();
 
-            tokio::task::spawn(async move {
-                let guest_result = store.run_concurrent(async move |store| {
-                    let (req, body) = req.into_parts();
-                    let body = body.map_err(ErrorCode::from_hyper_request_error);
-                    let req = http::Request::from_parts(req, body);
-                    let (request, request_io_result) = Request::from_http(req);
-                    let (res, task) = proxy.handle(store, request).await??;
-                    let res =
-                        store.with(|mut store| res.into_http(&mut store, request_io_result))?;
+            handler.push(Task::new(
+                Box::new(move |store, proxy| {
+                    Box::pin(async move {
+                        let (req, body) = req.into_parts();
+                        let body = body.map_err(ErrorCode::from_hyper_request_error);
+                        let req = http::Request::from_parts(req, body);
+                        let (request, request_io_result) = Request::from_http(req);
+                        let (res, task) = proxy.handle(store, request).await??;
+                        let res =
+                            store.with(|mut store| res.into_http(&mut store, request_io_result))?;
+                        _ = tx.send(res);
 
-                    _ = tx.send(res);
-
-                    task.block(store).await;
-                    anyhow::Ok(())
-                });
-
-                let guest_result = tokio::time::timeout(timeout, guest_result)
-                    .await
-                    .unwrap_or_else(|_| bail!("guest timed out"))?;
-                if let Err(e) = guest_result {
-                    log::error!("[{req_id}] :: {e:?}");
-                    return Err(e);
-                }
-
-                write_profile(&mut store);
-
-                anyhow::Ok(())
-            });
+                        // Wait for the task to finish.
+                        task.block(store).await;
+                        anyhow::Ok(())
+                    })
+                }),
+                req_id,
+            ));
             Ok(rx.await?.map(|body| body.map_err(|err| err.into()).boxed()))
         }
     }
