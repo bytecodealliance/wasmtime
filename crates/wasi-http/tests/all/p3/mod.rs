@@ -123,25 +123,36 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let proxy = Proxy::new(&mut store, &instance)?;
     let (req, io) = Request::from_http(req);
-    let (res, ()) = instance
-        .run_concurrent(&mut store, async |store| {
-            try_join!(
-                async {
-                    let (res, task) = match proxy.handle(store, req).await? {
-                        Ok(pair) => pair,
-                        Err(err) => return Ok(Err(Some(err))),
-                    };
-                    let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
-                    let (parts, body) = res.into_parts();
-                    let body = body.collect().await.context("failed to collect body")?;
-                    task.block(store).await;
-                    Ok(Ok(http::Response::from_parts(parts, body)))
-                },
-                async { io.await.context("failed to consume request body") }
-            )
-        })
-        .await??;
-    Ok(res)
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let ((handle_result, ()), res) = try_join!(
+        async move {
+            instance
+                .run_concurrent(&mut store, async |store| {
+                    try_join!(
+                        async {
+                            let (res, task) = match proxy.handle(store, req).await? {
+                                Ok(pair) => pair,
+                                Err(err) => return Ok(Err(Some(err))),
+                            };
+                            _ = tx
+                                .send(store.with(|store| res.into_http(store, async { Ok(()) }))?);
+                            task.block(store).await;
+                            Ok(Ok(()))
+                        },
+                        async { io.await.context("failed to consume request body") }
+                    )
+                })
+                .await?
+        },
+        async move {
+            let res = rx.await?;
+            let (parts, body) = res.into_parts();
+            let body = body.collect().await.context("failed to collect body")?;
+            anyhow::Ok(http::Response::from_parts(parts, body))
+        }
+    )?;
+
+    Ok(handle_result.map(|()| res))
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -254,18 +265,32 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_echo() -> Result<()> {
-    test_http_echo(P3_HTTP_ECHO_COMPONENT, false).await
+    test_http_echo(P3_HTTP_ECHO_COMPONENT, false, false).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_echo_host_to_host() -> Result<()> {
+    test_http_echo(P3_HTTP_ECHO_COMPONENT, false, true).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_middleware() -> Result<()> {
+    test_http_middleware(false).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_middleware_host_to_host() -> Result<()> {
+    test_http_middleware(true).await
+}
+
+async fn test_http_middleware(host_to_host: bool) -> Result<()> {
     let tempdir = tempfile::tempdir()?;
     let echo = &fs::read(P3_HTTP_ECHO_COMPONENT).await?;
     let middleware = &fs::read(P3_HTTP_MIDDLEWARE_COMPONENT).await?;
 
     let path = tempdir.path().join("temp.wasm");
     fs::write(&path, compose(middleware, echo).await?).await?;
-    test_http_echo(&path.to_str().unwrap(), true).await
+    test_http_echo(&path.to_str().unwrap(), true, host_to_host).await
 }
 
 async fn compose(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
@@ -290,6 +315,15 @@ async fn compose(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_middleware_with_chain() -> Result<()> {
+    test_http_middleware_with_chain(false).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_middleware_with_chain_host_to_host() -> Result<()> {
+    test_http_middleware_with_chain(true).await
+}
+
+async fn test_http_middleware_with_chain(host_to_host: bool) -> Result<()> {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("temp.wasm");
 
@@ -334,10 +368,12 @@ async fn p3_http_middleware_with_chain() -> Result<()> {
     .compose()?;
     fs::write(&path, &bytes).await?;
 
-    test_http_echo(&path.to_str().unwrap(), true).await
+    test_http_echo(&path.to_str().unwrap(), true, host_to_host).await
 }
 
-async fn test_http_echo(component: &str, use_compression: bool) -> Result<()> {
+async fn test_http_echo(component: &str, use_compression: bool, host_to_host: bool) -> Result<()> {
+    _ = env_logger::try_init();
+
     let body = b"And the mome raths outgrabe";
 
     // Prepare the raw body, optionally compressed if that's what we're
@@ -353,23 +389,7 @@ async fn test_http_echo(component: &str, use_compression: bool) -> Result<()> {
     // Prepare the http_body body, modeled here as a channel with the body
     // chunk above buffered up followed by some trailers. Note that trailers
     // are always here to test that code paths throughout the components.
-    let (mut body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(2);
-    body_tx
-        .send(Ok(http_body::Frame::data(raw_body)))
-        .await
-        .unwrap();
-    body_tx
-        .send(Ok(http_body::Frame::trailers({
-            let mut trailers = http::HeaderMap::new();
-            assert!(
-                trailers
-                    .insert("fizz", http::HeaderValue::from_static("buzz"))
-                    .is_none()
-            );
-            trailers
-        })))
-        .await
-        .unwrap();
+    let (mut body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(1);
 
     // Build the `http::Request`, optionally specifying compression-related
     // headers.
@@ -382,16 +402,40 @@ async fn test_http_echo(component: &str, use_compression: bool) -> Result<()> {
             .header("content-encoding", "deflate")
             .header("accept-encoding", "nonexistent-encoding, deflate");
     }
+    if host_to_host {
+        request = request.header("x-host-to-host", "true");
+    }
 
     // Send this request to wasm and assert that success comes back.
     //
     // Note that this will read the entire body internally and wait for
     // everything to get collected before proceeding to below.
-    let response = run_http(
-        component,
-        request.body(http_body_util::StreamBody::new(body_rx))?,
+    let response = futures::join!(
+        run_http(
+            component,
+            request.body(http_body_util::StreamBody::new(body_rx))?,
+        ),
+        async {
+            body_tx
+                .send(Ok(http_body::Frame::data(raw_body)))
+                .await
+                .unwrap();
+            body_tx
+                .send(Ok(http_body::Frame::trailers({
+                    let mut trailers = http::HeaderMap::new();
+                    assert!(
+                        trailers
+                            .insert("fizz", http::HeaderValue::from_static("buzz"))
+                            .is_none()
+                    );
+                    trailers
+                })))
+                .await
+                .unwrap();
+            drop(body_tx);
+        }
     )
-    .await?
+    .0?
     .unwrap();
     assert!(response.status().as_u16() == 200);
 

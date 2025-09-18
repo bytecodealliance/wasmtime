@@ -60,15 +60,16 @@ impl Handler for Component {
             wit_bindgen::spawn(async move {
                 {
                     let mut decoder = DeflateDecoder::new(Vec::new());
+                    let mut status = StreamResult::Complete(0);
+                    let mut chunk = Vec::with_capacity(64 * 1024);
 
-                    let (mut status, mut chunk) = body.read(Vec::with_capacity(64 * 1024)).await;
                     while let StreamResult::Complete(_) = status {
+                        (status, chunk) = body.read(chunk).await;
                         decoder.write_all(&chunk).unwrap();
                         let remaining = pipe_tx.write_all(mem::take(decoder.get_mut())).await;
                         assert!(remaining.is_empty());
                         *decoder.get_mut() = remaining;
                         chunk.clear();
-                        (status, chunk) = body.read(chunk).await;
                     }
 
                     let remaining = pipe_tx.write_all(decoder.finish().unwrap()).await;
@@ -123,15 +124,16 @@ impl Handler for Component {
             wit_bindgen::spawn(async move {
                 {
                     let mut encoder = DeflateEncoder::new(Vec::new(), Compression::fast());
-                    let (mut status, mut chunk) = body.read(Vec::with_capacity(64 * 1024)).await;
+                    let mut status = StreamResult::Complete(0);
+                    let mut chunk = Vec::with_capacity(64 * 1024);
 
                     while let StreamResult::Complete(_) = status {
+                        (status, chunk) = body.read(chunk).await;
                         encoder.write_all(&chunk).unwrap();
                         let remaining = pipe_tx.write_all(mem::take(encoder.get_mut())).await;
                         assert!(remaining.is_empty());
                         *encoder.get_mut() = remaining;
                         chunk.clear();
-                        (status, chunk) = body.read(chunk).await;
                     }
 
                     let remaining = pipe_tx.write_all(encoder.finish().unwrap()).await;
