@@ -4461,7 +4461,6 @@ dependencies = [
  "wasm-wave",
  "wasmparser 0.239.0",
  "wasmtime-environ",
- "wasmtime-internal-asm-macros",
  "wasmtime-internal-cache",
  "wasmtime-internal-component-macro",
  "wasmtime-internal-component-util",
@@ -4716,13 +4715,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmtime-internal-asm-macros"
-version = "38.0.0"
-dependencies = [
- "cfg-if",
-]
-
-[[package]]
 name = "wasmtime-internal-c-api-macros"
 version = "38.0.0"
 dependencies = [
@@ -4826,7 +4818,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "rustix 1.0.3",
- "wasmtime-internal-asm-macros",
  "wasmtime-internal-versioned-export-macros",
  "windows-sys 0.60.2",
 ]

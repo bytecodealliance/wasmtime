@@ -53,7 +53,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // winch
     "winch",
     // wasmtime
-    "wasmtime-internal-asm-macros",
     "wasmtime-internal-versioned-export-macros",
     "wasmtime-internal-slab",
     "wasmtime-internal-component-util",
