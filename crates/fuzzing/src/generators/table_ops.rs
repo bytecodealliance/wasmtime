@@ -19,6 +19,9 @@ const TABLE_SIZE_RANGE: RangeInclusive<u32> = 0..=100;
 const MAX_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
 const MAX_OPS: usize = 100;
 
+const STRUCT_BASE: u32 = 5;
+const TYPED_FN_BASE: u32 = 4;
+
 /// RecGroup ID struct definition.
 #[derive(
     Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize,
@@ -191,6 +194,14 @@ impl TableOps {
             vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
         );
 
+        types.ty().function(
+            vec![ValType::Ref(RefType {
+                nullable: false,
+                heap_type: wasm_encoder::HeapType::ANY,
+            })],
+            vec![],
+        );
+
         let mut rec_groups: BTreeMap<RecGroupId, Vec<TypeId>> = self
             .types
             .rec_groups
@@ -219,9 +230,23 @@ impl TableOps {
             }
         };
 
+        let mut struct_count: u32 = 0;
         for type_ids in rec_groups.values() {
             let members: Vec<wasm_encoder::SubType> = type_ids.iter().map(encode_ty_id).collect();
             types.ty().rec(members);
+            struct_count += type_ids.len() as u32;
+        }
+
+        let typed_ft_base: u32 = STRUCT_BASE + struct_count;
+        for i in 0..struct_count {
+            let concrete = STRUCT_BASE + i;
+            types.ty().function(
+                vec![ValType::Ref(RefType {
+                    nullable: false,
+                    heap_type: wasm_encoder::HeapType::Concrete(concrete),
+                })],
+                vec![],
+            );
         }
 
         // Import the GC function.
@@ -229,6 +254,21 @@ impl TableOps {
         imports.import("", "gc", EntityType::Function(0));
         imports.import("", "take_refs", EntityType::Function(2));
         imports.import("", "make_refs", EntityType::Function(3));
+        imports.import("", "take_struct", EntityType::Function(4));
+
+        let mut typed_names: Vec<String> = Vec::new();
+
+        for i in 0..struct_count {
+            let concrete = STRUCT_BASE + i;
+            let ty_idx = typed_ft_base + i; //
+            let name = format!("take_struct_{}", concrete);
+            typed_names.push(name);
+            imports.import(
+                "",
+                typed_names.last().unwrap().as_str(),
+                EntityType::Function(ty_idx),
+            );
+        }
 
         // Define our table.
         let mut tables = TableSection::new();
@@ -258,7 +298,8 @@ impl TableOps {
         functions.function(1);
 
         let mut exports = ExportSection::new();
-        exports.export("run", ExportKind::Func, 3);
+        let imported_fn_count: u32 = 4 + struct_count;
+        exports.export("run", ExportKind::Func, imported_fn_count);
 
         // Give ourselves one scratch local that we can use in various `TableOp`
         // implementations.
@@ -600,6 +641,8 @@ define_table_ops! {
     LocalSet(local_index: |ops| ops.num_params => u32) : 1 => 0,
 
     StructNew(type_index: |ops| ops.max_types => u32) : 0 => 0,
+    TakeStructCall(type_index: |ops| ops.max_types => u32) : 0 => 0,
+    TakeTypedStructCall(type_index: |ops| ops.max_types => u32) : 0 => 0,
 
     Drop : 1 => 0,
 
@@ -611,6 +654,7 @@ impl TableOp {
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
+        let take_structref_idx = 3;
 
         match self {
             Self::Gc() => {
@@ -651,8 +695,18 @@ impl TableOp {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
             Self::StructNew(x) => {
-                func.instruction(&Instruction::StructNew(x + 4));
-                func.instruction(&Instruction::Drop);
+                func.instruction(&Instruction::StructNew(x + 5));
+                func.instruction(&Instruction::Call(take_structref_idx));
+            }
+            Self::TakeStructCall(x) => {
+                func.instruction(&Instruction::StructNew(x + 5));
+                func.instruction(&Instruction::Call(take_structref_idx));
+            }
+            Self::TakeTypedStructCall(x) => {
+                let s = STRUCT_BASE + x;
+                let f = TYPED_FN_BASE + x;
+                func.instruction(&Instruction::StructNew(s));
+                func.instruction(&Instruction::Call(f));
             }
         }
     }
@@ -726,7 +780,7 @@ mod tests {
 
         let mut session = mutatis::Session::new();
 
-        for _ in 0..5 {
+        for _ in 0..2048 {
             session.mutate(&mut res)?;
             let wasm = res.to_wasm_binary();
 
@@ -738,7 +792,6 @@ mod tests {
             let wat = wasmprinter::print_bytes(&wasm).expect("[-] Failed .print_bytes(&wasm).");
             let result = validator.validate_all(&wasm);
             log::debug!("{wat}");
-            println!("{wat}");
             assert!(
                 result.is_ok(),
                 "\n[-] Invalid wat: {}\n\t\t==== Failed Wat ====\n{}",
@@ -788,37 +841,59 @@ mod tests {
   (type (;1;) (func (param externref externref)))
   (type (;2;) (func (param externref externref externref)))
   (type (;3;) (func (result externref externref externref)))
-  (rec
-    (type (;4;) (struct))
-  )
-  (rec)
+  (type (;4;) (func (param (ref any))))
   (rec
     (type (;5;) (struct))
   )
+  (rec)
   (rec
     (type (;6;) (struct))
+  )
+  (rec
     (type (;7;) (struct))
     (type (;8;) (struct))
-  )
-  (rec
     (type (;9;) (struct))
+  )
+  (rec
     (type (;10;) (struct))
-  )
-  (rec
     (type (;11;) (struct))
-    (type (;12;) (struct))
   )
   (rec
+    (type (;12;) (struct))
     (type (;13;) (struct))
   )
+  (rec
+    (type (;14;) (struct))
+  )
+  (type (;15;) (func (param (ref 5))))
+  (type (;16;) (func (param (ref 6))))
+  (type (;17;) (func (param (ref 7))))
+  (type (;18;) (func (param (ref 8))))
+  (type (;19;) (func (param (ref 9))))
+  (type (;20;) (func (param (ref 10))))
+  (type (;21;) (func (param (ref 11))))
+  (type (;22;) (func (param (ref 12))))
+  (type (;23;) (func (param (ref 13))))
+  (type (;24;) (func (param (ref 14))))
   (import "" "gc" (func (;0;) (type 0)))
   (import "" "take_refs" (func (;1;) (type 2)))
   (import "" "make_refs" (func (;2;) (type 3)))
+  (import "" "take_struct" (func (;3;) (type 4)))
+  (import "" "take_struct_5" (func (;4;) (type 15)))
+  (import "" "take_struct_6" (func (;5;) (type 16)))
+  (import "" "take_struct_7" (func (;6;) (type 17)))
+  (import "" "take_struct_8" (func (;7;) (type 18)))
+  (import "" "take_struct_9" (func (;8;) (type 19)))
+  (import "" "take_struct_10" (func (;9;) (type 20)))
+  (import "" "take_struct_11" (func (;10;) (type 21)))
+  (import "" "take_struct_12" (func (;11;) (type 22)))
+  (import "" "take_struct_13" (func (;12;) (type 23)))
+  (import "" "take_struct_14" (func (;13;) (type 24)))
   (table (;0;) 5 externref)
   (global (;0;) (mut externref) ref.null extern)
   (global (;1;) (mut externref) ref.null extern)
-  (export "run" (func 3))
-  (func (;3;) (type 1) (param externref externref)
+  (export "run" (func 14))
+  (func (;14;) (type 1) (param externref externref)
     (local externref)
     loop ;; label = @1
       ref.null extern
@@ -828,8 +903,8 @@ mod tests {
       local.get 0
       global.set 0
       global.get 0
-      struct.new 4
-      drop
+      struct.new 5
+      call 3
       drop
       drop
       drop

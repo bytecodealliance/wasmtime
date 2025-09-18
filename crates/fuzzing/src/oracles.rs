@@ -919,6 +919,38 @@ pub fn table_ops(
         });
         linker.define(&store, "", "make_refs", func).unwrap();
 
+        let func_ty = FuncType::new(
+            store.engine(),
+            vec![ValType::Ref(RefType::new(false, HeapType::Any))],
+            vec![],
+        );
+
+        let func = Func::new(&mut store, func_ty, {
+            move |_caller: Caller<'_, StoreLimits>, _params, _results| {
+                log::info!("table_ops: take_struct(<ref any>)");
+                Ok(())
+            }
+        });
+
+        linker.define(&store, "", "take_struct", func).unwrap();
+
+        for imp in module.imports() {
+            if imp.module() == "" {
+                let name = imp.name(); // &str
+                if name.starts_with("take_struct_") {
+                    if let wasmtime::ExternType::Func(ft) = imp.ty() {
+                        let imp_name = name.to_string();
+                        let func =
+                            Func::new(&mut store, ft.clone(), move |_caller, _params, _results| {
+                                log::info!("table_ops: {}(<typed structref>)", imp_name);
+                                Ok(())
+                            });
+                        linker.define(&store, "", name, func).unwrap();
+                    }
+                }
+            }
+        }
+
         let instance = linker.instantiate(&mut store, &module).unwrap();
         let run = instance.get_func(&mut store, "run").unwrap();
 
