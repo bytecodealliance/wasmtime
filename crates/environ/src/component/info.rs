@@ -1051,7 +1051,7 @@ pub enum Trampoline {
         /// The type index for the start function of the thread.
         start_func_ty_idx: ComponentTypeIndex,
         /// The index of the table that stores the start function.
-        start_func_table_idx: TableIndex,
+        start_func_table_idx: RuntimeTableIndex,
     },
 
     /// Intrinsic used to implement the `thread.switch-to` component model builtin.

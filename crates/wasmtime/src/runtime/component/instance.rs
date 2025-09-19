@@ -809,6 +809,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_table(&mut self, store: &mut StoreOpaque, table: &ExtractTable) {
+        println!("extract_table: {:?}", table);
         let export = match lookup_vmexport(store, self.id, &table.export) {
             crate::runtime::vm::Export::Table(t) => t,
             _ => unreachable!(),

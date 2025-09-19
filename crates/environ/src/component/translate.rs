@@ -1,5 +1,6 @@
 use crate::ScopeVec;
 use crate::component::dfg::AbstractInstantiations;
+use crate::component::dfg::TableId;
 use crate::component::*;
 use crate::prelude::*;
 use crate::{
@@ -311,7 +312,7 @@ enum LocalInitializer<'data> {
     ThreadNewIndirect {
         func: ModuleInternedTypeIndex,
         start_func_ty: ComponentTypeIndex,
-        start_func_table_idx: TableIndex,
+        start_func_table_index: TableIndex,
     },
     ThreadSwitchTo {
         func: ModuleInternedTypeIndex,
@@ -1103,14 +1104,14 @@ impl<'a, 'data> Translator<'a, 'data> {
                         }
                         wasmparser::CanonicalFunction::ThreadNewIndirect {
                             func_ty_index,
-                            table_index,
+                            table_id,
                         } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ThreadNewIndirect {
                                 func,
                                 start_func_ty: ComponentTypeIndex::from_u32(func_ty_index),
-                                start_func_table_idx: TableIndex::from_u32(table_index),
+                                start_func_table_index: TableIndex::from_u32(table_id),
                             }
                         }
                         wasmparser::CanonicalFunction::ThreadSwitchTo { cancellable } => {

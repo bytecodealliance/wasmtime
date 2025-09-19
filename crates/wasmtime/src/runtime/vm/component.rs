@@ -685,7 +685,12 @@ impl ComponentInstance {
                 let offset = self.offsets.runtime_table(i);
                 // SAFETY: see above
                 unsafe {
-                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                    *self.as_mut().vmctx_plus_offset_mut::<usize>(
+                        offset + offset_of!(VMTableImport, from) as u32,
+                    ) = INVALID_PTR;
+                    *self.as_mut().vmctx_plus_offset_mut::<usize>(
+                        offset + offset_of!(VMTableImport, vmctx) as u32,
+                    ) = INVALID_PTR;
                 }
             }
         }

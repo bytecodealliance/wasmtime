@@ -62,6 +62,7 @@ hashbrown = { workspace = true, features = ["default-hasher"] }
 bitflags = { workspace = true }
 futures = { workspace = true, features = ["alloc"], optional = true }
 bytes = { workspace = true, optional = true }
+tracing-subscriber.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true

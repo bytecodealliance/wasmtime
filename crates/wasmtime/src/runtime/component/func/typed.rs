@@ -191,7 +191,7 @@ where
 
             let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
             let prepared =
-                self.prepare_call(store.as_context_mut(), false, false, move |cx, ty, dst| {
+                self.prepare_call(store.as_context_mut(), true, false, move |cx, ty, dst| {
                     // SAFETY: The goal here is to get `Params`, a non-`'static`
                     // value, to live long enough to the lowering of the
                     // parameters. We're guaranteed that `Params` lives in the
@@ -220,7 +220,7 @@ where
 
             impl<'a, T> Drop for RemoveOnDrop<'a, T> {
                 fn drop(&mut self) {
-                    self.task.remove(self.store.as_context_mut()).unwrap();
+                    // self.task.remove(self.store.as_context_mut()).unwrap();
                 }
             }
 

@@ -64,8 +64,11 @@ pub struct ComponentDfg {
     /// Same as `reallocs`, but for post-return.
     pub post_returns: Intern<PostReturnId, CoreDef>,
 
-    /// Same as `reallocs`, but for post-return.
+    /// Same as `reallocs`, but for memories.
     pub memories: Intern<MemoryId, CoreExport<MemoryIndex>>,
+
+    /// Same as `reallocs`, but for tables.
+    pub tables: Intern<TableId, CoreExport<TableIndex>>,
 
     /// Metadata about identified fused adapters.
     ///
@@ -439,7 +442,7 @@ pub enum Trampoline {
     ThreadIndex,
     ThreadNewIndirect {
         start_func_ty_idx: ComponentTypeIndex,
-        start_func_table_idx: TableIndex,
+        start_func_table_id: TableId,
     },
     ThreadSwitchTo {
         cancellable: bool,
@@ -796,6 +799,15 @@ impl LinearizeDfg<'_> {
         )
     }
 
+    fn runtime_table(&mut self, table: TableId) -> RuntimeTableIndex {
+        self.intern(
+            table,
+            |me| &mut me.runtime_tables,
+            |me, table| me.core_export(&me.dfg.tables[table]),
+            |index, export| GlobalInitializer::ExtractTable(ExtractTable { index, export }),
+        )
+    }
+
     fn runtime_realloc(&mut self, realloc: ReallocId) -> RuntimeReallocIndex {
         self.intern(
             realloc,
@@ -997,10 +1009,10 @@ impl LinearizeDfg<'_> {
             Trampoline::ThreadIndex => info::Trampoline::ThreadIndex,
             Trampoline::ThreadNewIndirect {
                 start_func_ty_idx,
-                start_func_table_idx,
+                start_func_table_id,
             } => info::Trampoline::ThreadNewIndirect {
                 start_func_ty_idx: *start_func_ty_idx,
-                start_func_table_idx: *start_func_table_idx,
+                start_func_table_idx: self.runtime_table(*start_func_table_id),
             },
             Trampoline::ThreadSwitchTo { cancellable } => info::Trampoline::ThreadSwitchTo {
                 cancellable: *cancellable,

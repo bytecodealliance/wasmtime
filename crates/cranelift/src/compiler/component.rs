@@ -766,7 +766,7 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::ThreadResumeLater => {
                 self.translate_libcall(
                     host::thread_resume_later,
-                    TrapSentinel::NegativeOne,
+                    TrapSentinel::Falsy,
                     WasmArgs::InRegisters,
                     |_, _| {},
                 );

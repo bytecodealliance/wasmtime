@@ -1,6 +1,7 @@
 //! Implementation of string transcoding required by the component model.
 
 use crate::component::Instance;
+use crate::component::concurrent::GuestThreadIndex;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::component::concurrent::ResourcePair;
@@ -774,7 +775,7 @@ fn waitable_join(
 
 #[cfg(feature = "component-model-async")]
 fn thread_yield(store: &mut dyn VMStore, instance: Instance, cancellable: u8) -> Result<bool> {
-    instance.thread_yield_to(store, cancellable != 0, None)
+    instance.thread_yield(store, cancellable != 0)
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1277,18 +1278,24 @@ fn thread_switch_to(
     instance: Instance,
     cancellable: u8,
     thread_idx: u32,
-) -> Result<u32> {
-    todo!()
+) -> Result<bool> {
+    store.component_async_store().thread_switch_to(
+        instance,
+        cancellable != 0,
+        GuestThreadIndex::from_u32(thread_idx),
+    )
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_suspend(store: &mut dyn VMStore, instance: Instance, cancellable: u8) -> Result<u32> {
-    todo!()
+fn thread_suspend(store: &mut dyn VMStore, instance: Instance, cancellable: u8) -> Result<bool> {
+    instance.thread_suspend(store, cancellable != 0)
 }
 
 #[cfg(feature = "component-model-async")]
 fn thread_resume_later(store: &mut dyn VMStore, instance: Instance, thread_idx: u32) -> Result<()> {
-    todo!()
+    store
+        .component_async_store()
+        .thread_resume_later(instance, GuestThreadIndex::from_u32(thread_idx))
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1298,5 +1305,9 @@ fn thread_yield_to(
     cancellable: u8,
     thread_idx: u32,
 ) -> Result<bool> {
-    instance.thread_yield_to(store, cancellable != 0, Some(TableId::new(thread_idx)))
+    store.component_async_store().thread_yield_to(
+        instance,
+        cancellable != 0,
+        GuestThreadIndex::from_u32(thread_idx),
+    )
 }
