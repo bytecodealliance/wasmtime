@@ -1107,10 +1107,11 @@ mod test_programs {
     use anyhow::{Context, Result, bail};
     use http_body_util::BodyExt;
     use hyper::header::HeaderValue;
-    use std::io::{BufRead, BufReader, Read, Write};
+    use std::io::{self, BufRead, BufReader, Read, Write};
     use std::iter;
     use std::net::SocketAddr;
     use std::process::{Child, Command, Stdio};
+    use std::thread::{self, JoinHandle};
     use test_programs_artifacts::*;
     use tokio::net::TcpStream;
 
@@ -1507,6 +1508,8 @@ mod test_programs {
     /// Helper structure to manage an invocation of `wasmtime serve`
     struct WasmtimeServe {
         child: Option<Child>,
+        stdout: Option<JoinHandle<io::Result<Vec<u8>>>>,
+        stderr: Option<JoinHandle<io::Result<Vec<u8>>>>,
         addr: SocketAddr,
         shutdown_addr: SocketAddr,
     }
@@ -1539,9 +1542,9 @@ mod test_programs {
             // This is done to figure out what `:0` was bound to in the child
             // process.
             let mut line = String::new();
-            let mut reader = BufReader::new(child.stderr.take().unwrap());
+            let mut stderr = BufReader::new(child.stderr.take().unwrap());
             let mut read_addr_from_line = |prefix: &str| -> Result<SocketAddr> {
-                reader.read_line(&mut line)?;
+                stderr.read_line(&mut line)?;
 
                 if !line.starts_with(prefix) {
                     bail!("input line `{line}` didn't start with `{prefix}`");
@@ -1567,13 +1570,22 @@ mod test_programs {
                 (Err(a), _) | (_, Err(a)) => {
                     child.kill()?;
                     child.wait()?;
-                    reader.read_to_string(&mut line)?;
+                    stderr.read_to_string(&mut line)?;
                     return Err(a.context(line));
                 }
             };
-            assert!(reader.buffer().is_empty());
-            child.stderr = Some(reader.into_inner());
+            let mut stdout = child.stdout.take().unwrap();
             Ok(WasmtimeServe {
+                stdout: Some(thread::spawn(move || {
+                    let mut dst = Vec::new();
+                    stdout.read_to_end(&mut dst).map(|_| dst)
+                })),
+
+                stderr: Some(thread::spawn(move || {
+                    let mut dst = Vec::new();
+                    stderr.read_to_end(&mut dst).map(|_| dst)
+                })),
+
                 child: Some(child),
                 addr,
                 shutdown_addr,
@@ -1582,6 +1594,10 @@ mod test_programs {
 
         /// Completes this server gracefully by printing the output on failure.
         fn finish(mut self) -> Result<(String, String)> {
+            self._finish()
+        }
+
+        fn _finish(&mut self) -> Result<(String, String)> {
             let mut child = self.child.take().unwrap();
 
             // If the child process has already exited, then great! Otherwise
@@ -1598,7 +1614,9 @@ mod test_programs {
             // was already shut down (e.g. panicked or similar), wait for the
             // result here. The result should succeed (e.g. 0 exit status), and
             // if it did then the stdout/stderr are the caller's problem.
-            let output = child.wait_with_output()?;
+            let mut output = child.wait_with_output()?;
+            output.stdout = self.stdout.take().unwrap().join().unwrap()?;
+            output.stderr = self.stderr.take().unwrap().join().unwrap()?;
             if !output.status.success() {
                 bail!("child failed {output:?}");
             }
@@ -1650,30 +1668,19 @@ mod test_programs {
     // if our server goes away.
     impl Drop for WasmtimeServe {
         fn drop(&mut self) {
-            let mut child = match self.child.take() {
-                Some(child) => child,
-                None => return,
-            };
-            if child.kill().is_err() {
+            if self.child.is_none() {
                 return;
             }
-            let output = match child.wait_with_output() {
-                Ok(output) => output,
-                Err(_) => return,
-            };
-
-            println!("server status: {}", output.status);
-            if !output.stdout.is_empty() {
-                println!(
-                    "server stdout:\n{}",
-                    String::from_utf8_lossy(&output.stdout)
-                );
-            }
-            if !output.stderr.is_empty() {
-                println!(
-                    "server stderr:\n{}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
+            match self._finish() {
+                Ok((stdout, stderr)) => {
+                    if !stdout.is_empty() {
+                        println!("server stdout:\n{stdout}");
+                    }
+                    if !stderr.is_empty() {
+                        println!("server stderr:\n{stderr}");
+                    }
+                }
+                Err(e) => println!("failed to wait for child or read stdio: {e}"),
             }
         }
     }
