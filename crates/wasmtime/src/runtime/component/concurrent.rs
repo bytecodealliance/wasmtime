@@ -1035,9 +1035,8 @@ impl Instance {
     /// event loop.
     ///
     /// Like [`Self::run`], this will run `fun` as part of this instance's event
-    /// loop until it yields a result _or_ there are no more tasks to run.
-    /// Unlike [`Self::run`], `fun` is provided an [`Accessor`], which provides
-    /// controlled access to the `Store` and its data.
+    /// loop until it yields a result.  `fun` is provided an [`Accessor`], which
+    /// provides controlled access to the `Store` and its data.
     ///
     /// This function can be used to invoke [`Func::call_concurrent`] for
     /// example within the async closure provided here.
@@ -1161,9 +1160,7 @@ impl Instance {
 
     /// Run this instance's event loop.
     ///
-    /// The returned future will resolve when either the specified future
-    /// completes (in which case we return its result) or no further progress
-    /// can be made (in which case we trap with `Trap::AsyncDeadlock`).
+    /// The returned future will resolve when the specified future completes.
     async fn poll_until<T, R>(
         self,
         mut store: StoreContextMut<'_, T>,
@@ -1258,35 +1255,10 @@ impl Instance {
                                     // futures in `ConcurrentState::futures`,
                                     // there are no remaining work items, _and_
                                     // the future we were passed as an argument
-                                    // still hasn't completed, meaning we're
-                                    // stuck, so we return an error.  The
-                                    // underlying assumption is that `future`
-                                    // depends on this component instance making
-                                    // such progress, and thus there's no point
-                                    // in continuing to poll it given we've run
-                                    // out of work to do.
-                                    //
-                                    // Note that we'd also reach this point if
-                                    // the host embedder passed e.g. a
-                                    // `std::future::Pending` to
-                                    // `Instance::run_concurrent`, in which case
-                                    // we'd return a "deadlock" error even when
-                                    // any and all tasks have completed
-                                    // normally.  However, that's not how
-                                    // `Instance::run_concurrent` is intended
-                                    // (and documented) to be used, so it seems
-                                    // reasonable to lump that case in with
-                                    // "real" deadlocks.
-                                    //
-                                    // TODO: Once we've added host APIs for
-                                    // cancelling in-progress tasks, we can
-                                    // return some other, non-error value here,
-                                    // treating it as "normal" and giving the
-                                    // host embedder a chance to intervene by
-                                    // cancelling one or more tasks and/or
-                                    // starting new tasks capable of waking the
-                                    // existing ones.
-                                    Poll::Ready(Err(anyhow!(crate::Trap::AsyncDeadlock)))
+                                    // still hasn't completed, so we assume that
+                                    // future will wake up and give us more work
+                                    // to do when it's ready to.
+                                    Poll::Pending
                                 }
                             }
                             // There is at least one pending future in
