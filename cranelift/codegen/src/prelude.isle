@@ -96,6 +96,12 @@
 (decl pure imm64_icmp (Type IntCC Imm64 Imm64) Imm64)
 (extern constructor imm64_icmp imm64_icmp)
 
+(decl pure imm64_rotl (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_rotl imm64_rotl)
+
+(decl pure imm64_rotr (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_rotr imm64_rotr)
+
 ;; Each of these extractors tests whether the upper half of the input equals the
 ;; lower half of the input
 (decl u128_replicated_u64 (u64) u128)
