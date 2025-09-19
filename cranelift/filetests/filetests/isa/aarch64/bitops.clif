@@ -628,6 +628,38 @@ block0(v0: i8x16):
 ;   mvn v0.16b, v0.16b
 ;   ret
 
+function %bnot_i8x8(i8x8) -> i8x8 {
+block0(v0: i8x8):
+    v1 = bnot v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   mvn v0.8b, v0.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mvn v0.8b, v0.8b
+;   ret
+
+function %bnot_i16x4(i16x4) -> i16x4 {
+block0(v0: i16x4):
+    v1 = bnot v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   mvn v0.8b, v0.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mvn v0.8b, v0.8b
+;   ret
+
 function %band_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
     v2 = band v0, v1
@@ -692,6 +724,38 @@ block0(v0: i8x16, v1: i8x16):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and v0.16b, v0.16b, v1.16b
+;   ret
+
+function %band_i8x8(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+    v2 = band v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   and v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   and v0.8b, v0.8b, v1.8b
+;   ret
+
+function %band_i16x4(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+    v2 = band v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   and v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   and v0.8b, v0.8b, v1.8b
 ;   ret
 
 function %band_i64_constant(i64) -> i64 {
@@ -830,6 +894,38 @@ block0(v0: i8x16, v1: i8x16):
 ;   orr v0.16b, v0.16b, v1.16b
 ;   ret
 
+function %bor_i8x8(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+    v2 = bor v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   orr v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   orr v0.8b, v0.8b, v1.8b
+;   ret
+
+function %bor_i16x4(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+    v2 = bor v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   orr v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   orr v0.8b, v0.8b, v1.8b
+;   ret
+
 function %bor_i64_constant(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i64 3
@@ -964,6 +1060,38 @@ block0(v0: i8x16, v1: i8x16):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor v0.16b, v0.16b, v1.16b
+;   ret
+
+function %bxor_i8x8(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+    v2 = bxor v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   eor v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   eor v0.8b, v0.8b, v1.8b
+;   ret
+
+function %bxor_i16x4(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+    v2 = bxor v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   eor v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   eor v0.8b, v0.8b, v1.8b
 ;   ret
 
 function %bxor_i64_constant(i64) -> i64 {
@@ -1185,6 +1313,54 @@ block0(v0: i128, v1: i128):
 ; block0: ; offset 0x0
 ;   orn x0, x0, x2
 ;   orn x1, x1, x3
+;   ret
+
+function %bor_not_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = bor_not v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   orn v0.16b, v0.16b, v1.16b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   orn v0.16b, v0.16b, v1.16b
+;   ret
+
+function %bor_not_i8x8(i8x8, i8x8) -> i8x8 {
+block0(v0: i8x8, v1: i8x8):
+    v2 = bor_not v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   orn v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   orn v0.8b, v0.8b, v1.8b
+;   ret
+
+function %bor_not_i16x4(i16x4, i16x4) -> i16x4 {
+block0(v0: i16x4, v1: i16x4):
+    v2 = bor_not v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   orn v0.8b, v0.8b, v1.8b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   orn v0.8b, v0.8b, v1.8b
 ;   ret
 
 function %bor_not_i64_constant(i64) -> i64 {

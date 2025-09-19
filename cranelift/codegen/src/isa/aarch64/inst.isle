@@ -1526,6 +1526,8 @@
     (Bic)
     ;; Bitwise inclusive or
     (Orr)
+    ;; Bitwise inclusive or not
+    (Orn)
     ;; Bitwise exclusive or
     (Eor)
     ;; Unsigned maximum pairwise
@@ -3221,6 +3223,9 @@
 
 (decl orr_vec (Reg Reg VectorSize) Reg)
 (rule (orr_vec x y size) (vec_rrr (VecALUOp.Orr) x y size))
+
+(decl orn_vec (Reg Reg VectorSize) Reg)
+(rule (orn_vec x y size) (vec_rrr (VecALUOp.Orn) x y size))
 
 ;; Helpers for generating `and` instructions.
 (spec (and_reg ty a b)

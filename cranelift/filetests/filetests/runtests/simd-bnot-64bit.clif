@@ -1,0 +1,38 @@
+test interpret
+test run
+target aarch64
+set enable_multi_ret_implicit_sret
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+; s390x and x86_64 do not support 64-bit vectors.
+
+
+function %bnot_i8x8(i8x8) -> i8x8 {
+block0(v0: i8x8):
+    v1 = bnot v0
+    return v1
+}
+; run: %bnot_i8x8(0x0000000000000000) == 0xffffffffffffffff
+; run: %bnot_i8x8(0x1111111111111111) == 0xeeeeeeeeeeeeeeee
+; run: %bnot_i8x8(0x0101001100001111) == 0xfefeffeeffffeeee
+; run: %bnot_i8x8(0x0000000000000000) == 0xffffffffffffffff
+
+function %bnot_i16x4(i16x4) -> i16x4 {
+block0(v0: i16x4):
+    v1 = bnot v0
+    return v1
+}
+; run: %bnot_i16x4(0x0000000000000000) == 0xffffffffffffffff
+; run: %bnot_i16x4(0x1111111111111111) == 0xeeeeeeeeeeeeeeee
+; run: %bnot_i16x4(0x0101001100001111) == 0xfefeffeeffffeeee
+; run: %bnot_i16x4(0x0000000000000000) == 0xffffffffffffffff
+
+function %bnot_i32x2(i32x2) -> i32x2 {
+block0(v0: i32x2):
+    v1 = bnot v0
+    return v1
+}
+; run: %bnot_i32x2(0x0000000000000000) == 0xffffffffffffffff
+; run: %bnot_i32x2(0x1111111111111111) == 0xeeeeeeeeeeeeeeee
+; run: %bnot_i32x2(0x0101001100001111) == 0xfefeffeeffffeeee
+; run: %bnot_i32x2(0x0000000000000000) == 0xffffffffffffffff
