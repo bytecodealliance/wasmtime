@@ -234,7 +234,7 @@ where
             let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
             self.func
                 .instance
-                .run_concurrent(wrapper.store.as_context_mut(), async |_| {
+                .run_concurrent_trap_on_idle(wrapper.store.as_context_mut(), async |_| {
                     Ok(result.await?.0)
                 })
                 .await?

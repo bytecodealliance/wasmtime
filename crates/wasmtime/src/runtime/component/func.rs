@@ -281,7 +281,7 @@ impl Func {
         #[cfg(feature = "component-model-async")]
         {
             self.instance
-                .run_concurrent(&mut store, async |store| {
+                .run_concurrent_trap_on_idle(&mut store, async |store| {
                     self.call_concurrent_dynamic(store, params, results, false)
                         .await
                         .map(drop)
