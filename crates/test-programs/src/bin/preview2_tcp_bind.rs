@@ -1,4 +1,4 @@
-use test_programs::sockets::attempt_random_port;
+use test_programs::sockets::{attempt_random_port, supports_ipv6};
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -152,30 +152,26 @@ fn main() {
     let net = Network::default();
 
     test_tcp_bind_ephemeral_port(&net, IpAddress::IPV4_LOOPBACK);
-    test_tcp_bind_ephemeral_port(&net, IpAddress::IPV6_LOOPBACK);
     test_tcp_bind_ephemeral_port(&net, IpAddress::IPV4_UNSPECIFIED);
-    test_tcp_bind_ephemeral_port(&net, IpAddress::IPV6_UNSPECIFIED);
-
     test_tcp_bind_specific_port(&net, IpAddress::IPV4_LOOPBACK);
-    test_tcp_bind_specific_port(&net, IpAddress::IPV6_LOOPBACK);
     test_tcp_bind_specific_port(&net, IpAddress::IPV4_UNSPECIFIED);
-    test_tcp_bind_specific_port(&net, IpAddress::IPV6_UNSPECIFIED);
-
     test_tcp_bind_reuseaddr(&net, IpAddress::IPV4_LOOPBACK);
-    test_tcp_bind_reuseaddr(&net, IpAddress::IPV6_LOOPBACK);
-
     test_tcp_bind_addrinuse(&net, IpAddress::IPV4_LOOPBACK);
-    test_tcp_bind_addrinuse(&net, IpAddress::IPV6_LOOPBACK);
     test_tcp_bind_addrinuse(&net, IpAddress::IPV4_UNSPECIFIED);
-    test_tcp_bind_addrinuse(&net, IpAddress::IPV6_UNSPECIFIED);
-
     test_tcp_bind_addrnotavail(&net, RESERVED_IPV4_ADDRESS);
-    test_tcp_bind_addrnotavail(&net, RESERVED_IPV6_ADDRESS);
-
     test_tcp_bind_wrong_family(&net, IpAddressFamily::Ipv4);
-    test_tcp_bind_wrong_family(&net, IpAddressFamily::Ipv6);
 
-    test_tcp_bind_non_unicast(&net);
-
-    test_tcp_bind_dual_stack(&net);
+    if supports_ipv6() {
+        test_tcp_bind_ephemeral_port(&net, IpAddress::IPV6_LOOPBACK);
+        test_tcp_bind_ephemeral_port(&net, IpAddress::IPV6_UNSPECIFIED);
+        test_tcp_bind_specific_port(&net, IpAddress::IPV6_LOOPBACK);
+        test_tcp_bind_specific_port(&net, IpAddress::IPV6_UNSPECIFIED);
+        test_tcp_bind_reuseaddr(&net, IpAddress::IPV6_LOOPBACK);
+        test_tcp_bind_addrinuse(&net, IpAddress::IPV6_LOOPBACK);
+        test_tcp_bind_addrinuse(&net, IpAddress::IPV6_UNSPECIFIED);
+        test_tcp_bind_addrnotavail(&net, RESERVED_IPV6_ADDRESS);
+        test_tcp_bind_wrong_family(&net, IpAddressFamily::Ipv6);
+        test_tcp_bind_non_unicast(&net);
+        test_tcp_bind_dual_stack(&net);
+    }
 }

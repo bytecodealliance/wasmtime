@@ -2,6 +2,7 @@ use futures::join;
 use test_programs::p3::wasi::sockets::types::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, TcpSocket,
 };
+use test_programs::sockets::supports_ipv6;
 
 struct Component;
 
@@ -199,16 +200,17 @@ async fn test_tcp_connected_state_invariants(family: IpAddressFamily) {
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         test_tcp_unbound_state_invariants(IpAddressFamily::Ipv4);
-        test_tcp_unbound_state_invariants(IpAddressFamily::Ipv6);
-
         test_tcp_bound_state_invariants(IpAddressFamily::Ipv4);
-        test_tcp_bound_state_invariants(IpAddressFamily::Ipv6);
-
         test_tcp_listening_state_invariants(IpAddressFamily::Ipv4).await;
-        test_tcp_listening_state_invariants(IpAddressFamily::Ipv6).await;
-
         test_tcp_connected_state_invariants(IpAddressFamily::Ipv4).await;
-        test_tcp_connected_state_invariants(IpAddressFamily::Ipv6).await;
+
+        if supports_ipv6() {
+            test_tcp_unbound_state_invariants(IpAddressFamily::Ipv6);
+            test_tcp_bound_state_invariants(IpAddressFamily::Ipv6);
+            test_tcp_listening_state_invariants(IpAddressFamily::Ipv6).await;
+            test_tcp_connected_state_invariants(IpAddressFamily::Ipv6).await;
+        }
+
         Ok(())
     }
 }

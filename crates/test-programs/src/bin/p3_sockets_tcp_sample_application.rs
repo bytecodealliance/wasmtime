@@ -3,6 +3,7 @@ use test_programs::p3::wasi::sockets::types::{
     IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress, TcpSocket,
 };
 use test_programs::p3::wit_stream;
+use test_programs::sockets::supports_ipv6;
 use wit_bindgen::StreamResult;
 
 struct Component;
@@ -99,16 +100,18 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             }),
         )
         .await;
-        test_tcp_sample_application(
-            IpAddressFamily::Ipv6,
-            IpSocketAddress::Ipv6(Ipv6SocketAddress {
-                port: 0,                           // use any free port
-                address: (0, 0, 0, 0, 0, 0, 0, 1), // localhost
-                flow_info: 0,
-                scope_id: 0,
-            }),
-        )
-        .await;
+        if supports_ipv6() {
+            test_tcp_sample_application(
+                IpAddressFamily::Ipv6,
+                IpSocketAddress::Ipv6(Ipv6SocketAddress {
+                    port: 0,                           // use any free port
+                    address: (0, 0, 0, 0, 0, 0, 0, 1), // localhost
+                    flow_info: 0,
+                    scope_id: 0,
+                }),
+            )
+            .await;
+        }
         Ok(())
     }
 }

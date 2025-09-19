@@ -2,6 +2,7 @@ use test_programs::p3::sockets::attempt_random_port;
 use test_programs::p3::wasi::sockets::types::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, UdpSocket,
 };
+use test_programs::sockets::supports_ipv6;
 
 struct Component;
 
@@ -88,27 +89,26 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             IpAddress::Ipv6((0x2001, 0x0db8, 0, 0, 0, 0, 0, 0)); // Reserved for documentation and examples.
 
         test_udp_bind_ephemeral_port(IpAddress::IPV4_LOOPBACK);
-        test_udp_bind_ephemeral_port(IpAddress::IPV6_LOOPBACK);
         test_udp_bind_ephemeral_port(IpAddress::IPV4_UNSPECIFIED);
-        test_udp_bind_ephemeral_port(IpAddress::IPV6_UNSPECIFIED);
-
         test_udp_bind_specific_port(IpAddress::IPV4_LOOPBACK);
-        test_udp_bind_specific_port(IpAddress::IPV6_LOOPBACK);
         test_udp_bind_specific_port(IpAddress::IPV4_UNSPECIFIED);
-        test_udp_bind_specific_port(IpAddress::IPV6_UNSPECIFIED);
-
         test_udp_bind_addrinuse(IpAddress::IPV4_LOOPBACK);
-        test_udp_bind_addrinuse(IpAddress::IPV6_LOOPBACK);
         test_udp_bind_addrinuse(IpAddress::IPV4_UNSPECIFIED);
-        test_udp_bind_addrinuse(IpAddress::IPV6_UNSPECIFIED);
-
         test_udp_bind_addrnotavail(RESERVED_IPV4_ADDRESS);
-        test_udp_bind_addrnotavail(RESERVED_IPV6_ADDRESS);
-
         test_udp_bind_wrong_family(IpAddressFamily::Ipv4);
-        test_udp_bind_wrong_family(IpAddressFamily::Ipv6);
 
-        test_udp_bind_dual_stack();
+        if supports_ipv6() {
+            test_udp_bind_ephemeral_port(IpAddress::IPV6_LOOPBACK);
+            test_udp_bind_ephemeral_port(IpAddress::IPV6_UNSPECIFIED);
+            test_udp_bind_specific_port(IpAddress::IPV6_LOOPBACK);
+            test_udp_bind_specific_port(IpAddress::IPV6_UNSPECIFIED);
+            test_udp_bind_addrinuse(IpAddress::IPV6_LOOPBACK);
+            test_udp_bind_addrinuse(IpAddress::IPV6_UNSPECIFIED);
+            test_udp_bind_addrnotavail(RESERVED_IPV6_ADDRESS);
+            test_udp_bind_wrong_family(IpAddressFamily::Ipv6);
+            test_udp_bind_dual_stack();
+        }
+
         Ok(())
     }
 }

@@ -43,6 +43,11 @@ impl<T> Ctx<T> {
             builder.env(var, val);
         }
 
+        let supports_ipv6 = std::net::TcpListener::bind((std::net::Ipv6Addr::LOCALHOST, 0)).is_ok();
+        if !supports_ipv6 {
+            builder.env("DISABLE_IPV6", "1");
+        }
+
         let ctx = Ctx {
             wasi: configure(&mut builder),
             stderr,
