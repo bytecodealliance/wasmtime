@@ -1170,31 +1170,50 @@ impl Instance {
         mut future: Pin<&mut impl Future<Output = R>>,
     ) -> Result<R>
     where
-        T: Send,
+        T: Send + 'static,
     {
+        struct Reset<'a, T: 'static> {
+            store: StoreContextMut<'a, T>,
+            instance: Instance,
+            futures: Option<FuturesUnordered<HostTaskFuture>>,
+        }
+
+        impl<'a, T> Drop for Reset<'a, T> {
+            fn drop(&mut self) {
+                if let Some(futures) = self.futures.take() {
+                    *self
+                        .instance
+                        .concurrent_state_mut(self.store.0)
+                        .futures
+                        .get_mut() = Some(futures);
+                }
+            }
+        }
+
         loop {
             // Take `ConcurrentState::futures` out of the instance so we can
             // poll it while also safely giving any of the futures inside access
             // to `self`.
-            let mut futures = self
-                .concurrent_state_mut(store.0)
-                .futures
-                .get_mut()
-                .take()
-                .unwrap();
-            let mut next = pin!(futures.next());
+            let futures = self.concurrent_state_mut(store.0).futures.get_mut().take();
+            let mut reset = Reset {
+                store: store.as_context_mut(),
+                instance: self,
+                futures,
+            };
+            let mut next = pin!(reset.futures.as_mut().unwrap().next());
 
             let result = future::poll_fn(|cx| {
                 // First, poll the future we were passed as an argument and
                 // return immediately if it's ready.
-                if let Poll::Ready(value) = self.set_tls(store.0, || future.as_mut().poll(cx)) {
+                if let Poll::Ready(value) = self.set_tls(reset.store.0, || future.as_mut().poll(cx))
+                {
                     return Poll::Ready(Ok(Either::Left(value)));
                 }
 
                 // Next, poll `ConcurrentState::futures` (which includes any
                 // pending host tasks and/or background tasks), returning
                 // immediately if one of them fails.
-                let next = match self.set_tls(store.0, || next.as_mut().poll(cx)) {
+                let next = match self.set_tls(reset.store.0, || next.as_mut().poll(cx)) {
                     Poll::Ready(Some(output)) => {
                         match output {
                             Err(e) => return Poll::Ready(Err(e)),
@@ -1206,7 +1225,7 @@ impl Instance {
                     Poll::Pending => Poll::Pending,
                 };
 
-                let mut instance = self.id().get_mut(store.0);
+                let mut instance = self.id().get_mut(reset.store.0);
 
                 // Next, check the "high priority" work queue and return
                 // immediately if it has at least one item.
@@ -1231,7 +1250,7 @@ impl Instance {
                                 // in case one of `ConcurrentState::futures` had
                                 // the side effect of unblocking it.
                                 if let Poll::Ready(value) =
-                                    self.set_tls(store.0, || future.as_mut().poll(cx))
+                                    self.set_tls(reset.store.0, || future.as_mut().poll(cx))
                                 {
                                     Poll::Ready(Ok(Either::Left(value)))
                                 } else {
@@ -1290,7 +1309,7 @@ impl Instance {
             // Put the `ConcurrentState::futures` back into the instance before
             // we return or handle any work items since one or more of those
             // items might append more futures.
-            *self.concurrent_state_mut(store.0).futures.get_mut() = Some(futures);
+            drop(reset);
 
             match result? {
                 // The future we were passed as an argument completed, so we
