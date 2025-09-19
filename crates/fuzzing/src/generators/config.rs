@@ -838,18 +838,14 @@ impl OptLevel {
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
 enum RegallocAlgorithm {
     Backtracking,
-    // FIXME(#11544 and #11545): rename back to `SinglePass` and handle below
-    // when those issues are fixed
-    TemporarilyDisabledSinglePass,
+    SinglePass,
 }
 
 impl RegallocAlgorithm {
     fn to_wasmtime(&self) -> wasmtime::RegallocAlgorithm {
         match self {
             RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
-            RegallocAlgorithm::TemporarilyDisabledSinglePass => {
-                wasmtime::RegallocAlgorithm::Backtracking
-            }
+            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::SinglePass,
         }
     }
 }
