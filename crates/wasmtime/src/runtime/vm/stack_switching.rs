@@ -410,7 +410,7 @@ pub fn cont_new(
 /// executing themselves, but are an ancestor of the currently executing
 /// stack), we have the following: All the fields in the stack's
 /// `VMStackLimits` are valid, describing the stack's stack limit, and
-/// pointers where executing for that stack entered and exited WASM.
+/// pointers where executing for that stack entered and exited Wasm.
 ///
 /// Suspended continuations: For suspended continuations (including their
 /// ancestors), we have the following. Note that the initial stack can never
