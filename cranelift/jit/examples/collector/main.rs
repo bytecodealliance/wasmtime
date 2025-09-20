@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use std::mem;
 
 use cranelift::prelude::*;
-use cranelift_codegen::ir::BlockArg;
+use cranelift_codegen::{Context, ir::BlockArg};
 use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{Linkage, Module};
+use cranelift_module::{FuncId, Linkage, Module};
 
 use crate::frame::*;
 
@@ -33,7 +33,29 @@ fn main() {
     builder.symbol("gc_alloc", gc::allocate_object as *const u8);
     builder.symbol("gc_collect", gc::trigger_collection as *const u8);
 
+    builder.symbol("trampoline_enter", frame::push_frame_entry as *const u8);
+    builder.symbol("trampoline_exit", frame::pop_frame_entry as *const u8);
+
     let mut module = JITModule::new(builder);
+    let mut ctx = module.make_context();
+    let mut func_ctx = FunctionBuilderContext::new();
+
+    let trampoline_enter = {
+        let mut sig = module.make_signature();
+        sig.params.push(AbiParam::new(types::I64));
+        sig.params.push(AbiParam::new(types::I64));
+
+        module
+            .declare_function("trampoline_enter", Linkage::Import, &sig)
+            .unwrap()
+    };
+
+    let trampoline_exit = {
+        let sig = module.make_signature();
+        module
+            .declare_function("trampoline_exit", Linkage::Import, &sig)
+            .unwrap()
+    };
 
     // `gc_alloc` is meant to be used whenever a runtime-managed allocation
     // is needed. For unmanaged allocations, used `malloc` or similar function.
@@ -46,7 +68,16 @@ fn main() {
             .declare_function("gc_alloc", Linkage::Import, &sig)
             .unwrap();
 
-        func
+        create_trampoline_for(
+            &mut module,
+            &mut ctx,
+            &mut func_ctx,
+            trampoline_enter,
+            trampoline_exit,
+            func,
+            "gc_alloc",
+            &sig,
+        )
     };
 
     // `gc_collect` is used to manually collect dead objects to reclaim
@@ -57,15 +88,22 @@ fn main() {
     // amount of memory is in use.
     let collection_func = {
         let sig = module.make_signature();
+
         let func = module
             .declare_function("gc_collect", Linkage::Import, &sig)
             .unwrap();
 
-        func
+        create_trampoline_for(
+            &mut module,
+            &mut ctx,
+            &mut func_ctx,
+            trampoline_enter,
+            trampoline_exit,
+            func,
+            "gc_collect",
+            &sig,
+        )
     };
-
-    let mut ctx = module.make_context();
-    let mut func_ctx = FunctionBuilderContext::new();
 
     let mut function_metadata = HashMap::new();
 
@@ -215,7 +253,16 @@ fn main() {
 
         module.clear_context(&mut ctx);
 
-        func
+        create_trampoline_for(
+            &mut module,
+            &mut ctx,
+            &mut func_ctx,
+            trampoline_enter,
+            trampoline_exit,
+            func,
+            "main",
+            &sig,
+        )
     };
 
     module.finalize_definitions().unwrap();
@@ -227,8 +274,8 @@ fn main() {
     // act like it's a loop.
     {
         let metadata = function_metadata.remove("main").unwrap();
-        let start = FunctionPtr::new(module.get_finalized_function(main_func));
-        let end = FunctionPtr::new(unsafe { start.ptr().byte_add(metadata.total_size) });
+        let start = module.get_finalized_function(main_func);
+        let end = unsafe { start.byte_add(metadata.total_size) };
 
         func_stack_maps.push(CompiledFunctionMetadata {
             start,
@@ -246,4 +293,53 @@ fn main() {
     let ret_code = main_ptr();
 
     std::process::exit(ret_code);
+}
+
+fn create_trampoline_for(
+    module: &mut JITModule,
+    ctx: &mut Context,
+    func_ctx: &mut FunctionBuilderContext,
+    trampoline_enter: FuncId,
+    trampoline_exit: FuncId,
+    func: FuncId,
+    name: &'static str,
+    sig: &Signature,
+) -> FuncId {
+    let trampoline = module
+        .declare_function(&format!("__tp_{name}"), Linkage::Export, sig)
+        .unwrap();
+
+    ctx.func.signature = sig.clone();
+
+    let mut bcx = FunctionBuilder::new(&mut ctx.func, func_ctx);
+    let entry_block = bcx.create_block();
+    bcx.append_block_params_for_function_params(entry_block);
+
+    bcx.switch_to_block(entry_block);
+
+    let ret_ptr = bcx.ins().get_return_address(types::I64);
+
+    let current_fp = bcx.ins().get_frame_pointer(types::I64);
+    let prev_fp = bcx.ins().load(types::I64, MemFlags::new(), current_fp, 0);
+
+    let trampoline_enter_ref = module.declare_func_in_func(trampoline_enter, &mut bcx.func);
+    bcx.ins().call(trampoline_enter_ref, &[prev_fp, ret_ptr]);
+
+    let callee_ref = module.declare_func_in_func(func, &mut bcx.func);
+    let callee_params = bcx.block_params(entry_block).to_vec();
+    let callee_call = bcx.ins().call(callee_ref, &callee_params);
+    let callee_return = bcx.inst_results(callee_call).to_vec();
+
+    let trampoline_exit_ref = module.declare_func_in_func(trampoline_exit, &mut bcx.func);
+    bcx.ins().call(trampoline_exit_ref, &[]);
+
+    bcx.ins().return_(&callee_return);
+
+    bcx.seal_all_blocks();
+    bcx.finalize();
+
+    module.define_function(trampoline, ctx).unwrap();
+    module.clear_context(ctx);
+
+    trampoline
 }

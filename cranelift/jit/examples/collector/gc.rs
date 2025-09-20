@@ -8,7 +8,24 @@ use std::alloc::{Layout, alloc, dealloc};
 use std::collections::HashMap;
 use std::sync::{LazyLock, RwLock};
 
-use crate::frame::FunctionPtr;
+/// Immutable, thread-transportable pointer type.
+#[derive(Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FunctionPtr(*const u8);
+
+impl FunctionPtr {
+    #[inline]
+    pub fn new(ptr: *const u8) -> Self {
+        FunctionPtr(ptr)
+    }
+
+    #[inline]
+    pub fn ptr(self) -> *const u8 {
+        self.0
+    }
+}
+
+unsafe impl Send for FunctionPtr {}
+unsafe impl Sync for FunctionPtr {}
 
 const POINTER_ALIGNMENT: usize = std::mem::align_of::<*const ()>();
 
