@@ -228,6 +228,7 @@ async function shard(configs) {
         config,
         {
           name: `${config.name} (${Array.from(bucket).join(', ')})`,
+          cache_key: `${config.name}-${Array.from(bucket).join('-').substring(0, 400)}`,
           // We run tests via `cargo test --workspace`, so exclude crates that
           // aren't in this bucket, rather than naming only the crates that are
           // in this bucket.
