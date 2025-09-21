@@ -1668,8 +1668,15 @@ mod test_programs {
     // if our server goes away.
     impl Drop for WasmtimeServe {
         fn drop(&mut self) {
-            if self.child.is_none() {
-                return;
+            match &mut self.child {
+                Some(child) => match child.kill() {
+                    Ok(()) => {}
+                    Err(e) => {
+                        eprintln!("failed to kill child process {e}");
+                        return;
+                    }
+                },
+                None => return,
             }
             match self._finish() {
                 Ok((stdout, stderr)) => {
