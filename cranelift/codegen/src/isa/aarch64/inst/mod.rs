@@ -2216,10 +2216,6 @@ impl Inst {
                     VecALUOp::Fcmeq => ("fcmeq", size),
                     VecALUOp::Fcmgt => ("fcmgt", size),
                     VecALUOp::Fcmge => ("fcmge", size),
-                    VecALUOp::And => ("and", VectorSize::Size8x16),
-                    VecALUOp::Bic => ("bic", VectorSize::Size8x16),
-                    VecALUOp::Orr => ("orr", VectorSize::Size8x16),
-                    VecALUOp::Eor => ("eor", VectorSize::Size8x16),
                     VecALUOp::Umaxp => ("umaxp", size),
                     VecALUOp::Add => ("add", size),
                     VecALUOp::Sub => ("sub", size),
@@ -2245,6 +2241,14 @@ impl Inst {
                     VecALUOp::Uzp2 => ("uzp2", size),
                     VecALUOp::Trn1 => ("trn1", size),
                     VecALUOp::Trn2 => ("trn2", size),
+
+                    // Lane division does not affect bitwise operations.
+                    // However, when printing, use 8-bit lane division to conform to ARM formatting.
+                    VecALUOp::And => ("and", size.as_scalar8_vector()),
+                    VecALUOp::Bic => ("bic", size.as_scalar8_vector()),
+                    VecALUOp::Orr => ("orr", size.as_scalar8_vector()),
+                    VecALUOp::Orn => ("orn", size.as_scalar8_vector()),
+                    VecALUOp::Eor => ("eor", size.as_scalar8_vector()),
                 };
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size);
                 let rn = pretty_print_vreg_vector(rn, size);
@@ -2376,15 +2380,6 @@ impl Inst {
             }
             &Inst::VecMisc { op, rd, rn, size } => {
                 let (op, size, suffix) = match op {
-                    VecMisc2::Not => (
-                        "mvn",
-                        if size.is_128bits() {
-                            VectorSize::Size8x16
-                        } else {
-                            VectorSize::Size8x8
-                        },
-                        "",
-                    ),
                     VecMisc2::Neg => ("neg", size, ""),
                     VecMisc2::Abs => ("abs", size, ""),
                     VecMisc2::Fabs => ("fabs", size, ""),
@@ -2412,6 +2407,10 @@ impl Inst {
                     VecMisc2::Fcmgt0 => ("fcmgt", size, ", #0.0"),
                     VecMisc2::Fcmle0 => ("fcmle", size, ", #0.0"),
                     VecMisc2::Fcmlt0 => ("fcmlt", size, ", #0.0"),
+
+                    // Lane division does not affect bitwise operations.
+                    // However, when printing, use 8-bit lane division to conform to ARM formatting.
+                    VecMisc2::Not => ("mvn", size.as_scalar8_vector(), ""),
                 };
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size);
                 let rn = pretty_print_vreg_vector(rn, size);
