@@ -1405,9 +1405,14 @@
 (rule 3 (lower (has_type $I128 (band x (bnot y)))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
 (rule 4 (lower (has_type $I128 (band (bnot y) x))) (i128_alu_bitop (ALUOp.AndNot) $I64 x y))
 
-(rule 5 (lower (has_type (ty_vec128 ty) (band x (bnot y))))
+(rule 5 (lower (has_type (ty_vec64 ty) (band x (bnot y))))
       (bic_vec x y (vector_size ty)))
-(rule 6 (lower (has_type (ty_vec128 ty) (band (bnot y) x)))
+(rule 6 (lower (has_type (ty_vec64 ty) (band (bnot y) x)))
+      (bic_vec x y (vector_size ty)))
+
+(rule 7 (lower (has_type (ty_vec128 ty) (band x (bnot y))))
+      (bic_vec x y (vector_size ty)))
+(rule 8 (lower (has_type (ty_vec128 ty) (band (bnot y) x)))
       (bic_vec x y (vector_size ty)))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
