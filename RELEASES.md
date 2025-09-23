@@ -1,3 +1,14 @@
+## 37.0.1
+
+Released 2025-09-23.
+
+### Fixed
+
+* Cranelift's `cranelift-jit` crate now properly applies relocations to `ADRP`
+  instructions on aarch64; a zero-extension on the offset was fixed to properly
+  sign-extend instead.
+  [#11734](https://github.com/bytecodealliance/wasmtime/pull/11734)
+
 ## 37.0.0
 
 Released 2025-09-20.
