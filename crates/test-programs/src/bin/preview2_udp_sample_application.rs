@@ -1,3 +1,4 @@
+use test_programs::sockets::supports_ipv6;
 use test_programs::wasi::sockets::network::{
     IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress, Network,
 };
@@ -80,13 +81,15 @@ fn main() {
             address: (127, 0, 0, 1), // localhost
         }),
     );
-    test_udp_sample_application(
-        IpAddressFamily::Ipv6,
-        IpSocketAddress::Ipv6(Ipv6SocketAddress {
-            port: 0,                           // use any free port
-            address: (0, 0, 0, 0, 0, 0, 0, 1), // localhost
-            flow_info: 0,
-            scope_id: 0,
-        }),
-    );
+    if supports_ipv6() {
+        test_udp_sample_application(
+            IpAddressFamily::Ipv6,
+            IpSocketAddress::Ipv6(Ipv6SocketAddress {
+                port: 0,                           // use any free port
+                address: (0, 0, 0, 0, 0, 0, 0, 1), // localhost
+                flow_info: 0,
+                scope_id: 0,
+            }),
+        );
+    }
 }

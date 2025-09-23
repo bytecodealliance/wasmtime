@@ -1,3 +1,4 @@
+use test_programs::sockets::supports_ipv6;
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -216,17 +217,16 @@ fn main() {
     let net = Network::default();
 
     test_tcp_sockopt_defaults(IpAddressFamily::Ipv4);
-    test_tcp_sockopt_defaults(IpAddressFamily::Ipv6);
-
     test_tcp_sockopt_input_ranges(IpAddressFamily::Ipv4);
-    test_tcp_sockopt_input_ranges(IpAddressFamily::Ipv6);
-
     test_tcp_sockopt_readback(IpAddressFamily::Ipv4);
-    test_tcp_sockopt_readback(IpAddressFamily::Ipv6);
-
     test_tcp_sockopt_inheritance(&net, IpAddressFamily::Ipv4);
-    test_tcp_sockopt_inheritance(&net, IpAddressFamily::Ipv6);
-
     test_tcp_sockopt_after_listen(&net, IpAddressFamily::Ipv4);
-    test_tcp_sockopt_after_listen(&net, IpAddressFamily::Ipv6);
+
+    if supports_ipv6() {
+        test_tcp_sockopt_defaults(IpAddressFamily::Ipv6);
+        test_tcp_sockopt_input_ranges(IpAddressFamily::Ipv6);
+        test_tcp_sockopt_readback(IpAddressFamily::Ipv6);
+        test_tcp_sockopt_inheritance(&net, IpAddressFamily::Ipv6);
+        test_tcp_sockopt_after_listen(&net, IpAddressFamily::Ipv6);
+    }
 }

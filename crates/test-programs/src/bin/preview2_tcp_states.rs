@@ -1,3 +1,4 @@
+use test_programs::sockets::supports_ipv6;
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -216,14 +217,14 @@ fn main() {
     let net = Network::default();
 
     test_tcp_unbound_state_invariants(IpAddressFamily::Ipv4);
-    test_tcp_unbound_state_invariants(IpAddressFamily::Ipv6);
-
     test_tcp_bound_state_invariants(&net, IpAddressFamily::Ipv4);
-    test_tcp_bound_state_invariants(&net, IpAddressFamily::Ipv6);
-
     test_tcp_listening_state_invariants(&net, IpAddressFamily::Ipv4);
-    test_tcp_listening_state_invariants(&net, IpAddressFamily::Ipv6);
-
     test_tcp_connected_state_invariants(&net, IpAddressFamily::Ipv4);
-    test_tcp_connected_state_invariants(&net, IpAddressFamily::Ipv6);
+
+    if supports_ipv6() {
+        test_tcp_unbound_state_invariants(IpAddressFamily::Ipv6);
+        test_tcp_bound_state_invariants(&net, IpAddressFamily::Ipv6);
+        test_tcp_listening_state_invariants(&net, IpAddressFamily::Ipv6);
+        test_tcp_connected_state_invariants(&net, IpAddressFamily::Ipv6);
+    }
 }

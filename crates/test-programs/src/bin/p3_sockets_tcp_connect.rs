@@ -2,6 +2,7 @@ use futures::join;
 use test_programs::p3::wasi::sockets::types::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, TcpSocket,
 };
+use test_programs::sockets::supports_ipv6;
 
 struct Component;
 
@@ -125,20 +126,18 @@ async fn test_tcp_connect_explicit_bind(family: IpAddressFamily) {
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         test_tcp_connect_unspec(IpAddressFamily::Ipv4).await;
-        test_tcp_connect_unspec(IpAddressFamily::Ipv6).await;
-
         test_tcp_connect_port_0(IpAddressFamily::Ipv4).await;
-        test_tcp_connect_port_0(IpAddressFamily::Ipv6).await;
-
         test_tcp_connect_wrong_family(IpAddressFamily::Ipv4).await;
-        test_tcp_connect_wrong_family(IpAddressFamily::Ipv6).await;
-
-        test_tcp_connect_non_unicast().await;
-
-        test_tcp_connect_dual_stack().await;
-
         test_tcp_connect_explicit_bind(IpAddressFamily::Ipv4).await;
-        test_tcp_connect_explicit_bind(IpAddressFamily::Ipv6).await;
+
+        if supports_ipv6() {
+            test_tcp_connect_unspec(IpAddressFamily::Ipv6).await;
+            test_tcp_connect_port_0(IpAddressFamily::Ipv6).await;
+            test_tcp_connect_wrong_family(IpAddressFamily::Ipv6).await;
+            test_tcp_connect_non_unicast().await;
+            test_tcp_connect_dual_stack().await;
+            test_tcp_connect_explicit_bind(IpAddressFamily::Ipv6).await;
+        }
         Ok(())
     }
 }

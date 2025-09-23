@@ -2,6 +2,7 @@ use futures::join;
 use test_programs::p3::wasi::sockets::types::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, TcpSocket,
 };
+use test_programs::sockets::supports_ipv6;
 
 struct Component;
 
@@ -218,19 +219,18 @@ async fn test_tcp_sockopt_after_listen(family: IpAddressFamily) {
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         test_tcp_sockopt_defaults(IpAddressFamily::Ipv4);
-        test_tcp_sockopt_defaults(IpAddressFamily::Ipv6);
-
         test_tcp_sockopt_input_ranges(IpAddressFamily::Ipv4);
-        test_tcp_sockopt_input_ranges(IpAddressFamily::Ipv6);
-
         test_tcp_sockopt_readback(IpAddressFamily::Ipv4);
-        test_tcp_sockopt_readback(IpAddressFamily::Ipv6);
-
         test_tcp_sockopt_inheritance(IpAddressFamily::Ipv4).await;
-        test_tcp_sockopt_inheritance(IpAddressFamily::Ipv6).await;
-
         test_tcp_sockopt_after_listen(IpAddressFamily::Ipv4).await;
-        test_tcp_sockopt_after_listen(IpAddressFamily::Ipv6).await;
+
+        if supports_ipv6() {
+            test_tcp_sockopt_defaults(IpAddressFamily::Ipv6);
+            test_tcp_sockopt_input_ranges(IpAddressFamily::Ipv6);
+            test_tcp_sockopt_readback(IpAddressFamily::Ipv6);
+            test_tcp_sockopt_inheritance(IpAddressFamily::Ipv6).await;
+            test_tcp_sockopt_after_listen(IpAddressFamily::Ipv6).await;
+        }
         Ok(())
     }
 }

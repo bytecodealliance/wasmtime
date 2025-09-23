@@ -5,6 +5,7 @@ use test_programs::p3::wasi::sockets::types::{
     IpAddress, IpAddressFamily, IpSocketAddress, TcpSocket,
 };
 use test_programs::p3::wit_stream;
+use test_programs::sockets::supports_ipv6;
 use wit_bindgen::StreamResult;
 
 struct Component;
@@ -185,18 +186,17 @@ async fn test_tcp_read_cancellation(family: IpAddressFamily) {
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         test_tcp_input_stream_should_be_closed_by_remote_shutdown(IpAddressFamily::Ipv4).await;
-        test_tcp_input_stream_should_be_closed_by_remote_shutdown(IpAddressFamily::Ipv6).await;
-
         test_tcp_input_stream_should_be_closed_by_local_shutdown(IpAddressFamily::Ipv4).await;
-        test_tcp_input_stream_should_be_closed_by_local_shutdown(IpAddressFamily::Ipv6).await;
-
         test_tcp_output_stream_should_be_closed_by_local_shutdown(IpAddressFamily::Ipv4).await;
-        test_tcp_output_stream_should_be_closed_by_local_shutdown(IpAddressFamily::Ipv6).await;
-
         test_tcp_shutdown_should_not_lose_data(IpAddressFamily::Ipv4).await;
-        test_tcp_shutdown_should_not_lose_data(IpAddressFamily::Ipv6).await;
-
         test_tcp_read_cancellation(IpAddressFamily::Ipv4).await;
+
+        if supports_ipv6() {
+            test_tcp_input_stream_should_be_closed_by_remote_shutdown(IpAddressFamily::Ipv6).await;
+            test_tcp_input_stream_should_be_closed_by_local_shutdown(IpAddressFamily::Ipv6).await;
+            test_tcp_output_stream_should_be_closed_by_local_shutdown(IpAddressFamily::Ipv6).await;
+            test_tcp_shutdown_should_not_lose_data(IpAddressFamily::Ipv6).await;
+        }
         Ok(())
     }
 }
