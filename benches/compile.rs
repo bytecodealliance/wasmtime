@@ -78,7 +78,10 @@ fn bench_compile(c: &mut Criterion) {
         let mut group = c.benchmark_group(scenario.to_string());
         for file in std::fs::read_dir("benches/compile").unwrap() {
             let path = file.unwrap().path();
-            compile(&mut group, &path, scenario);
+            let extension = path.extension().and_then(|s| s.to_str());
+            if path.is_file() && matches!(extension, Some("wasm") | Some("wat")) {
+                compile(&mut group, &path, scenario);
+            }
         }
         group.finish();
     }
