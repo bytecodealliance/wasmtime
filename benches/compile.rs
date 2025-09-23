@@ -75,7 +75,7 @@ fn compile(group: &mut BenchmarkGroup<WallTime>, path: &Path, scenario: Scenario
 
 fn bench_compile(c: &mut Criterion) {
     for scenario in Scenario::list() {
-        let mut group = c.benchmark_group(format!("{scenario}"));
+        let mut group = c.benchmark_group(scenario.to_string());
         for file in std::fs::read_dir("benches/compile").unwrap() {
             let path = file.unwrap().path();
             compile(&mut group, &path, scenario);
