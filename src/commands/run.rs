@@ -976,6 +976,10 @@ impl RunCommand {
                     }
                     CliLinker::Component(linker) => {
                         wasmtime_wasi_http::add_only_http_to_linker_sync(linker)?;
+                        #[cfg(feature = "component-model-async")]
+                        if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
+                            wasmtime_wasi_http::p3::add_to_linker(linker)?;
+                        }
                     }
                 }
 
@@ -1138,6 +1142,8 @@ struct Host {
     wasi_http_outgoing_body_buffer_chunks: Option<usize>,
     #[cfg(feature = "wasi-http")]
     wasi_http_outgoing_body_chunk_size: Option<usize>,
+    #[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
+    p3_http: crate::common::DefaultP3Ctx,
     limits: StoreLimits,
     #[cfg(feature = "profiling")]
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
@@ -1152,12 +1158,16 @@ struct Host {
 
 impl Host {
     fn wasip1_ctx(&mut self) -> &mut wasmtime_wasi::p1::WasiP1Ctx {
-        let ctx = self.wasip1_ctx.as_mut().expect("wasi is not configured");
-        Arc::get_mut(ctx)
-            .expect("wasmtime_wasi is not compatible with threads")
-            .get_mut()
-            .unwrap()
+        unwrap_singlethread_context(&mut self.wasip1_ctx)
     }
+}
+
+fn unwrap_singlethread_context<T>(ctx: &mut Option<Arc<Mutex<T>>>) -> &mut T {
+    let ctx = ctx.as_mut().expect("context not configured");
+    Arc::get_mut(ctx)
+        .expect("context is not compatible with threads")
+        .get_mut()
+        .unwrap()
 }
 
 impl WasiView for Host {
@@ -1185,6 +1195,16 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
     fn outgoing_body_chunk_size(&mut self) -> usize {
         self.wasi_http_outgoing_body_chunk_size
             .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
+    }
+}
+
+#[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
+impl wasmtime_wasi_http::p3::WasiHttpView for Host {
+    fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
+        wasmtime_wasi_http::p3::WasiHttpCtxView {
+            table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
+            ctx: &mut self.p3_http,
+        }
     }
 }
 
