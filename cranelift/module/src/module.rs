@@ -182,6 +182,14 @@ impl Linkage {
         }
     }
 
+    /// Test whether this linkage must have a definition.
+    pub fn requires_definition(self) -> bool {
+        match self {
+            Self::Import | Self::Preemptible => false,
+            Self::Local | Self::Hidden | Self::Export => true,
+        }
+    }
+
     /// Test whether this linkage will have a definition that cannot be preempted.
     pub fn is_final(self) -> bool {
         match self {
