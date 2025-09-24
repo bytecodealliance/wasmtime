@@ -30,7 +30,7 @@ pub(crate) fn encode_sib(scale: u8, enc_index: u8, enc_base: u8) -> u8 {
 /// This function is used below in combination with `uses_8bit` booleans to
 /// determine the `RexPrefix::must_emit` flag. Table 3-2 in volume 1 of the
 /// Intel manual details how referencing `dil`, the low 8-bits of `rdi`,
-/// requires the use of the REX prefix as without it it would otherwise
+/// requires the use of the REX prefix as without it, it would otherwise
 /// reference the `AH` register.
 ///
 /// This is used whenever a register is encoded with a `RexPrefix` and is also
