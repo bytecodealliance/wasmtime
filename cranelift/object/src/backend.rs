@@ -536,6 +536,34 @@ impl ObjectModule {
 
     /// Finalize all relocations and output an object.
     pub fn finish(mut self) -> ObjectProduct {
+        if cfg!(debug_assertions) {
+            for (func_id, decl) in self.declarations.get_functions() {
+                if !decl.linkage.requires_definition() {
+                    continue;
+                }
+
+                assert!(
+                    self.functions[func_id].unwrap().1,
+                    "function \"{}\" with linkage {:?} must be defined but is not",
+                    decl.linkage_name(func_id),
+                    decl.linkage,
+                );
+            }
+
+            for (data_id, decl) in self.declarations.get_data_objects() {
+                if !decl.linkage.requires_definition() {
+                    continue;
+                }
+
+                assert!(
+                    self.data_objects[data_id].unwrap().1,
+                    "data object \"{}\" with linkage {:?} must be defined but is not",
+                    decl.linkage_name(data_id),
+                    decl.linkage,
+                );
+            }
+        }
+
         let symbol_relocs = mem::take(&mut self.relocs);
         for symbol in symbol_relocs {
             for &ObjectRelocRecord {
