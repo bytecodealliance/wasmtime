@@ -46,7 +46,7 @@ struct Host {
     http_outgoing_body_chunk_size: Option<usize>,
 
     #[cfg(feature = "component-model-async")]
-    p3_http: DefaultP3Ctx,
+    p3_http: crate::common::DefaultP3Ctx,
 
     limits: StoreLimits,
 
@@ -90,11 +90,6 @@ impl WasiHttpView for Host {
             .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
     }
 }
-
-#[cfg(feature = "component-model-async")]
-struct DefaultP3Ctx;
-#[cfg(feature = "component-model-async")]
-impl wasmtime_wasi_http::p3::WasiHttpCtx for DefaultP3Ctx {}
 
 #[cfg(feature = "component-model-async")]
 impl wasmtime_wasi_http::p3::WasiHttpView for Host {
@@ -212,7 +207,7 @@ impl ServeCommand {
             #[cfg(feature = "profiling")]
             guest_profiler: None,
             #[cfg(feature = "component-model-async")]
-            p3_http: DefaultP3Ctx,
+            p3_http: crate::common::DefaultP3Ctx,
         };
 
         if self.run.common.wasi.nn == Some(true) {
