@@ -187,7 +187,7 @@ unsafe extern "C" fn callback_start(event0: u32, event1: u32, event2: u32) -> u3
 
                     // The writer is ready now, so this read should not block.
                     //
-                    // As noted above, we we rely on the writer sending us all the
+                    // As noted above, we rely on the writer sending us all the
                     // expected bytes at once.
                     let received = &mut vec![0_u8; expected.len()];
                     let status = stream_read(rx, received.as_mut_ptr(), received.len());
@@ -214,7 +214,7 @@ unsafe extern "C" fn callback_start(event0: u32, event1: u32, event2: u32) -> u3
 
                     // The reader is ready now, so this write should not block.
                     //
-                    // As noted above, we we rely on the reader accepting all the
+                    // As noted above, we rely on the reader accepting all the
                     // expected bytes at once.
                     let status = stream_write(tx, BYTES_TO_WRITE.as_ptr(), BYTES_TO_WRITE.len());
                     assert_eq!(
