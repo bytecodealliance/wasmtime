@@ -13,10 +13,10 @@ use crate::machinst::{
     CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode, compile,
 };
-use crate::result::CodegenResult;
+use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
 use crate::{Final, MachBufferFinalized};
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
 use std::string::String;
@@ -39,12 +39,22 @@ pub(crate) struct X64Backend {
 
 impl X64Backend {
     /// Create a new X64 backend with the given (shared) flags.
-    fn new_with_flags(triple: Triple, flags: Flags, x64_flags: x64_settings::Flags) -> Self {
-        Self {
+    fn new_with_flags(
+        triple: Triple,
+        flags: Flags,
+        x64_flags: x64_settings::Flags,
+    ) -> CodegenResult<Self> {
+        if triple.pointer_width().unwrap() != target_lexicon::PointerWidth::U64 {
+            return Err(CodegenError::Unsupported(
+                "the x32 ABI is not supported".to_owned(),
+            ));
+        }
+
+        Ok(Self {
             triple,
             flags,
             x64_flags,
-        }
+        })
     }
 
     fn compile_vcode(
@@ -257,6 +267,6 @@ fn isa_constructor(
     builder: &shared_settings::Builder,
 ) -> CodegenResult<OwnedTargetIsa> {
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
-    let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags);
+    let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags)?;
     Ok(backend.wrapped())
 }
