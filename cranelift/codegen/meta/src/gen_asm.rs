@@ -643,7 +643,7 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
             fmtln!(f, "(decl {rule_name_or_feat} ({param_tys}) {result_ty})");
             fmtln!(f, "(rule 1 ({rule_name_or_feat} {param_names})");
             f.indent(|f| {
-                fmtln!(f, "(if-let true (use_{alt_feature}))");
+                fmtln!(f, "(if-let true (has_{alt_feature}))");
                 fmtln!(f, "(x64_{alt_name}{suffix} {param_names}))");
             });
             fmtln!(

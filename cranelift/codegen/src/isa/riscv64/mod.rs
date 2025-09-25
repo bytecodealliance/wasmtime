@@ -282,7 +282,13 @@ fn isa_constructor(
     // - Zifencei: Instruction-Fetch Fence
     //
     // Ensure that those combination of features is enabled.
-    if !isa_flags.has_g() {
+    if !(isa_flags.has_m()
+        && isa_flags.has_a()
+        && isa_flags.has_f()
+        && isa_flags.has_d()
+        && isa_flags.has_zicsr()
+        && isa_flags.has_zifencei())
+    {
         return Err(CodegenError::Unsupported(
             "The RISC-V Backend currently requires all the features in the G Extension enabled"
                 .into(),

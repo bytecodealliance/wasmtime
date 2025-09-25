@@ -1,9 +1,7 @@
 //! Generate the ISA-specific settings.
 
 use crate::cdsl::camel_case;
-use crate::cdsl::settings::{
-    BoolSetting, Predicate, Preset, Setting, SettingGroup, SpecificSetting,
-};
+use crate::cdsl::settings::{BoolSetting, Preset, Setting, SettingGroup, SpecificSetting};
 use crate::constant_hash::generate_table;
 use crate::unique_table::UniqueSeqTable;
 use cranelift_codegen_shared::constant_hash::simple_hash;
@@ -46,20 +44,6 @@ fn gen_constructor(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatte
                 group.name,
                 group.settings_size
             );
-
-            // Now compute the predicates.
-            for p in &group.predicates {
-                fmt.comment(format!("Precompute #{}.", p.number));
-                fmt.add_block(&format!("if {}", p.render(group)), |fmt| {
-                    fmtln!(
-                        fmt,
-                        "{}.bytes[{}] |= 1 << {};",
-                        group.name,
-                        group.bool_start_byte_offset + p.number / 8,
-                        p.number % 8
-                    );
-                });
-            }
 
             fmtln!(fmt, "{}", group.name);
         });
@@ -193,16 +177,6 @@ fn gen_getter(setting: &Setting, fmt: &mut Formatter) {
     }
 }
 
-fn gen_pred_getter(predicate: &Predicate, group: &SettingGroup, fmt: &mut Formatter) {
-    fmt.doc_comment(format!("Computed predicate `{}`.", predicate.render(group)));
-    fmt.add_block(
-        &format!("pub fn {}(&self) -> bool", predicate.name),
-        |fmt| {
-            fmtln!(fmt, "self.numbered_predicate({})", predicate.number);
-        },
-    );
-}
-
 /// Emits getters for each setting value.
 fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
     fmt.doc_comment("User-defined settings.");
@@ -221,9 +195,6 @@ fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
 
         for setting in &group.settings {
             gen_getter(setting, fmt);
-        }
-        for predicate in &group.predicates {
-            gen_pred_getter(predicate, group, fmt);
         }
     });
 }
