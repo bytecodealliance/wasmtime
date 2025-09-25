@@ -97,7 +97,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     match &engine.config().module_version {
         ModuleVersionStrategy::WasmtimeVersion => {
             let version = core::str::from_utf8(version)?;
-            if version != Engine::VERSION {
+            if version != Engine::version() {
                 bail!(
                     "Module was compiled with incompatible Wasmtime version '{}'",
                     version
