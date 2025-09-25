@@ -3899,6 +3899,11 @@
         (if-let new_offset (i32_checked_add x offset))
         (amode_no_more_iconst ty y new_offset))
 
+(rule 3
+      (amode ty (stack_addr slot offset1) offset2)
+      (AMode.SlotOffset
+       (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
+
 (decl amode_no_more_iconst (Type Value i32) AMode)
 ;; Base case: move the `offset` into a register and add it to `val` via the
 ;; amode

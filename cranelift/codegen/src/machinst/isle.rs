@@ -507,6 +507,22 @@ macro_rules! isle_lower_prelude_methods {
                 .into()
         }
 
+        fn abi_stackslot_offset_into_slot_region(
+            &mut self,
+            stack_slot: StackSlot,
+            offset1: Offset32,
+            offset2: Offset32,
+        ) -> i32 {
+            let offset1 = i32::from(offset1);
+            let offset2 = i32::from(offset2);
+            i32::try_from(self.lower_ctx.abi().sized_stackslot_offset(stack_slot))
+                .expect("Stack slot region cannot be larger than 2GiB")
+                .checked_add(offset1)
+                .expect("Stack slot region cannot be larger than 2GiB")
+                .checked_add(offset2)
+                .expect("Stack slot region cannot be larger than 2GiB")
+        }
+
         fn abi_dynamic_stackslot_addr(
             &mut self,
             dst: WritableReg,

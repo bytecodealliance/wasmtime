@@ -2139,6 +2139,11 @@ impl<M: ABIMachineSpec> Callee<M> {
         }
     }
 
+    /// Get the raw offset of a sized stackslot in the slot region.
+    pub fn sized_stackslot_offset(&self, slot: StackSlot) -> u32 {
+        self.sized_stackslots[slot]
+    }
+
     /// Produce an instruction that computes a sized stackslot address.
     pub fn sized_stackslot_addr(
         &self,

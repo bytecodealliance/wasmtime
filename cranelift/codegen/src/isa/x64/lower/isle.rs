@@ -410,6 +410,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
+    fn synthetic_amode_slot(&mut self, offset: i32) -> SyntheticAmode {
+        SyntheticAmode::SlotOffset { simm32: offset }
+    }
+
+    #[inline]
     fn const_to_synthetic_amode(&mut self, c: VCodeConstant) -> SyntheticAmode {
         SyntheticAmode::ConstantOffset(c)
     }
@@ -633,7 +638,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn amode_offset(&mut self, addr: &Amode, offset: i32) -> Amode {
+    fn amode_offset(&mut self, addr: &SyntheticAmode, offset: i32) -> SyntheticAmode {
         addr.offset(offset)
     }
 

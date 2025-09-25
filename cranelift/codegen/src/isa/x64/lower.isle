@@ -3056,8 +3056,8 @@
 ;; We can load an I128 by doing two 64-bit loads.
 (rule -3 (lower (has_type $I128
                        (load (little_or_native_endian flags) address offset)))
-      (let ((addr_lo Amode (to_amode flags address offset))
-            (addr_hi Amode (amode_offset addr_lo 8))
+      (let ((addr_lo SyntheticAmode (to_amode flags address offset))
+            (addr_hi SyntheticAmode (amode_offset addr_lo 8))
             (value_lo Reg (x64_mov addr_lo))
             (value_hi Reg (x64_mov addr_hi)))
         (value_regs value_lo value_hi)))
@@ -3187,8 +3187,8 @@
       (let ((value_reg ValueRegs value)
             (value_lo Gpr (value_regs_get_gpr value_reg 0))
             (value_hi Gpr (value_regs_get_gpr value_reg 1))
-            (addr_lo Amode (to_amode flags address offset))
-            (addr_hi Amode (amode_offset addr_lo 8)))
+            (addr_lo SyntheticAmode (to_amode flags address offset))
+            (addr_hi SyntheticAmode (amode_offset addr_lo 8)))
       (side_effect
        (side_effect_concat
         (x64_movrm $I64 addr_lo value_lo)
