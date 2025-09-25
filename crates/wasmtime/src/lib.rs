@@ -306,9 +306,6 @@ pub(crate) mod prelude {
 
 pub(crate) use hashbrown::{hash_map, hash_set};
 
-/// Version of Wasmtime library formatted in semver style.
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
 /// is a field projection within `T`.
 ///

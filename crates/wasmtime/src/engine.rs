@@ -83,6 +83,10 @@ impl Default for Engine {
 }
 
 impl Engine {
+    /// Version string of the engine used during ModuleVersionStrategy::WasmtimeVersion
+    /// compatibility check.
+    pub const VERSION: &str = env!("CARGO_PKG_VERSION_MAJOR");
+
     /// Creates a new [`Engine`] with the specified compilation and
     /// configuration settings.
     ///
