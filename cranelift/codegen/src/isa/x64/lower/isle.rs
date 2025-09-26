@@ -244,88 +244,88 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn use_avx(&mut self) -> bool {
-        self.backend.x64_flags.use_avx()
+    fn has_avx(&mut self) -> bool {
+        self.backend.x64_flags.has_avx()
     }
 
     #[inline]
     fn use_avx2(&mut self) -> bool {
-        self.backend.x64_flags.use_avx2()
+        self.backend.x64_flags.has_avx() && self.backend.x64_flags.has_avx2()
     }
 
     #[inline]
-    fn use_avx512vl(&mut self) -> bool {
-        self.backend.x64_flags.use_avx512vl()
+    fn has_avx512vl(&mut self) -> bool {
+        self.backend.x64_flags.has_avx512vl()
     }
 
     #[inline]
-    fn use_avx512dq(&mut self) -> bool {
-        self.backend.x64_flags.use_avx512dq()
+    fn has_avx512dq(&mut self) -> bool {
+        self.backend.x64_flags.has_avx512dq()
     }
 
     #[inline]
-    fn use_avx512f(&mut self) -> bool {
-        self.backend.x64_flags.use_avx512f()
+    fn has_avx512f(&mut self) -> bool {
+        self.backend.x64_flags.has_avx512f()
     }
 
     #[inline]
-    fn use_avx512bitalg(&mut self) -> bool {
-        self.backend.x64_flags.use_avx512bitalg()
+    fn has_avx512bitalg(&mut self) -> bool {
+        self.backend.x64_flags.has_avx512bitalg()
     }
 
     #[inline]
-    fn use_avx512vbmi(&mut self) -> bool {
-        self.backend.x64_flags.use_avx512vbmi()
+    fn has_avx512vbmi(&mut self) -> bool {
+        self.backend.x64_flags.has_avx512vbmi()
     }
 
     #[inline]
-    fn use_lzcnt(&mut self) -> bool {
-        self.backend.x64_flags.use_lzcnt()
+    fn has_lzcnt(&mut self) -> bool {
+        self.backend.x64_flags.has_lzcnt()
     }
 
     #[inline]
-    fn use_bmi1(&mut self) -> bool {
-        self.backend.x64_flags.use_bmi1()
+    fn has_bmi1(&mut self) -> bool {
+        self.backend.x64_flags.has_bmi1()
     }
 
     #[inline]
-    fn use_bmi2(&mut self) -> bool {
-        self.backend.x64_flags.use_bmi2()
+    fn has_bmi2(&mut self) -> bool {
+        self.backend.x64_flags.has_bmi2()
     }
 
     #[inline]
     fn use_popcnt(&mut self) -> bool {
-        self.backend.x64_flags.use_popcnt()
+        self.backend.x64_flags.has_popcnt() && self.backend.x64_flags.has_sse42()
     }
 
     #[inline]
     fn use_fma(&mut self) -> bool {
-        self.backend.x64_flags.use_fma()
+        self.backend.x64_flags.has_avx() && self.backend.x64_flags.has_fma()
     }
 
     #[inline]
-    fn use_sse3(&mut self) -> bool {
-        self.backend.x64_flags.use_sse3()
+    fn has_sse3(&mut self) -> bool {
+        self.backend.x64_flags.has_sse3()
     }
 
     #[inline]
-    fn use_ssse3(&mut self) -> bool {
-        self.backend.x64_flags.use_ssse3()
+    fn has_ssse3(&mut self) -> bool {
+        self.backend.x64_flags.has_ssse3()
     }
 
     #[inline]
-    fn use_sse41(&mut self) -> bool {
-        self.backend.x64_flags.use_sse41()
+    fn has_sse41(&mut self) -> bool {
+        self.backend.x64_flags.has_sse41()
     }
 
     #[inline]
     fn use_sse42(&mut self) -> bool {
-        self.backend.x64_flags.use_sse42()
+        self.backend.x64_flags.has_sse41() && self.backend.x64_flags.has_sse42()
     }
 
     #[inline]
-    fn use_cmpxchg16b(&mut self) -> bool {
-        self.backend.x64_flags.use_cmpxchg16b()
+    fn has_cmpxchg16b(&mut self) -> bool {
+        self.backend.x64_flags.has_cmpxchg16b()
     }
 
     #[inline]

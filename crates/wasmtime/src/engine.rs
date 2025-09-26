@@ -92,9 +92,8 @@ impl Engine {
     /// configurations are incompatible.
     ///
     /// For example, feature `reference_types` will need to set
-    /// the compiler setting `enable_safepoints` and `unwind_info`
-    /// to `true`, but explicitly disable these two compiler settings
-    /// will cause errors.
+    /// the compiler setting `unwind_info` to `true`, but explicitly
+    /// disable these two compiler settings will cause errors.
     pub fn new(config: &Config) -> Result<Engine> {
         let config = config.clone();
         let (tunables, features) = config.validate()?;
@@ -416,17 +415,6 @@ information about this check\
             "use_colocated_libcalls" => *value == FlagValue::Bool(false),
             "use_pinned_reg_as_heap_base" => *value == FlagValue::Bool(false),
 
-            // If reference types (or anything that depends on reference types,
-            // like typed function references and GC) are enabled this must be
-            // enabled, otherwise this setting can have any value.
-            "enable_safepoints" => {
-                if self.features().contains(WasmFeatures::REFERENCE_TYPES) {
-                    *value == FlagValue::Bool(true)
-                } else {
-                    return Ok(())
-                }
-            }
-
             // Windows requires unwind info as part of its ABI.
             "unwind_info" => {
                 if target.operating_system == target_lexicon::OperatingSystem::Windows {
@@ -460,7 +448,6 @@ information about this check\
             "enable_heap_access_spectre_mitigation"
             | "enable_table_access_spectre_mitigation"
             | "enable_nan_canonicalization"
-            | "enable_jump_tables"
             | "enable_float"
             | "enable_verifier"
             | "enable_pcc"

@@ -1,7 +1,6 @@
 test interpret
 test run
 set opt_level=speed
-set enable_safepoints=true
 set unwind_info=false
 set preserve_frame_pointers=true
 set machine_code_cfg_info=true

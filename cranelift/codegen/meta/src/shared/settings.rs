@@ -113,15 +113,6 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
-        "enable_float",
-        "Enable the use of floating-point instructions.",
-        r#"
-            Disabling use of floating-point instructions is not yet implemented.
-        "#,
-        true,
-    );
-
-    settings.add_bool(
         "enable_nan_canonicalization",
         "Enable NaN canonicalization.",
         r#"
@@ -139,24 +130,6 @@ pub(crate) fn define() -> SettingGroup {
             This register is excluded from register allocation, and is completely under the control of
             the end-user. It is possible to read it via the get_pinned_reg instruction, and to set it
             with the set_pinned_reg instruction.
-        "#,
-        false,
-    );
-
-    settings.add_bool(
-        "enable_atomics",
-        "Enable the use of atomic instructions",
-        "",
-        true,
-    );
-
-    settings.add_bool(
-        "enable_safepoints",
-        "Enable safepoint instruction insertions.",
-        r#"
-            This will allow the emit_stack_maps() function to insert the safepoint
-            instruction on top of calls and interrupt traps in order to display the
-            live reference values at that point in the program.
         "#,
         false,
     );
@@ -324,16 +297,8 @@ pub(crate) fn define() -> SettingGroup {
         vec!["outline", "inline"],
     );
 
-    // Jump table options.
-
-    settings.add_bool(
-        "enable_jump_tables",
-        "Enable the use of jump tables in generated machine code.",
-        "",
-        true,
-    );
-
-    // Spectre options.
+    // Spectre options. (Only read by wasmtime-cranelift)
+    // FIXME move configuration out of Cranelift into Wasmtime
 
     settings.add_bool(
         "enable_heap_access_spectre_mitigation",

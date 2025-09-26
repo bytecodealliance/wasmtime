@@ -177,11 +177,11 @@ impl TargetIsa for X64Backend {
     }
 
     fn has_native_fma(&self) -> bool {
-        self.x64_flags.use_fma()
+        self.x64_flags.has_fma()
     }
 
     fn has_round(&self) -> bool {
-        self.x64_flags.use_sse41()
+        self.x64_flags.has_sse41()
     }
 
     fn has_x86_blendv_lowering(&self, ty: Type) -> bool {
@@ -189,19 +189,19 @@ impl TargetIsa for X64Backend {
         // available from SSE 4.1 and onwards. Otherwise the i16x8 type has no
         // equivalent instruction which only looks at the top bit for a select
         // operation, so that always returns `false`
-        self.x64_flags.use_sse41() && ty != types::I16X8
+        self.x64_flags.has_sse41() && ty != types::I16X8
     }
 
     fn has_x86_pshufb_lowering(&self) -> bool {
-        self.x64_flags.use_ssse3()
+        self.x64_flags.has_ssse3()
     }
 
     fn has_x86_pmulhrsw_lowering(&self) -> bool {
-        self.x64_flags.use_ssse3()
+        self.x64_flags.has_ssse3()
     }
 
     fn has_x86_pmaddubsw_lowering(&self) -> bool {
-        self.x64_flags.use_ssse3()
+        self.x64_flags.has_ssse3()
     }
 
     fn default_argument_extension(&self) -> ir::ArgumentExtension {

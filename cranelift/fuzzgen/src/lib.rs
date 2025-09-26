@@ -185,10 +185,8 @@ where
         //   aarch64: https://github.com/bytecodealliance/wasmtime/issues/2735
         let bool_settings = [
             "enable_alias_analysis",
-            "enable_safepoints",
             "unwind_info",
             "preserve_frame_pointers",
-            "enable_jump_tables",
             "enable_heap_access_spectre_mitigation",
             "enable_table_access_spectre_mitigation",
             "enable_incremental_compilation_cache_checks",
@@ -250,11 +248,6 @@ where
 
         // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
         builder.enable("enable_verifier").unwrap();
-
-        // These settings just panic when they're not enabled and we try to use their respective functionality
-        // so they aren't very interesting to be automatically generated.
-        builder.enable("enable_atomics").unwrap();
-        builder.enable("enable_float").unwrap();
 
         // `machine_code_cfg_info` generates additional metadata for the embedder but this doesn't feed back
         // into compilation anywhere, we leave it on unconditionally to make sure the generation doesn't panic.

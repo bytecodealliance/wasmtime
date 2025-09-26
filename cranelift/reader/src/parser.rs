@@ -3685,7 +3685,7 @@ mod tests {
             r#"; before
                              test cfg option=5
                              test verify
-                             set enable_float=false
+                             set unwind_info=false
                              feature "foo"
                              feature !"bar"
                              ; still preamble
@@ -3699,7 +3699,7 @@ mod tests {
         match tf.isa_spec {
             IsaSpec::None(s) => {
                 assert!(s.enable_verifier());
-                assert!(!s.enable_float());
+                assert!(!s.unwind_info());
             }
             _ => panic!("unexpected ISAs"),
         }
@@ -3726,7 +3726,7 @@ mod tests {
         assert!(
             parse_test(
                 "target x86_64
-                            set enable_float=false
+                            set unwind_info=false
                             function %foo() system_v {}",
                 ParseOptions::default()
             )
@@ -3734,7 +3734,7 @@ mod tests {
         );
 
         match parse_test(
-            "set enable_float=false
+            "set unwind_info=false
                           target x86_64
                           function %foo() system_v {}",
             ParseOptions::default(),
