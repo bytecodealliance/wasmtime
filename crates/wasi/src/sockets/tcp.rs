@@ -332,7 +332,7 @@ impl TcpSocket {
         }
     }
 
-    /// For WASIp2 this retreives the result from the future passed to
+    /// For WASIp2 this retrieves the result from the future passed to
     /// `set_pending_connect`.
     ///
     /// Return states here are:

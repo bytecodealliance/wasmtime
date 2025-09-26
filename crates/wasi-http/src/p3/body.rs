@@ -341,7 +341,7 @@ impl http_body::Body for GuestBody {
                 match res {
                     Ok(buf) => {
                         if let Some(n) = self.content_length.as_mut() {
-                            // Substract frame length from `content_length`,
+                            // Subtract frame length from `content_length`,
                             // [LimitedGuestBodyConsumer] already performs the validation, so
                             // just keep count as optimization for
                             // `is_end_stream` and `size_hint`
