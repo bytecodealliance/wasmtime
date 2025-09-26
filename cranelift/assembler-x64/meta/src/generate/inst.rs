@@ -68,6 +68,8 @@ impl dsl::Inst {
             self.generate_is_available_function(f);
             f.empty_line();
             self.generate_features_function(f);
+            f.empty_line();
+            self.generate_num_registers_function(f);
         });
     }
 
@@ -241,6 +243,19 @@ impl dsl::Inst {
         fmtln!(f, "#[must_use]");
         f.add_block("pub fn features(&self) -> &'static Features", |f| {
             self.features.generate_constructor_expr(f);
+        });
+    }
+
+    /// `fn num_registers_available(&self) -> usize { ... }`
+    fn generate_num_registers_function(&self, f: &mut Formatter) {
+        fmtln!(f, "#[must_use]");
+        f.add_block("pub fn num_registers_available(&self) -> usize", |f| {
+            use dsl::Encoding::*;
+            let n = match self.encoding {
+                Rex(_) | Vex(_) => 16,
+                Evex(_) => 32,
+            };
+            fmtln!(f, "{n}")
         });
     }
 
