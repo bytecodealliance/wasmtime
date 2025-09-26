@@ -7,8 +7,12 @@ repository to run the example locally.
 
 This example demonstrates using the [Memory Protection Keys](https://www.man7.org/linux/man-pages/man7/pkeys.7.html) feature on supported platforms.
 
-## `mpk.rs`
+## Host Source
 
-```rust,ignore
+<!-- langtabs-start -->
+
+```rust
 {{#include ../examples/mpk.rs}}
 ```
+
+<!-- langtabs-end -->

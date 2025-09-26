@@ -7,14 +7,18 @@ repository to run the example locally.
 
 This example demonstrates configuring Wasmtime for asynchronous operation and calling async host functions from wasm.
 
-## `async.wat`
+## Wasm Source
 
 ```wat
 {{#include ../examples/async.wat}}
 ```
 
-## `async.cpp`
+## Host Source
+
+<!-- langtabs-start -->
 
 ```cpp
 {{#include ../examples/async.cpp}}
 ```
+
+<!-- langtabs-end -->
