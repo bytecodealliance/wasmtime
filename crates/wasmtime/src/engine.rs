@@ -154,6 +154,12 @@ impl Engine {
         &self.inner.config
     }
 
+    /// Version string of the engine used during [`WasmtimeVersion`](crate::ModuleVersionStrategy::WasmtimeVersion)
+    /// compatibility check.
+    pub fn version() -> &'static str {
+        env!("CARGO_PKG_VERSION_MAJOR")
+    }
+
     #[inline]
     pub(crate) fn features(&self) -> WasmFeatures {
         self.inner.features
