@@ -110,6 +110,21 @@ block0:
 ;     return v11  ; v11 = -1
 ; }
 
+function %cprop_srem() -> i32 {
+block0:
+    v0 = iconst.i32 -17
+    v1 = iconst.i32 7
+    v2 = srem v0, v1
+    return v2
+}
+
+; function %cprop_srem() -> i32 fast {
+; block0:
+;     v28 = iconst.i32 -3
+;     v2 -> v28
+;     return v28  ; v28 = -3
+; }
+
 function %udiv_by_one(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 1
@@ -228,4 +243,3 @@ block0:
 ;     v2 = uadd_overflow_trap v0, v1, user42  ; v0 = -1, v1 = 1
 ;     return v2
 ; }
-

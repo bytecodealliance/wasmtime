@@ -60,6 +60,28 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn imm64_srem(&mut self, ty: Type, x: Imm64, y: Imm64) -> Option<Imm64> {
+            // Sign extend `x` and `y`.
+            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            let x = (x.bits() << shift) >> shift;
+            let y = (y.bits() << shift) >> shift;
+
+            // NB: We can't rely on `checked_rem` to detect `ty::MIN / -1`
+            // (which overflows and should trap) because we are working with
+            // `i64` values here, and `i32::MIN != i64::MIN`, for
+            // example. Therefore, we have to explicitly check for this case
+            // ourselves.
+            let min = ((self.ty_smin(ty) as i64) << shift) >> shift;
+            if x == min && y == -1 {
+                return None;
+            }
+
+            let ty_mask = self.ty_mask(ty) as i64;
+            let result = x.checked_rem(y)? & ty_mask;
+            Some(Imm64::new(result))
+        }
+
+        #[inline]
         fn imm64_shl(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
             // Mask off any excess shift bits.
             let shift_mask = (ty.bits() - 1) as u64;
