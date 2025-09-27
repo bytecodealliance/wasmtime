@@ -36,6 +36,12 @@
       (iconst ty d))
 
 (rule (simplify_skeleton
+       (srem (iconst ty k1)
+             (iconst _ k2)))
+      (if-let d (imm64_srem ty k1 k2))
+      (iconst ty d))
+
+(rule (simplify_skeleton
        (udiv (iconst_u ty k1)
              (iconst_u ty k2)))
       (if-let d (u64_checked_div k1 k2))
