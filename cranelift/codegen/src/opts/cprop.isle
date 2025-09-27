@@ -47,6 +47,12 @@
       (if-let d (u64_checked_div k1 k2))
       (iconst ty (imm64_masked ty d)))
 
+(rule (simplify_skeleton
+       (urem (iconst_u ty k1)
+             (iconst_u ty k2)))
+      (if-let d (u64_checked_rem k1 k2))
+      (iconst ty (imm64_masked ty d)))
+
 (rule (simplify
        (bor (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k1))
