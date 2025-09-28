@@ -15,6 +15,7 @@ use serde_derive::{Deserialize, Serialize};
 /// This is like a `FuncKey` but without any payload values.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(test, derive(arbitrary::Arbitrary))]
 pub enum FuncKeyKind {
     /// A Wasm-defined function.
     DefinedWasmFunction = FuncKey::new_kind(0b000),
@@ -153,6 +154,7 @@ impl FuncKeyIndex {
 
 /// ABI signature of functions that are generated here.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(test, derive(arbitrary::Arbitrary))]
 pub enum Abi {
     /// The "wasm" ABI, or suitable to be a `wasm_call` field of a `VMFuncRef`.
     Wasm = 0,
