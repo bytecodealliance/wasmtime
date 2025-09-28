@@ -12,7 +12,7 @@ capstone = { workspace = true, optional = true }
 
 [dev-dependencies]
 arbitrary = { workspace = true, features = ["derive"] }
-arbtest = "0.3.1"
+arbtest = { workspace = true }
 capstone = { workspace = true }
 
 [build-dependencies]
