@@ -148,6 +148,7 @@ macro_rules! declare_vecs {
     )*};
 }
 
+#[cfg(feature = "async")]
 pub(crate) use declare_vecs;
 
 declare_vecs! {
