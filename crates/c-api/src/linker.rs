@@ -46,6 +46,9 @@ macro_rules! to_str {
     };
 }
 
+#[cfg(feature = "async")]
+pub(crate) use to_str;
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_linker_define(
     linker: &mut wasmtime_linker_t,
