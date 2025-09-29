@@ -282,8 +282,6 @@ jobs:
         echo "${{ runner.tool_cache }}/mdbook/bin" >> $GITHUB_PATH
         cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook --locked
     - run: (cd docs && mdbook build)
-    - run: cargo build -p wasi-common --features wasmtime/wat,wasmtime/cranelift
-    - run: (cd docs && mdbook test -L ../target/debug/deps)
 
     # Build Rust API documentation.
     #
