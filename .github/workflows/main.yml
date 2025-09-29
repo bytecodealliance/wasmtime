@@ -253,7 +253,8 @@ jobs:
     name: Doc build
     runs-on: ubuntu-latest
     env:
-      CARGO_MDBOOK_VERSION: 0.4.37
+      MDBOOK_VERSION: 0.4.37
+      MDBOOK_LANGTABS_VERSION: 0.1.1
       RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
@@ -277,10 +278,11 @@ jobs:
     - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/mdbook
-        key: cargo-mdbook-bin-${{ env.CARGO_MDBOOK_VERSION }}
+        key: cargo-mdbook-${{ env.MDBOOK_VERSION }}-langtabs-${{ env.MDBOOK_LANGTABS_VERSION }}
     - run: |
         echo "${{ runner.tool_cache }}/mdbook/bin" >> $GITHUB_PATH
-        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook --locked
+        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.MDBOOK_VERSION }} mdbook --locked
+        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.MDBOOK_LANGTABS_VERSION }} mdbook-langtabs --locked
     - run: (cd docs && mdbook build)
 
     # Build Rust API documentation.
