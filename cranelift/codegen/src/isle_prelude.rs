@@ -40,10 +40,11 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn imm64_sdiv(&mut self, ty: Type, x: Imm64, y: Imm64) -> Option<Imm64> {
             // Sign extend `x` and `y`.
-            assert!(ty.bits() <= 64);
-            let shift = 64 - ty.bits();
-            let x = (x.bits() << shift) >> shift;
-            let y = (y.bits() << shift) >> shift;
+            let type_width = ty.bits();
+            assert!(type_width <= 64);
+            let x = x.sign_extend_from_width(type_width).bits();
+            let y = y.sign_extend_from_width(type_width).bits();
+            let shift = 64 - type_width;
 
             // NB: We can't rely on `checked_div` to detect `ty::MIN / -1`
             // (which overflows and should trap) because we are working with
@@ -55,20 +56,20 @@ macro_rules! isle_common_prelude_methods {
                 return None;
             }
 
-            let ty_mask = self.ty_mask(ty) as i64;
-            let result = x.checked_div(y)? & ty_mask;
-            Some(Imm64::new(result))
+            let result = x.checked_div(y)?;
+            Some(Imm64::new(result).mask_to_width(type_width))
         }
 
         #[inline]
         fn imm64_srem(&mut self, ty: Type, x: Imm64, y: Imm64) -> Option<Imm64> {
             // Sign extend `x` and `y`.
-            assert!(ty.bits() <= 64);
-            let shift = 64 - ty.bits();
-            let x = (x.bits() << shift) >> shift;
-            let y = (y.bits() << shift) >> shift;
+            let type_width = ty.bits();
+            assert!(type_width <= 64);
+            let x = x.sign_extend_from_width(type_width).bits();
+            let y = y.sign_extend_from_width(type_width).bits();
+            let shift = 64 - type_width;
 
-            // NB: We can't rely on `checked_rem` to detect `ty::MIN / -1`
+            // NB: We can't rely on `checked_div` to detect `ty::MIN / -1`
             // (which overflows and should trap) because we are working with
             // `i64` values here, and `i32::MIN != i64::MIN`, for
             // example. Therefore, we have to explicitly check for this case
@@ -78,9 +79,8 @@ macro_rules! isle_common_prelude_methods {
                 return None;
             }
 
-            let ty_mask = self.ty_mask(ty) as i64;
-            let result = x.checked_rem(y)? & ty_mask;
-            Some(Imm64::new(result))
+            let result = x.checked_rem(y)?;
+            Some(Imm64::new(result).mask_to_width(type_width))
         }
 
         #[inline]
