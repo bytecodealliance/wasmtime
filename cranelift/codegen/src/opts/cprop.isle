@@ -31,13 +31,13 @@
 
 (rule (simplify_skeleton
        (sdiv (iconst ty k1)
-             (iconst _ k2)))
+             (iconst ty k2)))
       (if-let d (imm64_sdiv ty k1 k2))
       (iconst ty d))
 
 (rule (simplify_skeleton
        (srem (iconst ty k1)
-             (iconst _ k2)))
+             (iconst ty k2)))
       (if-let d (imm64_srem ty k1 k2))
       (iconst ty d))
 
