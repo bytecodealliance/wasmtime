@@ -52,7 +52,7 @@ easier-to-use API on top.
 
 Wasmtime is available in Bash through the [`wasmtime` CLI](./cli.md) executable
 and its various subcommands. Source for the `wasmtime` executable is developed
-int he same repository as Wasmtime itself. Installation of `wasmtime` can be
+in the same repository as Wasmtime itself. Installation of `wasmtime` can be
 [found in this documentation](./cli-install.md).
 
 # External bindings to Wasmtime
@@ -60,7 +60,7 @@ int he same repository as Wasmtime itself. Installation of `wasmtime` can be
 The following language bindings are all developed outside of the Wasmtime
 repository. Consequently they are not officially supported and may have varying
 levels of support and activity. Note that many of these bindings are in the
-bytecodealliance GitHub organization but are still note tested/developed in-sync
+bytecodealliance GitHub organization but are still not tested/developed in-sync
 with the main repository.
 
 ## Python
