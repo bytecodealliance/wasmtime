@@ -12,8 +12,12 @@ post-mortem analysis.
 [core dumps]: https://github.com/WebAssembly/tool-conventions/blob/main/Coredump.md
 [`wasmgdb`]: https://github.com/xtuc/wasm-coredump/blob/main/bin/wasmgdb/README.md
 
-## `main.rs`
+## Host Source
 
-```rust,ignore
+<!-- langtabs-start -->
+
+```rust
 {{#include ../examples/coredump.rs}}
 ```
+
+<!-- langtabs-end -->
