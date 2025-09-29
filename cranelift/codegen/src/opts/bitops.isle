@@ -202,3 +202,30 @@
 (rule (simplify (band ty (band ty x y) y)) (band ty x y))
 (rule (simplify (band ty x (band ty x y))) (band ty x y))
 (rule (simplify (band ty y (band ty x y))) (band ty x y))
+
+;; (x ^ ~y) & x --> x & y
+(rule (simplify (band ty (bxor ty x (bnot ty y)) x)) (band ty x y))
+(rule (simplify (band ty (bxor ty (bnot ty y) x) x)) (band ty x y))
+(rule (simplify (band ty x (bxor ty x (bnot ty y)))) (band ty x y))
+(rule (simplify (band ty x (bxor ty (bnot ty y) x))) (band ty x y))
+
+; (x & y) + (x ^ y) --> x | y
+(rule (simplify (iadd ty (band ty x y) (bxor ty x y))) (bor ty x y))
+(rule (simplify (iadd ty (bxor ty x y) (band ty x y))) (bor ty x y))
+
+; (x | y) + (x & y) --> x + y
+(rule (simplify (iadd ty (bor ty x y) (band ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (band ty x y) (bor ty x y))) (iadd ty x y))
+
+; (x & y) | x --> x
+(rule (simplify (bor ty (band ty x y) x)) x)
+(rule (simplify (bor ty x (band ty x y))) x)
+
+; (x ^ y) ^ y --> x
+(rule (simplify (bxor ty (bxor ty x y) y)) x)
+(rule (simplify (bxor ty y (bxor ty x y))) x)
+
+; (x & y) | ~x -> y | ~x
+(rule (simplify (bor ty (band ty x y) (bnot ty x))) (bor ty y (bnot ty x)))
+(rule (simplify (bor ty (bnot ty x) (band ty x y))) (bor ty y (bnot ty x)))
+

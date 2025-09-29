@@ -213,10 +213,9 @@ fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht.top() {
         WasmHeapTopType::Func => pointer_type,
         WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => ir::types::I32,
-        WasmHeapTopType::Cont =>
-        // TODO(10248) This is added in a follow-up PR
-        {
-            unimplemented!("codegen for stack switching types not implemented, yet")
+        WasmHeapTopType::Cont => {
+            // VMContObj is 2 * pointer_size (pointer + usize revision)
+            ir::Type::int((2 * pointer_type.bits()).try_into().unwrap()).unwrap()
         }
     }
 }
@@ -303,7 +302,7 @@ fn mach_reloc_to_reloc(
             // in the Wasm-to-Cranelift translator.
             panic!("unexpected libcall {libcall:?}");
         }
-        _ => panic!("unrecognized external name"),
+        _ => panic!("unrecognized external name {target:?}"),
     };
     Relocation {
         reloc: kind,
@@ -374,6 +373,11 @@ impl BuiltinFunctionSignatures {
 
     fn bool(&self) -> AbiParam {
         AbiParam::new(ir::types::I8)
+    }
+
+    #[cfg(feature = "stack-switching")]
+    fn size(&self) -> AbiParam {
+        AbiParam::new(self.pointer_type)
     }
 
     fn wasm_signature(&self, builtin: BuiltinFunctionIndex) -> Signature {

@@ -8,7 +8,45 @@ use std::sync::Arc;
 use tracing::debug;
 use wasmtime::component::{HasData, Resource, ResourceTable};
 
-pub(crate) struct WasiFilesystem;
+/// A helper struct which implements [`HasData`] for the `wasi:filesystem` APIs.
+///
+/// This can be useful when directly calling `add_to_linker` functions directly,
+/// such as [`wasmtime_wasi::p2::bindings::filesystem::types::add_to_linker`] as
+/// the `D` type parameter. See [`HasData`] for more information about the type
+/// parameter's purpose.
+///
+/// When using this type you can skip the [`WasiFilesystemView`] trait, for
+/// example.
+///
+/// # Examples
+///
+/// ```
+/// use wasmtime::component::{Linker, ResourceTable};
+/// use wasmtime::{Engine, Result, Config};
+/// use wasmtime_wasi::filesystem::*;
+///
+/// struct MyStoreState {
+///     table: ResourceTable,
+///     filesystem: WasiFilesystemCtx,
+/// }
+///
+/// fn main() -> Result<()> {
+///     let mut config = Config::new();
+///     config.async_support(true);
+///     let engine = Engine::new(&config)?;
+///     let mut linker = Linker::new(&engine);
+///
+///     wasmtime_wasi::p2::bindings::filesystem::types::add_to_linker::<MyStoreState, WasiFilesystem>(
+///         &mut linker,
+///         |state| WasiFilesystemCtxView {
+///             table: &mut state.table,
+///             ctx: &mut state.filesystem,
+///         },
+///     )?;
+///     Ok(())
+/// }
+/// ```
+pub struct WasiFilesystem;
 
 impl HasData for WasiFilesystem {
     type Data<'a> = WasiFilesystemCtxView<'a>;
@@ -16,8 +54,8 @@ impl HasData for WasiFilesystem {
 
 #[derive(Clone, Default)]
 pub struct WasiFilesystemCtx {
-    pub allow_blocking_current_thread: bool,
-    pub preopens: Vec<(Dir, String)>,
+    pub(crate) allow_blocking_current_thread: bool,
+    pub(crate) preopens: Vec<(Dir, String)>,
 }
 
 pub struct WasiFilesystemCtxView<'a> {
@@ -701,6 +739,12 @@ impl File {
         }
     }
 
+    /// Returns reference to the underlying [`cap_std::fs::File`]
+    #[cfg(feature = "p3")]
+    pub(crate) fn as_file(&self) -> &Arc<cap_std::fs::File> {
+        &self.file
+    }
+
     pub(crate) async fn advise(
         &self,
         offset: u64,
@@ -746,7 +790,7 @@ pub struct Dir {
     /// oflags back out using fcntl.
     pub open_mode: OpenMode,
 
-    allow_blocking_current_thread: bool,
+    pub(crate) allow_blocking_current_thread: bool,
 }
 
 impl Dir {
@@ -791,6 +835,12 @@ impl Dir {
             let d = self.dir.clone();
             spawn_blocking(move || body(&d)).await
         }
+    }
+
+    /// Returns reference to the underlying [`cap_std::fs::Dir`]
+    #[cfg(feature = "p3")]
+    pub(crate) fn as_dir(&self) -> &Arc<cap_std::fs::Dir> {
+        &self.dir
     }
 
     pub(crate) async fn create_directory_at(&self, path: String) -> Result<(), ErrorCode> {

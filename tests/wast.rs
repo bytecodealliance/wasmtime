@@ -1,9 +1,7 @@
 use anyhow::{Context, bail};
 use libtest_mimic::{Arguments, FormatSetting, Trial};
 use std::sync::{Condvar, LazyLock, Mutex};
-use wasmtime::{
-    Config, Enabled, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, Store,
-};
+use wasmtime::{Config, Enabled, Engine, InstanceAllocationStrategy, PoolingAllocationConfig};
 use wasmtime_test_util::wast::{Collector, Compiler, WastConfig, WastTest, limits};
 use wasmtime_wast::{Async, SpectestConfig, WastContext};
 
@@ -148,6 +146,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
 
     if is_cranelift {
         cfg.cranelift_debug_verifier(true);
+        cfg.cranelift_wasmtime_debug_checks(true);
     }
 
     // By default we'll allocate huge chunks (6gb) of the address space for each
@@ -248,8 +247,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
 
     for (engine, desc) in engines {
         let result = engine.and_then(|engine| {
-            let store = Store::new(&engine, ());
-            let mut wast_context = WastContext::new(store, Async::Yes);
+            let mut wast_context = WastContext::new(&engine, Async::Yes, |_store| {});
             wast_context.generate_dwarf(true);
             wast_context.register_spectest(&SpectestConfig {
                 use_shared_memory: true,

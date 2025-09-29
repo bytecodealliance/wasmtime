@@ -1495,27 +1495,24 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     store: &mut StoreContextMut<'_, T>,
     closure: impl FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 ) -> Result<()> {
-    unsafe {
-        // The `enter_wasm` call below will reset the store context's
-        // `stack_chain` to a new `InitialStack`, pointing to the
-        // stack-allocated `initial_stack_csi`.
-        let mut initial_stack_csi = VMCommonStackInformation::running_default();
-        // Stores some state of the runtime just before entering Wasm. Will be
-        // restored upon exiting Wasm. Note that the `CallThreadState` that is
-        // created by the `catch_traps` call below will store a pointer to this
-        // stack-allocated `previous_runtime_state`.
-        let mut previous_runtime_state =
-            EntryStoreContext::enter_wasm(store, &mut initial_stack_csi);
+    // The `enter_wasm` call below will reset the store context's
+    // `stack_chain` to a new `InitialStack`, pointing to the
+    // stack-allocated `initial_stack_csi`.
+    let mut initial_stack_csi = VMCommonStackInformation::running_default();
+    // Stores some state of the runtime just before entering Wasm. Will be
+    // restored upon exiting Wasm. Note that the `CallThreadState` that is
+    // created by the `catch_traps` call below will store a pointer to this
+    // stack-allocated `previous_runtime_state`.
+    let mut previous_runtime_state = EntryStoreContext::enter_wasm(store, &mut initial_stack_csi);
 
-        if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
-            // `previous_runtime_state` implicitly dropped here
-            return Err(trap);
-        }
-        let result = crate::runtime::vm::catch_traps(store, &mut previous_runtime_state, closure);
-        core::mem::drop(previous_runtime_state);
-        store.0.call_hook(CallHook::ReturningFromWasm)?;
-        result
+    if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
+        // `previous_runtime_state` implicitly dropped here
+        return Err(trap);
     }
+    let result = crate::runtime::vm::catch_traps(store, &mut previous_runtime_state, closure);
+    core::mem::drop(previous_runtime_state);
+    store.0.call_hook(CallHook::ReturningFromWasm)?;
+    result
 }
 
 /// This type helps managing the state of the runtime when entering and exiting
@@ -1527,17 +1524,11 @@ pub(crate) struct EntryStoreContext {
     /// If set, contains value of `stack_limit` field to restore in
     /// `VMStoreContext` when exiting Wasm.
     pub stack_limit: Option<usize>,
-    /// Contains value of `last_wasm_exit_pc` field to restore in
-    /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_exit_pc: usize,
-    /// Contains value of `last_wasm_exit_trampoline_fp` field to restore in
-    /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_exit_trampoline_fp: usize,
-    /// Contains value of `last_wasm_entry_fp` field to restore in
-    /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_entry_fp: usize,
-    /// Contains value of `stack_chain` field to restore in
-    /// `VMStoreContext` when exiting Wasm.
+    pub last_wasm_entry_sp: usize,
+    pub last_wasm_entry_trap_handler: usize,
     pub stack_chain: VMStackChain,
 
     /// We need a pointer to the runtime limits, so we can update them from
@@ -1624,27 +1615,22 @@ impl EntryStoreContext {
         }
 
         unsafe {
-            let last_wasm_exit_pc = *store.0.vm_store_context().last_wasm_exit_pc.get();
-            let last_wasm_exit_trampoline_fp = *store
-                .0
-                .vm_store_context()
-                .last_wasm_exit_trampoline_fp
-                .get();
-            let last_wasm_entry_fp = *store.0.vm_store_context().last_wasm_entry_fp.get();
-
-            let stack_chain = (*store.0.vm_store_context().stack_chain.get()).clone();
-
-            let new_stack_chain = VMStackChain::InitialStack(initial_stack_information);
-            *store.0.vm_store_context().stack_chain.get() = new_stack_chain;
-
             let vm_store_context = store.0.vm_store_context();
+            let new_stack_chain = VMStackChain::InitialStack(initial_stack_information);
+            *vm_store_context.stack_chain.get() = new_stack_chain;
 
             Self {
                 stack_limit,
-                last_wasm_exit_pc,
-                last_wasm_exit_trampoline_fp,
-                last_wasm_entry_fp,
-                stack_chain,
+                last_wasm_exit_pc: *(*vm_store_context).last_wasm_exit_pc.get(),
+                last_wasm_exit_trampoline_fp: *(*vm_store_context)
+                    .last_wasm_exit_trampoline_fp
+                    .get(),
+                last_wasm_entry_fp: *(*vm_store_context).last_wasm_entry_fp.get(),
+                last_wasm_entry_sp: *(*vm_store_context).last_wasm_entry_sp.get(),
+                last_wasm_entry_trap_handler: *(*vm_store_context)
+                    .last_wasm_entry_trap_handler
+                    .get(),
+                stack_chain: (*(*vm_store_context).stack_chain.get()).clone(),
                 vm_store_context,
             }
         }
@@ -1665,6 +1651,9 @@ impl EntryStoreContext {
                 self.last_wasm_exit_trampoline_fp;
             *(*self.vm_store_context).last_wasm_exit_pc.get() = self.last_wasm_exit_pc;
             *(*self.vm_store_context).last_wasm_entry_fp.get() = self.last_wasm_entry_fp;
+            *(*self.vm_store_context).last_wasm_entry_sp.get() = self.last_wasm_entry_sp;
+            *(*self.vm_store_context).last_wasm_entry_trap_handler.get() =
+                self.last_wasm_entry_trap_handler;
             *(*self.vm_store_context).stack_chain.get() = self.stack_chain.clone();
         }
     }
@@ -2325,11 +2314,8 @@ impl HostContext {
         T: 'static,
     {
         // Note that this function is intentionally scoped into a
-        // separate closure. Handling traps and panics will involve
-        // longjmp-ing from this function which means we won't run
-        // destructors. As a result anything requiring a destructor
-        // should be part of this closure, and the long-jmp-ing
-        // happens after the closure in handling the result.
+        // separate closure to fit everything inside `enter_host_from_wasm`
+        // below.
         let run = move |mut caller: Caller<'_, T>| {
             let mut args =
                 NonNull::slice_from_raw_parts(args.cast::<MaybeUninit<ValRaw>>(), args_len);

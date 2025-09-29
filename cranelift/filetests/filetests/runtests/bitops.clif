@@ -164,3 +164,61 @@ block0(v0: i32, v1: i32):
 
 ; run: %test_and_and4(4, 3) == 0
 
+function %fold_and_xor_not(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v1
+    v3 = bxor v0, v2
+    v4 = band v3, v0
+    return v4
+}
+
+; run: %fold_and_xor_not(4, 5) == 4
+
+function %fold_add_or_and3(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = band v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; run: %fold_add_or_and3(4, 5) == 9
+
+function %fold_add_and_xor4(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = band v0, v1
+    v3 = bxor v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; run: %fold_add_and_xor4(1, 2) == 3
+
+function %fold_or_and14(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = band v0, v1
+    v3 = bor v2, v0
+    return v3
+}
+
+; run: %fold_or_and14(0xffff0000, 0x0000ffff) == 0xffff0000
+
+function %fold_xor_xor15(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = bxor v0, v1
+    v3 = bxor v1, v2
+    return v3
+}
+
+; run: %fold_xor_xor15(0xdead0000, 0x0000beef) == 0xdead0000
+
+function %fold_or_and_not(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = bnot v0
+    v4 = bor v2, v3
+    return v4
+}
+
+; run: %fold_or_and_not(0, 0) == 0xffffffff
+

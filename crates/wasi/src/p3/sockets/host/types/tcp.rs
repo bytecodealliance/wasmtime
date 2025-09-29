@@ -1,26 +1,27 @@
 use super::is_addr_allowed;
-use crate::TrappableError;
 use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::sockets::types::{
     Duration, ErrorCode, HostTcpSocket, HostTcpSocketWithStore, IpAddressFamily, IpSocketAddress,
     TcpSocket,
 };
-use crate::p3::sockets::{SocketResult, WasiSockets};
+use crate::p3::sockets::{SocketError, SocketResult, WasiSockets};
 use crate::sockets::{NonInheritedOptions, SocketAddrUse, SocketAddressFamily, WasiSocketsCtxView};
-use anyhow::Context;
+use anyhow::Context as _;
 use bytes::BytesMut;
+use core::iter;
+use core::pin::Pin;
+use core::task::{Context, Poll};
 use io_lifetimes::AsSocketlike as _;
-use std::future::poll_fn;
 use std::io::Cursor;
 use std::net::{Shutdown, SocketAddr};
-use std::pin::pin;
 use std::sync::Arc;
-use std::task::Poll;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::oneshot;
 use wasmtime::component::{
-    Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureWriter, GuardedStreamWriter,
-    Resource, ResourceTable, StreamReader, StreamWriter,
+    Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
+    StreamProducer, StreamReader, StreamResult,
 };
+use wasmtime::{AsContextMut as _, StoreContextMut};
 
 fn get_socket<'a>(
     table: &'a ResourceTable,
@@ -29,7 +30,7 @@ fn get_socket<'a>(
     table
         .get(socket)
         .context("failed to get socket resource from table")
-        .map_err(TrappableError::trap)
+        .map_err(SocketError::trap)
 }
 
 fn get_socket_mut<'a>(
@@ -39,106 +40,198 @@ fn get_socket_mut<'a>(
     table
         .get_mut(socket)
         .context("failed to get socket resource from table")
-        .map_err(TrappableError::trap)
+        .map_err(SocketError::trap)
 }
 
-struct ListenTask {
+struct ListenStreamProducer<T> {
     listener: Arc<TcpListener>,
     family: SocketAddressFamily,
-    tx: StreamWriter<Resource<TcpSocket>>,
     options: NonInheritedOptions,
+    getter: for<'a> fn(&'a mut T) -> WasiSocketsCtxView<'a>,
 }
 
-impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ListenTask {
-    async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
-        let mut tx = GuardedStreamWriter::new(store, self.tx);
-        while !tx.is_closed() {
-            let Some(res) = ({
-                let mut accept = pin!(self.listener.accept());
-                let mut tx = pin!(tx.watch_reader());
-                poll_fn(|cx| match tx.as_mut().poll(cx) {
-                    Poll::Ready(()) => return Poll::Ready(None),
-                    Poll::Pending => accept.as_mut().poll(cx).map(Some),
-                })
-                .await
-            }) else {
-                return Ok(());
-            };
-            let socket = TcpSocket::new_accept(res.map(|p| p.0), &self.options, self.family)
-                .unwrap_or_else(|err| TcpSocket::new_error(err, self.family));
-            let socket = store.with(|mut view| {
-                view.get()
-                    .table
-                    .push(socket)
-                    .context("failed to push socket resource to table")
-            })?;
-            if let Some(socket) = tx.write(Some(socket)).await {
-                debug_assert!(tx.is_closed());
-                store.with(|mut view| {
-                    view.get()
-                        .table
-                        .delete(socket)
-                        .context("failed to delete socket resource from table")
-                })?;
-                return Ok(());
-            }
+impl<D> StreamProducer<D> for ListenStreamProducer<D>
+where
+    D: 'static,
+{
+    type Item = Resource<TcpSocket>;
+    type Buffer = Option<Self::Item>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        // If the destination buffer is empty then this is a request on
+        // behalf of the guest to wait for this socket to be ready to accept
+        // without actually accepting something. The `TcpListener` in Tokio does
+        // not have this capability so we're forced to lie here and say instead
+        // "yes we're ready to accept" as a fallback.
+        //
+        // See WebAssembly/component-model#561 for some more information.
+        if dst.remaining(&mut store) == Some(0) {
+            return Poll::Ready(Ok(StreamResult::Completed));
         }
-        Ok(())
+        let res = match self.listener.poll_accept(cx) {
+            Poll::Ready(res) => res.map(|(stream, _)| stream),
+            Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => return Poll::Pending,
+        };
+        let socket = TcpSocket::new_accept(res, &self.options, self.family)
+            .unwrap_or_else(|err| TcpSocket::new_error(err, self.family));
+        let WasiSocketsCtxView { table, .. } = (self.getter)(store.data_mut());
+        let socket = table
+            .push(socket)
+            .context("failed to push socket resource to table")?;
+        dst.set_buffer(Some(socket));
+        Poll::Ready(Ok(StreamResult::Completed))
     }
 }
 
-struct ReceiveTask {
+struct ReceiveStreamProducer {
     stream: Arc<TcpStream>,
-    data_tx: StreamWriter<u8>,
-    result_tx: FutureWriter<Result<(), ErrorCode>>,
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
 }
 
-impl<T> AccessorTask<T, WasiSockets, wasmtime::Result<()>> for ReceiveTask {
-    async fn run(self, store: &Accessor<T, WasiSockets>) -> wasmtime::Result<()> {
-        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
-        let mut data_tx = GuardedStreamWriter::new(store, self.data_tx);
-        let result_tx = GuardedFutureWriter::new(store, self.result_tx);
-        let res = loop {
-            match self.stream.try_read_buf(&mut buf) {
-                Ok(0) => {
-                    break Ok(());
-                }
-                Ok(..) => {
-                    buf = data_tx.write_all(Cursor::new(buf)).await.into_inner();
-                    if data_tx.is_closed() {
-                        break Ok(());
+impl Drop for ReceiveStreamProducer {
+    fn drop(&mut self) {
+        self.close(Ok(()))
+    }
+}
+
+impl ReceiveStreamProducer {
+    fn close(&mut self, res: Result<(), ErrorCode>) {
+        if let Some(tx) = self.result.take() {
+            _ = self
+                .stream
+                .as_socketlike_view::<std::net::TcpStream>()
+                .shutdown(Shutdown::Read);
+            _ = tx.send(res);
+        }
+    }
+}
+
+impl<D> StreamProducer<D> for ReceiveStreamProducer {
+    type Item = u8;
+    type Buffer = Cursor<BytesMut>;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        dst: Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let res = 'result: {
+            // 0-length reads are an indication that we should wait for
+            // readiness here, so use `poll_read_ready`.
+            if dst.remaining(store.as_context_mut()) == Some(0) {
+                return match self.stream.poll_read_ready(cx) {
+                    Poll::Ready(Ok(())) => Poll::Ready(Ok(StreamResult::Completed)),
+                    Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                    Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+                    Poll::Pending => Poll::Pending,
+                };
+            }
+
+            let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
+            let buf = dst.remaining();
+            loop {
+                match self.stream.try_read(buf) {
+                    Ok(0) => break 'result Ok(()),
+                    Ok(n) => {
+                        dst.mark_written(n);
+                        return Poll::Ready(Ok(StreamResult::Completed));
                     }
-                    buf.clear();
-                }
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                    let Some(res) = ({
-                        let mut readable = pin!(self.stream.readable());
-                        let mut tx = pin!(data_tx.watch_reader());
-                        poll_fn(|cx| match tx.as_mut().poll(cx) {
-                            Poll::Ready(()) => return Poll::Ready(None),
-                            Poll::Pending => readable.as_mut().poll(cx).map(Some),
-                        })
-                        .await
-                    }) else {
-                        break Ok(());
-                    };
-                    if let Err(err) = res {
-                        break Err(err.into());
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        match self.stream.poll_read_ready(cx) {
+                            Poll::Ready(Ok(())) => continue,
+                            Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                            Poll::Pending if finish => {
+                                return Poll::Ready(Ok(StreamResult::Cancelled));
+                            }
+                            Poll::Pending => return Poll::Pending,
+                        }
                     }
-                }
-                Err(err) => {
-                    break Err(err.into());
+                    Err(err) => break 'result Err(err.into()),
                 }
             }
         };
-        _ = self
-            .stream
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(Shutdown::Read);
-        drop(self.stream);
-        drop(data_tx);
-        result_tx.write(res).await;
-        Ok(())
+        self.close(res);
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
+}
+
+struct SendStreamConsumer {
+    stream: Arc<TcpStream>,
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+}
+
+impl Drop for SendStreamConsumer {
+    fn drop(&mut self) {
+        self.close(Ok(()))
+    }
+}
+
+impl SendStreamConsumer {
+    fn close(&mut self, res: Result<(), ErrorCode>) {
+        if let Some(tx) = self.result.take() {
+            _ = self
+                .stream
+                .as_socketlike_view::<std::net::TcpStream>()
+                .shutdown(Shutdown::Write);
+            _ = tx.send(res);
+        }
+    }
+}
+
+impl<D> StreamConsumer<D> for SendStreamConsumer {
+    type Item = u8;
+
+    fn poll_consume(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        src: Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let mut src = src.as_direct(store);
+        let res = 'result: {
+            // A 0-length write is a request to wait for readiness so use
+            // `poll_write_ready` to wait for the underlying object to be ready.
+            if src.remaining().is_empty() {
+                return match self.stream.poll_write_ready(cx) {
+                    Poll::Ready(Ok(())) => Poll::Ready(Ok(StreamResult::Completed)),
+                    Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                    Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+                    Poll::Pending => Poll::Pending,
+                };
+            }
+            loop {
+                match self.stream.try_write(src.remaining()) {
+                    Ok(n) => {
+                        debug_assert!(n > 0);
+                        src.mark_read(n);
+                        return Poll::Ready(Ok(StreamResult::Completed));
+                    }
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        match self.stream.poll_write_ready(cx) {
+                            Poll::Ready(Ok(())) => continue,
+                            Poll::Ready(Err(err)) => break 'result Err(err.into()),
+                            Poll::Pending if finish => {
+                                return Poll::Ready(Ok(StreamResult::Cancelled));
+                            }
+                            Poll::Pending => return Poll::Pending,
+                        }
+                    }
+                    Err(err) => break 'result Err(err.into()),
+                }
+            }
+        };
+        self.close(res);
+        Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
 
@@ -152,8 +245,8 @@ impl HostTcpSocketWithStore for WasiSockets {
         if !is_addr_allowed(store, local_address, SocketAddrUse::TcpBind).await {
             return Err(ErrorCode::AccessDenied.into());
         }
-        store.with(|mut view| {
-            let socket = get_socket_mut(view.get().table, &socket)?;
+        store.with(|mut store| {
+            let socket = get_socket_mut(store.get().table, &socket)?;
             socket.start_bind(local_address)?;
             socket.finish_bind()?;
             Ok(())
@@ -169,16 +262,17 @@ impl HostTcpSocketWithStore for WasiSockets {
         if !is_addr_allowed(store, remote_address, SocketAddrUse::TcpConnect).await {
             return Err(ErrorCode::AccessDenied.into());
         }
-        let sock = store.with(|mut view| -> SocketResult<_> {
-            let socket = get_socket_mut(view.get().table, &socket)?;
-            Ok(socket.start_connect(&remote_address)?)
+        let sock = store.with(|mut store| {
+            let socket = get_socket_mut(store.get().table, &socket)?;
+            let socket = socket.start_connect(&remote_address)?;
+            SocketResult::Ok(socket)
         })?;
 
         // FIXME: handle possible cancellation of the outer `connect`
         // https://github.com/bytecodealliance/wasmtime/pull/11291#discussion_r2223917986
         let res = sock.connect(remote_address).await;
-        store.with(|mut view| -> SocketResult<_> {
-            let socket = get_socket_mut(view.get().table, &socket)?;
+        store.with(|mut store| {
+            let socket = get_socket_mut(store.get().table, &socket)?;
             socket.finish_connect(res)?;
             Ok(())
         })
@@ -188,98 +282,83 @@ impl HostTcpSocketWithStore for WasiSockets {
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
     ) -> SocketResult<StreamReader<Resource<TcpSocket>>> {
-        store.with(|mut view| {
-            let socket = get_socket_mut(view.get().table, &socket)?;
+        let instance = store.instance();
+        let getter = store.getter();
+        store.with(|mut store| {
+            let socket = get_socket_mut(store.get().table, &socket)?;
             socket.start_listen()?;
             socket.finish_listen()?;
             let listener = socket.tcp_listener_arc().unwrap().clone();
             let family = socket.address_family();
             let options = socket.non_inherited_options().clone();
-            let (tx, rx) = view
-                .instance()
-                .stream(&mut view)
-                .context("failed to create stream")
-                .map_err(TrappableError::trap)?;
-            let task = ListenTask {
-                listener,
-                family,
-                tx,
-                options,
-            };
-            view.spawn(task);
-            Ok(rx)
+            Ok(StreamReader::new(
+                instance,
+                &mut store,
+                ListenStreamProducer {
+                    listener,
+                    family,
+                    options,
+                    getter,
+                },
+            ))
         })
     }
 
     async fn send<T: 'static>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
-        mut data: StreamReader<u8>,
+        data: StreamReader<u8>,
     ) -> SocketResult<()> {
-        let stream = store.with(|mut view| -> SocketResult<_> {
-            let sock = get_socket(view.get().table, &socket)?;
+        let (result_tx, result_rx) = oneshot::channel();
+        store.with(|mut store| {
+            let sock = get_socket(store.get().table, &socket)?;
             let stream = sock.tcp_stream_arc()?;
-            Ok(Arc::clone(stream))
+            let stream = Arc::clone(stream);
+            data.pipe(
+                store,
+                SendStreamConsumer {
+                    stream,
+                    result: Some(result_tx),
+                },
+            );
+            SocketResult::Ok(())
         })?;
-        let mut buf = Vec::with_capacity(DEFAULT_BUFFER_CAPACITY);
-        let mut result = Ok(());
-        while !data.is_closed() {
-            buf = data.read(store, buf).await;
-            let mut slice = buf.as_slice();
-            while !slice.is_empty() {
-                match stream.try_write(&slice) {
-                    Ok(n) => slice = &slice[n..],
-                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                        if let Err(err) = stream.writable().await {
-                            result = Err(ErrorCode::from(err).into());
-                            break;
-                        }
-                    }
-                    Err(err) => {
-                        result = Err(ErrorCode::from(err).into());
-                        break;
-                    }
-                }
-            }
-            buf.clear();
-        }
-        _ = stream
-            .as_socketlike_view::<std::net::TcpStream>()
-            .shutdown(Shutdown::Write);
-        result
+        result_rx
+            .await
+            .context("oneshot sender dropped")
+            .map_err(SocketError::trap)??;
+        Ok(())
     }
 
     async fn receive<T: 'static>(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        store.with(|mut view| {
-            let instance = view.instance();
-            let (mut data_tx, data_rx) = instance
-                .stream(&mut view)
-                .context("failed to create stream")?;
-            let socket = get_socket_mut(view.get().table, &socket)?;
+        let instance = store.instance();
+        store.with(|mut store| {
+            let socket = get_socket_mut(store.get().table, &socket)?;
             match socket.start_receive() {
                 Some(stream) => {
-                    let stream = stream.clone();
-                    let (result_tx, result_rx) = instance
-                        .future(&mut view, || unreachable!())
-                        .context("failed to create future")?;
-                    view.spawn(ReceiveTask {
-                        stream,
-                        data_tx,
-                        result_tx,
-                    });
-                    Ok((data_rx, result_rx))
+                    let stream = Arc::clone(stream);
+                    let (result_tx, result_rx) = oneshot::channel();
+                    Ok((
+                        StreamReader::new(
+                            instance,
+                            &mut store,
+                            ReceiveStreamProducer {
+                                stream,
+                                result: Some(result_tx),
+                            },
+                        ),
+                        FutureReader::new(instance, &mut store, result_rx),
+                    ))
                 }
-                None => {
-                    let (mut result_tx, result_rx) = instance
-                        .future(&mut view, || Err(ErrorCode::InvalidState))
-                        .context("failed to create future")?;
-                    result_tx.close(&mut view);
-                    data_tx.close(&mut view);
-                    Ok((data_rx, result_rx))
-                }
+                None => Ok((
+                    StreamReader::new(instance, &mut store, iter::empty()),
+                    FutureReader::new(instance, &mut store, async {
+                        anyhow::Ok(Err(ErrorCode::InvalidState))
+                    }),
+                )),
             }
         })
     }
@@ -293,7 +372,7 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
             .table
             .push(socket)
             .context("failed to push socket resource to table")
-            .map_err(TrappableError::trap)?;
+            .map_err(SocketError::trap)?;
         Ok(resource)
     }
 

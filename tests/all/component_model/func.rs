@@ -922,7 +922,7 @@ async fn async_reentrance() -> Result<()> {
     let message = "cannot enter component instance";
     match instance
         .run_concurrent(&mut store, async move |accessor| {
-            func.call_concurrent(accessor, (42,)).await
+            anyhow::Ok(func.call_concurrent(accessor, (42,)).await?.0)
         })
         .await
     {
@@ -1052,7 +1052,7 @@ async fn task_return_trap(component: &str, substring: &str) -> Result<()> {
     let func = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
     match instance
         .run_concurrent(&mut store, async move |accessor| {
-            func.call_concurrent(accessor, ()).await
+            anyhow::Ok(func.call_concurrent(accessor, ()).await?.0)
         })
         .await
     {
@@ -1251,7 +1251,8 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             instance
                 .run_concurrent(&mut store, async |store| {
-                    func.call_concurrent(store, &input, &mut results).await
+                    func.call_concurrent(store, &input, &mut results).await?;
+                    anyhow::Ok(())
                 })
                 .await??;
         } else {
@@ -1295,7 +1296,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             instance
                 .run_concurrent(&mut store, async move |accessor| {
-                    func.call_concurrent(accessor, input).await
+                    anyhow::Ok(func.call_concurrent(accessor, input).await?.0)
                 })
                 .await??
                 .0
@@ -1684,7 +1685,8 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             instance
                 .run_concurrent(&mut store, async |store| {
-                    func.call_concurrent(store, &[], &mut results).await
+                    func.call_concurrent(store, &[], &mut results).await?;
+                    anyhow::Ok(())
                 })
                 .await??;
         } else {
@@ -1773,7 +1775,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             instance
                 .run_concurrent(&mut store, async move |accessor| {
-                    func.call_concurrent(accessor, ()).await
+                    anyhow::Ok(func.call_concurrent(accessor, ()).await?.0)
                 })
                 .await??
                 .0

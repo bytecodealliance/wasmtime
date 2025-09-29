@@ -3536,6 +3536,14 @@ impl Inst {
             }
 
             &Inst::DummyUse { .. } => {}
+
+            &Inst::LabelAddress { dst, label } => {
+                let inst = Inst::LoadAddr {
+                    rd: dst,
+                    mem: MemArg::Label { target: label },
+                };
+                inst.emit(sink, emit_info, state);
+            }
         }
 
         state.clear_post_insn();

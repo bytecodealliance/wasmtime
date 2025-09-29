@@ -13,7 +13,7 @@ block0:
 
 ; VCode:
 ; block0:
-;   load_sym a0,%my_global+0
+;   load_ext_name_got a0,%my_global
 ;   ret
 ;
 ; Disassembled:

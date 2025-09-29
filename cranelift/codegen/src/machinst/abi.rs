@@ -490,7 +490,7 @@ pub trait ABIMachineSpec {
         flags: &settings::Flags,
         sig: &Signature,
         regs: &[Writable<RealReg>],
-        is_leaf: bool,
+        function_calls: FunctionCalls,
         incoming_args_size: u32,
         tail_args_size: u32,
         stackslots_size: u32,
@@ -601,7 +601,12 @@ pub trait ABIMachineSpec {
 
     /// Get the exception payload registers, if any, for a calling
     /// convention.
-    fn exception_payload_regs(_call_conv: isa::CallConv) -> &'static [Reg] {
+    ///
+    /// Note that the argument here is the calling convention of the *callee*.
+    /// This might differ from the caller but the exceptional payloads that are
+    /// available are defined by the callee, not the caller.
+    fn exception_payload_regs(callee_conv: isa::CallConv) -> &'static [Reg] {
+        let _ = callee_conv;
         &[]
     }
 }
@@ -1078,6 +1083,9 @@ pub struct FrameLayout {
     /// according to the ABI.  These registers will be saved and
     /// restored by gen_clobber_save and gen_clobber_restore.
     pub clobbered_callee_saves: Vec<Writable<RealReg>>,
+
+    /// The function's call pattern classification.
+    pub function_calls: FunctionCalls,
 }
 
 impl FrameLayout {
@@ -1155,9 +1163,6 @@ pub struct Callee<M: ABIMachineSpec> {
     flags: settings::Flags,
     /// The ISA-specific flag values controlling this function's compilation.
     isa_flags: M::F,
-    /// Whether or not this function is a "leaf", meaning it calls no other
-    /// functions
-    is_leaf: bool,
     /// If this function has a stack limit specified, then `Reg` is where the
     /// stack limit will be located after the instructions specified have been
     /// executed.
@@ -1308,7 +1313,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             call_conv,
             flags,
             isa_flags: isa_flags.clone(),
-            is_leaf: f.is_leaf(),
             stack_limit,
             _mach: PhantomData,
         })
@@ -2022,6 +2026,15 @@ impl<M: ABIMachineSpec> Callee<M> {
         assert!(outputs.next().is_none());
 
         if let Some(try_call_payloads) = try_call_payloads {
+            // Let `M` say where the payload values are going to end up and then
+            // double-check it's the same size as the calling convention's
+            // reported number of exception types.
+            let pregs = M::exception_payload_regs(callee_conv);
+            assert_eq!(
+                callee_conv.exception_payload_types(M::word_type()).len(),
+                pregs.len()
+            );
+
             // We need to update `defs` to contain the exception
             // payload regs as well. We have two sources of info that
             // we join:
@@ -2041,7 +2054,6 @@ impl<M: ABIMachineSpec> Callee<M> {
             // handle the two cases below for each payload register:
             // overlaps a return value (and we alias to it) or not
             // (and we add a def).
-            let pregs = M::exception_payload_regs(callee_conv);
             for (i, &preg) in pregs.iter().enumerate() {
                 let vreg = try_call_payloads[i];
                 if let Some(existing) = defs.iter().find(|def| match def.location {
@@ -2127,6 +2139,11 @@ impl<M: ABIMachineSpec> Callee<M> {
         }
     }
 
+    /// Get the raw offset of a sized stackslot in the slot region.
+    pub fn sized_stackslot_offset(&self, slot: StackSlot) -> u32 {
+        self.sized_stackslots[slot]
+    }
+
     /// Produce an instruction that computes a sized stackslot address.
     pub fn sized_stackslot_addr(
         &self,
@@ -2174,6 +2191,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         sigs: &SigSet,
         spillslots: usize,
         clobbered: Vec<Writable<RealReg>>,
+        function_calls: FunctionCalls,
     ) {
         let bytes = M::word_bytes();
         let total_stacksize = self.stackslots_size + bytes * spillslots as u32;
@@ -2184,7 +2202,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             &self.flags,
             self.signature(),
             &clobbered,
-            self.is_leaf,
+            function_calls,
             self.stack_args_size(sigs),
             self.tail_args_size,
             self.stackslots_size,
@@ -2221,7 +2239,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             + frame_layout.clobber_size
             + frame_layout.fixed_frame_storage_size
             + frame_layout.outgoing_args_size
-            + if self.is_leaf {
+            + if frame_layout.function_calls == FunctionCalls::None {
                 0
             } else {
                 frame_layout.setup_area_size
@@ -2229,7 +2247,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 
         // Leaf functions with zero stack don't need a stack check if one's
         // specified, otherwise always insert the stack check.
-        if total_stacksize > 0 || !self.is_leaf {
+        if total_stacksize > 0 || frame_layout.function_calls != FunctionCalls::None {
             if let Some((reg, stack_limit_load)) = &self.stack_limit {
                 insts.extend(stack_limit_load.clone());
                 self.insert_stack_check(*reg, total_stacksize, &mut insts);
@@ -2464,11 +2482,14 @@ impl<T> CallInfo<T> {
                         // returns), we use the integer temp register in
                         // steps.
                         let parts = (ty.bytes() + M::word_bytes() - 1) / M::word_bytes();
+                        let one_part_load_ty =
+                            Type::int_with_byte_size(M::word_bytes().min(ty.bytes()) as u16)
+                                .unwrap();
                         for part in 0..parts {
                             emit(M::gen_load_stack(
                                 amode.offset_by(part * M::word_bytes()),
                                 temp,
-                                M::word_type(),
+                                one_part_load_ty,
                             ));
                             emit(M::gen_store_stack(
                                 StackAMode::Slot(

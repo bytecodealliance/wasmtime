@@ -1,4 +1,4 @@
-package wasi:filesystem@0.3.0-rc-2025-08-15;
+package wasi:filesystem@0.3.0-rc-2025-09-16;
 /// WASI filesystem is a filesystem API primarily intended to let users run WASI
 /// programs that access their files on their existing filesystems, without
 /// significant overhead.
@@ -23,19 +23,19 @@ package wasi:filesystem@0.3.0-rc-2025-08-15;
 /// [WASI filesystem path resolution].
 ///
 /// [WASI filesystem path resolution]: https://github.com/WebAssembly/wasi-filesystem/blob/main/path-resolution.md
-@since(version = 0.3.0-rc-2025-08-15)
+@since(version = 0.3.0-rc-2025-09-16)
 interface types {
-    @since(version = 0.3.0-rc-2025-08-15)
-    use wasi:clocks/wall-clock@0.3.0-rc-2025-08-15.{datetime};
+    @since(version = 0.3.0-rc-2025-09-16)
+    use wasi:clocks/wall-clock@0.3.0-rc-2025-09-16.{datetime};
 
     /// File size or length of a region within a file.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     type filesize = u64;
 
     /// The type of a filesystem object referenced by a descriptor.
     ///
     /// Note: This was called `filetype` in earlier versions of WASI.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     enum descriptor-type {
         /// The type of the descriptor or file is unknown or is different from
         /// any of the other types specified.
@@ -59,7 +59,7 @@ interface types {
     /// Descriptor flags.
     ///
     /// Note: This was called `fdflags` in earlier versions of WASI.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     flags descriptor-flags {
         /// Read mode: Data can be read.
         read,
@@ -103,7 +103,7 @@ interface types {
     /// File attributes.
     ///
     /// Note: This was called `filestat` in earlier versions of WASI.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     record descriptor-stat {
         /// File type.
         %type: descriptor-type,
@@ -130,7 +130,7 @@ interface types {
     }
 
     /// Flags determining the method of how paths are resolved.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     flags path-flags {
         /// As long as the resolved path corresponds to a symbolic link, it is
         /// expanded.
@@ -138,7 +138,7 @@ interface types {
     }
 
     /// Open flags used by `open-at`.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     flags open-flags {
         /// Create file if it does not exist, similar to `O_CREAT` in POSIX.
         create,
@@ -151,11 +151,11 @@ interface types {
     }
 
     /// Number of hard links to an inode.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     type link-count = u64;
 
     /// When setting a timestamp, this gives the value to set it to.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     variant new-timestamp {
         /// Leave the timestamp set to its previous value.
         no-change,
@@ -255,7 +255,7 @@ interface types {
     }
 
     /// File or memory access pattern advisory information.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     enum advice {
         /// The application has no advice to give on its behavior with respect
         /// to the specified data.
@@ -279,7 +279,7 @@ interface types {
 
     /// A 128-bit hash value, split into parts because wasm doesn't have a
     /// 128-bit integer type.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     record metadata-hash-value {
        /// 64 bits of a 128-bit hash value.
        lower: u64,
@@ -290,7 +290,7 @@ interface types {
     /// A descriptor is a reference to a filesystem object, which may be a file,
     /// directory, named pipe, special file, or other object on which filesystem
     /// calls may be made.
-    @since(version = 0.3.0-rc-2025-08-15)
+    @since(version = 0.3.0-rc-2025-09-16)
     resource descriptor {
         /// Return a stream for reading from a file.
         ///
@@ -308,7 +308,7 @@ interface types {
         /// resolves to `err` with an `error-code`.
         ///
         /// Note: This is similar to `pread` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         read-via-stream: func(
             /// The offset within the file at which to start reading.
             offset: filesize,
@@ -326,7 +326,7 @@ interface types {
         /// written or an error is encountered.
         ///
         /// Note: This is similar to `pwrite` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         write-via-stream: async func(
             /// Data to write
             data: stream<u8>,
@@ -342,13 +342,13 @@ interface types {
         /// written or an error is encountered.
         ///
         /// Note: This is similar to `write` with `O_APPEND` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         append-via-stream: async func(data: stream<u8>) -> result<_, error-code>;
 
         /// Provide file advisory information on a descriptor.
         ///
         /// This is similar to `posix_fadvise` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         advise: async func(
             /// The offset within the file to which the advisory applies.
             offset: filesize,
@@ -364,7 +364,7 @@ interface types {
         /// opened for writing.
         ///
         /// Note: This is similar to `fdatasync` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         sync-data: async func() -> result<_, error-code>;
 
         /// Get flags associated with a descriptor.
@@ -373,7 +373,7 @@ interface types {
         ///
         /// Note: This returns the value that was the `fs_flags` value returned
         /// from `fdstat_get` in earlier versions of WASI.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         get-flags: async func() -> result<descriptor-flags, error-code>;
 
         /// Get the dynamic type of a descriptor.
@@ -386,14 +386,14 @@ interface types {
         ///
         /// Note: This returns the value that was the `fs_filetype` value returned
         /// from `fdstat_get` in earlier versions of WASI.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         get-type: async func() -> result<descriptor-type, error-code>;
 
         /// Adjust the size of an open file. If this increases the file's size, the
         /// extra bytes are filled with zeros.
         ///
         /// Note: This was called `fd_filestat_set_size` in earlier versions of WASI.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         set-size: async func(size: filesize) -> result<_, error-code>;
 
         /// Adjust the timestamps of an open file or directory.
@@ -401,7 +401,7 @@ interface types {
         /// Note: This is similar to `futimens` in POSIX.
         ///
         /// Note: This was called `fd_filestat_set_times` in earlier versions of WASI.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         set-times: async func(
             /// The desired values of the data access timestamp.
             data-access-timestamp: new-timestamp,
@@ -421,7 +421,7 @@ interface types {
         ///
         /// This function returns a future, which will resolve to an error code if
         /// reading full contents of the directory fails.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         read-directory: async func() -> tuple<stream<directory-entry>, future<result<_, error-code>>>;
 
         /// Synchronize the data and metadata of a file to disk.
@@ -430,13 +430,13 @@ interface types {
         /// opened for writing.
         ///
         /// Note: This is similar to `fsync` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         sync: async func() -> result<_, error-code>;
 
         /// Create a directory.
         ///
         /// Note: This is similar to `mkdirat` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         create-directory-at: async func(
             /// The relative path at which to create the directory.
             path: string,
@@ -451,7 +451,7 @@ interface types {
         /// modified, use `metadata-hash`.
         ///
         /// Note: This was called `fd_filestat_get` in earlier versions of WASI.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         stat: async func() -> result<descriptor-stat, error-code>;
 
         /// Return the attributes of a file or directory.
@@ -461,7 +461,7 @@ interface types {
         /// discussion of alternatives.
         ///
         /// Note: This was called `path_filestat_get` in earlier versions of WASI.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         stat-at: async func(
             /// Flags determining the method of how the path is resolved.
             path-flags: path-flags,
@@ -475,7 +475,7 @@ interface types {
         ///
         /// Note: This was called `path_filestat_set_times` in earlier versions of
         /// WASI.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         set-times-at: async func(
             /// Flags determining the method of how the path is resolved.
             path-flags: path-flags,
@@ -494,7 +494,7 @@ interface types {
         /// `error-code::not-permitted` if the old path is not a file.
         ///
         /// Note: This is similar to `linkat` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         link-at: async func(
             /// Flags determining the method of how the path is resolved.
             old-path-flags: path-flags,
@@ -518,7 +518,7 @@ interface types {
         /// `error-code::read-only`.
         ///
         /// Note: This is similar to `openat` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         open-at: async func(
             /// Flags determining the method of how the path is resolved.
             path-flags: path-flags,
@@ -536,7 +536,7 @@ interface types {
         /// filesystem, this function fails with `error-code::not-permitted`.
         ///
         /// Note: This is similar to `readlinkat` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         readlink-at: async func(
             /// The relative path of the symbolic link from which to read.
             path: string,
@@ -547,7 +547,7 @@ interface types {
         /// Return `error-code::not-empty` if the directory is not empty.
         ///
         /// Note: This is similar to `unlinkat(fd, path, AT_REMOVEDIR)` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         remove-directory-at: async func(
             /// The relative path to a directory to remove.
             path: string,
@@ -556,7 +556,7 @@ interface types {
         /// Rename a filesystem object.
         ///
         /// Note: This is similar to `renameat` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         rename-at: async func(
             /// The relative source path of the file or directory to rename.
             old-path: string,
@@ -572,7 +572,7 @@ interface types {
         /// `error-code::not-permitted`.
         ///
         /// Note: This is similar to `symlinkat` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         symlink-at: async func(
             /// The contents of the symbolic link.
             old-path: string,
@@ -584,7 +584,7 @@ interface types {
         ///
         /// Return `error-code::is-directory` if the path refers to a directory.
         /// Note: This is similar to `unlinkat(fd, path, 0)` in POSIX.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         unlink-file-at: async func(
             /// The relative path to a file to unlink.
             path: string,
@@ -596,7 +596,7 @@ interface types {
         /// same device (`st_dev`) and inode (`st_ino` or `d_ino`) numbers.
         /// wasi-filesystem does not expose device and inode numbers, so this function
         /// may be used instead.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         is-same-object: async func(other: borrow<descriptor>) -> bool;
 
         /// Return a hash of the metadata associated with a filesystem object referred
@@ -618,14 +618,14 @@ interface types {
         ///    computed hash.
         ///
         /// However, none of these is required.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         metadata-hash: async func() -> result<metadata-hash-value, error-code>;
 
         /// Return a hash of the metadata associated with a filesystem object referred
         /// to by a directory descriptor and a relative path.
         ///
         /// This performs the same hash computation as `metadata-hash`.
-        @since(version = 0.3.0-rc-2025-08-15)
+        @since(version = 0.3.0-rc-2025-09-16)
         metadata-hash-at: async func(
             /// Flags determining the method of how the path is resolved.
             path-flags: path-flags,

@@ -174,6 +174,9 @@ pub struct AdapterOptions {
     pub post_return: Option<dfg::CoreDef>,
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
+    /// Whether or not this intrinsic can consume a task cancellation
+    /// notification.
+    pub cancellable: bool,
     /// The core function type that is being lifted from / lowered to.
     pub core_type: ModuleInternedTypeIndex,
     /// The data model used by this adapter: linear memory or GC objects.

@@ -1257,6 +1257,15 @@ impl Config {
         self
     }
 
+    /// Configures whether extra debug checks are inserted into
+    /// Wasmtime-generated code by Cranelift.
+    ///
+    /// The default value for this is `false`
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub fn cranelift_wasmtime_debug_checks(&mut self, enable: bool) -> &mut Self {
+        unsafe { self.cranelift_flag_set("wasmtime_debug_checks", &enable.to_string()) }
+    }
+
     /// Configures the Cranelift code generator optimization level.
     ///
     /// When the Cranelift code generator is used you can configure the
@@ -2027,7 +2036,7 @@ impl Config {
     /// This may result in faster execution at runtime, but adds additional
     /// compilation time. Inlining may also enlarge the size of compiled
     /// artifacts (for example, the size of the result of
-    /// [`Engine::precompile_component`]).
+    /// [`Engine::precompile_component`](crate::Engine::precompile_component)).
     ///
     /// Inlining is not supported by all of Wasmtime's compilation strategies;
     /// currently, it only Cranelift supports it. This setting will be ignored
@@ -2104,7 +2113,8 @@ impl Config {
                     | WasmFeatures::GC_TYPES
                     | WasmFeatures::EXCEPTIONS
                     | WasmFeatures::LEGACY_EXCEPTIONS
-                    | WasmFeatures::STACK_SWITCHING;
+                    | WasmFeatures::STACK_SWITCHING
+                    | WasmFeatures::CM_ASYNC;
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
                         unsupported |= WasmFeatures::THREADS;

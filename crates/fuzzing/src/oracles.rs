@@ -758,7 +758,10 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
     } else {
         wasmtime_wast::Async::Yes
     };
-    let mut wast_context = WastContext::new(fuzz_config.to_store(), async_);
+    let engine = Engine::new(&fuzz_config.to_wasmtime()).unwrap();
+    let mut wast_context = WastContext::new(&engine, async_, move |store| {
+        fuzz_config.configure_store_epoch_and_fuel(store);
+    });
     wast_context
         .register_spectest(&wasmtime_wast::SpectestConfig {
             use_shared_memory: true,

@@ -194,16 +194,16 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn simple_list1<T: 'static>(
+                fn simple_list1<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     l: wasmtime::component::__internal::Vec<u32>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn simple_list2<T: 'static>(
+                fn simple_list2<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u32>,
                 > + Send;
-                fn simple_list3<T: 'static>(
+                fn simple_list3<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: wasmtime::component::__internal::Vec<u32>,
                     b: wasmtime::component::__internal::Vec<u32>,
@@ -213,7 +213,7 @@ pub mod foo {
                         wasmtime::component::__internal::Vec<u32>,
                     ),
                 > + Send;
-                fn simple_list4<T: 'static>(
+                fn simple_list4<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     l: wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::Vec<u32>,
@@ -243,9 +243,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::Vec<u32>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::simple_list1(accessor, arg0)
-                                .await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::simple_list1(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -254,8 +253,8 @@ pub mod foo {
                     "simple-list2",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::simple_list2(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::simple_list2(host).await;
                             Ok((r,))
                         })
                     },
@@ -273,12 +272,8 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::simple_list3(
-                                    accessor,
-                                    arg0,
-                                    arg1,
-                                )
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::simple_list3(host, arg0, arg1)
                                 .await;
                             Ok((r,))
                         })
@@ -297,9 +292,8 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::simple_list4(accessor, arg0)
-                                .await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::simple_list4(host, arg0).await;
                             Ok((r,))
                         })
                     },
@@ -437,7 +431,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.simple_list1)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_simple_list2<_T, _D>(
@@ -454,7 +448,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::Vec<u32>,),
                             >::new_unchecked(self.simple_list2)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_simple_list3<_T, _D>(
@@ -486,7 +480,7 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.simple_list3)
                         };
-                        let (ret0,) = callee
+                        let ((ret0,), _) = callee
                             .call_concurrent(accessor, (arg0, arg1))
                             .await?;
                         Ok(ret0)
@@ -520,7 +514,9 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.simple_list4)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((ret0,), _) = callee
+                            .call_concurrent(accessor, (arg0,))
+                            .await?;
                         Ok(ret0)
                     }
                 }

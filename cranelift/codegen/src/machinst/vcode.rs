@@ -673,8 +673,12 @@ impl<I: VCodeInst> VCode<I> {
         self.insts.len()
     }
 
-    fn compute_clobbers(&self, regalloc: &regalloc2::Output) -> Vec<Writable<RealReg>> {
+    fn compute_clobbers_and_function_calls(
+        &self,
+        regalloc: &regalloc2::Output,
+    ) -> (Vec<Writable<RealReg>>, FunctionCalls) {
         let mut clobbered = PRegSet::default();
+        let mut function_calls = FunctionCalls::None;
 
         // All moves are included in clobbers.
         for (_, Edit::Move { to, .. }) in &regalloc.edits {
@@ -693,6 +697,8 @@ impl<I: VCodeInst> VCode<I> {
                     }
                 }
             }
+
+            function_calls.update(self.insts[i].call_type());
 
             // Also add explicitly-clobbered registers.
             //
@@ -720,10 +726,12 @@ impl<I: VCodeInst> VCode<I> {
             }
         }
 
-        clobbered
+        let clobbered_regs = clobbered
             .into_iter()
             .map(|preg| Writable::from_reg(RealReg::from(preg)))
-            .collect()
+            .collect();
+
+        (clobbered_regs, function_calls)
     }
 
     /// Emit the instructions to a `MachBuffer`, containing fixed-up
@@ -777,9 +785,13 @@ impl<I: VCodeInst> VCode<I> {
         // mutate `VCode`. The info it usually carries prior to
         // setting clobbers is fairly minimal so this should be
         // relatively cheap.
-        let clobbers = self.compute_clobbers(regalloc);
-        self.abi
-            .compute_frame_layout(&self.sigs, regalloc.num_spillslots, clobbers);
+        let (clobbers, function_calls) = self.compute_clobbers_and_function_calls(regalloc);
+        self.abi.compute_frame_layout(
+            &self.sigs,
+            regalloc.num_spillslots,
+            clobbers,
+            function_calls,
+        );
 
         // Emit blocks.
         let mut cur_srcloc = None;

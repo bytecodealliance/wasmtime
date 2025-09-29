@@ -1097,10 +1097,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn get_regs_clobbered_by_call(call_conv: isa::CallConv, is_exception: bool) -> PRegSet {
-        match call_conv {
-            isa::CallConv::Winch => WINCH_CLOBBERS,
-            isa::CallConv::Tail if is_exception => ALL_CLOBBERS,
-            _ => DEFAULT_AAPCS_CLOBBERS,
+        match (call_conv, is_exception) {
+            (isa::CallConv::Tail, true) => ALL_CLOBBERS,
+            (isa::CallConv::Winch, true) => ALL_CLOBBERS,
+            (isa::CallConv::Winch, false) => WINCH_CLOBBERS,
+            (isa::CallConv::SystemV, _) => DEFAULT_AAPCS_CLOBBERS,
+            (_, false) => DEFAULT_AAPCS_CLOBBERS,
+            (_, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
         }
     }
 
@@ -1120,7 +1123,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         flags: &settings::Flags,
         sig: &Signature,
         regs: &[Writable<RealReg>],
-        is_leaf: bool,
+        function_calls: FunctionCalls,
         incoming_args_size: u32,
         tail_args_size: u32,
         stackslots_size: u32,
@@ -1144,7 +1147,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         // Compute linkage frame size.
         let setup_area_size = if flags.preserve_frame_pointers()
-            || !is_leaf
+            || function_calls != FunctionCalls::None
             // The function arguments that are passed on the stack are addressed
             // relative to the Frame Pointer.
             || incoming_args_size > 0
@@ -1167,6 +1170,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
+            function_calls,
         }
     }
 

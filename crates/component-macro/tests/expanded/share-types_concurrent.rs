@@ -267,7 +267,7 @@ pub mod http_fetch {
         assert!(4 == < Response as wasmtime::component::ComponentType >::ALIGN32);
     };
     pub trait HostWithStore: wasmtime::component::HasData + Send {
-        fn fetch_request<T: 'static>(
+        fn fetch_request<T>(
             accessor: &wasmtime::component::Accessor<T, Self>,
             request: Request,
         ) -> impl ::core::future::Future<Output = Response> + Send;
@@ -288,8 +288,8 @@ pub mod http_fetch {
             "fetch-request",
             move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Request,)| {
                 wasmtime::component::__internal::Box::pin(async move {
-                    let accessor = &caller.with_data(host_getter);
-                    let r = <D as HostWithStore>::fetch_request(accessor, arg0).await;
+                    let host = &caller.with_getter(host_getter);
+                    let r = <D as HostWithStore>::fetch_request(host, arg0).await;
                     Ok((r,))
                 })
             },
@@ -385,7 +385,7 @@ pub mod exports {
                         (Response,),
                     >::new_unchecked(self.handle_request)
                 };
-                let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
+                let ((ret0,), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                 Ok(ret0)
             }
         }

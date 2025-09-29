@@ -31,7 +31,7 @@ defaults:
 # Cancel any in-flight jobs for the same PR/branch so there's only one active
 # at a time
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}2
   cancel-in-progress: true
 
 jobs:
@@ -318,7 +318,7 @@ jobs:
   micro_checks:
     name: Check ${{matrix.name}}
     strategy:
-      fail-fast: true
+      fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix:
         include:
           - name: wasmtime
@@ -504,7 +504,7 @@ jobs:
     name: "Platform: ${{ matrix.target }}"
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix:
         include:
         - target: x86_64-unknown-freebsd
@@ -627,7 +627,7 @@ jobs:
     if: needs.determine.outputs.test-capi
 
     strategy:
-      fail-fast: true
+      fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix:
         os: [ubuntu-24.04, macos-15, windows-2025]
 
@@ -658,7 +658,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
-      QEMU_BUILD_VERSION: 9.1.2
+      QEMU_BUILD_VERSION: 10.0.3
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
@@ -789,7 +789,10 @@ jobs:
     # no output. It's believed that `bash` adds things like `/usr/bin` to PATH
     # which is the wrong DLL or something like that.
     - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
+      if: runner.os == 'Windows'
       shell: pwsh
+    - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
+      if: runner.os != 'Windows'
 
   # Test `wasmtime-wasi-nn` in its own job, as not all of its backends are
   # compatible with all targets, and each must be tested separately anyways.

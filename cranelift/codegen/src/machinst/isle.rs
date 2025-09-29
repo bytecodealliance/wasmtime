@@ -507,6 +507,22 @@ macro_rules! isle_lower_prelude_methods {
                 .into()
         }
 
+        fn abi_stackslot_offset_into_slot_region(
+            &mut self,
+            stack_slot: StackSlot,
+            offset1: Offset32,
+            offset2: Offset32,
+        ) -> i32 {
+            let offset1 = i32::from(offset1);
+            let offset2 = i32::from(offset2);
+            i32::try_from(self.lower_ctx.abi().sized_stackslot_offset(stack_slot))
+                .expect("Stack slot region cannot be larger than 2GiB")
+                .checked_add(offset1)
+                .expect("Stack slot region cannot be larger than 2GiB")
+                .checked_add(offset2)
+                .expect("Stack slot region cannot be larger than 2GiB")
+        }
+
         fn abi_dynamic_stackslot_addr(
             &mut self,
             dst: WritableReg,
@@ -753,6 +769,14 @@ macro_rules! isle_lower_prelude_methods {
 
         fn value_is_unused(&mut self, val: Value) -> bool {
             self.lower_ctx.value_is_unused(val)
+        }
+
+        fn block_exn_successor_label(&mut self, block: &Block, exn_succ: u64) -> MachLabel {
+            // The first N successors are the exceptional edges, and
+            // the normal return is last; so the `exn_succ`'th
+            // exceptional edge is just the `exn_succ`'th edge overall.
+            let succ = usize::try_from(exn_succ).unwrap();
+            self.lower_ctx.block_successor_label(*block, succ)
         }
     };
 }

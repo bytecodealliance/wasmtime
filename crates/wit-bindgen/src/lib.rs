@@ -1527,7 +1527,7 @@ impl Wasmtime {
                         {wt}::component::ResourceType::host::<{camel}>(),
                         move |caller: &{wt}::component::Accessor::<T>, rep| {{
                             {wt}::component::__internal::Box::pin(async move {{
-                                let accessor = &caller.with_data(host_getter);
+                                let accessor = &caller.with_getter(host_getter);
                                 Host{camel}WithStore::drop(accessor, {wt}::component::Resource::new_own(rep)).await
                             }})
                         }},
@@ -1535,28 +1535,38 @@ impl Wasmtime {
                 )
             } else {
                 uwriteln!(
-                src,
-                "{inst}.resource_async(
-                    \"{name}\",
-                    {wt}::component::ResourceType::host::<{camel}>(),
-                    move |mut store, rep| {{
-                        {wt}::component::__internal::Box::new(async move {{
-                            Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep)).await
-                        }})
-                    }},
-                )?;"
-            )
+                    src,
+                    "{inst}.resource_async(
+                        \"{name}\",
+                        {wt}::component::ResourceType::host::<{camel}>(),
+                        move |mut store, rep| {{
+                            {wt}::component::__internal::Box::new(async move {{
+                                Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep)).await
+                            }})
+                        }},
+                    )?;"
+                )
             }
         } else {
+            let (first_arg, trait_suffix) = if flags.contains(FunctionFlags::STORE) {
+                (
+                    format!("{wt}::component::Access::new(store, host_getter)"),
+                    "WithStore",
+                )
+            } else {
+                ("&mut host_getter(store.data_mut())".to_string(), "")
+            };
             uwriteln!(
                 src,
                 "{inst}.resource(
                     \"{name}\",
                     {wt}::component::ResourceType::host::<{camel}>(),
                     move |mut store, rep| -> {wt}::Result<()> {{
-                        Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep))
+
+                        let resource = {wt}::component::Resource::new_own(rep);
+                        Host{camel}{trait_suffix}::drop({first_arg}, resource)
                     }},
-                )?;"
+                )?;",
             )
         }
         gate.close(src);
@@ -2490,7 +2500,14 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         if flags.contains(FunctionFlags::STORE) {
-            uwriteln!(self.src, "let accessor = &caller.with_data(host_getter);");
+            if flags.contains(FunctionFlags::ASYNC) {
+                uwriteln!(self.src, "let host = &caller.with_getter(host_getter);");
+            } else {
+                uwriteln!(
+                    self.src,
+                    "let host = {wt}::component::Access::new(caller, host_getter);"
+                );
+            }
         } else {
             self.src
                 .push_str("let host = &mut host_getter(caller.data_mut());\n");
@@ -2517,7 +2534,7 @@ impl<'a> InterfaceGenerator<'a> {
         if flags.contains(FunctionFlags::STORE) {
             uwrite!(
                 self.src,
-                "let r = <D as {host_trait}WithStore>::{func_name}(accessor, "
+                "let r = <D as {host_trait}WithStore>::{func_name}(host, "
             );
         } else {
             uwrite!(self.src, "let r = {host_trait}::{func_name}(host, ");
@@ -2560,7 +2577,11 @@ impl<'a> InterfaceGenerator<'a> {
             };
             let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
             let convert = if flags.contains(FunctionFlags::STORE) {
-                format!("accessor.with(|mut host| {convert}(&mut host.get(), e))?")
+                if flags.contains(FunctionFlags::ASYNC) {
+                    format!("host.with(|mut host| {convert}(&mut host.get(), e))?")
+                } else {
+                    format!("{convert}(&mut host.get(), e)?")
+                }
             } else {
                 format!("{convert}(host, e)?")
             };
@@ -2594,13 +2615,16 @@ impl<'a> InterfaceGenerator<'a> {
 
         self.push_str("fn ");
         self.push_str(&rust_function_name(func));
-        self.push_str(
-            &if flags.contains(FunctionFlags::STORE | FunctionFlags::ASYNC) {
-                format!("<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, ")
-            } else {
-                "(&mut self, ".to_string()
-            },
-        );
+        if flags.contains(FunctionFlags::STORE | FunctionFlags::ASYNC) {
+            uwrite!(
+                self.src,
+                "<T>(accessor: &{wt}::component::Accessor<T, Self>, "
+            );
+        } else if flags.contains(FunctionFlags::STORE) {
+            uwrite!(self.src, "<T>(host: {wt}::component::Access<T, Self>, ");
+        } else {
+            self.push_str("(&mut self, ");
+        }
         self.generate_function_params(func);
         self.push_str(")");
         self.push_str(" -> ");
@@ -2691,6 +2715,9 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "<S: {wt}::AsContextMut>(&self, mut store: S, ",);
         }
 
+        let task_exit =
+            flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE | FunctionFlags::TASK_EXIT);
+
         let param_mode = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
             TypeMode::Owned
         } else {
@@ -2704,7 +2731,13 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         uwrite!(self.src, ") -> {wt}::Result<");
+        if task_exit {
+            self.src.push_str("(");
+        }
         self.print_result_ty(func.result, TypeMode::Owned);
+        if task_exit {
+            uwrite!(self.src, ", {wt}::component::TaskExit)");
+        }
         uwrite!(self.src, ">");
 
         if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
@@ -2763,17 +2796,26 @@ impl<'a> InterfaceGenerator<'a> {
         self.src.push_str("};\n");
 
         self.src.push_str("let (");
+        if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
+            self.src.push_str("(");
+        }
         if func.result.is_some() {
             uwrite!(self.src, "ret0,");
         }
+
         if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
-            uwrite!(self.src, ") = callee.call_concurrent(accessor, (");
+            let task_exit = if task_exit { "task_exit" } else { "_" };
+            uwrite!(
+                self.src,
+                "), {task_exit}) = callee.call_concurrent(accessor, ("
+            );
         } else {
             uwrite!(
                 self.src,
                 ") = callee.call{async__}(store.as_context_mut(), ("
             );
-        }
+        };
+
         for (i, _) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{}, ", i);
         }
@@ -2799,10 +2841,16 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         self.src.push_str("Ok(");
+        if task_exit {
+            self.src.push_str("(");
+        }
         if func.result.is_some() {
             self.src.push_str("ret0");
         } else {
             self.src.push_str("()");
+        }
+        if task_exit {
+            self.src.push_str(", task_exit)");
         }
         self.src.push_str(")\n");
 
@@ -2907,12 +2955,24 @@ impl<'a> InterfaceGenerator<'a> {
                     }
                     let camel = name.to_upper_camel_case();
 
-                    assert!(flags.contains(FunctionFlags::ASYNC));
+                    if flags.contains(FunctionFlags::ASYNC) {
+                        uwrite!(
+                            self.src,
+                            "
+fn drop<T>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>)
+    -> impl ::core::future::Future<Output = {wt}::Result<()>> + Send where Self: Sized;
+"
+                        );
+                    } else {
+                        uwrite!(
+                            self.src,
+                            "
+fn drop<T>(accessor: {wt}::component::Access<T, Self>, rep: {wt}::component::Resource<{camel}>)
+    ->  {wt}::Result<()>;
+"
+                        );
+                    }
 
-                    uwrite!(
-                        self.src,
-                        "fn drop<T: 'static>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>) -> impl ::core::future::Future<Output = {wt}::Result<()>> + Send where Self: Sized;"
-                    );
                     extra_with_store_function = true;
                 }
                 ExtraTraitMethod::ErrorConvert { .. } => {}

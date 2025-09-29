@@ -121,7 +121,7 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
             assert_eq!(event0, EVENT_NONE);
 
             let set = *set;
-            assert!(async_when_ready() == STATUS_RETURNED);
+            assert_eq!(async_when_ready(), STATUS_RETURNED);
 
             *state = State::S5 { set };
 

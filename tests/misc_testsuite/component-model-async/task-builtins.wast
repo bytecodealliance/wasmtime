@@ -10,6 +10,24 @@
   (core instance $i (instantiate $m (with "" (instance (export "backpressure.set" (func $backpressure-set))))))
 )
 
+;; backpressure.inc
+(component
+  (core module $m
+    (import "" "backpressure.inc" (func $backpressure-inc))
+  )
+  (core func $backpressure-inc (canon backpressure.inc))
+  (core instance $i (instantiate $m (with "" (instance (export "backpressure.inc" (func $backpressure-inc))))))
+)
+
+;; backpressure.dec
+(component
+  (core module $m
+    (import "" "backpressure.dec" (func $backpressure-dec))
+  )
+  (core func $backpressure-dec (canon backpressure.dec))
+  (core instance $i (instantiate $m (with "" (instance (export "backpressure.dec" (func $backpressure-dec))))))
+)
+
 ;; task.return
 (component
   (core module $m

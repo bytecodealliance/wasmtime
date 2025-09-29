@@ -241,6 +241,34 @@ unsafe fn test_fd_readdir_unicode_boundary(dir_fd: wasip1::Fd) {
     wasip1::path_unlink_file(dir_fd, filename).expect("removing a file");
 }
 
+unsafe fn test_fd_readdir_past_end(dir_fd: wasip1::Fd) {
+    let file_fd = wasip1::path_open(
+        dir_fd,
+        0,
+        "a",
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("failed to create file");
+    wasip1::fd_close(file_fd).expect("closing a file");
+
+    let mut buf = vec![0; 128];
+    let len = wasip1::fd_readdir(dir_fd, buf.as_mut_ptr(), buf.capacity(), 0).unwrap();
+
+    let next = ReadDir::from_slice(&buf[..len])
+        .last()
+        .unwrap()
+        .dirent
+        .d_next;
+
+    let len = wasip1::fd_readdir(dir_fd, buf.as_mut_ptr(), buf.capacity(), next + 1).unwrap();
+    assert_eq!(len, 0);
+
+    wasip1::path_unlink_file(dir_fd, "a").expect("removing a file");
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -264,4 +292,5 @@ fn main() {
     unsafe { test_fd_readdir(dir_fd) }
     unsafe { test_fd_readdir_lots(dir_fd) }
     unsafe { test_fd_readdir_unicode_boundary(dir_fd) }
+    unsafe { test_fd_readdir_past_end(dir_fd) }
 }

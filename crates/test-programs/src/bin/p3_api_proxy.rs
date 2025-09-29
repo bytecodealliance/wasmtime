@@ -1,7 +1,7 @@
 use futures::join;
 use test_programs::p3::wasi::http::types::{ErrorCode, Headers, Request, Response};
 use test_programs::p3::{wit_future, wit_stream};
-use wit_bindgen_rt::async_support::spawn;
+use wit_bindgen::spawn;
 
 struct T;
 

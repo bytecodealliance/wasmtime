@@ -11,9 +11,11 @@ use std::vec::Vec;
 pub use untyped::*;
 mod untyped {
     use super::WriteBuffer;
+    use crate::vm::SendSyncPtr;
     use std::any::TypeId;
     use std::marker;
     use std::mem;
+    use std::ptr::NonNull;
 
     /// Helper structure to type-erase the `T` in `WriteBuffer<T>`.
     ///
@@ -25,7 +27,7 @@ mod untyped {
     /// borrow on the original buffer passed in.
     pub struct UntypedWriteBuffer<'a> {
         element_type_id: TypeId,
-        buf: *mut dyn WriteBuffer<()>,
+        buf: SendSyncPtr<dyn WriteBuffer<()>>,
         _marker: marker::PhantomData<&'a mut dyn WriteBuffer<()>>,
     }
 
@@ -48,11 +50,14 @@ mod untyped {
                 // is safe here because `typed` and `untyped` have the same size
                 // and we're otherwise reinterpreting a raw pointer with a type
                 // parameter to one without one.
-                buf: unsafe {
-                    let r = ReinterpretWriteBuffer { typed: buf };
-                    assert_eq!(mem::size_of_val(&r.typed), mem::size_of_val(&r.untyped));
-                    r.untyped
-                },
+                buf: SendSyncPtr::new(
+                    NonNull::new(unsafe {
+                        let r = ReinterpretWriteBuffer { typed: buf };
+                        assert_eq!(mem::size_of_val(&r.typed), mem::size_of_val(&r.untyped));
+                        r.untyped
+                    })
+                    .unwrap(),
+                ),
                 _marker: marker::PhantomData,
             }
         }
@@ -68,7 +73,12 @@ mod untyped {
             // structure also is proof of valid existence of the original
             // `&mut WriteBuffer<T>`, so taking the raw pointer back to a safe
             // reference is valid.
-            unsafe { &mut *ReinterpretWriteBuffer { untyped: self.buf }.typed }
+            unsafe {
+                &mut *ReinterpretWriteBuffer {
+                    untyped: self.buf.as_ptr(),
+                }
+                .typed
+            }
         }
     }
 }
@@ -204,10 +214,64 @@ impl<T: Send + Sync + 'static> ReadBuffer<T> for Option<T> {
     }
 }
 
+/// A `WriteBuffer` implementation, backed by a `Vec<u8>`, a position, and a limit.
+pub struct SliceBuffer {
+    buffer: Vec<u8>,
+    offset: usize,
+    limit: usize,
+}
+
+impl SliceBuffer {
+    pub fn new(buffer: Vec<u8>, offset: usize, limit: usize) -> Self {
+        assert!(limit <= buffer.len());
+        Self {
+            buffer,
+            offset,
+            limit,
+        }
+    }
+
+    pub fn into_parts(self) -> (Vec<u8>, usize, usize) {
+        (self.buffer, self.offset, self.limit)
+    }
+}
+
+// SAFETY: the `take` implementation below guarantees that the `fun` closure is
+// provided with fully initialized items due to all elements in the slice being
+// initialized.
+unsafe impl WriteBuffer<u8> for SliceBuffer {
+    fn remaining(&self) -> &[u8] {
+        &self.buffer[self.offset..self.limit]
+    }
+
+    fn skip(&mut self, count: usize) {
+        assert!(self.offset + count <= self.limit);
+        self.offset += count;
+    }
+
+    fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<u8>])) {
+        assert!(count <= self.remaining().len());
+        self.offset += count;
+        // SAFETY: Transmuting from `&[u8]` to `&[MaybeUninit<u8>]` should
+        // always be sound.
+        fun(unsafe {
+            mem::transmute::<&[u8], &[MaybeUninit<u8>]>(
+                &self.buffer[self.offset - count..self.limit],
+            )
+        });
+    }
+}
+
 /// A `WriteBuffer` implementation, backed by a `Vec`.
 pub struct VecBuffer<T> {
     buffer: Vec<MaybeUninit<T>>,
     offset: usize,
+}
+
+impl<T> Default for VecBuffer<T> {
+    fn default() -> Self {
+        Self::with_capacity(0)
+    }
 }
 
 impl<T> VecBuffer<T> {
@@ -266,7 +330,7 @@ unsafe impl<T: Send + Sync + 'static> WriteBuffer<T> for VecBuffer<T> {
         // ensure that if `fun` panics that the items are still considered
         // transferred.
         self.offset += count;
-        fun(&mut self.buffer[self.offset - count..]);
+        fun(&self.buffer[self.offset - count..]);
     }
 }
 

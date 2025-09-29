@@ -195,6 +195,7 @@ impl From<&DiffValue> for wasmi::Val {
             }
             DiffValue::AnyRef { .. } => unimplemented!(),
             DiffValue::ExnRef { .. } => unimplemented!(),
+            DiffValue::ContRef { .. } => unimplemented!(),
         }
     }
 }

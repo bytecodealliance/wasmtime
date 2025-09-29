@@ -2672,6 +2672,7 @@ impl MachInstEmit for Inst {
                     VecALUOp::And => (0b000_01110_00_1, 0b000111),
                     VecALUOp::Bic => (0b000_01110_01_1, 0b000111),
                     VecALUOp::Orr => (0b000_01110_10_1, 0b000111),
+                    VecALUOp::Orn => (0b000_01110_11_1, 0b000111),
                     VecALUOp::Eor => (0b001_01110_00_1, 0b000111),
                     VecALUOp::Umaxp => {
                         debug_assert_ne!(size, VectorSize::Size64x2);
@@ -3534,6 +3535,17 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::DummyUse { .. } => {}
+
+            &Inst::LabelAddress { dst, label } => {
+                // We emit an ADR only, which is +/- 2MiB range. This
+                // should be sufficient for the typical use-case of
+                // this instruction, which is insmall trampolines to
+                // get exception-handler addresses.
+                let inst = Inst::Adr { rd: dst, off: 0 };
+                let offset = sink.cur_offset();
+                inst.emit(sink, emit_info, state);
+                sink.use_label_at_offset(offset, label, LabelUse::Adr21);
+            }
 
             &Inst::StackProbeLoop { start, end, step } => {
                 assert!(emit_info.0.enable_probestack());

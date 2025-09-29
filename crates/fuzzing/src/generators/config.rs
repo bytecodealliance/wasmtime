@@ -454,7 +454,12 @@ impl Config {
     /// Configures a store based on this configuration.
     pub fn configure_store(&self, store: &mut Store<StoreLimits>) {
         store.limiter(|s| s as &mut dyn wasmtime::ResourceLimiter);
+        self.configure_store_epoch_and_fuel(store);
+    }
 
+    /// Configures everything unrelated to `T` in a store, such as epochs and
+    /// fuel.
+    pub fn configure_store_epoch_and_fuel<T>(&self, store: &mut Store<T>) {
         // Configure the store to never abort by default, that is it'll have
         // max fuel or otherwise trap on an epoch change but the epoch won't
         // ever change.
@@ -563,7 +568,7 @@ pub struct WasmtimeConfig {
     regalloc_algorithm: RegallocAlgorithm,
     debug_info: bool,
     canonicalize_nans: bool,
-    interruptable: bool,
+    interruptible: bool,
     pub(crate) consume_fuel: bool,
     pub(crate) epoch_interruption: bool,
     /// The Wasmtime memory configuration to use.
@@ -828,18 +833,14 @@ impl OptLevel {
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
 enum RegallocAlgorithm {
     Backtracking,
-    // FIXME(#11544 and #11545): rename back to `SinglePass` and handle below
-    // when those issues are fixed
-    TemporarilyDisabledSinglePass,
+    SinglePass,
 }
 
 impl RegallocAlgorithm {
     fn to_wasmtime(&self) -> wasmtime::RegallocAlgorithm {
         match self {
             RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
-            RegallocAlgorithm::TemporarilyDisabledSinglePass => {
-                wasmtime::RegallocAlgorithm::Backtracking
-            }
+            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::SinglePass,
         }
     }
 }

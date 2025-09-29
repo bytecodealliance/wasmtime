@@ -194,16 +194,16 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T: 'static>(
+                fn a<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::String,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn b<T: 'static>(
+                fn b<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::String,
                 > + Send;
-                fn c<T: 'static>(
+                fn c<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: wasmtime::component::__internal::String,
                     b: wasmtime::component::__internal::String,
@@ -230,8 +230,8 @@ pub mod foo {
                         (arg0,): (wasmtime::component::__internal::String,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::a(accessor, arg0).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::a(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -240,8 +240,8 @@ pub mod foo {
                     "b",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::b(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::b(host).await;
                             Ok((r,))
                         })
                     },
@@ -259,8 +259,8 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::c(accessor, arg0, arg1).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::c(host, arg0, arg1).await;
                             Ok((r,))
                         })
                     },
@@ -367,7 +367,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.a)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_b<_T, _D>(
@@ -384,7 +384,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::String,),
                             >::new_unchecked(self.b)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_c<_T, _D>(
@@ -406,7 +406,7 @@ pub mod exports {
                                 (wasmtime::component::__internal::String,),
                             >::new_unchecked(self.c)
                         };
-                        let (ret0,) = callee
+                        let ((ret0,), _) = callee
                             .call_concurrent(accessor, (arg0, arg1))
                             .await?;
                         Ok(ret0)

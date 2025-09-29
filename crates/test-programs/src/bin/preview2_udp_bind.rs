@@ -1,4 +1,5 @@
 use test_programs::sockets::attempt_random_port;
+use test_programs::sockets::supports_ipv6;
 use test_programs::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
 };
@@ -89,25 +90,31 @@ fn main() {
     let net = Network::default();
 
     test_udp_bind_ephemeral_port(&net, IpAddress::IPV4_LOOPBACK);
-    test_udp_bind_ephemeral_port(&net, IpAddress::IPV6_LOOPBACK);
     test_udp_bind_ephemeral_port(&net, IpAddress::IPV4_UNSPECIFIED);
-    test_udp_bind_ephemeral_port(&net, IpAddress::IPV6_UNSPECIFIED);
 
     test_udp_bind_specific_port(&net, IpAddress::IPV4_LOOPBACK);
-    test_udp_bind_specific_port(&net, IpAddress::IPV6_LOOPBACK);
     test_udp_bind_specific_port(&net, IpAddress::IPV4_UNSPECIFIED);
-    test_udp_bind_specific_port(&net, IpAddress::IPV6_UNSPECIFIED);
 
     test_udp_bind_addrinuse(&net, IpAddress::IPV4_LOOPBACK);
-    test_udp_bind_addrinuse(&net, IpAddress::IPV6_LOOPBACK);
     test_udp_bind_addrinuse(&net, IpAddress::IPV4_UNSPECIFIED);
-    test_udp_bind_addrinuse(&net, IpAddress::IPV6_UNSPECIFIED);
 
     test_udp_bind_addrnotavail(&net, RESERVED_IPV4_ADDRESS);
-    test_udp_bind_addrnotavail(&net, RESERVED_IPV6_ADDRESS);
 
     test_udp_bind_wrong_family(&net, IpAddressFamily::Ipv4);
     test_udp_bind_wrong_family(&net, IpAddressFamily::Ipv6);
 
-    test_udp_bind_dual_stack(&net);
+    if supports_ipv6() {
+        test_udp_bind_ephemeral_port(&net, IpAddress::IPV6_LOOPBACK);
+        test_udp_bind_ephemeral_port(&net, IpAddress::IPV6_UNSPECIFIED);
+
+        test_udp_bind_specific_port(&net, IpAddress::IPV6_LOOPBACK);
+        test_udp_bind_specific_port(&net, IpAddress::IPV6_UNSPECIFIED);
+
+        test_udp_bind_addrinuse(&net, IpAddress::IPV6_LOOPBACK);
+        test_udp_bind_addrinuse(&net, IpAddress::IPV6_UNSPECIFIED);
+
+        test_udp_bind_addrnotavail(&net, RESERVED_IPV6_ADDRESS);
+
+        test_udp_bind_dual_stack(&net);
+    }
 }

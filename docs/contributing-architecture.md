@@ -307,19 +307,14 @@ data is stored into a `GLOBAL_MODULES` map for later access during traps.
 ## Traps
 
 Once instances have been created and wasm starts running most things are fairly
-standard. Trampolines are used to enter wasm (or we can enter with a known ABI
-if using `wasmtime::TypedFunc`) and JIT code generally does what it does to
-execute wasm. An important aspect of the implementation to cover, however, is
-traps.
+standard. Trampolines are used to enter wasm and JIT code generally does what it
+does to execute wasm. An important aspect of the implementation to cover,
+however, is traps.
 
-Wasmtime today implements traps with `longjmp` and `setjmp`. The `setjmp`
-function cannot be defined in Rust (even unsafely --
-(https://github.com/rust-lang/rfcs/issues/2625) so the
-`crates/wasmtime/src/runtime/vm/helpers.c` file actually calls
-setjmp/longjmp. Note that in general the operation of `longjmp` is not safe to
-execute in Rust because it skips stack-based destructors, so after `setjmp` when
-we call back into Rust to execute wasm we need to be careful in Wasmtime to not
-have any significant destructors on the stack once wasm is called.
+Wasmtime today implements traps with the support for exceptions in Cranelift.
+Notably the entry trampoline into WebAssembly sets up an "base handler" used to
+catch all traps, and when a trap happens this is resumed to. The exception
+handler itself takes care of, for example, restoring registers.
 
 Traps can happen from a few different sources:
 
@@ -340,9 +335,8 @@ Traps can happen from a few different sources:
   back to the original wasm call-site.
 
 The general idea is that Wasmtime has very tight control over the stack frames
-of wasm (naturally via Cranelift) and also very tight control over the code that
-executes just before we enter wasm (aka before the `setjmp`) and just after we
-reenter back into wasm (aka frames before a possible `longjmp`).
+of wasm (naturally via Cranelift), and just after we reenter back into wasm (aka
+trampolines on entry/exit).
 
 The signal handler for Wasmtime uses the `GLOBAL_MODULES` map populated during
 instantiation to determine whether a program counter that triggered a signal is

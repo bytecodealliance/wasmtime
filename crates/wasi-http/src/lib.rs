@@ -230,7 +230,6 @@ pub mod types;
 pub mod bindings;
 
 #[cfg(feature = "p3")]
-#[expect(missing_docs, reason = "work in progress")] // TODO: add docs
 pub mod p3;
 
 pub use crate::error::{
@@ -241,6 +240,7 @@ pub use crate::types::{
     DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
     WasiHttpImpl, WasiHttpView,
 };
+use http::header::CONTENT_LENGTH;
 use wasmtime::component::{HasData, Linker};
 
 /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
@@ -391,4 +391,16 @@ where
     })?;
 
     Ok(())
+}
+
+/// Extract the `Content-Length` header value from a [`http::HeaderMap`], returning `None` if it's not
+/// present. This function will return `Err` if it's not possible to parse the `Content-Length`
+/// header.
+fn get_content_length(headers: &http::HeaderMap) -> wasmtime::Result<Option<u64>> {
+    let Some(v) = headers.get(CONTENT_LENGTH) else {
+        return Ok(None);
+    };
+    let v = v.to_str()?;
+    let v = v.parse()?;
+    Ok(Some(v))
 }

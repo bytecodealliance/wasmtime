@@ -5,7 +5,7 @@ use std::fmt::{Display, LowerHex};
 use wasmtime::{Store, Val};
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
-pub fn val<T>(ctx: &mut WastContext<T>, v: &CoreConst) -> Result<Val> {
+pub fn val(ctx: &mut WastContext, v: &CoreConst) -> Result<Val> {
     use CoreConst::*;
 
     Ok(match v {
@@ -24,9 +24,9 @@ pub fn val<T>(ctx: &mut WastContext<T>, v: &CoreConst) -> Result<Val> {
         ExternRef {
             value: Some(json_from_wast::ExternRef::Host(x)),
         } => Val::ExternRef(if let Some(rt) = ctx.async_runtime.as_ref() {
-            Some(rt.block_on(wasmtime::ExternRef::new_async(&mut ctx.store, x.0))?)
+            Some(rt.block_on(wasmtime::ExternRef::new_async(&mut ctx.core_store, x.0))?)
         } else {
-            Some(wasmtime::ExternRef::new(&mut ctx.store, x.0)?)
+            Some(wasmtime::ExternRef::new(&mut ctx.core_store, x.0)?)
         }),
 
         AnyRef {
@@ -36,11 +36,11 @@ pub fn val<T>(ctx: &mut WastContext<T>, v: &CoreConst) -> Result<Val> {
             value: Some(json_from_wast::AnyRef::Host(x)),
         } => {
             let x = if let Some(rt) = ctx.async_runtime.as_ref() {
-                rt.block_on(wasmtime::ExternRef::new_async(&mut ctx.store, x.0))?
+                rt.block_on(wasmtime::ExternRef::new_async(&mut ctx.core_store, x.0))?
             } else {
-                wasmtime::ExternRef::new(&mut ctx.store, x.0)?
+                wasmtime::ExternRef::new(&mut ctx.core_store, x.0)?
             };
-            let x = wasmtime::AnyRef::convert_extern(&mut ctx.store, x)?;
+            let x = wasmtime::AnyRef::convert_extern(&mut ctx.core_store, x)?;
             Val::AnyRef(Some(x))
         }
         NullRef => Val::AnyRef(None),
@@ -64,7 +64,7 @@ fn extract_lane_as_i64(bytes: u128, lane: usize) -> i64 {
     (bytes >> (lane * 64)) as i64
 }
 
-pub fn match_val<T>(store: &mut Store<T>, actual: &Val, expected: &CoreConst) -> Result<()> {
+pub fn match_val(store: &mut Store<()>, actual: &Val, expected: &CoreConst) -> Result<()> {
     match (actual, expected) {
         (_, CoreConst::Either { values }) => {
             for expected in values {

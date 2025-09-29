@@ -204,6 +204,48 @@ impl Instance {
         ret
     }
 
+    /// Converts a raw `VMContext` pointer into a raw `Instance` pointer.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function safely requires that `vmctx` is a valid allocation
+    /// of a `VMContext` which is derived from `Instance::new`. To safely
+    /// convert the returned raw pointer into a safe instance pointer callers
+    /// will also want to uphold guarantees such as:
+    ///
+    /// * The instance should not be in use elsewhere. For example you can't
+    ///   call this function twice, turn both raw pointers into safe pointers,
+    ///   and then use both safe pointers.
+    /// * There should be no other active mutable borrow to any other instance
+    ///   within the same store. Note that this is not restricted to just this
+    ///   instance pointer, but to all instances in a store. Instances can
+    ///   safely traverse to other instances "laterally" meaning that a mutable
+    ///   borrow on one is a mutable borrow on all.
+    /// * There should be no active mutable borrow on the store accessible at
+    ///   the same time the instance is turned. Instances are owned by a store
+    ///   and a store can be used to acquire a safe instance borrow at any time.
+    /// * The lifetime of the usage of the instance should not be unnecessarily
+    ///   long, for example it cannot be `'static`.
+    ///
+    /// Other entrypoints exist for converting from a raw `VMContext` to a safe
+    /// pointer such as:
+    ///
+    /// * `Instance::enter_host_from_wasm`
+    /// * `Instance::sibling_vmctx{,_mut}`
+    ///
+    /// These place further restrictions on the API signature to satisfy some of
+    /// the above points.
+    #[inline]
+    pub(crate) unsafe fn from_vmctx(vmctx: NonNull<VMContext>) -> NonNull<Instance> {
+        // SAFETY: The validity of `byte_sub` relies on `vmctx` being a valid
+        // allocation.
+        unsafe {
+            vmctx
+                .byte_sub(mem::size_of::<Instance>())
+                .cast::<Instance>()
+        }
+    }
+
     /// Encapsulated entrypoint to the host from WebAssembly, converting a raw
     /// `VMContext` pointer into a `VMStore` plus an `InstanceId`.
     ///
@@ -231,18 +273,13 @@ impl Instance {
     where
         R: HostResult,
     {
-        // SAFETY: The validity of this `byte_sub` relies on `vmctx` being a
-        // valid allocation which is itself a contract of this function.
-        // Additionally `as_mut` requires that the pointer is valid, which is
-        // also a contract of this function. The lifetime of the reference will
-        // be constrained by the closure `f` provided to this function which
-        // inherently can't have the pointer escape, so the lifetime is scoped
-        // here.
+        // SAFETY: It's a contract of this function that `vmctx` is a valid
+        // pointer with neither the store nor other instances actively in use
+        // when this is called, so it should be safe to acquire a mutable
+        // pointer to the store and read the instance pointer.
         let (store, instance) = unsafe {
-            let instance = vmctx
-                .byte_sub(mem::size_of::<Instance>())
-                .cast::<Instance>()
-                .as_mut();
+            let instance = Instance::from_vmctx(vmctx);
+            let instance = instance.as_ref();
             let store = &mut *instance.store.unwrap().0.as_ptr();
             (store, instance.id)
         };
@@ -265,12 +302,8 @@ impl Instance {
     #[inline]
     unsafe fn sibling_vmctx<'a>(&'a self, vmctx: NonNull<VMContext>) -> &'a Instance {
         // SAFETY: it's a contract of this function itself that `vmctx` is a
-        // valid pointer such that this pointer arithmetic is valid.
-        let ptr = unsafe {
-            vmctx
-                .byte_sub(mem::size_of::<Instance>())
-                .cast::<Instance>()
-        };
+        // valid pointer. Additionally with `self` being a
+        let ptr = unsafe { Instance::from_vmctx(vmctx) };
         // SAFETY: it's a contract of this function itself that `vmctx` is a
         // valid pointer to dereference. Additionally the lifetime of the return
         // value is constrained to be the same as `self` to avoid granting a
@@ -299,11 +332,7 @@ impl Instance {
     ) -> Pin<&'a mut Instance> {
         // SAFETY: it's a contract of this function itself that `vmctx` is a
         // valid pointer such that this pointer arithmetic is valid.
-        let mut ptr = unsafe {
-            vmctx
-                .byte_sub(mem::size_of::<Instance>())
-                .cast::<Instance>()
-        };
+        let mut ptr = unsafe { Instance::from_vmctx(vmctx) };
 
         // SAFETY: it's a contract of this function itself that `vmctx` is a
         // valid pointer to dereference. Additionally the lifetime of the return
@@ -311,33 +340,6 @@ impl Instance {
         // too-long lifetime. Finally mutable references to an instance are
         // always through `Pin`, so it's safe to create a pin-pointer here.
         unsafe { Pin::new_unchecked(ptr.as_mut()) }
-    }
-
-    /// Accessor from a raw `vmctx` to `&vm::Instance`, given a store.
-    ///
-    /// This is like the above `sibling_vmctx{,_mut}` accessors, but
-    /// takes the store explicitly rather than inferring it from an
-    /// existing instance in the store.
-    ///
-    /// # Safety
-    ///
-    /// The `vmctx` pointer must be a valid vmctx from an active
-    /// instance that belongs to the given `store`.
-    #[inline]
-    pub unsafe fn from_vmctx<'a>(
-        _store: &'a StoreOpaque,
-        vmctx: NonNull<VMContext>,
-    ) -> &'a Instance {
-        // SAFETY: The validity of this `byte_sub` relies on `vmctx`
-        // being a valid allocation which is itself a contract of this
-        // function. Likewise, the `.as_ref()` converts a valid `*mut
-        // Instance` to a `&Instance`.
-        unsafe {
-            vmctx
-                .byte_sub(mem::size_of::<Instance>())
-                .cast::<Instance>()
-                .as_ref()
-        }
     }
 
     pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {

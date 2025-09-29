@@ -10,14 +10,12 @@ use crate::runtime::vm::{
 use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque, StoreResourceLimiter};
 use alloc::sync::Arc;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, Module, Tunables, VMOffsets,
+    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, Module, StaticModuleIndex,
+    Tunables, VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
-use wasmtime_environ::{
-    StaticModuleIndex,
-    component::{Component, VMComponentOffsets},
-};
+use wasmtime_environ::component::{Component, VMComponentOffsets};
 
 /// Create a "frankenstein" instance with a single memory.
 ///
@@ -30,7 +28,7 @@ pub async fn create_memory(
     memory_ty: &MemoryType,
     preallocation: Option<&SharedMemory>,
 ) -> Result<InstanceId> {
-    let mut module = Module::new();
+    let mut module = Module::new(StaticModuleIndex::from_u32(0));
 
     // Create a memory, though it will never be used for constructing a memory
     // with an allocator: instead the memories are either preallocated (i.e.,

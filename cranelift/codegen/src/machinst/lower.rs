@@ -437,6 +437,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     try_call_rets.insert(inst, rets);
 
                     let mut payloads = smallvec![];
+                    // Note that this is intentionally using the calling
+                    // convention of the callee to determine what payload types
+                    // are available. The callee defines that, not the calling
+                    // convention of the caller.
                     for &ty in sig
                         .call_conv
                         .exception_payload_types(I::ABIMachineSpec::word_type())
@@ -1196,6 +1200,20 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             ValueUseState::Unused => true,
             _ => false,
         }
+    }
+
+    pub fn block_successor_label(&self, block: Block, succ: usize) -> MachLabel {
+        trace!("block_successor_label: block {block} succ {succ}");
+        let lowered = self
+            .vcode
+            .block_order()
+            .lowered_index_for_block(block)
+            .expect("Unreachable block");
+        trace!(" -> lowered block {lowered:?}");
+        let (_, succs) = self.vcode.block_order().succ_indices(lowered);
+        trace!(" -> succs {succs:?}");
+        let succ_block = *succs.get(succ).expect("Successor index out of range");
+        MachLabel::from_block(succ_block)
     }
 }
 

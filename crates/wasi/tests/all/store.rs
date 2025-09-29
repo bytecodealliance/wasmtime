@@ -24,8 +24,9 @@ impl<T> Ctx<T> {
         name: &str,
         configure: impl FnOnce(&mut WasiCtxBuilder) -> T,
     ) -> Result<(Store<Ctx<T>>, TempDir)> {
-        let stdout = MemoryOutputPipe::new(4096);
-        let stderr = MemoryOutputPipe::new(4096);
+        const MAX_OUTPUT_SIZE: usize = 10 << 20;
+        let stdout = MemoryOutputPipe::new(MAX_OUTPUT_SIZE);
+        let stderr = MemoryOutputPipe::new(MAX_OUTPUT_SIZE);
         let workspace = prepare_workspace(name)?;
 
         // Create our wasi context.
@@ -40,6 +41,11 @@ impl<T> Ctx<T> {
         builder.preopened_dir(workspace.path(), ".", DirPerms::all(), FilePerms::all())?;
         for (var, val) in test_programs_artifacts::wasi_tests_environment() {
             builder.env(var, val);
+        }
+
+        let supports_ipv6 = std::net::TcpListener::bind((std::net::Ipv6Addr::LOCALHOST, 0)).is_ok();
+        if !supports_ipv6 {
+            builder.env("DISABLE_IPV6", "1");
         }
 
         let ctx = Ctx {

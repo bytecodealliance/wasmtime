@@ -1,35 +1,36 @@
 use anyhow::{Context, Result};
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
-use hyper::{Request, Response, body::Bytes, service::service_fn};
-use std::{
-    future::Future,
-    net::{SocketAddr, TcpStream},
-    thread::JoinHandle,
-};
+use http::header::CONTENT_LENGTH;
+use hyper::service::service_fn;
+use hyper::{Request, Response};
+use std::future::Future;
+use std::net::{SocketAddr, TcpStream};
+use std::thread::JoinHandle;
 use tokio::net::TcpListener;
 use tracing::{debug, trace, warn};
 use wasmtime_wasi_http::io::TokioIo;
 
 async fn test(
-    mut req: Request<hyper::body::Incoming>,
-) -> http::Result<Response<BoxBody<Bytes, std::convert::Infallible>>> {
-    debug!("preparing mocked response",);
+    req: Request<hyper::body::Incoming>,
+) -> http::Result<Response<hyper::body::Incoming>> {
+    debug!(?req, "preparing mocked response for request");
     let method = req.method().to_string();
-    let body = req.body_mut().collect().await.unwrap();
-    let buf = body.to_bytes();
-    trace!("hyper request body size {:?}", buf.len());
-
-    Response::builder()
-        .status(http::StatusCode::OK)
+    let uri = req.uri().to_string();
+    let resp = Response::builder()
         .header("x-wasmtime-test-method", method)
-        .header("x-wasmtime-test-uri", req.uri().to_string())
-        .body(Full::<Bytes>::from(buf).boxed())
+        .header("x-wasmtime-test-uri", uri);
+    let resp = if let Some(content_length) = req.headers().get(CONTENT_LENGTH) {
+        resp.header(CONTENT_LENGTH, content_length)
+    } else {
+        resp
+    };
+    let body = req.into_body();
+    resp.body(body)
 }
 
 pub struct Server {
     conns: usize,
     addr: SocketAddr,
-    worker: Option<JoinHandle<Result<()>>>,
+    worker: Option<JoinHandle<()>>,
 }
 
 impl Server {
@@ -58,13 +59,18 @@ impl Server {
             rt.block_on(async move {
                 for i in 0..conns {
                     debug!(i, "preparing to accept connection");
-                    let (stream, _) = listener.accept().await.map_err(anyhow::Error::from)?;
-                    if let Err(err) = run(TokioIo::new(stream)).await {
-                        warn!(i, ?err, "failed to serve connection");
-                        return Err(err);
-                    }
+                    match listener.accept().await {
+                        Ok((stream, ..)) => {
+                            debug!(i, "accepted connection");
+                            if let Err(err) = run(TokioIo::new(stream)).await {
+                                warn!(i, ?err, "failed to serve connection");
+                            }
+                        }
+                        Err(err) => {
+                            warn!(i, ?err, "failed to accept connection");
+                        }
+                    };
                 }
-                Ok(())
             })
         });
         Ok(Self {
@@ -122,16 +128,7 @@ impl Drop for Server {
             // Force a connection to happen in case one hasn't happened already.
             let _ = TcpStream::connect(&self.addr);
         }
-
-        // If the worker fails with an error, report it here but don't panic.
-        // Some tests don't make a connection so the error will be that the tcp
-        // stream created above is closed immediately afterwards. Let the test
-        // independently decide if it failed or not, and this should be in the
-        // logs to assist with debugging if necessary.
-        let worker = self.worker.take().unwrap();
-        if let Err(e) = worker.join().unwrap() {
-            eprintln!("worker failed with error {e:?}");
-        }
+        self.worker.take().unwrap().join().unwrap();
     }
 }
 

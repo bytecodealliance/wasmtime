@@ -1,22 +1,395 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::task::{self, Context, Poll};
+use std::time::Duration;
 
 use super::util::{config, make_component, test_run, test_run_with_count};
 use anyhow::{Result, anyhow};
 use cancel::exports::local::local::cancel::Mode;
 use component_async_tests::transmit::bindings::exports::local::local::transmit::Control;
+use component_async_tests::util::{OneshotConsumer, OneshotProducer, PipeConsumer, PipeProducer};
 use component_async_tests::{Ctx, sleep, transmit};
 use futures::{
-    future::FutureExt,
-    stream::{FuturesUnordered, TryStreamExt},
+    FutureExt, SinkExt, StreamExt, TryStreamExt,
+    channel::{mpsc, oneshot},
+    stream::FuturesUnordered,
 };
 use wasmtime::component::{
-    Accessor, Component, FutureReader, GuardedFutureReader, GuardedStreamReader,
-    GuardedStreamWriter, HasSelf, Instance, Linker, ResourceTable, StreamReader, Val,
+    Accessor, Component, Destination, FutureConsumer, FutureProducer, FutureReader, HasSelf,
+    Instance, Linker, ResourceTable, Source, StreamConsumer, StreamProducer, StreamReader,
+    StreamResult, Val,
 };
-use wasmtime::{AsContextMut, Engine, Store};
+use wasmtime::{AsContextMut, Engine, Store, StoreContextMut};
 use wasmtime_wasi::WasiCtxBuilder;
+
+struct BufferStreamProducer {
+    buffer: Vec<u8>,
+}
+
+impl<D> StreamProducer<D> for BufferStreamProducer {
+    type Item = u8;
+    type Buffer = Option<u8>;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        destination: Destination<'a, Self::Item, Self::Buffer>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        let me = self.get_mut();
+        let capacity = destination.remaining(store.as_context_mut());
+        if capacity == Some(0) {
+            Poll::Ready(Ok(StreamResult::Completed))
+        } else {
+            assert_eq!(capacity, Some(me.buffer.len()));
+            let mut destination = destination.as_direct(store, me.buffer.len());
+            destination.remaining().copy_from_slice(&me.buffer);
+            destination.mark_written(me.buffer.len());
+
+            Poll::Ready(Ok(StreamResult::Dropped))
+        }
+    }
+}
+
+struct BufferStreamConsumer {
+    expected: Vec<u8>,
+}
+
+impl<D> StreamConsumer<D> for BufferStreamConsumer {
+    type Item = u8;
+
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        mut store: StoreContextMut<D>,
+        source: Source<Self::Item>,
+        _: bool,
+    ) -> Poll<Result<StreamResult>> {
+        let me = self.get_mut();
+        let available = source.remaining(store.as_context_mut());
+        if available == 0 {
+            Poll::Ready(Ok(StreamResult::Completed))
+        } else {
+            assert_eq!(available, me.expected.len());
+            let mut source = source.as_direct(store);
+            assert_eq!(&me.expected, source.remaining());
+            source.mark_read(me.expected.len());
+
+            Poll::Ready(Ok(StreamResult::Dropped))
+        }
+    }
+}
+
+struct ValueFutureProducer {
+    value: u8,
+}
+
+impl<D> FutureProducer<D> for ValueFutureProducer {
+    type Item = u8;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: StoreContextMut<'a, D>,
+        _: bool,
+    ) -> Poll<Result<Option<Self::Item>>> {
+        Poll::Ready(Ok(Some(self.value)))
+    }
+}
+
+struct ValueFutureConsumer {
+    expected: u8,
+}
+
+impl<D> FutureConsumer<D> for ValueFutureConsumer {
+    type Item = u8;
+
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        mut source: Source<'_, Self::Item>,
+        _: bool,
+    ) -> Poll<Result<()>> {
+        let value = &mut None;
+        source.read(store, value)?;
+        assert_eq!(value.take(), Some(self.expected));
+        Poll::Ready(Ok(()))
+    }
+}
+
+struct DelayedStreamProducer<P> {
+    inner: P,
+    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+
+impl<D, P: StreamProducer<D>> StreamProducer<D> for DelayedStreamProducer<P> {
+    type Item = P::Item;
+    type Buffer = P::Buffer;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<'a, D>,
+        destination: Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>> {
+        // SAFETY: We never move out of `self`.
+        let sleep = unsafe { &mut self.as_mut().get_unchecked_mut().sleep };
+        task::ready!(sleep.as_mut().poll(cx));
+        *sleep = async {}.boxed();
+
+        // SAFETY: This is a standard pin-projection, and we never move out
+        // of `self`.
+        let inner = unsafe { self.map_unchecked_mut(|v| &mut v.inner) };
+        inner.poll_produce(cx, store, destination, finish)
+    }
+}
+
+struct DelayedStreamConsumer<C> {
+    inner: C,
+    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+
+impl<D, C: StreamConsumer<D>> StreamConsumer<D> for DelayedStreamConsumer<C> {
+    type Item = C::Item;
+
+    fn poll_consume(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        source: Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>> {
+        // SAFETY: We never move out of `self`.
+        let sleep = unsafe { &mut self.as_mut().get_unchecked_mut().sleep };
+        task::ready!(sleep.as_mut().poll(cx));
+        *sleep = async {}.boxed();
+
+        // SAFETY: This is a standard pin-projection, and we never move out
+        // of `self`.
+        let inner = unsafe { self.map_unchecked_mut(|v| &mut v.inner) };
+        inner.poll_consume(cx, store, source, finish)
+    }
+}
+
+struct DelayedFutureProducer<P> {
+    inner: P,
+    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+
+impl<D, P: FutureProducer<D>> FutureProducer<D> for DelayedFutureProducer<P> {
+    type Item = P::Item;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<'a, D>,
+        finish: bool,
+    ) -> Poll<Result<Option<Self::Item>>> {
+        // SAFETY: We never move out of `self`.
+        let sleep = unsafe { &mut self.as_mut().get_unchecked_mut().sleep };
+        task::ready!(sleep.as_mut().poll(cx));
+        *sleep = async {}.boxed();
+
+        // SAFETY: This is a standard pin-projection, and we never move out
+        // of `self`.
+        let inner = unsafe { self.map_unchecked_mut(|v| &mut v.inner) };
+        inner.poll_produce(cx, store, finish)
+    }
+}
+
+struct DelayedFutureConsumer<C> {
+    inner: C,
+    sleep: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+
+impl<D, C: FutureConsumer<D>> FutureConsumer<D> for DelayedFutureConsumer<C> {
+    type Item = C::Item;
+
+    fn poll_consume(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        source: Source<'_, Self::Item>,
+        finish: bool,
+    ) -> Poll<Result<()>> {
+        // SAFETY: We never move out of `self`.
+        let sleep = unsafe { &mut self.as_mut().get_unchecked_mut().sleep };
+        task::ready!(sleep.as_mut().poll(cx));
+        *sleep = async {}.boxed();
+
+        // SAFETY: This is a standard pin-projection, and we never move out
+        // of `self`.
+        let inner = unsafe { self.map_unchecked_mut(|v| &mut v.inner) };
+        inner.poll_consume(cx, store, source, finish)
+    }
+}
+
+struct ProcrastinatingStreamProducer<P>(P);
+
+impl<D, P: StreamProducer<D>> StreamProducer<D> for ProcrastinatingStreamProducer<P> {
+    type Item = P::Item;
+    type Buffer = P::Buffer;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<'a, D>,
+        destination: Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>> {
+        if finish {
+            // SAFETY: This is a standard pin-projection, and we never move out
+            // of `self`.
+            let producer = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
+            producer.poll_produce(cx, store, destination, true)
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
+struct ProcrastinatingStreamConsumer<C>(C);
+
+impl<D, C: StreamConsumer<D>> StreamConsumer<D> for ProcrastinatingStreamConsumer<C> {
+    type Item = C::Item;
+
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        source: Source<'_, Self::Item>,
+        finish: bool,
+    ) -> Poll<Result<StreamResult>> {
+        if finish {
+            // SAFETY: This is a standard pin-projection, and we never move out
+            // of `self`.
+            let consumer = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
+            consumer.poll_consume(cx, store, source, true)
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
+struct ProcrastinatingFutureProducer<P>(P);
+
+impl<D, P: FutureProducer<D>> FutureProducer<D> for ProcrastinatingFutureProducer<P> {
+    type Item = P::Item;
+
+    fn poll_produce<'a>(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<'a, D>,
+        finish: bool,
+    ) -> Poll<Result<Option<Self::Item>>> {
+        if finish {
+            // SAFETY: This is a standard pin-projection, and we never move out
+            // of `self`.
+            let producer = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
+            producer.poll_produce(cx, store, true)
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
+struct ProcrastinatingFutureConsumer<C>(C);
+
+impl<D, C: FutureConsumer<D>> FutureConsumer<D> for ProcrastinatingFutureConsumer<C> {
+    type Item = C::Item;
+
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        source: Source<'_, Self::Item>,
+        finish: bool,
+    ) -> Poll<Result<()>> {
+        if finish {
+            // SAFETY: This is a standard pin-projection, and we never move out
+            // of `self`.
+            let consumer = unsafe { self.map_unchecked_mut(|v| &mut v.0) };
+            consumer.poll_consume(cx, store, source, true)
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
+fn sleep() -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    component_async_tests::util::sleep(Duration::from_millis(delay_millis())).boxed()
+}
+
+mod readiness {
+    wasmtime::component::bindgen!({
+        path: "wit",
+        world: "readiness-guest",
+        exports: { default: task_exit },
+    });
+}
+
+#[tokio::test]
+pub async fn async_readiness() -> Result<()> {
+    let component = test_programs_artifacts::ASYNC_READINESS_COMPONENT;
+
+    let engine = Engine::new(&config())?;
+
+    let component = make_component(&engine, &[component]).await?;
+
+    let mut linker = Linker::new(&engine);
+
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            continue_: false,
+            wakers: Arc::new(Mutex::new(None)),
+        },
+    );
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let readiness_guest = readiness::ReadinessGuest::new(&mut store, &instance)?;
+    let expected = vec![2u8, 4, 6, 8, 9];
+    let rx = StreamReader::new(
+        instance,
+        &mut store,
+        DelayedStreamProducer {
+            inner: BufferStreamProducer {
+                buffer: expected.clone(),
+            },
+            sleep: sleep(),
+        },
+    );
+    instance
+        .run_concurrent(&mut store, async move |accessor| {
+            let ((rx, expected), task_exit) = readiness_guest
+                .local_local_readiness()
+                .call_start(accessor, rx, expected)
+                .await?;
+
+            accessor.with(|access| {
+                rx.pipe(
+                    access,
+                    DelayedStreamConsumer {
+                        inner: BufferStreamConsumer { expected },
+                        sleep: sleep(),
+                    },
+                )
+            });
+
+            task_exit.block(accessor).await;
+
+            Ok(())
+        })
+        .await?
+}
 
 #[tokio::test]
 pub async fn async_poll_synchronous() -> Result<()> {
@@ -28,7 +401,7 @@ pub async fn async_poll_stackless() -> Result<()> {
     test_run(&[test_programs_artifacts::ASYNC_POLL_STACKLESS_COMPONENT]).await
 }
 
-pub mod cancel {
+mod cancel {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "cancel-host",
@@ -78,7 +451,7 @@ pub async fn async_trap_cancel_host_after_return() -> Result<()> {
     test_cancel_trap(Mode::TrapCancelHostAfterReturn).await
 }
 
-fn cancel_delay() -> u64 {
+fn delay_millis() -> u64 {
     // Miri-based builds are much slower to run, so we delay longer in that case
     // to ensure that async calls which the test expects to return `BLOCKED`
     // actually do so.
@@ -131,7 +504,7 @@ async fn test_cancel(mode: Mode) -> Result<()> {
         .run_concurrent(&mut store, async move |accessor| {
             cancel_host
                 .local_local_cancel()
-                .call_run(accessor, mode, cancel_delay())
+                .call_run(accessor, mode, delay_millis())
                 .await
         })
         .await??;
@@ -340,81 +713,78 @@ async fn test_transmit(component: &str) -> Result<()> {
 async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Result<()> {
     let engine = Engine::new(&config())?;
 
-    let make_store = || {
-        Store::new(
-            &engine,
-            Ctx {
-                wasi: WasiCtxBuilder::new().inherit_stdio().build(),
-                table: ResourceTable::default(),
-                continue_: false,
-                wakers: Arc::new(Mutex::new(None)),
-            },
-        )
-    };
-
     let component = make_component(&engine, &[component]).await?;
 
     let mut linker = Linker::new(&engine);
 
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 
-    let mut store = make_store();
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            continue_: false,
+            wakers: Arc::new(Mutex::new(None)),
+        },
+    );
 
     let (test, instance) = Test::instantiate(&mut store, &component, &linker).await?;
 
-    enum Event<'a, Test: TransmitTest> {
+    enum Event<Test: TransmitTest> {
         Result(Test::Result),
-        ControlWriteA(Option<GuardedStreamWriter<Control, &'a Accessor<Ctx>>>),
-        ControlWriteB(Option<GuardedStreamWriter<Control, &'a Accessor<Ctx>>>),
-        ControlWriteC(Option<GuardedStreamWriter<Control, &'a Accessor<Ctx>>>),
+        ControlWriteA(mpsc::Sender<Control>),
+        ControlWriteB(mpsc::Sender<Control>),
+        ControlWriteC(mpsc::Sender<Control>),
         ControlWriteD,
         WriteA,
-        WriteB(bool),
-        ReadC(
-            Option<GuardedStreamReader<String, &'a Accessor<Ctx>>>,
-            Option<String>,
-        ),
-        ReadD(Option<String>),
-        ReadNone(Option<GuardedStreamReader<String, &'a Accessor<Ctx>>>),
+        ReadC(mpsc::Receiver<String>, Option<String>),
+        ReadD(mpsc::Receiver<String>, Option<String>),
+        ReadNone(Option<String>),
     }
 
-    let (control_tx, control_rx) = instance.stream(&mut store)?;
-    let (caller_stream_tx, caller_stream_rx) = instance.stream(&mut store)?;
-    let (caller_future1_tx, caller_future1_rx) = instance.future(&mut store, || unreachable!())?;
-    let (_caller_future2_tx, caller_future2_rx) = instance.future(&mut store, || unreachable!())?;
-
+    let (mut control_tx, control_rx) = mpsc::channel(1);
+    let control_rx = StreamReader::new(instance, &mut store, PipeProducer::new(control_rx));
+    let (mut caller_stream_tx, caller_stream_rx) = mpsc::channel(1);
+    let caller_stream_rx =
+        StreamReader::new(instance, &mut store, PipeProducer::new(caller_stream_rx));
+    let (caller_future1_tx, caller_future1_rx) = oneshot::channel();
+    let caller_future1_rx = FutureReader::new(
+        instance,
+        &mut store,
+        OneshotProducer::new(caller_future1_rx),
+    );
+    let (_, caller_future2_rx) = oneshot::channel();
+    let caller_future2_rx = FutureReader::new(
+        instance,
+        &mut store,
+        OneshotProducer::new(caller_future2_rx),
+    );
+    let (callee_future1_tx, callee_future1_rx) = oneshot::channel();
+    let (callee_stream_tx, callee_stream_rx) = mpsc::channel(1);
     instance
-        .run_concurrent(&mut store, async move |accessor| {
-            let mut control_tx = GuardedStreamWriter::new(accessor, control_tx);
-            let control_rx = GuardedStreamReader::new(accessor, control_rx);
-            let mut caller_stream_tx = GuardedStreamWriter::new(accessor, caller_stream_tx);
-
-            let mut futures = FuturesUnordered::<
-                Pin<Box<dyn Future<Output = Result<Event<'_, Test>>> + Send>>,
-            >::new();
+        .run_concurrent(&mut store, async |accessor| {
             let mut caller_future1_tx = Some(caller_future1_tx);
-            let mut callee_stream_rx = None;
-            let mut callee_future1_rx = None;
+            let mut callee_future1_tx = Some(callee_future1_tx);
+            let mut callee_future1_rx = Some(callee_future1_rx);
+            let mut callee_stream_tx = Some(callee_stream_tx);
+            let mut callee_stream_rx = Some(callee_stream_rx);
             let mut complete = false;
+            let mut futures = FuturesUnordered::<
+                Pin<Box<dyn Future<Output = Result<Event<Test>>> + Send>>,
+            >::new();
 
             futures.push(
                 async move {
-                    control_tx
-                        .write_all(Some(Control::ReadStream("a".into())))
-                        .await;
-                    let w = if control_tx.is_closed() {
-                        None
-                    } else {
-                        Some(control_tx)
-                    };
-                    Ok(Event::ControlWriteA(w))
+                    control_tx.send(Control::ReadStream("a".into())).await?;
+                    Ok(Event::ControlWriteA(control_tx))
                 }
                 .boxed(),
             );
 
             futures.push(
                 async move {
-                    caller_stream_tx.write_all(Some(String::from("a"))).await;
+                    caller_stream_tx.send(String::from("a")).await?;
                     Ok(Event::WriteA)
                 }
                 .boxed(),
@@ -425,7 +795,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                     accessor,
                     &test,
                     Test::into_params(
-                        control_rx.into(),
+                        control_rx,
                         caller_stream_rx,
                         caller_future1_rx,
                         caller_future2_rx,
@@ -438,92 +808,76 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
             while let Some(event) = futures.try_next().await? {
                 match event {
                     Event::Result(result) => {
-                        let (stream_rx, future_rx, _) = accessor
-                            .with(|mut store| Test::from_result(&mut store, instance, result))?;
-                        callee_stream_rx = Some(GuardedStreamReader::new(accessor, stream_rx));
-                        callee_future1_rx = Some(GuardedFutureReader::new(accessor, future_rx));
+                        accessor.with(|mut store| {
+                            let (callee_stream_rx, callee_future1_rx, _) =
+                                Test::from_result(&mut store, instance, result)?;
+                            callee_stream_rx.pipe(
+                                &mut store,
+                                PipeConsumer::new(callee_stream_tx.take().unwrap()),
+                            );
+                            callee_future1_rx.pipe(
+                                &mut store,
+                                OneshotConsumer::new(callee_future1_tx.take().unwrap()),
+                            );
+                            anyhow::Ok(())
+                        })?;
                     }
-                    Event::ControlWriteA(tx) => {
+                    Event::ControlWriteA(mut control_tx) => {
                         futures.push(
                             async move {
-                                let mut tx = tx.unwrap();
-                                tx.write_all(Some(Control::ReadFuture("b".into()))).await;
-                                let w = if tx.is_closed() { None } else { Some(tx) };
-                                Ok(Event::ControlWriteB(w))
+                                control_tx.send(Control::ReadFuture("b".into())).await?;
+                                Ok(Event::ControlWriteB(control_tx))
                             }
                             .boxed(),
                         );
                     }
                     Event::WriteA => {
-                        futures.push(
-                            caller_future1_tx
-                                .take()
-                                .unwrap()
-                                .write(accessor, "b".into())
-                                .map(Event::WriteB)
-                                .map(Ok)
-                                .boxed(),
-                        );
-                    }
-                    Event::ControlWriteB(tx) => {
+                        _ = caller_future1_tx.take().unwrap().send("b".into());
+                        let mut callee_stream_rx = callee_stream_rx.take().unwrap();
                         futures.push(
                             async move {
-                                let mut tx = tx.unwrap();
-                                tx.write_all(Some(Control::WriteStream("c".into()))).await;
-                                let w = if tx.is_closed() { None } else { Some(tx) };
-                                Ok(Event::ControlWriteC(w))
+                                let value = callee_stream_rx.next().await;
+                                Ok(Event::ReadC(callee_stream_rx, value))
                             }
                             .boxed(),
                         );
                     }
-                    Event::WriteB(delivered) => {
-                        assert!(delivered);
-                        let mut rx = callee_stream_rx.take().unwrap();
+                    Event::ControlWriteB(mut control_tx) => {
                         futures.push(
                             async move {
-                                let b = rx.read(None).await;
-                                let r = if rx.is_closed() { None } else { Some(rx) };
-                                Ok(Event::ReadC(r, b))
+                                control_tx.send(Control::WriteStream("c".into())).await?;
+                                Ok(Event::ControlWriteC(control_tx))
                             }
                             .boxed(),
                         );
                     }
-                    Event::ControlWriteC(tx) => {
+                    Event::ControlWriteC(mut control_tx) => {
                         futures.push(
                             async move {
-                                let mut tx = tx.unwrap();
-                                tx.write_all(Some(Control::WriteFuture("d".into()))).await;
+                                control_tx.send(Control::WriteFuture("d".into())).await?;
                                 Ok(Event::ControlWriteD)
                             }
                             .boxed(),
                         );
                     }
-                    Event::ReadC(None, _) => unreachable!(),
-                    Event::ReadC(Some(rx), mut value) => {
+                    Event::ReadC(callee_stream_rx, mut value) => {
                         assert_eq!(value.take().as_deref(), Some("c"));
                         futures.push(
                             callee_future1_rx
                                 .take()
                                 .unwrap()
-                                .read()
-                                .map(Event::ReadD)
+                                .map(|v| Event::ReadD(callee_stream_rx, v.ok()))
                                 .map(Ok)
                                 .boxed(),
                         );
-                        callee_stream_rx = Some(rx);
                     }
                     Event::ControlWriteD => {}
-                    Event::ReadD(None) => unreachable!(),
-                    Event::ReadD(Some(value)) => {
+                    Event::ReadD(_, None) => unreachable!(),
+                    Event::ReadD(mut callee_stream_rx, Some(value)) => {
                         assert_eq!(&value, "d");
-                        let mut rx = callee_stream_rx.take().unwrap();
                         futures.push(
-                            async move {
-                                rx.read(None).await;
-                                let r = if rx.is_closed() { None } else { Some(rx) };
-                                Ok(Event::ReadNone(r))
-                            }
-                            .boxed(),
+                            async move { Ok(Event::ReadNone(callee_stream_rx.next().await)) }
+                                .boxed(),
                         );
                     }
                     Event::ReadNone(Some(_)) => unreachable!(),
@@ -536,6 +890,125 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
             assert!(complete);
 
             anyhow::Ok(())
+        })
+        .await??;
+    Ok(())
+}
+
+mod synchronous_transmit {
+    wasmtime::component::bindgen!({
+        path: "wit",
+        world: "synchronous-transmit-guest",
+        exports: { default: task_exit },
+    });
+}
+
+#[tokio::test]
+pub async fn async_cancel_transmit() -> Result<()> {
+    test_synchronous_transmit(
+        test_programs_artifacts::ASYNC_CANCEL_TRANSMIT_COMPONENT,
+        true,
+    )
+    .await
+}
+
+#[tokio::test]
+pub async fn async_synchronous_transmit() -> Result<()> {
+    test_synchronous_transmit(
+        test_programs_artifacts::ASYNC_SYNCHRONOUS_TRANSMIT_COMPONENT,
+        false,
+    )
+    .await
+}
+
+async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Result<()> {
+    let engine = Engine::new(&config())?;
+
+    let component = make_component(&engine, &[component]).await?;
+
+    let mut linker = Linker::new(&engine);
+
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            continue_: false,
+            wakers: Arc::new(Mutex::new(None)),
+        },
+    );
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let guest = synchronous_transmit::SynchronousTransmitGuest::new(&mut store, &instance)?;
+    let stream_expected = vec![2u8, 4, 6, 8, 9];
+    let producer = DelayedStreamProducer {
+        inner: BufferStreamProducer {
+            buffer: stream_expected.clone(),
+        },
+        sleep: sleep(),
+    };
+    let stream = if procrastinate {
+        StreamReader::new(
+            instance,
+            &mut store,
+            ProcrastinatingStreamProducer(producer),
+        )
+    } else {
+        StreamReader::new(instance, &mut store, producer)
+    };
+    let future_expected = 10;
+    let producer = DelayedFutureProducer {
+        inner: ValueFutureProducer {
+            value: future_expected,
+        },
+        sleep: sleep(),
+    };
+    let future = if procrastinate {
+        FutureReader::new(
+            instance,
+            &mut store,
+            ProcrastinatingFutureProducer(producer),
+        )
+    } else {
+        FutureReader::new(instance, &mut store, producer)
+    };
+    instance
+        .run_concurrent(&mut store, async move |accessor| {
+            let ((stream, stream_expected, future, future_expected), task_exit) = guest
+                .local_local_synchronous_transmit()
+                .call_start(accessor, stream, stream_expected, future, future_expected)
+                .await?;
+
+            accessor.with(|mut access| {
+                let consumer = DelayedStreamConsumer {
+                    inner: BufferStreamConsumer {
+                        expected: stream_expected,
+                    },
+                    sleep: sleep(),
+                };
+                if procrastinate {
+                    stream.pipe(&mut access, ProcrastinatingStreamConsumer(consumer));
+                } else {
+                    stream.pipe(&mut access, consumer);
+                }
+                let consumer = DelayedFutureConsumer {
+                    inner: ValueFutureConsumer {
+                        expected: future_expected,
+                    },
+                    sleep: sleep(),
+                };
+                if procrastinate {
+                    future.pipe(access, ProcrastinatingFutureConsumer(consumer));
+                } else {
+                    future.pipe(access, consumer);
+                }
+            });
+
+            task_exit.block(accessor).await;
+
+            Ok(())
         })
         .await?
 }

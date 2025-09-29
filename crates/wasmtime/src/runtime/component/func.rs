@@ -8,6 +8,7 @@ use crate::runtime::vm::component::{ComponentInstance, InstanceFlags, ResourceTa
 use crate::runtime::vm::{Export, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
+use anyhow::Context as _;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
@@ -283,6 +284,7 @@ impl Func {
                 .run_concurrent(&mut store, async |store| {
                     self.call_concurrent_dynamic(store, params, results, false)
                         .await
+                        .map(drop)
                 })
                 .await?
         }
@@ -335,6 +337,9 @@ impl Func {
     /// (if any) automatically when the guest task completes -- no need to
     /// explicitly call `Func::post_return` afterward.
     ///
+    /// This returns a [`TaskExit`] representing the completion of the guest
+    /// task and any transitive subtasks it might create.
+    ///
     /// # Panics
     ///
     /// Panics if the store that the [`Accessor`] is derived from does not own
@@ -345,8 +350,8 @@ impl Func {
         accessor: impl AsAccessor<Data: Send>,
         params: &[Val],
         results: &mut [Val],
-    ) -> Result<()> {
-        self.call_concurrent_dynamic(accessor.as_accessor(), params, results, true)
+    ) -> Result<TaskExit> {
+        self.call_concurrent_dynamic(accessor, params, results, true)
             .await
     }
 
@@ -354,13 +359,12 @@ impl Func {
     #[cfg(feature = "component-model-async")]
     async fn call_concurrent_dynamic(
         self,
-        store: impl AsAccessor<Data: Send>,
+        accessor: impl AsAccessor<Data: Send>,
         params: &[Val],
         results: &mut [Val],
         call_post_return_automatically: bool,
-    ) -> Result<()> {
-        let store = store.as_accessor();
-        let result = store.with(|mut store| {
+    ) -> Result<TaskExit> {
+        let result = accessor.as_accessor().with(|mut store| {
             assert!(
                 store.as_context_mut().0.async_support(),
                 "cannot use `call_concurrent` when async support is not enabled on the config"
@@ -374,12 +378,12 @@ impl Func {
             concurrent::queue_call(store.as_context_mut(), prepared)
         })?;
 
-        let run_results = result.await?;
+        let (run_results, rx) = result.await?;
         assert_eq!(run_results.len(), results.len());
         for (result, slot) in run_results.into_iter().zip(results) {
             *slot = result;
         }
-        Ok(())
+        Ok(TaskExit(rx))
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
@@ -730,6 +734,10 @@ impl Func {
             // panic, even if the function call below traps.
             flags.set_needs_post_return(false);
 
+            // Post return functions are forbidden from calling imports or
+            // intrinsics.
+            flags.set_may_leave(false);
+
             // If the function actually had a `post-return` configured in its
             // canonical options that's executed here.
             //
@@ -746,9 +754,10 @@ impl Func {
             }
 
             // And finally if everything completed successfully then the "may
-            // enter" flag is set to `true` again here which enables further use
-            // of the component.
+            // enter" and "may leave" flags are set to `true` again here which
+            // enables further use of the component.
             flags.set_may_enter(true);
+            flags.set_may_leave(true);
 
             let (calls, host_table, _, instance) = store
                 .0
@@ -932,5 +941,37 @@ impl Func {
         let mut cx = LiftContext::new(store, &options, self.instance);
         let ty = InterfaceType::Tuple(cx.types[ty].results);
         lift(&mut cx, ty)
+    }
+}
+
+/// Represents the completion of a task created using
+/// `[Typed]Func::call_concurrent`.
+///
+/// In general, a guest task may continue running after returning a value.
+/// Moreover, any given guest task may create its own subtasks before or after
+/// returning and may exit before some or all of those subtasks have finished
+/// running.  In that case, the still-running subtasks will be "reparented" to
+/// the nearest surviving caller, which may be the original host call.  The
+/// future returned by `TaskExit::block` will resolve once all transitive
+/// subtasks created directly or indirectly by the original call to
+/// `Instance::call_concurrent` have exited.
+#[cfg(feature = "component-model-async")]
+pub struct TaskExit(futures::channel::oneshot::Receiver<()>);
+
+#[cfg(feature = "component-model-async")]
+impl TaskExit {
+    /// Returns a future which will resolve once all transitive subtasks created
+    /// directly or indirectly by the original call to
+    /// `Instance::call_concurrent` have exited.
+    pub async fn block(self, accessor: impl AsAccessor<Data: Send>) {
+        // The current implementation makes no use of `accessor`, but future
+        // implementations might (e.g. by using a more efficient mechanism than
+        // a oneshot channel).
+        _ = accessor;
+
+        // We don't care whether the sender sent us a value or was dropped
+        // first; either one counts as a notification, so we ignore the result
+        // once the future resolves:
+        _ = self.0.await;
     }
 }

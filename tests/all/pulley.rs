@@ -453,28 +453,28 @@ async fn pulley_provenance_test_async_components() -> Result<()> {
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackless")?;
         instance
             .run_concurrent(&mut store, async move |accessor| {
-                run.call_concurrent(accessor, ()).await
+                anyhow::Ok(run.call_concurrent(accessor, ()).await?.0)
             })
             .await??;
 
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackful")?;
         instance
             .run_concurrent(&mut store, async move |accessor| {
-                run.call_concurrent(accessor, ()).await
+                anyhow::Ok(run.call_concurrent(accessor, ()).await?.0)
             })
             .await??;
 
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackless-stackless")?;
         instance
             .run_concurrent(&mut store, async move |accessor| {
-                run.call_concurrent(accessor, ()).await
+                anyhow::Ok(run.call_concurrent(accessor, ()).await?.0)
             })
             .await??;
 
         let run = instance.get_typed_func::<(), ()>(&mut store, "run-stackful-stackful")?;
         instance
             .run_concurrent(&mut store, async move |accessor| {
-                run.call_concurrent(accessor, ()).await
+                anyhow::Ok(run.call_concurrent(accessor, ()).await?.0)
             })
             .await??;
     }

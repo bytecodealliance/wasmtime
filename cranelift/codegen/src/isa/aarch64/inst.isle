@@ -993,6 +993,10 @@
        (DummyUse
         (reg Reg))
 
+       ;; A pseudoinstruction that loads the address of a label.
+       (LabelAddress (dst WritableReg)
+                     (label MachLabel))
+
        ;; Emits an inline stack probe loop.
        ;;
        ;; Note that this is emitted post-regalloc so `start` and `end` can be
@@ -1522,6 +1526,8 @@
     (Bic)
     ;; Bitwise inclusive or
     (Orr)
+    ;; Bitwise inclusive or not
+    (Orn)
     ;; Bitwise exclusive or
     (Eor)
     ;; Unsigned maximum pairwise
@@ -3218,6 +3224,9 @@
 (decl orr_vec (Reg Reg VectorSize) Reg)
 (rule (orr_vec x y size) (vec_rrr (VecALUOp.Orr) x y size))
 
+(decl orn_vec (Reg Reg VectorSize) Reg)
+(rule (orn_vec x y size) (vec_rrr (VecALUOp.Orn) x y size))
+
 ;; Helpers for generating `and` instructions.
 (spec (and_reg ty a b)
   (provide
@@ -3889,6 +3898,11 @@
 (rule 2 (amode ty (iadd (i32_from_iconst x) y) offset)
         (if-let new_offset (i32_checked_add x offset))
         (amode_no_more_iconst ty y new_offset))
+
+(rule 3
+      (amode ty (stack_addr slot offset1) offset2)
+      (AMode.SlotOffset
+       (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
 
 (decl amode_no_more_iconst (Type Value i32) AMode)
 ;; Base case: move the `offset` into a register and add it to `val` via the
@@ -5182,3 +5196,10 @@
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.FpuLoad128 dst amode flags))))
        dst))
+
+;; Helper for creating an `LabelAddress` instruction.
+(decl a64_label_address (MachLabel) Reg)
+(rule (a64_label_address label)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
+        dst))

@@ -1,7 +1,10 @@
 use crate::common::{Profile, RunCommon, RunTarget};
 use anyhow::{Result, bail};
+use bytes::Bytes;
 use clap::Parser;
 use http::{Response, StatusCode};
+use http_body_util::BodyExt as _;
+use http_body_util::combinators::BoxBody;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -21,12 +24,11 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::bindings::ProxyPre;
-use wasmtime_wasi_http::bindings::http::types::{ErrorCode, Scheme};
+use wasmtime_wasi_http::bindings as p2;
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
-    WasiHttpView, body::HyperOutgoingBody,
+    WasiHttpView,
 };
 
 #[cfg(feature = "wasi-config")]
@@ -42,6 +44,9 @@ struct Host {
     http: WasiHttpCtx,
     http_outgoing_body_buffer_chunks: Option<usize>,
     http_outgoing_body_chunk_size: Option<usize>,
+
+    #[cfg(feature = "component-model-async")]
+    p3_http: crate::common::DefaultP3Ctx,
 
     limits: StoreLimits,
 
@@ -83,6 +88,16 @@ impl WasiHttpView for Host {
     fn outgoing_body_chunk_size(&mut self) -> usize {
         self.http_outgoing_body_chunk_size
             .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
+    }
+}
+
+#[cfg(feature = "component-model-async")]
+impl wasmtime_wasi_http::p3::WasiHttpView for Host {
+    fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
+        wasmtime_wasi_http::p3::WasiHttpCtxView {
+            table: &mut self.table,
+            ctx: &mut self.p3_http,
+        }
     }
 }
 
@@ -191,6 +206,8 @@ impl ServeCommand {
             wasi_keyvalue: None,
             #[cfg(feature = "profiling")]
             guest_profiler: None,
+            #[cfg(feature = "component-model-async")]
+            p3_http: crate::common::DefaultP3Ctx,
         };
 
         if self.run.common.wasi.nn == Some(true) {
@@ -270,8 +287,19 @@ impl ServeCommand {
         if cli == Some(true) {
             self.run.add_wasmtime_wasi_to_linker(linker)?;
             wasmtime_wasi_http::add_only_http_to_linker_async(linker)?;
+            #[cfg(feature = "component-model-async")]
+            if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
+                wasmtime_wasi_http::p3::add_to_linker(linker)?;
+            }
         } else {
             wasmtime_wasi_http::add_to_linker_async(linker)?;
+            #[cfg(feature = "component-model-async")]
+            if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
+                wasmtime_wasi_http::p3::add_to_linker(linker)?;
+                wasmtime_wasi::p3::clocks::add_to_linker(linker)?;
+                wasmtime_wasi::p3::random::add_to_linker(linker)?;
+                wasmtime_wasi::p3::cli::add_to_linker(linker)?;
+            }
         }
 
         if self.run.common.wasi.nn == Some(true) {
@@ -360,7 +388,13 @@ impl ServeCommand {
         };
 
         let instance = linker.instantiate_pre(&component)?;
-        let instance = ProxyPre::new(instance)?;
+        #[cfg(feature = "component-model-async")]
+        let instance = match wasmtime_wasi_http::p3::bindings::ProxyIndices::new(&instance) {
+            Ok(indices) => ProxyPre::P3(indices, instance),
+            Err(_) => ProxyPre::P2(p2::ProxyPre::new(instance)?),
+        };
+        #[cfg(not(feature = "component-model-async"))]
+        let instance = ProxyPre::P2(p2::ProxyPre::new(instance)?);
 
         // Spawn background task(s) waiting for graceful shutdown signals. This
         // always listens for ctrl-c but additionally can listen for a TCP
@@ -430,9 +464,6 @@ impl ServeCommand {
                             let h = h.clone();
                             async move {
                                 use http_body_util::{BodyExt, Full};
-                                fn to_errorcode(_: Infallible) -> ErrorCode {
-                                    unreachable!()
-                                }
                                 match handle_request(h, req, comp).await {
                                     Ok(r) => Ok::<_, Infallible>(r),
                                     Err(e) => {
@@ -456,7 +487,7 @@ impl ServeCommand {
                                             .header("Content-Type", "text/html; charset=UTF-8")
                                             .body(
                                                 Full::new(bytes::Bytes::from(error_html))
-                                                    .map_err(to_errorcode)
+                                                    .map_err(|_| unreachable!())
                                                     .boxed(),
                                             )
                                             .unwrap())
@@ -696,8 +727,40 @@ fn setup_guest_profiler(
 struct ProxyHandlerInner {
     cmd: ServeCommand,
     engine: Engine,
-    instance_pre: ProxyPre<Host>,
+    instance_pre: ProxyPre,
     next_id: AtomicU64,
+}
+
+enum ProxyPre {
+    P2(p2::ProxyPre<Host>),
+    #[cfg(feature = "component-model-async")]
+    P3(
+        wasmtime_wasi_http::p3::bindings::ProxyIndices,
+        wasmtime::component::InstancePre<Host>,
+    ),
+}
+
+impl ProxyPre {
+    async fn instantiate(&self, store: &mut Store<Host>) -> Result<Proxy> {
+        Ok(match self {
+            ProxyPre::P2(pre) => Proxy::P2(pre.instantiate_async(store).await?),
+            #[cfg(feature = "component-model-async")]
+            ProxyPre::P3(indices, pre) => {
+                let instance = pre.instantiate_async(&mut *store).await?;
+                let proxy = indices.load(&mut *store, &instance)?;
+                Proxy::P3(proxy, instance)
+            }
+        })
+    }
+}
+
+enum Proxy {
+    P2(p2::Proxy),
+    #[cfg(feature = "component-model-async")]
+    P3(
+        wasmtime_wasi_http::p3::bindings::Proxy,
+        wasmtime::component::Instance,
+    ),
 }
 
 impl ProxyHandlerInner {
@@ -710,7 +773,7 @@ impl ProxyHandlerInner {
 struct ProxyHandler(Arc<ProxyHandlerInner>);
 
 impl ProxyHandler {
-    fn new(cmd: ServeCommand, engine: Engine, instance_pre: ProxyPre<Host>) -> Self {
+    fn new(cmd: ServeCommand, engine: Engine, instance_pre: ProxyPre) -> Self {
         Self(Arc::new(ProxyHandlerInner {
             cmd,
             engine,
@@ -726,7 +789,7 @@ async fn handle_request(
     ProxyHandler(inner): ProxyHandler,
     req: Request,
     component: Component,
-) -> Result<hyper::Response<HyperOutgoingBody>> {
+) -> Result<hyper::Response<BoxBody<Bytes, anyhow::Error>>> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
 
     let req_id = inner.next_req_id();
@@ -739,52 +802,91 @@ async fn handle_request(
 
     let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
 
-    let req = store.data_mut().new_incoming_request(Scheme::Http, req)?;
-    let out = store.data_mut().new_response_outparam(sender)?;
-    let proxy = inner.instance_pre.instantiate_async(&mut store).await?;
+    let (write_profile, epoch_thread) =
+        setup_epoch_handler(&inner.cmd, &mut store, component.clone())?;
 
-    let comp = component.clone();
-    let task = tokio::task::spawn(async move {
-        let (write_profile, epoch_thread) = setup_epoch_handler(&inner.cmd, &mut store, comp)?;
-
-        if let Err(e) = proxy
-            .wasi_http_incoming_handler()
-            .call_handle(&mut store, req, out)
-            .await
-        {
-            log::error!("[{req_id}] :: {e:?}");
-            return Err(e);
-        }
-
-        write_profile(&mut store);
-        drop(epoch_thread);
-
-        Ok(())
-    });
-
-    let result = match receiver.await {
-        Ok(Ok(resp)) => Ok(resp),
-        Ok(Err(e)) => Err(e.into()),
-        Err(_) => {
-            // An error in the receiver (`RecvError`) only indicates that the
-            // task exited before a response was sent (i.e., the sender was
-            // dropped); it does not describe the underlying cause of failure.
-            // Instead we retrieve and propagate the error from inside the task
-            // which should more clearly tell the user what went wrong. Note
-            // that we assume the task has already exited at this point so the
-            // `await` should resolve immediately.
-            let e = match task.await {
-                Ok(Ok(())) => {
-                    bail!("guest never invoked `response-outparam::set` method")
+    match inner.instance_pre.instantiate(&mut store).await? {
+        Proxy::P2(proxy) => {
+            let req = store
+                .data_mut()
+                .new_incoming_request(p2::http::types::Scheme::Http, req)?;
+            let out = store.data_mut().new_response_outparam(sender)?;
+            let task = tokio::task::spawn(async move {
+                if let Err(e) = proxy
+                    .wasi_http_incoming_handler()
+                    .call_handle(&mut store, req, out)
+                    .await
+                {
+                    log::error!("[{req_id}] :: {e:?}");
+                    return Err(e);
                 }
-                Ok(Err(e)) => e,
-                Err(e) => e.into(),
-            };
-            Err(e.context("guest never invoked `response-outparam::set` method"))
-        }
-    };
 
-    result
+                write_profile(&mut store);
+                drop(epoch_thread);
+
+                Ok(())
+            });
+
+            let result = match receiver.await {
+                Ok(Ok(resp)) => resp,
+                Ok(Err(e)) => bail!(e),
+                Err(_) => {
+                    // An error in the receiver (`RecvError`) only indicates that the
+                    // task exited before a response was sent (i.e., the sender was
+                    // dropped); it does not describe the underlying cause of failure.
+                    // Instead we retrieve and propagate the error from inside the task
+                    // which should more clearly tell the user what went wrong. Note
+                    // that we assume the task has already exited at this point so the
+                    // `await` should resolve immediately.
+                    let e = match task.await {
+                        Ok(Ok(())) => {
+                            bail!("guest never invoked `response-outparam::set` method")
+                        }
+                        Ok(Err(e)) => e,
+                        Err(e) => e.into(),
+                    };
+                    bail!(e.context("guest never invoked `response-outparam::set` method"))
+                }
+            };
+
+            Ok(result.map(|body| body.map_err(|e| e.into()).boxed()))
+        }
+        #[cfg(feature = "component-model-async")]
+        Proxy::P3(proxy, instance) => {
+            use wasmtime_wasi_http::p3::bindings::http::types::{ErrorCode, Request};
+
+            let (tx, rx) = tokio::sync::oneshot::channel();
+
+            tokio::task::spawn(async move {
+                let guest_result = instance
+                    .run_concurrent(&mut store, async move |store| {
+                        let (req, body) = req.into_parts();
+                        let body = body.map_err(ErrorCode::from_hyper_request_error);
+                        let req = http::Request::from_parts(req, body);
+                        let (request, request_io_result) = Request::from_http(req);
+                        let (res, task) = proxy.handle(store, request).await??;
+                        let res =
+                            store.with(|mut store| res.into_http(&mut store, request_io_result))?;
+
+                        _ = tx.send(res);
+
+                        task.block(store).await;
+                        anyhow::Ok(())
+                    })
+                    .await?;
+                if let Err(e) = guest_result {
+                    log::error!("[{req_id}] :: {e:?}");
+                    return Err(e);
+                }
+
+                write_profile(&mut store);
+                drop(epoch_thread);
+
+                anyhow::Ok(())
+            });
+            Ok(rx.await?.map(|body| body.map_err(|err| err.into()).boxed()))
+        }
+    }
 }
 
 #[derive(Clone)]

@@ -95,7 +95,7 @@ fn host_always_has_some_stack() -> Result<()> {
     // Additionally, however, and this is the crucial test, make sure that the
     // host function actually completed. If HITS is 1 then we entered but didn't
     // exit meaning we segfaulted while executing the host, yet still tried to
-    // recover from it with longjmp.
+    // recover from it with a jump.
     assert_eq!(hits1, 0);
     assert_eq!(hits2, 0);
     assert_eq!(hits3, 0);

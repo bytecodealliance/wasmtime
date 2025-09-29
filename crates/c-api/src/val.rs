@@ -98,6 +98,7 @@ impl wasm_val_t {
             Val::ExternRef(_) => crate::abort("creating a wasm_val_t from an externref"),
             Val::ExnRef(_) => crate::abort("creating a wasm_val_t from  an exnref"),
             Val::V128(_) => crate::abort("creating a wasm_val_t from a v128"),
+            Val::ContRef(_) => crate::abort("creating a wasm_val_t from a contref"),
         }
     }
 
@@ -258,6 +259,7 @@ impl wasmtime_val_t {
                     v128: val.as_u128().to_le_bytes(),
                 },
             },
+            Val::ContRef(_) => crate::abort("contrefs not yet supported in C API (#10248)"),
         }
     }
 

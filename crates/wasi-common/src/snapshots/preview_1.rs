@@ -580,6 +580,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if !table.contains_key(from) {
             return Err(Error::badf());
         }
+        if !table.contains_key(to) {
+            return Err(Error::badf());
+        }
         table.renumber(from, to)
     }
 

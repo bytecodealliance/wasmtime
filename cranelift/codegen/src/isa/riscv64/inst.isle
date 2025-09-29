@@ -139,7 +139,14 @@
       (kind IntegerCompare))
 
     ;; Load an inline symbol reference.
-    (LoadExtName
+    (LoadExtNameGot
+      (rd WritableReg)
+      (name BoxExternalName))
+    (LoadExtNameNear
+      (rd WritableReg)
+      (name BoxExternalName)
+      (offset i64))
+    (LoadExtNameFar
       (rd WritableReg)
       (name BoxExternalName)
       (offset i64))
@@ -246,6 +253,10 @@
     ;; A dummy use, useful to keep a value alive.
        (DummyUse
         (reg Reg))
+
+    ;; A pseudoinstruction that loads the address of a label.
+    (LabelAddress (dst WritableReg)
+                  (label MachLabel))
 
     ;; popcnt  if target doesn't support extension B
     ;; use iteration to implement.
@@ -2750,8 +2761,43 @@
 
 
 ;;;; load extern name
-(decl load_ext_name (ExternalName i64) Reg)
-(extern constructor load_ext_name load_ext_name)
+(decl load_ext_name (ExternalName i64 RelocDistance) Reg)
+(rule (load_ext_name name offset _dist)
+  (if-let true (is_pic))
+  (rv_add (load_ext_name_got name) (imm $I64 (i64_cast_unsigned offset))))
+(rule 1 (load_ext_name name 0 _dist)
+  (if-let true (is_pic))
+  (load_ext_name_got name))
+(rule (load_ext_name name offset (RelocDistance.Near))
+  (if-let false (is_pic))
+  (load_ext_name_near name offset))
+(rule (load_ext_name name offset (RelocDistance.Far))
+  (if-let false (is_pic))
+  (load_ext_name_far name offset))
+
+(decl pure is_pic () bool)
+(extern constructor is_pic is_pic)
+
+;; Helper for emitting `MInst.LoadExtNameGot` instructions.
+(decl load_ext_name_got (BoxExternalName) Reg)
+(rule (load_ext_name_got extname)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadExtNameGot dst extname))))
+        dst))
+
+;; Helper for emitting `MInst.LoadExtNameNear` instructions.
+(decl load_ext_name_near (BoxExternalName i64) Reg)
+(rule (load_ext_name_near extname offset)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadExtNameNear dst extname offset))))
+        dst))
+
+;; Helper for emitting `MInst.LoadExtNameFar` instructions.
+(decl load_ext_name_far (BoxExternalName i64) Reg)
+(rule (load_ext_name_far extname offset)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadExtNameFar dst extname offset))))
+        dst))
 
 (decl elf_tls_get_addr (ExternalName) Reg)
 (rule (elf_tls_get_addr name)
@@ -3208,3 +3254,11 @@
 ;; a >= b
 (rule 1 (fcmp_to_float_compare (FloatCC.GreaterThanOrEqual) ty a b)
   (FloatCompare.One (rv_fge ty a b)))
+
+
+;; Helper for creating an `LabelAddress` instruction.
+(decl rv64_label_address (MachLabel) Reg)
+(rule (rv64_label_address label)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
+        dst))

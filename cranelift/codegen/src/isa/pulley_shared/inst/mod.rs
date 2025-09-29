@@ -144,11 +144,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             assert!(reg.is_special());
         }
 
-        Inst::LoadExtName {
-            dst,
-            name: _,
-            offset: _,
-        } => {
+        Inst::LoadExtNameNear { dst, .. } | Inst::LoadExtNameFar { dst, .. } => {
             collector.reg_def(dst);
         }
 
@@ -335,6 +331,10 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::Raw { raw } => generated::get_operands(raw, collector),
 
         Inst::EmitIsland { .. } => {}
+
+        Inst::LabelAddress { dst, label: _ } => {
+            collector.reg_def(dst);
+        }
     }
 }
 
@@ -492,6 +492,18 @@ where
 
     fn is_mem_access(&self) -> bool {
         todo!()
+    }
+
+    fn call_type(&self) -> CallType {
+        match &self.inst {
+            Inst::Call { .. } | Inst::IndirectCall { .. } | Inst::IndirectCallHost { .. } => {
+                CallType::Regular
+            }
+
+            Inst::ReturnCall { .. } | Inst::ReturnIndirectCall { .. } => CallType::TailCall,
+
+            _ => CallType::None,
+        }
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self {
@@ -669,9 +681,14 @@ impl Inst {
                 format!("xmov {dst}, {reg}")
             }
 
-            Inst::LoadExtName { dst, name, offset } => {
+            Inst::LoadExtNameNear { dst, name, offset } => {
                 let dst = format_reg(*dst.to_reg());
-                format!("{dst} = load_ext_name {name:?}, {offset}")
+                format!("{dst} = load_ext_name_near {name:?}, {offset}")
+            }
+
+            Inst::LoadExtNameFar { dst, name, offset } => {
+                let dst = format_reg(*dst.to_reg());
+                format!("{dst} = load_ext_name_far {name:?}, {offset}")
             }
 
             Inst::Call { info } => {
@@ -812,6 +829,11 @@ impl Inst {
             Inst::Raw { raw } => generated::print(raw),
 
             Inst::EmitIsland { space_needed } => format!("emit_island {space_needed}"),
+
+            Inst::LabelAddress { dst, label } => {
+                let dst = format_reg(dst.to_reg().to_reg());
+                format!("label_address {dst}, {label:?}")
+            }
         }
     }
 }
@@ -820,9 +842,11 @@ impl Inst {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LabelUse {
     /// A PC-relative `jump`/`call`/etc... instruction with an `i32` relative
-    /// target. The payload value is an addend that describes the positive
-    /// offset from the start of the instruction to the offset being relocated.
-    Jump(u32),
+    /// target.
+    ///
+    /// The relative distance to the destination is added to the 4 bytes at the
+    /// label site.
+    PcRel,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -833,21 +857,21 @@ impl MachInstLabelUse for LabelUse {
     /// Maximum PC-relative range (positive), inclusive.
     fn max_pos_range(self) -> CodeOffset {
         match self {
-            Self::Jump(_) => 0x7fff_ffff,
+            Self::PcRel => 0x7fff_ffff,
         }
     }
 
     /// Maximum PC-relative range (negative).
     fn max_neg_range(self) -> CodeOffset {
         match self {
-            Self::Jump(_) => 0x8000_0000,
+            Self::PcRel => 0x8000_0000,
         }
     }
 
     /// Size of window into code needed to do the patch.
     fn patch_size(self) -> CodeOffset {
         match self {
-            Self::Jump(_) => 4,
+            Self::PcRel => 4,
         }
     }
 
@@ -858,13 +882,17 @@ impl MachInstLabelUse for LabelUse {
         debug_assert!(use_relative >= -(self.max_neg_range() as i64));
         let pc_rel = i32::try_from(use_relative).unwrap() as u32;
         match self {
-            Self::Jump(addend) => {
-                let value = pc_rel.wrapping_add(addend);
+            Self::PcRel => {
+                let buf: &mut [u8; 4] = buffer.try_into().unwrap();
+                let addend = u32::from_le_bytes(*buf);
                 trace!(
-                    "patching label use @ {use_offset:#x} to label {label_offset:#x} via \
-                     PC-relative offset {pc_rel:#x}"
+                    "patching label use @ {use_offset:#x} \
+                     to label {label_offset:#x} via \
+                     PC-relative offset {pc_rel:#x} \
+                     adding in {addend:#x}"
                 );
-                buffer.copy_from_slice(&value.to_le_bytes()[..]);
+                let value = pc_rel.wrapping_add(addend);
+                *buf = value.to_le_bytes();
             }
         }
     }
@@ -872,14 +900,14 @@ impl MachInstLabelUse for LabelUse {
     /// Is a veneer supported for this label reference type?
     fn supports_veneer(self) -> bool {
         match self {
-            Self::Jump(_) => false,
+            Self::PcRel => false,
         }
     }
 
     /// How large is the veneer, if supported?
     fn veneer_size(self) -> CodeOffset {
         match self {
-            Self::Jump(_) => 0,
+            Self::PcRel => 0,
         }
     }
 
@@ -895,19 +923,13 @@ impl MachInstLabelUse for LabelUse {
         _veneer_offset: CodeOffset,
     ) -> (CodeOffset, LabelUse) {
         match self {
-            Self::Jump(_) => panic!("veneer not supported for {self:?}"),
+            Self::PcRel => panic!("veneer not supported for {self:?}"),
         }
     }
 
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
-        match reloc {
-            Reloc::X86CallPCRel4 if addend < 0 => {
-                // We are always relocating some offset that is within an
-                // instruction, but pulley adds the offset relative to the PC
-                // pointing to the *start* of the instruction. Therefore, adjust
-                // back to the beginning of the instruction.
-                Some(LabelUse::Jump(i32::try_from(-addend).unwrap() as u32))
-            }
+        match (reloc, addend) {
+            (Reloc::PulleyPcRel, 0) => Some(LabelUse::PcRel),
             _ => None,
         }
     }

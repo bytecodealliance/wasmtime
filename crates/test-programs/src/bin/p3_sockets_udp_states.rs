@@ -1,6 +1,7 @@
 use test_programs::p3::wasi::sockets::types::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, UdpSocket,
 };
+use test_programs::sockets::supports_ipv6;
 
 struct Component;
 
@@ -82,13 +83,14 @@ fn test_udp_connected_state_invariants(family: IpAddressFamily) {
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         test_udp_unbound_state_invariants(IpAddressFamily::Ipv4).await;
-        test_udp_unbound_state_invariants(IpAddressFamily::Ipv6).await;
-
         test_udp_bound_state_invariants(IpAddressFamily::Ipv4);
-        test_udp_bound_state_invariants(IpAddressFamily::Ipv6);
-
         test_udp_connected_state_invariants(IpAddressFamily::Ipv4);
-        test_udp_connected_state_invariants(IpAddressFamily::Ipv6);
+
+        if supports_ipv6() {
+            test_udp_unbound_state_invariants(IpAddressFamily::Ipv6).await;
+            test_udp_bound_state_invariants(IpAddressFamily::Ipv6);
+            test_udp_connected_state_invariants(IpAddressFamily::Ipv6);
+        }
         Ok(())
     }
 }

@@ -28,12 +28,15 @@ impl CompiledBlob {
     ) {
         use std::ptr::write_unaligned;
 
-        for &ModuleReloc {
-            kind,
-            offset,
-            ref name,
-            addend,
-        } in &self.relocs
+        for (
+            i,
+            &ModuleReloc {
+                kind,
+                offset,
+                ref name,
+                addend,
+            },
+        ) in self.relocs.iter().enumerate()
         {
             debug_assert!((offset as usize) < self.size);
             let at = unsafe { self.ptr.offset(isize::try_from(offset).unwrap()) };
@@ -98,11 +101,17 @@ impl CompiledBlob {
                     let base = get_address(name);
                     let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
                     let get_page = |x| x & (!0xfff);
-                    let pcrel = i32::try_from(get_page(what as isize) - get_page(at as isize))
-                        .unwrap()
-                        .cast_unsigned();
+                    // NOTE: This should technically be i33 given that this relocation type allows
+                    // a range from -4GB to +4GB, not -2GB to +2GB. But this doesn't really matter
+                    // as the target is unlikely to be more than 2GB from the adrp instruction. We
+                    // need to be careful to not cast to an unsigned int until after doing >> 12 to
+                    // compute the upper 21bits of the pcrel address however as otherwise the top
+                    // bit of the 33bit pcrel address would be forced 0 through zero extension
+                    // instead of being sign extended as it should be.
+                    let pcrel =
+                        i32::try_from(get_page(what as isize) - get_page(at as isize)).unwrap();
                     let iptr = at as *mut u32;
-                    let hi21 = pcrel >> 12;
+                    let hi21 = (pcrel >> 12).cast_unsigned();
                     let lo = (hi21 & 0x3) << 29;
                     let hi = (hi21 & 0x1ffffc) << 3;
                     unsafe { modify_inst32(iptr, |inst| inst | lo | hi) };
@@ -150,7 +159,53 @@ impl CompiledBlob {
                         modify_inst32(jalr_addr, |jalr| (jalr & 0xFFFFF) | (lo12 << 20));
                     }
                 }
-                _ => unimplemented!(),
+                Reloc::PulleyPcRel => {
+                    let base = get_address(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
+                    let at = at as *mut i32;
+                    unsafe {
+                        at.write_unaligned(at.read_unaligned().wrapping_add(pcrel));
+                    }
+                }
+
+                // See <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses>
+                // for why `0x800` is added here.
+                Reloc::RiscvPCRelHi20 => {
+                    let base = get_address(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let pcrel = i32::try_from((what as isize) - (at as isize) + 0x800)
+                        .unwrap()
+                        .cast_unsigned();
+                    let at = at as *mut u32;
+                    unsafe {
+                        modify_inst32(at, |i| i | (pcrel & 0xfffff000));
+                    }
+                }
+
+                // The target of this relocation is the `auipc` preceding this
+                // instruction which should be `RiscvPCRelHi20`, and the actual
+                // target that we're relocating against is the target of that
+                // relocation. Assume for now that the previous relocation is
+                // the target of this relocation, and then use that.
+                Reloc::RiscvPCRelLo12I => {
+                    let prev_reloc = &self.relocs[i - 1];
+                    assert_eq!(prev_reloc.kind, Reloc::RiscvPCRelHi20);
+                    let lo_target = get_address(name);
+                    let hi_address =
+                        unsafe { self.ptr.offset(isize::try_from(prev_reloc.offset).unwrap()) };
+                    assert_eq!(lo_target, hi_address);
+                    let hi_target = get_address(&prev_reloc.name);
+                    let pcrel = i32::try_from((hi_target as isize) - (hi_address as isize))
+                        .unwrap()
+                        .cast_unsigned();
+                    let at = at as *mut u32;
+                    unsafe {
+                        modify_inst32(at, |i| i | ((pcrel & 0xfff) << 20));
+                    }
+                }
+
+                other => unimplemented!("unimplemented reloc {other:?}"),
             }
         }
     }

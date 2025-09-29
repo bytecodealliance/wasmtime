@@ -237,7 +237,7 @@ pub mod foo {
                 assert!(1 == < Error as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn option_test<T: 'static>(
+                fn option_test<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<
@@ -262,8 +262,8 @@ pub mod foo {
                     "option-test",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::option_test(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::option_test(host).await;
                             Ok((r,))
                         })
                     },
@@ -419,7 +419,7 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.option_test)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                 }

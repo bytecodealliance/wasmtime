@@ -105,7 +105,8 @@ impl Inst {
             | Inst::MachOTlsGetAddr { .. }
             | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
-            | Inst::DummyUse { .. } => true,
+            | Inst::DummyUse { .. }
+            | Inst::LabelAddress { .. } => true,
 
             Inst::Atomic128RmwSeq { .. } | Inst::Atomic128XchgSeq { .. } => emit_info.cmpxchg16b(),
 
@@ -822,6 +823,11 @@ impl PrettyPrint for Inst {
                 format!("dummy_use {reg}")
             }
 
+            Inst::LabelAddress { dst, label } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
+                format!("label_address {dst}, {label:?}")
+            }
+
             Inst::External { inst } => {
                 format!("{inst}")
             }
@@ -1183,6 +1189,10 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(reg);
         }
 
+        Inst::LabelAddress { dst, .. } => {
+            collector.reg_def(dst);
+        }
+
         Inst::External { inst } => {
             inst.visit(&mut external::RegallocVisitor { collector });
         }
@@ -1278,6 +1288,19 @@ impl MachInst for Inst {
         match self {
             Self::Args { .. } => true,
             _ => false,
+        }
+    }
+
+    fn call_type(&self) -> CallType {
+        match self {
+            Inst::CallKnown { .. }
+            | Inst::CallUnknown { .. }
+            | Inst::ElfTlsGetAddr { .. }
+            | Inst::MachOTlsGetAddr { .. } => CallType::Regular,
+
+            Inst::ReturnCallKnown { .. } | Inst::ReturnCallUnknown { .. } => CallType::TailCall,
+
+            _ => CallType::None,
         }
     }
 

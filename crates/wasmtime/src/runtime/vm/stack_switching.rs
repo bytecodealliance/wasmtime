@@ -39,19 +39,15 @@ pub use stack::*;
 /// For performance reasons, the VMContRef at the bottom of this chain
 /// (i.e., the one pointed to by the VMContObj) has a pointer to the
 /// other end of the chain (i.e., its last ancestor).
-// FIXME(frank-emrich) Does this actually need to be 16-byte aligned any
-// more? Now that we use I128 on the Cranelift side (see
-// [wasmtime_cranelift::stack_switching::fatpointer::pointer_type]), it
-// should be fine to use the natural alignment of the type.
-#[repr(C, align(16))]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct VMContObj {
-    pub revision: u64,
     pub contref: NonNull<VMContRef>,
+    pub revision: usize,
 }
 
 impl VMContObj {
-    pub fn new(contref: NonNull<VMContRef>, revision: u64) -> Self {
+    pub fn new(contref: NonNull<VMContRef>, revision: usize) -> Self {
         Self { contref, revision }
     }
 
@@ -63,7 +59,7 @@ impl VMContObj {
     ///
     /// Behavior will be undefined if a pointer to data that is not a
     /// VMContRef is provided.
-    pub unsafe fn from_raw_parts(contref: *mut u8, revision: u64) -> Option<Self> {
+    pub unsafe fn from_raw_parts(contref: *mut u8, revision: usize) -> Option<Self> {
         NonNull::new(contref.cast::<VMContRef>()).map(|contref| Self::new(contref, revision))
     }
 }
@@ -208,7 +204,7 @@ pub struct VMContRef {
     pub last_ancestor: *mut VMContRef,
 
     /// Revision counter.
-    pub revision: u64,
+    pub revision: usize,
 
     /// The underlying stack.
     pub stack: VMContinuationStack,
@@ -549,7 +545,7 @@ pub enum VMStackState {
 mod tests {
     use core::mem::{offset_of, size_of};
 
-    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
+    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
 
     use super::*;
 
@@ -562,7 +558,7 @@ mod tests {
 
     #[test]
     fn check_vm_stack_limits_offsets() {
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             offset_of!(VMStackLimits, stack_limit),
@@ -576,7 +572,7 @@ mod tests {
 
     #[test]
     fn check_vm_common_stack_information_offsets() {
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             size_of::<VMCommonStackInformation>(),
@@ -607,7 +603,7 @@ mod tests {
     #[test]
     fn check_vm_array_offsets() {
         // Note that the type parameter has no influence on the size and offsets.
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             size_of::<VMHostArray<()>>(),
@@ -628,8 +624,26 @@ mod tests {
     }
 
     #[test]
+    fn check_vm_contobj_offsets() {
+        let module = Module::new(StaticModuleIndex::from_u32(0));
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            offset_of!(VMContObj, contref),
+            usize::from(offsets.ptr.vmcontobj_contref())
+        );
+        assert_eq!(
+            offset_of!(VMContObj, revision),
+            usize::from(offsets.ptr.vmcontobj_revision())
+        );
+        assert_eq!(
+            size_of::<VMContObj>(),
+            usize::from(offsets.ptr.size_of_vmcontobj())
+        )
+    }
+
+    #[test]
     fn check_vm_contref_offsets() {
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             offset_of!(VMContRef, common_stack_information),
@@ -667,7 +681,7 @@ mod tests {
 
     #[test]
     fn check_vm_stack_chain_offsets() {
-        let module = Module::new();
+        let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             size_of::<VMStackChain>(),

@@ -19,64 +19,61 @@
 use crate::{Frame, Unwind};
 use core::ops::ControlFlow;
 
-/// Throw action to perform.
-#[derive(Clone, Debug)]
-pub enum ThrowAction {
-    /// Jump to the given handler with the given SP and FP values.
-    Handler {
-        /// Program counter of handler return point.
-        pc: usize,
-        /// Stack pointer to restore before jumping to handler.
-        sp: usize,
-        /// Frame pointer to restore before jumping to handler.
-        fp: usize,
-    },
-    /// No handler found.
-    None,
+/// Description of a frame on the stack that is ready to catch an exception.
+#[derive(Debug)]
+pub struct Handler {
+    /// Program counter of handler return point.
+    pub pc: usize,
+    /// Stack pointer to restore before jumping to handler.
+    pub sp: usize,
+    /// Frame pointer to restore before jumping to handler.
+    pub fp: usize,
 }
 
-/// Implementation of stack-walking to find a handler.
-///
-/// This function searches for a handler in the given range of stack
-/// frames, starting from the throw stub and up to a specified entry
-/// frame.
-///
-/// # Safety
-///
-/// The safety of this function is the same as [`crate::visit_frames`] where the
-/// values passed in configuring the frame pointer walk must be correct and
-/// Wasm-defined for this to not have UB.
-pub unsafe fn compute_throw_action<F: Fn(&Frame) -> Option<(usize, usize)>>(
-    unwind: &dyn Unwind,
-    frame_handler: F,
-    exit_pc: usize,
-    exit_trampoline_frame: usize,
-    entry_frame: usize,
-) -> ThrowAction {
-    // SAFETY: the safety of `visit_frames` relies on the correctness of the
-    // parameters passed in which is forwarded as a contract to this function
-    // tiself.
-    let result = unsafe {
-        crate::stackwalk::visit_frames(
-            unwind,
-            exit_pc,
-            exit_trampoline_frame,
-            entry_frame,
-            |frame| {
-                log::trace!("visit_frame: frame {frame:?}");
-                if let Some((handler_pc, handler_sp)) = frame_handler(&frame) {
-                    return ControlFlow::Break(ThrowAction::Handler {
-                        pc: handler_pc,
-                        sp: handler_sp,
-                        fp: frame.fp(),
-                    });
-                }
-                ControlFlow::Continue(())
-            },
-        )
-    };
-    match result {
-        ControlFlow::Break(action) => action,
-        ControlFlow::Continue(()) => ThrowAction::None,
+impl Handler {
+    /// Implementation of stack-walking to find a handler.
+    ///
+    /// This function searches for a handler in the given range of stack
+    /// frames, starting from the throw stub and up to a specified entry
+    /// frame.
+    ///
+    /// # Safety
+    ///
+    /// The safety of this function is the same as [`crate::visit_frames`] where the
+    /// values passed in configuring the frame pointer walk must be correct and
+    /// Wasm-defined for this to not have UB.
+    pub unsafe fn find<F: Fn(&Frame) -> Option<(usize, usize)>>(
+        unwind: &dyn Unwind,
+        frame_handler: F,
+        exit_pc: usize,
+        exit_trampoline_frame: usize,
+        entry_frame: usize,
+    ) -> Option<Handler> {
+        // SAFETY: the safety of `visit_frames` relies on the correctness of the
+        // parameters passed in which is forwarded as a contract to this function
+        // tiself.
+        let result = unsafe {
+            crate::stackwalk::visit_frames(
+                unwind,
+                exit_pc,
+                exit_trampoline_frame,
+                entry_frame,
+                |frame| {
+                    log::trace!("visit_frame: frame {frame:?}");
+                    if let Some((handler_pc, handler_sp)) = frame_handler(&frame) {
+                        return ControlFlow::Break(Handler {
+                            pc: handler_pc,
+                            sp: handler_sp,
+                            fp: frame.fp(),
+                        });
+                    }
+                    ControlFlow::Continue(())
+                },
+            )
+        };
+        match result {
+            ControlFlow::Break(handler) => Some(handler),
+            ControlFlow::Continue(()) => None,
+        }
     }
 }

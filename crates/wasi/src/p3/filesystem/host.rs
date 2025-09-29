@@ -1,20 +1,26 @@
-use crate::DirPerms;
 use crate::filesystem::{Descriptor, Dir, File, WasiFilesystem, WasiFilesystemCtxView};
-use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::clocks::wall_clock;
 use crate::p3::bindings::filesystem::types::{
     self, Advice, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry, ErrorCode,
     Filesize, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
-use crate::{FilePerms, TrappableError};
+use crate::p3::{DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer};
+use crate::{DirPerms, FilePerms};
 use anyhow::Context as _;
 use bytes::BytesMut;
-use std::io::Cursor;
+use core::pin::Pin;
+use core::task::{Context, Poll, ready};
+use core::{iter, mem};
+use std::io::{self, Cursor};
+use std::sync::Arc;
 use system_interface::fs::FileIoExt as _;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::{JoinHandle, spawn_blocking};
+use wasmtime::StoreContextMut;
 use wasmtime::component::{
-    Accessor, AccessorTask, FutureReader, FutureWriter, GuardedFutureWriter, GuardedStreamWriter,
-    Resource, ResourceTable, StreamReader, StreamWriter,
+    Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
+    StreamProducer, StreamReader, StreamResult,
 };
 
 fn get_descriptor<'a>(
@@ -24,7 +30,7 @@ fn get_descriptor<'a>(
     table
         .get(fd)
         .context("failed to get descriptor resource from table")
-        .map_err(TrappableError::trap)
+        .map_err(FilesystemError::trap)
 }
 
 fn get_file<'a>(
@@ -108,125 +114,367 @@ fn systemtimespec_from(t: NewTimestamp) -> Result<Option<fs_set_times::SystemTim
     }
 }
 
-struct ReadFileTask {
+struct ReadStreamProducer {
     file: File,
     offset: u64,
-    data_tx: StreamWriter<u8>,
-    result_tx: FutureWriter<Result<(), ErrorCode>>,
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+    task: Option<JoinHandle<std::io::Result<BytesMut>>>,
 }
 
-impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadFileTask {
-    async fn run(self, store: &Accessor<T, WasiFilesystem>) -> wasmtime::Result<()> {
-        let mut buf = BytesMut::zeroed(DEFAULT_BUFFER_CAPACITY);
-        let mut offset = self.offset;
-        let mut data_tx = GuardedStreamWriter::new(store, self.data_tx);
-        let result_tx = GuardedFutureWriter::new(store, self.result_tx);
-        let res = loop {
-            match self
-                .file
-                .run_blocking(move |file| {
-                    let n = file.read_at(&mut buf, offset)?;
-                    buf.truncate(n);
-                    std::io::Result::Ok(buf)
-                })
-                .await
-            {
-                Ok(chunk) if chunk.is_empty() => {
-                    break Ok(());
-                }
-                Ok(chunk) => {
-                    let Ok(n) = chunk.len().try_into() else {
-                        break Err(ErrorCode::Overflow);
-                    };
-                    let Some(n) = offset.checked_add(n) else {
-                        break Err(ErrorCode::Overflow);
-                    };
-                    offset = n;
-                    buf = data_tx.write_all(Cursor::new(chunk)).await.into_inner();
-                    if data_tx.is_closed() {
-                        break Ok(());
-                    }
-                    buf.resize(DEFAULT_BUFFER_CAPACITY, 0);
-                }
-                Err(err) => {
-                    break Err(err.into());
-                }
-            }
-        };
-        drop(self.file);
-        drop(data_tx);
-        result_tx.write(res).await;
-        Ok(())
+impl Drop for ReadStreamProducer {
+    fn drop(&mut self) {
+        self.close(Ok(()))
     }
 }
 
-struct ReadDirectoryTask {
-    dir: Dir,
-    data_tx: StreamWriter<DirectoryEntry>,
-    result_tx: FutureWriter<Result<(), ErrorCode>>,
+impl ReadStreamProducer {
+    fn close(&mut self, res: Result<(), ErrorCode>) {
+        if let Some(tx) = self.result.take() {
+            _ = tx.send(res);
+        }
+    }
+
+    /// Update the internal `offset` field after reading `amt` bytes from the file.
+    fn complete_read(&mut self, amt: usize) -> StreamResult {
+        let Ok(amt) = amt.try_into() else {
+            self.close(Err(ErrorCode::Overflow));
+            return StreamResult::Dropped;
+        };
+        let Some(amt) = self.offset.checked_add(amt) else {
+            self.close(Err(ErrorCode::Overflow));
+            return StreamResult::Dropped;
+        };
+        self.offset = amt;
+        StreamResult::Completed
+    }
 }
 
-impl<T> AccessorTask<T, WasiFilesystem, wasmtime::Result<()>> for ReadDirectoryTask {
-    async fn run(self, store: &Accessor<T, WasiFilesystem>) -> wasmtime::Result<()> {
-        let mut data_tx = GuardedStreamWriter::new(store, self.data_tx);
-        let result_tx = GuardedFutureWriter::new(store, self.result_tx);
-        let res = loop {
-            let mut entries = match self.dir.run_blocking(cap_std::fs::Dir::entries).await {
-                Ok(entries) => entries,
-                Err(err) => break Err(err.into()),
-            };
-            if let Err(err) = loop {
-                let Some((res, tail)) = self
-                    .dir
-                    .run_blocking(move |_| entries.next().map(|entry| (entry, entries)))
-                    .await
-                else {
-                    break Ok(());
-                };
-                entries = tail;
-                let entry = match res {
-                    Ok(entry) => entry,
-                    Err(err) => {
-                        // On windows, filter out files like `C:\DumpStack.log.tmp` which we
-                        // can't get full metadata for.
-                        #[cfg(windows)]
-                        {
-                            use windows_sys::Win32::Foundation::{
-                                ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION,
-                            };
-                            if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
-                                || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
-                            {
-                                continue;
-                            }
-                        }
-                        break Err(err.into());
-                    }
-                };
-                let meta = match entry.metadata() {
-                    Ok(meta) => meta,
-                    Err(err) => break Err(err.into()),
-                };
-                let Ok(name) = entry.file_name().into_string() else {
-                    break Err(ErrorCode::IllegalByteSequence);
-                };
-                data_tx
-                    .write(Some(DirectoryEntry {
-                        type_: meta.file_type().into(),
-                        name,
-                    }))
-                    .await;
-                if data_tx.is_closed() {
-                    break Ok(());
+impl<D> StreamProducer<D> for ReadStreamProducer {
+    type Item = u8;
+    type Buffer = Cursor<BytesMut>;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<'a, D>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
+        // Intentionally ignore this as in blocking mode everything is always
+        // ready and otherwise spawned blocking work can't be cancelled.
+        _finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        if let Some(file) = self.file.as_blocking_file() {
+            // Once a blocking file, always a blocking file, so assert as such.
+            assert!(self.task.is_none());
+            let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
+            let buf = dst.remaining();
+            if buf.is_empty() {
+                return Poll::Ready(Ok(StreamResult::Completed));
+            }
+            return match file.read_at(buf, self.offset) {
+                Ok(0) => {
+                    self.close(Ok(()));
+                    Poll::Ready(Ok(StreamResult::Dropped))
                 }
-            } {
-                break Err(err);
+                Ok(n) => {
+                    dst.mark_written(n);
+                    Poll::Ready(Ok(self.complete_read(n)))
+                }
+                Err(err) => {
+                    self.close(Err(err.into()));
+                    Poll::Ready(Ok(StreamResult::Dropped))
+                }
             };
-        };
-        drop(self.dir);
-        drop(data_tx);
-        result_tx.write(res).await;
-        Ok(())
+        }
+
+        // Lazily spawn a read task if one hasn't already been spawned yet.
+        let me = &mut *self;
+        let task = me.task.get_or_insert_with(|| {
+            let mut buf = dst.take_buffer().into_inner();
+            buf.resize(DEFAULT_BUFFER_CAPACITY, 0);
+            let file = Arc::clone(me.file.as_file());
+            let offset = me.offset;
+            spawn_blocking(move || {
+                file.read_at(&mut buf, offset).map(|n| {
+                    buf.truncate(n);
+                    buf
+                })
+            })
+        });
+
+        // Await the completion of the read task. Note that this is not a
+        // cancellable await point because we can't cancel the other task, so
+        // the `finish` parameter is ignored.
+        let res = ready!(Pin::new(task).poll(cx)).expect("I/O task should not panic");
+        self.task = None;
+        match res {
+            Ok(buf) if buf.is_empty() => {
+                self.close(Ok(()));
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Ok(buf) => {
+                let n = buf.len();
+                dst.set_buffer(Cursor::new(buf));
+                Poll::Ready(Ok(self.complete_read(n)))
+            }
+            Err(err) => {
+                self.close(Err(err.into()));
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+        }
+    }
+}
+
+fn map_dir_entry(
+    entry: std::io::Result<cap_std::fs::DirEntry>,
+) -> Result<Option<DirectoryEntry>, ErrorCode> {
+    match entry {
+        Ok(entry) => {
+            let meta = entry.metadata()?;
+            let Ok(name) = entry.file_name().into_string() else {
+                return Err(ErrorCode::IllegalByteSequence);
+            };
+            Ok(Some(DirectoryEntry {
+                type_: meta.file_type().into(),
+                name,
+            }))
+        }
+        Err(err) => {
+            // On windows, filter out files like `C:\DumpStack.log.tmp` which we
+            // can't get full metadata for.
+            #[cfg(windows)]
+            {
+                use windows_sys::Win32::Foundation::{
+                    ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION,
+                };
+                if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
+                    || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
+                {
+                    return Ok(None);
+                }
+            }
+            Err(err.into())
+        }
+    }
+}
+
+struct ReadDirStream {
+    rx: mpsc::Receiver<DirectoryEntry>,
+    task: JoinHandle<Result<(), ErrorCode>>,
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+}
+
+impl ReadDirStream {
+    fn new(
+        dir: Arc<cap_std::fs::Dir>,
+        result: oneshot::Sender<Result<(), ErrorCode>>,
+    ) -> ReadDirStream {
+        let (tx, rx) = mpsc::channel(1);
+        ReadDirStream {
+            task: spawn_blocking(move || {
+                let entries = dir.entries()?;
+                for entry in entries {
+                    if let Some(entry) = map_dir_entry(entry)? {
+                        if let Err(_) = tx.blocking_send(entry) {
+                            break;
+                        }
+                    }
+                }
+                Ok(())
+            }),
+            rx,
+            result: Some(result),
+        }
+    }
+
+    fn close(&mut self, res: Result<(), ErrorCode>) {
+        self.rx.close();
+        self.task.abort();
+        let _ = self.result.take().unwrap().send(res);
+    }
+}
+
+impl<D> StreamProducer<D> for ReadDirStream {
+    type Item = DirectoryEntry;
+    type Buffer = Option<DirectoryEntry>;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        mut dst: Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        // If this is a 0-length read then `mpsc::Receiver` does not expose an
+        // API to wait for an item to be available without taking it out of the
+        // channel. In lieu of that just say that we're complete and ready for a
+        // read.
+        if dst.remaining(&mut store) == Some(0) {
+            return Poll::Ready(Ok(StreamResult::Completed));
+        }
+
+        match self.rx.poll_recv(cx) {
+            // If an item is on the channel then send that along and say that
+            // the read is now complete with one item being yielded.
+            Poll::Ready(Some(item)) => {
+                dst.set_buffer(Some(item));
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+
+            // If there's nothing left on the channel then that means that an
+            // error occurred or the iterator is done. In both cases an
+            // un-cancellable wait for the spawned task is entered and we await
+            // its completion. Upon completion there our own stream is closed
+            // with the result (sending an error code on our oneshot) and then
+            // the stream is reported as dropped.
+            Poll::Ready(None) => {
+                let result = ready!(Pin::new(&mut self.task).poll(cx))
+                    .expect("spawned task should not panic");
+                self.close(result);
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+
+            // If an item isn't ready yet then cancel this outstanding request
+            // if `finish` is set, otherwise propagate the `Pending` status.
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl Drop for ReadDirStream {
+    fn drop(&mut self) {
+        if self.result.is_some() {
+            self.close(Ok(()));
+        }
+    }
+}
+
+struct WriteStreamConsumer {
+    file: File,
+    location: WriteLocation,
+    result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
+    buffer: BytesMut,
+    task: Option<JoinHandle<std::io::Result<(BytesMut, usize)>>>,
+}
+
+#[derive(Copy, Clone)]
+enum WriteLocation {
+    End,
+    Offset(u64),
+}
+
+impl WriteStreamConsumer {
+    fn new_at(file: File, offset: u64, result: oneshot::Sender<Result<(), ErrorCode>>) -> Self {
+        Self {
+            file,
+            location: WriteLocation::Offset(offset),
+            result: Some(result),
+            buffer: BytesMut::default(),
+            task: None,
+        }
+    }
+
+    fn new_append(file: File, result: oneshot::Sender<Result<(), ErrorCode>>) -> Self {
+        Self {
+            file,
+            location: WriteLocation::End,
+            result: Some(result),
+            buffer: BytesMut::default(),
+            task: None,
+        }
+    }
+
+    fn close(&mut self, res: Result<(), ErrorCode>) {
+        _ = self.result.take().unwrap().send(res);
+    }
+
+    /// Update the internal `offset` field after writing `amt` bytes from the file.
+    fn complete_write(&mut self, amt: usize) -> StreamResult {
+        match &mut self.location {
+            WriteLocation::End => StreamResult::Completed,
+            WriteLocation::Offset(offset) => {
+                let Ok(amt) = amt.try_into() else {
+                    self.close(Err(ErrorCode::Overflow));
+                    return StreamResult::Dropped;
+                };
+                let Some(amt) = offset.checked_add(amt) else {
+                    self.close(Err(ErrorCode::Overflow));
+                    return StreamResult::Dropped;
+                };
+                *offset = amt;
+                StreamResult::Completed
+            }
+        }
+    }
+}
+
+impl WriteLocation {
+    fn write(&self, file: &cap_std::fs::File, bytes: &[u8]) -> io::Result<usize> {
+        match *self {
+            WriteLocation::End => file.append(bytes),
+            WriteLocation::Offset(at) => file.write_at(bytes, at),
+        }
+    }
+}
+
+impl<D> StreamConsumer<D> for WriteStreamConsumer {
+    type Item = u8;
+
+    fn poll_consume(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        src: Source<Self::Item>,
+        // Intentionally ignore this as in blocking mode everything is always
+        // ready and otherwise spawned blocking work can't be cancelled.
+        _finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let mut src = src.as_direct(store);
+        if let Some(file) = self.file.as_blocking_file() {
+            // Once a blocking file, always a blocking file, so assert as such.
+            assert!(self.task.is_none());
+            return match self.location.write(file, src.remaining()) {
+                Ok(n) => {
+                    src.mark_read(n);
+                    Poll::Ready(Ok(self.complete_write(n)))
+                }
+                Err(err) => {
+                    self.close(Err(err.into()));
+                    Poll::Ready(Ok(StreamResult::Dropped))
+                }
+            };
+        }
+        let me = &mut *self;
+        let task = me.task.get_or_insert_with(|| {
+            debug_assert!(me.buffer.is_empty());
+            me.buffer.extend_from_slice(src.remaining());
+            let buf = mem::take(&mut me.buffer);
+            let file = Arc::clone(me.file.as_file());
+            let location = me.location;
+            spawn_blocking(move || location.write(&file, &buf).map(|n| (buf, n)))
+        });
+        let res = ready!(Pin::new(task).poll(cx)).expect("I/O task should not panic");
+        self.task = None;
+        match res {
+            Ok((buf, n)) => {
+                src.mark_read(n);
+                self.buffer = buf;
+                self.buffer.clear();
+                Poll::Ready(Ok(self.complete_write(n)))
+            }
+            Err(err) => {
+                self.close(Err(err.into()));
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+        }
+    }
+}
+
+impl Drop for WriteStreamConsumer {
+    fn drop(&mut self) {
+        if self.result.is_some() {
+            self.close(Ok(()))
+        }
     }
 }
 
@@ -242,87 +490,78 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         fd: Resource<Descriptor>,
         offset: Filesize,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        let (file, (data_tx, data_rx), (result_tx, result_rx)) = store.with(|mut store| {
-            let file = get_file(store.get().table, &fd).cloned()?;
-            let instance = store.instance();
-            let data = instance
-                .stream(&mut store)
-                .context("failed to create stream")?;
-            let result = if !file.perms.contains(FilePerms::READ) {
-                instance.future(&mut store, || Err(types::ErrorCode::NotPermitted))
-            } else {
-                instance.future(&mut store, || unreachable!())
+        let instance = store.instance();
+        store.with(|mut store| {
+            let file = get_file(store.get().table, &fd)?;
+            if !file.perms.contains(FilePerms::READ) {
+                return Ok((
+                    StreamReader::new(instance, &mut store, iter::empty()),
+                    FutureReader::new(instance, &mut store, async {
+                        anyhow::Ok(Err(ErrorCode::NotPermitted))
+                    }),
+                ));
             }
-            .context("failed to create future")?;
-            anyhow::Ok((file, data, result))
-        })?;
-        if !file.perms.contains(FilePerms::READ) {
-            return Ok((data_rx, result_rx));
-        }
-        store.spawn(ReadFileTask {
-            file,
-            offset,
-            data_tx,
-            result_tx,
-        });
-        Ok((data_rx, result_rx))
+
+            let file = file.clone();
+            let (result_tx, result_rx) = oneshot::channel();
+            Ok((
+                StreamReader::new(
+                    instance,
+                    &mut store,
+                    ReadStreamProducer {
+                        file,
+                        offset,
+                        result: Some(result_tx),
+                        task: None,
+                    },
+                ),
+                FutureReader::new(instance, &mut store, result_rx),
+            ))
+        })
     }
 
     async fn write_via_stream<U>(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
-        mut data: StreamReader<u8>,
-        mut offset: Filesize,
+        data: StreamReader<u8>,
+        offset: Filesize,
     ) -> FilesystemResult<()> {
-        let file = store.get_file(&fd)?;
-        if !file.perms.contains(FilePerms::WRITE) {
-            return Err(types::ErrorCode::NotPermitted.into());
-        }
-        let mut buf = Vec::with_capacity(DEFAULT_BUFFER_CAPACITY);
-        while !data.is_closed() {
-            buf = data.read(store, buf).await;
-            buf = file
-                .spawn_blocking(move |file| {
-                    let mut pos = 0;
-                    while pos != buf.len() {
-                        let n = file.write_at(&buf[pos..], offset)?;
-                        pos = pos.saturating_add(n);
-                        let n = n.try_into().or(Err(ErrorCode::Overflow))?;
-                        offset = offset.checked_add(n).ok_or(ErrorCode::Overflow)?;
-                    }
-                    FilesystemResult::Ok(buf)
-                })
-                .await?;
-            offset = offset.saturating_add(buf.len() as _);
-            buf.clear();
-        }
+        let (result_tx, result_rx) = oneshot::channel();
+        store.with(|mut store| {
+            let file = get_file(store.get().table, &fd)?;
+            if !file.perms.contains(FilePerms::WRITE) {
+                return Err(ErrorCode::NotPermitted.into());
+            }
+            let file = file.clone();
+            data.pipe(store, WriteStreamConsumer::new_at(file, offset, result_tx));
+            FilesystemResult::Ok(())
+        })?;
+        result_rx
+            .await
+            .context("oneshot sender dropped")
+            .map_err(FilesystemError::trap)??;
         Ok(())
     }
 
     async fn append_via_stream<U>(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
-        mut data: StreamReader<u8>,
+        data: StreamReader<u8>,
     ) -> FilesystemResult<()> {
-        let file = store.get_file(&fd)?;
-        if !file.perms.contains(FilePerms::WRITE) {
-            return Err(types::ErrorCode::NotPermitted.into());
-        }
-        let mut buf = Vec::with_capacity(DEFAULT_BUFFER_CAPACITY);
-        while !data.is_closed() {
-            buf = data.read(store, buf).await;
-            buf = file
-                .spawn_blocking(move |file| {
-                    let mut pos = 0;
-                    while pos != buf.len() {
-                        let n = file.append(&buf[pos..])?;
-                        pos = pos.saturating_add(n);
-                    }
-                    FilesystemResult::Ok(buf)
-                })
-                .await?;
-            buf.clear();
-        }
+        let (result_tx, result_rx) = oneshot::channel();
+        store.with(|mut store| {
+            let file = get_file(store.get().table, &fd)?;
+            if !file.perms.contains(FilePerms::WRITE) {
+                return Err(ErrorCode::NotPermitted.into());
+            }
+            let file = file.clone();
+            data.pipe(store, WriteStreamConsumer::new_append(file, result_tx));
+            FilesystemResult::Ok(())
+        })?;
+        result_rx
+            .await
+            .context("oneshot sender dropped")
+            .map_err(FilesystemError::trap)??;
         Ok(())
     }
 
@@ -395,29 +634,40 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         StreamReader<DirectoryEntry>,
         FutureReader<Result<(), ErrorCode>>,
     )> {
-        let (dir, (data_tx, data_rx), (result_tx, result_rx)) = store.with(|mut store| {
-            let dir = get_dir(store.get().table, &fd).cloned()?;
-            let instance = store.instance();
-            let data = instance
-                .stream(&mut store)
-                .context("failed to create stream")?;
-            let result = if !dir.perms.contains(DirPerms::READ) {
-                instance.future(&mut store, || Err(types::ErrorCode::NotPermitted))
-            } else {
-                instance.future(&mut store, || unreachable!())
+        let instance = store.instance();
+        store.with(|mut store| {
+            let dir = get_dir(store.get().table, &fd)?;
+            if !dir.perms.contains(DirPerms::READ) {
+                return Ok((
+                    StreamReader::new(instance, &mut store, iter::empty()),
+                    FutureReader::new(instance, &mut store, async {
+                        anyhow::Ok(Err(ErrorCode::NotPermitted))
+                    }),
+                ));
             }
-            .context("failed to create future")?;
-            anyhow::Ok((dir, data, result))
-        })?;
-        if !dir.perms.contains(DirPerms::READ) {
-            return Ok((data_rx, result_rx));
-        }
-        store.spawn(ReadDirectoryTask {
-            dir,
-            data_tx,
-            result_tx,
-        });
-        Ok((data_rx, result_rx))
+            let allow_blocking_current_thread = dir.allow_blocking_current_thread;
+            let dir = Arc::clone(dir.as_dir());
+            let (result_tx, result_rx) = oneshot::channel();
+            let stream = if allow_blocking_current_thread {
+                match dir.entries() {
+                    Ok(readdir) => StreamReader::new(
+                        instance,
+                        &mut store,
+                        FallibleIteratorProducer::new(
+                            readdir.filter_map(|e| map_dir_entry(e).transpose()),
+                            result_tx,
+                        ),
+                    ),
+                    Err(e) => {
+                        result_tx.send(Err(e.into())).unwrap();
+                        StreamReader::new(instance, &mut store, iter::empty())
+                    }
+                }
+            } else {
+                StreamReader::new(instance, &mut store, ReadDirStream::new(dir, result_tx))
+            };
+            Ok((stream, FutureReader::new(instance, &mut store, result_rx)))
+        })
     }
 
     async fn sync<U>(store: &Accessor<U, Self>, fd: Resource<Descriptor>) -> FilesystemResult<()> {

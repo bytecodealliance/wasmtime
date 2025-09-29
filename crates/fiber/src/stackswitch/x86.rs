@@ -10,12 +10,12 @@
 // different so the reserved space at the top of the stack is 8 bytes, not 16
 // bytes. Still two pointers though.
 
-use wasmtime_asm_macros::asm_func;
+use core::arch::naked_asm;
 
-// fn(top_of_stack: *mut u8)
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_switch),
-    "
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8) {
+    naked_asm!(
+        "
         // Load our stack-to-use
         mov eax, 0x4[esp]
         mov ecx, -0x8[eax]
@@ -36,17 +36,18 @@ asm_func!(
         pop ebx
         pop ebp
         ret
-    ",
-);
+        ",
+    )
+}
 
-// fn(
-//    top_of_stack: *mut u8,
-//    entry_point: extern fn(*mut u8, *mut u8),
-//    entry_arg0: *mut u8,
-// )
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
-    "
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn wasmtime_fiber_init(
+    top_of_stack: *mut u8,
+    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_arg0: *mut u8,
+) {
+    naked_asm!(
+        "
         mov eax, 4[esp]
 
         // move top_of_stack to the 2nd argument
@@ -79,13 +80,15 @@ asm_func!(
         lea ecx, -0x24[eax]
         mov -0x08[eax], ecx
         ret
-    ",
-    start = sym super::wasmtime_fiber_start,
-);
+        ",
+        start = sym wasmtime_fiber_start,
+    );
+}
 
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_start),
-    "
+#[unsafe(naked)]
+unsafe extern "C" fn wasmtime_fiber_start() -> ! {
+    naked_asm!(
+        "
         .cfi_startproc simple
         .cfi_def_cfa_offset 0
         .cfi_escape 0x0f, /* DW_CFA_def_cfa_expression */ \
@@ -105,5 +108,6 @@ asm_func!(
         call ebp
         ud2
         .cfi_endproc
-    ",
-);
+        ",
+    );
+}

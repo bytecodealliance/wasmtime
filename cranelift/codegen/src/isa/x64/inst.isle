@@ -316,6 +316,10 @@
        ;; A pseudoinstruction that just keeps a value alive.
        (DummyUse (reg Reg))
 
+       ;; A pseudoinstruction that loads the address of a label.
+       (LabelAddress (dst WritableGpr)
+                     (label MachLabel))
+
        ;; An instruction assembled outside of cranelift-codegen.
        (External (inst AssemblerInst))))
 
@@ -398,6 +402,15 @@
 (spec (amode_to_synthetic_amode amode) (provide (= result amode)))
 (decl amode_to_synthetic_amode (Amode) SyntheticAmode)
 (extern constructor amode_to_synthetic_amode amode_to_synthetic_amode)
+
+(decl synthetic_amode_slot (i32) SyntheticAmode)
+(extern constructor synthetic_amode_slot synthetic_amode_slot)
+
+;; Helper for loads/stores to/from stackslots.
+(decl stackslot_amode (StackSlot Offset32 Offset32) SyntheticAmode)
+(rule (stackslot_amode slot offset1 offset2)
+      (let ((slot_offset i32 (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
+        (synthetic_amode_slot slot_offset)))
 
 ;; An `Amode` represents a possible addressing mode that can be used
 ;; in instructions. These denote a 64-bit value only.
@@ -490,11 +503,15 @@
       (provide (= result (concat flags (bvadd val (sign_ext 64 offset)))))
       (require
             (= (widthof val) 64)))
-(decl to_amode (MemFlags Value Offset32) Amode)
+(decl to_amode (MemFlags Value Offset32) SyntheticAmode)
 (rule 0 (to_amode flags base offset)
         (amode_imm_reg flags base offset))
 (rule 1 (to_amode flags (iadd x y) offset)
         (to_amode_add flags x y offset))
+
+(rule 2
+      (to_amode flags (stack_addr slot offset1) offset2)
+      (stackslot_amode slot offset1 offset2))
 
 ;; Same as `to_amode`, except that the base address is computed via the addition
 ;; of the two `Value` arguments provided.
@@ -568,7 +585,7 @@
 
 ;; Offsetting an Amode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
-(decl amode_offset (Amode i32) Amode)
+(decl amode_offset (SyntheticAmode i32) SyntheticAmode)
 (extern constructor amode_offset amode_offset)
 
 ;; Return a zero offset as an `Offset32`.
@@ -1364,7 +1381,7 @@
 (rule 0 (x64_load (multi_lane _bits _lanes) addr _ext_kind)
       (x64_movdqu_load addr))
 
-(decl x64_mov (Amode) Reg)
+(decl x64_mov (SyntheticAmode) Reg)
 (spec (x64_mov addr)
       (provide (= result (conv_to 64 (load_effect (extract 79 64 addr) 64 (extract 63 0 addr))))))
 (rule (x64_mov addr) (x64_movq_rm addr))
@@ -2697,25 +2714,25 @@
 (decl x64_pextrb (Xmm u8) Gpr)
 (rule (x64_pextrb src lane) (x64_pextrb_a_or_avx src lane))
 
-(decl x64_pextrb_store (Amode Xmm u8) SideEffectNoResult)
+(decl x64_pextrb_store (SyntheticAmode Xmm u8) SideEffectNoResult)
 (rule (x64_pextrb_store addr src lane) (x64_pextrb_a_mem_or_avx addr src lane))
 
 (decl x64_pextrw (Xmm u8) Gpr)
 (rule (x64_pextrw src lane) (x64_pextrw_a_or_avx src lane))
 
-(decl x64_pextrw_store (Amode Xmm u8) SideEffectNoResult)
+(decl x64_pextrw_store (SyntheticAmode Xmm u8) SideEffectNoResult)
 (rule (x64_pextrw_store addr src lane) (x64_pextrw_b_mem_or_avx addr src lane))
 
 (decl x64_pextrd (Xmm u8) Gpr)
 (rule (x64_pextrd src lane) (x64_pextrd_a_or_avx src lane))
 
-(decl x64_pextrd_store (Amode Xmm u8) SideEffectNoResult)
+(decl x64_pextrd_store (SyntheticAmode Xmm u8) SideEffectNoResult)
 (rule (x64_pextrd_store addr src lane) (x64_pextrd_a_mem_or_avx addr src lane))
 
 (decl x64_pextrq (Xmm u8) Gpr)
 (rule (x64_pextrq src lane) (x64_pextrq_a_or_avx src lane))
 
-(decl x64_pextrq_store (Amode Xmm u8) SideEffectNoResult)
+(decl x64_pextrq_store (SyntheticAmode Xmm u8) SideEffectNoResult)
 (rule (x64_pextrq_store addr src lane) (x64_pextrq_a_mem_or_avx addr src lane))
 
 ;; Helper for creating `pmovmskb` instructions.
@@ -3177,7 +3194,7 @@
           )
           (x64_por low_gt_and_high_eq high_halves_gt)))
 
-(decl x64_add_mem (Type Amode Value) SideEffectNoResult)
+(decl x64_add_mem (Type SyntheticAmode Value) SideEffectNoResult)
 (spec (x64_add_mem ty addr val)
       (provide (= result (store_effect
                         (extract 79 64 addr)
@@ -3203,7 +3220,7 @@
 (rule 2 (x64_add_mem $I32 addr (i8_from_iconst val)) (x64_addl_mi_sxb_mem addr val))
 (rule 2 (x64_add_mem $I64 addr (i8_from_iconst val)) (x64_addq_mi_sxb_mem addr val))
 
-(decl x64_sub_mem (Type Amode Value) SideEffectNoResult)
+(decl x64_sub_mem (Type SyntheticAmode Value) SideEffectNoResult)
 
 ;; `sub mem, reg`
 (rule 0 (x64_sub_mem $I8 addr val) (x64_subb_mr_mem addr val))
@@ -3219,7 +3236,7 @@
 (rule 2 (x64_sub_mem $I32 addr (i8_from_iconst val)) (x64_subl_mi_sxb_mem addr val))
 (rule 2 (x64_sub_mem $I64 addr (i8_from_iconst val)) (x64_subq_mi_sxb_mem addr val))
 
-(decl x64_and_mem (Type Amode Value) SideEffectNoResult)
+(decl x64_and_mem (Type SyntheticAmode Value) SideEffectNoResult)
 
 ;; `and mem, imm`
 (rule (x64_and_mem $I8 addr val) (x64_andb_mr_mem addr val))
@@ -3237,7 +3254,7 @@
 (rule 2 (x64_and_mem $I32 addr (i8_from_iconst val)) (x64_andl_mi_sxb_mem addr val))
 (rule 2 (x64_and_mem $I64 addr (i8_from_iconst val)) (x64_andq_mi_sxb_mem addr val))
 
-(decl x64_or_mem (Type Amode Value) SideEffectNoResult)
+(decl x64_or_mem (Type SyntheticAmode Value) SideEffectNoResult)
 
 ;; `or mem, reg`
 (rule 0 (x64_or_mem $I8 addr val) (x64_orb_mr_mem addr val))
@@ -3255,7 +3272,7 @@
 (rule 2 (x64_or_mem $I32 addr (i8_from_iconst val)) (x64_orl_mi_sxb_mem addr val))
 (rule 2 (x64_or_mem $I64 addr (i8_from_iconst val)) (x64_orq_mi_sxb_mem addr val))
 
-(decl x64_xor_mem (Type Amode Value) SideEffectNoResult)
+(decl x64_xor_mem (Type SyntheticAmode Value) SideEffectNoResult)
 
 ;; `xor mem, reg`
 (rule 0 (x64_xor_mem $I8 addr val) (x64_xorb_mr_mem addr val))
@@ -3640,31 +3657,31 @@
 (rule (x64_xchg $I32 addr operand) (x64_xchgl_rm operand addr))
 (rule (x64_xchg $I64 addr operand) (x64_xchgq_rm operand addr))
 
-(decl x64_lock_add (OperandSize Amode Gpr) SideEffectNoResult)
+(decl x64_lock_add (OperandSize SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_lock_add (OperandSize.Size8) addr reg)   (x64_lock_addb_mr_mem addr reg))
 (rule (x64_lock_add (OperandSize.Size16) addr reg)  (x64_lock_addw_mr_mem addr reg))
 (rule (x64_lock_add (OperandSize.Size32) addr reg)  (x64_lock_addl_mr_mem addr reg))
 (rule (x64_lock_add (OperandSize.Size64) addr reg)  (x64_lock_addq_mr_mem addr reg))
 
-(decl x64_lock_sub (OperandSize Amode Gpr) SideEffectNoResult)
+(decl x64_lock_sub (OperandSize SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_lock_sub (OperandSize.Size8) addr reg)   (x64_lock_subb_mr_mem addr reg))
 (rule (x64_lock_sub (OperandSize.Size16) addr reg)  (x64_lock_subw_mr_mem addr reg))
 (rule (x64_lock_sub (OperandSize.Size32) addr reg)  (x64_lock_subl_mr_mem addr reg))
 (rule (x64_lock_sub (OperandSize.Size64) addr reg)  (x64_lock_subq_mr_mem addr reg))
 
-(decl x64_lock_and (OperandSize Amode Gpr) SideEffectNoResult)
+(decl x64_lock_and (OperandSize SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_lock_and (OperandSize.Size8) addr reg)   (x64_lock_andb_mr_mem addr reg))
 (rule (x64_lock_and (OperandSize.Size16) addr reg)  (x64_lock_andw_mr_mem addr reg))
 (rule (x64_lock_and (OperandSize.Size32) addr reg)  (x64_lock_andl_mr_mem addr reg))
 (rule (x64_lock_and (OperandSize.Size64) addr reg)  (x64_lock_andq_mr_mem addr reg))
 
-(decl x64_lock_or (OperandSize Amode Gpr) SideEffectNoResult)
+(decl x64_lock_or (OperandSize SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_lock_or (OperandSize.Size8) addr reg)   (x64_lock_orb_mr_mem addr reg))
 (rule (x64_lock_or (OperandSize.Size16) addr reg)  (x64_lock_orw_mr_mem addr reg))
 (rule (x64_lock_or (OperandSize.Size32) addr reg)  (x64_lock_orl_mr_mem addr reg))
 (rule (x64_lock_or (OperandSize.Size64) addr reg)  (x64_lock_orq_mr_mem addr reg))
 
-(decl x64_lock_xor (OperandSize Amode Gpr) SideEffectNoResult)
+(decl x64_lock_xor (OperandSize SyntheticAmode Gpr) SideEffectNoResult)
 (rule (x64_lock_xor (OperandSize.Size8) addr reg)   (x64_lock_xorb_mr_mem addr reg))
 (rule (x64_lock_xor (OperandSize.Size16) addr reg)  (x64_lock_xorw_mr_mem addr reg))
 (rule (x64_lock_xor (OperandSize.Size32) addr reg)  (x64_lock_xorl_mr_mem addr reg))
@@ -3882,6 +3899,14 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (tmp WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.CoffTlsGetAddr name dst tmp))))
+        dst))
+
+;;;; Label Addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl x64_label_address (MachLabel) Gpr)
+(rule (x64_label_address label)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

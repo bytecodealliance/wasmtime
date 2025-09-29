@@ -2,7 +2,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::{Block, Function, Inst, Layout, ProgramPoint};
+use crate::ir::{Block, Function, Layout, ProgramPoint};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
@@ -41,7 +41,7 @@ const NOT_VISITED: u32 = 0;
 /// It's not required because function's CFG in Cranelift always have
 /// a singular root, but helps to avoid additional checks.
 /// Numbering nodes from 0 also follows the convention in
-/// `SimpleDominatorTree` and `DominatorTreePreorder`.
+/// `SimpleDominatorTree`.
 #[derive(Clone, Default)]
 struct SpanningTree {
     nodes: Vec<SpanningTreeNode>,
@@ -123,6 +123,20 @@ struct DominatorTreeNode {
     idom: PackedOption<Block>,
     /// Preorder traversal number, zero for unreachable blocks.
     pre_number: u32,
+
+    /// First child node in the domtree.
+    child: PackedOption<Block>,
+
+    /// Next sibling node in the domtree. This linked list is ordered according to the CFG RPO.
+    sibling: PackedOption<Block>,
+
+    /// Sequence number for this node in a pre-order traversal of the dominator tree.
+    /// Unreachable blocks have number 0, the entry block is 1.
+    dom_pre_number: u32,
+
+    /// Maximum `dom_pre_number` for the sub-tree of the dominator tree that is rooted at this node.
+    /// This is always >= `dom_pre_number`.
+    dom_pre_max: u32,
 }
 
 /// The dominator tree for a single function,
@@ -236,20 +250,22 @@ impl DominatorTree {
     /// Returns `true` if `block_a` dominates `block_b`.
     ///
     /// A block is considered to dominate itself.
-    fn block_dominates(&self, block_a: Block, mut block_b: Block) -> bool {
-        let pre_a = self.nodes[block_a].pre_number;
+    /// This uses preorder numbers for O(1) constant time performance.
+    pub fn block_dominates(&self, block_a: Block, block_b: Block) -> bool {
+        let na = &self.nodes[block_a];
+        let nb = &self.nodes[block_b];
+        na.dom_pre_number <= nb.dom_pre_number && na.dom_pre_max >= nb.dom_pre_max
+    }
 
-        // Run a finger up the dominator tree from b until we see a.
-        // Do nothing if b is unreachable.
-        while pre_a < self.nodes[block_b].pre_number {
-            let idom = match self.idom(block_b) {
-                Some(idom) => idom,
-                None => return false, // a is unreachable, so we climbed past the entry
-            };
-            block_b = idom;
+    /// Get an iterator over the direct children of `block` in the dominator tree.
+    ///
+    /// These are the blocks whose immediate dominator is `block`, ordered according
+    /// to the CFG reverse post-order.
+    pub fn children(&self, block: Block) -> ChildIter<'_> {
+        ChildIter {
+            domtree: self,
+            next: self.nodes[block].child,
         }
-
-        block_a == block_b
     }
 }
 
@@ -297,6 +313,7 @@ impl DominatorTree {
         self.clear();
         self.compute_spanning_tree(func);
         self.compute_domtree(cfg);
+        self.compute_domtree_preorder();
 
         self.valid = true;
     }
@@ -447,93 +464,50 @@ impl DominatorTree {
             self.nodes[block].idom = self.stree[idom].block;
         }
     }
-}
 
-/// Optional pre-order information that can be computed for a dominator tree.
-///
-/// This data structure is computed from a `DominatorTree` and provides:
-///
-/// - A forward traversable dominator tree through the `children()` iterator.
-/// - An ordering of blocks according to a dominator tree pre-order.
-/// - Constant time dominance checks at the block granularity.
-///
-/// The information in this auxiliary data structure is not easy to update when the control flow
-/// graph changes, which is why it is kept separate.
-pub struct DominatorTreePreorder {
-    nodes: SecondaryMap<Block, ExtraNode>,
-
-    // Scratch memory used by `compute_postorder()`.
-    stack: Vec<Block>,
-}
-
-#[derive(Default, Clone)]
-struct ExtraNode {
-    /// First child node in the domtree.
-    child: PackedOption<Block>,
-
-    /// Next sibling node in the domtree. This linked list is ordered according to the CFG RPO.
-    sibling: PackedOption<Block>,
-
-    /// Sequence number for this node in a pre-order traversal of the dominator tree.
-    /// Unreachable blocks have number 0, the entry block is 1.
-    pre_number: u32,
-
-    /// Maximum `pre_number` for the sub-tree of the dominator tree that is rooted at this node.
-    /// This is always >= `pre_number`.
-    pre_max: u32,
-}
-
-/// Creating and computing the dominator tree pre-order.
-impl DominatorTreePreorder {
-    /// Create a new blank `DominatorTreePreorder`.
-    pub fn new() -> Self {
-        Self {
-            nodes: SecondaryMap::new(),
-            stack: Vec::new(),
-        }
-    }
-
-    /// Recompute this data structure to match `domtree`.
-    pub fn compute(&mut self, domtree: &DominatorTree) {
-        self.nodes.clear();
-
+    /// Compute dominator tree preorder information.
+    ///
+    /// This populates child/sibling links and preorder numbers for fast dominance checks.
+    fn compute_domtree_preorder(&mut self) {
         // Step 1: Populate the child and sibling links.
         //
         // By following the CFG post-order and pushing to the front of the lists, we make sure that
         // sibling lists are ordered according to the CFG reverse post-order.
-        for &block in domtree.cfg_postorder() {
-            if let Some(idom) = domtree.idom(block) {
+        for &block in &self.postorder {
+            if let Some(idom) = self.idom(block) {
                 let sib = mem::replace(&mut self.nodes[idom].child, block.into());
                 self.nodes[block].sibling = sib;
             } else {
                 // The only block without an immediate dominator is the entry.
-                self.stack.push(block);
+                self.dfs_worklist.push(TraversalEvent::Enter(0, block));
             }
         }
 
         // Step 2. Assign pre-order numbers from a DFS of the dominator tree.
-        debug_assert!(self.stack.len() <= 1);
+        debug_assert!(self.dfs_worklist.len() <= 1);
         let mut n = 0;
-        while let Some(block) = self.stack.pop() {
-            n += 1;
-            let node = &mut self.nodes[block];
-            node.pre_number = n;
-            node.pre_max = n;
-            if let Some(n) = node.sibling.expand() {
-                self.stack.push(n);
-            }
-            if let Some(n) = node.child.expand() {
-                self.stack.push(n);
+        while let Some(event) = self.dfs_worklist.pop() {
+            if let TraversalEvent::Enter(_, block) = event {
+                n += 1;
+                let node = &mut self.nodes[block];
+                node.dom_pre_number = n;
+                node.dom_pre_max = n;
+                if let Some(sibling) = node.sibling.expand() {
+                    self.dfs_worklist.push(TraversalEvent::Enter(0, sibling));
+                }
+                if let Some(child) = node.child.expand() {
+                    self.dfs_worklist.push(TraversalEvent::Enter(0, child));
+                }
             }
         }
 
-        // Step 3. Propagate the `pre_max` numbers up the tree.
+        // Step 3. Propagate the `dom_pre_max` numbers up the tree.
         // The CFG post-order is topologically ordered w.r.t. dominance so a node comes after all
         // its dominator tree children.
-        for &block in domtree.cfg_postorder() {
-            if let Some(idom) = domtree.idom(block) {
-                let pre_max = cmp::max(self.nodes[block].pre_max, self.nodes[idom].pre_max);
-                self.nodes[idom].pre_max = pre_max;
+        for &block in &self.postorder {
+            if let Some(idom) = self.idom(block) {
+                let pre_max = cmp::max(self.nodes[block].dom_pre_max, self.nodes[idom].dom_pre_max);
+                self.nodes[idom].dom_pre_max = pre_max;
             }
         }
     }
@@ -541,7 +515,7 @@ impl DominatorTreePreorder {
 
 /// An iterator that enumerates the direct children of a block in the dominator tree.
 pub struct ChildIter<'a> {
-    dtpo: &'a DominatorTreePreorder,
+    domtree: &'a DominatorTree,
     next: PackedOption<Block>,
 }
 
@@ -551,70 +525,9 @@ impl<'a> Iterator for ChildIter<'a> {
     fn next(&mut self) -> Option<Block> {
         let n = self.next.expand();
         if let Some(block) = n {
-            self.next = self.dtpo.nodes[block].sibling;
+            self.next = self.domtree.nodes[block].sibling;
         }
         n
-    }
-}
-
-/// Query interface for the dominator tree pre-order.
-impl DominatorTreePreorder {
-    /// Get an iterator over the direct children of `block` in the dominator tree.
-    ///
-    /// These are the block's whose immediate dominator is an instruction in `block`, ordered according
-    /// to the CFG reverse post-order.
-    pub fn children(&self, block: Block) -> ChildIter<'_> {
-        ChildIter {
-            dtpo: self,
-            next: self.nodes[block].child,
-        }
-    }
-
-    /// Fast, constant time dominance check with block granularity.
-    ///
-    /// This computes the same result as `domtree.dominates(a, b)`, but in guaranteed fast constant
-    /// time. This is less general than the `DominatorTree` method because it only works with block
-    /// program points.
-    ///
-    /// A block is considered to dominate itself.
-    pub fn dominates(&self, a: Block, b: Block) -> bool {
-        let na = &self.nodes[a];
-        let nb = &self.nodes[b];
-        na.pre_number <= nb.pre_number && na.pre_max >= nb.pre_max
-    }
-
-    /// Checks if one instruction dominates another.
-    pub fn dominates_inst(&self, a: Inst, b: Inst, layout: &Layout) -> bool {
-        match (layout.inst_block(a), layout.inst_block(b)) {
-            (Some(block_a), Some(block_b)) => {
-                if block_a == block_b {
-                    layout.pp_cmp(a, b) != Ordering::Greater
-                } else {
-                    self.dominates(block_a, block_b)
-                }
-            }
-            _ => false,
-        }
-    }
-
-    /// Compare two blocks according to the dominator pre-order.
-    pub fn pre_cmp_block(&self, a: Block, b: Block) -> Ordering {
-        self.nodes[a].pre_number.cmp(&self.nodes[b].pre_number)
-    }
-
-    /// Compare two program points according to the dominator tree pre-order.
-    ///
-    /// This ordering of program points have the property that given a program point, pp, all the
-    /// program points dominated by pp follow immediately and contiguously after pp in the order.
-    pub fn pre_cmp<A, B>(&self, a: A, b: B, layout: &Layout) -> Ordering
-    where
-        A: Into<ProgramPoint>,
-        B: Into<ProgramPoint>,
-    {
-        let a = a.into();
-        let b = b.into();
-        self.pre_cmp_block(layout.pp_block(a), layout.pp_block(b))
-            .then_with(|| layout.pp_cmp(a, b))
     }
 }
 
@@ -633,9 +546,6 @@ mod tests {
         let dtree = DominatorTree::with_function(&func, &cfg);
         assert_eq!(0, dtree.nodes.keys().count());
         assert_eq!(dtree.cfg_postorder(), &[]);
-
-        let mut dtpo = DominatorTreePreorder::new();
-        dtpo.compute(&dtree);
     }
 
     #[test]
@@ -681,17 +591,15 @@ mod tests {
         assert!(!dt.dominates(v2_def, block0, &cur.func.layout));
         assert!(!dt.dominates(block0, v2_def, &cur.func.layout));
 
-        let mut dtpo = DominatorTreePreorder::new();
-        dtpo.compute(&dt);
-        assert!(dtpo.dominates(block0, block0));
-        assert!(!dtpo.dominates(block0, block1));
-        assert!(dtpo.dominates(block0, block2));
-        assert!(!dtpo.dominates(block1, block0));
-        assert!(dtpo.dominates(block1, block1));
-        assert!(!dtpo.dominates(block1, block2));
-        assert!(!dtpo.dominates(block2, block0));
-        assert!(!dtpo.dominates(block2, block1));
-        assert!(dtpo.dominates(block2, block2));
+        assert!(dt.block_dominates(block0, block0));
+        assert!(!dt.block_dominates(block0, block1));
+        assert!(dt.block_dominates(block0, block2));
+        assert!(!dt.block_dominates(block1, block0));
+        assert!(dt.block_dominates(block1, block1));
+        assert!(!dt.block_dominates(block1, block2));
+        assert!(!dt.block_dominates(block2, block0));
+        assert!(!dt.block_dominates(block2, block1));
+        assert!(dt.block_dominates(block2, block2));
     }
 
     #[test]

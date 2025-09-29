@@ -320,6 +320,37 @@
         (_ InstOutput (gen_trapif (IntCC.UnsignedLessThan) tmp x tc)))
     tmp))
 
+;;;; Rules for uadd_overflow ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; For i64, we can use the fact that if a + b < a, then overflow occurred
+(rule 0 (lower (has_type $I64 (uadd_overflow x y)))
+  (let ((sum XReg (rv_add x y))
+        (overflow XReg (rv_sltu sum x)))
+    (output_pair sum overflow)))
+
+;; i32 case (on RV64 use addw to detect 32-bit overflow correctly)
+(rule 1 (lower (has_type $I32 (uadd_overflow x y)))
+  (let ((x64 XReg (zext x))                
+        (sum XReg (rv_addw x y))           
+        (overflow XReg (rv_sltu sum x64))) 
+    (output_pair sum overflow)))
+
+;; For i128, we need to handle the high and low parts separately
+(rule 2 (lower (has_type $I128 (uadd_overflow x y)))
+  (let ((x_regs ValueRegs x)
+        (y_regs ValueRegs y)
+        (x_lo XReg (value_regs_get x_regs 0))
+        (x_hi XReg (value_regs_get x_regs 1))
+        (y_lo XReg (value_regs_get y_regs 0))
+        (y_hi XReg (value_regs_get y_regs 1))
+        (sum_lo XReg (rv_add x_lo y_lo))
+        (carry XReg (rv_sltu sum_lo x_lo))
+        (sum_hi XReg (rv_add x_hi y_hi))
+        (sum_hi_with_carry XReg (rv_add sum_hi carry))
+        (overflow XReg (rv_or (rv_sltu sum_hi_with_carry x_hi) 
+                              (rv_and carry (rv_seqz (rv_xor sum_hi_with_carry x_hi))))))
+    (output_pair (value_regs sum_lo sum_hi_with_carry) overflow)))
+
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
 
@@ -2379,8 +2410,8 @@
 
 ;;;;;  Rules for `func_addr`;;;;;;;;;
 (rule
-  (lower (func_addr (func_ref_data _ name _)))
-  (load_ext_name name 0))
+  (lower (func_addr (func_ref_data _ name dist)))
+  (load_ext_name name 0 dist))
 
 ;;;;;  Rules for `fcvt_to_uint`;;;;;;;;;
 
@@ -2538,8 +2569,8 @@
 
 ;;;;;  Rules for `symbol_value`;;;;;;;;;
 (rule
-   (lower (symbol_value (symbol_value_data name _ offset)))
-   (load_ext_name name offset))
+   (lower (symbol_value (symbol_value_data name dist offset)))
+   (load_ext_name name offset dist))
 
 ;;;;;  Rules for `tls_value` ;;;;;;;;;;;;;;
 
@@ -2679,12 +2710,12 @@
         output))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower (call (func_ref_data sig_ref name _) args))
+(rule (lower (call (func_ref_data sig_ref name dist) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_call_rets abi output))
-            (target Reg (load_ext_name name 0))
+            (target Reg (load_ext_name name 0 dist))
             (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
             (_ Unit (emit_side_effect (call_ind_impl info))))
         output))
@@ -2712,12 +2743,12 @@
         (emit_side_effect (call_impl info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower_branch (try_call (func_ref_data sig_ref name _) args et) targets)
+(rule (lower_branch (try_call (func_ref_data sig_ref name dist) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
             (defs CallRetList (gen_try_call_rets abi))
-            (target Reg (load_ext_name name 0))
+            (target Reg (load_ext_name name 0 dist))
             (info BoxCallIndInfo (gen_call_ind_info abi target uses defs trycall)))
         (emit_side_effect (call_ind_impl info))))
 
@@ -2742,10 +2773,10 @@
         (side_effect (return_call_impl info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
-(rule (lower (return_call (func_ref_data sig_ref name _) args))
+(rule (lower (return_call (func_ref_data sig_ref name dist) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_return_call_args abi args))
-            (target Reg (load_ext_name name 0))
+            (target Reg (load_ext_name name 0 dist))
             (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
         (side_effect (return_call_ind_impl info))))
 
@@ -3100,3 +3131,10 @@
         (x_clip VReg (rv_vnclipu_wi x_pos zero (unmasked) (vstate_mf2 (ty_half_lanes out_ty))))
         (y_clip VReg (rv_vnclipu_wi y_pos zero (unmasked) (vstate_mf2 (ty_half_lanes out_ty)))))
     (rv_vslideup_vvi x_clip y_clip lane_diff (unmasked) out_ty)))
+
+
+;; Rules for `get_exception_handler_address` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (get_exception_handler_address (u64_from_imm64 idx) block))
+      (let ((succ_label MachLabel (block_exn_successor_label block idx)))
+        (rv64_label_address succ_label)))

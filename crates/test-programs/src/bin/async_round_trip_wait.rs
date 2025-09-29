@@ -9,16 +9,13 @@ mod bindings {
     export!(Component);
 }
 
-use {
-    bindings::{exports::local::local::baz::Guest as Baz, local::local::baz},
-    wit_bindgen_rt::async_support,
-};
+use bindings::{exports::local::local::baz::Guest as Baz, local::local::baz};
 
 struct Component;
 
 impl Baz for Component {
     fn foo(s: String) -> String {
-        async_support::block_on(async move {
+        wit_bindgen::block_on(async move {
             format!(
                 "{} - exited guest",
                 baz::foo(format!("{s} - entered guest")).await

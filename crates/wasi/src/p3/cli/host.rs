@@ -1,6 +1,7 @@
 use crate::I32Exit;
 use crate::cli::{IsTerminal, WasiCli, WasiCliCtxView};
 use crate::p3::DEFAULT_BUFFER_CAPACITY;
+use crate::p3::bindings::cli::types::ErrorCode;
 use crate::p3::bindings::cli::{
     environment, exit, stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr,
     terminal_stdin, terminal_stdout,
@@ -8,70 +9,123 @@ use crate::p3::bindings::cli::{
 use crate::p3::cli::{TerminalInput, TerminalOutput};
 use anyhow::{Context as _, anyhow};
 use bytes::BytesMut;
-use std::io::Cursor;
-use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
+use core::pin::Pin;
+use core::task::{Context, Poll};
+use std::io::{self, Cursor};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::sync::oneshot;
 use wasmtime::component::{
-    Accessor, AccessorTask, GuardedStreamReader, GuardedStreamWriter, HasData, Resource,
-    StreamReader, StreamWriter,
+    Accessor, Destination, FutureReader, Resource, Source, StreamConsumer, StreamProducer,
+    StreamReader, StreamResult,
 };
+use wasmtime::{AsContextMut as _, StoreContextMut};
 
-struct InputTask<T> {
-    rx: T,
-    tx: StreamWriter<u8>,
+struct InputStreamProducer {
+    rx: Pin<Box<dyn AsyncRead + Send + Sync>>,
+    result_tx: Option<oneshot::Sender<ErrorCode>>,
 }
 
-impl<T, U, V> AccessorTask<T, U, wasmtime::Result<()>> for InputTask<V>
-where
-    U: HasData,
-    V: AsyncRead + Send + Sync + Unpin + 'static,
-{
-    async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
-        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
-        let mut tx = GuardedStreamWriter::new(store, self.tx);
-        while !tx.is_closed() {
-            match self.rx.read_buf(&mut buf).await {
-                Ok(0) => return Ok(()),
-                Ok(_) => {
-                    buf = tx.write_all(Cursor::new(buf)).await.into_inner();
-                    buf.clear();
-                }
-                Err(_err) => {
-                    // TODO: Report the error to the guest
-                    return Ok(());
-                }
-            }
+fn io_error_to_error_code(err: io::Error) -> ErrorCode {
+    match err.kind() {
+        io::ErrorKind::BrokenPipe => ErrorCode::Pipe,
+        other => {
+            tracing::warn!("stdio error: {other}");
+            ErrorCode::Io
         }
-        Ok(())
     }
 }
 
-struct OutputTask<T> {
-    rx: StreamReader<u8>,
-    tx: T,
+impl<D> StreamProducer<D> for InputStreamProducer {
+    type Item = u8;
+    type Buffer = Cursor<BytesMut>;
+
+    fn poll_produce<'a>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut store: StoreContextMut<'a, D>,
+        dst: Destination<'a, Self::Item, Self::Buffer>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        // If the destination buffer is empty then this is a request on
+        // behalf of the guest to wait for this input stream to be readable.
+        // The `AsyncRead` trait abstraction does not provide the ability to
+        // await this event so we're forced to basically just lie here and
+        // say we're ready read data later.
+        //
+        // See WebAssembly/component-model#561 for some more information.
+        if dst.remaining(store.as_context_mut()) == Some(0) {
+            return Poll::Ready(Ok(StreamResult::Completed));
+        }
+
+        let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
+        let mut buf = ReadBuf::new(dst.remaining());
+        match self.rx.as_mut().poll_read(cx, &mut buf) {
+            Poll::Ready(Ok(())) if buf.filled().is_empty() => {
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Poll::Ready(Ok(())) => {
+                let n = buf.filled().len();
+                dst.mark_written(n);
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Poll::Ready(Err(e)) => {
+                let _ = self
+                    .result_tx
+                    .take()
+                    .unwrap()
+                    .send(io_error_to_error_code(e));
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
 }
 
-impl<T, U, V> AccessorTask<T, U, wasmtime::Result<()>> for OutputTask<V>
-where
-    U: HasData,
-    V: AsyncWrite + Send + Sync + Unpin + 'static,
-{
-    async fn run(mut self, store: &Accessor<T, U>) -> wasmtime::Result<()> {
-        let mut buf = BytesMut::with_capacity(DEFAULT_BUFFER_CAPACITY);
-        let mut rx = GuardedStreamReader::new(store, self.rx);
-        while !rx.is_closed() {
-            buf = rx.read(buf).await;
-            match self.tx.write_all(&buf).await {
-                Ok(()) => {
-                    buf.clear();
-                    continue;
-                }
-                Err(_err) => {
-                    // TODO: Report the error to the guest
-                    return Ok(());
-                }
-            }
+struct OutputStreamConsumer {
+    tx: Pin<Box<dyn AsyncWrite + Send + Sync>>,
+    result_tx: Option<oneshot::Sender<ErrorCode>>,
+}
+
+impl<D> StreamConsumer<D> for OutputStreamConsumer {
+    type Item = u8;
+
+    fn poll_consume(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        store: StoreContextMut<D>,
+        src: Source<Self::Item>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        let mut src = src.as_direct(store);
+        let buf = src.remaining();
+
+        // If the source buffer is empty then this is a request on behalf of
+        // the guest to wait for this output stream to be writable. The
+        // `AsyncWrite` trait abstraction does not provide the ability to await
+        // this event so we're forced to basically just lie here and say we're
+        // ready write data later.
+        //
+        // See WebAssembly/component-model#561 for some more information.
+        if buf.len() == 0 {
+            return Poll::Ready(Ok(StreamResult::Completed));
         }
-        Ok(())
+        match self.tx.as_mut().poll_write(cx, buf) {
+            Poll::Ready(Ok(n)) => {
+                src.mark_read(n);
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Poll::Ready(Err(e)) => {
+                let _ = self
+                    .result_tx
+                    .take()
+                    .unwrap()
+                    .send(io_error_to_error_code(e));
+                Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 
@@ -139,18 +193,28 @@ impl terminal_stderr::Host for WasiCliCtxView<'_> {
 }
 
 impl stdin::HostWithStore for WasiCli {
-    async fn get_stdin<U>(store: &Accessor<U, Self>) -> wasmtime::Result<StreamReader<u8>> {
-        store.with(|mut view| {
-            let instance = view.instance();
-            let (tx, rx) = instance
-                .stream(&mut view)
-                .context("failed to create stream")?;
-            let stdin = view.get().ctx.stdin.async_stream();
-            view.spawn(InputTask {
-                rx: Box::into_pin(stdin),
-                tx,
+    async fn read_via_stream<U>(
+        store: &Accessor<U, Self>,
+    ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
+        let instance = store.instance();
+        store.with(|mut store| {
+            let rx = store.get().ctx.stdin.async_stream();
+            let (result_tx, result_rx) = oneshot::channel();
+            let stream = StreamReader::new(
+                instance,
+                &mut store,
+                InputStreamProducer {
+                    rx: Box::into_pin(rx),
+                    result_tx: Some(result_tx),
+                },
+            );
+            let future = FutureReader::new(instance, &mut store, async {
+                anyhow::Ok(match result_rx.await {
+                    Ok(err) => Err(err),
+                    Err(_) => Ok(()),
+                })
             });
-            Ok(rx)
+            Ok((stream, future))
         })
     }
 }
@@ -158,17 +222,24 @@ impl stdin::HostWithStore for WasiCli {
 impl stdin::Host for WasiCliCtxView<'_> {}
 
 impl stdout::HostWithStore for WasiCli {
-    async fn set_stdout<U>(
+    async fn write_via_stream<U>(
         store: &Accessor<U, Self>,
         data: StreamReader<u8>,
-    ) -> wasmtime::Result<()> {
-        store.with(|mut view| {
-            let tx = view.get().ctx.stdout.async_stream();
-            view.spawn(OutputTask {
-                rx: data,
-                tx: Box::into_pin(tx),
-            });
-            Ok(())
+    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+        let (result_tx, result_rx) = oneshot::channel();
+        store.with(|mut store| {
+            let tx = store.get().ctx.stdout.async_stream();
+            data.pipe(
+                store,
+                OutputStreamConsumer {
+                    tx: Box::into_pin(tx),
+                    result_tx: Some(result_tx),
+                },
+            );
+        });
+        Ok(match result_rx.await {
+            Ok(err) => Err(err),
+            Err(_) => Ok(()),
         })
     }
 }
@@ -176,17 +247,24 @@ impl stdout::HostWithStore for WasiCli {
 impl stdout::Host for WasiCliCtxView<'_> {}
 
 impl stderr::HostWithStore for WasiCli {
-    async fn set_stderr<U>(
+    async fn write_via_stream<U>(
         store: &Accessor<U, Self>,
         data: StreamReader<u8>,
-    ) -> wasmtime::Result<()> {
-        store.with(|mut view| {
-            let tx = view.get().ctx.stderr.async_stream();
-            view.spawn(OutputTask {
-                rx: data,
-                tx: Box::into_pin(tx),
-            });
-            Ok(())
+    ) -> wasmtime::Result<Result<(), ErrorCode>> {
+        let (result_tx, result_rx) = oneshot::channel();
+        store.with(|mut store| {
+            let tx = store.get().ctx.stderr.async_stream();
+            data.pipe(
+                store,
+                OutputStreamConsumer {
+                    tx: Box::into_pin(tx),
+                    result_tx: Some(result_tx),
+                },
+            );
+        });
+        Ok(match result_rx.await {
+            Ok(err) => Err(err),
+            Err(_) => Ok(()),
         })
     }
 }

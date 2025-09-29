@@ -84,12 +84,22 @@ impl CallConv {
     /// Does this calling convention support exceptions?
     pub fn supports_exceptions(&self) -> bool {
         match self {
-            CallConv::Tail | CallConv::SystemV => true,
+            CallConv::Tail | CallConv::SystemV | CallConv::Winch => true,
             _ => false,
         }
     }
 
     /// What types do the exception payload value(s) have?
+    ///
+    /// Note that this function applies to the *callee* of a `try_call`
+    /// instruction. The calling convention of the callee may differ from the
+    /// caller, but the exceptional payload types available are defined by the
+    /// callee calling convention.
+    ///
+    /// Also note that individual backends are responsible for reporting
+    /// register destinations for exceptional types. Internally Cranelift
+    /// asserts that the backend supports the exact same number of register
+    /// destinations as this return value.
     pub fn exception_payload_types(&self, pointer_ty: Type) -> &[Type] {
         match self {
             CallConv::Tail | CallConv::SystemV => match pointer_ty {

@@ -120,10 +120,19 @@ pub enum Reloc {
     /// <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses>
     RiscvGotHi20,
 
+    /// High 20 bits of a 32-bit PC-relative offset relocation
+    ///
+    /// This is the `R_RISCV_PCREL_HI20` relocation from the RISC-V ELF psABI document.
+    /// <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses>
+    RiscvPCRelHi20,
+
     /// s390x TLS GD64 - 64-bit offset of tls_index for GD symbol in GOT
     S390xTlsGd64,
     /// s390x TLS GDCall - marker to enable optimization of TLS calls
     S390xTlsGdCall,
+
+    /// Pulley - a relocation which is a pc-relative offset.
+    PulleyPcRel,
 
     /// Pulley - call a host function indirectly where the embedder resolving
     /// this relocation needs to fill the 8-bit immediate that's part of the
@@ -149,6 +158,7 @@ impl fmt::Display for Reloc {
             Self::RiscvCallPlt => write!(f, "RiscvCallPlt"),
             Self::RiscvTlsGdHi20 => write!(f, "RiscvTlsGdHi20"),
             Self::RiscvGotHi20 => write!(f, "RiscvGotHi20"),
+            Self::RiscvPCRelHi20 => write!(f, "RiscvPCRelHi20"),
             Self::RiscvPCRelLo12I => write!(f, "RiscvPCRelLo12I"),
             Self::ElfX86_64TlsGd => write!(f, "ElfX86_64TlsGd"),
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),
@@ -164,6 +174,7 @@ impl fmt::Display for Reloc {
             Self::Aarch64AddAbsLo12Nc => write!(f, "Aarch64AddAbsLo12Nc"),
             Self::S390xTlsGd64 => write!(f, "TlsGd64"),
             Self::S390xTlsGdCall => write!(f, "TlsGdCall"),
+            Self::PulleyPcRel => write!(f, "PulleyPcRel"),
             Self::PulleyCallIndirectHost => write!(f, "PulleyCallIndirectHost"),
         }
     }

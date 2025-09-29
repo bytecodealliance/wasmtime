@@ -205,7 +205,7 @@ pub mod foo {
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T: 'static>(
+                fn a<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send;
             }
@@ -225,8 +225,8 @@ pub mod foo {
                     "a",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::a(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::a(host).await;
                             Ok((r,))
                         })
                     },
@@ -244,7 +244,7 @@ pub mod foo {
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T: 'static>(
+                fn a<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send;
             }
@@ -264,8 +264,8 @@ pub mod foo {
                     "a",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::a(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::a(host).await;
                             Ok((r,))
                         })
                     },
@@ -283,7 +283,7 @@ pub mod foo {
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T: 'static>(
+                fn a<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Foo> + Send;
             }
@@ -303,8 +303,8 @@ pub mod foo {
                     "a",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::a(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::a(host).await;
                             Ok((r,))
                         })
                     },
@@ -324,7 +324,7 @@ pub mod d {
         assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
     };
     pub trait HostWithStore: wasmtime::component::HasData + Send {
-        fn b<T: 'static>(
+        fn b<T>(
             accessor: &wasmtime::component::Accessor<T, Self>,
         ) -> impl ::core::future::Future<Output = Foo> + Send;
     }
@@ -344,8 +344,8 @@ pub mod d {
             "b",
             move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                 wasmtime::component::__internal::Box::pin(async move {
-                    let accessor = &caller.with_data(host_getter);
-                    let r = <D as HostWithStore>::b(accessor).await;
+                    let host = &caller.with_getter(host_getter);
+                    let r = <D as HostWithStore>::b(host).await;
                     Ok((r,))
                 })
             },

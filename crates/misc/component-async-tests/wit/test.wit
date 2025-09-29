@@ -58,6 +58,8 @@ interface run {
 
 interface backpressure {
   set-backpressure: func(enabled: bool);
+  inc-backpressure: func();
+  dec-backpressure: func();
 }
 
 interface transmit {
@@ -160,6 +162,22 @@ interface cancel {
 
 interface intertask {
   foo: func(fut: future);
+}
+
+interface readiness {
+  start: async func(s: stream<u8>, expected: list<u8>) -> tuple<stream<u8>, list<u8>>;
+}
+
+interface synchronous-transmit {
+  start: async func(s: stream<u8>, s-expected: list<u8>, f: future<u8>, f-expected: u8) -> tuple<stream<u8>, list<u8>, future<u8>, u8>;
+}
+
+interface sleep-post-return {
+  run: async func(sleep-time-millis: u64);
+}
+
+interface closed-stream {
+  get: func() -> stream<u8>;
 }
 
 world yield-caller {
@@ -306,6 +324,25 @@ world cancel-host {
 world intertask-communication {
   import intertask;
   export run;
+}
+
+world synchronous-transmit-guest {
+  export synchronous-transmit;
+}
+
+world sleep-post-return-callee {
+  import sleep;
+  export sleep-post-return;
+}
+
+world sleep-post-return-caller {
+  import sleep;
+  import sleep-post-return;
+  export sleep-post-return;
+}
+
+world closed-stream-guest {
+  export closed-stream;
 }
 
 interface coop {

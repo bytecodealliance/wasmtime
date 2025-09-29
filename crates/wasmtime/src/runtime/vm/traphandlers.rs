@@ -26,6 +26,7 @@ use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
 use core::ptr::{self, NonNull};
+use wasmtime_unwinder::Handler;
 
 pub use self::backtrace::Backtrace;
 #[cfg(feature = "gc")]
@@ -52,12 +53,7 @@ pub(crate) enum TrapTest {
     #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
     HandledByEmbedder,
     /// This is a wasm trap, it needs to be handled.
-    #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
-    Trap {
-        /// How to longjmp back to the original wasm frame.
-        #[cfg(has_host_compiler_backend)]
-        jmp_buf: *const u8,
-    },
+    Trap(Handler),
 }
 
 fn lazy_per_thread_init() {
@@ -66,13 +62,13 @@ fn lazy_per_thread_init() {
 
 /// Raises a preexisting trap or exception and unwinds.
 ///
-/// If the preexisting state has registered a trap, this function will
-/// execute the `longjmp` to make its way back to the original
-/// `setjmp` performed when Wasm was entered. If the state has
-/// registered an exception, this function will perform the unwind
-/// action registered: either resetting PC, FP, and SP to the handler
-/// in the middle of the Wasm activation on the stack, or `longjmp`
-/// back to the entry from the host, if the exception is uncaught.
+/// If the preexisting state has registered a trap, this function will execute
+/// the `Handler::resume` to make its way back to the original exception
+/// handler created when Wasm was entered. If the state has registered an
+/// exception, this function will perform the unwind action registered: either
+/// resetting PC, FP, and SP to the handler in the middle of the Wasm
+/// activation on the stack, or the entry trampoline back to the the host, if
+/// the exception is uncaught.
 ///
 /// This is currently only called from the `raise` builtin of
 /// Wasmtime. This builtin is only used when the host returns back to
@@ -136,19 +132,6 @@ where
         tls::with(|info| info.unwrap().record_unwind(store, unwind));
     }
     ret
-}
-
-/// Hook used by Pulley to configure the `jmp_buf` field in `CallThreadState`
-/// once it starts executing.
-pub(super) fn set_jmp_buf(jmp_buf: *const u8) {
-    tls::with(|info| {
-        let info = info.unwrap();
-        assert_eq!(
-            info.jmp_buf.get(),
-            CallThreadState::JMP_BUF_INTERPRETER_SENTINEL
-        );
-        info.jmp_buf.set(jmp_buf);
-    });
 }
 
 /// A trait used in conjunction with `catch_unwind_and_record_trap` to convert a
@@ -429,12 +412,7 @@ impl From<wasmtime_environ::Trap> for TrapReason {
 
 /// Catches any wasm traps that happen within the execution of `closure`,
 /// returning them as a `Result`.
-///
-/// # Unsafety
-///
-/// This function is unsafe because during the execution of `closure` it may be
-/// longjmp'd over and none of its destructors on the stack may be run.
-pub unsafe fn catch_traps<T, F>(
+pub fn catch_traps<T, F>(
     store: &mut StoreContextMut<'_, T>,
     old_state: &mut EntryStoreContext,
     mut closure: F,
@@ -444,44 +422,10 @@ where
 {
     let caller = store.0.default_caller();
 
-    let result = CallThreadState::new(store.0, old_state).with(|cx| match store.0.executor() {
-        // In interpreted mode directly invoke the host closure since we won't
-        // be using host-based `setjmp`/`longjmp` as that's not going to save
-        // the context we want.
-        ExecutorRef::Interpreter(r) => {
-            cx.jmp_buf
-                .set(CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
-            closure(caller, Some(r))
-        }
-
-        // In native mode, however, defer to C to do the `setjmp` since Rust
-        // doesn't understand `setjmp`.
-        //
-        // Note that here we pass a function pointer to C to catch longjmp
-        // within, here it's `call_closure`, and that passes `None` for the
-        // interpreter since this branch is only ever taken if the interpreter
-        // isn't present.
+    let result = CallThreadState::new(store.0, old_state).with(|_cx| match store.0.executor() {
+        ExecutorRef::Interpreter(r) => closure(caller, Some(r)),
         #[cfg(has_host_compiler_backend)]
-        ExecutorRef::Native => unsafe {
-            traphandlers::wasmtime_setjmp(
-                cx.jmp_buf.as_ptr(),
-                {
-                    extern "C" fn call_closure<F>(
-                        payload: *mut u8,
-                        caller: NonNull<VMContext>,
-                    ) -> bool
-                    where
-                        F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
-                    {
-                        unsafe { (*(payload as *mut F))(caller, None) }
-                    }
-
-                    call_closure::<F>
-                },
-                &mut closure as *mut F as *mut u8,
-                caller,
-            )
-        },
+        ExecutorRef::Native => closure(caller, None),
     });
 
     match result {
@@ -530,12 +474,12 @@ mod call_thread_state {
     /// enacted by `unwind()`.
     ///
     /// This represents either a request to unwind to the entry point
-    /// from host (via longjmp), with associated data; or a request to
+    /// from host, with associated data; or a request to
     /// unwind into the middle of the Wasm action, e.g. when an
     /// exception is caught.
     pub enum UnwindState {
         /// Unwind all the way to the entry from host to Wasm, using
-        /// `longjmp` to the `jmp_buf` on the `CallThreadState`.
+        /// the handler configured in the entry trampoline.
         UnwindToHost {
             reason: UnwindReason,
             backtrace: Option<Backtrace>,
@@ -548,7 +492,7 @@ mod call_thread_state {
         /// payload word in the underlying exception ABI is used to
         /// send the raw `VMExnRef`.
         #[cfg(feature = "gc")]
-        UnwindToWasm { pc: usize, fp: usize, sp: usize },
+        UnwindToWasm(Handler),
         /// Do not unwind.
         None,
     }
@@ -585,14 +529,10 @@ mod call_thread_state {
     /// `&CallThreadState`.
     pub struct CallThreadState {
         /// Unwind state set when initiating an unwind and read when
-        /// the control transfer occurs (after the `longjmp` point is
+        /// the control transfer occurs (after the `raise` point is
         /// reached for host-code destinations and right when
         /// performing the jump for Wasm-code destinations).
         pub(super) unwind: Cell<UnwindState>,
-        /// Resume point established by `setjmp`, used when unwinding
-        /// all the way across the Wasm activation back to the entry
-        /// from host code. Traps and uncaught exceptions use this.
-        pub(super) jmp_buf: Cell<*const u8>,
         #[cfg(all(has_native_signals))]
         pub(super) signal_handler: Option<*const SignalHandler>,
         pub(super) capture_backtrace: bool,
@@ -624,8 +564,6 @@ mod call_thread_state {
     }
 
     impl CallThreadState {
-        pub const JMP_BUF_INTERPRETER_SENTINEL: *mut u8 = 1 as *mut u8;
-
         #[inline]
         pub(super) fn new(
             store: &mut StoreOpaque,
@@ -634,7 +572,6 @@ mod call_thread_state {
             CallThreadState {
                 unwind: Cell::new(UnwindState::None),
                 unwinder: store.unwinder(),
-                jmp_buf: Cell::new(ptr::null()),
                 #[cfg(all(has_native_signals))]
                 signal_handler: store.signal_handler(),
                 capture_backtrace: store.engine().config().wasm_backtrace,
@@ -741,6 +678,14 @@ mod call_thread_state {
                     &cx.last_wasm_entry_fp,
                     &mut (*self.old_state).last_wasm_entry_fp,
                 );
+                swap(
+                    &cx.last_wasm_entry_sp,
+                    &mut (*self.old_state).last_wasm_entry_sp,
+                );
+                swap(
+                    &cx.last_wasm_entry_trap_handler,
+                    &mut (*self.old_state).last_wasm_entry_trap_handler,
+                );
                 swap(&cx.stack_chain, &mut (*self.old_state).stack_chain);
             }
         }
@@ -749,7 +694,7 @@ mod call_thread_state {
 pub use call_thread_state::*;
 
 #[cfg(feature = "gc")]
-use super::compute_throw_action;
+use super::compute_handler;
 
 pub enum UnwindReason {
     #[cfg(all(feature = "std", panic = "unwind"))]
@@ -822,15 +767,13 @@ impl CallThreadState {
             // payload at that point.
             #[cfg(feature = "gc")]
             UnwindReason::Trap(TrapReason::Exception) => {
-                // SAFETY: we are invoking `compute_throw()` while
+                // SAFETY: we are invoking `compute_handler()` while
                 // Wasm is on the stack and we have re-entered via a
                 // trampoline, as required by its stack-walking logic.
-                let action = unsafe { compute_throw_action(store) };
-                match action {
-                    wasmtime_unwinder::ThrowAction::Handler { pc, sp, fp } => {
-                        UnwindState::UnwindToWasm { pc, sp, fp }
-                    }
-                    wasmtime_unwinder::ThrowAction::None => UnwindState::UnwindToHost {
+                let handler = unsafe { compute_handler(store) };
+                match handler {
+                    Some(handler) => UnwindState::UnwindToWasm(handler),
+                    None => UnwindState::UnwindToHost {
                         reason: UnwindReason::Trap(TrapReason::Exception),
                         backtrace: None,
                         coredump_stack: None,
@@ -872,24 +815,29 @@ impl CallThreadState {
     ///
     /// # Unsafety
     ///
-    /// This function is not safe if the corresponding setjmp wasn't already
-    /// called. Additionally this isn't safe as it may skip all Rust
-    /// destructors on the stack, if there are any, for native executors as a
-    /// longjmp or equivalent will be used.
+    /// This function is not safe if a corresponding handler wasn't already
+    /// setup in the entry trampoline. Additionally this isn't safe as it may
+    /// skip all Rust destructors on the stack, if there are any, for native
+    /// executors as `Handler::resume` will be used.
     unsafe fn unwind(&self, store: &mut dyn VMStore) {
         let unwind = self.unwind.replace(UnwindState::None);
         match unwind {
             UnwindState::UnwindToHost { .. } => {
-                // Keep the state around -- we will read it out again
-                // when we reach the entry-from-host side after the
-                // `longjmp`.
                 self.unwind.set(unwind);
+                let handler = self.entry_trap_handler();
+                let payload1 = 0;
+                let payload2 = 0;
                 unsafe {
-                    self.longjmp(store.executor());
+                    self.resume_to_exception_handler(
+                        store.executor(),
+                        &handler,
+                        payload1,
+                        payload2,
+                    );
                 }
             }
             #[cfg(feature = "gc")]
-            UnwindState::UnwindToWasm { pc, fp, sp } => {
+            UnwindState::UnwindToWasm(handler) => {
                 // Take the pending exception at this time and use it as payload.
                 let payload1 = usize::try_from(
                     store
@@ -904,9 +852,7 @@ impl CallThreadState {
                 unsafe {
                     self.resume_to_exception_handler(
                         store.executor(),
-                        pc,
-                        sp,
-                        fp,
+                        &handler,
                         payload1,
                         payload2,
                     );
@@ -918,39 +864,30 @@ impl CallThreadState {
         }
     }
 
-    unsafe fn longjmp(&self, executor: ExecutorRef<'_>) {
-        let jmp_buf = self.jmp_buf.get();
-        debug_assert!(!jmp_buf.is_null());
-        debug_assert!(jmp_buf != CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
-
+    pub(crate) fn entry_trap_handler(&self) -> Handler {
         unsafe {
-            match executor {
-                ExecutorRef::Interpreter(r) => r.longjmp(jmp_buf),
-                #[cfg(has_host_compiler_backend)]
-                ExecutorRef::Native => traphandlers::wasmtime_longjmp(jmp_buf),
-            }
+            let vm_store_context = self.vm_store_context.as_ref();
+            let fp = *vm_store_context.last_wasm_entry_fp.get();
+            let sp = *vm_store_context.last_wasm_entry_sp.get();
+            let pc = *vm_store_context.last_wasm_entry_trap_handler.get();
+            Handler { pc, sp, fp }
         }
     }
 
-    #[cfg(feature = "gc")]
     unsafe fn resume_to_exception_handler(
         &self,
         executor: ExecutorRef<'_>,
-        pc: usize,
-        sp: usize,
-        fp: usize,
+        handler: &Handler,
         payload1: usize,
         payload2: usize,
     ) {
         unsafe {
             match executor {
-                ExecutorRef::Interpreter(r) => {
-                    r.resume_to_exception_handler(pc, sp, fp, payload1, payload2)
+                ExecutorRef::Interpreter(mut r) => {
+                    r.resume_to_exception_handler(handler, payload1, payload2)
                 }
                 #[cfg(has_host_compiler_backend)]
-                ExecutorRef::Native => {
-                    wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2)
-                }
+                ExecutorRef::Native => handler.resume_tailcc(payload1, payload2),
             }
         }
     }
@@ -999,13 +936,8 @@ impl CallThreadState {
         &self,
         regs: TrapRegisters,
         faulting_addr: Option<usize>,
-        call_handler: impl Fn(&SignalHandler) -> bool,
+        call_handler: impl FnOnce(&SignalHandler) -> bool,
     ) -> TrapTest {
-        // If we haven't even started to handle traps yet, bail out.
-        if self.jmp_buf.get().is_null() {
-            return TrapTest::NotWasm;
-        }
-
         // First up see if any instance registered has a custom trap handler,
         // in which case run them all. If anything handles the trap then we
         // return that the trap was handled.
@@ -1031,17 +963,10 @@ impl CallThreadState {
         };
 
         // If all that passed then this is indeed a wasm trap, so return the
-        // `jmp_buf` passed to `wasmtime_longjmp` to resume.
+        // `Handler` setup in the original wasm frame.
         self.set_jit_trap(regs, faulting_addr, trap);
-        TrapTest::Trap {
-            #[cfg(has_host_compiler_backend)]
-            jmp_buf: self.take_jmp_buf(),
-        }
-    }
-
-    #[cfg(has_host_compiler_backend)]
-    pub(crate) fn take_jmp_buf(&self) -> *const u8 {
-        self.jmp_buf.replace(ptr::null())
+        let entry_handler = self.entry_trap_handler();
+        TrapTest::Trap(entry_handler)
     }
 
     pub(crate) fn set_jit_trap(

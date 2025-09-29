@@ -40,56 +40,59 @@ cfg_if::cfg_if! {
         /// the frame is later popped.
         pub use imp::get_stack_pointer;
 
-        /// Resume execution at the given PC, SP, and FP, with the given
-        /// payload values, according to the tail-call ABI's exception
-        /// scheme. Note that this scheme does not restore any other
-        /// registers, so the given state is all that we need.
-        ///
-        /// # Safety
-        ///
-        /// This method requires:
-        ///
-        /// - the `sp` and `fp` to correspond to an active stack frame
-        ///   (above the current function), in code using Cranelift's
-        ///   `tail` calling convention.
-        ///
-        /// - The `pc` to correspond to a `try_call` handler
-        ///   destination, as emitted in Cranelift metadata, or
-        ///   otherwise a target that is expecting the tail-call ABI's
-        ///   exception ABI.
-        ///
-        /// - The Rust frames between the unwind destination and this
-        ///   frame to be unwind-safe: that is, they cannot have `Drop`
-        ///   handlers for which safety requires that they run.
-        pub unsafe fn resume_to_exception_handler(
-            pc: usize,
-            sp: usize,
-            fp: usize,
-            payload1: usize,
-            payload2: usize,
-        ) -> ! {
-            // Without this ASAN seems to nondeterministically trigger an
-            // internal assertion when running tests with threads. Not entirely
-            // clear what's going on here but it seems related to the fact that
-            // there's Rust code on the stack which is never cleaned up due to
-            // the jump out of `imp::resume_to_exception_handler`.
-            //
-            // This function is documented as something that should be called to
-            // clean up the entire thread's shadow memory and stack which isn't
-            // exactly what we want but this at least seems to resolve ASAN
-            // issues for now. Probably a heavy hammer but better than false
-            // positives I suppose...
-            #[cfg(asan)]
-            {
-                unsafe extern "C" {
-                    fn __asan_handle_no_return();
+        impl crate::Handler {
+            /// Resume execution at the given PC, SP, and FP, with the given
+            /// payload values, according to the tail-call ABI's exception
+            /// scheme. Note that this scheme does not restore any other
+            /// registers, so the given state is all that we need.
+            ///
+            /// # Safety
+            ///
+            /// This method requires:
+            ///
+            /// - the `sp` and `fp` to correspond to an active stack frame
+            ///   (above the current function), in code using Cranelift's
+            ///   `tail` calling convention.
+            ///
+            /// - The `pc` to correspond to a `try_call` handler
+            ///   destination, as emitted in Cranelift metadata, or
+            ///   otherwise a target that is expecting the tail-call ABI's
+            ///   exception ABI.
+            ///
+            /// - The Rust frames between the unwind destination and this
+            ///   frame to be unwind-safe: that is, they cannot have `Drop`
+            ///   handlers for which safety requires that they run.
+            ///
+            /// - The Cranelift-generated `try_call` that we're unwinding to was
+            ///   invoking the callee with the `tail` calling convention.
+            pub unsafe fn resume_tailcc(
+                &self,
+                payload1: usize,
+                payload2: usize,
+            ) -> ! {
+                // Without this ASAN seems to nondeterministically trigger an
+                // internal assertion when running tests with threads. Not entirely
+                // clear what's going on here but it seems related to the fact that
+                // there's Rust code on the stack which is never cleaned up due to
+                // the jump out of `imp::resume_to_exception_handler`.
+                //
+                // This function is documented as something that should be called to
+                // clean up the entire thread's shadow memory and stack which isn't
+                // exactly what we want but this at least seems to resolve ASAN
+                // issues for now. Probably a heavy hammer but better than false
+                // positives I suppose...
+                #[cfg(asan)]
+                {
+                    unsafe extern "C" {
+                        fn __asan_handle_no_return();
+                    }
+                    unsafe {
+                        __asan_handle_no_return();
+                    }
                 }
                 unsafe {
-                    __asan_handle_no_return();
+                    imp::resume_to_exception_handler(self.pc, self.sp, self.fp, payload1, payload2)
                 }
-            }
-            unsafe {
-                imp::resume_to_exception_handler(pc, sp, fp, payload1, payload2)
             }
         }
 
@@ -101,21 +104,20 @@ cfg_if::cfg_if! {
         /// - Requires that `fp` is a valid frame-pointer value for an
         ///   active stack frame (above the current function), in code
         ///   using Cranelift's `tail` calling convention.
-        pub use imp::get_next_older_pc_from_fp;
-
+        use imp::get_next_older_pc_from_fp;
 
         /// The offset of the saved old-FP value in a frame, from the
         /// location pointed to by a given FP.
-        pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = imp::NEXT_OLDER_FP_FROM_FP_OFFSET;
+        const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = imp::NEXT_OLDER_FP_FROM_FP_OFFSET;
 
         /// The offset of the next older SP value, from the value of a
         /// given FP.
-        pub const NEXT_OLDER_SP_FROM_FP_OFFSET: usize = imp::NEXT_OLDER_SP_FROM_FP_OFFSET;
+        const NEXT_OLDER_SP_FROM_FP_OFFSET: usize = imp::NEXT_OLDER_SP_FROM_FP_OFFSET;
 
         /// Assert that the given `fp` is aligned as expected by the
         /// host platform's implementation of the Cranelift tail-call
         /// ABI.
-        pub use imp::assert_fp_is_aligned;
+        use imp::assert_fp_is_aligned;
 
         /// If we have the above host-specific implementations, we can
         /// implement `Unwind`.

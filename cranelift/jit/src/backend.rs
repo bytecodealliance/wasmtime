@@ -212,7 +212,7 @@ impl JITModule {
     }
 
     fn get_address(&self, name: &ModuleRelocTarget) -> *const u8 {
-        match *name {
+        match name {
             ModuleRelocTarget::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
                     let func_id = FuncId::from_name(name);
@@ -244,12 +244,18 @@ impl JITModule {
                     panic!("can't resolve symbol {name}");
                 }
             }
-            ModuleRelocTarget::LibCall(ref libcall) => {
+            ModuleRelocTarget::LibCall(libcall) => {
                 let sym = (self.libcall_names)(*libcall);
                 self.lookup_symbol(&sym)
                     .unwrap_or_else(|| panic!("can't resolve libcall {sym}"))
             }
-            _ => panic!("invalid name"),
+            ModuleRelocTarget::FunctionOffset(func_id, offset) => {
+                match &self.compiled_functions[*func_id] {
+                    Some(compiled) => return compiled.ptr.wrapping_add(*offset as usize),
+                    None => todo!(),
+                }
+            }
+            name => panic!("invalid name {name:?}"),
         }
     }
 

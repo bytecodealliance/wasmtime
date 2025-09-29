@@ -60,7 +60,7 @@ pub struct Network {
 }
 
 impl Network {
-    pub(crate) async fn check_socket_addr(
+    pub async fn check_socket_addr(
         &self,
         addr: SocketAddr,
         reason: SocketAddrUse,

@@ -42,9 +42,8 @@
       (reg XReg))
 
     ;; Load an external symbol's address into a register.
-    (LoadExtName (dst WritableXReg)
-                 (name BoxExternalName)
-                 (offset i64))
+    (LoadExtNameNear (dst WritableXReg) (name BoxExternalName) (offset i64))
+    (LoadExtNameFar (dst WritableXReg) (name BoxExternalName) (offset i64))
 
     ;; A direct call to a known callee.
     (Call (info BoxCallInfo))
@@ -92,6 +91,10 @@
 
     ;; Island generation prior to variable-length instructions.
     (EmitIsland (space_needed u32))
+
+    ;; A pseudoinstruction that loads the address of a label.
+    (LabelAddress (dst WritableXReg)
+                  (label MachLabel))
   )
 )
 
@@ -154,6 +157,7 @@
 (convert RawInst MInst raw_inst_to_inst)
 
 (type U6 (primitive U6))
+(type PcRelOffset (primitive PcRelOffset))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
@@ -689,6 +693,27 @@
 (rule (gen_br_table idx default labels)
       (emit (MInst.BrTable idx default labels)))
 
+;; Helper for creating `MInst.LoadExtNameNear` instructions.
+(decl load_ext_name_near (BoxExternalName i64) XReg)
+(rule (load_ext_name_near name offset)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.LoadExtNameNear dst name offset))))
+        dst))
+
+;; Helper for creating `MInst.LoadExtNameFar` instructions.
+(decl load_ext_name_far (BoxExternalName i64) XReg)
+(rule (load_ext_name_far name offset)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.LoadExtNameFar dst name offset))))
+        dst))
+
+;; Helper for creating `MInst.LoadExtName*` instructions.
+(decl load_ext_name (BoxExternalName i64 RelocDistance) XReg)
+(rule (load_ext_name name offset (RelocDistance.Near))
+  (load_ext_name_near name offset))
+(rule (load_ext_name name offset (RelocDistance.Far))
+  (load_ext_name_far name offset))
+
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo) BoxCallInfo)
@@ -760,3 +785,10 @@
 (rule (sext64 val @ (value_type $I16)) (pulley_sext16 val))
 (rule (sext64 val @ (value_type $I32)) (pulley_sext32 val))
 (rule (sext64 val @ (value_type $I64)) val)
+
+;; Helper for creating an `LabelAddress` instruction.
+(decl pulley_label_address (MachLabel) Reg)
+(rule (pulley_label_address label)
+      (let ((dst WritableReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.LabelAddress dst label))))
+        dst))

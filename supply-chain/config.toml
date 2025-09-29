@@ -127,9 +127,6 @@ criteria = []
 [policy.wasmtime-fuzzing]
 criteria = []
 
-[policy.wasmtime-internal-asm-macros]
-audit-as-crates-io = true
-
 [policy.wasmtime-internal-c-api-macros]
 audit-as-crates-io = true
 

@@ -8,10 +8,7 @@ mod bindings {
     export!(Component);
 }
 
-use {
-    bindings::exports::local::local::{backpressure::Guest as Backpressure, run::Guest as Run},
-    wit_bindgen_rt::async_support,
-};
+use bindings::exports::local::local::{backpressure::Guest as Backpressure, run::Guest as Run};
 
 struct Component;
 
@@ -23,7 +20,14 @@ impl Run for Component {
 
 impl Backpressure for Component {
     fn set_backpressure(enabled: bool) {
-        async_support::backpressure_set(enabled);
+        #[expect(deprecated, reason = "will replace with backpressure.inc/dec soon")]
+        wit_bindgen::backpressure_set(enabled);
+    }
+    fn inc_backpressure() {
+        wit_bindgen::backpressure_inc();
+    }
+    fn dec_backpressure() {
+        wit_bindgen::backpressure_dec();
     }
 }
 

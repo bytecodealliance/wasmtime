@@ -390,7 +390,9 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
         }
-        Inst::LoadExtName { rd, .. } => {
+        Inst::LoadExtNameGot { rd, .. }
+        | Inst::LoadExtNameNear { rd, .. }
+        | Inst::LoadExtNameFar { rd, .. } => {
             collector.reg_def(rd);
         }
         Inst::ElfTlsGetAddr { rd, .. } => {
@@ -694,6 +696,9 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             vec_mask_operands(mask, collector);
         }
         Inst::EmitIsland { .. } => {}
+        Inst::LabelAddress { dst, .. } => {
+            collector.reg_def(dst);
+        }
     }
 }
 
@@ -753,6 +758,18 @@ impl MachInst for Inst {
         match self {
             Self::Args { .. } => true,
             _ => false,
+        }
+    }
+
+    fn call_type(&self) -> CallType {
+        match self {
+            Inst::Call { .. } | Inst::CallInd { .. } | Inst::ElfTlsGetAddr { .. } => {
+                CallType::Regular
+            }
+
+            Inst::ReturnCall { .. } | Inst::ReturnCallInd { .. } => CallType::TailCall,
+
+            _ => CallType::None,
         }
     }
 
@@ -1411,13 +1428,25 @@ impl Inst {
                     format!("{op_name} {rd},{src},({addr})")
                 }
             }
-            &MInst::LoadExtName {
+            &MInst::LoadExtNameGot { rd, ref name } => {
+                let rd = format_reg(rd.to_reg());
+                format!("load_ext_name_got {rd},{}", name.display(None))
+            }
+            &MInst::LoadExtNameNear {
                 rd,
                 ref name,
                 offset,
             } => {
                 let rd = format_reg(rd.to_reg());
-                format!("load_sym {},{}{:+}", rd, name.display(None), offset)
+                format!("load_ext_name_near {rd},{}{offset:+}", name.display(None))
+            }
+            &MInst::LoadExtNameFar {
+                rd,
+                ref name,
+                offset,
+            } => {
+                let rd = format_reg(rd.to_reg());
+                format!("load_ext_name_far {rd},{}{offset:+}", name.display(None))
             }
             &Inst::ElfTlsGetAddr { rd, ref name } => {
                 let rd = format_reg(rd.to_reg());
@@ -1645,6 +1674,11 @@ impl Inst {
             }
             Inst::EmitIsland { needed_space } => {
                 format!("emit_island {needed_space}")
+            }
+
+            Inst::LabelAddress { dst, label } => {
+                let dst = format_reg(dst.to_reg());
+                format!("label_address {dst}, {label:?}")
             }
         }
     }

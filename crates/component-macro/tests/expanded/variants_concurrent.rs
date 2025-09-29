@@ -466,28 +466,28 @@ pub mod foo {
                 assert!(4 == < IsClone as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn e1_arg<T: 'static>(
+                fn e1_arg<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: E1,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn e1_result<T: 'static>(
+                fn e1_result<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = E1> + Send;
-                fn v1_arg<T: 'static>(
+                fn v1_arg<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: V1,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn v1_result<T: 'static>(
+                fn v1_result<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = V1> + Send;
-                fn bool_arg<T: 'static>(
+                fn bool_arg<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: bool,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn bool_result<T: 'static>(
+                fn bool_result<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = bool> + Send;
-                fn option_arg<T: 'static>(
+                fn option_arg<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Option<bool>,
                     b: Option<()>,
@@ -496,7 +496,7 @@ pub mod foo {
                     e: Option<f32>,
                     g: Option<Option<bool>>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn option_result<T: 'static>(
+                fn option_result<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = (
@@ -508,7 +508,7 @@ pub mod foo {
                         Option<Option<bool>>,
                     ),
                 > + Send;
-                fn casts<T: 'static>(
+                fn casts<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Casts1,
                     b: Casts2,
@@ -519,7 +519,7 @@ pub mod foo {
                 ) -> impl ::core::future::Future<
                     Output = (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),
                 > + Send;
-                fn result_arg<T: 'static>(
+                fn result_arg<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Result<(), ()>,
                     b: Result<(), E1>,
@@ -531,7 +531,7 @@ pub mod foo {
                         wasmtime::component::__internal::Vec<u8>,
                     >,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn result_result<T: 'static>(
+                fn result_result<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = (
@@ -546,36 +546,36 @@ pub mod foo {
                         >,
                     ),
                 > + Send;
-                fn return_result_sugar<T: 'static>(
+                fn return_result_sugar<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<i32, MyErrno>> + Send;
-                fn return_result_sugar2<T: 'static>(
+                fn return_result_sugar2<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<(), MyErrno>> + Send;
-                fn return_result_sugar3<T: 'static>(
+                fn return_result_sugar3<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<MyErrno, MyErrno>,
                 > + Send;
-                fn return_result_sugar4<T: 'static>(
+                fn return_result_sugar4<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<(i32, u32), MyErrno>,
                 > + Send;
-                fn return_option_sugar<T: 'static>(
+                fn return_option_sugar<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Option<i32>> + Send;
-                fn return_option_sugar2<T: 'static>(
+                fn return_option_sugar2<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Option<MyErrno>> + Send;
-                fn result_simple<T: 'static>(
+                fn result_simple<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<u32, i32>> + Send;
-                fn is_clone_arg<T: 'static>(
+                fn is_clone_arg<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: IsClone,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn is_clone_return<T: 'static>(
+                fn is_clone_return<T>(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = IsClone> + Send;
             }
@@ -595,8 +595,8 @@ pub mod foo {
                     "e1-arg",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (E1,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::e1_arg(accessor, arg0).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::e1_arg(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -605,8 +605,8 @@ pub mod foo {
                     "e1-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::e1_result(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::e1_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -615,8 +615,8 @@ pub mod foo {
                     "v1-arg",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (V1,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::v1_arg(accessor, arg0).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::v1_arg(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -625,8 +625,8 @@ pub mod foo {
                     "v1-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::v1_result(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::v1_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -635,8 +635,8 @@ pub mod foo {
                     "bool-arg",
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (bool,)| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::bool_arg(accessor, arg0).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::bool_arg(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -645,8 +645,8 @@ pub mod foo {
                     "bool-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::bool_result(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::bool_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -672,9 +672,9 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let host = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::option_arg(
-                                    accessor,
+                                    host,
                                     arg0,
                                     arg1,
                                     arg2,
@@ -691,8 +691,8 @@ pub mod foo {
                     "option-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::option_result(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::option_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -711,9 +711,9 @@ pub mod foo {
                         ): (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let host = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::casts(
-                                    accessor,
+                                    host,
                                     arg0,
                                     arg1,
                                     arg2,
@@ -750,9 +750,9 @@ pub mod foo {
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let host = &caller.with_getter(host_getter);
                             let r = <D as HostWithStore>::result_arg(
-                                    accessor,
+                                    host,
                                     arg0,
                                     arg1,
                                     arg2,
@@ -769,8 +769,8 @@ pub mod foo {
                     "result-result",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::result_result(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::result_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -779,8 +779,8 @@ pub mod foo {
                     "return-result-sugar",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::return_result_sugar(accessor)
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::return_result_sugar(host)
                                 .await;
                             Ok((r,))
                         })
@@ -790,8 +790,8 @@ pub mod foo {
                     "return-result-sugar2",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::return_result_sugar2(accessor)
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::return_result_sugar2(host)
                                 .await;
                             Ok((r,))
                         })
@@ -801,8 +801,8 @@ pub mod foo {
                     "return-result-sugar3",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::return_result_sugar3(accessor)
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::return_result_sugar3(host)
                                 .await;
                             Ok((r,))
                         })
@@ -812,8 +812,8 @@ pub mod foo {
                     "return-result-sugar4",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::return_result_sugar4(accessor)
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::return_result_sugar4(host)
                                 .await;
                             Ok((r,))
                         })
@@ -823,8 +823,8 @@ pub mod foo {
                     "return-option-sugar",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::return_option_sugar(accessor)
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::return_option_sugar(host)
                                 .await;
                             Ok((r,))
                         })
@@ -834,8 +834,8 @@ pub mod foo {
                     "return-option-sugar2",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::return_option_sugar2(accessor)
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::return_option_sugar2(host)
                                 .await;
                             Ok((r,))
                         })
@@ -845,8 +845,8 @@ pub mod foo {
                     "result-simple",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::result_simple(accessor).await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::result_simple(host).await;
                             Ok((r,))
                         })
                     },
@@ -858,9 +858,8 @@ pub mod foo {
                         (arg0,): (IsClone,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::is_clone_arg(accessor, arg0)
-                                .await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::is_clone_arg(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -869,9 +868,8 @@ pub mod foo {
                     "is-clone-return",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
-                            let r = <D as HostWithStore>::is_clone_return(accessor)
-                                .await;
+                            let host = &caller.with_getter(host_getter);
+                            let r = <D as HostWithStore>::is_clone_return(host).await;
                             Ok((r,))
                         })
                     },
@@ -1540,7 +1538,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.e1_arg)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_e1_result<_T, _D>(
@@ -1557,7 +1555,7 @@ pub mod exports {
                                 (E1,),
                             >::new_unchecked(self.e1_result)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_v1_arg<_T, _D>(
@@ -1575,7 +1573,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.v1_arg)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_v1_result<_T, _D>(
@@ -1592,7 +1590,7 @@ pub mod exports {
                                 (V1,),
                             >::new_unchecked(self.v1_result)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_bool_arg<_T, _D>(
@@ -1610,7 +1608,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.bool_arg)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_bool_result<_T, _D>(
@@ -1627,7 +1625,7 @@ pub mod exports {
                                 (bool,),
                             >::new_unchecked(self.bool_result)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_option_arg<_T, _D>(
@@ -1657,7 +1655,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.option_arg)
                         };
-                        let () = callee
+                        let ((), _) = callee
                             .call_concurrent(
                                 accessor,
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
@@ -1697,7 +1695,7 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.option_result)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_casts<_T, _D>(
@@ -1722,7 +1720,7 @@ pub mod exports {
                                 ((Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),),
                             >::new_unchecked(self.casts)
                         };
-                        let (ret0,) = callee
+                        let ((ret0,), _) = callee
                             .call_concurrent(
                                 accessor,
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
@@ -1763,7 +1761,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.result_arg)
                         };
-                        let () = callee
+                        let ((), _) = callee
                             .call_concurrent(
                                 accessor,
                                 (arg0, arg1, arg2, arg3, arg4, arg5),
@@ -1809,7 +1807,7 @@ pub mod exports {
                                 ),
                             >::new_unchecked(self.result_result)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar<_T, _D>(
@@ -1826,7 +1824,7 @@ pub mod exports {
                                 (Result<i32, MyErrno>,),
                             >::new_unchecked(self.return_result_sugar)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar2<_T, _D>(
@@ -1843,7 +1841,7 @@ pub mod exports {
                                 (Result<(), MyErrno>,),
                             >::new_unchecked(self.return_result_sugar2)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar3<_T, _D>(
@@ -1860,7 +1858,7 @@ pub mod exports {
                                 (Result<MyErrno, MyErrno>,),
                             >::new_unchecked(self.return_result_sugar3)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_result_sugar4<_T, _D>(
@@ -1877,7 +1875,7 @@ pub mod exports {
                                 (Result<(i32, u32), MyErrno>,),
                             >::new_unchecked(self.return_result_sugar4)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_option_sugar<_T, _D>(
@@ -1894,7 +1892,7 @@ pub mod exports {
                                 (Option<i32>,),
                             >::new_unchecked(self.return_option_sugar)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_return_option_sugar2<_T, _D>(
@@ -1911,7 +1909,7 @@ pub mod exports {
                                 (Option<MyErrno>,),
                             >::new_unchecked(self.return_option_sugar2)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_result_simple<_T, _D>(
@@ -1928,7 +1926,7 @@ pub mod exports {
                                 (Result<u32, i32>,),
                             >::new_unchecked(self.result_simple)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_is_clone_arg<_T, _D>(
@@ -1946,7 +1944,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.is_clone_arg)
                         };
-                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                     pub async fn call_is_clone_return<_T, _D>(
@@ -1963,7 +1961,7 @@ pub mod exports {
                                 (IsClone,),
                             >::new_unchecked(self.is_clone_return)
                         };
-                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
+                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                 }

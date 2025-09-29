@@ -896,7 +896,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         flags: &settings::Flags,
         _sig: &Signature,
         regs: &[Writable<RealReg>],
-        _is_leaf: bool,
+        function_calls: FunctionCalls,
         incoming_args_size: u32,
         tail_args_size: u32,
         stackslots_size: u32,
@@ -975,6 +975,7 @@ impl ABIMachineSpec for S390xMachineDeps {
             stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
+            function_calls,
         }
     }
 
@@ -1099,8 +1100,8 @@ impl S390xMachineDeps {
 fn is_reg_saved_in_prologue(call_conv: isa::CallConv, r: RealReg) -> bool {
     match (call_conv, r.class()) {
         (isa::CallConv::Tail, RegClass::Int) => {
-            // r8 - r15 inclusive are callee-saves.
-            r.hw_enc() >= 8 && r.hw_enc() <= 15
+            // r8 - r14 inclusive are callee-saves.
+            r.hw_enc() >= 8 && r.hw_enc() <= 14
         }
         (_, RegClass::Int) => {
             // r6 - r15 inclusive are callee-saves.

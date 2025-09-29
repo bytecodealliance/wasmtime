@@ -1406,7 +1406,10 @@ pub unsafe extern "C" fn fd_readdir(
                     match iter.next() {
                         Some(Ok(_)) => {}
                         Some(Err(e)) => return Err(e),
-                        None => return Ok(()),
+                        None => {
+                            *bufused = 0;
+                            return Ok(());
+                        }
                     }
                 }
             }
@@ -2415,8 +2418,13 @@ pub unsafe extern "C" fn sock_send(
 /// Shut down socket send and receive channels.
 /// Note: This is similar to `shutdown` in POSIX.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn sock_shutdown(_fd: Fd, _how: Sdflags) -> Errno {
-    unreachable!()
+pub unsafe extern "C" fn sock_shutdown(fd: Fd, _how: Sdflags) -> Errno {
+    State::with(|state| {
+        state
+            .descriptors_mut()
+            .get_stream_with_error_mut(fd, wasi::ERRNO_BADF)?;
+        Err(wasi::ERRNO_NOTSOCK)
+    })
 }
 
 #[cfg(not(feature = "proxy"))]

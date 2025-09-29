@@ -65,7 +65,6 @@
 
 use crate::dbg::DisplayList;
 use crate::dominator_tree::DominatorTree;
-use crate::dominator_tree::DominatorTreePreorder;
 use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::ExceptionTableItem;
@@ -303,7 +302,6 @@ enum BlockCallTargetType {
 struct Verifier<'a> {
     func: &'a Function,
     expected_cfg: ControlFlowGraph,
-    expected_domtree_preorder: DominatorTreePreorder,
     expected_domtree: DominatorTree,
     isa: Option<&'a dyn TargetIsa>,
 }
@@ -312,13 +310,10 @@ impl<'a> Verifier<'a> {
     pub fn new(func: &'a Function, fisa: FlagsOrIsa<'a>) -> Self {
         let expected_cfg = ControlFlowGraph::with_function(func);
         let expected_domtree = DominatorTree::with_function(func, &expected_cfg);
-        let mut expected_domtree_preorder = DominatorTreePreorder::new();
-        expected_domtree_preorder.compute(&expected_domtree);
         Self {
             func,
             expected_cfg,
             expected_domtree,
-            expected_domtree_preorder,
             isa: fisa.isa,
         }
     }
@@ -734,6 +729,11 @@ impl<'a> Verifier<'a> {
                 self.verify_constant_size(inst, opcode, constant_handle, errors)?;
             }
 
+            ExceptionHandlerAddress { block, imm, .. } => {
+                self.verify_block(inst, block, errors)?;
+                self.verify_try_call_handler_index(inst, block, imm.into(), errors)?;
+            }
+
             // Exhaustive list so we can't forget to add new formats
             AtomicCas { .. }
             | AtomicRmw { .. }
@@ -1006,11 +1006,10 @@ impl<'a> Verifier<'a> {
                 }
                 // Defining instruction dominates the instruction that uses the value.
                 if is_reachable {
-                    if !self.expected_domtree_preorder.dominates_inst(
-                        def_inst,
-                        loc_inst,
-                        &self.func.layout,
-                    ) {
+                    if !self
+                        .expected_domtree
+                        .dominates(def_inst, loc_inst, &self.func.layout)
+                    {
                         return errors.fatal((
                             loc_inst,
                             self.context(loc_inst),
@@ -1045,7 +1044,7 @@ impl<'a> Verifier<'a> {
                 }
                 let user_block = self.func.layout.inst_block(loc_inst).expect("Expected instruction to be in a block as we're traversing code already in layout");
                 // The defining block dominates the instruction using this value.
-                if is_reachable && !self.expected_domtree_preorder.dominates(block, user_block) {
+                if is_reachable && !self.expected_domtree.block_dominates(block, user_block) {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
@@ -1976,6 +1975,54 @@ impl<'a> Verifier<'a> {
         }
 
         if errors.has_error() { Err(()) } else { Ok(()) }
+    }
+
+    fn verify_try_call_handler_index(
+        &self,
+        inst: Inst,
+        block: Block,
+        index_imm: i64,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult {
+        if index_imm < 0 {
+            return errors.fatal((
+                inst,
+                format!("exception handler index {index_imm} cannot be negative"),
+            ));
+        }
+        let Ok(index) = usize::try_from(index_imm) else {
+            return errors.fatal((
+                inst,
+                format!("exception handler index {index_imm} is out-of-range"),
+            ));
+        };
+        let Some(terminator) = self.func.layout.last_inst(block) else {
+            return errors.fatal((
+                inst,
+                format!("referenced block {block} does not have a terminator"),
+            ));
+        };
+        let Some(et) = self.func.dfg.insts[terminator].exception_table() else {
+            return errors.fatal((
+                inst,
+                format!("referenced block {block} does not end in a try_call"),
+            ));
+        };
+
+        let etd = &self.func.dfg.exception_tables[et];
+        // The exception table's out-edges consist of all exceptional
+        // edges first, followed by the normal return last. For N
+        // out-edges, there are N-1 exception handlers that can be
+        // selected.
+        let num_exceptional_edges = etd.all_branches().len() - 1;
+        if index >= num_exceptional_edges {
+            return errors.fatal((
+                inst,
+                format!("exception handler index {index_imm} is out-of-range"),
+            ));
+        }
+
+        Ok(())
     }
 
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult {

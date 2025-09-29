@@ -807,3 +807,15 @@ block0(v0: i8):
     return v1
 }
 ; run: %sshr_i8_const(0x40) == 0x20
+
+function %fold_shifts_over_and1(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v3: i32):
+    v2 = ishl v0, v1
+    v4 = band v2, v3
+    v5 = ushr v4, v1
+    return v5
+}
+
+; run: %fold_shifts_over_and1(0, 0, 0) == 0
+; run: %fold_shifts_over_and1(1, 31, 0x80000000) == 1
+

@@ -12,7 +12,7 @@ use {
         },
         wit_future, wit_stream,
     },
-    wit_bindgen_rt::async_support::{self, StreamResult},
+    wit_bindgen::StreamResult,
 };
 
 struct Component;
@@ -48,7 +48,8 @@ impl Handler for Component {
             }
             _ => true,
         });
-        let (mut body, trailers) = request.consume_body().unwrap();
+        let (_, result_rx) = wit_future::new(|| Ok(()));
+        let (mut body, trailers) = Request::consume_body(request, result_rx);
 
         let (body, trailers) = if content_deflated {
             // Next, spawn a task to pipe and decode the original request body and trailers into a new request
@@ -56,7 +57,7 @@ impl Handler for Component {
             let (trailers_tx, trailers_rx) = wit_future::new(|| todo!());
             let (mut pipe_tx, pipe_rx) = wit_stream::new();
 
-            async_support::spawn(async move {
+            wit_bindgen::spawn(async move {
                 {
                     let mut decoder = DeflateDecoder::new(Vec::new());
 
@@ -77,8 +78,6 @@ impl Handler for Component {
                 }
 
                 trailers_tx.write(trailers.await).await.unwrap();
-
-                drop(request);
             });
 
             (pipe_rx, trailers_rx)
@@ -110,7 +109,8 @@ impl Handler for Component {
             headers.push(("content-encoding".into(), b"deflate".into()));
         }
 
-        let (mut body, trailers) = response.consume_body().unwrap();
+        let (_, result_rx) = wit_future::new(|| Ok(()));
+        let (mut body, trailers) = Response::consume_body(response, result_rx);
         let (body, trailers) = if accept_deflated {
             headers.retain(|(name, _value)| name != "content-length");
 
@@ -120,7 +120,7 @@ impl Handler for Component {
             let (trailers_tx, trailers_rx) = wit_future::new(|| todo!());
             let (mut pipe_tx, pipe_rx) = wit_stream::new();
 
-            async_support::spawn(async move {
+            wit_bindgen::spawn(async move {
                 {
                     let mut encoder = DeflateEncoder::new(Vec::new(), Compression::fast());
                     let (mut status, mut chunk) = body.read(Vec::with_capacity(64 * 1024)).await;
@@ -141,7 +141,6 @@ impl Handler for Component {
                 }
 
                 trailers_tx.write(trailers.await).await.unwrap();
-                drop(response);
             });
 
             (pipe_rx, trailers_rx)

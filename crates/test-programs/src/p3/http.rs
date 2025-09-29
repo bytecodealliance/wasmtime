@@ -94,9 +94,8 @@ pub async fn request(
             let response = handler::handle(request).await?;
             let status = response.get_status_code();
             let headers = response.get_headers().copy_all();
-            let (body_rx, trailers_rx) = response
-                .consume_body()
-                .expect("failed to get response body");
+            let (_, result_rx) = wit_future::new(|| Ok(()));
+            let (body_rx, trailers_rx) = types::Response::consume_body(response, result_rx);
             let ((), rx) = join!(
                 async {
                     if let Some(buf) = body {

@@ -7,6 +7,13 @@ use wasmtime::component::{Component, Linker};
 use wasmtime_wasi::p3::bindings::Command;
 
 async fn run(path: &str) -> Result<()> {
+    run_allow_blocking_current_thread(path, false).await
+}
+
+async fn run_allow_blocking_current_thread(
+    path: &str,
+    allow_blocking_current_thread: bool,
+) -> Result<()> {
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
     let engine = test_programs_artifacts::engine(|config| {
@@ -20,7 +27,9 @@ async fn run(path: &str) -> Result<()> {
     wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
 
     let (mut store, _td) = Ctx::new(&engine, name, |builder| MyWasiCtx {
-        wasi: builder.build(),
+        wasi: builder
+            .allow_blocking_current_thread(allow_blocking_current_thread)
+            .build(),
         table: Default::default(),
     })?;
     let component = Component::from_file(&engine, path)?;
@@ -52,6 +61,11 @@ async fn p3_clocks_sleep() -> anyhow::Result<()> {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_filesystem_file_read_write() -> anyhow::Result<()> {
     run(P3_FILESYSTEM_FILE_READ_WRITE_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_filesystem_file_read_write_blocking() -> anyhow::Result<()> {
+    run_allow_blocking_current_thread(P3_FILESYSTEM_FILE_READ_WRITE_COMPONENT, true).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -117,4 +131,24 @@ async fn p3_sockets_udp_sockopts() -> anyhow::Result<()> {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_sockets_udp_states() -> anyhow::Result<()> {
     run(P3_SOCKETS_UDP_STATES_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_readdir() -> anyhow::Result<()> {
+    run(P3_READDIR_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_readdir_blocking() -> anyhow::Result<()> {
+    run_allow_blocking_current_thread(P3_READDIR_COMPONENT, true).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_file_write() -> anyhow::Result<()> {
+    run(P3_FILE_WRITE_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_file_write_blocking() -> anyhow::Result<()> {
+    run_allow_blocking_current_thread(P3_FILE_WRITE_COMPONENT, true).await
 }

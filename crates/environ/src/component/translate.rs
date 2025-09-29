@@ -193,6 +193,12 @@ enum LocalInitializer<'data> {
     BackpressureSet {
         func: ModuleInternedTypeIndex,
     },
+    BackpressureInc {
+        func: ModuleInternedTypeIndex,
+    },
+    BackpressureDec {
+        func: ModuleInternedTypeIndex,
+    },
     TaskReturn {
         result: Option<ComponentValType>,
         options: LocalCanonicalOptions,
@@ -411,6 +417,7 @@ struct LocalCanonicalOptions {
     string_encoding: StringEncoding,
     post_return: Option<FuncIndex>,
     async_: bool,
+    cancellable: bool,
     callback: Option<FuncIndex>,
     /// The type index of the core GC types signature.
     core_type: ModuleInternedTypeIndex,
@@ -838,6 +845,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::BackpressureSet { func: core_type }
                         }
+                        wasmparser::CanonicalFunction::BackpressureInc => {
+                            let core_type = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::BackpressureInc { func: core_type }
+                        }
+                        wasmparser::CanonicalFunction::BackpressureDec => {
+                            let core_type = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::BackpressureDec { func: core_type }
+                        }
+
                         wasmparser::CanonicalFunction::TaskReturn { result, options } => {
                             let result = result.map(|ty| match ty {
                                 wasmparser::ComponentValType::Primitive(ty) => {
@@ -873,6 +891,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                             LocalInitializer::WaitableSetWait {
                                 options: LocalCanonicalOptions {
                                     core_type,
+                                    cancellable,
                                     async_: false,
                                     data_model: LocalDataModel::LinearMemory {
                                         memory: Some(MemoryIndex::from_u32(memory)),
@@ -895,6 +914,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 options: LocalCanonicalOptions {
                                     core_type,
                                     async_: false,
+                                    cancellable,
                                     data_model: LocalDataModel::LinearMemory {
                                         memory: Some(MemoryIndex::from_u32(memory)),
                                         realloc: None,
@@ -1562,6 +1582,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         Ok(LocalCanonicalOptions {
             string_encoding,
             post_return,
+            cancellable: false,
             async_,
             callback,
             core_type,
