@@ -40,10 +40,7 @@ async fn threads() -> Result<()> {
         ;; The thread entry point, which sets the global to the value passed in
         (func $thread-start (param i32)
             local.get 0
-            global.set $g
-            i32.const 0
-            call $thread-switch-to
-            drop)
+            global.set $g)
         (export "thread-start" (func $thread-start))
 
         ;; Initialize the function table with our thread-start function; this will be
@@ -56,7 +53,7 @@ async fn threads() -> Result<()> {
             i32.const 0
             i32.const 42
             call $thread-new-indirect
-            call $thread-switch-to
+            call $thread-yield-to
             drop
             global.get $g))
     
@@ -96,7 +93,7 @@ async fn threads() -> Result<()> {
         .instantiate_async(&mut store, &component)
         .await?;
     let func = instance.get_typed_func::<(), (u32,)>(&mut store, "run")?;
-    assert_eq!(func.call_async(&mut store, ()).await?, (1,));
+    assert_eq!(func.call_async(&mut store, ()).await?, (42,));
 
     Ok(())
 }

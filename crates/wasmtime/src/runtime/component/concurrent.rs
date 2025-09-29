@@ -642,17 +642,21 @@ impl GuestCall {
     /// - the call is for a not-yet started task and the (sub-)component
     /// instance to be called has backpressure enabled
     fn is_ready(&self, state: &mut ConcurrentState) -> Result<bool> {
-        return Ok(true);
         let task_instance = state.get_mut(self.thread.task)?.instance;
         let state = state.instance_state(task_instance);
-        let ready = match &self.kind {
-            GuestCallKind::DeliverEvent { .. } => !state.do_not_enter,
-            GuestCallKind::Start(_) => !(state.do_not_enter || state.backpressure),
-        };
+
+        // Explicit threads are always ready, as they can only be entered from within the same
+        // task.
+        let ready = self.thread.is_explicit_thread()
+            || match &self.kind {
+                GuestCallKind::DeliverEvent { .. } => !state.do_not_enter,
+                GuestCallKind::Start(_) => !(state.do_not_enter || state.backpressure),
+            };
         log::trace!(
-            "call {self:?} ready? {ready} (do_not_enter: {}; backpressure: {})",
+            "call {self:?} ready? {ready} (do_not_enter: {}; backpressure: {}, is_explicit_thread: {})",
             state.do_not_enter,
-            state.backpressure
+            state.backpressure,
+            self.thread.is_explicit_thread()
         );
         Ok(ready)
     }
@@ -1407,31 +1411,22 @@ impl Instance {
 
         if let Some(mut fiber) = fiber {
             // See the `SuspendReason` documentation for what each case means.
-            let next = match state.suspend_reason.take().unwrap() {
+            match state.suspend_reason.take().unwrap() {
                 SuspendReason::NeedWork => {
                     if state.worker.is_none() {
                         state.worker = Some(fiber);
                     } else {
                         fiber.dispose(store);
                     }
-                    None
                 }
-                SuspendReason::Yielding { to, thread } => {
+                SuspendReason::Yielding { .. } => {
                     state.push_low_priority(WorkItem::ResumeFiber(fiber));
-                    to.map(|next_thread| InstanceGuestThreadIndex {
-                        task: thread.task,
-                        thread: next_thread,
-                    })
                 }
-                SuspendReason::ExplicitlySuspending { to, thread } => {
+                SuspendReason::ExplicitlySuspending { thread, .. } => {
                     state
                         .get_mut(thread.task)?
                         .suspended_threads
                         .insert(thread.thread, SuspendedThreadState::Started(fiber));
-                    to.map(|next_thread| InstanceGuestThreadIndex {
-                        task: thread.task,
-                        thread: next_thread,
-                    })
                 }
                 SuspendReason::Waiting { set, thread } => {
                     let old = state
@@ -1439,9 +1434,10 @@ impl Instance {
                         .waiting
                         .insert(thread, WaitMode::Fiber(fiber));
                     assert!(old.is_none());
-                    None
                 }
             };
+        } else {
+            log::trace!("resume_fiber: fiber has exited");
         }
 
         Ok(())
@@ -1886,9 +1882,9 @@ impl Instance {
 
                 instance.maybe_pop_call_context(store.store_opaque_mut(), guest_thread.task)?;
 
-                let task = instance
-                    .concurrent_state_mut(store)
-                    .get_mut(guest_thread.task)?;
+                let state = instance.concurrent_state_mut(store);
+                let task = state.get_mut(guest_thread.task)?;
+                task.thread_completed(guest_thread.thread);
 
                 match &task.caller {
                     Caller::Host {
@@ -1896,8 +1892,7 @@ impl Instance {
                         ..
                     } => {
                         if *remove_task_automatically {
-                            Waitable::Guest(guest_thread.task)
-                                .delete_from(instance.concurrent_state_mut(store))?;
+                            self.delete_task_if_all_threads_exited(store, guest_thread.task)?;
                         }
                     }
                     Caller::Guest { .. } => {
@@ -2317,6 +2312,7 @@ impl Instance {
                     storage[0] = MaybeUninit::new(result);
                 }
 
+                log::trace!("lowered sync result for {guest_task:?}");
                 Waitable::Guest(guest_task).delete_from(state)?;
             } else {
                 // This means the callee failed to call either `task.return` or
@@ -3329,6 +3325,34 @@ impl Instance {
     ) -> &'a mut ConcurrentState {
         self.id().get_mut(store).concurrent_state_mut()
     }
+
+    fn delete_task_if_all_threads_exited(
+        &self,
+        store: &mut StoreOpaque,
+        task: TableId<GuestTask>,
+    ) -> Result<bool> {
+        let state = self.concurrent_state_mut(store);
+        let guest_task = state.get_mut(task)?;
+        // We consider all threads to have exited if every thread that remains
+        // (which may be zero) is suspended, because these threads will never be
+        // resumed again.
+        let all_threads_exited = guest_task
+            .threads
+            .keys()
+            .all(|thread| guest_task.suspended_threads.contains_key(thread));
+        if all_threads_exited {
+            log::trace!("deleting guest task {task:?} as all threads exited");
+            // TODO: delete any fibers
+            Waitable::Guest(task).delete_from(state)?;
+            Ok(true)
+        } else {
+            log::trace!(
+                "not deleting guest task {task:?} as {} threads remain",
+                guest_task.threads.len()
+            );
+            Ok(false)
+        }
+    }
 }
 
 /// Trait representing component model ABI async intrinsics and fused adapter
@@ -3926,6 +3950,12 @@ struct InstanceGuestThreadIndex {
     thread: GuestThreadIndex,
 }
 
+impl InstanceGuestThreadIndex {
+    fn is_explicit_thread(&self) -> bool {
+        self.thread != MAIN_GUEST_THREAD_INDEX
+    }
+}
+
 impl GuestThread {
     fn new(index: GuestThreadIndex) -> Self {
         Self {
@@ -4055,6 +4085,12 @@ impl GuestTask {
             },
         );
         thread_index
+    }
+
+    fn thread_completed(&mut self, thread_index: GuestThreadIndex) {
+        let present = self.threads.remove(&thread_index).is_some();
+        assert!(present);
+        self.suspended_threads.remove(&thread_index);
     }
 
     /// Dispose of this guest task, reparenting any pending subtasks to the

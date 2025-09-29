@@ -1,6 +1,5 @@
 use crate::ScopeVec;
 use crate::component::dfg::AbstractInstantiations;
-use crate::component::dfg::TableId;
 use crate::component::*;
 use crate::prelude::*;
 use crate::{

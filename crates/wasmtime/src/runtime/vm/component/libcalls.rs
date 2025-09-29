@@ -1,11 +1,11 @@
 //! Implementation of string transcoding required by the component model.
 
 use crate::component::Instance;
+#[cfg(feature = "component-model-async")]
 use crate::component::concurrent::GuestThreadIndex;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::component::concurrent::ResourcePair;
-use crate::runtime::component::concurrent::table::TableId;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::{HostResultHasUnwindSentinel, VMStore, VmSafe};
 use core::cell::Cell;

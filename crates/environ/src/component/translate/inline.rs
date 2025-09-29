@@ -1048,10 +1048,6 @@ impl<'a> Inliner<'a> {
                     });
 
                 let table_id = self.result.tables.push(table_export);
-                println!(
-                    "Table index={:?}, id={:?}",
-                    start_func_table_index, table_id
-                );
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadNewIndirect {
