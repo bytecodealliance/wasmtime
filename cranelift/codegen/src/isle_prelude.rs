@@ -34,13 +34,14 @@ macro_rules! isle_common_prelude_methods {
             let clz_offset = 64 - bits;
             let a_v: u64 = a.bits().cast_unsigned();
             let lz = a_v.leading_zeros() - clz_offset;
-            Imm64::new(lz as i64)
+            Imm64::new(i64::from(lz))
         }
 
         #[inline]
         fn imm64_sdiv(&mut self, ty: Type, x: Imm64, y: Imm64) -> Option<Imm64> {
             // Sign extend `x` and `y`.
-            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            assert!(ty.bits() <= 64);
+            let shift = 64 - ty.bits();
             let x = (x.bits() << shift) >> shift;
             let y = (y.bits() << shift) >> shift;
 
@@ -62,7 +63,8 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn imm64_srem(&mut self, ty: Type, x: Imm64, y: Imm64) -> Option<Imm64> {
             // Sign extend `x` and `y`.
-            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            assert!(ty.bits() <= 64);
+            let shift = 64 - ty.bits();
             let x = (x.bits() << shift) >> shift;
             let y = (y.bits() << shift) >> shift;
 
