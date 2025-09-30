@@ -2875,63 +2875,6 @@ impl Instance {
         )
     }
 
-    /// Implements the `thread.yield` intrinsic.
-    pub(crate) fn thread_yield(
-        self,
-        store: &mut dyn VMStore,
-        caller: RuntimeComponentInstanceIndex,
-        cancellable: bool,
-    ) -> Result<bool> {
-        self.id().get(store).check_may_leave(caller)?;
-        self.waitable_check(store, cancellable, WaitableCheck::Yield)
-            .map(|_| {
-                if cancellable {
-                    let state = self.concurrent_state_mut(store);
-                    let thread = state.guest_thread.unwrap();
-                    if let Some(event) = state.get_mut(thread.task).unwrap().event.take() {
-                        assert!(matches!(event, Event::Cancelled));
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            })
-    }
-
-    /// Implements the `thread.yield-to` intrinsic.
-    pub(crate) fn thread_yield_to<T: 'static>(
-        self,
-        mut store: StoreContextMut<T>,
-        caller: RuntimeComponentInstanceIndex,
-        cancellable: bool,
-        thread: GuestThreadIndex,
-    ) -> Result<bool> {
-        log::trace!("thread yielding to {thread:?}");
-        self.resume_suspended_thread(store.as_context_mut(), thread, true)?;
-        self.thread_yield(store.0, caller, cancellable)
-    }
-
-    pub(crate) fn thread_switch_to<T: 'static>(
-        self,
-        mut store: StoreContextMut<T>,
-        _cancellable: bool,
-        thread: GuestThreadIndex,
-    ) -> Result<bool> {
-        let state = self.concurrent_state_mut(store.0);
-        let current_thread = state.guest_thread.unwrap();
-        self.resume_suspended_thread(store.as_context_mut(), thread, true)?;
-        self.suspend(
-            store.0,
-            SuspendReason::ExplicitlySuspending {
-                thread: current_thread,
-                to: Some(thread),
-            },
-        )?;
-        Ok(true)
-    }
-
     unsafe fn read_funcref_from_table(
         self,
         store: &mut dyn VMStore,
@@ -3114,25 +3057,52 @@ impl Instance {
         Ok(())
     }
 
-    pub(crate) fn thread_suspend(self, store: &mut dyn VMStore, cancellable: bool) -> Result<bool> {
-        if cancellable {
-            bail!("todo: cancellable `thread.suspend` not implemented yet");
+    /// Helper function for the `thread.yield`, `thread.yield-to`, `thread.suspend`,
+    /// and `thread.switch-to` intrinsics.
+    pub(crate) fn suspension_intrinsic<T: 'static>(
+        self,
+        mut store: StoreContextMut<T>,
+        caller: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+        yielding: bool,
+        to_thread: Option<GuestThreadIndex>,
+    ) -> Result<bool> {
+        self.id().get(store.0).check_may_leave(caller)?;
+
+        if let Some(thread) = to_thread {
+            self.resume_suspended_thread(store.as_context_mut(), thread, true)?;
         }
 
-        let guest_thread = self.concurrent_state_mut(store).guest_thread.unwrap();
-        self.suspend(
-            store,
+        let guest_thread = self.concurrent_state_mut(store.0).guest_thread.unwrap();
+        let reason = if yielding {
+            SuspendReason::Yielding {
+                thread: guest_thread,
+                to: to_thread,
+            }
+        } else {
             SuspendReason::ExplicitlySuspending {
                 thread: guest_thread,
-                to: None,
-            },
-        )?;
+                to: to_thread,
+            }
+        };
 
-        Ok(true)
+        self.suspend(store.0, reason)?;
+
+        if cancellable {
+            let state = self.concurrent_state_mut(store.0);
+            let thread = state.guest_thread.unwrap();
+            if let Some(event) = state.get_mut(thread.task).unwrap().event.take() {
+                assert!(matches!(event, Event::Cancelled));
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        } else {
+            Ok(false)
+        }
     }
 
-    /// Helper function for the `waitable-set.wait`, `waitable-set.poll`, and
-    /// `thread.yield` intrinsics.
+    /// Helper function for the `waitable-set.wait` and `waitable-set.poll` intrinsics.
     fn waitable_check(
         self,
         store: &mut dyn VMStore,
@@ -3144,7 +3114,6 @@ impl Instance {
         let (wait, set) = match &check {
             WaitableCheck::Wait(params) => (true, Some(params.set)),
             WaitableCheck::Poll(params) => (false, Some(params.set)),
-            WaitableCheck::Yield => (false, None),
         };
 
         // First, suspend this fiber, allowing any other threads to run.
@@ -3233,7 +3202,6 @@ impl Instance {
                 options.memory_mut(store)[ptr + 4..][..4].copy_from_slice(&result.to_le_bytes());
                 Ok(ordinal)
             }
-            WaitableCheck::Yield => Ok(0),
         };
 
         result
@@ -3629,25 +3597,18 @@ pub trait VMComponentAsyncStore {
         debug_msg_address: u32,
     ) -> Result<()>;
 
-    /// The `thread.resume-later` intrinsic.
-    fn thread_resume_later(&mut self, instance: Instance, thread: GuestThreadIndex) -> Result<()>;
-
-    /// The `thread.yield-to` intrinsic.
-    fn thread_yield_to(
+    /// The `thread.yield`, `thread.yield-to`, `thread.suspend`, and `thread.switch-to` intrinsics.
+    fn suspension_intrinsic(
         &mut self,
         instance: Instance,
         caller: RuntimeComponentInstanceIndex,
         cancellable: bool,
-        thread: GuestThreadIndex,
+        yielding: bool,
+        to_thread: Option<GuestThreadIndex>,
     ) -> Result<bool>;
 
-    /// The `thread.switch-to` intrinsic.
-    fn thread_switch_to(
-        &mut self,
-        instance: Instance,
-        cancellable: bool,
-        thread: GuestThreadIndex,
-    ) -> Result<bool>;
+    /// The `thread.resume-later` intrinsic.
+    fn thread_resume_later(&mut self, instance: Instance, thread: GuestThreadIndex) -> Result<()>;
 }
 
 /// SAFETY: See trait docs.
@@ -3944,27 +3905,25 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         )
     }
 
-    fn thread_resume_later(&mut self, instance: Instance, thread: GuestThreadIndex) -> Result<()> {
-        instance.resume_suspended_thread(StoreContextMut(self), thread, false)
-    }
-
-    fn thread_yield_to(
+    fn suspension_intrinsic(
         &mut self,
         instance: Instance,
         caller: RuntimeComponentInstanceIndex,
         cancellable: bool,
-        thread: GuestThreadIndex,
+        yielding: bool,
+        to_thread: Option<GuestThreadIndex>,
     ) -> Result<bool> {
-        instance.thread_yield_to(StoreContextMut(self), caller, cancellable, thread)
+        instance.suspension_intrinsic(
+            StoreContextMut(self),
+            caller,
+            cancellable,
+            yielding,
+            to_thread,
+        )
     }
 
-    fn thread_switch_to(
-        &mut self,
-        instance: Instance,
-        cancellable: bool,
-        thread: GuestThreadIndex,
-    ) -> Result<bool> {
-        instance.thread_switch_to(StoreContextMut(self), cancellable, thread)
+    fn thread_resume_later(&mut self, instance: Instance, thread: GuestThreadIndex) -> Result<()> {
+        instance.resume_suspended_thread(StoreContextMut(self), thread, false)
     }
 }
 
@@ -4997,7 +4956,6 @@ struct WaitableCheckParams {
 enum WaitableCheck {
     Wait(WaitableCheckParams),
     Poll(WaitableCheckParams),
-    Yield,
 }
 
 /// Represents a guest task called from the host, prepared using `prepare_call`.

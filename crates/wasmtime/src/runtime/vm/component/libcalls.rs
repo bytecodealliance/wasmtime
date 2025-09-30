@@ -810,10 +810,12 @@ fn thread_yield(
     caller_instance: u32,
     cancellable: u8,
 ) -> Result<bool> {
-    instance.thread_yield(
-        store,
+    store.component_async_store().suspension_intrinsic(
+        instance,
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         cancellable != 0,
+        true,
+        None,
     )
 }
 
@@ -1391,19 +1393,33 @@ fn thread_new_indirect(
 fn thread_switch_to(
     store: &mut dyn VMStore,
     instance: Instance,
+    caller: u32,
     cancellable: u8,
     thread_idx: u32,
 ) -> Result<bool> {
-    store.component_async_store().thread_switch_to(
+    store.component_async_store().suspension_intrinsic(
         instance,
+        RuntimeComponentInstanceIndex::from_u32(caller),
         cancellable != 0,
-        GuestThreadIndex::from_u32(thread_idx),
+        false,
+        Some(GuestThreadIndex::from_u32(thread_idx)),
     )
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_suspend(store: &mut dyn VMStore, instance: Instance, cancellable: u8) -> Result<bool> {
-    instance.thread_suspend(store, cancellable != 0)
+fn thread_suspend(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    caller: u32,
+    cancellable: u8,
+) -> Result<bool> {
+    store.component_async_store().suspension_intrinsic(
+        instance,
+        RuntimeComponentInstanceIndex::from_u32(caller),
+        cancellable != 0,
+        false,
+        None,
+    )
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1421,10 +1437,11 @@ fn thread_yield_to(
     cancellable: u8,
     thread_idx: u32,
 ) -> Result<bool> {
-    store.component_async_store().thread_yield_to(
+    store.component_async_store().suspension_intrinsic(
         instance,
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         cancellable != 0,
-        GuestThreadIndex::from_u32(thread_idx),
+        true,
+        Some(GuestThreadIndex::from_u32(thread_idx)),
     )
 }

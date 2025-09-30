@@ -1142,6 +1142,7 @@ impl<'a> Inliner<'a> {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadSwitchTo {
+                        instance: frame.instance,
                         cancellable: *cancellable,
                     },
                 ));
@@ -1151,6 +1152,7 @@ impl<'a> Inliner<'a> {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadSuspend {
+                        instance: frame.instance,
                         cancellable: *cancellable,
                     },
                 ));

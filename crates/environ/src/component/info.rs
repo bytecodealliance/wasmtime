@@ -1130,12 +1130,16 @@ pub enum Trampoline {
 
     /// Intrinsic used to implement the `thread.switch-to` component model builtin.
     ThreadSwitchTo {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// If `true`, indicates the caller instance maybe reentered.
         cancellable: bool,
     },
 
     /// Intrinsic used to implement the `thread.suspend` component model builtin.
     ThreadSuspend {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// If `true`, indicates the caller instance maybe reentered.
         cancellable: bool,
     },

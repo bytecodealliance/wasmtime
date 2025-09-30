@@ -811,12 +811,16 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::ThreadSwitchTo { cancellable } => {
+            Trampoline::ThreadSwitchTo {
+                instance,
+                cancellable,
+            } => {
                 self.translate_libcall(
                     host::thread_switch_to,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(
                             me.builder
                                 .ins()
@@ -825,12 +829,16 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::ThreadSuspend { cancellable } => {
+            Trampoline::ThreadSuspend {
+                instance,
+                cancellable,
+            } => {
                 self.translate_libcall(
                     host::thread_suspend,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(
                             me.builder
                                 .ins()

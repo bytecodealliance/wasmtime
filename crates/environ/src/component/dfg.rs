@@ -485,9 +485,11 @@ pub enum Trampoline {
         start_func_table_id: TableId,
     },
     ThreadSwitchTo {
+        instance: RuntimeComponentInstanceIndex,
         cancellable: bool,
     },
     ThreadSuspend {
+        instance: RuntimeComponentInstanceIndex,
         cancellable: bool,
     },
     ThreadResumeLater,
@@ -1154,10 +1156,18 @@ impl LinearizeDfg<'_> {
                 start_func_ty_idx: *start_func_ty_idx,
                 start_func_table_idx: self.runtime_table(*start_func_table_id),
             },
-            Trampoline::ThreadSwitchTo { cancellable } => info::Trampoline::ThreadSwitchTo {
+            Trampoline::ThreadSwitchTo {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadSwitchTo {
+                instance: *instance,
                 cancellable: *cancellable,
             },
-            Trampoline::ThreadSuspend { cancellable } => info::Trampoline::ThreadSuspend {
+            Trampoline::ThreadSuspend {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadSuspend {
+                instance: *instance,
                 cancellable: *cancellable,
             },
             Trampoline::ThreadResumeLater => info::Trampoline::ThreadResumeLater,
