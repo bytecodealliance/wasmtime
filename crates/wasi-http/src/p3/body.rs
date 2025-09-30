@@ -540,7 +540,8 @@ where
 
     fn try_into(me: Pin<Box<Self>>, ty: TypeId) -> Result<Box<dyn Any>, Pin<Box<Self>>> {
         if ty == TypeId::of::<Self>() {
-            Ok(Box::new(*Pin::into_inner(me)))
+            let me = Pin::into_inner(me);
+            Ok(me)
         } else {
             Err(me)
         }

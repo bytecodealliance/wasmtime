@@ -1,13 +1,12 @@
 use crate::get_content_length;
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::p3::body::{Body, GuestBody, HostBodyStreamProducer};
+use crate::p3::body::{Body, GuestBody};
 use crate::p3::{WasiHttpCtxView, WasiHttpView};
 use anyhow::Context as _;
 use bytes::Bytes;
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::BoxBody;
-use std::mem;
 use std::sync::Arc;
 use wasmtime::AsContextMut;
 
@@ -56,7 +55,7 @@ impl Response {
     /// to a [`WasiHttpCtxView`].
     pub fn into_http_with_getter<T: 'static>(
         self,
-        mut store: impl AsContextMut<Data = T>,
+        store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
     ) -> wasmtime::Result<http::Response<BoxBody<Bytes, ErrorCode>>> {
@@ -71,26 +70,17 @@ impl Response {
                 // `Content-Length` header value is validated in `fields` implementation
                 let content_length =
                     get_content_length(&res.headers).context("failed to parse `content-length`")?;
-                let guest_body = move |store, contents_rx| {
-                    GuestBody::new(
-                        store,
-                        contents_rx,
-                        trailers_rx,
-                        result_tx,
-                        fut,
-                        content_length,
-                        ErrorCode::HttpResponseBodySize,
-                        getter,
-                    )
-                    .boxed()
-                };
-                match contents_rx
-                    .map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(store.as_context_mut()))
-                {
-                    Some(Ok(mut producer)) => mem::take(&mut producer.body),
-                    Some(Err(rx)) => guest_body(store, Some(rx)),
-                    None => guest_body(store, None),
-                }
+                GuestBody::new(
+                    store,
+                    contents_rx,
+                    trailers_rx,
+                    result_tx,
+                    fut,
+                    content_length,
+                    ErrorCode::HttpResponseBodySize,
+                    getter,
+                )
+                .boxed()
             }
             Body::Host { body, result_tx } => {
                 _ = result_tx.send(Box::new(fut));
