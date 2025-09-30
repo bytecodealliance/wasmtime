@@ -93,19 +93,13 @@ impl Body {
                 result_tx,
             } => {
                 fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
-                let instance = store.instance();
-                (
-                    StreamReader::new(instance, &mut store, iter::empty()),
-                    trailers_rx,
-                )
+                (StreamReader::new(&mut store, iter::empty()), trailers_rx)
             }
             Body::Host { body, result_tx } => {
                 fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
-                let instance = store.instance();
                 let (trailers_tx, trailers_rx) = oneshot::channel();
                 (
                     StreamReader::new(
-                        instance,
                         &mut store,
                         HostBodyStreamProducer {
                             body,
@@ -113,7 +107,7 @@ impl Body {
                             getter,
                         },
                     ),
-                    FutureReader::new(instance, &mut store, trailers_rx),
+                    FutureReader::new(&mut store, trailers_rx),
                 )
             }
         }

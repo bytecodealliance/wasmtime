@@ -8,7 +8,7 @@ use std::pin::pin;
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
 use std::time::Duration;
-use wasmtime::component::{Accessor, Instance, Linker, ResourceTable};
+use wasmtime::component::{Accessor, Linker, ResourceTable};
 use wasmtime::{AsContextMut, Engine, Store, StoreContextMut};
 use wasmtime_wasi::WasiCtxBuilder;
 
@@ -71,8 +71,10 @@ async fn test_sleep_post_return(components: &[&str]) -> Result<()> {
         },
     );
 
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let guest = sleep_post_return::SleepPostReturnCallee::new(&mut store, &instance)?;
+    let guest = sleep_post_return::SleepPostReturnCallee::instantiate_async(
+        &mut store, &component, &linker,
+    )
+    .await?;
 
     async fn run_with(
         accessor: &Accessor<Ctx>,
@@ -93,18 +95,17 @@ async fn test_sleep_post_return(components: &[&str]) -> Result<()> {
 
     async fn run(
         store: StoreContextMut<'_, Ctx>,
-        instance: Instance,
         guest: &sleep_post_return::SleepPostReturnCallee,
     ) -> Result<()> {
-        instance
-            .run_concurrent(store, async |accessor| {
+        store
+            .run_concurrent(async |accessor| {
                 run_with(accessor, guest).await?;
 
                 // Go idle for a bit before doing it again.  This tests that
-                // `Instance::run_concurrent` is okay with having no outstanding
-                // guest or host tasks to poll for a while, trusting that we'll
-                // resolve the future independently, with or without giving it
-                // more work to do.
+                // `StoreContextMut::run_concurrent` is okay with having no
+                // outstanding guest or host tasks to poll for a while, trusting
+                // that we'll resolve the future independently, with or without
+                // giving it more work to do.
                 util::sleep(Duration::from_millis(100)).await;
 
                 run_with(accessor, guest).await?;
@@ -114,23 +115,21 @@ async fn test_sleep_post_return(components: &[&str]) -> Result<()> {
             .await?
     }
 
-    run(store.as_context_mut(), instance, &guest).await?;
+    run(store.as_context_mut(), &guest).await?;
     // At this point, all subtasks should have exited, meaning no waitables,
-    // tasks, or other concurrent state should remain present in the instance.
-    instance.assert_concurrent_state_empty(&mut store);
+    // tasks, or other concurrent state should remain present in the store.
+    store.assert_concurrent_state_empty();
 
     // Do it again, but this time cancel the event loop before it exits:
     assert!(
-        future::poll_fn(|cx| Poll::Ready(
-            pin!(run(store.as_context_mut(), instance, &guest)).poll(cx)
-        ))
-        .await
-        .is_pending()
+        future::poll_fn(|cx| Poll::Ready(pin!(run(store.as_context_mut(), &guest)).poll(cx)))
+            .await
+            .is_pending()
     );
 
     // Assuming the event loop is cancel-safe, this should complete without
     // errors or panics:
-    run(store.as_context_mut(), instance, &guest).await?;
+    run(store.as_context_mut(), &guest).await?;
 
     Ok(())
 }

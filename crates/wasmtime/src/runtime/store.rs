@@ -482,7 +482,7 @@ pub struct StoreOpaque {
     host_resource_data: crate::component::HostResourceData,
 
     #[cfg(feature = "component-model-async")]
-    concurrent_async_state: concurrent::AsyncState,
+    concurrent_state: concurrent::ConcurrentState,
 
     /// State related to the executor of wasm code.
     ///
@@ -696,7 +696,7 @@ impl<T> Store<T> {
             host_resource_data: Default::default(),
             executor: Executor::new(engine),
             #[cfg(feature = "component-model-async")]
-            concurrent_async_state: Default::default(),
+            concurrent_state: Default::default(),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -2301,14 +2301,34 @@ at https://bytecodealliance.org/security.
         )
     }
 
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn component_resource_state_with_instance_and_concurrent_state(
+        &mut self,
+        instance: crate::component::Instance,
+    ) -> (
+        &mut vm::component::CallContexts,
+        &mut vm::component::HandleTable,
+        &mut crate::component::HostResourceData,
+        Pin<&mut vm::component::ComponentInstance>,
+        &mut concurrent::ConcurrentState,
+    ) {
+        (
+            &mut self.component_calls,
+            &mut self.component_host_table,
+            &mut self.host_resource_data,
+            instance.id().from_data_get_mut(&mut self.store_data),
+            &mut self.concurrent_state,
+        )
+    }
+
     #[cfg(feature = "async")]
     pub(crate) fn fiber_async_state_mut(&mut self) -> &mut fiber::AsyncState {
         &mut self.async_state
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn concurrent_async_state_mut(&mut self) -> &mut concurrent::AsyncState {
-        &mut self.concurrent_async_state
+    pub(crate) fn concurrent_state_mut(&mut self) -> &mut concurrent::ConcurrentState {
+        &mut self.concurrent_state
     }
 
     #[cfg(feature = "async")]

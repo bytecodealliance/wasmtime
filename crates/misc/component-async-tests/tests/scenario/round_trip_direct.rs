@@ -60,13 +60,14 @@ async fn test_round_trip_direct(
 
         let mut store = make_store();
 
-        let instance = linker.instantiate_async(&mut store, &component).await?;
-        let round_trip = component_async_tests::round_trip_direct::bindings::RoundTripDirect::new(
-            &mut store, &instance,
-        )?;
+        let round_trip =
+            component_async_tests::round_trip_direct::bindings::RoundTripDirect::instantiate_async(
+                &mut store, &component, &linker,
+            )
+            .await?;
 
-        instance
-            .run_concurrent(&mut store, {
+        store
+            .run_concurrent({
                 let input = input.to_owned();
                 let expected_output = expected_output.to_owned();
                 async move |accessor| {
@@ -115,8 +116,8 @@ async fn test_round_trip_direct(
             .ok_or_else(|| anyhow!("can't find `foo` in instance"))?;
 
         // Start three concurrent calls and then join them all:
-        instance
-            .run_concurrent(&mut store, async |store| -> wasmtime::Result<_> {
+        store
+            .run_concurrent(async |store| -> wasmtime::Result<_> {
                 let mut futures = FuturesUnordered::new();
                 for _ in 0..3 {
                     futures.push(async move {

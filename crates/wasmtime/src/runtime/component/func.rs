@@ -276,12 +276,12 @@ impl Func {
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
-        let mut store = store.as_context_mut();
+        let store = store.as_context_mut();
 
         #[cfg(feature = "component-model-async")]
         {
-            self.instance
-                .run_concurrent_trap_on_idle(&mut store, async |store| {
+            store
+                .run_concurrent_trap_on_idle(async |store| {
                     self.call_concurrent_dynamic(store, params, results, false)
                         .await
                         .map(drop)

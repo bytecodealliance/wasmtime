@@ -354,11 +354,10 @@ pub async fn async_readiness() -> Result<()> {
         },
     );
 
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let readiness_guest = readiness::ReadinessGuest::new(&mut store, &instance)?;
+    let readiness_guest =
+        readiness::ReadinessGuest::instantiate_async(&mut store, &component, &linker).await?;
     let expected = vec![2u8, 4, 6, 8, 9];
     let rx = StreamReader::new(
-        instance,
         &mut store,
         DelayedStreamProducer {
             inner: BufferStreamProducer {
@@ -367,8 +366,8 @@ pub async fn async_readiness() -> Result<()> {
             sleep: sleep(),
         },
     );
-    instance
-        .run_concurrent(&mut store, async move |accessor| {
+    store
+        .run_concurrent(async move |accessor| {
             let ((rx, expected), task_exit) = readiness_guest
                 .local_local_readiness()
                 .call_start(accessor, rx, expected)
@@ -498,10 +497,10 @@ async fn test_cancel(mode: Mode) -> Result<()> {
         },
     );
 
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let cancel_host = cancel::CancelHost::new(&mut store, &instance)?;
-    instance
-        .run_concurrent(&mut store, async move |accessor| {
+    let cancel_host =
+        cancel::CancelHost::instantiate_async(&mut store, &component, &linker).await?;
+    store
+        .run_concurrent(async move |accessor| {
             cancel_host
                 .local_local_cancel()
                 .call_run(accessor, mode, delay_millis())
@@ -544,7 +543,7 @@ pub trait TransmitTest {
         store: impl AsContextMut<Data = Ctx>,
         component: &Component,
         linker: &Linker<Ctx>,
-    ) -> impl Future<Output = Result<(Self::Instance, Instance)>>;
+    ) -> impl Future<Output = Result<Self::Instance>>;
 
     fn call<'a>(
         accessor: &'a Accessor<Ctx, HasSelf<Ctx>>,
@@ -561,7 +560,6 @@ pub trait TransmitTest {
 
     fn from_result(
         store: impl AsContextMut<Data = Ctx>,
-        instance: Instance,
         result: Self::Result,
     ) -> Result<(
         StreamReader<String>,
@@ -587,13 +585,11 @@ impl TransmitTest for StaticTransmitTest {
     );
 
     async fn instantiate(
-        mut store: impl AsContextMut<Data = Ctx>,
+        store: impl AsContextMut<Data = Ctx>,
         component: &Component,
         linker: &Linker<Ctx>,
-    ) -> Result<(Self::Instance, Instance)> {
-        let instance = linker.instantiate_async(&mut store, component).await?;
-        let callee = transmit::bindings::TransmitCallee::new(store, &instance)?;
-        Ok((callee, instance))
+    ) -> Result<Self::Instance> {
+        transmit::bindings::TransmitCallee::instantiate_async(store, &component, &linker).await
     }
 
     fn call<'a>(
@@ -617,7 +613,6 @@ impl TransmitTest for StaticTransmitTest {
 
     fn from_result(
         _: impl AsContextMut<Data = Ctx>,
-        _: Instance,
         result: Self::Result,
     ) -> Result<(
         StreamReader<String>,
@@ -639,9 +634,8 @@ impl TransmitTest for DynamicTransmitTest {
         store: impl AsContextMut<Data = Ctx>,
         component: &Component,
         linker: &Linker<Ctx>,
-    ) -> Result<(Self::Instance, Instance)> {
-        let instance = linker.instantiate_async(store, component).await?;
-        Ok((instance, instance))
+    ) -> Result<Self::Instance> {
+        linker.instantiate_async(store, component).await
     }
 
     async fn call<'a>(
@@ -688,7 +682,6 @@ impl TransmitTest for DynamicTransmitTest {
 
     fn from_result(
         mut store: impl AsContextMut<Data = Ctx>,
-        instance: Instance,
         result: Self::Result,
     ) -> Result<(
         StreamReader<String>,
@@ -698,9 +691,9 @@ impl TransmitTest for DynamicTransmitTest {
         let Val::Tuple(fields) = result else {
             unreachable!()
         };
-        let stream = StreamReader::from_val(store.as_context_mut(), instance, &fields[0])?;
-        let future1 = FutureReader::from_val(store.as_context_mut(), instance, &fields[1])?;
-        let future2 = FutureReader::from_val(store.as_context_mut(), instance, &fields[2])?;
+        let stream = StreamReader::from_val(store.as_context_mut(), &fields[0])?;
+        let future1 = FutureReader::from_val(store.as_context_mut(), &fields[1])?;
+        let future2 = FutureReader::from_val(store.as_context_mut(), &fields[2])?;
         Ok((stream, future1, future2))
     }
 }
@@ -729,7 +722,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
         },
     );
 
-    let (test, instance) = Test::instantiate(&mut store, &component, &linker).await?;
+    let test = Test::instantiate(&mut store, &component, &linker).await?;
 
     enum Event<Test: TransmitTest> {
         Result(Test::Result),
@@ -744,26 +737,17 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
     }
 
     let (mut control_tx, control_rx) = mpsc::channel(1);
-    let control_rx = StreamReader::new(instance, &mut store, PipeProducer::new(control_rx));
+    let control_rx = StreamReader::new(&mut store, PipeProducer::new(control_rx));
     let (mut caller_stream_tx, caller_stream_rx) = mpsc::channel(1);
-    let caller_stream_rx =
-        StreamReader::new(instance, &mut store, PipeProducer::new(caller_stream_rx));
+    let caller_stream_rx = StreamReader::new(&mut store, PipeProducer::new(caller_stream_rx));
     let (caller_future1_tx, caller_future1_rx) = oneshot::channel();
-    let caller_future1_rx = FutureReader::new(
-        instance,
-        &mut store,
-        OneshotProducer::new(caller_future1_rx),
-    );
+    let caller_future1_rx = FutureReader::new(&mut store, OneshotProducer::new(caller_future1_rx));
     let (_, caller_future2_rx) = oneshot::channel();
-    let caller_future2_rx = FutureReader::new(
-        instance,
-        &mut store,
-        OneshotProducer::new(caller_future2_rx),
-    );
+    let caller_future2_rx = FutureReader::new(&mut store, OneshotProducer::new(caller_future2_rx));
     let (callee_future1_tx, callee_future1_rx) = oneshot::channel();
     let (callee_stream_tx, callee_stream_rx) = mpsc::channel(1);
-    instance
-        .run_concurrent(&mut store, async |accessor| {
+    store
+        .run_concurrent(async |accessor| {
             let mut caller_future1_tx = Some(caller_future1_tx);
             let mut callee_future1_tx = Some(callee_future1_tx);
             let mut callee_future1_rx = Some(callee_future1_rx);
@@ -810,7 +794,7 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                     Event::Result(result) => {
                         accessor.with(|mut store| {
                             let (callee_stream_rx, callee_future1_rx, _) =
-                                Test::from_result(&mut store, instance, result)?;
+                                Test::from_result(&mut store, result)?;
                             callee_stream_rx.pipe(
                                 &mut store,
                                 PipeConsumer::new(callee_stream_tx.take().unwrap()),
@@ -950,13 +934,9 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
         sleep: sleep(),
     };
     let stream = if procrastinate {
-        StreamReader::new(
-            instance,
-            &mut store,
-            ProcrastinatingStreamProducer(producer),
-        )
+        StreamReader::new(&mut store, ProcrastinatingStreamProducer(producer))
     } else {
-        StreamReader::new(instance, &mut store, producer)
+        StreamReader::new(&mut store, producer)
     };
     let future_expected = 10;
     let producer = DelayedFutureProducer {
@@ -966,16 +946,12 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
         sleep: sleep(),
     };
     let future = if procrastinate {
-        FutureReader::new(
-            instance,
-            &mut store,
-            ProcrastinatingFutureProducer(producer),
-        )
+        FutureReader::new(&mut store, ProcrastinatingFutureProducer(producer))
     } else {
-        FutureReader::new(instance, &mut store, producer)
+        FutureReader::new(&mut store, producer)
     };
-    instance
-        .run_concurrent(&mut store, async move |accessor| {
+    store
+        .run_concurrent(async move |accessor| {
             let ((stream, stream_expected, future, future_expected), task_exit) = guest
                 .local_local_synchronous_transmit()
                 .call_start(accessor, stream, stream_expected, future, future_expected)

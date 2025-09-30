@@ -196,19 +196,17 @@ impl stdin::HostWithStore for WasiCli {
     async fn read_via_stream<U>(
         store: &Accessor<U, Self>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        let instance = store.instance();
         store.with(|mut store| {
             let rx = store.get().ctx.stdin.async_stream();
             let (result_tx, result_rx) = oneshot::channel();
             let stream = StreamReader::new(
-                instance,
                 &mut store,
                 InputStreamProducer {
                     rx: Box::into_pin(rx),
                     result_tx: Some(result_tx),
                 },
             );
-            let future = FutureReader::new(instance, &mut store, async {
+            let future = FutureReader::new(&mut store, async {
                 anyhow::Ok(match result_rx.await {
                     Ok(err) => Err(err),
                     Err(_) => Ok(()),

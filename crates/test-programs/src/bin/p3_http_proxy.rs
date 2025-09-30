@@ -15,7 +15,7 @@ struct Component;
 test_programs::p3::proxy::export!(Component);
 
 impl Handler for Component {
-    /// Return a response which echoes the request headers, body, and trailers.
+    // Forward the request body and trailers to a URL specified in a header.
     async fn handle(request: Request) -> Result<Response, ErrorCode> {
         let headers = request.get_headers().copy_all();
         Ok(

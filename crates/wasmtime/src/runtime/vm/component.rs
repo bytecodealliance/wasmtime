@@ -42,9 +42,6 @@ pub use self::handle_table::{TransmitLocalState, Waitable};
 pub use self::resources::CallContext;
 pub use self::resources::{CallContexts, ResourceTables, TypedResource, TypedResourceIndex};
 
-#[cfg(feature = "component-model-async")]
-use crate::component::concurrent;
-
 /// Runtime representation of a component instance and all state necessary for
 /// the instance itself.
 ///
@@ -87,11 +84,6 @@ pub struct ComponentInstance {
     /// is used directly to translate guest handles to host representations and
     /// vice-versa.
     instance_handle_tables: PrimaryMap<RuntimeComponentInstanceIndex, HandleTable>,
-
-    /// State related to async for this component, e.g. futures, streams, tasks,
-    /// etc.
-    #[cfg(feature = "component-model-async")]
-    concurrent_state: concurrent::ConcurrentState,
 
     /// What all compile-time-identified core instances are mapped to within the
     /// `Store` that this component belongs to.
@@ -314,8 +306,6 @@ impl ComponentInstance {
             imports: imports.clone(),
             store: VMStoreRawPtr(store),
             post_return_arg: None,
-            #[cfg(feature = "component-model-async")]
-            concurrent_state: concurrent::ConcurrentState::new(component),
             vmctx: OwnedVMContext::new(),
         });
         unsafe {
@@ -882,13 +872,6 @@ impl ComponentInstance {
         // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().post_return_arg }
-    }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn concurrent_state_mut(self: Pin<&mut Self>) -> &mut concurrent::ConcurrentState {
-        // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
-        // the map returned.
-        unsafe { &mut self.get_unchecked_mut().concurrent_state }
     }
 
     pub(crate) fn check_may_leave(

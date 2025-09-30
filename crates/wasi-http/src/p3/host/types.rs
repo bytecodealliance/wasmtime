@@ -319,7 +319,6 @@ impl HostRequestWithStore for WasiHttp {
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
         options: Option<Resource<RequestOptions>>,
     ) -> wasmtime::Result<(Resource<Request>, FutureReader<Result<(), ErrorCode>>)> {
-        let instance = store.instance();
         store.with(|mut store| {
             let (result_tx, result_rx) = oneshot::channel();
             let body = match contents
@@ -357,11 +356,7 @@ impl HostRequestWithStore for WasiHttp {
             let req = table.push(req).context("failed to push request to table")?;
             Ok((
                 req,
-                FutureReader::new(
-                    instance,
-                    &mut store,
-                    GuestBodyResultProducer::Receiver(result_rx),
-                ),
+                FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx)),
             ))
         })
     }
@@ -613,7 +608,6 @@ impl HostResponseWithStore for WasiHttp {
         contents: Option<StreamReader<u8>>,
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     ) -> wasmtime::Result<(Resource<Response>, FutureReader<Result<(), ErrorCode>>)> {
-        let instance = store.instance();
         store.with(|mut store| {
             let (result_tx, result_rx) = oneshot::channel();
             let body = match contents
@@ -646,11 +640,7 @@ impl HostResponseWithStore for WasiHttp {
                 .context("failed to push response to table")?;
             Ok((
                 res,
-                FutureReader::new(
-                    instance,
-                    &mut store,
-                    GuestBodyResultProducer::Receiver(result_rx),
-                ),
+                FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx)),
             ))
         })
     }
