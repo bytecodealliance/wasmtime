@@ -296,11 +296,7 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::WaitableSetWait {
-                instance,
-                options,
-                cancellable,
-            } => {
+            Trampoline::WaitableSetWait { instance, options } => {
                 self.translate_libcall(
                     host::waitable_set_wait,
                     TrapSentinel::NegativeOne,
@@ -308,19 +304,10 @@ impl<'a> TrampolineCompiler<'a> {
                     |me, params| {
                         params.push(me.index_value(*instance));
                         params.push(me.index_value(*options));
-                        params.push(
-                            me.builder
-                                .ins()
-                                .iconst(ir::types::I8, i64::from(*cancellable)),
-                        );
                     },
                 );
             }
-            Trampoline::WaitableSetPoll {
-                instance,
-                options,
-                cancellable,
-            } => {
+            Trampoline::WaitableSetPoll { instance, options } => {
                 self.translate_libcall(
                     host::waitable_set_poll,
                     TrapSentinel::NegativeOne,
@@ -328,11 +315,6 @@ impl<'a> TrampolineCompiler<'a> {
                     |me, params| {
                         params.push(me.index_value(*instance));
                         params.push(me.index_value(*options));
-                        params.push(
-                            me.builder
-                                .ins()
-                                .iconst(ir::types::I8, i64::from(*cancellable)),
-                        );
                     },
                 );
             }
@@ -865,12 +847,16 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
-            Trampoline::ThreadYieldTo { cancellable } => {
+            Trampoline::ThreadYieldTo {
+                instance,
+                cancellable,
+            } => {
                 self.translate_libcall(
                     host::thread_yield_to,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
                     |me, params| {
+                        params.push(me.index_value(*instance));
                         params.push(
                             me.builder
                                 .ins()

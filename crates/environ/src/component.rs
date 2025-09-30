@@ -108,9 +108,9 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             waitable_set_new(vmctx: vmctx, caller_instance: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            waitable_set_wait(vmctx: vmctx, caller_instance: u32, options: u32, cancellable: u8, set: u32, payload: u32) -> u64;
+            waitable_set_wait(vmctx: vmctx, caller_instance: u32, options: u32, set: u32, payload: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            waitable_set_poll(vmctx: vmctx, caller_instance: u32, options: u32, cancellable: u8, set: u32, payload: u32) -> u64;
+            waitable_set_poll(vmctx: vmctx, caller_instance: u32, options: u32, set: u32, payload: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             waitable_set_drop(vmctx: vmctx, caller_instance: u32, set: u32) -> bool;
             #[cfg(feature = "component-model-async")]
@@ -198,7 +198,7 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             thread_resume_later(vmctx: vmctx, thread_idx: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            thread_yield_to(vmctx: vmctx, cancellable: u8, thread_idx: u32) -> u32;
+            thread_yield_to(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
 
             trap(vmctx: vmctx, code: u8) -> bool;
 

@@ -354,12 +354,10 @@ pub enum Trampoline {
     WaitableSetWait {
         instance: RuntimeComponentInstanceIndex,
         options: OptionsId,
-        cancellable: bool,
     },
     WaitableSetPoll {
         instance: RuntimeComponentInstanceIndex,
         options: OptionsId,
-        cancellable: bool,
     },
     WaitableSetDrop {
         instance: RuntimeComponentInstanceIndex,
@@ -494,6 +492,7 @@ pub enum Trampoline {
     },
     ThreadResumeLater,
     ThreadYieldTo {
+        instance: RuntimeComponentInstanceIndex,
         cancellable: bool,
     },
 }
@@ -961,24 +960,18 @@ impl LinearizeDfg<'_> {
             Trampoline::WaitableSetNew { instance } => info::Trampoline::WaitableSetNew {
                 instance: *instance,
             },
-            Trampoline::WaitableSetWait {
-                instance,
-                options,
-                cancellable,
-            } => info::Trampoline::WaitableSetWait {
-                instance: *instance,
-                options: self.options(*options),
-                cancellable: *cancellable,
-            },
-            Trampoline::WaitableSetPoll {
-                instance,
-                options,
-                cancellable,
-            } => info::Trampoline::WaitableSetPoll {
-                instance: *instance,
-                options: self.options(*options),
-                cancellable: *cancellable,
-            },
+            Trampoline::WaitableSetWait { instance, options } => {
+                info::Trampoline::WaitableSetWait {
+                    instance: *instance,
+                    options: self.options(*options),
+                }
+            }
+            Trampoline::WaitableSetPoll { instance, options } => {
+                info::Trampoline::WaitableSetPoll {
+                    instance: *instance,
+                    options: self.options(*options),
+                }
+            }
             Trampoline::WaitableSetDrop { instance } => info::Trampoline::WaitableSetDrop {
                 instance: *instance,
             },
@@ -1168,7 +1161,11 @@ impl LinearizeDfg<'_> {
                 cancellable: *cancellable,
             },
             Trampoline::ThreadResumeLater => info::Trampoline::ThreadResumeLater,
-            Trampoline::ThreadYieldTo { cancellable } => info::Trampoline::ThreadYieldTo {
+            Trampoline::ThreadYieldTo {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadYieldTo {
+                instance: *instance,
                 cancellable: *cancellable,
             },
         };

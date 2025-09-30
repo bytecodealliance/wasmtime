@@ -211,11 +211,9 @@ enum LocalInitializer<'data> {
     },
     WaitableSetWait {
         options: LocalCanonicalOptions,
-        cancellable: bool,
     },
     WaitableSetPoll {
         options: LocalCanonicalOptions,
-        cancellable: bool,
     },
     WaitableSetDrop {
         func: ModuleInternedTypeIndex,
@@ -901,7 +899,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                                     callback: None,
                                     string_encoding: StringEncoding::Utf8,
                                 },
-                                cancellable,
                             }
                         }
                         wasmparser::CanonicalFunction::WaitableSetPoll {
@@ -923,7 +920,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                                     callback: None,
                                     string_encoding: StringEncoding::Utf8,
                                 },
-                                cancellable,
                             }
                         }
                         wasmparser::CanonicalFunction::WaitableSetDrop => {
@@ -1123,14 +1119,14 @@ impl<'a, 'data> Translator<'a, 'data> {
                         }
                         wasmparser::CanonicalFunction::ThreadNewIndirect {
                             func_ty_index,
-                            table_id,
+                            table_index,
                         } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ThreadNewIndirect {
                                 func,
                                 start_func_ty: ComponentTypeIndex::from_u32(func_ty_index),
-                                start_func_table_index: TableIndex::from_u32(table_id),
+                                start_func_table_index: TableIndex::from_u32(table_index),
                             }
                         }
                         wasmparser::CanonicalFunction::ThreadSwitchTo { cancellable } => {

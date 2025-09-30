@@ -745,10 +745,7 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            WaitableSetWait {
-                options,
-                cancellable,
-            } => {
+            WaitableSetWait { options } => {
                 let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
@@ -761,10 +758,7 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
-            WaitableSetPoll {
-                options,
-                cancellable,
-            } => {
+            WaitableSetPoll { options } => {
                 let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
@@ -1122,20 +1116,6 @@ impl<'a> Inliner<'a> {
                     .push((*func, dfg::Trampoline::ThreadIndex));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ContextSet { func, i } => {
-                let index = self
-                    .result
-                    .trampolines
-                    .push((*func, dfg::Trampoline::ContextSet(*i)));
-                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
-            }
-            ThreadIndex { func } => {
-                let index = self
-                    .result
-                    .trampolines
-                    .push((*func, dfg::Trampoline::ThreadIndex));
-                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
-            }
             ThreadNewIndirect {
                 func,
                 start_func_table_index,
@@ -1187,6 +1167,7 @@ impl<'a> Inliner<'a> {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadYieldTo {
+                        instance: frame.instance,
                         cancellable: *cancellable,
                     },
                 ));

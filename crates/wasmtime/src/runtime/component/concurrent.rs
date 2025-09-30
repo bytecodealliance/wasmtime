@@ -2827,7 +2827,6 @@ impl Instance {
         store: &mut dyn VMStore,
         caller: RuntimeComponentInstanceIndex,
         options: OptionsIndex,
-        cancellable: bool,
         set: u32,
         payload: u32,
     ) -> Result<u32> {
@@ -2855,7 +2854,6 @@ impl Instance {
         store: &mut dyn VMStore,
         caller: RuntimeComponentInstanceIndex,
         options: OptionsIndex,
-        cancellable: bool,
         set: u32,
         payload: u32,
     ) -> Result<u32> {
@@ -2906,12 +2904,13 @@ impl Instance {
     pub(crate) fn thread_yield_to<T: 'static>(
         self,
         mut store: StoreContextMut<T>,
+        caller: RuntimeComponentInstanceIndex,
         cancellable: bool,
         thread: GuestThreadIndex,
     ) -> Result<bool> {
         log::trace!("thread yielding to {thread:?}");
         self.resume_suspended_thread(store.as_context_mut(), thread, true)?;
-        self.thread_yield(store.0, cancellable)
+        self.thread_yield(store.0, caller, cancellable)
     }
 
     pub(crate) fn thread_switch_to<T: 'static>(
@@ -3357,7 +3356,7 @@ impl Instance {
                     if async_ {
                         return Ok(BLOCKED);
                     } else {
-                        self.wait_for_event(store, Waitable::Guest(guest_thread.task))?;
+                        self.wait_for_event(store, Waitable::Guest(guest_task))?;
                     }
                 }
             }
@@ -3376,11 +3375,17 @@ impl Instance {
 
     fn wait_for_event(self, store: &mut dyn VMStore, waitable: Waitable) -> Result<()> {
         let state = self.concurrent_state_mut(store);
-        let caller = state.guest_task.unwrap();
+        let caller = state.guest_thread.unwrap();
         let old_set = waitable.common(state)?.set;
-        let set = state.get_mut(caller)?.sync_call_set;
+        let set = state.get_mut(caller.task)?.sync_call_set;
         waitable.join(state, Some(set))?;
-        self.suspend(store, SuspendReason::Waiting { set, task: caller })?;
+        self.suspend(
+            store,
+            SuspendReason::Waiting {
+                set,
+                thread: caller,
+            },
+        )?;
         let state = self.concurrent_state_mut(store);
         waitable.join(state, old_set)
     }
@@ -3631,6 +3636,7 @@ pub trait VMComponentAsyncStore {
     fn thread_yield_to(
         &mut self,
         instance: Instance,
+        caller: RuntimeComponentInstanceIndex,
         cancellable: bool,
         thread: GuestThreadIndex,
     ) -> Result<bool>;
@@ -3945,10 +3951,11 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
     fn thread_yield_to(
         &mut self,
         instance: Instance,
+        caller: RuntimeComponentInstanceIndex,
         cancellable: bool,
         thread: GuestThreadIndex,
     ) -> Result<bool> {
-        instance.thread_yield_to(StoreContextMut(self), cancellable, thread)
+        instance.thread_yield_to(StoreContextMut(self), caller, cancellable, thread)
     }
 
     fn thread_switch_to(

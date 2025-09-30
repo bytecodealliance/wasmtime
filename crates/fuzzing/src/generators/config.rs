@@ -135,7 +135,9 @@ impl Config {
             extended_const,
             wide_arithmetic,
             component_model_async,
-            component_model_threading
+            component_model_async_builtins,
+            component_model_async_stackful,
+            component_model_threading,
             component_model_error_context,
             component_model_gc,
             simd,
@@ -154,8 +156,11 @@ impl Config {
         self.module_config.function_references_enabled =
             function_references.or(gc).unwrap_or(false);
         self.module_config.component_model_async = component_model_async.unwrap_or(false);
-        self.module_config.component_model_threading =
-            component_model_threading.unwrap_or(false);
+        self.module_config.component_model_async_builtins =
+            component_model_async_builtins.unwrap_or(false);
+        self.module_config.component_model_async_stackful =
+            component_model_async_stackful.unwrap_or(false);
+        self.module_config.component_model_threading = component_model_threading.unwrap_or(false);
         self.module_config.component_model_error_context =
             component_model_error_context.unwrap_or(false);
         self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
@@ -276,8 +281,11 @@ impl Config {
         cfg.wasm.async_stack_zeroing = Some(self.wasmtime.async_stack_zeroing);
         cfg.wasm.bulk_memory = Some(true);
         cfg.wasm.component_model_async = Some(self.module_config.component_model_async);
-        cfg.wasm.component_model_threading =
-            Some(self.module_config.component_model_threading);
+        cfg.wasm.component_model_async_builtins =
+            Some(self.module_config.component_model_async_builtins);
+        cfg.wasm.component_model_async_stackful =
+            Some(self.module_config.component_model_async_stackful);
+        cfg.wasm.component_model_threading = Some(self.module_config.component_model_threading);
         cfg.wasm.component_model_error_context =
             Some(self.module_config.component_model_error_context);
         cfg.wasm.component_model_gc = Some(self.module_config.component_model_gc);

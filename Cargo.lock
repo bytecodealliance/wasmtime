@@ -4457,6 +4457,7 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "tokio",
+ "tracing-subscriber",
  "wasm-encoder",
  "wasm-wave",
  "wasmparser 0.239.0",

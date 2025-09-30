@@ -795,8 +795,6 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
         /// Configuration options for this intrinsic call.
         options: OptionsIndex,
-        /// If `true`, indicates the caller instance maybe reentered.
-        cancellable: bool,
     },
 
     /// A `waitable-set.poll` intrinsic, which checks whether any outstanding
@@ -807,8 +805,6 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
         /// Configuration options for this intrinsic call.
         options: OptionsIndex,
-        /// If `true`, indicates the caller instance maybe reentered.
-        cancellable: bool,
     },
 
     /// A `waitable-set.drop` intrinsic.
@@ -1149,6 +1145,8 @@ pub enum Trampoline {
 
     /// Intrinsic used to implement the `thread.yield-to` component model builtin.
     ThreadYieldTo {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// If `true`, indicates the caller instance maybe reentered.
         cancellable: bool,
     },

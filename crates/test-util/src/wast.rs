@@ -226,6 +226,8 @@ macro_rules! foreach_config_option {
             hogs_memory
             nan_canonicalization
             component_model_async
+            component_model_async_builtins
+            component_model_async_stackful
             component_model_threading
             component_model_error_context
             component_model_gc

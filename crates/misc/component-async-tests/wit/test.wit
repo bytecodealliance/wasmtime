@@ -326,6 +326,10 @@ world intertask-communication {
   export run;
 }
 
+world readiness-guest {
+  export readiness;
+}
+
 world synchronous-transmit-guest {
   export synchronous-transmit;
 }

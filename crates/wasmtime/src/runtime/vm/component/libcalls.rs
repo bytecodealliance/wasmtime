@@ -745,7 +745,6 @@ fn waitable_set_wait(
     instance: Instance,
     caller: u32,
     options: u32,
-    cancellable: u8,
     set: u32,
     payload: u32,
 ) -> Result<u32> {
@@ -764,7 +763,6 @@ fn waitable_set_poll(
     instance: Instance,
     caller: u32,
     options: u32,
-    cancellable: u8,
     set: u32,
     payload: u32,
 ) -> Result<u32> {
@@ -1419,11 +1417,13 @@ fn thread_resume_later(store: &mut dyn VMStore, instance: Instance, thread_idx: 
 fn thread_yield_to(
     store: &mut dyn VMStore,
     instance: Instance,
+    caller_instance: u32,
     cancellable: u8,
     thread_idx: u32,
 ) -> Result<bool> {
     store.component_async_store().thread_yield_to(
         instance,
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
         cancellable != 0,
         GuestThreadIndex::from_u32(thread_idx),
     )

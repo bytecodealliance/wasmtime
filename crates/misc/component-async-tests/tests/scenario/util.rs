@@ -35,6 +35,8 @@ pub fn config() -> Config {
     }
     config.wasm_component_model(true);
     config.wasm_component_model_async(true);
+    config.wasm_component_model_async_builtins(true);
+    config.wasm_component_model_async_stackful(true);
     config.wasm_component_model_threading(true);
     config.wasm_component_model_error_context(true);
     config.async_support(true);

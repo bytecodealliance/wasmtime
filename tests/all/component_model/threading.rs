@@ -10,8 +10,7 @@ async fn threads() -> Result<()> {
     let builder = FmtSubscriber::builder()
         .with_writer(std::io::stderr)
         .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"))
-        .with_ansi(std::io::stderr().is_terminal())
-        .init();
+        .with_ansi(std::io::stderr().is_terminal());
     let mut config = Config::new();
     config.async_support(true);
     config.wasm_component_model_async(true);

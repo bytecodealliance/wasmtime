@@ -112,11 +112,6 @@ pub enum Trap {
     /// that all host tasks have completed and any/all host-owned stream/future
     /// handles have been dropped.
     AsyncDeadlock,
-
-    /// When the `component-model` feature is enabled this trap represents a
-    /// scenario where a component instance tried to call an import or intrinsic
-    /// when it wasn't allowed to, e.g. from a post-return function.
-    CannotLeaveComponent,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -195,7 +190,6 @@ impl fmt::Display for Trap {
             ContinuationAlreadyConsumed => "continuation already consumed",
             DisabledOpcode => "pulley opcode disabled at compile time was executed",
             AsyncDeadlock => "deadlock detected: event loop cannot make further progress",
-            CannotLeaveComponent => "cannot leave component instance",
         };
         write!(f, "wasm trap: {desc}")
     }
