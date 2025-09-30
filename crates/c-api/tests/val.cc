@@ -75,3 +75,82 @@ TEST(Val, Smoke) {
   val = func;
   EXPECT_EQ(val.kind(), ValKind::FuncRef);
 }
+
+class SetOnDrop {
+  std::shared_ptr<std::atomic<bool>> flag_;
+
+public:
+  SetOnDrop() : flag_(std::make_shared<std::atomic<bool>>(false)) {}
+  SetOnDrop(const SetOnDrop &) = delete;
+  SetOnDrop(SetOnDrop &&obj) : flag_(obj.flag_) { obj.flag_.reset(); }
+  ~SetOnDrop() {
+    if (flag_)
+      flag_->store(true);
+  }
+
+  const std::shared_ptr<std::atomic<bool>> &flag() { return this->flag_; }
+};
+
+TEST(Val, DropsExternRef) {
+  std::shared_ptr<std::atomic<bool>> flag;
+  Engine engine;
+  Store store(engine);
+
+  // smoke test for `SetOnDrop` itself
+  {
+    SetOnDrop guard;
+    flag = guard.flag();
+    EXPECT_FALSE(flag->load());
+  }
+  EXPECT_TRUE(flag->load());
+
+  // Test that if an `ExternRef` is created and dropped it doesn't leak.
+  {
+    SetOnDrop guard;
+    flag = guard.flag();
+    ExternRef r(store, std::make_shared<SetOnDrop>(std::move(guard)));
+    EXPECT_FALSE(flag->load());
+    store.context().gc();
+    EXPECT_FALSE(flag->load());
+  }
+  EXPECT_FALSE(flag->load());
+  store.context().gc();
+  EXPECT_TRUE(flag->load());
+
+  // Test that if a `Val(ExternRef)` is created and dropped it doesn't leak.
+  {
+    SetOnDrop guard;
+    flag = guard.flag();
+    ExternRef r(store, std::make_shared<SetOnDrop>(std::move(guard)));
+    Val v(r);
+    EXPECT_FALSE(flag->load());
+    store.context().gc();
+    EXPECT_FALSE(flag->load());
+  }
+  EXPECT_FALSE(flag->load());
+  store.context().gc();
+  EXPECT_TRUE(flag->load());
+
+  // Similar to above testing a variety of APIs.
+  {
+    SetOnDrop guard;
+    flag = guard.flag();
+    ExternRef r(store, std::make_shared<SetOnDrop>(std::move(guard)));
+    ExternRef r2 = r;
+    ExternRef r3(r2);
+    r3 = r2;
+    r = std::move(r2);
+
+    Val v(r3);
+    Val v2 = v;
+    Val v3(v2);
+    v3 = v2;
+    v = std::move(v2);
+
+    store.context().gc();
+    EXPECT_FALSE(flag->load());
+  }
+  EXPECT_FALSE(flag->load());
+  store.context().gc();
+  EXPECT_TRUE(flag->load());
+}

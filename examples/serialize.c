@@ -20,6 +20,12 @@ static void exit_with_error(const char *message, wasmtime_error_t *error,
 static wasm_trap_t *hello_callback(void *env, wasmtime_caller_t *caller,
                                    const wasmtime_val_t *args, size_t nargs,
                                    wasmtime_val_t *results, size_t nresults) {
+  (void) env;
+  (void) caller;
+  (void) args;
+  (void) nargs;
+  (void) results;
+  (void) nresults;
   printf("Calling back...\n");
   printf("> Hello World!\n");
   return NULL;
@@ -102,6 +108,7 @@ int deserialize(wasm_byte_vec_t *buffer) {
   wasm_functype_t *hello_ty = wasm_functype_new_0_0();
   wasmtime_func_t hello;
   wasmtime_func_new(context, hello_ty, hello_callback, NULL, NULL, &hello);
+  wasm_functype_delete(hello_ty);
 
   // With our callback function we can now instantiate the compiled module,
   // giving us an instance we can then execute exports from. Note that

@@ -87,6 +87,14 @@ template <> struct WasmType<std::optional<ExternRef>> {
   static const bool valid = true;
   static const ValKind kind = ValKind::ExternRef;
   static void store(Store::Context cx, wasmtime_val_raw_t *p,
+                    std::optional<ExternRef> &&ref) {
+    if (ref) {
+      p->externref = ref->take_raw(cx);
+    } else {
+      p->externref = 0;
+    }
+  }
+  static void store(Store::Context cx, wasmtime_val_raw_t *p,
                     const std::optional<ExternRef> &ref) {
     if (ref) {
       p->externref = wasmtime_externref_to_raw(cx.raw_context(), ref->raw());
@@ -129,6 +137,9 @@ template <typename T> struct WasmTypeList {
   static bool matches(ValType::ListRef types) {
     return WasmTypeList<std::tuple<T>>::matches(types);
   }
+  static void store(Store::Context cx, wasmtime_val_raw_t *storage, T &&t) {
+    WasmType<T>::store(cx, storage, t);
+  }
   static void store(Store::Context cx, wasmtime_val_raw_t *storage,
                     const T &t) {
     WasmType<T>::store(cx, storage, t);
@@ -168,6 +179,15 @@ template <typename... T> struct WasmTypeList<std::tuple<T...>> {
     }
     size_t n = 0;
     return ((WasmType<T>::kind == types.begin()[n++].kind()) && ...);
+  }
+  static void store(Store::Context cx, wasmtime_val_raw_t *storage,
+                    std::tuple<T...> &&t) {
+    size_t n = 0;
+    std::apply(
+        [&](auto &...val) {
+          (WasmType<T>::store(cx, &storage[n++], val), ...); // NOLINT
+        },
+        t);
   }
   static void store(Store::Context cx, wasmtime_val_raw_t *storage,
                     const std::tuple<T...> &t) {

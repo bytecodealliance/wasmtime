@@ -1,7 +1,7 @@
 use crate::r#ref::ref_to_val;
 use crate::{
-    WASM_I32, WasmtimeStoreContextMut, from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t,
-    wasmtime_anyref_t, wasmtime_externref_t, wasmtime_valkind_t,
+    WASM_I32, from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_anyref_t,
+    wasmtime_externref_t, wasmtime_valkind_t,
 };
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
@@ -158,6 +158,22 @@ const _: () = {
     assert!(std::mem::align_of::<wasmtime_val_union>() == std::mem::align_of::<u64>());
 };
 
+impl Drop for wasmtime_val_t {
+    fn drop(&mut self) {
+        unsafe {
+            match self.kind {
+                crate::WASMTIME_ANYREF => {
+                    let _ = ManuallyDrop::take(&mut self.of.anyref);
+                }
+                crate::WASMTIME_EXTERNREF => {
+                    let _ = ManuallyDrop::take(&mut self.of.externref);
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 // The raw pointers are actually optional boxes.
 unsafe impl Send for wasmtime_val_union
 where
@@ -298,33 +314,32 @@ impl wasmtime_val_t {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_val_unroot(
-    _cx: WasmtimeStoreContextMut<'_>,
-    val: &mut MaybeUninit<wasmtime_val_t>,
-) {
-    let val = val.assume_init_read();
-    match val.kind {
-        crate::WASMTIME_ANYREF => {
-            if let Some(val) = ManuallyDrop::into_inner(val.of.anyref).as_wasmtime() {
-                drop(val);
-            }
-        }
-        crate::WASMTIME_EXTERNREF => {
-            if let Some(val) = ManuallyDrop::into_inner(val.of.externref).as_wasmtime() {
-                drop(val);
-            }
-        }
-        _ => {}
-    }
+pub unsafe extern "C" fn wasmtime_val_unroot(_cx: *mut u8, val: &mut ManuallyDrop<wasmtime_val_t>) {
+    ManuallyDrop::drop(val);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_val_clone(
-    cx: WasmtimeStoreContextMut<'_>,
+    _cx: *mut u8,
     src: &wasmtime_val_t,
     dst: &mut MaybeUninit<wasmtime_val_t>,
 ) {
-    let mut scope = RootScope::new(cx);
-    let val = src.to_val(&mut scope);
-    crate::initialize(dst, wasmtime_val_t::from_val(&mut scope, val))
+    let of = match src.kind {
+        crate::WASMTIME_ANYREF => wasmtime_val_union {
+            anyref: ManuallyDrop::new(src.of.anyref.as_wasmtime().into()),
+        },
+        crate::WASMTIME_EXTERNREF => wasmtime_val_union {
+            externref: ManuallyDrop::new(src.of.externref.as_wasmtime().into()),
+        },
+        crate::WASMTIME_I32 => wasmtime_val_union { i32: src.of.i32 },
+        crate::WASMTIME_I64 => wasmtime_val_union { i64: src.of.i64 },
+        crate::WASMTIME_F32 => wasmtime_val_union { f32: src.of.f32 },
+        crate::WASMTIME_F64 => wasmtime_val_union { f64: src.of.f64 },
+        crate::WASMTIME_V128 => wasmtime_val_union { v128: src.of.v128 },
+        crate::WASMTIME_FUNCREF => wasmtime_val_union {
+            funcref: src.of.funcref,
+        },
+        _ => unreachable!(),
+    };
+    dst.write(wasmtime_val_t { kind: src.kind, of });
 }
