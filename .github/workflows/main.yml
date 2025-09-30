@@ -640,12 +640,16 @@ jobs:
           - os: ubuntu-24.04
             flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
             name: Linux
+            setup_shell: bash
           - os: macos-15
             flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
             name: macOS
+            setup_shell: bash
           - os: windows-2025
             flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
             name: Windows
+            setup_shell: cmd
+            setup: call C:\"Program Files"\"Microsoft Visual Studio"\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
 
           # This tests using static linking for examples but skips building the
           # Rust examples as well as C/C++ tests. Intended to be a faster build
@@ -653,6 +657,7 @@ jobs:
           - os: ubuntu-24.04
             flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_RUST_EXAMPLES=OFF
             name: Linux (static linking)
+            setup_shell: bash
     steps:
     - uses: actions/checkout@v4
       with:
@@ -660,7 +665,10 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: rustup target add wasm32-wasip2
 
-    - run: cmake -G Ninja -Sexamples -Bexamples/build ${{ matrix.flags }}
+    - run: |
+        ${{ matrix.setup }}
+        cmake -G Ninja -Sexamples -Bexamples/build ${{ matrix.flags }}
+      shell: ${{ matrix.setup_shell }}
     - run: ninja -C examples/build
     - run: ninja -C examples/build test
       env:
