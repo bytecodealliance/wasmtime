@@ -624,7 +624,7 @@ jobs:
   # Perform all tests of the c-api
   test_capi:
     needs: determine
-    name: Test C-API ${{ matrix.os }}
+    name: Test C-API ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     if: needs.determine.outputs.test-capi
 
@@ -660,13 +660,8 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: rustup target add wasm32-wasip2
 
-    - run: |
-        call C:\"Program Files"\"Microsoft Visual Studio"\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-        cmake -G Ninja -Sexamples -Bexamples/build ${{ matrix.flags }}
-      if: runner.os == 'Windows'
-      shell: cmd
-    - run: cmake -G Ninja -Sexamples -Bexamples/build ${{ matrix.flags }}
-      if: runner.os != 'Windows'
+    - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+    - run: cmake -G Ninja -Sexamples -DCMAKE_BUILD_TYPE=Debug -Bexamples/build ${{ matrix.flags }}
     - run: ninja -C examples/build
     - run: ninja -C examples/build test
       env:
