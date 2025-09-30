@@ -644,7 +644,10 @@ jobs:
             flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
             name: macOS
           - os: windows-2025
-            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            # Note that dynamic linking is disabled here because I don't want to
+            # have to deal with figuring out how to get `wasmtime.dll` onto
+            # `PATH` for various tests.
+            flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
             name: Windows
 
           # This tests using static linking for examples but skips building the
