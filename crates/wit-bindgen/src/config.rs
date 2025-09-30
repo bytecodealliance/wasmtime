@@ -19,7 +19,7 @@ bitflags::bitflags! {
 #[derive(Default, Debug, Clone)]
 pub struct FunctionConfig {
     rules: Vec<FunctionRule>,
-    default: FunctionFlags,
+    pub(crate) default: FunctionFlags,
 }
 
 #[derive(Debug, Clone)]
