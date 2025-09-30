@@ -649,7 +649,7 @@ jobs:
             flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
             name: Windows
             setup_shell: cmd
-            setup: call C:\"Program Files"\"Microsoft Visual Studio"\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+            setup: 'call C:\"Program Files"\"Microsoft Visual Studio"\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"'
 
           # This tests using static linking for examples but skips building the
           # Rust examples as well as C/C++ tests. Intended to be a faster build
