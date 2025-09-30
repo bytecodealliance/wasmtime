@@ -631,18 +631,28 @@ jobs:
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
-        flags:
-        # This configuration will build C/C++ tests, examples, and Rust tests.
-        # Everything is linked against the C shared library to speed up
-        # linking, and this is intended to be the "main set of tests".
-        - -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+        include:
+          # This configuration will build C/C++ tests, examples, and Rust tests.
+          # Everything is linked against the C shared library to speed up
+          # linking, and this is intended to be the "main set of tests".
+          #
+          # Run this on windows/mac/linux
+          - os: ubuntu-24.04
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            name: Linux
+          - os: macos-15
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            name: macOS
+          - os: windows-2025
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            name: Windows
 
-        # This tests using static linking for examples but skips building the
-        # Rust examples as well as C/C++ tests. Intended to be a faster build
-        # which mostly just tests static linking.
-        - -DBUILD_SHARED_LIBS=OFF -DBUILD_RUST_EXAMPLES=OFF
-
+          # This tests using static linking for examples but skips building the
+          # Rust examples as well as C/C++ tests. Intended to be a faster build
+          # which mostly just tests static linking.
+          - os: ubuntu-24.04
+            flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_RUST_EXAMPLES=OFF
+            name: Linux (static linking)
     steps:
     - uses: actions/checkout@v4
       with:
