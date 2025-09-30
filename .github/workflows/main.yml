@@ -200,6 +200,8 @@ jobs:
             echo platform-checks=true >> $GITHUB_OUTPUT
           elif grep -q 'prtest:miri' commits.log; then
             echo test-miri=true >> $GITHUB_OUTPUT
+          elif grep -q 'prtest:capi' commits.log; then
+            echo test-capi=true >> $GITHUB_OUTPUT
           fi
           if grep -q crates.c-api names.log; then
             echo test-capi=true >> $GITHUB_OUTPUT
@@ -630,23 +632,30 @@ jobs:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix:
         os: [ubuntu-24.04, macos-15, windows-2025]
+        flags:
+        # This configuration will build C/C++ tests, examples, and Rust tests.
+        # Everything is linked against the C shared library to speed up
+        # linking, and this is intended to be the "main set of tests".
+        - -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+
+        # This tests using static linking for examples but skips building the
+        # Rust examples as well as C/C++ tests. Intended to be a faster build
+        # which mostly just tests static linking.
+        - -DBUILD_SHARED_LIBS=OFF -DBUILD_RUST_EXAMPLES=OFF
 
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - run: rustup target add wasm32-wasip2
 
-    # Build and test the C API with example C programs along with the example
-    # Rust programs. Note that this only executes if the `determine` step told
-    # us to test the capi which is off-by-default for PRs.
-    - run: rustup target add wasm32-wasip2 # wasip2 target needed by example programs
-    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON
-    - run: cmake --build examples/build --config Debug
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
-      if: runner.os == 'Windows'
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
-      if: runner.os != 'Windows'
+    - run: cmake -G Ninja -Sexamples -Bexamples/build ${{ matrix.flags }}
+    - run: ninja -C examples/build
+    - run: ninja -C examples/build test
+      env:
+        CTEST_OUTPUT_ON_FAILURE: 1
+        CTEST_PARALLEL_LEVEL: 4
 
   # Perform all tests (debug mode) for `wasmtime`.
   #
