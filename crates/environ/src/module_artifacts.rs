@@ -478,8 +478,17 @@ impl CompiledFunctionsTable {
             let key_index = index.as_u32() - start.as_u32();
             FuncKeyIndex::from_raw(key_index)
         } else {
-            let sparse_index = index.as_u32() - start.as_u32();
-            let sparse_index = SparseIndex::from_u32(sparse_index);
+            let sparse_offset = index.as_u32() - start.as_u32();
+            let sparse_start = self.sparse_starts[ns_idx];
+            let sparse_index = SparseIndex::from_u32(sparse_start.as_u32() + sparse_offset);
+            debug_assert!(
+                {
+                    let range = self.sparse_range(ns_idx);
+                    range.start <= sparse_index && sparse_index < range.end
+                },
+                "{sparse_index:?} is not within {:?}",
+                self.sparse_range(ns_idx)
+            );
             self.sparse_indices[sparse_index]
         };
         let key = FuncKey::from_parts(key_ns, key_index);
@@ -737,10 +746,7 @@ mod tests {
     fn reverse_lookups() {
         use arbitrary::{Result, Unstructured};
 
-        arbtest::arbtest(|u| run(u))
-            // to reproduce
-            // .seed(0x9bcf2ddc00000020)
-            .budget_ms(1_000);
+        arbtest::arbtest(|u| run(u)).budget_ms(1_000);
 
         fn run(u: &mut Unstructured<'_>) -> Result<()> {
             let mut funcs = Vec::new();

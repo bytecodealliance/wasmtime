@@ -6,7 +6,7 @@ use crate::component;
 use crate::{
     BuiltinFunctionIndex, DefinedFuncIndex, HostCall, ModuleInternedTypeIndex, StaticModuleIndex,
 };
-use core::cmp;
+use core::{cmp, fmt};
 use serde_derive::{Deserialize, Serialize};
 
 /// The kind of a function that is being compiled, linked, or otherwise
@@ -77,8 +77,24 @@ impl FuncKeyKind {
 /// The namespace half of a `FuncKey`.
 ///
 /// This is an opaque combination of the key's kind and module index, if any.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct FuncKeyNamespace(u32);
+
+impl fmt::Debug for FuncKeyNamespace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct Hex<T: fmt::LowerHex>(T);
+        impl<T: fmt::LowerHex> fmt::Debug for Hex<T> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{:#x}", self.0)
+            }
+        }
+        f.debug_struct("FuncKeyNamespace")
+            .field("raw", &Hex(self.0))
+            .field("kind", &self.kind())
+            .field("module", &self.module())
+            .finish()
+    }
+}
 
 impl From<FuncKeyNamespace> for u32 {
     fn from(ns: FuncKeyNamespace) -> Self {
@@ -123,6 +139,10 @@ impl FuncKeyNamespace {
     pub fn kind(&self) -> FuncKeyKind {
         let raw = self.0 & FuncKey::KIND_MASK;
         FuncKeyKind::from_raw(raw)
+    }
+
+    fn module(&self) -> u32 {
+        self.0 & FuncKey::MODULE_MASK
     }
 }
 
