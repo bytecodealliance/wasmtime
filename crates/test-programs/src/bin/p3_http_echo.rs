@@ -18,7 +18,11 @@ impl Handler for Component {
         let (_, result_rx) = wit_future::new(|| Ok(()));
         let (body, trailers) = Request::consume_body(request, result_rx);
 
-        let (response, _result) = if false {
+        let (response, _result) = if headers
+            .get("x-host-to-host")
+            .into_iter()
+            .any(|v| v == b"true")
+        {
             // This is the easy and efficient way to do it...
             Response::new(headers, Some(body), trailers)
         } else {

@@ -54,3 +54,4 @@ base64 = { workspace = true }
 flate2 = { workspace = true }
 wasm-compose = { workspace = true }
 tempfile = { workspace = true }
+env_logger = { workspace = true }

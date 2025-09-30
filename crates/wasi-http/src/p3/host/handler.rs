@@ -12,12 +12,13 @@ use http::{HeaderValue, Uri};
 use http_body_util::BodyExt as _;
 use std::sync::Arc;
 use tokio::sync::oneshot;
+use tokio::task::{self, JoinHandle};
 use tracing::debug;
-use wasmtime::component::{Accessor, AccessorTask, JoinHandle, Resource};
+use wasmtime::component::{Accessor, Resource};
 
 /// A wrapper around [`JoinHandle`], which will [`JoinHandle::abort`] the task
 /// when dropped
-struct AbortOnDropJoinHandle(JoinHandle);
+struct AbortOnDropJoinHandle(JoinHandle<()>);
 
 impl Drop for AbortOnDropJoinHandle {
     fn drop(&mut self) {
@@ -171,20 +172,6 @@ trait BodyExt {
 
 impl<T> BodyExt for T {}
 
-struct SendRequestTask {
-    io: Pin<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
-    result_tx: oneshot::Sender<Result<(), ErrorCode>>,
-}
-
-impl<T> AccessorTask<T, WasiHttp, wasmtime::Result<()>> for SendRequestTask {
-    async fn run(self, _: &Accessor<T, WasiHttp>) -> wasmtime::Result<()> {
-        let res = self.io.await;
-        debug!(?res, "`send_request` I/O future finished");
-        _ = self.result_tx.send(res);
-        Ok(())
-    }
-}
-
 async fn io_task_result(
     rx: oneshot::Receiver<(
         Arc<AbortOnDropJoinHandle>,
@@ -336,7 +323,11 @@ impl HostWithStore for WasiHttp {
             Poll::Pending => {
                 // I/O driver still needs to be polled, spawn a task and send handles to it
                 let (tx, rx) = oneshot::channel();
-                let io = store.spawn(SendRequestTask { io, result_tx: tx });
+                let io = task::spawn(async move {
+                    let res = io.await;
+                    debug!(?res, "`send_request` I/O future finished");
+                    _ = tx.send(res);
+                });
                 let io = Arc::new(AbortOnDropJoinHandle(io));
                 _ = io_result_tx.send((Arc::clone(&io), rx));
                 _ = io_task_tx.send(Arc::clone(&io));
