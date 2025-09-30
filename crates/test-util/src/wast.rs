@@ -32,21 +32,26 @@ pub mod limits {
 /// of the wasmtime repository.
 pub fn find_tests(root: &Path) -> Result<Vec<WastTest>> {
     let mut tests = Vec::new();
+
+    let spec_tests = root.join("tests/spec_testsuite");
     add_tests(
         &mut tests,
-        &root.join("tests/spec_testsuite"),
+        &spec_tests,
         &FindConfig::Infer(spec_test_config),
-    )?;
+    )
+    .with_context(|| format!("failed to add tests from `{}`", spec_tests.display()))?;
+
+    let misc_tests = root.join("tests/misc_testsuite");
+    add_tests(&mut tests, &misc_tests, &FindConfig::InTest)
+        .with_context(|| format!("failed to add tests from `{}`", misc_tests.display()))?;
+
+    let cm_tests = root.join("tests/component-model/test");
     add_tests(
         &mut tests,
-        &root.join("tests/misc_testsuite"),
-        &FindConfig::InTest,
-    )?;
-    add_tests(
-        &mut tests,
-        &root.join("tests/component-model/test"),
+        &cm_tests,
         &FindConfig::Infer(component_test_config),
-    )?;
+    )
+    .with_context(|| format!("failed to add tests from `{}`", cm_tests.display()))?;
     Ok(tests)
 }
 
