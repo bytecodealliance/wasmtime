@@ -45,7 +45,7 @@ extern struct jit_descriptor __jit_debug_descriptor;
 static void exit_with_error(const char *message, wasmtime_error_t *error,
                             wasm_trap_t *trap);
 
-int main(int argc, const char *argv[]) {
+int main() {
   // Configuring engine to support generating of DWARF info.
   // lldb can be used to attach to the program and observe
   // original fib-wasm.c source code and variables.

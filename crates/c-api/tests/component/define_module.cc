@@ -36,6 +36,7 @@ TEST(component, define_module) {
   err = wasmtime_module_new(
       engine, reinterpret_cast<const uint8_t *>(wasm.data), wasm.size, &module);
   CHECK_ERR(err);
+  wasm_byte_vec_delete(&wasm);
 
   const auto store = wasmtime_store_new(engine, nullptr, nullptr);
   const auto context = wasmtime_store_context(store);
@@ -70,6 +71,8 @@ TEST(component, define_module) {
   CHECK_ERR(err);
 
   wasmtime_component_linker_delete(linker);
+  wasmtime_component_delete(component);
+  wasmtime_module_delete(module);
 
   wasmtime_store_delete(store);
   wasm_engine_delete(engine);

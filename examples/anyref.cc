@@ -47,7 +47,7 @@ int main() {
   auto cx = store.context();
   AnyRef i31 = AnyRef::i31(cx, 1234);
   Val anyref_val(i31);
-  auto opt_any = anyref_val.anyref(cx);
+  auto opt_any = anyref_val.anyref();
   if (!opt_any || !opt_any->u31(cx) || *opt_any->u31(cx) != 1234) {
     std::cerr << "> Error creating i31 anyref\n";
     return 1;
@@ -61,7 +61,7 @@ int main() {
     std::cerr << "> Error getting table element\n";
     return 1;
   }
-  auto elem_any = elem_opt->anyref(cx);
+  auto elem_any = elem_opt->anyref();
   if (!elem_any || !elem_any->u31(cx) || *elem_any->u31(cx) != 1234) {
     std::cerr << "> Error verifying table element\n";
     return 1;
@@ -71,7 +71,7 @@ int main() {
   Global global = std::get<Global>(*instance.get(store, "global"));
   global.set(store, anyref_val).unwrap();
   Val global_val = global.get(store);
-  auto global_any = global_val.anyref(cx);
+  auto global_any = global_val.anyref();
   if (!global_any || !global_any->u31(cx) || *global_any->u31(cx) != 1234) {
     std::cerr << "> Error verifying global value\n";
     return 1;
@@ -88,7 +88,7 @@ int main() {
     std::cerr << "> Unexpected number of results\n";
     return 1;
   }
-  auto ret_any = results[0].anyref(cx);
+  auto ret_any = results[0].anyref();
   if (!ret_any || !ret_any->u31(cx) || *ret_any->u31(cx) != 42) {
     std::cerr << "> Error verifying returned anyref\n";
     return 1;

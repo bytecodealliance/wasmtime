@@ -38,13 +38,41 @@ public:
   /// Creates a new `ExternRef` directly from its C-API representation.
   explicit ExternRef(wasmtime_externref_t val) : val(val) {}
 
+  /// Copy constructor to clone `other`.
+  ExternRef(const ExternRef &other) {
+    wasmtime_externref_clone(&other.val, &val);
+  }
+
+  /// Copy assignment to clone from `other`.
+  ExternRef &operator=(const ExternRef &other) {
+    wasmtime_externref_unroot(&val);
+    wasmtime_externref_clone(&other.val, &val);
+    return *this;
+  }
+
+  /// Move constructor to move the contents of `other`.
+  ExternRef(ExternRef &&other) {
+    val = other.val;
+    wasmtime_externref_set_null(&other.val);
+  }
+
+  /// Move assignment to move the contents of `other`.
+  ExternRef &operator=(ExternRef &&other) {
+    wasmtime_externref_unroot(&val);
+    val = other.val;
+    wasmtime_externref_set_null(&other.val);
+    return *this;
+  }
+
+  ~ExternRef() { wasmtime_externref_unroot(&val); }
+
   /// Creates a new `externref` value from the provided argument.
   ///
   /// Note that `val` should be safe to send across threads and should own any
   /// memory that it points to. Also note that `ExternRef` is similar to a
   /// `std::shared_ptr` in that there can be many references to the same value.
-  template <typename T> explicit ExternRef(Store::Context cx, T val) {
-    void *ptr = std::make_unique<std::any>(std::move(val)).release();
+  explicit ExternRef(Store::Context cx, std::any val) {
+    void *ptr = std::make_unique<std::any>(val).release();
     bool ok = wasmtime_externref_new(cx.ptr, ptr, finalizer, &this->val);
     if (!ok) {
       fprintf(stderr, "failed to allocate a new externref");
@@ -52,26 +80,23 @@ public:
     }
   }
 
-  /// Creates a new `ExternRef` which is separately rooted from this one.
-  ExternRef clone(Store::Context cx) {
-    wasmtime_externref_t other;
-    wasmtime_externref_clone(cx.ptr, &val, &other);
-    return ExternRef(other);
-  }
-
   /// Returns the underlying host data associated with this `ExternRef`.
   std::any &data(Store::Context cx) {
     return *static_cast<std::any *>(wasmtime_externref_data(cx.ptr, &val));
   }
 
-  /// Unroots this value from the context provided, enabling a future GC to
-  /// collect the internal object if there are no more references.
-  void unroot(Store::Context cx) { wasmtime_externref_unroot(cx.ptr, &val); }
+  /// Consumes ownership of the underlying `wasmtime_externref_t` and returns
+  /// the result of `wasmtime_externref_to_raw`.
+  uint32_t take_raw(Store::Context cx) {
+    uint32_t ret = wasmtime_externref_to_raw(cx.raw_context(), &val);
+    wasmtime_externref_set_null(&val);
+    return ret;
+  }
 
-  /// Returns the raw underlying C API value.
-  ///
-  /// This class still retains ownership of the pointer.
-  const wasmtime_externref_t *raw() const { return &val; }
+  /// Returns `wasmtime_externref_to_raw`.
+  uint32_t borrow_raw(Store::Context cx) const {
+    return wasmtime_externref_to_raw(cx.raw_context(), &val);
+  }
 };
 
 /**
@@ -86,6 +111,32 @@ public:
   /// Creates a new `AnyRef` directly from its C-API representation.
   explicit AnyRef(wasmtime_anyref_t val) : val(val) {}
 
+  /// Copy constructor to clone `other`.
+  AnyRef(const AnyRef &other) { wasmtime_anyref_clone(&other.val, &val); }
+
+  /// Copy assignment to clone from `other`.
+  AnyRef &operator=(const AnyRef &other) {
+    wasmtime_anyref_unroot(&val);
+    wasmtime_anyref_clone(&other.val, &val);
+    return *this;
+  }
+
+  /// Move constructor to move the contents of `other`.
+  AnyRef(AnyRef &&other) {
+    val = other.val;
+    wasmtime_anyref_set_null(&other.val);
+  }
+
+  /// Move assignment to move the contents of `other`.
+  AnyRef &operator=(AnyRef &&other) {
+    wasmtime_anyref_unroot(&val);
+    val = other.val;
+    wasmtime_anyref_set_null(&other.val);
+    return *this;
+  }
+
+  ~AnyRef() { wasmtime_anyref_unroot(&val); }
+
   /// Creates a new `AnyRef` which is an `i31` with the given `value`,
   /// truncated if the upper bit is set.
   static AnyRef i31(Store::Context cx, uint32_t value) {
@@ -94,21 +145,18 @@ public:
     return AnyRef(other);
   }
 
-  /// Creates a new `AnyRef` which is separately rooted from this one.
-  AnyRef clone(Store::Context cx) {
-    wasmtime_anyref_t other;
-    wasmtime_anyref_clone(cx.ptr, &val, &other);
-    return AnyRef(other);
+  /// Consumes ownership of the underlying `wasmtime_anyref_t` and returns the
+  /// result of `wasmtime_anyref_to_raw`.
+  uint32_t take_raw(Store::Context cx) {
+    uint32_t ret = wasmtime_anyref_to_raw(cx.raw_context(), &val);
+    wasmtime_anyref_set_null(&val);
+    return ret;
   }
 
-  /// Unroots this value from the context provided, enabling a future GC to
-  /// collect the internal object if there are no more references.
-  void unroot(Store::Context cx) { wasmtime_anyref_unroot(cx.ptr, &val); }
-
-  /// Returns the raw underlying C API value.
-  ///
-  /// This class still retains ownership of the pointer.
-  const wasmtime_anyref_t *raw() const { return &val; }
+  /// Returns `wasmtime_anyref_to_raw`.
+  uint32_t borrow_raw(Store::Context cx) const {
+    return wasmtime_anyref_to_raw(cx.raw_context(), &val);
+  }
 
   /// \brief If this is an `i31`, get the value zero-extended.
   std::optional<uint32_t> u31(Store::Context cx) const {
@@ -201,6 +249,7 @@ public:
     val.kind = WASMTIME_EXTERNREF;
     if (ptr) {
       val.of.externref = ptr->val;
+      wasmtime_externref_set_null(&ptr->val);
     } else {
       wasmtime_externref_set_null(&val.of.externref);
     }
@@ -210,6 +259,7 @@ public:
     val.kind = WASMTIME_ANYREF;
     if (ptr) {
       val.of.anyref = ptr->val;
+      wasmtime_anyref_set_null(&ptr->val);
     } else {
       wasmtime_anyref_set_null(&val.of.anyref);
     }
@@ -220,6 +270,35 @@ public:
   /// Creates a new `anyref` WebAssembly value which is not `ref.null
   /// any`.
   Val(AnyRef ptr);
+
+  /// Copy constructor to clone `other`.
+  Val(const Val &other) { wasmtime_val_clone(&other.val, &val); }
+
+  /// Copy assignment to clone from `other`.
+  Val &operator=(const Val &other) {
+    wasmtime_val_unroot(&val);
+    wasmtime_val_clone(&other.val, &val);
+    return *this;
+  }
+
+  /// Move constructor to move the contents of `other`.
+  Val(Val &&other) {
+    val = other.val;
+    other.val.kind = WASMTIME_I32;
+    other.val.of.i32 = 0;
+  }
+
+  /// Move assignment to move the contents of `other`.
+  Val &operator=(Val &&other) {
+    wasmtime_val_unroot(&val);
+    val = other.val;
+    other.val.kind = WASMTIME_I32;
+    other.val.of.i32 = 0;
+    return *this;
+  }
+
+  /// Unroots the values in `val`, if any.
+  ~Val() { wasmtime_val_unroot(&val); }
 
   /// Returns the kind of value that this value has.
   ValKind kind() const {
@@ -294,7 +373,7 @@ public:
   ///
   /// Note that `externref` is a nullable reference, hence the `optional` return
   /// value.
-  std::optional<ExternRef> externref(Store::Context cx) const {
+  std::optional<ExternRef> externref() const {
     if (val.kind != WASMTIME_EXTERNREF) {
       std::abort();
     }
@@ -302,7 +381,7 @@ public:
       return std::nullopt;
     }
     wasmtime_externref_t other;
-    wasmtime_externref_clone(cx.ptr, &val.of.externref, &other);
+    wasmtime_externref_clone(&val.of.externref, &other);
     return ExternRef(other);
   }
 
@@ -311,7 +390,7 @@ public:
   ///
   /// Note that `anyref` is a nullable reference, hence the `optional` return
   /// value.
-  std::optional<AnyRef> anyref(Store::Context cx) const {
+  std::optional<AnyRef> anyref() const {
     if (val.kind != WASMTIME_ANYREF) {
       std::abort();
     }
@@ -319,7 +398,7 @@ public:
       return std::nullopt;
     }
     wasmtime_anyref_t other;
-    wasmtime_anyref_clone(cx.ptr, &val.of.anyref, &other);
+    wasmtime_anyref_clone(&val.of.anyref, &other);
     return AnyRef(other);
   }
 
@@ -329,9 +408,6 @@ public:
   /// Note that `funcref` is a nullable reference, hence the `optional` return
   /// value.
   std::optional<Func> funcref() const;
-
-  /// Unroots any GC references this `Val` points to within the `cx` provided.
-  void unroot(Store::Context cx) { wasmtime_val_unroot(cx.ptr, &val); }
 };
 
 } // namespace wasmtime
