@@ -1791,9 +1791,6 @@ impl<M: ABIMachineSpec> Callee<M> {
         let mut uses: CallArgList = smallvec![];
         let mut insts = smallvec![];
 
-        if args.len() != sigs.num_args(sig) {
-            println!("MISMATCH: {}", self.signature());
-        }
         assert_eq!(args.len(), sigs.num_args(sig));
 
         let call_conv = sigs[sig].call_conv;
