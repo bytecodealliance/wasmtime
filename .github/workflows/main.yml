@@ -661,6 +661,10 @@ jobs:
     - run: rustup target add wasm32-wasip2
 
     - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+    # An ode to MinGW: man you're a pain to work around sometimes
+    - run: rm /usr/bin/link
+      if: runner.os == 'Windows'
+
     - run: cmake -G Ninja -Sexamples -DCMAKE_BUILD_TYPE=Debug -Bexamples/build ${{ matrix.flags }}
     - run: ninja -C examples/build
     - run: ninja -C examples/build test
