@@ -14,7 +14,12 @@ function(CREATE_TARGET TARGET TARGET_PATH)
     target_compile_options(wasmtime-${TARGET} PRIVATE /W3)
   endif()
 
-  target_compile_definitions(wasmtime-${TARGET} PRIVATE WASMTIME_TEST_ONLY)
+  # This is only used in fib-debug.c right now and it only works with static
+  # linking beacuse the required symbols aren't exported in the shared library, so
+  # only when shared libs are disabled is this turned on.
+  if (NOT BUILD_SHARED_LIBS)
+    target_compile_definitions(wasmtime-${TARGET} PRIVATE WASMTIME_TEST_ONLY)
+  endif()
 
   set_target_properties(wasmtime-${TARGET} PROPERTIES
     OUTPUT_NAME wasmtime-${TARGET}
@@ -24,6 +29,7 @@ function(CREATE_TARGET TARGET TARGET_PATH)
 
   target_include_directories(wasmtime-${TARGET} PUBLIC wasmtime)
   target_link_libraries(wasmtime-${TARGET} PUBLIC wasmtime)
+
   add_test(NAME ${TARGET}-c COMMAND wasmtime-${TARGET} WORKING_DIRECTORY ../..)
 endfunction()
 
@@ -34,6 +40,7 @@ function(CREATE_RUST_TEST EXAMPLE)
     add_test(NAME ${EXAMPLE}-rust COMMAND cargo run --example ${EXAMPLE} WORKING_DIRECTORY ../..)
   endif()
 endfunction()
+
 function(CREATE_RUST_WASM EXAMPLE TARGET)
   add_custom_target(${EXAMPLE}-wasm-${TARGET} ALL COMMAND cargo build -p example-${EXAMPLE}-wasm --target ${TARGET})
 endfunction()
@@ -41,7 +48,7 @@ endfunction()
 # Enable testing
 enable_testing()
 
-# Wasm files required by tests
+# Wasm files required by tests, but only built if tests are actually being run.
 create_rust_wasm(fib-debug wasm32-unknown-unknown)
 create_rust_wasm(tokio wasm32-wasip1)
 create_rust_wasm(wasi wasm32-wasip1)
@@ -80,24 +87,27 @@ create_target(wasip1 wasip1/main.c)
 create_target(wasip1-cpp wasip1/main.cc)
 
 # Rust examples/tests
-create_rust_test(anyref)
-create_rust_test(epochs)
-create_rust_test(externref)
-create_rust_test(fib-debug)
-create_rust_test(fuel)
-create_rust_test(gcd)
-create_rust_test(hello)
-create_rust_test(interrupt)
-create_rust_test(linking)
-create_rust_test(memory)
-create_rust_test(multi)
-create_rust_test(multimemory)
-create_rust_test(serialize)
-create_rust_test(threads)
-create_rust_test(wasip1)
-create_rust_test(wasip1-async)
-create_rust_test(wasip2)
-create_rust_test(wasip2-async)
-create_rust_test(tokio wasi-common/tokio)
-create_rust_test(component)
-create_rust_test(resource-component)
+if (BUILD_RUST_EXAMPLES)
+  add_custom_target(rust-examples ALL COMMAND cargo build --examples WORKING_DIRECTORY ../..)
+  create_rust_test(anyref)
+  create_rust_test(epochs)
+  create_rust_test(externref)
+  create_rust_test(fib-debug)
+  create_rust_test(fuel)
+  create_rust_test(gcd)
+  create_rust_test(hello)
+  create_rust_test(interrupt)
+  create_rust_test(linking)
+  create_rust_test(memory)
+  create_rust_test(multi)
+  create_rust_test(multimemory)
+  create_rust_test(serialize)
+  create_rust_test(threads)
+  create_rust_test(wasip1)
+  create_rust_test(wasip1-async)
+  create_rust_test(wasip2)
+  create_rust_test(wasip2-async)
+  create_rust_test(tokio wasi-common/tokio)
+  create_rust_test(component)
+  create_rust_test(resource-component)
+endif()

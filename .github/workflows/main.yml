@@ -200,6 +200,8 @@ jobs:
             echo platform-checks=true >> $GITHUB_OUTPUT
           elif grep -q 'prtest:miri' commits.log; then
             echo test-miri=true >> $GITHUB_OUTPUT
+          elif grep -q 'prtest:capi' commits.log; then
+            echo test-capi=true >> $GITHUB_OUTPUT
           fi
           if grep -q crates.c-api names.log; then
             echo test-capi=true >> $GITHUB_OUTPUT
@@ -622,31 +624,56 @@ jobs:
   # Perform all tests of the c-api
   test_capi:
     needs: determine
-    name: Test C-API ${{ matrix.os }}
+    name: Test C-API ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     if: needs.determine.outputs.test-capi
 
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        include:
+          # This configuration will build C/C++ tests, examples, and Rust tests.
+          # Everything is linked against the C shared library to speed up
+          # linking, and this is intended to be the "main set of tests".
+          #
+          # Run this on windows/mac/linux
+          - os: ubuntu-24.04
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            name: Linux
+          - os: macos-15
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            name: macOS
+          - os: windows-2025
+            # Note that dynamic linking is disabled here because I don't want to
+            # have to deal with figuring out how to get `wasmtime.dll` onto
+            # `PATH` for various tests.
+            flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            name: Windows
 
+          # This tests using static linking for examples but skips building the
+          # Rust examples as well as C/C++ tests. Intended to be a faster build
+          # which mostly just tests static linking.
+          - os: ubuntu-24.04
+            flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_RUST_EXAMPLES=OFF
+            name: Linux (static linking)
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - run: rustup target add wasm32-wasip2
 
-    # Build and test the C API with example C programs along with the example
-    # Rust programs. Note that this only executes if the `determine` step told
-    # us to test the capi which is off-by-default for PRs.
-    - run: rustup target add wasm32-wasip2 # wasip2 target needed by example programs
-    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON
-    - run: cmake --build examples/build --config Debug
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
+    - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+    # An ode to MinGW: man you're a pain to work around sometimes
+    - run: rm /usr/bin/link
       if: runner.os == 'Windows'
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
-      if: runner.os != 'Windows'
+
+    - run: cmake -G Ninja -Sexamples -DCMAKE_BUILD_TYPE=Debug -Bexamples/build ${{ matrix.flags }}
+    - run: ninja -C examples/build
+    - run: ninja -C examples/build test
+      env:
+        CTEST_OUTPUT_ON_FAILURE: 1
+        CTEST_PARALLEL_LEVEL: 4
 
   # Perform all tests (debug mode) for `wasmtime`.
   #
