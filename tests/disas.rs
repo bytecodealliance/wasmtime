@@ -69,13 +69,6 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Similarly, SDE (Intel Software Development Emulator) emulation makes these
-    // tests very slow without much benefit since they only exercise architecture-
-    // independent compilation code. Disable this test suite when SDE is enabled.
-    if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
-        return Ok(());
-    }
-
     let _ = env_logger::try_init();
 
     let mut tests = Vec::new();

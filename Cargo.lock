@@ -627,7 +627,6 @@ dependencies = [
  "wasm-compose",
  "wasmparser 0.239.0",
  "wasmtime",
- "wasmtime-test-util",
  "wasmtime-wasi",
 ]
 

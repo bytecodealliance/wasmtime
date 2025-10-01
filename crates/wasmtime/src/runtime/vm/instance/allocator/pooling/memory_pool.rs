@@ -907,9 +907,6 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_pooling_allocator_striping() {
-        if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
-            return;
-        }
         if !mpk::is_supported() {
             println!("skipping `test_pooling_allocator_striping` test; mpk is not supported");
             return;
