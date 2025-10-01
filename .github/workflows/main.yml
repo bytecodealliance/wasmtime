@@ -1200,15 +1200,12 @@ jobs:
       - check_js
     if: always()
     steps:
-    - name: Successful test and build
-      if: ${{ !(contains(needs.*.result, 'failure')) }}
-      run: exit 0
-    - name: Failing test and build
-      if: ${{ contains(needs.*.result, 'failure') }}
-      run: exit 1
-    - name: Report failure on cancellation
-      if: ${{ contains(needs.*.result, 'cancelled') || cancelled() }}
-      run: exit 1
+    # Calculate the exit status of the whole CI workflow.
+    # If all dependent jobs were successful, this exits with 0 (and the
+    # outcome job continues successfully). If a some dependent job has
+    # failed, this exits with 1.
+    - name: calculate the correct exit status
+      run: jq --exit-status 'all(.result == "success" or .result == "skipped")' <<< '${{ toJson(needs) }}'
 
   # The purpose of this jobs is to watch for changes on the `release-*`
   # branches of this repository and look for the term
