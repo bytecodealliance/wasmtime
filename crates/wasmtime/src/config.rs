@@ -6,7 +6,7 @@ use core::str::FromStr;
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 use wasmparser::WasmFeatures;
-use wasmtime_environ::{ConfigTunables, TripleExt, Tunables};
+use wasmtime_environ::{ConfigTunables, IntraModuleInlining, TripleExt, Tunables};
 
 #[cfg(feature = "runtime")]
 use crate::memory::MemoryCreator;
@@ -431,8 +431,9 @@ impl Config {
         self
     }
 
-    /// Configures whether DWARF debug information will be emitted during
-    /// compilation.
+    /// Configures whether DWARF debug information will be emitted
+    /// during compilation for a native debugger on the Wasmtime
+    /// process to consume.
     ///
     /// Note that the `debug-builtins` compile-time Cargo feature must also be
     /// enabled for native debuggers such as GDB or LLDB to be able to debug
@@ -440,8 +441,29 @@ impl Config {
     ///
     /// By default this option is `false`.
     /// **Note** Enabling this option is not compatible with the Winch compiler.
-    pub fn debug_info(&mut self, enable: bool) -> &mut Self {
+    pub fn native_debug_info(&mut self, enable: bool) -> &mut Self {
         self.tunables.generate_native_debuginfo = Some(enable);
+        self
+    }
+
+    /// Configures whether compiled code will be instrumented to
+    /// provide precise debug state at the Wasm VM level.
+    ///
+    /// Without this enabled, debugger-visible state is "best-effort":
+    /// we may be able to recover some Wasm locals or operand stack
+    /// values, but it is not guaranteed, even when optimizations are
+    /// disabled.
+    ///
+    /// When this is enabled, additional instrumentation is inserted
+    /// that directly tracks the Wasm VM state at every step. This has
+    /// some performance impact, but allows perfect debugging
+    /// fidelity.
+    ///
+    /// ***Note*** Enabling this option is not compatible with the
+    /// Winch compiler.
+    #[cfg(feature = "debug")]
+    pub fn debug_instrumentation(&mut self, enable: bool) -> &mut Self {
+        self.tunables.debug_instrumentation = Some(enable);
         self
     }
 
@@ -2059,6 +2081,17 @@ impl Config {
     /// the Wasmtime version 36).
     pub fn compiler_inlining(&mut self, inlining: bool) -> &mut Self {
         self.tunables.inlining = Some(inlining);
+        self
+    }
+
+    /// Whether to force all possible inlining.
+    pub fn compiler_force_inlining(&mut self, inlining: bool) -> &mut Self {
+        let inlining = if inlining {
+            IntraModuleInlining::Yes
+        } else {
+            IntraModuleInlining::No
+        };
+        self.tunables.inlining_intra_module = Some(inlining);
         self
     }
 

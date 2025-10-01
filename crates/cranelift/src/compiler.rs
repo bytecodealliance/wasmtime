@@ -14,7 +14,10 @@ use cranelift_codegen::isa::{
     unwind::{UnwindInfo, UnwindInfoKind},
 };
 use cranelift_codegen::print_errors::pretty_error;
-use cranelift_codegen::{CompiledCode, Context, FinalizedMachCallSite};
+use cranelift_codegen::{
+    CompiledCode, Context, FinalizedMachCallSite, MachBufferDebugTagList, MachBufferFrameLayout,
+    MachDebugTagPos,
+};
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
 use object::write::{Object, StandardSegment, SymbolId};
@@ -28,13 +31,13 @@ use std::ops::Range;
 use std::path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
-use wasmtime_environ::obj::ELF_WASMTIME_EXCEPTIONS;
+use wasmtime_environ::obj::{ELF_WASMTIME_EXCEPTIONS, ELF_WASMTIME_FRAMES};
 use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
-    DefinedFuncIndex, FlagValue, FuncKey, FunctionBodyData, FunctionLoc, HostCall,
-    InliningCompiler, ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection,
-    StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, VMOffsets,
-    WasmFuncType, WasmValType,
+    DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameTableBuilder, FuncKey,
+    FunctionBodyData, FunctionLoc, HostCall, InliningCompiler, ModuleTranslation,
+    ModuleTypesBuilder, PtrSize, StackMapSection, StaticModuleIndex, TrapEncodingBuilder,
+    TrapSentinel, TripleExt, Tunables, VMOffsets, WasmFuncType, WasmValType,
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
@@ -252,7 +255,7 @@ impl wasmtime_environ::Compiler for Compiler {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(self, translation, types, wasm_func_ty);
+        let mut func_env = FuncEnvironment::new(self, translation, types, wasm_func_ty, key);
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.
@@ -575,6 +578,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut traps = TrapEncodingBuilder::default();
         let mut stack_maps = StackMapSection::default();
         let mut exception_tables = ExceptionTableBuilder::default();
+        let mut frame_tables = FrameTableBuilder::default();
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
@@ -602,6 +606,16 @@ impl wasmtime_environ::Compiler for Compiler {
                 range.clone(),
                 func.buffer.call_sites(),
             )?;
+            if self.tunables.debug_instrumentation
+                && let Some(frame_layout) = func.buffer.frame_layout()
+            {
+                clif_to_env_frame_tables(
+                    &mut frame_tables,
+                    range.clone(),
+                    func.buffer.debug_tags(),
+                    frame_layout,
+                )?;
+            }
             builder.append_padding(self.linkopts.padding_between_functions);
 
             let info = FunctionLoc {
@@ -627,6 +641,17 @@ impl wasmtime_environ::Compiler for Compiler {
         exception_tables.serialize(|bytes| {
             obj.append_section_data(exception_section, bytes, 1);
         });
+
+        if self.tunables.debug_instrumentation {
+            let frame_table_section = obj.add_section(
+                obj.segment_name(StandardSegment::Data).to_vec(),
+                ELF_WASMTIME_FRAMES.as_bytes().to_vec(),
+                SectionKind::ReadOnlyData,
+            );
+            frame_tables.serialize(|bytes| {
+                obj.append_section_data(frame_table_section, bytes, 1);
+            });
+        }
 
         Ok(ret)
     }
@@ -1401,8 +1426,6 @@ impl FunctionCompiler<'_> {
             }
         }
 
-        compiled_function
-            .set_sized_stack_slots(std::mem::take(&mut context.func.sized_stack_slots));
         self.compiler.contexts.lock().unwrap().push(self.cx);
 
         Ok(compiled_function)
@@ -1445,6 +1468,56 @@ fn clif_to_env_exception_tables<'a>(
     call_sites: impl Iterator<Item = FinalizedMachCallSite<'a>>,
 ) -> anyhow::Result<()> {
     builder.add_func(CodeOffset::try_from(range.start).unwrap(), call_sites)
+}
+
+/// Convert from Cranelift's representation of frame state slots and
+/// debug tags to Wasmtime's serialized metadata.
+fn clif_to_env_frame_tables<'a>(
+    builder: &mut FrameTableBuilder,
+    range: Range<u64>,
+    tag_sites: impl Iterator<Item = MachBufferDebugTagList<'a>>,
+    frame_layout: &MachBufferFrameLayout,
+) -> anyhow::Result<()> {
+    let mut frame_descriptors = HashMap::new();
+    for tag_site in tag_sites {
+        // Split into frames; each has three debug tags.
+        let mut frames = vec![];
+        for frame_tags in tag_site.tags.chunks_exact(3) {
+            let &[
+                ir::DebugTag::StackSlot(slot),
+                ir::DebugTag::User(wasm_pc),
+                ir::DebugTag::User(stack_shape),
+            ] = frame_tags
+            else {
+                panic!("Invalid tags");
+            };
+
+            let frame_descriptor = *frame_descriptors.entry(slot).or_insert_with(|| {
+                let slot_to_fp_offset =
+                    frame_layout.frame_to_fp_offset - frame_layout.stackslots[slot].offset;
+                let descriptor = frame_layout.stackslots[slot].descriptor.clone();
+                builder.add_frame_descriptor(slot_to_fp_offset, descriptor)
+            });
+
+            frames.push((
+                wasm_pc,
+                frame_descriptor,
+                FrameStackShape::from_raw(stack_shape),
+            ));
+        }
+
+        let native_pc_in_code_section = u32::try_from(range.start)
+            .unwrap()
+            .checked_add(tag_site.offset)
+            .unwrap();
+        let pos = match tag_site.pos {
+            MachDebugTagPos::Post => FrameInstPos::Post,
+            MachDebugTagPos::Pre => FrameInstPos::Pre,
+        };
+        builder.add_program_point(native_pc_in_code_section, pos, &frames);
+    }
+
+    Ok(())
 }
 
 fn save_last_wasm_entry_context(

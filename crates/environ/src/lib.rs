@@ -19,6 +19,7 @@ extern crate alloc;
 pub mod prelude;
 
 mod address_map;
+mod frame_table;
 #[macro_use]
 mod builtin;
 mod demangling;
@@ -45,6 +46,7 @@ pub use crate::address_map::*;
 pub use crate::builtin::*;
 pub use crate::demangling::*;
 pub use crate::error::*;
+pub use crate::frame_table::*;
 pub use crate::gc::*;
 pub use crate::hostcall::*;
 pub use crate::key::*;

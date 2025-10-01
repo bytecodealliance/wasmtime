@@ -124,6 +124,7 @@ pub fn translate_operator(
     builder: &mut FunctionBuilder,
     stack: &mut FuncTranslationStacks,
     environ: &mut FuncEnvironment<'_>,
+    srcloc: ir::SourceLoc,
 ) -> WasmResult<()> {
     log::trace!("Translating Wasm opcode: {op:?}");
 
@@ -163,6 +164,7 @@ pub fn translate_operator(
             builder.def_var(Variable::from_u32(*local_index), val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
+            environ.state_slot_local_set(builder, *local_index, val);
         }
         Operator::LocalTee { local_index } => {
             let mut val = stack.peek1();
@@ -176,6 +178,7 @@ pub fn translate_operator(
             builder.def_var(Variable::from_u32(*local_index), val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
+            environ.state_slot_local_set(builder, *local_index, val);
         }
         /********************************** Globals ****************************************
          *  `get_global` and `set_global` are handled by the environment.
@@ -427,7 +430,7 @@ pub fn translate_operator(
 
             frame.restore_catch_handlers(&mut stack.handlers, builder);
 
-            frame.truncate_value_stack_to_original_size(&mut stack.stack);
+            frame.truncate_value_stack_to_original_size(&mut stack.stack, &mut stack.stack_shape);
             stack
                 .stack
                 .extend_from_slice(builder.block_params(next_block));
@@ -650,6 +653,8 @@ pub fn translate_operator(
 
             let inst_results = environ.translate_call(
                 builder,
+                stack,
+                srcloc,
                 function_index,
                 sig_ref,
                 args,
@@ -682,6 +687,8 @@ pub fn translate_operator(
 
             let inst_results = environ.translate_call_indirect(
                 builder,
+                stack,
+                srcloc,
                 validator.features(),
                 TableIndex::from_u32(*table_index),
                 type_index,
@@ -724,8 +731,9 @@ pub fn translate_operator(
             // Bitcast any vector arguments to their default type, I8X16, before calling.
             let args = stack.peekn_mut(num_args);
             bitcast_wasm_params(environ, sig_ref, args, builder);
+            let args = stack.peekn(num_args); // Reborrow immutably.
 
-            environ.translate_return_call(builder, function_index, sig_ref, args)?;
+            environ.translate_return_call(builder, stack, srcloc, function_index, sig_ref, args)?;
 
             stack.popn(num_args);
             stack.reachable = false;
@@ -748,6 +756,8 @@ pub fn translate_operator(
 
             environ.translate_return_call_indirect(
                 builder,
+                stack,
+                srcloc,
                 validator.features(),
                 TableIndex::from_u32(*table_index),
                 type_index,
@@ -772,7 +782,14 @@ pub fn translate_operator(
             let args = stack.peekn_mut(num_args);
             bitcast_wasm_params(environ, sigref, args, builder);
 
-            environ.translate_return_call_ref(builder, sigref, callee, stack.peekn(num_args))?;
+            environ.translate_return_call_ref(
+                builder,
+                stack,
+                srcloc,
+                sigref,
+                callee,
+                stack.peekn(num_args),
+            )?;
 
             stack.popn(num_args);
             stack.reachable = false;
@@ -2516,6 +2533,8 @@ pub fn translate_operator(
 
             let inst_results = environ.translate_call_ref(
                 builder,
+                stack,
+                srcloc,
                 sigref,
                 callee,
                 stack.peekn(num_args),
@@ -3233,7 +3252,10 @@ fn translate_unreachable_operator(
                                     blocktype_params_results(validator, blocktype)?;
                                 let else_block = block_with_params(builder, params, environ)?;
                                 let frame = stack.control_stack.last().unwrap();
-                                frame.truncate_value_stack_to_else_params(&mut stack.stack);
+                                frame.truncate_value_stack_to_else_params(
+                                    &mut stack.stack,
+                                    &mut stack.stack_shape,
+                                );
 
                                 // We change the target of the branch instruction.
                                 builder.change_jump_destination(
@@ -3246,7 +3268,10 @@ fn translate_unreachable_operator(
                             }
                             ElseData::WithElse { else_block } => {
                                 let frame = stack.control_stack.last().unwrap();
-                                frame.truncate_value_stack_to_else_params(&mut stack.stack);
+                                frame.truncate_value_stack_to_else_params(
+                                    &mut stack.stack,
+                                    &mut stack.stack_shape,
+                                );
                                 else_block
                             }
                         };
@@ -3264,13 +3289,14 @@ fn translate_unreachable_operator(
         }
         Operator::End => {
             let value_stack = &mut stack.stack;
+            let stack_shape = &mut stack.stack_shape;
             let control_stack = &mut stack.control_stack;
             let frame = control_stack.pop().unwrap();
 
             frame.restore_catch_handlers(&mut stack.handlers, builder);
 
             // Pop unused parameters from stack.
-            frame.truncate_value_stack_to_original_size(value_stack);
+            frame.truncate_value_stack_to_original_size(value_stack, stack_shape);
 
             let reachable_anyway = match frame {
                 // If it is a loop we also have to seal the body loop block
@@ -4287,7 +4313,7 @@ fn bitcast_wasm_params(
 ) {
     let callee_signature = &builder.func.dfg.signatures[callee_signature];
     let changes = bitcast_arguments(builder, arguments, &callee_signature.params, |i| {
-        environ.is_wasm_parameter(&callee_signature, i)
+        environ.is_wasm_parameter(i)
     });
     for (t, arg) in changes {
         let mut flags = MemFlags::new();

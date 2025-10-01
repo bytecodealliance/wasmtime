@@ -14,7 +14,10 @@ use std::iter::{self, Peekable};
 use std::path::{Path, PathBuf};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use wasmtime::Engine;
-use wasmtime_environ::{FilePos, StackMap, Trap, obj};
+use wasmtime_environ::{
+    FilePos, FrameInstPos, FrameStackShape, FrameStateSlot, FrameTable, FrameTableDescriptorIndex,
+    StackMap, Trap, obj,
+};
 use wasmtime_unwinder::{ExceptionHandler, ExceptionTable};
 
 /// A helper utility in wasmtime to explore the compiled object file format of
@@ -70,6 +73,10 @@ pub struct ObjdumpCommand {
     /// Whether or not to show information about exception tables.
     #[arg(long, require_equals = true, value_name = "true|false")]
     exception_tables: Option<Option<bool>>,
+
+    /// Whether or not to show information about frame tables.
+    #[arg(long, require_equals = true, value_name = "true|false")]
+    frame_tables: Option<Option<bool>>,
 }
 
 fn optional_flag_with_default(flag: Option<Option<bool>>, default: bool) -> bool {
@@ -95,6 +102,10 @@ impl ObjdumpCommand {
 
     fn exception_tables(&self) -> bool {
         optional_flag_with_default(self.exception_tables, true)
+    }
+
+    fn frame_tables(&self) -> bool {
+        optional_flag_with_default(self.frame_tables, true)
     }
 
     /// Executes the command.
@@ -150,6 +161,18 @@ impl ObjdumpCommand {
                 .and_then(|bytes| ExceptionTable::parse(bytes).ok())
                 .map(|table| table.into_iter())
                 .map(|i| (Box::new(i) as Box<dyn Iterator<Item = _>>).peekable()),
+            frame_tables: elf
+                .section_by_name(obj::ELF_WASMTIME_FRAMES)
+                .and_then(|section| section.data().ok())
+                .and_then(|bytes| FrameTable::parse(bytes).ok())
+                .map(|table| table.into_program_points())
+                .map(|i| (Box::new(i) as Box<dyn Iterator<Item = _>>).peekable()),
+
+            frame_table_descriptors: elf
+                .section_by_name(obj::ELF_WASMTIME_FRAMES)
+                .and_then(|section| section.data().ok())
+                .and_then(|bytes| FrameTable::parse(bytes).ok()),
+
             objdump: &self,
         };
 
@@ -528,6 +551,21 @@ struct Decorator<'a> {
     stack_maps: Option<Peekable<Box<dyn Iterator<Item = (u32, StackMap<'a>)> + 'a>>>,
     exception_tables:
         Option<Peekable<Box<dyn Iterator<Item = (u32, Option<u32>, Vec<ExceptionHandler>)> + 'a>>>,
+    frame_tables: Option<
+        Peekable<
+            Box<
+                dyn Iterator<
+                        Item = (
+                            u32,
+                            FrameInstPos,
+                            Vec<(u32, FrameTableDescriptorIndex, FrameStackShape)>,
+                        ),
+                    > + 'a,
+            >,
+        >,
+    >,
+
+    frame_table_descriptors: Option<FrameTable<'a>>,
 }
 
 impl Decorator<'_> {
@@ -536,6 +574,7 @@ impl Decorator<'_> {
         self.traps(address, post_list);
         self.stack_maps(address, post_list);
         self.exception_table(address, pre_list);
+        self.frame_table(address, pre_list, post_list);
     }
 
     fn addrmap(&mut self, address: u64, list: &mut Vec<String>) {
@@ -624,5 +663,66 @@ impl Decorator<'_> {
                 ));
             }
         }
+    }
+
+    fn frame_table(
+        &mut self,
+        address: u64,
+        pre_list: &mut Vec<String>,
+        post_list: &mut Vec<String>,
+    ) {
+        if !self.objdump.frame_tables() {
+            return;
+        }
+        let (Some(frame_table_iter), Some(frame_tables)) =
+            (&mut self.frame_tables, &self.frame_table_descriptors)
+        else {
+            return;
+        };
+
+        while let Some((addr, pos, frames)) =
+            frame_table_iter.next_if(|(addr, _, _)| u64::from(*addr) <= address)
+        {
+            if u64::from(addr) != address {
+                continue;
+            }
+            let list = match pos {
+                // N.B.: the "post" position means that we are
+                // attached to the end of the previous instruction
+                // (its "post"); which means that from this
+                // instruction's PoV, we print before the instruction
+                // (the "pre list"). And vice versa for the "pre"
+                // position. Hence the reversal here.
+                FrameInstPos::Post => &mut *pre_list,
+                FrameInstPos::Pre => &mut *post_list,
+            };
+            for (wasm_pc, frame_descriptor, stack_shape) in frames {
+                let (frame_descriptor_data, offset) =
+                    frame_tables.frame_descriptor(frame_descriptor).unwrap();
+                let frame_descriptor = FrameStateSlot::parse(frame_descriptor_data).unwrap();
+
+                let local_shape = Self::describe_local_shape(&frame_descriptor);
+                let stack_shape = Self::describe_stack_shape(&frame_descriptor, stack_shape);
+                let func_key = frame_descriptor.func_key();
+                list.push(format!("debug frame state: func key {func_key:?}, wasm PC {wasm_pc}, slot at FP-0x{offset:x}, locals {local_shape}, stack {stack_shape}"));
+            }
+        }
+    }
+
+    fn describe_local_shape(desc: &FrameStateSlot<'_>) -> String {
+        let mut parts = vec![];
+        for (offset, ty) in desc.locals() {
+            parts.push(format!("{ty:?} @ slot+0x{:x}", offset.offset()));
+        }
+        parts.join(", ")
+    }
+
+    fn describe_stack_shape(desc: &FrameStateSlot<'_>, shape: FrameStackShape) -> String {
+        let mut parts = vec![];
+        for (offset, ty) in desc.stack(shape) {
+            parts.push(format!("{ty:?} @ slot+0x{:x}", offset.offset()));
+        }
+        parts.reverse();
+        parts.join(", ")
     }
 }

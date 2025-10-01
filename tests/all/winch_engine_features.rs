@@ -52,7 +52,7 @@ fn ensure_compatibility_between_winch_and_signals_based_traps(config: &mut Confi
 fn ensure_compatibility_between_winch_and_generate_native_debuginfo(
     config: &mut Config,
 ) -> Result<()> {
-    config.debug_info(true);
+    config.native_debug_info(true);
     let result = Engine::new(&config);
     match result {
         Ok(_) => {

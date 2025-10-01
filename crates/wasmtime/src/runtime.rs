@@ -31,7 +31,7 @@ pub(crate) mod func;
 
 pub(crate) mod code;
 pub(crate) mod code_memory;
-#[cfg(feature = "debug-builtins")]
+#[cfg(feature = "debug")]
 pub(crate) mod debug;
 #[cfg(feature = "gc")]
 pub(crate) mod exception;
@@ -45,6 +45,8 @@ pub(crate) mod limits;
 pub(crate) mod linker;
 pub(crate) mod memory;
 pub(crate) mod module;
+#[cfg(feature = "debug-builtins")]
+pub(crate) mod native_debug;
 pub(crate) mod resources;
 pub(crate) mod store;
 pub(crate) mod trampoline;
@@ -74,6 +76,8 @@ cfg_if::cfg_if! {
 }
 
 pub use code_memory::CodeMemory;
+#[cfg(feature = "debug")]
+pub use debug::*;
 #[cfg(feature = "gc")]
 pub use exception::*;
 pub use externals::*;
