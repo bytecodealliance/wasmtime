@@ -1,13 +1,17 @@
-use alloc::vec::Vec;
 use std::backtrace::Backtrace;
 use std::cell::RefCell;
+use std::io::Write;
+use std::vec::Vec;
+use std::write;
 
+/// Tracks allocation, usage, and deletion of all resources
 #[derive(Debug)]
 pub struct ResourceSanitizer {
     uses: RefCell<Vec<(u32, SanInfo)>>,
 }
 
 impl ResourceSanitizer {
+    /// XXX
     pub fn new() -> Self {
         Self {
             uses: RefCell::new(Vec::new()),
@@ -34,8 +38,24 @@ impl ResourceSanitizer {
             .expect("deleted resource present in sanitizer log");
         info.deleted = Some(backtrace);
     }
+
+    /// XXX
+    pub fn report_live_set(&self, w: &mut impl Write) -> Result<(), std::io::Error> {
+        let uses = self.uses.borrow();
+        for (ix, info) in uses.iter() {
+            if info.deleted.is_none() {
+                write!(
+                    w,
+                    "LEAK resource {ix}: {}\nLEAK allocated at {:#?}\nLEAK last used at {:#?}\n",
+                    info.type_name, info.allocated, info.last_used
+                )?;
+            }
+        }
+        Ok(())
+    }
 }
 
+/// sanitizer information for a given resource
 #[derive(Debug)]
 pub struct SanInfo {
     type_name: &'static str,
@@ -45,6 +65,7 @@ pub struct SanInfo {
 }
 
 impl SanInfo {
+    /// XXX
     pub fn new(type_name: &'static str, allocated: Backtrace) -> Self {
         SanInfo {
             type_name,

@@ -8,7 +8,7 @@ use core::mem;
 #[cfg(feature = "resource-sanitizer")]
 mod sanitizer;
 #[cfg(feature = "resource-sanitizer")]
-use sanitizer::{ResourceSanitizer, SanInfo};
+pub use sanitizer::{ResourceSanitizer, SanInfo};
 #[cfg(feature = "resource-sanitizer")]
 use std::backtrace::Backtrace;
 
