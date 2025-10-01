@@ -729,3 +729,59 @@ mod paths {
         });
     }
 }
+
+mod import_async_interface {
+    pub mod async_interface_implementation {
+        wasmtime::component::bindgen!({
+            world: "test:async-import/blah-impl",
+            inline: r#"
+            package test:async-import;
+
+            interface blah {
+                foo: func();
+            }
+
+            world blah-impl {
+                import blah;
+            }
+
+            world bar {
+                import blah;
+            }
+            "#,
+            imports: { default: async },
+        });
+
+        use test::async_import::blah::Host;
+        struct X;
+
+        impl Host for X {
+            async fn foo(&mut self) {}
+        }
+    }
+
+    mod require_t_send {
+        wasmtime::component::bindgen!({
+            world: "test:async-import/bar",
+            inline: r#"
+            package test:async-import;
+
+            interface blah {
+                foo: func();
+            }
+
+            world blah-impl {
+                import blah;
+            }
+
+            world bar {
+                import blah;
+            }
+            "#,
+            with: {
+                "test:async-import/blah": super::async_interface_implementation::test::async_import::blah,
+            },
+            imports: { default: async },
+        });
+    }
+}

@@ -216,7 +216,7 @@ const _: () = {
         where
             D: foo::foo::i::HostWithStore,
             for<'a> D::Data<'a>: foo::foo::i::Host,
-            T: 'static,
+            T: 'static + Send,
         {
             foo::foo::i::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
