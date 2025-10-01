@@ -288,7 +288,7 @@ async function main() {
   // If the optional third argument to this script is `true` then that means all
   // tests are being run and no filtering should happen.
   if (process.argv[4] == 'true') {
-    // Even in full CI, exclude SDE tests unless explicitly requested
+    // Exclude SDE tests unless explicitly requested by prtest:sde
     const fullMatrix = FULL_MATRIX.filter(config => 
       !config.sde || commits.includes('prtest:sde')
     );
