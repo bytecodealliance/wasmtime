@@ -756,7 +756,7 @@ mod import_async_interface {
         struct X;
 
         impl Host for X {
-            async fn foo(&mut self) { }
+            async fn foo(&mut self) {}
         }
     }
 
