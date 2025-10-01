@@ -627,10 +627,8 @@ jobs:
 
   # Perform all tests of the c-api
   test_capi:
-    needs: determine
     name: Test C-API ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    if: needs.determine.outputs.test-capi
 
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
@@ -642,7 +640,8 @@ jobs:
           #
           # Run this on windows/mac/linux
           - os: ubuntu-24.04
-            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            # Only run the "plugins" example on Linux
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON -DBUILD_RUST_PLUGINS_EXAMPLE=ON
             name: Linux
           - os: macos-15
             flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
@@ -672,6 +671,9 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: rustup target add wasm32-wasip2
 
+    - uses: ./.github/actions/install-plugins-prerequisites
+      if: runner.os == 'Linux'
+
     - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
     # An ode to MinGW: man you're a pain to work around sometimes
     - run: rm /usr/bin/link
@@ -683,6 +685,7 @@ jobs:
       env:
         CTEST_OUTPUT_ON_FAILURE: 1
         CTEST_PARALLEL_LEVEL: 4
+        WASI_SDK_PATH: ${{ runner.temp }}/wasi-sdk-27.0-x86_64-linux
 
   # Perform all tests (debug mode) for `wasmtime`.
   #

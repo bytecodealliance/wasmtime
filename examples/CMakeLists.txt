@@ -115,3 +115,7 @@ if (BUILD_RUST_EXAMPLES)
   create_rust_test(component)
   create_rust_test(resource-component)
 endif()
+
+if (BUILD_RUST_PLUGINS_EXAMPLE)
+  add_test(NAME wasip2-plugins-rust COMMAND cargo build --features build-plugins WORKING_DIRECTORY ../../examples/wasip2-plugins)
+endif()

@@ -1,0 +1,17 @@
+[package]
+name = "calculator"
+version = "0.1.0"
+edition = "2024"
+description = """
+Example Rust-based WebAssembly host that implements a calculator
+with plugins for arithmetic operations.
+"""
+
+[dependencies]
+anyhow = "1.0.72"
+clap = { version = "4", features = ["derive"] }
+wasmtime = { workspace = true, features = ['std', 'cranelift'] }
+wasmtime-wasi = { workspace = true }
+
+[features]
+build-plugins = []

@@ -172,6 +172,7 @@ members = [
   "examples/resource-component/wasm",
   "examples/min-platform",
   "examples/min-platform/embedding",
+  "examples/wasip2-plugins",
   "fuzz",
   "winch/codegen",
 ]

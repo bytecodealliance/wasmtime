@@ -19,6 +19,7 @@
   - [Multithreaded Embedding](./examples-multithreaded-embedding.md)
   - [WASIp1](./examples-wasip1.md)
   - [WASIp2](./examples-wasip2.md)
+    - [An Application with Plugins](./wasip2-plugins.md)
   - [Core Dumps](./examples-core-dumps.md)
   - [Memory Protection Keys](./examples-mpk.md)
   - [Async Host Functions](./examples-async.md)
