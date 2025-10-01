@@ -5,9 +5,10 @@ use bytes::Bytes;
 use flate2::Compression;
 use flate2::write::{DeflateDecoder, DeflateEncoder};
 use futures::SinkExt;
+use futures::channel::oneshot;
 use http::HeaderValue;
 use http_body::Body;
-use http_body_util::{BodyExt as _, Collected, Empty};
+use http_body_util::{BodyExt as _, Collected, Empty, combinators::BoxBody};
 use std::io::Write;
 use std::path::Path;
 use test_programs_artifacts::*;
@@ -17,19 +18,65 @@ use wasm_compose::config::{Config, Dependency, Instantiation, InstantiationArg};
 use wasmtime::Store;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p3::bindings::Command;
-use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi::{TrappableError, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::p3::bindings::Proxy;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
-use wasmtime_wasi_http::p3::{Request, WasiHttpCtx, WasiHttpCtxView, WasiHttpView};
+use wasmtime_wasi_http::p3::{
+    self, Request, RequestOptions, WasiHttpCtx, WasiHttpCtxView, WasiHttpView,
+};
 use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
 
 foreach_p3_http!(assert_test_exists);
 
-struct TestHttpCtx;
+struct TestHttpCtx {
+    request_body_tx: Option<oneshot::Sender<BoxBody<Bytes, ErrorCode>>>,
+}
 
 impl WasiHttpCtx for TestHttpCtx {
     fn is_forbidden_header(&mut self, name: &http::header::HeaderName) -> bool {
         name.as_str() == "custom-forbidden-header" || DEFAULT_FORBIDDEN_HEADERS.contains(name)
+    }
+
+    fn send_request(
+        &mut self,
+        request: http::Request<BoxBody<Bytes, ErrorCode>>,
+        options: Option<RequestOptions>,
+        fut: Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
+    ) -> Box<
+        dyn Future<
+                Output = Result<
+                    (
+                        http::Response<BoxBody<Bytes, ErrorCode>>,
+                        Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
+                    ),
+                    TrappableError<ErrorCode>,
+                >,
+            > + Send,
+    > {
+        _ = fut;
+        if let Some("p3-test") = request.uri().authority().map(|v| v.as_str()) {
+            _ = self
+                .request_body_tx
+                .take()
+                .unwrap()
+                .send(request.into_body());
+            Box::new(async {
+                Ok((
+                    http::Response::new(Default::default()),
+                    Box::new(async { Ok(()) }) as Box<dyn Future<Output = _> + Send>,
+                ))
+            })
+        } else {
+            Box::new(async move {
+                use http_body_util::BodyExt;
+
+                let (res, io) = p3::default_send_request(request, options).await?;
+                Ok((
+                    res.map(BodyExt::boxed),
+                    Box::new(io) as Box<dyn Future<Output = _> + Send>,
+                ))
+            })
+        }
     }
 }
 
@@ -39,12 +86,14 @@ struct Ctx {
     http: TestHttpCtx,
 }
 
-impl Default for Ctx {
-    fn default() -> Self {
+impl Ctx {
+    fn new(request_body_tx: oneshot::Sender<BoxBody<Bytes, ErrorCode>>) -> Self {
         Self {
             table: ResourceTable::default(),
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
-            http: TestHttpCtx,
+            http: TestHttpCtx {
+                request_body_tx: Some(request_body_tx),
+            },
         }
     }
 }
@@ -80,7 +129,7 @@ async fn run_cli(path: &str, server: &Server) -> anyhow::Result<()> {
             wasi: wasmtime_wasi::WasiCtx::builder()
                 .env("HTTP_SERVER", server.addr())
                 .build(),
-            ..Ctx::default()
+            ..Ctx::new(oneshot::channel().0)
         },
     );
     let mut linker = Linker::new(&engine);
@@ -104,6 +153,7 @@ async fn run_cli(path: &str, server: &Server) -> anyhow::Result<()> {
 async fn run_http<E: Into<ErrorCode> + 'static>(
     component_filename: &str,
     req: http::Request<impl Body<Data = Bytes, Error = E> + Send + Sync + 'static>,
+    request_body_tx: oneshot::Sender<BoxBody<Bytes, ErrorCode>>,
 ) -> anyhow::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
@@ -112,7 +162,7 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
     });
     let component = Component::from_file(&engine, component_filename)?;
 
-    let mut store = Store::new(&engine, Ctx::default());
+    let mut store = Store::new(&engine, Ctx::new(request_body_tx));
 
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
@@ -253,7 +303,12 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
         .uri("http://example.com:8080/test-path")
         .method(http::Method::GET);
 
-    let res = run_http(P3_API_PROXY_COMPONENT, req.body(Empty::new())?).await?;
+    let res = run_http(
+        P3_API_PROXY_COMPONENT,
+        req.body(Empty::new())?,
+        oneshot::channel().0,
+    )
+    .await?;
 
     match res {
         Ok(res) => println!("response: {res:?}"),
@@ -414,6 +469,7 @@ async fn test_http_echo(component: &str, use_compression: bool, host_to_host: bo
         run_http(
             component,
             request.body(http_body_util::StreamBody::new(body_rx))?,
+            oneshot::channel().0
         ),
         async {
             body_tx
@@ -474,5 +530,60 @@ async fn test_http_echo(component: &str, use_compression: bool, host_to_host: bo
         collected_body.to_vec()
     };
     assert_eq!(response_body, body.as_slice());
+    Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_proxy() -> Result<()> {
+    let body = b"And the mome raths outgrabe";
+
+    let raw_body = Bytes::copy_from_slice(body);
+
+    let (mut body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(1);
+
+    // Tell the guest to forward the request to `http://p3-test/`, which we
+    // handle specially in `TestHttpCtx::send_request` above, sending the
+    // request body to the oneshot sender we specify below and then immediately
+    // returning a dummy response.  We won't start sending the request body
+    // until after the guest has exited and we've dropped the store.
+
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET)
+        .header("url", "http://p3-test/");
+
+    let (request_body_tx, request_body_rx) = oneshot::channel();
+    let response = run_http(
+        P3_HTTP_PROXY_COMPONENT,
+        request.body(http_body_util::StreamBody::new(body_rx))?,
+        request_body_tx,
+    )
+    .await?
+    .unwrap();
+    assert!(response.status().as_u16() == 200);
+
+    // The guest has exited and the store has been dropped; now we finally send
+    // the request body and assert that we've received the entire thing.
+
+    let ((), request_body) = futures::join!(
+        async {
+            body_tx
+                .send(Ok(http_body::Frame::data(raw_body)))
+                .await
+                .unwrap();
+            drop(body_tx);
+        },
+        async {
+            request_body_rx
+                .await
+                .unwrap()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+        }
+    );
+
+    assert_eq!(request_body, body.as_slice());
     Ok(())
 }
