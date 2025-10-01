@@ -408,3 +408,9 @@ component-model-async-bytes = [
   "component-model-async",
   "dep:bytes",
 ]
+
+# Enables support for `component::ResourceSanitizer`
+resource-sanitizer = [
+    "component-model",
+    "std",
+]

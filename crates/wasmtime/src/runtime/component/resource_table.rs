@@ -5,6 +5,13 @@ use core::any::Any;
 use core::fmt;
 use core::mem;
 
+#[cfg(feature = "resource-sanitizer")]
+mod sanitizer;
+#[cfg(feature = "resource-sanitizer")]
+use sanitizer::{ResourceSanitizer, SanInfo};
+#[cfg(feature = "resource-sanitizer")]
+use std::backtrace::Backtrace;
+
 #[derive(Debug)]
 /// Errors returned by operations on `ResourceTable`
 pub enum ResourceTableError {
@@ -36,6 +43,40 @@ impl core::error::Error for ResourceTableError {}
 pub struct ResourceTable {
     entries: Vec<Entry>,
     free_head: Option<usize>,
+    #[cfg(feature = "resource-sanitizer")]
+    sanitizer: Option<ResourceSanitizer>,
+}
+
+/// Builder for `ResourceTable`
+pub struct ResourceTableBuilder {
+    entries: Option<Vec<Entry>>,
+    #[cfg(feature = "resource-sanitizer")]
+    sanitizer: Option<ResourceSanitizer>,
+}
+
+impl ResourceTableBuilder {
+    /// Allocate at least the specified capacity for table entries
+    pub fn capacity(mut self, capacity: usize) -> Self {
+        self.entries = Some(Vec::with_capacity(capacity));
+        self
+    }
+
+    #[cfg(feature = "resource-sanitizer")]
+    /// Use a `ResourceSanitizer` with the ResourceTable
+    pub fn sanitizer(mut self, sanitizer: ResourceSanitizer) -> Self {
+        self.sanitizer = Some(sanitizer);
+        self
+    }
+
+    /// Construct a `ResourceTable`
+    pub fn build(self) -> ResourceTable {
+        ResourceTable {
+            entries: self.entries.unwrap_or_default(),
+            free_head: None,
+            #[cfg(feature = "resource-sanitizer")]
+            sanitizer: self.sanitizer,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -101,9 +142,15 @@ impl TableEntry {
 impl ResourceTable {
     /// Create an empty table
     pub fn new() -> Self {
-        ResourceTable {
-            entries: Vec::new(),
-            free_head: None,
+        Self::builder().build()
+    }
+
+    /// Create a builder
+    pub fn builder() -> ResourceTableBuilder {
+        ResourceTableBuilder {
+            entries: None,
+            #[cfg(feature = "resource-sanitizer")]
+            sanitizer: None,
         }
     }
 
@@ -118,14 +165,6 @@ impl ResourceTable {
         })
     }
 
-    /// Create an empty table with at least the specified capacity.
-    pub fn with_capacity(capacity: usize) -> Self {
-        ResourceTable {
-            entries: Vec::with_capacity(capacity),
-            free_head: None,
-        }
-    }
-
     /// Inserts a new value `T` into this table, returning a corresponding
     /// `Resource<T>` which can be used to refer to it after it was inserted.
     pub fn push<T>(&mut self, entry: T) -> Result<Resource<T>, ResourceTableError>
@@ -133,6 +172,13 @@ impl ResourceTable {
         T: Send + 'static,
     {
         let idx = self.push_(TableEntry::new(Box::new(entry), None))?;
+        #[cfg(feature = "resource-sanitizer")]
+        if let Some(san) = &self.sanitizer {
+            san.log_construction(
+                idx,
+                SanInfo::new(std::any::type_name::<T>(), Backtrace::force_capture()),
+            )
+        }
         Ok(Resource::new_own(idx))
     }
 
@@ -245,6 +291,14 @@ impl ResourceTable {
         self.occupied(parent)?;
         let child = self.push_(TableEntry::new(Box::new(entry), Some(parent)))?;
         self.occupied_mut(parent)?.add_child(child);
+
+        #[cfg(feature = "resource-sanitizer")]
+        if let Some(san) = &self.sanitizer {
+            san.log_construction(
+                child,
+                SanInfo::new(std::any::type_name::<T>(), Backtrace::force_capture()),
+            )
+        }
         Ok(Resource::new_own(child))
     }
 
@@ -279,6 +333,10 @@ impl ResourceTable {
     ///
     /// Multiple shared references can be borrowed at any given time.
     pub fn get<T: Any + Sized>(&self, key: &Resource<T>) -> Result<&T, ResourceTableError> {
+        #[cfg(feature = "resource-sanitizer")]
+        if let Some(san) = &self.sanitizer {
+            san.log_usage(key.rep(), Backtrace::force_capture())
+        }
         self.get_(key.rep())?
             .downcast_ref()
             .ok_or(ResourceTableError::WrongType)
@@ -295,6 +353,10 @@ impl ResourceTable {
         &mut self,
         key: &Resource<T>,
     ) -> Result<&mut T, ResourceTableError> {
+        #[cfg(feature = "resource-sanitizer")]
+        if let Some(san) = &self.sanitizer {
+            san.log_usage(key.rep(), Backtrace::force_capture())
+        }
         self.get_any_mut(key.rep())?
             .downcast_mut()
             .ok_or(ResourceTableError::WrongType)
@@ -302,6 +364,10 @@ impl ResourceTable {
 
     /// Returns the raw `Any` at the `key` index provided.
     pub fn get_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, ResourceTableError> {
+        #[cfg(feature = "resource-sanitizer")]
+        if let Some(san) = &self.sanitizer {
+            san.log_usage(key, Backtrace::force_capture())
+        }
         let r = self.occupied_mut(key)?;
         Ok(&mut *r.entry)
     }
@@ -311,6 +377,10 @@ impl ResourceTable {
     where
         T: Any,
     {
+        #[cfg(feature = "resource-sanitizer")]
+        if let Some(san) = &self.sanitizer {
+            san.log_delete(resource.rep(), Backtrace::force_capture())
+        }
         self.delete_maybe_debug(resource, cfg!(debug_assertions))
     }
 
@@ -353,6 +423,12 @@ impl ResourceTable {
         &'a mut self,
         map: BTreeMap<u32, T>,
     ) -> impl Iterator<Item = (Result<&'a mut dyn Any, ResourceTableError>, T)> {
+        #[cfg(feature = "resource-sanitizer")]
+        if let Some(san) = &self.sanitizer {
+            for (k, _) in map.iter() {
+                san.log_usage(*k, Backtrace::force_capture())
+            }
+        }
         map.into_iter().map(move |(k, v)| {
             let item = self
                 .occupied_mut(k)
@@ -373,6 +449,11 @@ impl ResourceTable {
     {
         let parent_entry = self.occupied(parent.rep())?;
         Ok(parent_entry.children.iter().map(|child_index| {
+            #[cfg(feature = "resource-sanitizer")]
+            if let Some(san) = &self.sanitizer {
+                san.log_usage(*child_index, Backtrace::force_capture())
+            }
+
             let child = self.occupied(*child_index).expect("missing child");
             child.entry.as_ref()
         }))
@@ -380,10 +461,26 @@ impl ResourceTable {
 
     /// Iterate over all the entries in this table.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (dyn Any + Send)> {
+        #[cfg(feature = "resource-sanitizer")]
+        if let Some(san) = &self.sanitizer {
+            for (ix, entry) in self.entries.iter().enumerate() {
+                if matches!(entry, Entry::Occupied { .. }) {
+                    san.log_usage(ix.try_into().unwrap(), Backtrace::force_capture())
+                }
+            }
+        }
+
         self.entries.iter_mut().filter_map(|entry| match entry {
             Entry::Occupied { entry } => Some(&mut *entry.entry),
             Entry::Free { .. } => None,
         })
+    }
+
+    /// Get the table's `ResourceSanitizer` if one exists. Some iff
+    /// `ResourceTableBuilder::sanitizer` was used at creation.
+    #[cfg(feature = "resource-sanitizer")]
+    pub fn get_sanitizer(&self) -> Option<&ResourceSanitizer> {
+        self.sanitizer.as_ref()
     }
 }
 
