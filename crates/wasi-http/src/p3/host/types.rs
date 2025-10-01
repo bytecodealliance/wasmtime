@@ -322,16 +322,29 @@ impl HostRequestWithStore for WasiHttp {
         let instance = store.instance();
         store.with(|mut store| {
             let (result_tx, result_rx) = oneshot::channel();
+            let body = match contents
+                .map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(store.as_context_mut()))
+            {
+                Some(Ok(mut producer)) => Body::Host {
+                    body: mem::take(&mut producer.body),
+                    result_tx,
+                },
+                Some(Err(rx)) => Body::Guest {
+                    contents_rx: Some(rx),
+                    trailers_rx: trailers,
+                    result_tx,
+                },
+                None => Body::Guest {
+                    contents_rx: None,
+                    trailers_rx: trailers,
+                    result_tx,
+                },
+            };
             let WasiHttpCtxView { table, .. } = store.get();
             let headers = delete_fields(table, headers)?;
             let options = options
                 .map(|options| delete_request_options(table, options))
                 .transpose()?;
-            let body = Body::Guest {
-                contents_rx: contents,
-                trailers_rx: trailers,
-                result_tx,
-            };
             let req = Request {
                 method: http::Method::GET,
                 scheme: None,
