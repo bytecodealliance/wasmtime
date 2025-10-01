@@ -6,6 +6,7 @@
 use crate::entity::PrimaryMap;
 use crate::ir::StackSlot;
 use crate::ir::entities::{DynamicStackSlot, DynamicType};
+use alloc::vec::Vec;
 use core::fmt;
 use core::str::FromStr;
 
@@ -69,32 +70,43 @@ pub struct StackSlotData {
     /// be aligned according to other considerations, such as minimum
     /// stack slot size or machine word size, as well.
     pub align_shift: u8,
+
+    /// Opaque stackslot metadata, passed through to compilation
+    /// result metadata describing stackslot location.
+    ///
+    /// In the face of compiler transforms like inlining that may move
+    /// stackslots between functions, when an embedder wants to
+    /// externally observe stackslots, it needs a first-class way for
+    /// the identity of stackslots to be carried along with the IR
+    /// entities. This opaque data allows the embedder to do that.
+    pub descriptor: Vec<u8>,
 }
 
 impl StackSlotData {
     /// Create a stack slot with the specified byte size and alignment.
-    pub fn new(kind: StackSlotKind, size: StackSize, align_shift: u8) -> Self {
+    pub fn new(kind: StackSlotKind, size: StackSize, align_shift: u8, descriptor: Vec<u8>) -> Self {
         Self {
             kind,
             size,
             align_shift,
+            descriptor,
         }
     }
 }
 
 impl fmt::Display for StackSlotData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.align_shift != 0 {
-            write!(
-                f,
-                "{} {}, align = {}",
-                self.kind,
-                self.size,
-                1u32 << self.align_shift
-            )
+        let align_shift = if self.align_shift != 0 {
+            format!(", align = {}", 1u32 << self.align_shift)
         } else {
-            write!(f, "{} {}", self.kind, self.size)
-        }
+            "".into()
+        };
+        let descriptor = if !self.descriptor.is_empty() {
+            format!(", descriptor = {:?}", self.descriptor)
+        } else {
+            "".into()
+        };
+        write!(f, "{} {}{align_shift}{descriptor}", self.kind, self.size)
     }
 }
 
@@ -147,10 +159,18 @@ mod tests {
     fn stack_slot() {
         let mut func = Function::new();
 
-        let ss0 =
-            func.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4, 0));
-        let ss1 =
-            func.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 8, 0));
+        let ss0 = func.create_sized_stack_slot(StackSlotData::new(
+            StackSlotKind::ExplicitSlot,
+            4,
+            0,
+            vec![],
+        ));
+        let ss1 = func.create_sized_stack_slot(StackSlotData::new(
+            StackSlotKind::ExplicitSlot,
+            8,
+            0,
+            vec![],
+        ));
         assert_eq!(ss0.to_string(), "ss0");
         assert_eq!(ss1.to_string(), "ss1");
 

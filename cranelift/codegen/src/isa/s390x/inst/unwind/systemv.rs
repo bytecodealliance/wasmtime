@@ -116,7 +116,12 @@ mod tests {
 
         let mut context = Context::for_function(create_function(
             CallConv::SystemV,
-            Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64, 0)),
+            Some(StackSlotData::new(
+                StackSlotKind::ExplicitSlot,
+                64,
+                0,
+                vec![],
+            )),
         ));
 
         let code = context
@@ -163,7 +168,12 @@ mod tests {
 
         let mut context = Context::for_function(create_multi_return_function(
             CallConv::SystemV,
-            Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64, 0)),
+            Some(StackSlotData::new(
+                StackSlotKind::ExplicitSlot,
+                64,
+                0,
+                vec![],
+            )),
         ));
 
         let code = context

@@ -389,16 +389,10 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
 pub struct CompiledCodeBase<T: CompilePhase> {
     /// Machine code.
     pub buffer: MachBufferFinalized<T>,
-    /// Size of stack frame, in bytes.
-    pub frame_size: u32,
     /// Disassembly, if requested.
     pub vcode: Option<String>,
     /// Debug info: value labels to registers/stackslots at code offsets.
     pub value_labels_ranges: ValueLabelsRanges,
-    /// Debug info: stackslots to stack pointer offsets.
-    pub sized_stackslot_offsets: PrimaryMap<StackSlot, u32>,
-    /// Debug info: stackslots to stack pointer offsets.
-    pub dynamic_stackslot_offsets: PrimaryMap<DynamicStackSlot, u32>,
     /// Basic-block layout info: block start offsets.
     ///
     /// This info is generated only if the `machine_code_cfg_info`
@@ -418,11 +412,8 @@ impl CompiledCodeStencil {
     pub fn apply_params(self, params: &FunctionParameters) -> CompiledCode {
         CompiledCode {
             buffer: self.buffer.apply_base_srcloc(params.base_srcloc()),
-            frame_size: self.frame_size,
             vcode: self.vcode,
             value_labels_ranges: self.value_labels_ranges,
-            sized_stackslot_offsets: self.sized_stackslot_offsets,
-            dynamic_stackslot_offsets: self.dynamic_stackslot_offsets,
             bb_starts: self.bb_starts,
             bb_edges: self.bb_edges,
         }

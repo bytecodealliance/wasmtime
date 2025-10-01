@@ -45,6 +45,9 @@ pub struct FunctionBuilder<'a> {
     /// Source location to assign to all new instructions.
     srcloc: ir::SourceLoc,
 
+    /// Debug tags to assign to all new side-effecting instructions.
+    debug_tags: Vec<ir::DebugTag>,
+
     func_ctx: &'a mut FunctionBuilderContext,
     position: PackedOption<Block>,
 }
@@ -323,6 +326,7 @@ impl<'a> FunctionBuilder<'a> {
         Self {
             func,
             srcloc: Default::default(),
+            debug_tags: vec![],
             func_ctx,
             position: Default::default(),
         }
@@ -336,6 +340,11 @@ impl<'a> FunctionBuilder<'a> {
     /// Set the source location that should be assigned to all new instructions.
     pub fn set_srcloc(&mut self, srcloc: ir::SourceLoc) {
         self.srcloc = srcloc;
+    }
+
+    /// Set the debug tags that should be assigned to all new side-effecting instructions.
+    pub fn set_debug_tags(&mut self, tags: Vec<ir::DebugTag>) {
+        self.debug_tags = tags;
     }
 
     /// Creates a new [`Block`] and returns its reference.
@@ -624,6 +633,7 @@ impl<'a> FunctionBuilder<'a> {
         self.ensure_inserted_block();
         FuncCursor::new(self.func)
             .with_srcloc(self.srcloc)
+            .with_debug_tags(self.debug_tags.clone())
             .at_bottom(self.position.unwrap())
     }
 

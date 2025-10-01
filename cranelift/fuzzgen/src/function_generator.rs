@@ -1636,7 +1636,7 @@ where
             let alignment = self.param(&self.config.stack_slot_alignment_log2)? as u8;
             let alignment_bytes = 1 << alignment;
 
-            let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes, alignment);
+            let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes, alignment, vec![]);
             let slot = builder.create_sized_stack_slot(ss_data);
 
             // Generate one Alias Analysis Category for each slot

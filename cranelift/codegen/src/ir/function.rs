@@ -5,6 +5,7 @@
 
 use crate::HashMap;
 use crate::entity::{PrimaryMap, SecondaryMap};
+use crate::ir::DebugTags;
 use crate::ir::{
     self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
     DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, JumpTable,
@@ -190,6 +191,15 @@ pub struct FunctionStencil {
     /// interpreted by Cranelift, only preserved.
     pub srclocs: SourceLocs,
 
+    /// Opaque debug-info tags on instructions.
+    ///
+    /// These tags are not interpreted by Cranelift, and are passed
+    /// through to compilation-result metadata. The only semantic
+    /// structure that Cranelift imposes is that when inlining, it
+    /// prepends the callsite call instruction's tags to the tags on
+    /// inlined instructions.
+    pub debug_tags: DebugTags,
+
     /// An optional global value which represents an expression evaluating to
     /// the stack limit for this function. This `GlobalValue` will be
     /// interpreted in the prologue, if necessary, to insert a stack check to
@@ -209,6 +219,7 @@ impl FunctionStencil {
         self.dfg.clear();
         self.layout.clear();
         self.srclocs.clear();
+        self.debug_tags.clear();
         self.stack_limit = None;
     }
 
@@ -408,6 +419,7 @@ impl Function {
                 layout: Layout::new(),
                 srclocs: SecondaryMap::new(),
                 stack_limit: None,
+                debug_tags: DebugTags::default(),
             },
             params: FunctionParameters::new(),
         }
