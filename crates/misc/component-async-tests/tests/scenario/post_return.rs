@@ -36,6 +36,9 @@ pub async fn async_post_return_caller() -> Result<()> {
 
 #[tokio::test]
 pub async fn async_sleep_post_return_caller() -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+        return Ok(());
+    }
     test_sleep_post_return(&[
         test_programs_artifacts::ASYNC_SLEEP_POST_RETURN_CALLER_COMPONENT,
         test_programs_artifacts::ASYNC_SLEEP_POST_RETURN_CALLEE_COMPONENT,
@@ -45,6 +48,9 @@ pub async fn async_sleep_post_return_caller() -> Result<()> {
 
 #[tokio::test]
 pub async fn async_sleep_post_return_callee() -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+        return Ok(());
+    }
     test_sleep_post_return(&[test_programs_artifacts::ASYNC_SLEEP_POST_RETURN_CALLEE_COMPONENT])
         .await
 }

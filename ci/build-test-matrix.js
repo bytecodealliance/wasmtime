@@ -54,6 +54,9 @@ const FAST_MATRIX = [
 //   QEMU and installing cross compilers to execute a cross-compiled test suite
 //   on CI.
 //
+// * `sde` - if `true`, indicates this test should use Intel SDE for instruction
+//   emulation. SDE will be set up and configured as the test runner.
+//
 // * `rust` - the Rust version to install, and if unset this'll be set to
 //   `default`
 const FULL_MATRIX = [
@@ -77,6 +80,14 @@ const FULL_MATRIX = [
     "filter": "asan",
     "rust": "wasmtime-ci-pinned-nightly",
     "target": "x86_64-unknown-linux-gnu",
+  },
+  {
+    "os": ubuntu,
+    "name": "Test Linux x86_64 with SDE",
+    "filter": "sde",
+    "isa": "x64",
+    "sde": true,
+    "crates": "cranelift-tools",
   },
   {
     "os": macos,
@@ -226,6 +237,19 @@ async function shard(configs) {
   // created above.
   const sharded = [];
   for (const config of configs) {
+    // If crates is specified, don't shard, just use the specified crates
+        if (config.crates) {
+          sharded.push(Object.assign(
+            {},
+            config,
+            {
+              bucket: members
+                .map(c => c === config.crates ? `--package ${c}` : `--exclude ${c}`)
+                .join(" ")
+            }
+          ));
+      continue;
+    }
     for (const bucket of buckets) {
       sharded.push(Object.assign(
         {},
@@ -264,7 +288,11 @@ async function main() {
   // If the optional third argument to this script is `true` then that means all
   // tests are being run and no filtering should happen.
   if (process.argv[4] == 'true') {
-    console.log(JSON.stringify(await shard(FULL_MATRIX), undefined, 2));
+    // Even in full CI, exclude SDE tests unless explicitly requested
+    const fullMatrix = FULL_MATRIX.filter(config => 
+      !config.sde || commits.includes('prtest:sde')
+    );
+    console.log(JSON.stringify(await shard(fullMatrix), undefined, 2));
     return;
   }
 

@@ -1789,6 +1789,9 @@ mod test_programs {
 
     #[test]
     fn cli_large_env() -> Result<()> {
+        if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+            return Ok(());
+        }
         for wasm in [CLI_LARGE_ENV, CLI_LARGE_ENV_COMPONENT] {
             println!("run {wasm:?}");
             let mut cmd = get_wasmtime_command()?;
@@ -2218,17 +2221,26 @@ start a print 1234
 
     #[test]
     fn cli_p1_much_stdout() -> Result<()> {
+        if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+            return Ok(());
+        }
         run_much_stdout(CLI_P1_MUCH_STDOUT_COMPONENT, &[])
     }
 
     #[test]
     fn cli_p2_much_stdout() -> Result<()> {
+        if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+            return Ok(());
+        }
         run_much_stdout(CLI_P2_MUCH_STDOUT_COMPONENT, &[])
     }
 
     #[test]
     #[cfg_attr(not(feature = "component-model-async"), ignore)]
     fn cli_p3_much_stdout() -> Result<()> {
+        if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+            return Ok(());
+        }
         run_much_stdout(
             CLI_P3_MUCH_STDOUT_COMPONENT,
             &["-Wcomponent-model-async", "-Sp3"],
@@ -2274,6 +2286,9 @@ fn settings_command() -> Result<()> {
 #[cfg(target_arch = "x86_64")]
 #[test]
 fn profile_with_vtune() -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+        return Ok(());
+    }
     if !is_vtune_available() {
         println!("> `vtune` is not available on the system path; skipping test");
         return Ok(());

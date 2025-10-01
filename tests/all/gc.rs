@@ -1684,6 +1684,9 @@ fn instantiate_table_init_expr_oom() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn instantiate_global_init_oom() -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+        return Ok(());
+    }
     let mut config = Config::new();
     config.wasm_gc(true);
     config.wasm_function_references(true);

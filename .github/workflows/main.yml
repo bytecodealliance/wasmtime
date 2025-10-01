@@ -706,6 +706,11 @@ jobs:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
       if: matrix.qemu != ''
+
+    - name: Setup Intel SDE
+      uses: petarpetrovt/setup-sde@v3.0
+      if: matrix.sde
+
     - name: Install qemu
       run: |
         set -ex
@@ -741,6 +746,26 @@ jobs:
         ninja -C build install
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.qemu != ''
+
+    - name: Configure Intel SDE
+      run: |
+        # Configure SDE as the test runner for x86_64 target when SDE is enabled
+        # The `-future` flag enables future instruction set emulation as an example
+        # You can modify this to test specific instruction sets like AVX, AVX2, etc.
+        echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=$SDE_PATH/sde64 -future --" >> $GITHUB_ENV
+        
+        # Similar optimizations as QEMU - build in release mode for faster testing
+        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
+        
+        # Enable environment variable to indicate SDE is being used
+        echo WASMTIME_TEST_SDE=1 >> $GITHUB_ENV
+        
+        # Generic variable for skipping tests that are problematic under SDE (performance, compatibility, etc.)
+        echo WASMTIME_TEST_NO_SDE=1 >> $GITHUB_ENV
+        
+        # Similar to QEMU, reduce memory usage during SDE emulation
+        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
+      if: matrix.sde
 
     - name: Configure ASAN
       run: |

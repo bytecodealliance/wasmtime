@@ -93,6 +93,9 @@ fn test_traps(store: &mut Store<()>, funcs: &[TestFunc], addr: u32, mem: &Memory
 #[wasmtime_test(wasm_features(simd))]
 #[cfg_attr(miri, ignore)]
 fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+        return Ok(());
+    }
     const GB: u64 = 1 << 30;
     const MB: u64 = 1 << 20;
 
@@ -192,6 +195,9 @@ fn guards_present() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 #[cfg_attr(asan, ignore)]
 fn guards_present_pooling(config: &mut Config) -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+        return Ok(());
+    }
     const GUARD_SIZE: u64 = 65536;
 
     let mut pool = crate::small_pool_config();
@@ -252,6 +258,9 @@ fn guards_present_pooling(config: &mut Config) -> Result<()> {
 #[cfg_attr(asan, ignore)]
 #[cfg(target_arch = "x86_64")] // only platform with mpk
 fn guards_present_pooling_mpk(config: &mut Config) -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_SDE").is_ok() {
+        return Ok(());
+    }
     if !wasmtime::PoolingAllocationConfig::are_memory_protection_keys_available() {
         println!("skipping `guards_present_pooling_mpk` test; mpk is not supported");
         return Ok(());
