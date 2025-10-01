@@ -2502,18 +2502,6 @@ impl Config {
             }
         }
 
-        // check for incompatible compiler options and set required values
-        if features.contains(WasmFeatures::REFERENCE_TYPES) {
-            if !self
-                .compiler_config
-                .ensure_setting_unset_or_given("enable_safepoints", "true")
-            {
-                bail!(
-                    "compiler option 'enable_safepoints' must be enabled when 'reference types' is enabled"
-                );
-            }
-        }
-
         if features.contains(WasmFeatures::RELAXED_SIMD) && !features.contains(WasmFeatures::SIMD) {
             bail!("cannot disable the simd proposal but enable the relaxed simd proposal");
         }
