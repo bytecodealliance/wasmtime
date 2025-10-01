@@ -109,6 +109,17 @@ pub const ELF_WASMTIME_TRAPS: &str = ".wasmtime.traps";
 /// code offsets are relative to the start of the text segment.
 pub const ELF_WASMTIME_EXCEPTIONS: &str = ".wasmtime.exceptions";
 
+/// A custom binary-encoded section of the wasmtime compilation
+/// artifacts which encodes frame tables.
+///
+/// This section is used at runtime to allow debug APIs to decode Wasm
+/// VM-level state from state stack slots.
+///
+/// This section's format is defined by the
+/// [`wasmtime_environ::FrameTableBuilder`] data structure. Its code
+/// offsets are relative to the start of the text segment.
+pub const ELF_WASMTIME_FRAMES: &str = ".wasmtime.frames";
+
 /// A custom section which consists of just 1 byte which is either 0 or 1 as to
 /// whether BTI is enabled.
 pub const ELF_WASM_BTI: &str = ".wasmtime.bti";

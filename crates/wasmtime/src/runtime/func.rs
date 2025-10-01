@@ -2228,6 +2228,15 @@ impl<T> Caller<'_, T> {
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         self.store.fuel_async_yield_interval(interval)
     }
+
+    /// Provide an object that captures Wasm stack state, including
+    /// Wasm VM-level values (locals and operand stack).
+    ///
+    /// See ['Store::stack_values`] for more details.
+    #[cfg(feature = "debug")]
+    pub fn stack_values(&mut self) -> Option<crate::StackView<'_>> {
+        self.store.stack_values()
+    }
 }
 
 impl<T: 'static> AsContext for Caller<'_, T> {

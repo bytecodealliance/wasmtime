@@ -67,6 +67,10 @@ impl CompilerBuilder for Builder {
             bail!("Winch does not currently support generating native debug information");
         }
 
+        if tunables.debug_instrumentation {
+            bail!("Winch does not currently support debug instrumentation");
+        }
+
         self.tunables = Some(tunables.clone());
         self.cranelift.set_tunables(tunables)?;
         Ok(())

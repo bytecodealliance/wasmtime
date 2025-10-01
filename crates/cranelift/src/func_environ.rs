@@ -21,13 +21,14 @@ use cranelift_frontend::Variable;
 use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
 use smallvec::{SmallVec, smallvec};
 use std::mem;
-use wasmparser::{Operator, WasmFeatures};
+use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
-    FuncIndex, FuncKey, GlobalIndex, IndexType, Memory, MemoryIndex, Module,
-    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex,
-    TagIndex, TripleExt, Tunables, TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType,
-    WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
+    MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize,
+    Table, TableIndex, TagIndex, TripleExt, Tunables, TypeConvert, TypeIndex, VMOffsets,
+    WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 use wasmtime_math::f64_cvt_to_int_bounds;
@@ -96,6 +97,7 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 pub struct FuncEnvironment<'module_environment> {
     compiler: &'module_environment Compiler,
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
+    key: FuncKey,
     pub(crate) module: &'module_environment Module,
     types: &'module_environment ModuleTypesBuilder,
     wasm_func_ty: &'module_environment WasmFuncType,
@@ -182,6 +184,10 @@ pub struct FuncEnvironment<'module_environment> {
     /// slot on this function's stack to be used for the
     /// current continuation's `values` field.
     stack_switching_values_buffer: Option<ir::StackSlot>,
+
+    /// The stack-slot used for exposing Wasm state via debug
+    /// instrumentation, if any, and the builder containing its metadata.
+    pub(crate) state_slot: Option<(ir::StackSlot, FrameStateSlotBuilder)>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -190,6 +196,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         translation: &'module_environment ModuleTranslation<'module_environment>,
         types: &'module_environment ModuleTypesBuilder,
         wasm_func_ty: &'module_environment WasmFuncType,
+        key: FuncKey,
     ) -> Self {
         let tunables = compiler.tunables();
         let builtin_functions = BuiltinFunctions::new(compiler);
@@ -199,6 +206,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let _ = BuiltinFunctions::raise;
 
         Self {
+            key,
             isa: compiler.isa(),
             module: &translation.module,
             compiler,
@@ -238,6 +246,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             stack_switching_handler_list_buffer: None,
             stack_switching_values_buffer: None,
+
+            state_slot: None,
         }
     }
 
@@ -1179,6 +1189,187 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let ty = self.module.types[type_index].unwrap_module_type_index();
         self.types[ty].unwrap_func().params().len()
     }
+
+    /// Initialize the state slot with an empty layout.
+    pub(crate) fn create_state_slot(&mut self, builder: &mut FunctionBuilder) {
+        if self.tunables.debug_instrumentation {
+            let frame_builder = FrameStateSlotBuilder::new(self.key, self.pointer_type().bytes());
+
+            // Initially zero-size and with no descriptor; we will fill in
+            // this info once we're done with the function body.
+            let slot = builder.func.create_sized_stack_slot(ir::StackSlotData::new(
+                ir::StackSlotKind::ExplicitSlot,
+                0,
+                0,
+                vec![],
+            ));
+
+            self.state_slot = Some((slot, frame_builder));
+        }
+    }
+
+    /// Update the state slot layout with a new layout given a local.
+    pub(crate) fn add_state_slot_local(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        ty: WasmValType,
+        init: Option<ir::Value>,
+    ) {
+        if let Some((slot, b)) = &mut self.state_slot {
+            let offset = b.add_local(FrameValType::from(ty));
+            if let Some(init) = init {
+                builder.ins().stack_store(init, *slot, offset.offset());
+            }
+        }
+    }
+
+    fn update_state_slot_stack(
+        &mut self,
+        validator: &FuncValidator<impl WasmModuleResources>,
+        builder: &mut FunctionBuilder,
+        stack: &mut FuncTranslationStacks,
+    ) -> WasmResult<()> {
+        // Take ownership of the state-slot builder temporarily rather
+        // than mutably borrowing so we can invoke a method below.
+        if let Some((slot, mut b)) = self.state_slot.take() {
+            // If the stack-shape stack is shorter than the value
+            // stack, that means that values were popped and then new
+            // values were pushed; hence, these operand-stack values
+            // are "dirty" and need to be flushed to the stackslot.
+            for i in stack.stack_shape.len()..stack.stack.len() {
+                let parent_shape = i
+                    .checked_sub(1)
+                    .map(|parent_idx| stack.stack_shape[parent_idx]);
+                if let Some(this_ty) = validator
+                    .get_operand_type(stack.stack.len() - i - 1)
+                    .expect("Index should not be out of range")
+                {
+                    let wasm_ty = self.convert_valtype(this_ty)?;
+                    let (this_shape, offset) =
+                        b.push_stack(parent_shape, FrameValType::from(wasm_ty));
+                    stack.stack_shape.push(this_shape);
+
+                    let value = stack.stack[i];
+                    builder.ins().stack_store(value, slot, offset.offset());
+                } else {
+                    // Unreachable code with unknown type -- no
+                    // flushes for this or later-pushed values.
+                    break;
+                }
+            }
+
+            self.state_slot = Some((slot, b));
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn debug_tags(
+        &self,
+        stack: &FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
+    ) -> Vec<ir::DebugTag> {
+        if let Some((slot, _b)) = &self.state_slot {
+            stack.assert_debug_stack_is_synced();
+            let stack_shape = stack
+                .stack_shape
+                .last()
+                .map(|s| s.raw())
+                .unwrap_or(u32::MAX);
+            let pc = srcloc.bits();
+            vec![
+                ir::DebugTag::StackSlot(*slot),
+                ir::DebugTag::User(pc),
+                ir::DebugTag::User(stack_shape),
+            ]
+        } else {
+            vec![]
+        }
+    }
+
+    fn set_debug_tags(
+        &self,
+        builder: &mut FunctionBuilder,
+        stack: &FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
+    ) {
+        if self.state_slot.is_some() {
+            let tags = self.debug_tags(stack, srcloc);
+            builder.set_debug_tags(tags);
+        }
+    }
+
+    fn finish_debug_metadata(&self, builder: &mut FunctionBuilder) {
+        if let Some((slot, b)) = &self.state_slot {
+            builder.func.sized_stack_slots[*slot].descriptor = b.serialize();
+            builder.func.sized_stack_slots[*slot].size = b.size();
+        }
+    }
+
+    /// Store a new value for a local in the state slot, if present.
+    pub(crate) fn state_slot_local_set(
+        &self,
+        builder: &mut FunctionBuilder,
+        local: u32,
+        value: ir::Value,
+    ) {
+        if let Some((slot, b)) = &self.state_slot {
+            let offset = b.local_offset(local);
+            builder.ins().stack_store(value, *slot, offset.offset());
+        }
+    }
+
+    fn update_state_slot_vmctx(&mut self, builder: &mut FunctionBuilder) {
+        if let &Some((slot, _)) = &self.state_slot {
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            builder.ins().stack_store(vmctx, slot, 0);
+        }
+    }
+
+    /// Perform debug instrumentation prior to translating an
+    /// operator.
+    pub(crate) fn debug_instrumentation_before_op(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        stack: &mut FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
+    ) -> WasmResult<()> {
+        if stack.reachable() {
+            self.set_debug_tags(builder, stack, srcloc);
+        }
+        Ok(())
+    }
+
+    /// Perform debug instrumentation after translating an operator.
+    pub(crate) fn debug_instrumentation_after_op(
+        &mut self,
+        validator: &FuncValidator<impl WasmModuleResources>,
+        builder: &mut FunctionBuilder,
+        stack: &mut FuncTranslationStacks,
+    ) -> WasmResult<()> {
+        if stack.reachable() {
+            self.update_state_slot_stack(validator, builder, stack)?;
+        }
+        Ok(())
+    }
+
+    /// Perform debug instrumentation before translating the whole function.
+    pub(crate) fn debug_instrumentation_at_start(
+        &mut self,
+        builder: &mut FunctionBuilder,
+    ) -> WasmResult<()> {
+        self.update_state_slot_vmctx(builder);
+        Ok(())
+    }
+
+    /// Perform debug instrumentation after translating the whole function.
+    pub(crate) fn debug_instrumentation_at_end(
+        &mut self,
+        builder: &mut FunctionBuilder,
+    ) -> WasmResult<()> {
+        self.finish_debug_metadata(builder);
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -1691,6 +1882,8 @@ impl FuncEnvironment<'_> {
 struct Call<'a, 'func, 'module_env> {
     builder: &'a mut FunctionBuilder<'func>,
     env: &'a mut FuncEnvironment<'module_env>,
+    stack: &'a FuncTranslationStacks,
+    srcloc: ir::SourceLoc,
     handlers: Vec<(Option<ExceptionTag>, Block)>,
     tail: bool,
 }
@@ -1712,12 +1905,16 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     pub fn new(
         builder: &'a mut FunctionBuilder<'func>,
         env: &'a mut FuncEnvironment<'module_env>,
+        stack: &'a FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
         handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> Self {
         let handlers = handlers.into_iter().collect();
         Call {
             builder,
             env,
+            stack,
+            srcloc,
             handlers,
             tail: false,
         }
@@ -1727,10 +1924,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     pub fn new_tail(
         builder: &'a mut FunctionBuilder<'func>,
         env: &'a mut FuncEnvironment<'module_env>,
+        stack: &'a FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
     ) -> Self {
         Call {
             builder,
             env,
+            stack,
+            srcloc,
             handlers: vec![],
             tail: true,
         }
@@ -2213,15 +2414,17 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         } else if let Some((exception_table, continuation_block, results)) =
             self.exception_table(sig_ref)
         {
-            self.builder.ins().try_call(callee, args, exception_table);
+            let inst = self.builder.ins().try_call(callee, args, exception_table);
             self.handle_call_result_stackmap(&results, sig_ref);
             self.builder.switch_to_block(continuation_block);
             self.builder.seal_block(continuation_block);
+            self.attach_tags(inst);
             results
         } else {
             let inst = self.builder.ins().call(callee, args);
             let results = self.results_from_call_inst(inst);
             self.handle_call_result_stackmap(&results, sig_ref);
+            self.attach_tags(inst);
             results
         }
     }
@@ -2240,18 +2443,28 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         } else if let Some((exception_table, continuation_block, results)) =
             self.exception_table(sig_ref)
         {
-            self.builder
+            let inst = self
+                .builder
                 .ins()
                 .try_call_indirect(func_addr, args, exception_table);
             self.handle_call_result_stackmap(&results, sig_ref);
             self.builder.switch_to_block(continuation_block);
             self.builder.seal_block(continuation_block);
+            self.attach_tags(inst);
             results
         } else {
             let inst = self.builder.ins().call_indirect(sig_ref, func_addr, args);
             let results = self.results_from_call_inst(inst);
             self.handle_call_result_stackmap(&results, sig_ref);
+            self.attach_tags(inst);
             results
+        }
+    }
+
+    fn attach_tags(&mut self, inst: ir::Inst) {
+        let tags = self.env.debug_tags(self.stack, self.srcloc);
+        if !tags.is_empty() {
+            self.builder.func.debug_tags.set(inst, tags);
         }
     }
 }
@@ -2307,10 +2520,18 @@ impl FuncEnvironment<'_> {
         &self.heaps
     }
 
-    pub fn is_wasm_parameter(&self, _signature: &ir::Signature, index: usize) -> bool {
+    pub fn is_wasm_parameter(&self, index: usize) -> bool {
         // The first two parameters are the vmctx and caller vmctx. The rest are
         // the wasm parameters.
         index >= 2
+    }
+
+    pub fn clif_param_as_wasm_param(&self, index: usize) -> Option<WasmValType> {
+        if index >= 2 {
+            Some(self.wasm_func_ty.params()[index - 2])
+        } else {
+            None
+        }
     }
 
     pub fn param_needs_stack_map(&self, _signature: &ir::Signature, index: usize) -> bool {
@@ -2990,6 +3211,8 @@ impl FuncEnvironment<'_> {
     pub fn translate_call_indirect<'a>(
         &mut self,
         builder: &'a mut FunctionBuilder,
+        stack: &'a FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
         features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
@@ -2998,7 +3221,7 @@ impl FuncEnvironment<'_> {
         call_args: &[ir::Value],
         handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> WasmResult<Option<CallRets>> {
-        Call::new(builder, self, handlers).indirect_call(
+        Call::new(builder, self, stack, srcloc, handlers).indirect_call(
             features,
             table_index,
             ty_index,
@@ -3011,39 +3234,55 @@ impl FuncEnvironment<'_> {
     pub fn translate_call<'a>(
         &mut self,
         builder: &'a mut FunctionBuilder,
+        stack: &'a FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         call_args: &[ir::Value],
         handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> WasmResult<CallRets> {
-        Call::new(builder, self, handlers).direct_call(callee_index, sig_ref, call_args)
+        Call::new(builder, self, stack, srcloc, handlers).direct_call(
+            callee_index,
+            sig_ref,
+            call_args,
+        )
     }
 
     pub fn translate_call_ref<'a>(
         &mut self,
         builder: &'a mut FunctionBuilder,
+        stack: &'a FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
         handlers: impl IntoIterator<Item = (Option<ExceptionTag>, Block)>,
     ) -> WasmResult<CallRets> {
-        Call::new(builder, self, handlers).call_ref(sig_ref, callee, call_args)
+        Call::new(builder, self, stack, srcloc, handlers).call_ref(sig_ref, callee, call_args)
     }
 
     pub fn translate_return_call(
         &mut self,
         builder: &mut FunctionBuilder,
+        stack: &FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self).direct_call(callee_index, sig_ref, call_args)?;
+        Call::new_tail(builder, self, stack, srcloc).direct_call(
+            callee_index,
+            sig_ref,
+            call_args,
+        )?;
         Ok(())
     }
 
     pub fn translate_return_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
+        stack: &FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
         features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
@@ -3051,7 +3290,7 @@ impl FuncEnvironment<'_> {
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self).indirect_call(
+        Call::new_tail(builder, self, stack, srcloc).indirect_call(
             features,
             table_index,
             ty_index,
@@ -3065,11 +3304,13 @@ impl FuncEnvironment<'_> {
     pub fn translate_return_call_ref(
         &mut self,
         builder: &mut FunctionBuilder,
+        stack: &FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self).call_ref(sig_ref, callee, call_args)?;
+        Call::new_tail(builder, self, stack, srcloc).call_ref(sig_ref, callee, call_args)?;
         Ok(())
     }
 

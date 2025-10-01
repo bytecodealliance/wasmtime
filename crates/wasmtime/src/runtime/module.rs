@@ -18,6 +18,8 @@ use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::{fs::File, path::Path};
 use wasmparser::{Parser, ValidPayload, Validator};
+#[cfg(feature = "debug")]
+use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
     CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind,
     TypeTrace, VMOffsets, VMSharedTypeIndex,
@@ -1141,6 +1143,14 @@ impl Module {
     pub(crate) fn exception_table<'a>(&'a self) -> ExceptionTable<'a> {
         ExceptionTable::parse(self.inner.code.code_memory().exception_tables())
             .expect("Exception tables were validated on module load")
+    }
+
+    /// Obtain a frame-table parser on this module's frame state slot
+    /// (debug instrumentation) metadata.
+    #[cfg(feature = "debug")]
+    pub(crate) fn frame_table<'a>(&'a self) -> FrameTable<'a> {
+        FrameTable::parse(self.inner.code.code_memory().frame_tables())
+            .expect("Frame tables were validated on module load")
     }
 }
 

@@ -278,6 +278,7 @@ impl Metadata<'_> {
             memory_reservation,
             memory_guard_size,
             generate_native_debuginfo,
+            debug_instrumentation,
             parse_wasm_debuginfo,
             consume_fuel,
             epoch_interruption,
@@ -321,6 +322,11 @@ impl Metadata<'_> {
             generate_native_debuginfo,
             other.generate_native_debuginfo,
             "debug information support",
+        )?;
+        Self::check_bool(
+            debug_instrumentation,
+            other.debug_instrumentation,
+            "debug instrumentation",
         )?;
         Self::check_bool(
             parse_wasm_debuginfo,
@@ -702,7 +708,7 @@ Caused by:
         assert_eq!(cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
-        cfg.debug_info(true)
+        cfg.native_debug_info(true)
             .cache(Some(Cache::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         let cache_config = engine

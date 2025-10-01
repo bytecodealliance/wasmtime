@@ -77,7 +77,7 @@ impl Backtrace {
     }
 
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
-    #[cfg(feature = "gc")]
+    #[cfg(any(feature = "gc", feature = "debug"))]
     pub fn trace(store: &StoreOpaque, f: impl FnMut(Frame) -> ControlFlow<()>) {
         let vm_store_context = store.vm_store_context();
         let unwind = store.unwinder();
@@ -136,6 +136,19 @@ impl Backtrace {
     /// If Wasm hit a trap, and we calling this from the trap handler, then the
     /// Wasm exit trampoline didn't run, and we use the provided PC and FP
     /// instead of looking them up in `VMStoreContext`.
+    ///
+    /// We define "current Wasm stack" here as "all activations
+    /// associated with the given store". That is: if we have a stack like
+    ///
+    /// ```plain
+    ///     host --> (Wasm functions in store A) --> host --> (Wasm functions in store B) --> host
+    ///          --> (Wasm functions in store A) --> host --> call `trace_with_trap_state` with store A
+    /// ```
+    ///
+    /// then we will see the first and third Wasm activations (those
+    /// associated with store A), but not that with store B. In
+    /// essence, activations from another store might as well be some
+    /// other opaque host code; we don't know anything about it.
     pub(crate) unsafe fn trace_with_trap_state(
         vm_store_context: *const VMStoreContext,
         unwind: &dyn Unwind,

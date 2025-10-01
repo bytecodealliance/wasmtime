@@ -487,7 +487,7 @@ async fn pulley_provenance_test_async_components() -> Result<()> {
 #[cfg(not(miri))]
 fn enabling_debug_info_doesnt_break_anything() -> Result<()> {
     let mut config = pulley_config();
-    config.debug_info(true);
+    config.native_debug_info(true);
     let engine = Engine::new(&config)?;
     assert!(Module::from_file(&engine, "./tests/all/cli_tests/greeter_command.wat").is_err());
     Ok(())

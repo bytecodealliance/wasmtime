@@ -408,3 +408,6 @@ component-model-async-bytes = [
   "component-model-async",
   "dep:bytes",
 ]
+
+# Enables support for guest debugging.
+debug = ['runtime']

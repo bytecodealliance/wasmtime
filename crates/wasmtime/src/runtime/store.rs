@@ -1167,6 +1167,25 @@ impl<T> Store<T> {
     pub fn has_pending_exception(&self) -> bool {
         self.inner.pending_exception.is_some()
     }
+
+    /// Provide an object that captures Wasm stack state, including
+    /// Wasm VM-level values (locals and operand stack).
+    ///
+    /// This object views all activations for the current store that
+    /// are on the stack. An activation is a contiguous sequence of
+    /// Wasm frames (called functions) that were called from host code
+    /// and called back out to host code. If there are activations
+    /// from multiple stores on the stack, for example if Wasm code in
+    /// one store calls out to host code which invokes another Wasm
+    /// function in another store, then the other stores are "opaque"
+    /// to our view here in the same way that host code is.
+    ///
+    /// Returns `None` if debug instrumentation is not enabled for
+    /// the engine containing this store.
+    #[cfg(feature = "debug")]
+    pub fn stack_values(&mut self) -> Option<crate::StackView<'_>> {
+        self.inner.stack_values()
+    }
 }
 
 impl<'a, T> StoreContext<'a, T> {
@@ -1289,6 +1308,15 @@ impl<'a, T> StoreContextMut<'a, T> {
     #[cfg(feature = "gc")]
     pub fn has_pending_exception(&self) -> bool {
         self.0.inner.pending_exception.is_some()
+    }
+
+    /// Provide an object that captures Wasm stack state, including
+    /// Wasm VM-level values (locals and operand stack).
+    ///
+    /// See ['Store::stack_values`] for more details.
+    #[cfg(feature = "debug")]
+    pub fn stack_values(&mut self) -> Option<crate::StackView<'_>> {
+        self.0.inner.stack_values()
     }
 }
 
