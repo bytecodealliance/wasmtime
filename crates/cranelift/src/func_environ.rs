@@ -1197,12 +1197,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             // Initially zero-size and with no descriptor; we will fill in
             // this info once we're done with the function body.
-            let slot = builder.func.create_sized_stack_slot(ir::StackSlotData::new(
-                ir::StackSlotKind::ExplicitSlot,
-                0,
-                0,
-                vec![],
-            ));
+            let slot = builder
+                .func
+                .create_sized_stack_slot(ir::StackSlotData::new_with_key(
+                    ir::StackSlotKind::ExplicitSlot,
+                    0,
+                    0,
+                    ir::StackSlotKey::new(self.key.into_raw_u64()),
+                ));
 
             self.state_slot = Some((slot, frame_builder));
         }
@@ -1287,21 +1289,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    fn set_debug_tags(
-        &self,
-        builder: &mut FunctionBuilder,
-        stack: &FuncTranslationStacks,
-        srcloc: ir::SourceLoc,
-    ) {
-        if self.state_slot.is_some() {
-            let tags = self.debug_tags(stack, srcloc);
-            builder.set_debug_tags(tags);
-        }
-    }
-
     fn finish_debug_metadata(&self, builder: &mut FunctionBuilder) {
         if let Some((slot, b)) = &self.state_slot {
-            builder.func.sized_stack_slots[*slot].descriptor = b.serialize();
             builder.func.sized_stack_slots[*slot].size = b.size();
         }
     }
@@ -1335,7 +1324,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         srcloc: ir::SourceLoc,
     ) -> WasmResult<()> {
         if stack.reachable() {
-            self.set_debug_tags(builder, stack, srcloc);
+            let inst = builder.ins().sequence_point();
+            let tags = self.debug_tags(stack, srcloc);
+            builder.func.debug_tags.set(inst, tags);
         }
         Ok(())
     }

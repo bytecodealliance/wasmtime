@@ -189,7 +189,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn append_code(
         &self,
         obj: &mut Object<'static>,
-        funcs: &[(String, Box<dyn Any + Send + Sync>)],
+        funcs: &[(String, FuncKey, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, wasmtime_environ::FuncKey) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         self.trampolines.append_code(obj, funcs, resolve_reloc)
@@ -334,7 +334,7 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
     fn append_code(
         &self,
         obj: &mut Object<'static>,
-        funcs: &[(String, Box<dyn Any + Send + Sync>)],
+        funcs: &[(String, FuncKey, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, FuncKey) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         self.0.append_code(obj, funcs, resolve_reloc)

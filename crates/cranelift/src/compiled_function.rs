@@ -3,7 +3,9 @@ use cranelift_codegen::{
     Final, MachBufferFinalized, MachBufferFrameLayout, MachSrcLoc, ValueLabelsRanges, ir,
     isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo,
 };
-use wasmtime_environ::{FilePos, InstructionAddressMap, PrimaryMap, TrapInformation};
+use wasmtime_environ::{
+    FilePos, FrameStateSlotBuilder, InstructionAddressMap, PrimaryMap, TrapInformation,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Metadata to translate from binary offsets back to the original
@@ -61,6 +63,8 @@ pub struct CompiledFunction {
     /// The metadata for the compiled function, including unwind information
     /// the function address map.
     metadata: CompiledFunctionMetadata,
+    /// Debug metadata for the top-level function's state slot.
+    pub debug_slot_descriptor: Option<FrameStateSlotBuilder>,
 }
 
 impl CompiledFunction {
@@ -77,6 +81,7 @@ impl CompiledFunction {
             name_map,
             alignment,
             metadata: Default::default(),
+            debug_slot_descriptor: None,
         }
     }
 
