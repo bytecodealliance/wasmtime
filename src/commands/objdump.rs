@@ -696,6 +696,10 @@ impl Decorator<'_> {
                 FrameInstPos::Post => &mut *pre_list,
                 FrameInstPos::Pre => &mut *post_list,
             };
+            let pos = match pos {
+                FrameInstPos::Post => "after previous inst",
+                FrameInstPos::Pre => "before next inst",
+            };
             for (wasm_pc, frame_descriptor, stack_shape) in frames {
                 let (frame_descriptor_data, offset) =
                     frame_tables.frame_descriptor(frame_descriptor).unwrap();
@@ -704,7 +708,7 @@ impl Decorator<'_> {
                 let local_shape = Self::describe_local_shape(&frame_descriptor);
                 let stack_shape = Self::describe_stack_shape(&frame_descriptor, stack_shape);
                 let func_key = frame_descriptor.func_key();
-                list.push(format!("debug frame state: func key {func_key:?}, wasm PC {wasm_pc}, slot at FP-0x{offset:x}, locals {local_shape}, stack {stack_shape}"));
+                list.push(format!("debug frame state ({pos}): func key {func_key:?}, wasm PC {wasm_pc}, slot at FP-0x{offset:x}, locals {local_shape}, stack {stack_shape}"));
             }
         }
     }

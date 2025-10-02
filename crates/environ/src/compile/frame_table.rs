@@ -260,11 +260,15 @@ impl FrameTableBuilder {
         frames: &[(u32, FrameTableDescriptorIndex, FrameStackShape)],
     ) {
         let pc_and_pos = FrameInstPos::encode(native_pc, pos);
-        // If we already have a program point record at this PC, don't add another.
-        if let Some(last) = self.progpoint_pcs.last()
+        // If we already have a program point record at this PC,
+        // overwrite it.
+        while let Some(last) = self.progpoint_pcs.last()
             && last.get(LittleEndian) == pc_and_pos
         {
-            return;
+            self.progpoint_pcs.pop();
+            self.progpoint_descriptor_offsets.pop();
+            self.progpoint_descriptor_data
+                .truncate(self.progpoint_descriptor_data.len() - 3);
         }
 
         let start = u32::try_from(self.progpoint_descriptor_data.len()).unwrap();
