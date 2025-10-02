@@ -2214,8 +2214,8 @@ pub struct MachBufferStackSlot {
     /// Offset from the bottom of the stack frame.
     pub offset: u32,
 
-    /// User-provided descriptor bytes for this stack slot.
-    pub descriptor: Vec<u8>,
+    /// User-provided key to describe this stack slot.
+    pub key: Option<ir::StackSlotKey>,
 }
 
 /// Debug tags: a sequence of references to a stack slot, or a

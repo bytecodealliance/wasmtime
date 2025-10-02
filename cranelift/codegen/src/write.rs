@@ -648,12 +648,7 @@ mod tests {
         f.name = UserFuncName::testcase("foo");
         assert_eq!(f.to_string(), "function %foo() fast {\n}\n");
 
-        f.create_sized_stack_slot(StackSlotData::new(
-            StackSlotKind::ExplicitSlot,
-            4,
-            0,
-            vec![],
-        ));
+        f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4, 0));
         assert_eq!(
             f.to_string(),
             "function %foo() fast {\n    ss0 = explicit_slot 4\n}\n"
@@ -689,12 +684,7 @@ mod tests {
         );
 
         let mut f = Function::new();
-        f.create_sized_stack_slot(StackSlotData::new(
-            StackSlotKind::ExplicitSlot,
-            4,
-            2,
-            vec![],
-        ));
+        f.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4, 2));
         assert_eq!(
             f.to_string(),
             "function u0:0() fast {\n    ss0 = explicit_slot 4, align = 4\n}\n"

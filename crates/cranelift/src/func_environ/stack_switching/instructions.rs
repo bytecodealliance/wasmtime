@@ -349,7 +349,6 @@ pub(crate) mod stack_switching_helpers {
                         ir::StackSlotKind::ExplicitSlot,
                         required_size,
                         align,
-                        vec![],
                     );
                     let slot = builder.create_sized_stack_slot(slot_size);
                     let new_data = builder.ins().stack_addr(env.pointer_type(), slot, 0);
@@ -1867,7 +1866,6 @@ pub(crate) fn translate_switch<'a>(
             ir::StackSlotKind::ExplicitSlot,
             u32::from(cctx_size),
             u8::try_from(env.pointer_type().bytes()).unwrap(),
-            vec![],
         );
         let slot = builder.create_sized_stack_slot(slot_size);
         let tmp_control_context = builder.ins().stack_addr(env.pointer_type(), slot, 0);

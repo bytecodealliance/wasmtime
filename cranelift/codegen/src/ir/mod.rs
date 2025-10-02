@@ -66,7 +66,7 @@ pub use crate::ir::progpoint::ProgramPoint;
 pub use crate::ir::sourceloc::RelSourceLoc;
 pub use crate::ir::sourceloc::SourceLoc;
 pub use crate::ir::stackslot::{
-    DynamicStackSlotData, DynamicStackSlots, StackSlotData, StackSlotKind, StackSlots,
+    DynamicStackSlotData, DynamicStackSlots, StackSlotData, StackSlotKey, StackSlotKind, StackSlots,
 };
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;

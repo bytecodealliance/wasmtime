@@ -568,7 +568,6 @@ impl StackSlots {
                         ir::StackSlotKind::ExplicitSlot,
                         size,
                         log2_size.try_into().unwrap(),
-                        vec![],
                     ));
                     log::trace!("rewriting:       created new stack slot {slot:?} for {val:?}");
                     slot

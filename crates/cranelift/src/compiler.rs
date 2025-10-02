@@ -1053,7 +1053,6 @@ impl Compiler {
             ir::StackSlotKind::ExplicitSlot,
             values_vec_byte_size,
             4,
-            vec![],
         ));
         let values_vec_ptr = builder.ins().stack_addr(pointer_type, slot, 0);
 

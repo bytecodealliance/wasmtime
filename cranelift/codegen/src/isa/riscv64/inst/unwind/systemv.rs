@@ -80,12 +80,7 @@ mod tests {
 
         let mut context = Context::for_function(create_function(
             CallConv::SystemV,
-            Some(StackSlotData::new(
-                StackSlotKind::ExplicitSlot,
-                64,
-                0,
-                vec![],
-            )),
+            Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64, 0)),
         ));
 
         let code = context
