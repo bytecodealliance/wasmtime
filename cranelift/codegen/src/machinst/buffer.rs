@@ -255,9 +255,9 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Any source location mappings referring to this code.
     srclocs: SmallVec<[MachSrcLoc<Stencil>; 64]>,
     /// Any debug tags referring to this code.
-    debug_tags: SmallVec<[MachDebugTags; 64]>,
+    debug_tags: Vec<MachDebugTags>,
     /// Pool of debug tags referenced by `MachDebugTags` entries.
-    debug_tag_pool: SmallVec<[DebugTag; 64]>,
+    debug_tag_pool: Vec<DebugTag>,
     /// Any user stack maps for this code.
     ///
     /// Each entry is an `(offset, span, stack_map)` triple. Entries are sorted
@@ -379,9 +379,9 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     /// Any source location mappings referring to this code.
     pub(crate) srclocs: SmallVec<[T::MachSrcLocType; 64]>,
     /// Any debug tags referring to this code.
-    pub(crate) debug_tags: SmallVec<[MachDebugTags; 64]>,
+    pub(crate) debug_tags: Vec<MachDebugTags>,
     /// Pool of debug tags referenced by `MachDebugTags` entries.
-    pub(crate) debug_tag_pool: SmallVec<[DebugTag; 64]>,
+    pub(crate) debug_tag_pool: Vec<DebugTag>,
     /// Any user stack maps for this code.
     ///
     /// Each entry is an `(offset, span, stack_map)` triple. Entries are sorted
@@ -466,8 +466,8 @@ impl<I: VCodeInst> MachBuffer<I> {
             call_sites: SmallVec::new(),
             exception_handlers: SmallVec::new(),
             srclocs: SmallVec::new(),
-            debug_tags: SmallVec::new(),
-            debug_tag_pool: SmallVec::new(),
+            debug_tags: vec![],
+            debug_tag_pool: vec![],
             user_stack_maps: SmallVec::new(),
             unwind_info: SmallVec::new(),
             cur_srcloc: None,
