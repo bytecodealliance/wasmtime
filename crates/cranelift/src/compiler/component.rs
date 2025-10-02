@@ -1527,7 +1527,6 @@ impl TrampolineCompiler<'_> {
                     ir::StackSlotKind::ExplicitSlot,
                     pointer_type.bytes(),
                     0,
-                    vec![],
                 ));
             args.push(self.builder.ins().stack_addr(pointer_type, slot, 0));
         }

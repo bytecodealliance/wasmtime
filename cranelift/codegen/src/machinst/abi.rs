@@ -100,8 +100,8 @@
 
 use crate::CodegenError;
 use crate::entity::SecondaryMap;
-use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, ExceptionTag, Signature};
+use crate::ir::{StackSlotKey, types::*};
 use crate::isa::TargetIsa;
 use crate::settings::ProbestackStrategy;
 use crate::{ir, isa};
@@ -1143,7 +1143,7 @@ pub struct Callee<M: ABIMachineSpec> {
     /// Offsets to each sized stackslot.
     sized_stackslots: PrimaryMap<StackSlot, u32>,
     /// Descriptors for sized stackslots.
-    sized_stackslot_descriptors: SecondaryMap<StackSlot, Vec<u8>>,
+    sized_stackslot_keys: SecondaryMap<StackSlot, Option<StackSlotKey>>,
     /// Total stack size of all stackslots
     stackslots_size: u32,
     /// Stack size to be reserved for outgoing arguments.
@@ -1229,7 +1229,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         // Compute sized stackslot locations and total stackslot size.
         let mut end_offset: u32 = 0;
         let mut sized_stackslots = PrimaryMap::new();
-        let mut sized_stackslot_descriptors = SecondaryMap::new();
+        let mut sized_stackslot_keys = SecondaryMap::new();
 
         for (stackslot, data) in f.sized_stack_slots.iter() {
             // We start our computation possibly unaligned where the previous
@@ -1253,7 +1253,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 
             debug_assert_eq!(stackslot.as_u32() as usize, sized_stackslots.len());
             sized_stackslots.push(start_offset);
-            sized_stackslot_descriptors[stackslot] = data.descriptor.clone();
+            sized_stackslot_keys[stackslot] = data.key;
         }
 
         // Compute dynamic stackslot locations and total stackslot size.
@@ -1308,7 +1308,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             dynamic_stackslots,
             dynamic_type_sizes,
             sized_stackslots,
-            sized_stackslot_descriptors,
+            sized_stackslot_keys,
             stackslots_size,
             outgoing_args_size: 0,
             tail_args_size,
@@ -2416,7 +2416,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         for (slot, storage_area_offset) in &self.sized_stackslots {
             stackslots[slot] = MachBufferStackSlot {
                 offset: storage_area_base.checked_add(*storage_area_offset).unwrap(),
-                descriptor: self.sized_stackslot_descriptors[slot].clone(),
+                key: self.sized_stackslot_keys[slot],
             };
         }
         MachBufferFrameLayout {

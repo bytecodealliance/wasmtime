@@ -15,7 +15,7 @@ use cranelift_codegen::ir::immediates::{
 };
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::pcc::{BaseExpr, Expr, Fact};
-use cranelift_codegen::ir::{self, UserExternalNameRef};
+use cranelift_codegen::ir::{self, StackSlotKey, UserExternalNameRef};
 use cranelift_codegen::ir::{DebugTag, types::*};
 
 use cranelift_codegen::ir::{
@@ -252,7 +252,6 @@ impl Context {
                 StackSlotKind::ExplicitSlot,
                 0,
                 0,
-                vec![],
             ));
         }
         self.function.sized_stack_slots[ss] = data;
@@ -1543,7 +1542,7 @@ impl<'a> Parser<'a> {
     //                   | "spill_slot"
     //                   | "incoming_arg"
     //                   | "outgoing_arg"
-    // stack-slot-flag ::= "align" "=" Bytes | "descriptor" "=" "[" u8,* "]"
+    // stack-slot-flag ::= "align" "=" Bytes | "key" "=" uimm64
     fn parse_stack_slot_decl(&mut self) -> ParseResult<(StackSlot, StackSlotData)> {
         let ss = self.match_ss("expected stack slot number: ss«n»")?;
         self.match_token(Token::Equal, "expected '=' in stack slot declaration")?;
@@ -1561,7 +1560,7 @@ impl<'a> Parser<'a> {
         }
 
         let mut align = 1;
-        let mut descriptor = vec![];
+        let mut key = None;
 
         while self.token() == Some(Token::Comma) {
             self.consume();
@@ -1575,20 +1574,11 @@ impl<'a> Parser<'a> {
                     align = u32::try_from(align64)
                         .map_err(|_| self.error("alignment must be a 32-bit unsigned integer"))?;
                 }
-                Some(Token::Identifier("descriptor")) => {
+                Some(Token::Identifier("key")) => {
                     self.consume();
                     self.match_token(Token::Equal, "expected `=` after flag")?;
-                    self.match_token(Token::LBracket, "expected `[` to start descriptor content")?;
-                    while self.token() != Some(Token::RBracket) {
-                        let byte = self.match_uimm8("expected a descriptor byte value")?;
-                        descriptor.push(byte);
-                        if let Some(Token::Comma) = self.token() {
-                            self.consume();
-                        } else {
-                            break;
-                        }
-                    }
-                    self.match_token(Token::RBracket, "expected `[` to end descriptor content")?;
+                    let value = self.match_uimm64("expected `u64` value for `key` flag")?;
+                    key = Some(StackSlotKey::new(value.into()));
                 }
                 _ => {
                     return Err(self.error("invalid flag for stack slot"));
@@ -1601,7 +1591,10 @@ impl<'a> Parser<'a> {
         }
         let align_shift = u8::try_from(align.ilog2()).unwrap(); // Always succeeds: range 0..=31.
 
-        let data = StackSlotData::new(kind, bytes as u32, align_shift, descriptor);
+        let data = match key {
+            Some(key) => StackSlotData::new_with_key(kind, bytes as u32, align_shift, key),
+            None => StackSlotData::new(kind, bytes as u32, align_shift),
+        };
 
         // Collect any trailing comments.
         self.token();

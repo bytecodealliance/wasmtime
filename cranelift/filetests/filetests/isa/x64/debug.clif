@@ -2,7 +2,7 @@ test compile precise-output
 target x86_64
 
 function %f0(i32, i32) -> i32 {
-    ss0 = explicit_slot 64, descriptor = [1, 2, 3, 4]
+    ss0 = explicit_slot 64, key = 1234
     ;; not colocated -- shows interesting case where tags attach to
     ;; multiple VCode insts.
     fn0 = %f1(i32, i32)
@@ -57,7 +57,7 @@ block0(v0: i32, v1: i32):
 ;   retq
 
 function %f1(i32, i32) -> i32 {
-    ss0 = explicit_slot 64, descriptor = [1, 2, 3, 4]
+    ss0 = explicit_slot 64, key = 1234
     fn0 = colocated %f1(i32, i32)
 block0(v0: i32, v1: i32):
 <ss0, 0, 0>      call fn0(v0, v1)

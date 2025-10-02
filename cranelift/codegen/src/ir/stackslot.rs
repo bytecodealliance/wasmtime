@@ -6,7 +6,6 @@
 use crate::entity::PrimaryMap;
 use crate::ir::StackSlot;
 use crate::ir::entities::{DynamicStackSlot, DynamicType};
-use alloc::vec::Vec;
 use core::fmt;
 use core::str::FromStr;
 
@@ -71,25 +70,62 @@ pub struct StackSlotData {
     /// stack slot size or machine word size, as well.
     pub align_shift: u8,
 
-    /// Opaque stackslot metadata, passed through to compilation
-    /// result metadata describing stackslot location.
+    /// Opaque stackslot metadata handle, passed through to
+    /// compilation result metadata describing stackslot location.
     ///
     /// In the face of compiler transforms like inlining that may move
     /// stackslots between functions, when an embedder wants to
     /// externally observe stackslots, it needs a first-class way for
     /// the identity of stackslots to be carried along with the IR
-    /// entities. This opaque data allows the embedder to do that.
-    pub descriptor: Vec<u8>,
+    /// entities. This opaque `StackSlotKey` allows the embedder to do
+    /// so.
+    pub key: Option<StackSlotKey>,
+}
+
+/// An opaque key uniquely identifying a stack slot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct StackSlotKey(u64);
+impl StackSlotKey {
+    /// Construct a [`StackSlotKey`] from raw bits.
+    ///
+    /// An embedder can use any 64-bit value to describe a stack slot;
+    /// there are no restrictions, and the value does not mean
+    /// anything to Cranelift itself.
+    pub fn new(value: u64) -> StackSlotKey {
+        StackSlotKey(value)
+    }
+
+    /// Get the raw bits from the [`StackSlotKey`].
+    pub fn bits(&self) -> u64 {
+        self.0
+    }
 }
 
 impl StackSlotData {
     /// Create a stack slot with the specified byte size and alignment.
-    pub fn new(kind: StackSlotKind, size: StackSize, align_shift: u8, descriptor: Vec<u8>) -> Self {
+    pub fn new(kind: StackSlotKind, size: StackSize, align_shift: u8) -> Self {
         Self {
             kind,
             size,
             align_shift,
-            descriptor,
+            key: None,
+        }
+    }
+
+    /// Create a stack slot with the specified byte size and alignment
+    /// and the given user-defined key.
+    pub fn new_with_key(
+        kind: StackSlotKind,
+        size: StackSize,
+        align_shift: u8,
+        key: StackSlotKey,
+    ) -> Self {
+        Self {
+            kind,
+            size,
+            align_shift,
+            key: Some(key),
         }
     }
 }
@@ -101,12 +137,12 @@ impl fmt::Display for StackSlotData {
         } else {
             "".into()
         };
-        let descriptor = if !self.descriptor.is_empty() {
-            format!(", descriptor = {:?}", self.descriptor)
-        } else {
-            "".into()
+        let key = match self.key {
+            Some(value) => format!(", key = {}", value.bits()),
+            None => "".into(),
         };
-        write!(f, "{} {}{align_shift}{descriptor}", self.kind, self.size)
+
+        write!(f, "{} {}{align_shift}{key}", self.kind, self.size)
     }
 }
 
@@ -159,18 +195,10 @@ mod tests {
     fn stack_slot() {
         let mut func = Function::new();
 
-        let ss0 = func.create_sized_stack_slot(StackSlotData::new(
-            StackSlotKind::ExplicitSlot,
-            4,
-            0,
-            vec![],
-        ));
-        let ss1 = func.create_sized_stack_slot(StackSlotData::new(
-            StackSlotKind::ExplicitSlot,
-            8,
-            0,
-            vec![],
-        ));
+        let ss0 =
+            func.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 4, 0));
+        let ss1 =
+            func.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 8, 0));
         assert_eq!(ss0.to_string(), "ss0");
         assert_eq!(ss1.to_string(), "ss1");
 
