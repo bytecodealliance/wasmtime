@@ -231,10 +231,10 @@ impl FrameTableBuilder {
     pub fn add_frame_descriptor(
         &mut self,
         slot_to_fp_offset: u32,
-        data: Vec<u8>,
+        data: &[u8],
     ) -> FrameTableDescriptorIndex {
         let start = u32::try_from(self.frame_descriptor_data.len()).unwrap();
-        self.frame_descriptor_data.extend(data);
+        self.frame_descriptor_data.extend(data.iter().cloned());
         let end = u32::try_from(self.frame_descriptor_data.len()).unwrap();
 
         let index = FrameTableDescriptorIndex(
