@@ -2,11 +2,7 @@
 //!
 //! This module defines cursor data types that can be used for inserting instructions.
 
-use crate::{
-    inst_predicates::has_lowering_side_effect,
-    ir::{self},
-};
-use alloc::vec::Vec;
+use crate::ir;
 
 /// The possible positions of a cursor.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -38,9 +34,6 @@ pub trait Cursor {
     /// Set the source location that should be assigned to new instructions.
     fn set_srcloc(&mut self, srcloc: ir::SourceLoc);
 
-    /// Set the debug tags that should be assigned to new side-effecting instructions.
-    fn set_debug_tags(&mut self, tags: Vec<ir::DebugTag>);
-
     /// Borrow a reference to the function layout that this cursor is navigating.
     fn layout(&self) -> &ir::Layout;
 
@@ -65,30 +58,6 @@ pub trait Cursor {
         Self: Sized,
     {
         self.set_srcloc(srcloc);
-        self
-    }
-
-    /// Exchange this cursor for one with a set debug tag list.
-    ///
-    /// These tags will be attached to all newly inserted
-    /// side-effecting instructions.
-    ///
-    /// This is intended to be used as a builder method:
-    ///
-    /// ```
-    /// # use cranelift_codegen::ir::{Function, Block, DebugTag};
-    /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
-    /// fn edit_func(func: &mut Function, tags: Vec<DebugTag>) {
-    ///     let mut pos = FuncCursor::new(func).with_debug_tags(tags);
-    ///
-    ///     // Use `pos`...
-    /// }
-    /// ```
-    fn with_debug_tags(mut self, tags: Vec<ir::DebugTag>) -> Self
-    where
-        Self: Sized,
-    {
-        self.set_debug_tags(tags);
         self
     }
 
@@ -648,7 +617,6 @@ pub trait Cursor {
 pub struct FuncCursor<'f> {
     pos: CursorPosition,
     srcloc: ir::SourceLoc,
-    debug_tags: Vec<ir::DebugTag>,
 
     /// The referenced function.
     pub func: &'f mut ir::Function,
@@ -660,7 +628,6 @@ impl<'f> FuncCursor<'f> {
         Self {
             pos: CursorPosition::Nowhere,
             srcloc: Default::default(),
-            debug_tags: vec![],
             func,
         }
     }
@@ -694,10 +661,6 @@ impl<'f> Cursor for FuncCursor<'f> {
         self.srcloc = srcloc;
     }
 
-    fn set_debug_tags(&mut self, tags: Vec<ir::DebugTag>) {
-        self.debug_tags = tags;
-    }
-
     fn layout(&self) -> &ir::Layout {
         &self.func.layout
     }
@@ -720,9 +683,6 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
         self.insert_inst(inst);
         if !self.srcloc.is_default() {
             self.func.set_srcloc(inst, self.srcloc);
-        }
-        if has_lowering_side_effect(self.func, inst) && !self.debug_tags.is_empty() {
-            self.func.debug_tags.set(inst, self.debug_tags.clone());
         }
         &mut self.func.dfg
     }

@@ -756,7 +756,7 @@ mod tests {
     use super::*;
     use crate::cursor::{Cursor, CursorPosition};
     use crate::entity::EntityRef;
-    use crate::ir::{Block, DebugTag, Inst, SourceLoc};
+    use crate::ir::{Block, Inst, SourceLoc};
     use alloc::vec::Vec;
     use core::cmp::Ordering;
 
@@ -792,10 +792,6 @@ mod tests {
         }
 
         fn set_srcloc(&mut self, _srcloc: SourceLoc) {
-            unimplemented!()
-        }
-
-        fn set_debug_tags(&mut self, _tags: Vec<DebugTag>) {
             unimplemented!()
         }
 

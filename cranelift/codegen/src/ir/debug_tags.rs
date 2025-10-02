@@ -71,6 +71,11 @@ pub enum DebugTag {
 
 impl DebugTags {
     /// Set the tags on an instruction, overwriting existing tag list.
+    ///
+    /// Tags can only be set on call instructions (those for which
+    /// [`crate::Opcode::is_call()`] returns `true`) and on
+    /// `sequence_point` instructions. This property is checked by the
+    /// CLIF verifier.
     pub fn set(&mut self, inst: Inst, tags: impl IntoIterator<Item = DebugTag>) {
         let start = u32::try_from(self.tags.len()).unwrap();
         self.tags.extend(tags);
@@ -93,6 +98,13 @@ impl DebugTags {
         }
     }
 
+    /// Does the given instruction have any tags?
+    pub fn has(&self, inst: Inst) -> bool {
+        // We rely on the invariant that an entry in the map is
+        // present only if the list range is non-empty.
+        self.insts.contains_key(&inst)
+    }
+
     /// Clone the tags from one instruction to another.
     ///
     /// This clone is cheap (references the same underlying storage)
@@ -100,6 +112,8 @@ impl DebugTags {
     pub fn clone_tags(&mut self, from: Inst, to: Inst) {
         if let Some(range) = self.insts.get(&from).cloned() {
             self.insts.insert(to, range);
+        } else {
+            self.insts.remove(&to);
         }
     }
 

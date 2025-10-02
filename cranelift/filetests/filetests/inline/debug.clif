@@ -4,8 +4,9 @@ target x86_64
 function %f0(i32, i32) -> i32 {
     ss0 = explicit_slot 64, descriptor = [1, 2, 3, 4]
 block0(v0: i32, v1: i32):
-<ss0, 1, 0> v2 = iadd v0, v1
-<ss0, 0, 1>      return v2
+<ss0, 1, 0>      sequence_point
+            v2 = iadd v0, v1
+                 return v2
 }
 
 ; (no functions inlined into %f0)
@@ -27,11 +28,12 @@ block0():
 ;
 ;                                 block0:
 ;                                     v0 = iconst.i32 10
-; <ss0, 2, 2>                         jump block1
+;                                     jump block1
 ;
 ;                                 block1:
-; <ss0, 2, 2, ss1, 1, 0>              v3 = iadd.i32 v0, v0  ; v0 = 10, v0 = 10
-; <ss0, 2, 2, ss1, 0, 1>              jump block2(v3)
+; <ss0, 2, 2, ss1, 1, 0>              sequence_point 
+;                                     v3 = iadd.i32 v0, v0  ; v0 = 10, v0 = 10
+;                                     jump block2(v3)
 ;
 ;                                 block2(v2: i32):
 ;                                     v1 -> v2

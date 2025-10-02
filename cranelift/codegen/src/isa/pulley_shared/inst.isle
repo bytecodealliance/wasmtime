@@ -95,6 +95,9 @@
     ;; A pseudoinstruction that loads the address of a label.
     (LabelAddress (dst WritableXReg)
                   (label MachLabel))
+
+    ;; A pseudoinstruction that serves as a sequence point.
+    (SequencePoint)
   )
 )
 
@@ -792,3 +795,8 @@
       (let ((dst WritableReg (temp_writable_xreg))
             (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))
+
+;; Helper for creating a `SequencePoint` instruction.
+(decl pulley_sequence_point () SideEffectNoResult)
+(rule (pulley_sequence_point)
+      (SideEffectNoResult.Inst (MInst.SequencePoint)))

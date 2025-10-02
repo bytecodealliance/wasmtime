@@ -191,13 +191,20 @@ pub struct FunctionStencil {
     /// interpreted by Cranelift, only preserved.
     pub srclocs: SourceLocs,
 
-    /// Opaque debug-info tags on instructions.
+    /// Opaque debug-info tags on sequence-point and call
+    /// instructions.
     ///
     /// These tags are not interpreted by Cranelift, and are passed
     /// through to compilation-result metadata. The only semantic
     /// structure that Cranelift imposes is that when inlining, it
     /// prepends the callsite call instruction's tags to the tags on
     /// inlined instructions.
+    ///
+    /// In order to ensure clarity around guaranteed compiler
+    /// behavior, tags are only permitted on instructions whose
+    /// presence and sequence will remain the same in the compiled
+    /// output: namely, `sequence_point` instructions and ordinary
+    /// call instructions.
     pub debug_tags: DebugTags,
 
     /// An optional global value which represents an expression evaluating to

@@ -367,8 +367,11 @@ fn inline_one(
     let mut last_inlined_block = inline_block_layout(func, call_block, callee, &entity_map);
 
     // Get a copy of debug tags on the call instruction; these are
-    // prepended to debug tags on inlined instructions.
+    // prepended to debug tags on inlined instructions. Remove them
+    // from the call itself as it will be rewritten to a jump (which
+    // cannot have tags).
     let call_debug_tags = func.debug_tags.get(call_inst).to_vec();
+    func.debug_tags.set(call_inst, []);
 
     // Translate each instruction from the callee into the caller,
     // appending them to their associated block in the caller.

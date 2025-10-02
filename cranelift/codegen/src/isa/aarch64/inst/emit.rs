@@ -3547,6 +3547,10 @@ impl MachInstEmit for Inst {
                 sink.use_label_at_offset(offset, label, LabelUse::Adr21);
             }
 
+            &Inst::SequencePoint { .. } => {
+                // Nothing.
+            }
+
             &Inst::StackProbeLoop { start, end, step } => {
                 assert!(emit_info.0.enable_probestack());
 
