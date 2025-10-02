@@ -34,7 +34,7 @@ endif()
 
 set(WASMTIME_TARGET_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../target/${WASMTIME_TARGET}/${WASMTIME_BUILD_TYPE})
 
-if(WASMTIME_TARGET MATCHES "darwin")
+if(WASMTIME_TARGET MATCHES "apple")
   set(WASMTIME_SHARED_FILES libwasmtime.dylib)
   set(WASMTIME_STATIC_FILES libwasmtime.a)
 elseif(WASMTIME_TARGET MATCHES "windows-gnu")
