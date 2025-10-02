@@ -1323,7 +1323,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         stack: &mut FuncTranslationStacks,
         srcloc: ir::SourceLoc,
     ) -> WasmResult<()> {
-        if stack.reachable() {
+        if stack.reachable() && self.state_slot.is_some() {
             let inst = builder.ins().sequence_point();
             let tags = self.debug_tags(stack, srcloc);
             builder.func.debug_tags.set(inst, tags);
