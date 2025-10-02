@@ -32,9 +32,11 @@
 ;;       sub     sp, sp, #0x20
 ;;       stur    x2, [sp]
 ;;       stur    x2, [sp, #0x10]
-;;       mov     w24, #0x2a
-;;       stur    w24, [sp, #8]
+;;       mov     w27, #0x2a
+;;       ╰─╼ debug frame state: func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 53, slot at FP-0xb0, locals , stack 
+;;       stur    w27, [sp, #8]
 ;;       ldur    x2, [sp, #0x10]
+;;       ╰─╼ debug frame state: func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 63, slot at FP-0xb0, locals , stack I32 @ slot+0x8
 ;;       bl      #0x318
 ;;   5c: mov     x21, x2
 ;;       mov     w3, #0x4000000
@@ -43,35 +45,37 @@
 ;;       mov     w6, #8
 ;;       ldur    x2, [sp, #0x10]
 ;;       bl      #0x2a4
-;;   78: ldur    x4, [sp, #0x10]
-;;       ldr     x9, [x4, #8]
-;;       ldr     x13, [x9, #0x18]
-;;       add     x9, x13, #0x20
-;;       str     w24, [x9, w2, uxtw]
-;;       add     x10, x13, #0x18
-;;       mov     x12, x21
-;;       str     w12, [x10, w2, uxtw]
-;;       mov     w11, #0
-;;       add     x12, x13, #0x1c
-;;       stur    x13, [sp, #0x18]
-;;       str     w11, [x12, w2, uxtw]
+;;   78: ldur    x8, [sp, #0x10]
+;;       ldr     x13, [x8, #8]
+;;       ldr     x3, [x13, #0x18]
+;;       add     x13, x3, #0x20
+;;       str     w27, [x13, w2, uxtw]
+;;       add     x14, x3, #0x18
+;;       mov     x0, x21
+;;       str     w0, [x14, w2, uxtw]
+;;       mov     w15, #0
+;;       add     x0, x3, #0x1c
+;;       stur    x3, [sp, #0x18]
+;;       str     w15, [x0, w2, uxtw]
 ;;       mov     x3, x2
 ;;       ldur    x2, [sp, #0x10]
 ;;       bl      #0x350
 ;;       ├─╼ exception frame offset: SP = FP - 0xb0
 ;;       ╰─╼ exception handler: tag=0, context at [SP+0x10], handler=0xb8
 ;;   b4: .byte   0x1f, 0xc1, 0x00, 0x00
-;;       ldur    x13, [sp, #0x18]
-;;       add     x13, x13, #0x20
-;;       ldr     w15, [x13, w0, uxtw]
-;;       stur    w15, [sp, #8]
+;;       ldur    x3, [sp, #0x18]
+;;       add     x1, x3, #0x20
+;;       ldr     w3, [x1, w0, uxtw]
+;;       stur    w3, [sp, #8]
 ;;       ldur    x2, [sp, #0x10]
-;;       ldr     x0, [x2, #0x30]
+;;       ╰─╼ debug frame state: func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 69, slot at FP-0xb0, locals , stack I32 @ slot+0x8
+;;       ldr     x5, [x2, #0x30]
 ;;       ldr     x2, [x2, #0x40]
 ;;       ldur    x3, [sp, #0x10]
-;;       blr     x0
+;;       blr     x5
 ;;       ╰─╼ debug frame state: func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 69, slot at FP-0xb0, locals , stack I32 @ slot+0x8
 ;;   dc: add     sp, sp, #0x20
+;;       ╰─╼ debug frame state: func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 71, slot at FP-0xb0, locals , stack I32 @ slot+0x8
 ;;       ldp     d8, d9, [sp], #0x10
 ;;       ldp     d10, d11, [sp], #0x10
 ;;       ldp     d12, d13, [sp], #0x10
