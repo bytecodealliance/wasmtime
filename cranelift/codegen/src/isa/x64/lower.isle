@@ -5059,3 +5059,9 @@
 
 (rule (lower (nop))
       (invalid_reg))
+
+;; Rules for `sequence_point` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sequence_point))
+      (side_effect
+       (x64_sequence_point)))

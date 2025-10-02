@@ -8,7 +8,8 @@ function %f0(i32, i32) -> i32 {
     fn0 = %f1(i32, i32)
 block0(v0: i32, v1: i32):
 <ss0, 0, 0>      call fn0(v0, v1)
-<ss0, 1, 0> v2 = iadd v0, v1
+<ss0, 1, 0>      sequence_point
+            v2 = iadd v0, v1
                  return v2
 }
 
@@ -25,8 +26,9 @@ block0(v0: i32, v1: i32):
 ;   movq %rdi, %r14
 ;   call    *%rdx
 ;   ; ^-- debug @ Post: [StackSlot(ss0), User(0), User(0)]
-;   leal (%r14, %r12), %eax
+;   sequence_point
 ;   ; ^-- debug @ Pre: [StackSlot(ss0), User(1), User(0)]
+;   leal (%r14, %r12), %eax
 ;   movq 0x40(%rsp), %r12
 ;   movq 0x48(%rsp), %r14
 ;   addq $0x50, %rsp
@@ -59,7 +61,8 @@ function %f1(i32, i32) -> i32 {
     fn0 = colocated %f1(i32, i32)
 block0(v0: i32, v1: i32):
 <ss0, 0, 0>      call fn0(v0, v1)
-<ss0, 1, 0> v2 = iadd v0, v1
+<ss0, 1, 0>      sequence_point
+            v2 = iadd v0, v1
                  return v2
 }
 
@@ -74,8 +77,9 @@ block0(v0: i32, v1: i32):
 ;   movq %rsi, %r15
 ;   call    TestCase(%f1)
 ;   ; ^-- debug @ Post: [StackSlot(ss0), User(0), User(0)]
-;   leal (%rbx, %r15), %eax
+;   sequence_point
 ;   ; ^-- debug @ Pre: [StackSlot(ss0), User(1), User(0)]
+;   leal (%rbx, %r15), %eax
 ;   movq 0x40(%rsp), %rbx
 ;   movq 0x48(%rsp), %r15
 ;   addq $0x50, %rsp

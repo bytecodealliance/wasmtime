@@ -195,6 +195,7 @@ impl Inst {
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
             | Inst::LabelAddress { .. }
+            | Inst::SequencePoint { .. }
             | Inst::Popcnt { .. }
             | Inst::Cltz { .. }
             | Inst::Brev8 { .. }
@@ -2768,6 +2769,10 @@ impl Inst {
                     sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
                     sink.bind_label(jump_around_label, &mut state.ctrl_plane);
                 }
+            }
+
+            Inst::SequencePoint { .. } => {
+                // Nothing.
             }
         }
     }
