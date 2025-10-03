@@ -686,6 +686,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       QEMU_BUILD_VERSION: 10.0.3
+      SDE_BUILD_VERSION: 9.58.0-2025-06-16
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
@@ -733,6 +734,13 @@ jobs:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
       if: matrix.qemu != ''
+
+    - uses: actions/cache@v4
+      with:
+        path: ${{ runner.tool_cache }}/sde
+        key: sde-${{ env.SDE_BUILD_VERSION }}
+      if: matrix.sde != ''
+
     - name: Install qemu
       run: |
         set -ex
@@ -768,6 +776,40 @@ jobs:
         ninja -C build install
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.qemu != ''
+
+    - name: Install Intel SDE
+      run: |
+        set -ex
+
+        # Set up SDE as runner for x86_64 targets
+        echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=${{ runner.tool_cache }}/sde/sde64 -future --" >> $GITHUB_ENV
+
+        # SDE emulation is very slow, so use release mode for better performance
+        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
+
+        # Enable environment variable to indicate SDE is being used
+        echo WASMTIME_TEST_SDE=1 >> $GITHUB_ENV
+        
+        # Generic variable for skipping tests that are problematic under SDE (performance, compatibility, etc.)
+        echo WASMTIME_TEST_NO_SDE=1 >> $GITHUB_ENV
+        
+        # Similar to QEMU, reduce memory usage during SDE emulation
+        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
+
+        # See if SDE is already in the cache
+        if [ -f ${{ runner.tool_cache }}/sde/sde64 ]; then
+          exit 0
+        fi
+
+        curl --retry 5 --retry-all-errors -o sde.tar.xz \
+          https://downloadmirror.intel.com/859732/sde-external-${{ env.SDE_BUILD_VERSION }}-lin.tar.xz
+        
+        mkdir -p ${{ runner.tool_cache }}/sde
+        tar xJf sde.tar.xz --strip-components=1 -C ${{ runner.tool_cache }}/sde
+        rm sde.tar.xz
+        
+        chmod +x ${{ runner.tool_cache }}/sde/sde64
+      if: matrix.sde != ''
 
     - name: Configure ASAN
       run: |
