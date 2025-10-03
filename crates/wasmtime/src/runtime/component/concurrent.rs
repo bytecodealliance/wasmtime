@@ -3059,6 +3059,17 @@ impl Instance {
         Ok(())
     }
 
+    fn pending_cancellation(&self, store: &mut StoreOpaque) -> bool {
+        let state = self.concurrent_state_mut(store);
+        let thread = state.guest_thread.unwrap();
+        if let Some(event) = state.get_mut(thread.task).unwrap().event.take() {
+            assert!(matches!(event, Event::Cancelled));
+            true
+        } else {
+            false
+        }
+    }
+
     /// Helper function for the `thread.yield`, `thread.yield-to`, `thread.suspend`,
     /// and `thread.switch-to` intrinsics.
     pub(crate) fn suspension_intrinsic<T: 'static>(
@@ -3069,6 +3080,11 @@ impl Instance {
         yielding: bool,
         to_thread: Option<GuestThreadIndex>,
     ) -> Result<bool> {
+        // There could be a pending cancellation from a previous uncancellable wait
+        if cancellable && self.pending_cancellation(store.0) {
+            return Ok(true);
+        }
+
         self.id().get(store.0).check_may_leave(caller)?;
 
         if let Some(thread) = to_thread {
@@ -3092,18 +3108,7 @@ impl Instance {
 
         self.suspend(store.0, reason)?;
 
-        if cancellable {
-            let state = self.concurrent_state_mut(store.0);
-            let thread = state.guest_thread.unwrap();
-            if let Some(event) = state.get_mut(thread.task).unwrap().event.take() {
-                assert!(matches!(event, Event::Cancelled));
-                Ok(true)
-            } else {
-                Ok(false)
-            }
-        } else {
-            Ok(false)
-        }
+        Ok(cancellable && self.pending_cancellation(store.0))
     }
 
     /// Helper function for the `waitable-set.wait` and `waitable-set.poll` intrinsics.
