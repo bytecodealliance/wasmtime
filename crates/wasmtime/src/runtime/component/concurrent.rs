@@ -605,11 +605,13 @@ enum SuspendReason {
     Yielding {
         thread: InstanceGuestThreadIndex,
         to: Option<GuestThreadIndex>,
+        cancellable: bool,
     },
     /// The fiber was explicitly suspended with a call to `thread.suspend` or `thread.switch-to`.
     ExplicitlySuspending {
         thread: InstanceGuestThreadIndex,
         to: Option<GuestThreadIndex>,
+        cancellable: bool,
     },
 }
 
@@ -3078,11 +3080,13 @@ impl Instance {
             SuspendReason::Yielding {
                 thread: guest_thread,
                 to: to_thread,
+                cancellable,
             }
         } else {
             SuspendReason::ExplicitlySuspending {
                 thread: guest_thread,
                 to: to_thread,
+                cancellable,
             }
         };
 
@@ -3116,12 +3120,14 @@ impl Instance {
             WaitableCheck::Poll(params) => (false, Some(params.set)),
         };
 
+        log::trace!("waitable check for {guest_thread:?}; set {set:?}");
         // First, suspend this fiber, allowing any other threads to run.
         self.suspend(
             store,
             SuspendReason::Yielding {
                 thread: guest_thread,
                 to: None,
+                cancellable,
             },
         )?;
 
@@ -3310,6 +3316,7 @@ impl Instance {
                             SuspendReason::Yielding {
                                 thread: caller,
                                 to: None,
+                                cancellable: false,
                             },
                         )?;
                         break;
