@@ -112,6 +112,15 @@ impl Frame {
 /// then this method may segfault. These values must point to valid Wasmtime
 /// compiled code which respects the frame pointers that Wasmtime currently
 /// requires.
+///
+/// The iterator that this function returns *must* be consumed while
+/// the frames are still active. That is, it cannot be stashed and
+/// consumed after returning back into the Wasm activation that is
+/// being iterated over.
+///
+/// Ordinarily this can be ensured by holding the unsafe iterator
+/// together with a borrow of the `Store` that owns the stack;
+/// higher-level layers wrap the two together.
 pub unsafe fn frame_iterator(
     unwind: &dyn Unwind,
     mut pc: usize,
