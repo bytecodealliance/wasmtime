@@ -41,6 +41,70 @@ impl PoolingAllocatorMetrics {
         self.allocator().live_tables.load(Ordering::Relaxed)
     }
 
+    /// Returns the number of WebAssembly stacks currently allocated.
+    pub fn stacks(&self) -> usize {
+        self.allocator().live_stacks.load(Ordering::Relaxed)
+    }
+
+    /// Returns the number of WebAssembly GC heaps currently allocated.
+    pub fn gc_heaps(&self) -> usize {
+        self.allocator().live_gc_heaps.load(Ordering::Relaxed)
+    }
+
+    /// Returns the number of slots for linear memories in this allocator which
+    /// are not currently in use but were previously used.
+    ///
+    /// A "warm" slot means that there was a previous instantiation of a memory
+    /// in that slot. Warm slots are favored in general for allocating new
+    /// memories over using a slot that has never been used before.
+    pub fn unused_warm_memories(&self) -> u32 {
+        self.allocator().memories.unused_warm_slots()
+    }
+
+    /// Returns the number of bytes in this pooling allocator which are not part
+    /// of any in-used linear memory slot but were previously used and are kept
+    /// resident via the `*_keep_resident` configuration options.
+    pub fn unused_memory_bytes_resident(&self) -> usize {
+        self.allocator().memories.unused_bytes_resident()
+    }
+
+    /// Returns the number of slots for tables in this allocator which are not
+    /// currently in use but were previously used.
+    ///
+    /// A "warm" slot means that there was a previous instantiation of a table
+    /// in that slot. Warm slots are favored in general for allocating new
+    /// tables over using a slot that has never been used before.
+    pub fn unused_warm_tables(&self) -> u32 {
+        self.allocator().tables.unused_warm_slots()
+    }
+
+    /// Returns the number of bytes in this pooling allocator which are not part
+    /// of any in-used linear table slot but were previously used and are kept
+    /// resident via the `*_keep_resident` configuration options.
+    pub fn unused_table_bytes_resident(&self) -> usize {
+        self.allocator().tables.unused_bytes_resident()
+    }
+
+    /// Returns the number of slots for stacks in this allocator which are not
+    /// currently in use but were previously used.
+    ///
+    /// A "warm" slot means that there was a previous use of a stack
+    /// in that slot. Warm slots are favored in general for allocating new
+    /// stacks over using a slot that has never been used before.
+    pub fn unused_warm_stacks(&self) -> u32 {
+        self.allocator().stacks.unused_warm_slots()
+    }
+
+    /// Returns the number of bytes in this pooling allocator which are not part
+    /// of any in-used linear stack slot but were previously used and are kept
+    /// resident via the `*_keep_resident` configuration options.
+    ///
+    /// This returns `None` if the `async_stack_zeroing` option is disabled or
+    /// if the platform doesn't manage stacks (e.g. Windows returns `None`).
+    pub fn unused_stack_bytes_resident(&self) -> Option<usize> {
+        self.allocator().stacks.unused_bytes_resident()
+    }
+
     fn allocator(&self) -> &PoolingInstanceAllocator {
         self.engine
             .allocator()
@@ -52,9 +116,11 @@ impl PoolingAllocatorMetrics {
 #[cfg(test)]
 mod tests {
     use crate::{
-        Config, InstanceAllocationStrategy, Store,
+        Config, Enabled, InstanceAllocationStrategy, Module, PoolingAllocationConfig, Result,
+        Store,
         component::{Component, Linker},
     };
+    use std::vec::Vec;
 
     use super::*;
 
@@ -111,5 +177,170 @@ mod tests {
 
         let maybe_metrics = engine.pooling_allocator_metrics();
         assert!(maybe_metrics.is_none());
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn unused_memories_tables_and_more() -> Result<()> {
+        let mut pool = PoolingAllocationConfig::default();
+        pool.linear_memory_keep_resident(65536);
+        pool.table_keep_resident(65536);
+        pool.pagemap_scan(Enabled::Auto);
+        let mut config = Config::new();
+        config.allocation_strategy(pool);
+        let engine = Engine::new(&config)?;
+
+        let metrics = engine.pooling_allocator_metrics().unwrap();
+        let host_page_size = crate::vm::host_page_size();
+
+        assert_eq!(metrics.memories(), 0);
+        assert_eq!(metrics.core_instances(), 0);
+        assert_eq!(metrics.component_instances(), 0);
+        assert_eq!(metrics.memories(), 0);
+        assert_eq!(metrics.tables(), 0);
+        assert_eq!(metrics.unused_warm_memories(), 0);
+        assert_eq!(metrics.unused_memory_bytes_resident(), 0);
+        assert_eq!(metrics.unused_warm_tables(), 0);
+        assert_eq!(metrics.unused_table_bytes_resident(), 0);
+
+        let m1 = Module::new(
+            &engine,
+            r#"
+            (module (memory (export "m") 1) (table 1 funcref))
+        "#,
+        )?;
+
+        let mut store = Store::new(&engine, ());
+        crate::Instance::new(&mut store, &m1, &[])?;
+        assert_eq!(metrics.memories(), 1);
+        assert_eq!(metrics.tables(), 1);
+        assert_eq!(metrics.core_instances(), 1);
+        assert_eq!(metrics.component_instances(), 0);
+        drop(store);
+
+        assert_eq!(metrics.memories(), 0);
+        assert_eq!(metrics.tables(), 0);
+        assert_eq!(metrics.core_instances(), 0);
+        assert_eq!(metrics.unused_warm_memories(), 1);
+        assert_eq!(metrics.unused_warm_tables(), 1);
+        if PoolingAllocationConfig::is_pagemap_scan_available() {
+            assert_eq!(metrics.unused_memory_bytes_resident(), 0);
+            assert_eq!(metrics.unused_table_bytes_resident(), host_page_size);
+        } else {
+            assert_eq!(metrics.unused_memory_bytes_resident(), 65536);
+            assert_eq!(metrics.unused_table_bytes_resident(), host_page_size);
+        }
+
+        let mut store = Store::new(&engine, ());
+        let i = crate::Instance::new(&mut store, &m1, &[])?;
+        assert_eq!(metrics.memories(), 1);
+        assert_eq!(metrics.tables(), 1);
+        assert_eq!(metrics.core_instances(), 1);
+        assert_eq!(metrics.component_instances(), 0);
+        assert_eq!(metrics.unused_warm_memories(), 0);
+        assert_eq!(metrics.unused_warm_tables(), 0);
+        assert_eq!(metrics.unused_memory_bytes_resident(), 0);
+        assert_eq!(metrics.unused_table_bytes_resident(), 0);
+        let m = i.get_memory(&mut store, "m").unwrap();
+        m.data_mut(&mut store)[0] = 1;
+        m.grow(&mut store, 1)?;
+        drop(store);
+
+        assert_eq!(metrics.memories(), 0);
+        assert_eq!(metrics.tables(), 0);
+        assert_eq!(metrics.core_instances(), 0);
+        assert_eq!(metrics.unused_warm_memories(), 1);
+        assert_eq!(metrics.unused_warm_tables(), 1);
+        if PoolingAllocationConfig::is_pagemap_scan_available() {
+            assert_eq!(metrics.unused_memory_bytes_resident(), host_page_size);
+            assert_eq!(metrics.unused_table_bytes_resident(), host_page_size);
+        } else {
+            assert_eq!(metrics.unused_memory_bytes_resident(), 65536);
+            assert_eq!(metrics.unused_table_bytes_resident(), host_page_size);
+        }
+
+        let stores = (0..10)
+            .map(|_| {
+                let mut store = Store::new(&engine, ());
+                crate::Instance::new(&mut store, &m1, &[]).unwrap();
+                store
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(metrics.memories(), 10);
+        assert_eq!(metrics.tables(), 10);
+        assert_eq!(metrics.core_instances(), 10);
+        assert_eq!(metrics.unused_warm_memories(), 0);
+        assert_eq!(metrics.unused_warm_tables(), 0);
+        assert_eq!(metrics.unused_memory_bytes_resident(), 0);
+        assert_eq!(metrics.unused_table_bytes_resident(), 0);
+
+        drop(stores);
+
+        assert_eq!(metrics.memories(), 00);
+        assert_eq!(metrics.tables(), 00);
+        assert_eq!(metrics.core_instances(), 00);
+        assert_eq!(metrics.unused_warm_memories(), 10);
+        assert_eq!(metrics.unused_warm_tables(), 10);
+        if PoolingAllocationConfig::is_pagemap_scan_available() {
+            assert_eq!(metrics.unused_memory_bytes_resident(), host_page_size);
+            assert_eq!(metrics.unused_table_bytes_resident(), 10 * host_page_size);
+        } else {
+            assert_eq!(metrics.unused_memory_bytes_resident(), 10 * 65536);
+            assert_eq!(metrics.unused_table_bytes_resident(), 10 * host_page_size);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn gc_heaps() -> Result<()> {
+        let pool = PoolingAllocationConfig::default();
+        let mut config = Config::new();
+        config.allocation_strategy(pool);
+        let engine = Engine::new(&config)?;
+
+        let metrics = engine.pooling_allocator_metrics().unwrap();
+
+        assert_eq!(metrics.gc_heaps(), 0);
+        let mut store = Store::new(&engine, ());
+        crate::ExternRef::new(&mut store, ())?;
+        assert_eq!(metrics.gc_heaps(), 1);
+        drop(store);
+        assert_eq!(metrics.gc_heaps(), 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg_attr(miri, ignore)]
+    async fn stacks() -> Result<()> {
+        let pool = PoolingAllocationConfig::default();
+        let mut config = Config::new();
+        config.allocation_strategy(pool);
+        config.async_support(true);
+        let engine = Engine::new(&config)?;
+
+        let metrics = engine.pooling_allocator_metrics().unwrap();
+
+        assert_eq!(metrics.stacks(), 0);
+        assert_eq!(metrics.unused_warm_stacks(), 0);
+        let mut store = Store::new(&engine, ());
+
+        crate::Func::wrap(&mut store, || {})
+            .call_async(&mut store, &[], &mut [])
+            .await?;
+        assert_eq!(metrics.stacks(), 1);
+        drop(store);
+        assert_eq!(metrics.stacks(), 0);
+        assert_eq!(metrics.unused_stack_bytes_resident(), None);
+        if cfg!(unix) {
+            assert_eq!(metrics.unused_warm_stacks(), 1);
+        } else {
+            assert_eq!(metrics.unused_warm_stacks(), 0);
+        }
+
+        Ok(())
     }
 }
