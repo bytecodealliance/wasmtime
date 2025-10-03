@@ -95,21 +95,6 @@ block0:
 ;     return v18  ; v18 = 1
 ; }
 
-function %cprop_urem() -> i32 {
-block0:
-    v0 = iconst.i32 13
-    v1 = iconst.i32 7
-    v2 = urem v0, v1
-    return v2
-}
-
-; function %cprop_urem() -> i32 fast {
-; block0:
-;     v37 = iconst.i32 6
-;     v2 -> v37
-;     return v37  ; v37 = 6
-; }
-
 function %cprop_sdiv() -> i32 {
 block0:
     v0 = iconst.i32 -7
@@ -124,70 +109,6 @@ block0:
 ;     v2 -> v11
 ;     return v11  ; v11 = -1
 ; }
-
-function %cprop_sdiv_i8_min() -> i8 {
-block0:
-    v0 = iconst.i8 -128
-    v1 = iconst.i8 -1
-    v2 = sdiv v0, v1
-    return v2
-}
-
-;function %cprop_sdiv_i8_min() -> i8 fast {
-;block0:
-;     v0 = iconst.i8 -128
-;     v1 = iconst.i8 -1
-;     v2 = sdiv v0, v1  ; v0 = -128, v1 = -1
-;     return v2
-;}
-
-function %cprop_srem_i8_min() -> i8 {
-block0:
-    v0 = iconst.i8 -128
-    v1 = iconst.i8 -1
-    v2 = srem v0, v1
-    return v2
-}
-
-;function %cprop_srem_i8_min() -> i8 fast {
-;block0:
-;     v0 = iconst.i8 -128
-;     v1 = iconst.i8 -1
-;     v2 = srem v0, v1  ; v0 = -128, v1 = -1
-;     return v2
-;}
-
-function %cprop_srem_i64_min() -> i64 {
-block0:
-    v0 = iconst.i64 -9223372036854775808
-    v1 = iconst.i64 -1
-    v2 = srem v0, v1
-    return v2
-}
-
-;function %cprop_srem_i64_min() -> i64 fast {
-;block0:
-;     v0 = iconst.i64 -9223372036854775808
-;     v1 = iconst.i64 -1
-;     v2 = srem v0, v1  ; v0 = -9223372036854775808, v1 = -1
-;     return v2
-;}
-
-function %cprop_srem() -> i32 {
-block0:
-    v0 = iconst.i32 -17
-    v1 = iconst.i32 7
-    v2 = srem v0, v1
-    return v2
-}
-
-; function %cprop_srem() -> i32 fast {
-; block0:
-;     v28 = iconst.i32 -3
-;     v2 -> v28
-;     return v28  ; v28 = -3
-; }
-
 
 function %udiv_by_one(i32) -> i32 {
 block0(v0: i32):
@@ -307,3 +228,4 @@ block0:
 ;     v2 = uadd_overflow_trap v0, v1, user42  ; v0 = -1, v1 = 1
 ;     return v2
 ; }
+
