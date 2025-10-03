@@ -42,11 +42,13 @@ impl PoolingAllocatorMetrics {
     }
 
     /// Returns the number of WebAssembly stacks currently allocated.
+    #[cfg(feature = "async")]
     pub fn stacks(&self) -> usize {
         self.allocator().live_stacks.load(Ordering::Relaxed)
     }
 
     /// Returns the number of WebAssembly GC heaps currently allocated.
+    #[cfg(feature = "gc")]
     pub fn gc_heaps(&self) -> usize {
         self.allocator().live_gc_heaps.load(Ordering::Relaxed)
     }
@@ -91,6 +93,7 @@ impl PoolingAllocatorMetrics {
     /// A "warm" slot means that there was a previous use of a stack
     /// in that slot. Warm slots are favored in general for allocating new
     /// stacks over using a slot that has never been used before.
+    #[cfg(feature = "async")]
     pub fn unused_warm_stacks(&self) -> u32 {
         self.allocator().stacks.unused_warm_slots()
     }
@@ -101,6 +104,7 @@ impl PoolingAllocatorMetrics {
     ///
     /// This returns `None` if the `async_stack_zeroing` option is disabled or
     /// if the platform doesn't manage stacks (e.g. Windows returns `None`).
+    #[cfg(feature = "async")]
     pub fn unused_stack_bytes_resident(&self) -> Option<usize> {
         self.allocator().stacks.unused_bytes_resident()
     }
