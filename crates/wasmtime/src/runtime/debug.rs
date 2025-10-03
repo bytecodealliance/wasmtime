@@ -87,6 +87,7 @@ impl<'a> Iterator for StackView<'a> {
         if self.frames.is_empty() {
             let next_frame = self.iter.next()?;
             self.frames = VirtualFrame::decode(self.iter.store, next_frame, self.is_trapping_frame);
+            debug_assert!(!self.frames.is_empty());
             self.is_trapping_frame = false;
         }
 
