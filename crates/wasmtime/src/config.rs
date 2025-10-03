@@ -2339,6 +2339,10 @@ impl Config {
             None
         };
 
+        if !cfg!(feature = "debug") && tunables.debug_instrumentation {
+            bail!("debug instrumentation support was disabled at compile time");
+        }
+
         Ok((tunables, features))
     }
 
