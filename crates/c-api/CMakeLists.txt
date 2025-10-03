@@ -86,7 +86,7 @@ add_dependencies(wasmtime wasmtime-crate)
 
 if(BUILD_SHARED_LIBS)
     if(NOT WASMTIME_TARGET MATCHES "windows")
-      if(NOT WASMTIME_TARGET MATCHES "darwin")
+      if(NOT WASMTIME_TARGET MATCHES "apple")
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath='$ORIGIN'")
       endif()
     endif()
@@ -97,7 +97,7 @@ else()
         target_compile_options(wasmtime INTERFACE -DWASM_API_EXTERN= -DWASI_API_EXTERN=)
         target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
             ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
-    elseif(WASMTIME_TARGET MATCHES "darwin")
+    elseif(WASMTIME_TARGET MATCHES "apple")
         target_link_libraries(wasmtime INTERFACE ${WASMTIME_STATIC_FILES}
             "-framework CoreFoundation")
     else()
@@ -115,7 +115,7 @@ install(DIRECTORY "${WASMTIME_HEADER_DST}/" TYPE INCLUDE)
 install(FILES ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES}
         DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-if(WASMTIME_TARGET MATCHES "darwin")
+if(WASMTIME_TARGET MATCHES "apple")
   # Postprocess the macOS dylib a bit to have a more reasonable `LC_ID_DYLIB`
   # directive than the default one that comes out of the linker when typically
   # doing `cargo build`. For more info see #984
