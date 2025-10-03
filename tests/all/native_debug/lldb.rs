@@ -508,7 +508,7 @@ fn dwarf_simple() -> Result<()> {
 fn dwarf_imported_memory() -> Result<()> {
     test_dwarf_simple(
         DWARF_IMPORTED_MEMORY,
-        &["--preload=env=./tests/all/debug/satisfy_memory_import.wat"],
+        &["--preload=env=./tests/all/native_debug/satisfy_memory_import.wat"],
     )
 }
 
