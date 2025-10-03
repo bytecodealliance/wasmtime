@@ -97,10 +97,10 @@ impl Frame {
     }
 }
 
-/// Walk through a contiguous sequence of Wasm frames starting with
-/// the frame at the given PC and FP and ending at
-/// `trampoline_fp`. This FP should correspond to that of a trampoline
-/// that was used to enter the Wasm code.
+/// Provide an iterator that walks through a contiguous sequence of
+/// Wasm frames starting with the frame at the given PC and FP and
+/// ending at `trampoline_fp`. This FP should correspond to that of a
+/// trampoline that was used to enter the Wasm code.
 ///
 /// We require that the initial PC, FP, and `trampoline_fp` values are
 /// non-null (non-zero).
@@ -112,13 +112,12 @@ impl Frame {
 /// then this method may segfault. These values must point to valid Wasmtime
 /// compiled code which respects the frame pointers that Wasmtime currently
 /// requires.
-pub unsafe fn visit_frames<R>(
+pub unsafe fn frame_iterator(
     unwind: &dyn Unwind,
     mut pc: usize,
     mut fp: usize,
     trampoline_fp: usize,
-    mut f: impl FnMut(Frame) -> ControlFlow<R>,
-) -> ControlFlow<R> {
+) -> impl Iterator<Item = Frame> {
     log::trace!("=== Tracing through contiguous sequence of Wasm frames ===");
     log::trace!("trampoline_fp = 0x{trampoline_fp:016x}");
     log::trace!("   initial pc = 0x{pc:016x}");
@@ -170,7 +169,12 @@ pub unsafe fn visit_frames<R>(
     // which `return_call`'d an exit trampoline, then `fp ==
     // trampoline_fp` on the entry of this function, meaning the loop
     // won't actually execute anything.
-    while fp != trampoline_fp {
+    core::iter::from_fn(move || {
+        if fp == trampoline_fp {
+            log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");
+            return None;
+        }
+
         // At the start of each iteration of the loop, we know that
         // `fp` is a frame pointer from Wasm code. Therefore, we know
         // it is not being used as an extra general-purpose register,
@@ -188,7 +192,7 @@ pub unsafe fn visit_frames<R>(
         log::trace!("pc = {:p}", pc as *const ());
         log::trace!("fp = {:p}", fp as *const ());
 
-        f(Frame { pc, fp })?;
+        let frame = Frame { pc, fp };
 
         // SAFETY: this unsafe traversal of the linked list on the stack is
         // reflected in the contract of this function where `pc`, `fp`,
@@ -212,8 +216,37 @@ pub unsafe fn visit_frames<R>(
             assert!(next_older_fp > fp, "{next_older_fp:#x} > {fp:#x}");
             fp = next_older_fp;
         }
+
+        Some(frame)
+    })
+}
+
+/// Walk through a contiguous sequence of Wasm frames starting with
+/// the frame at the given PC and FP and ending at
+/// `trampoline_fp`. This FP should correspond to that of a trampoline
+/// that was used to enter the Wasm code.
+///
+/// We require that the initial PC, FP, and `trampoline_fp` values are
+/// non-null (non-zero).
+///
+/// # Safety
+///
+/// This function is not safe as `unwind`, `pc`, `fp`, and `trampoline_fp` must
+/// all be "correct" in that if they're wrong or mistakenly have the wrong value
+/// then this method may segfault. These values must point to valid Wasmtime
+/// compiled code which respects the frame pointers that Wasmtime currently
+/// requires.
+pub unsafe fn visit_frames<R>(
+    unwind: &dyn Unwind,
+    pc: usize,
+    fp: usize,
+    trampoline_fp: usize,
+    mut f: impl FnMut(Frame) -> ControlFlow<R>,
+) -> ControlFlow<R> {
+    let iter = unsafe { frame_iterator(unwind, pc, fp, trampoline_fp) };
+    for frame in iter {
+        f(frame)?;
     }
 
-    log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");
     ControlFlow::Continue(())
 }
