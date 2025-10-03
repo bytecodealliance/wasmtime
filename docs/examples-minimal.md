@@ -4,6 +4,14 @@ Wasmtime embeddings may wish to optimize for binary size and runtime footprint
 to fit on a small system. This documentation is intended to guide some features
 of Wasmtime and how to best produce a minimal build of Wasmtime.
 
+An example embedding of Wasmtime optimized for size is [Wasefire] which [runs
+with 256k RAM and ~300k
+flash](https://github.com/google/wasefire/issues/458#issuecomment-3275110991).
+In this embedding [Pulley](./examples-pulley.md) was used for an execution
+engine as well.
+
+[Wasefire]: https://github.com/google/wasefire
+
 ## Building a minimal CLI
 
 > *Note*: the exact numbers in this section were last updated on 2024-12-12 on a
