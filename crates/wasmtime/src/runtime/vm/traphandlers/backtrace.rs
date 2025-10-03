@@ -77,7 +77,7 @@ impl Backtrace {
     }
 
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
-    #[cfg(any(feature = "gc", feature = "debug"))]
+    #[cfg(feature = "gc")]
     pub fn trace(store: &StoreOpaque, f: impl FnMut(Frame) -> ControlFlow<()>) {
         let vm_store_context = store.vm_store_context();
         let unwind = store.unwinder();
@@ -323,5 +323,61 @@ impl Backtrace {
         &'a self,
     ) -> impl ExactSizeIterator<Item = &'a Frame> + DoubleEndedIterator + 'a {
         self.0.iter()
+    }
+}
+
+/// An iterator over one Wasm activation.
+#[cfg(feature = "debug")]
+pub(crate) struct CurrentActivationBacktrace<'a> {
+    pub(crate) store: &'a mut StoreOpaque,
+    inner: Box<dyn Iterator<Item = Frame>>,
+}
+
+#[cfg(feature = "debug")]
+impl<'a> CurrentActivationBacktrace<'a> {
+    /// Return an iterator over the most recent Wasm activation.
+    ///
+    /// The iterator captures the store with a mutable borrow, and
+    /// then yields it back at each frame. This ensures that the stack
+    /// remains live while still providing a mutable store that may be
+    /// needed to access items in the frame (e.g., to create new roots
+    /// when reading out GC refs).
+    ///
+    /// This serves as an alternative to `Backtrace::trace()` and
+    /// friends: it allows external iteration (and e.g. lazily walking
+    /// through frames in a stack) rather than visiting via a closure.
+    ///
+    /// # Safety
+    ///
+    /// Although the iterator yields a mutable store back at each
+    /// iteration, this *must not* be used to mutate the stack
+    /// activation itself that this iterator is visiting. While the
+    /// `store` technically owns the stack in question, the only way
+    /// to do this with the current API would be to return back into
+    /// the Wasm activation. As long as this iterator is held and used
+    /// while within host code called from that activation (which will
+    /// ordinarily be ensured if the `store`'s lifetime came from the
+    /// host entry point) then everything will be sound.
+    pub(crate) unsafe fn new(store: &'a mut StoreOpaque) -> CurrentActivationBacktrace<'a> {
+        // Get the initial exit FP, exit PC, and entry FP.
+        let vm_store_context = store.vm_store_context();
+        let exit_pc = unsafe { *(*vm_store_context).last_wasm_exit_pc.get() };
+        let exit_fp = unsafe { (*vm_store_context).last_wasm_exit_fp() };
+        let trampoline_fp = unsafe { *(*vm_store_context).last_wasm_entry_fp.get() };
+        let unwind = store.unwinder();
+        // Establish the iterator.
+        let inner = Box::new(unsafe {
+            wasmtime_unwinder::frame_iterator(unwind, exit_pc, exit_fp, trampoline_fp)
+        });
+
+        CurrentActivationBacktrace { store, inner }
+    }
+}
+
+#[cfg(feature = "debug")]
+impl<'a> Iterator for CurrentActivationBacktrace<'a> {
+    type Item = Frame;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
     }
 }

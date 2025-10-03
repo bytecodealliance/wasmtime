@@ -54,25 +54,40 @@ fn stack_values_two_frames() -> anyhow::Result<()> {
             },
             |mut caller: Caller<'_, ()>| {
                 let mut stack = caller.stack_values().unwrap();
-                assert_eq!(stack.len(), 2);
-                let mut frame = stack.frame(0);
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().0.as_u32(), 1);
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().1, 65);
+                let frame = stack.next().unwrap();
+                assert_eq!(
+                    frame
+                        .wasm_function_index_and_pc(&mut stack)
+                        .unwrap()
+                        .0
+                        .as_u32(),
+                    1
+                );
+                assert_eq!(frame.wasm_function_index_and_pc(&mut stack).unwrap().1, 65);
 
                 assert_eq!(frame.num_locals(), 2);
                 assert_eq!(frame.num_stacks(), 2);
-                assert!(matches!(frame.local(0).0, ValType::I32));
-                assert!(matches!(frame.local(1).0, ValType::I32));
-                assert_eq!(frame.local(0).1.unwrap_i32(), 1);
-                assert_eq!(frame.local(1).1.unwrap_i32(), 2);
-                assert!(matches!(frame.stack(0).0, ValType::I32));
-                assert!(matches!(frame.stack(1).0, ValType::I32));
-                assert_eq!(frame.stack(0).1.unwrap_i32(), 1);
-                assert_eq!(frame.stack(1).1.unwrap_i32(), 2);
+                assert!(matches!(frame.local(&mut stack, 0).0, ValType::I32));
+                assert!(matches!(frame.local(&mut stack, 1).0, ValType::I32));
+                assert_eq!(frame.local(&mut stack, 0).1.unwrap_i32(), 1);
+                assert_eq!(frame.local(&mut stack, 1).1.unwrap_i32(), 2);
+                assert!(matches!(frame.stack(&mut stack, 0).0, ValType::I32));
+                assert!(matches!(frame.stack(&mut stack, 1).0, ValType::I32));
+                assert_eq!(frame.stack(&mut stack, 0).1.unwrap_i32(), 1);
+                assert_eq!(frame.stack(&mut stack, 1).1.unwrap_i32(), 2);
 
-                let mut frame = stack.frame(1);
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
-                assert_eq!(frame.wasm_function_index_and_pc().unwrap().1, 55);
+                let frame = stack.next().unwrap();
+                assert_eq!(
+                    frame
+                        .wasm_function_index_and_pc(&mut stack)
+                        .unwrap()
+                        .0
+                        .as_u32(),
+                    0
+                );
+                assert_eq!(frame.wasm_function_index_and_pc(&mut stack).unwrap().1, 55);
+
+                assert!(stack.next().is_none());
             },
         )?;
     }
@@ -97,11 +112,11 @@ fn stack_values_exceptions() -> anyhow::Result<()> {
         |_config| {},
         |mut caller: Caller<'_, ()>| {
             let mut stack = caller.stack_values().unwrap();
-            assert_eq!(stack.len(), 1);
-            let mut frame = stack.frame(0);
+            let frame = stack.next().unwrap();
             assert_eq!(frame.num_stacks(), 1);
-            assert!(matches!(frame.stack(0).0, ValType::I32));
-            assert_eq!(frame.stack(0).1.unwrap_i32(), 42);
+            assert!(matches!(frame.stack(&mut stack, 0).0, ValType::I32));
+            assert_eq!(frame.stack(&mut stack, 0).1.unwrap_i32(), 42);
+            assert!(stack.next().is_none());
         },
     )
 }
