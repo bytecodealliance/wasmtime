@@ -392,6 +392,25 @@ impl FuncKey {
         }
     }
 
+    /// Create a key from a raw packed `u64` representation.
+    ///
+    /// Should only be given a value produced by `into_raw_u64()`.
+    ///
+    /// Panics when given an invalid value.
+    pub fn from_raw_u64(value: u64) -> Self {
+        let hi = u32::try_from(value >> 32).unwrap();
+        let lo = u32::try_from(value & 0xffff_ffff).unwrap();
+        FuncKey::from_raw_parts(hi, lo)
+    }
+
+    /// Produce a packed `u64` representation of this key.
+    ///
+    /// May be used with `from_raw_64()` to reconstruct this key.
+    pub fn into_raw_u64(&self) -> u64 {
+        let (hi, lo) = self.into_raw_parts();
+        (u64::from(hi) << 32) | u64::from(lo)
+    }
+
     /// Unwrap a `FuncKey::DefinedWasmFunction` or else panic.
     pub fn unwrap_defined_wasm_function(self) -> (StaticModuleIndex, DefinedFuncIndex) {
         match self {

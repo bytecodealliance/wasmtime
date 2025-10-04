@@ -360,6 +360,9 @@
     (EmitIsland
      ;; The needed space before the next deadline.
      (needed_space u32))
+
+    ;; A pseudoinstruction that serves as a sequence point.
+    (SequencePoint)
 ))
 
 (type AtomicOP (enum
@@ -3262,3 +3265,8 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))
+
+;; Helper for creating a `SequencePoint` instruction.
+(decl rv64_sequence_point () SideEffectNoResult)
+(rule (rv64_sequence_point)
+      (SideEffectNoResult.Inst (MInst.SequencePoint)))

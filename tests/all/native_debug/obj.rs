@@ -12,7 +12,7 @@ pub fn compile_cranelift(
     output: impl AsRef<Path>,
 ) -> Result<()> {
     let mut config = Config::new();
-    config.debug_info(true);
+    config.native_debug_info(true);
     if let Some(target) = target {
         config.target(&target.to_string())?;
     }

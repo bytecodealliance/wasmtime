@@ -1815,6 +1815,10 @@ pub(crate) fn emit(
             asm::inst::leaq_rm::new(*dst, Amode::rip_relative(*label)).emit(sink, info, state);
         }
 
+        Inst::SequencePoint { .. } => {
+            // Nothing.
+        }
+
         Inst::External { inst } => {
             let frame = state.frame_layout();
             emit_maybe_shrink(

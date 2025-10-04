@@ -960,7 +960,7 @@ jobs:
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
         # Only testing release since it is more likely to expose issues with our low-level symbol handling.
-        cargo test --release --test all -- --ignored --test-threads 1 debug::
+        cargo test --release --test all -- --ignored --test-threads 1 native_debug::
       env:
         LLDB: lldb-18
         WASI_SDK_PATH: /tmp/wasi-sdk

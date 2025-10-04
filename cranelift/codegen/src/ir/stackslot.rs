@@ -69,6 +69,37 @@ pub struct StackSlotData {
     /// be aligned according to other considerations, such as minimum
     /// stack slot size or machine word size, as well.
     pub align_shift: u8,
+
+    /// Opaque stackslot metadata handle, passed through to
+    /// compilation result metadata describing stackslot location.
+    ///
+    /// In the face of compiler transforms like inlining that may move
+    /// stackslots between functions, when an embedder wants to
+    /// externally observe stackslots, it needs a first-class way for
+    /// the identity of stackslots to be carried along with the IR
+    /// entities. This opaque `StackSlotKey` allows the embedder to do
+    /// so.
+    pub key: Option<StackSlotKey>,
+}
+
+/// An opaque key uniquely identifying a stack slot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct StackSlotKey(u64);
+impl StackSlotKey {
+    /// Construct a [`StackSlotKey`] from raw bits.
+    ///
+    /// An embedder can use any 64-bit value to describe a stack slot;
+    /// there are no restrictions, and the value does not mean
+    /// anything to Cranelift itself.
+    pub fn new(value: u64) -> StackSlotKey {
+        StackSlotKey(value)
+    }
+
+    /// Get the raw bits from the [`StackSlotKey`].
+    pub fn bits(&self) -> u64 {
+        self.0
+    }
 }
 
 impl StackSlotData {
@@ -78,23 +109,40 @@ impl StackSlotData {
             kind,
             size,
             align_shift,
+            key: None,
+        }
+    }
+
+    /// Create a stack slot with the specified byte size and alignment
+    /// and the given user-defined key.
+    pub fn new_with_key(
+        kind: StackSlotKind,
+        size: StackSize,
+        align_shift: u8,
+        key: StackSlotKey,
+    ) -> Self {
+        Self {
+            kind,
+            size,
+            align_shift,
+            key: Some(key),
         }
     }
 }
 
 impl fmt::Display for StackSlotData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.align_shift != 0 {
-            write!(
-                f,
-                "{} {}, align = {}",
-                self.kind,
-                self.size,
-                1u32 << self.align_shift
-            )
+        let align_shift = if self.align_shift != 0 {
+            format!(", align = {}", 1u32 << self.align_shift)
         } else {
-            write!(f, "{} {}", self.kind, self.size)
-        }
+            "".into()
+        };
+        let key = match self.key {
+            Some(value) => format!(", key = {}", value.bits()),
+            None => "".into(),
+        };
+
+        write!(f, "{} {}{align_shift}{key}", self.kind, self.size)
     }
 }
 

@@ -136,6 +136,10 @@ define_tunables! {
         /// The general size threshold for the sum of the caller's and callee's
         /// sizes, past which we will generally not inline calls anymore.
         pub inlining_sum_size_threshold: u32,
+
+        /// Whether we are emitting debug instrumentation for precise
+        /// Wasm state.
+        pub debug_instrumentation: bool,
     }
 
     pub struct ConfigTunables {
@@ -210,6 +214,7 @@ impl Tunables {
             inlining_intra_module: IntraModuleInlining::WhenUsingGc,
             inlining_small_callee_size: 50,
             inlining_sum_size_threshold: 2000,
+            debug_instrumentation: false,
         }
     }
 

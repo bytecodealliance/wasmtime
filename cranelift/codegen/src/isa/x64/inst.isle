@@ -320,6 +320,9 @@
        (LabelAddress (dst WritableGpr)
                      (label MachLabel))
 
+       ;; A pseudoinstruction that serves as a sequence point.
+       (SequencePoint)
+
        ;; An instruction assembled outside of cranelift-codegen.
        (External (inst AssemblerInst))))
 
@@ -4097,3 +4100,8 @@
 
 (decl libcall_3 (LibCall Reg Reg Reg) Reg)
 (extern constructor libcall_3 libcall_3)
+
+;; Helper for creating a `SequencePoint` instruction.
+(decl x64_sequence_point () SideEffectNoResult)
+(rule (x64_sequence_point)
+      (SideEffectNoResult.Inst (MInst.SequencePoint)))

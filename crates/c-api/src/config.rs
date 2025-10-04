@@ -55,7 +55,7 @@ pub extern "C" fn wasm_config_new() -> Box<wasm_config_t> {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_config_debug_info_set(c: &mut wasm_config_t, enable: bool) {
-    c.config.debug_info(enable);
+    c.config.native_debug_info(enable);
 }
 
 #[unsafe(no_mangle)]

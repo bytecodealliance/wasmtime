@@ -596,6 +596,10 @@ fn pulley_emit<P>(
             let end = sink.cur_offset();
             sink.use_label_at_offset(end - 4, *label, LabelUse::PcRel);
         }
+
+        Inst::SequencePoint { .. } => {
+            // Nothing.
+        }
     }
 }
 

@@ -4,6 +4,7 @@ mod atomic_rmw_op;
 mod builder;
 pub mod condcodes;
 pub mod constant;
+mod debug_tags;
 pub mod dfg;
 pub mod dynamic_type;
 pub mod entities;
@@ -36,6 +37,7 @@ pub use crate::ir::builder::{
     InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase, ReplaceBuilder,
 };
 pub use crate::ir::constant::{ConstantData, ConstantPool};
+pub use crate::ir::debug_tags::{DebugTag, DebugTags};
 pub use crate::ir::dfg::{BlockData, DataFlowGraph, ValueDef};
 pub use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes, dynamic_to_fixed};
 pub use crate::ir::entities::{
@@ -64,7 +66,7 @@ pub use crate::ir::progpoint::ProgramPoint;
 pub use crate::ir::sourceloc::RelSourceLoc;
 pub use crate::ir::sourceloc::SourceLoc;
 pub use crate::ir::stackslot::{
-    DynamicStackSlotData, DynamicStackSlots, StackSlotData, StackSlotKind, StackSlots,
+    DynamicStackSlotData, DynamicStackSlots, StackSlotData, StackSlotKey, StackSlotKind, StackSlots,
 };
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
