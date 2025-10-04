@@ -102,6 +102,8 @@
 (decl pure imm64_clz (Type Imm64) Imm64)
 (extern constructor imm64_clz imm64_clz)
 
+(decl pure imm64_ctz (Type Imm64) Imm64)
+(extern constructor imm64_ctz imm64_ctz)
 
 ;; Each of these extractors tests whether the upper half of the input equals the
 ;; lower half of the input

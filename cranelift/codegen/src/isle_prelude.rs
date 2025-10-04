@@ -38,6 +38,19 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn imm64_ctz(&mut self, ty: Type, a: Imm64) -> Imm64 {
+            let bits = ty.bits();
+            assert!(bits <= 64);
+            let a_v: u64 = a.bits().cast_unsigned();
+            if a_v == 0 {
+                // ctz(0) is defined to be the number of bits in the type.
+                return Imm64::new(i64::from(bits));
+            }
+            let lz = a_v.trailing_zeros();
+            Imm64::new(i64::from(lz))
+        }
+
+        #[inline]
         fn imm64_sdiv(&mut self, ty: Type, x: Imm64, y: Imm64) -> Option<Imm64> {
             // Sign extend `x` and `y`.
             let type_width = ty.bits();
