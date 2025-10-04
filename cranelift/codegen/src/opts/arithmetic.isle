@@ -125,7 +125,6 @@
 ;; x % 1 == 0
 (rule (simplify_skeleton (urem x (iconst_u ty 1))) (iconst_u ty 0))
 (rule (simplify_skeleton (srem x (iconst_u ty 1))) (iconst_u ty 0))
-(rule (simplify_skeleton (srem x (iconst_s ty -1))) (iconst_u ty 0))
 
 ;; Unsigned `x % d == x & ((1 << ilog2(d)) - 1)` when `d` is a power of two.
 (rule (simplify_skeleton (urem x (iconst_u ty (u64_extract_power_of_two d))))
@@ -339,5 +338,3 @@
 ;; (x + y) - y --> x
 (rule (simplify (isub ty (iadd ty x y) x)) y)
 (rule (simplify (isub ty (iadd ty x y) y)) x)
-
-
