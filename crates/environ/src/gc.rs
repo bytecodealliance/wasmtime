@@ -231,7 +231,7 @@ pub trait GcTypeLayouts {
             WasmCompositeInnerType::Struct(ty) => Some(self.struct_layout(ty).into()),
             WasmCompositeInnerType::Func(_) => None,
             WasmCompositeInnerType::Cont(_) => {
-                unimplemented!("Stack switching feature not compatbile with GC, yet")
+                unimplemented!("Stack switching feature not compatible with GC, yet")
             }
             WasmCompositeInnerType::Exn(ty) => Some(self.exn_layout(ty).into()),
         }
