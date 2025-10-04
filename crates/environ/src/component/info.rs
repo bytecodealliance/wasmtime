@@ -1122,6 +1122,8 @@ pub enum Trampoline {
 
     /// Intrinsic used to implement the `thread.new_indirect` component model builtin.
     ThreadNewIndirect {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
         /// The type index for the start function of the thread.
         start_func_ty_idx: ComponentTypeIndex,
         /// The index of the table that stores the start function.

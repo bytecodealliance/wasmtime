@@ -2,7 +2,7 @@
 
 use crate::component::Instance;
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent::GuestThreadIndex;
+use crate::component::concurrent::table::TableId;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::component::concurrent::ResourcePair;
@@ -1375,6 +1375,7 @@ fn thread_index(store: &mut dyn VMStore, instance: Instance) -> Result<u32> {
 fn thread_new_indirect(
     store: &mut dyn VMStore,
     instance: Instance,
+    caller: u32,
     func_ty_id: u32,
     func_table_idx: u32,
     func_idx: u32,
@@ -1382,6 +1383,7 @@ fn thread_new_indirect(
 ) -> Result<u32> {
     instance.thread_new_indirect(
         store,
+        RuntimeComponentInstanceIndex::from_u32(caller),
         TypeFuncIndex::from_u32(func_ty_id),
         RuntimeTableIndex::from_u32(func_table_idx),
         func_idx,
@@ -1402,7 +1404,7 @@ fn thread_switch_to(
         RuntimeComponentInstanceIndex::from_u32(caller),
         cancellable != 0,
         false,
-        Some(GuestThreadIndex::from_u32(thread_idx)),
+        Some(TableId::new(thread_idx)),
     )
 }
 
@@ -1426,7 +1428,7 @@ fn thread_suspend(
 fn thread_resume_later(store: &mut dyn VMStore, instance: Instance, thread_idx: u32) -> Result<()> {
     store
         .component_async_store()
-        .thread_resume_later(instance, GuestThreadIndex::from_u32(thread_idx))
+        .thread_resume_later(instance, TableId::new(thread_idx))
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1442,6 +1444,6 @@ fn thread_yield_to(
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         cancellable != 0,
         true,
-        Some(GuestThreadIndex::from_u32(thread_idx)),
+        Some(TableId::new(thread_idx)),
     )
 }

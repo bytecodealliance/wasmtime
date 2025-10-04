@@ -481,6 +481,7 @@ pub enum Trampoline {
     },
     ThreadIndex,
     ThreadNewIndirect {
+        instance: RuntimeComponentInstanceIndex,
         start_func_ty_idx: ComponentTypeIndex,
         start_func_table_id: TableId,
     },
@@ -1150,9 +1151,11 @@ impl LinearizeDfg<'_> {
             },
             Trampoline::ThreadIndex => info::Trampoline::ThreadIndex,
             Trampoline::ThreadNewIndirect {
+                instance,
                 start_func_ty_idx,
                 start_func_table_id,
             } => info::Trampoline::ThreadNewIndirect {
+                instance: *instance,
                 start_func_ty_idx: *start_func_ty_idx,
                 start_func_table_idx: self.runtime_table(*start_func_table_id),
             },

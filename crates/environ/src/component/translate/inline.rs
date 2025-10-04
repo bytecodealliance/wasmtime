@@ -1132,6 +1132,7 @@ impl<'a> Inliner<'a> {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadNewIndirect {
+                        instance: frame.instance,
                         start_func_ty_idx: *start_func_ty,
                         start_func_table_id: table_id,
                     },
