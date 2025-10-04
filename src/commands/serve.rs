@@ -190,7 +190,9 @@ impl ServeCommand {
         builder.stderr(LogStream::new(stderr_prefix, Output::Stderr));
 
         let mut host = Host {
-            table: wasmtime::component::ResourceTable::new(),
+            table: wasmtime::component::ResourceTable::builder()
+                .sanitizer(wasmtime::component::ResourceSanitizer::new())
+                .build(),
             ctx: builder.build(),
             http: WasiHttpCtx::new(),
             http_outgoing_body_buffer_chunks: self.run.common.wasi.http_outgoing_body_buffer_chunks,

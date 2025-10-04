@@ -43,7 +43,7 @@ path = "src/bin/wasmtime.rs"
 doc = false
 
 [dependencies]
-wasmtime = { workspace = true, features = ['std'] }
+wasmtime = { workspace = true, features = ['std', 'resource-sanitizer'] }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-cli-flags = { workspace = true }
 wasmtime-cranelift = { workspace = true, optional = true }
