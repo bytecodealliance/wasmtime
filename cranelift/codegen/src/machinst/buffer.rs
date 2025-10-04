@@ -172,7 +172,7 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::function::FunctionParameters;
-use crate::ir::{ExceptionTag, ExternalName, RelSourceLoc, SourceLoc, TrapCode};
+use crate::ir::{DebugTag, ExceptionTag, ExternalName, RelSourceLoc, SourceLoc, TrapCode};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
     BlockIndex, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants, VCodeInst,
@@ -182,7 +182,7 @@ use crate::{MachInstEmitState, ir};
 use crate::{VCodeConstantData, timing};
 use core::ops::Range;
 use cranelift_control::ControlPlane;
-use cranelift_entity::{PrimaryMap, entity_impl};
+use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -254,6 +254,10 @@ pub struct MachBuffer<I: VCodeInst> {
     exception_handlers: SmallVec<[MachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
     srclocs: SmallVec<[MachSrcLoc<Stencil>; 64]>,
+    /// Any debug tags referring to this code.
+    debug_tags: Vec<MachDebugTags>,
+    /// Pool of debug tags referenced by `MachDebugTags` entries.
+    debug_tag_pool: Vec<DebugTag>,
     /// Any user stack maps for this code.
     ///
     /// Each entry is an `(offset, span, stack_map)` triple. Entries are sorted
@@ -322,6 +326,10 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Indicates when a patchable region is currently open, to guard that it's
     /// not possible to nest patchable regions.
     open_patchable: bool,
+    /// Stack frame layout metadata. If provided for a MachBuffer
+    /// containing a function body, this allows interpretation of
+    /// runtime state given a view of an active stack frame.
+    frame_layout: Option<MachBufferFrameLayout>,
 }
 
 impl MachBufferFinalized<Stencil> {
@@ -338,9 +346,12 @@ impl MachBufferFinalized<Stencil> {
                 .into_iter()
                 .map(|srcloc| srcloc.apply_base_srcloc(base_srcloc))
                 .collect(),
+            debug_tags: self.debug_tags,
+            debug_tag_pool: self.debug_tag_pool,
             user_stack_maps: self.user_stack_maps,
             unwind_info: self.unwind_info,
             alignment: self.alignment,
+            frame_layout: self.frame_layout,
         }
     }
 }
@@ -367,11 +378,19 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     pub(crate) exception_handlers: SmallVec<[FinalizedMachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
     pub(crate) srclocs: SmallVec<[T::MachSrcLocType; 64]>,
+    /// Any debug tags referring to this code.
+    pub(crate) debug_tags: Vec<MachDebugTags>,
+    /// Pool of debug tags referenced by `MachDebugTags` entries.
+    pub(crate) debug_tag_pool: Vec<DebugTag>,
     /// Any user stack maps for this code.
     ///
     /// Each entry is an `(offset, span, stack_map)` triple. Entries are sorted
     /// by code offset, and each stack map covers `span` bytes on the stack.
     pub(crate) user_stack_maps: SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]>,
+    /// Stack frame layout metadata. If provided for a MachBuffer
+    /// containing a function body, this allows interpretation of
+    /// runtime state given a view of an active stack frame.
+    pub(crate) frame_layout: Option<MachBufferFrameLayout>,
     /// Any unwind info at a given location.
     pub unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
     /// The required alignment of this buffer.
@@ -447,6 +466,8 @@ impl<I: VCodeInst> MachBuffer<I> {
             call_sites: SmallVec::new(),
             exception_handlers: SmallVec::new(),
             srclocs: SmallVec::new(),
+            debug_tags: vec![],
+            debug_tag_pool: vec![],
             user_stack_maps: SmallVec::new(),
             unwind_info: SmallVec::new(),
             cur_srcloc: None,
@@ -464,6 +485,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             constants: Default::default(),
             used_constants: Default::default(),
             open_patchable: false,
+            frame_layout: None,
         }
     }
 
@@ -838,6 +860,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         //    (end of buffer)
         self.data.truncate(b.start as usize);
         self.pending_fixup_records.truncate(b.fixup);
+
+        // Trim srclocs and debug tags now past the end of the buffer.
         while let Some(last_srcloc) = self.srclocs.last_mut() {
             if last_srcloc.end <= b.start {
                 break;
@@ -848,6 +872,13 @@ impl<I: VCodeInst> MachBuffer<I> {
             }
             self.srclocs.pop();
         }
+        while let Some(last_debug_tag) = self.debug_tags.last() {
+            if last_debug_tag.offset <= b.start {
+                break;
+            }
+            self.debug_tags.pop();
+        }
+
         // State:
         //    [PRE CODE]
         //  cur_off, Offset b.start, b.labels_at_this_branch:
@@ -1535,9 +1566,12 @@ impl<I: VCodeInst> MachBuffer<I> {
             call_sites: self.call_sites,
             exception_handlers: finalized_exception_handlers,
             srclocs,
+            debug_tags: self.debug_tags,
+            debug_tag_pool: self.debug_tag_pool,
             user_stack_maps: self.user_stack_maps,
             unwind_info: self.unwind_info,
             alignment,
+            frame_layout: self.frame_layout,
         }
     }
 
@@ -1693,6 +1727,19 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.user_stack_maps.push((return_addr, span, stack_map));
     }
 
+    /// Push a debug tag associated with the current buffer offset.
+    pub fn push_debug_tags(&mut self, pos: MachDebugTagPos, tags: &[DebugTag]) {
+        trace!("debug tags at offset {}: {tags:?}", self.cur_offset());
+        let start = u32::try_from(self.debug_tag_pool.len()).unwrap();
+        self.debug_tag_pool.extend(tags.iter().cloned());
+        let end = u32::try_from(self.debug_tag_pool.len()).unwrap();
+        self.debug_tags.push(MachDebugTags {
+            offset: self.cur_offset(),
+            pos,
+            range: start..end,
+        });
+    }
+
     /// Increase the alignment of the buffer to the given alignment if bigger
     /// than the current alignment.
     pub fn set_log2_min_function_alignment(&mut self, align_to: u8) {
@@ -1700,6 +1747,12 @@ impl<I: VCodeInst> MachBuffer<I> {
             1u32.checked_shl(u32::from(align_to))
                 .expect("log2_min_function_alignment too large"),
         );
+    }
+
+    /// Set the frame layout metadata.
+    pub fn set_frame_layout(&mut self, frame_layout: MachBufferFrameLayout) {
+        debug_assert!(self.frame_layout.is_none());
+        self.frame_layout = Some(frame_layout);
     }
 }
 
@@ -1715,6 +1768,19 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     /// Get a list of source location mapping tuples in sorted-by-start-offset order.
     pub fn get_srclocs_sorted(&self) -> &[T::MachSrcLocType] {
         &self.srclocs[..]
+    }
+
+    /// Get all debug tags, sorted by associated offset.
+    pub fn debug_tags(&self) -> impl Iterator<Item = MachBufferDebugTagList<'_>> {
+        self.debug_tags.iter().map(|tags| {
+            let start = usize::try_from(tags.range.start).unwrap();
+            let end = usize::try_from(tags.range.end).unwrap();
+            MachBufferDebugTagList {
+                offset: tags.offset,
+                pos: tags.pos,
+                tags: &self.debug_tag_pool[start..end],
+            }
+        })
     }
 
     /// Get the total required size for the code.
@@ -1791,6 +1857,11 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
                 exception_handlers: &self.exception_handlers[handler_range],
             }
         })
+    }
+
+    /// Get the frame layout, if known.
+    pub fn frame_layout(&self) -> Option<&MachBufferFrameLayout> {
+        self.frame_layout.as_ref()
     }
 }
 
@@ -2115,6 +2186,118 @@ impl MachBranch {
     fn is_uncond(&self) -> bool {
         self.inverted.is_none()
     }
+}
+
+/// Stack-frame layout information carried through to machine
+/// code. This provides sufficient information to interpret an active
+/// stack frame from a running function, if provided.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub struct MachBufferFrameLayout {
+    /// Offset from bottom of frame to FP (near top of frame). This
+    /// allows reading the frame given only FP.
+    pub frame_to_fp_offset: u32,
+    /// Offset from bottom of frame for each StackSlot,
+    pub stackslots: SecondaryMap<ir::StackSlot, MachBufferStackSlot>,
+}
+
+/// Descriptor for a single stack slot in the compiled function.
+#[derive(Clone, Debug, PartialEq, Default)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub struct MachBufferStackSlot {
+    /// Offset from the bottom of the stack frame.
+    pub offset: u32,
+
+    /// User-provided key to describe this stack slot.
+    pub key: Option<ir::StackSlotKey>,
+}
+
+/// Debug tags: a sequence of references to a stack slot, or a
+/// user-defined value, at a particular PC.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub(crate) struct MachDebugTags {
+    /// Offset at which this tag applies.
+    pub offset: CodeOffset,
+
+    /// Position on the attached instruction. This indicates whether
+    /// the tags attach to the prior instruction (i.e., as a return
+    /// point from a call) or the current instruction (i.e., as a PC
+    /// seen during a trap).
+    pub pos: MachDebugTagPos,
+
+    /// The range in the tag pool.
+    pub range: Range<u32>,
+}
+
+/// Debug tag position on an instruction.
+///
+/// We need to distinguish position on an instruction, and not just
+/// use offsets, because of the following case:
+///
+/// ```plain
+/// <tag1, tag2> call ...
+/// <tag3, tag4> trapping_store ...
+/// ```
+///
+/// If the stack is walked and interpreted with debug tags while
+/// within the call, the PC seen will be the return point, i.e. the
+/// address after the call. If the stack is walked and interpreted
+/// with debug tags upon a trap of the following instruction, it will
+/// be the PC of that instruction -- which is the same PC! Thus to
+/// disambiguate which tags we want, we attach a "pre/post" flag to
+/// every group of tags at an offset; and when we look up tags, we
+/// look them up for an offset and "position" at that offset.
+///
+/// Thus there are logically two positions at every offset -- so the
+/// above will be emitted as
+///
+/// ```plain
+/// 0: call ...
+///                          4, post: <tag1, tag2>
+///                          4, pre: <tag3, tag4>
+/// 4: trapping_store ...
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub enum MachDebugTagPos {
+    /// Tags attached after the instruction that ends at this offset.
+    ///
+    /// This is used to attach tags to a call, because the PC we see
+    /// when walking the stack is the *return point*.
+    Post,
+    /// Tags attached before the instruction that starts at this offset.
+    ///
+    /// This is used to attach tags to every other kind of
+    /// instruction, because the PC we see when processing a trap of
+    /// that instruction is the PC of that instruction, not the
+    /// following one.
+    Pre,
+}
+
+/// Iterator item for visiting debug tags.
+pub struct MachBufferDebugTagList<'a> {
+    /// Offset at which this tag applies.
+    pub offset: CodeOffset,
+
+    /// Position at this offset ("post", attaching to prior
+    /// instruction, or "pre", attaching to next instruction).
+    pub pos: MachDebugTagPos,
+
+    /// The underlying tags.
+    pub tags: &'a [DebugTag],
 }
 
 /// Implementation of the `TextSectionBuilder` trait backed by `MachBuffer`.

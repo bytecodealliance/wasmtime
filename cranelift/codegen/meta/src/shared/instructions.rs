@@ -3902,4 +3902,20 @@ pub(crate) fn define(
             Operand::new("a", &TxN.dynamic_to_vector()).with_doc("New fixed vector"),
         ]),
     );
+
+    ig.push(
+        Inst::new(
+            "sequence_point",
+            r#"
+         A compiler barrier that acts as an immovable marker from IR input to machine-code output.
+
+         This "sequence point" can have debug tags attached to it, and these tags will be
+         noted in the output `MachBuffer`.
+
+         It prevents motion of any other side-effects across this boundary.
+         "#,
+            &formats.nullary,
+        )
+        .other_side_effects(),
+    );
 }

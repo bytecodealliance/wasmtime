@@ -335,6 +335,8 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::LabelAddress { dst, label: _ } => {
             collector.reg_def(dst);
         }
+
+        Inst::SequencePoint { .. } => {}
     }
 }
 
@@ -833,6 +835,10 @@ impl Inst {
             Inst::LabelAddress { dst, label } => {
                 let dst = format_reg(dst.to_reg().to_reg());
                 format!("label_address {dst}, {label:?}")
+            }
+
+            Inst::SequencePoint {} => {
+                format!("sequence_point")
             }
         }
     }
