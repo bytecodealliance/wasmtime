@@ -1,6 +1,18 @@
 ;; Constant propagation.
 
 (rule (simplify
+       (rotl (fits_in_64 ty)
+             (iconst ty kx)
+             (iconst ty kk)))
+      (subsume (iconst ty (imm64_rotl ty kx kk))))
+
+(rule (simplify
+       (rotr (fits_in_64 ty)
+             (iconst ty kx)
+             (iconst ty kk)))
+      (subsume (iconst ty (imm64_rotr ty kx kk))))
+
+(rule (simplify
        (iadd (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
