@@ -44,10 +44,11 @@ macro_rules! isle_common_prelude_methods {
             let a_v: u64 = a.bits().cast_unsigned();
             if a_v == 0 {
                 // ctz(0) is defined to be the number of bits in the type.
-                return Imm64::new(i64::from(bits));
+                Imm64::new(i64::from(bits))
+            } else {
+                let lz = a_v.trailing_zeros();
+                Imm64::new(i64::from(lz))
             }
-            let lz = a_v.trailing_zeros();
-            Imm64::new(i64::from(lz))
         }
 
         #[inline]
