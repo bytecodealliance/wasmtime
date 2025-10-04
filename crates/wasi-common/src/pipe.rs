@@ -20,10 +20,11 @@ use std::sync::{Arc, RwLock};
 /// ```no_run
 /// use wasi_common::{pipe::ReadPipe, WasiCtx, Table};
 /// let stdin = ReadPipe::from("hello from stdin!");
-/// // Brint these instances from elsewhere (e.g. wasi-cap-std-sync):
-/// let random = todo!();
-/// let clocks = todo!();
-/// let sched = todo!();
+/// // Bring these instances from elsewhere (e.g. wasi-cap-std-sync or wasi-cap-std-tokio):
+/// use wasi_common::sync::{random_ctx, clocks_ctx, sched_ctx};
+/// let random = random_ctx();
+/// let clocks = clocks_ctx();
+/// let sched = sched_ctx();
 /// let table = Table::new();
 /// let mut ctx = WasiCtx::new(random, clocks, sched, table);
 /// ctx.set_stdin(Box::new(stdin.clone()));
@@ -116,10 +117,11 @@ impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
 /// ```no_run
 /// use wasi_common::{pipe::WritePipe, WasiCtx, Table};
 /// let stdout = WritePipe::new_in_memory();
-/// // Brint these instances from elsewhere (e.g. wasi-cap-std-sync):
-/// let random = todo!();
-/// let clocks = todo!();
-/// let sched = todo!();
+/// // Bring these instances from elsewhere (e.g. wasi-cap-std-sync or wasi-cap-std-tokio):
+/// use wasi_common::sync::{random_ctx, clocks_ctx, sched_ctx};
+/// let random = random_ctx();
+/// let clocks = clocks_ctx();
+/// let sched = sched_ctx();
 /// let table = Table::new();
 /// let mut ctx = WasiCtx::new(random, clocks, sched, table);
 /// ctx.set_stdout(Box::new(stdout.clone()));
