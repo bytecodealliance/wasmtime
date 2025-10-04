@@ -89,6 +89,11 @@ pub enum Trap {
     /// triggering a trap instead.
     CannotEnterComponent,
 
+    /// When the `component-model` feature is enabled this trap represents a
+    /// scenario where one component tried to call an import at a time when it
+    /// was not legal to do so.
+    CannotLeaveComponent,
+
     /// Async-lifted export failed to produce a result by calling `task.return`
     /// before returning `STATUS_DONE` and/or after all host tasks completed.
     NoAsyncResult,
@@ -107,11 +112,6 @@ pub enum Trap {
     /// that all host tasks have completed and any/all host-owned stream/future
     /// handles have been dropped.
     AsyncDeadlock,
-
-    /// When the `component-model` feature is enabled this trap represents a
-    /// scenario where a component instance tried to call an import or intrinsic
-    /// when it wasn't allowed to, e.g. from a post-return function.
-    CannotLeaveComponent,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -184,12 +184,12 @@ impl fmt::Display for Trap {
             AllocationTooLarge => "allocation size too large",
             CastFailure => "cast failure",
             CannotEnterComponent => "cannot enter component instance",
+            CannotLeaveComponent => "cannot leave component instance",
             NoAsyncResult => "async-lifted export failed to produce a result",
             UnhandledTag => "unhandled tag",
             ContinuationAlreadyConsumed => "continuation already consumed",
             DisabledOpcode => "pulley opcode disabled at compile time was executed",
             AsyncDeadlock => "deadlock detected: event loop cannot make further progress",
-            CannotLeaveComponent => "cannot leave component instance",
         };
         write!(f, "wasm trap: {desc}")
     }
