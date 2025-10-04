@@ -449,7 +449,7 @@ impl MemoryPool {
                 }
                 self.pool.stripes[self.stripe_index]
                     .allocator
-                    .free(SlotId(self.striped_allocation_index.0));
+                    .free(SlotId(self.striped_allocation_index.0), 0);
             }
         }
     }
@@ -468,6 +468,7 @@ impl MemoryPool {
         &self,
         allocation_index: MemoryAllocationIndex,
         image: MemoryImageSlot,
+        bytes_resident: usize,
     ) {
         self.return_memory_image_slot(allocation_index, image);
 
@@ -475,7 +476,7 @@ impl MemoryPool {
             StripedAllocationIndex::from_unstriped_slot_index(allocation_index, self.stripes.len());
         self.stripes[stripe_index]
             .allocator
-            .free(SlotId(striped_allocation_index.0));
+            .free(SlotId(striped_allocation_index.0), bytes_resident);
     }
 
     /// Purging everything related to `module`.
@@ -523,7 +524,7 @@ impl MemoryPool {
                         }
                     }
 
-                    stripe.allocator.free(id);
+                    stripe.allocator.free(id, 0);
                 }
             }
         }
@@ -598,6 +599,20 @@ impl MemoryPool {
             ImageSlot::PreviouslyUsed(slot),
         );
         assert!(matches!(prev, ImageSlot::Unknown));
+    }
+
+    pub fn unused_warm_slots(&self) -> u32 {
+        self.stripes
+            .iter()
+            .map(|i| i.allocator.unused_warm_slots())
+            .sum()
+    }
+
+    pub fn unused_bytes_resident(&self) -> usize {
+        self.stripes
+            .iter()
+            .map(|i| i.allocator.unused_bytes_resident())
+            .sum()
     }
 }
 

@@ -69,15 +69,24 @@ impl StackPool {
         &self,
         _stack: &mut wasmtime_fiber::FiberStack,
         _decommit: impl FnMut(*mut u8, usize),
-    ) {
+    ) -> usize {
         // No need to actually zero the stack, since the stack won't ever be
         // reused on non-unix systems.
+        0
     }
 
     /// Safety: see the unix implementation.
-    pub unsafe fn deallocate(&self, stack: wasmtime_fiber::FiberStack) {
+    pub unsafe fn deallocate(&self, stack: wasmtime_fiber::FiberStack, _bytes_resident: usize) {
         self.live_stacks.fetch_sub(1, Ordering::AcqRel);
         // A no-op as we don't actually own the fiber stack on Windows.
         let _ = stack;
+    }
+
+    pub fn unused_warm_slots(&self) -> u32 {
+        0
+    }
+
+    pub fn unused_bytes_resident(&self) -> Option<usize> {
+        None
     }
 }

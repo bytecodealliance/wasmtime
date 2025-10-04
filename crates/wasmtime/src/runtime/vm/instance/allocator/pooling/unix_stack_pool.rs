@@ -146,7 +146,7 @@ impl StackPool {
         &self,
         stack: &mut wasmtime_fiber::FiberStack,
         mut decommit: impl FnMut(*mut u8, usize),
-    ) {
+    ) -> usize {
         assert!(stack.is_from_raw_parts());
         assert!(
             !self.stack_size.is_zero(),
@@ -155,7 +155,7 @@ impl StackPool {
         );
 
         if !self.async_stack_zeroing {
-            return;
+            return 0;
         }
 
         let top = stack
@@ -203,6 +203,8 @@ impl StackPool {
 
         // Use the system to reset remaining stack pages to zero.
         decommit(bottom_of_stack as _, rest.byte_count());
+
+        size_to_memset.byte_count()
     }
 
     /// Deallocate a previously-allocated fiber.
@@ -214,7 +216,7 @@ impl StackPool {
     ///
     /// The caller must have already called `zero_stack` on the fiber stack and
     /// flushed any enqueued decommits for this stack's memory.
-    pub unsafe fn deallocate(&self, stack: wasmtime_fiber::FiberStack) {
+    pub unsafe fn deallocate(&self, stack: wasmtime_fiber::FiberStack, bytes_resident: usize) {
         assert!(stack.is_from_raw_parts());
 
         let top = stack
@@ -239,7 +241,19 @@ impl StackPool {
         assert!(index < self.max_stacks);
         let index = u32::try_from(index).unwrap();
 
-        self.index_allocator.free(SlotId(index));
+        self.index_allocator.free(SlotId(index), bytes_resident);
+    }
+
+    pub fn unused_warm_slots(&self) -> u32 {
+        self.index_allocator.unused_warm_slots()
+    }
+
+    pub fn unused_bytes_resident(&self) -> Option<usize> {
+        if self.async_stack_zeroing {
+            Some(self.index_allocator.unused_bytes_resident())
+        } else {
+            None
+        }
     }
 }
 
@@ -286,7 +300,7 @@ mod tests {
 
         for stack in stacks {
             unsafe {
-                pool.deallocate(stack);
+                pool.deallocate(stack, 0);
             }
         }
 

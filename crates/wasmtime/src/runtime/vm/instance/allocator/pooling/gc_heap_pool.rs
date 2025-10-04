@@ -133,7 +133,7 @@ impl GcHeapPool {
             heaps[allocation_index.index()].dealloc(heap)
         };
 
-        self.index_allocator.free(SlotId(allocation_index.0));
+        self.index_allocator.free(SlotId(allocation_index.0), 0);
 
         (memory_alloc_index, memory)
     }

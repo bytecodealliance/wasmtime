@@ -514,21 +514,23 @@ impl MemoryImageSlot {
     /// argument is the maximum amount of memory to keep resident in this
     /// process's memory on Linux. Up to that much memory will be `memset` to
     /// zero where the rest of it will be reset or released with `madvise`.
+    ///
+    /// Returns the number of bytes still resident in memory after this function
+    /// has returned.
     #[allow(dead_code, reason = "only used in some cfgs")]
     pub(crate) fn clear_and_remain_ready(
         &mut self,
         pagemap: Option<&PageMap>,
         keep_resident: HostAlignedByteCount,
         decommit: impl FnMut(*mut u8, usize),
-    ) -> Result<()> {
+    ) -> Result<usize> {
         assert!(self.dirty);
 
-        unsafe {
-            self.reset_all_memory_contents(pagemap, keep_resident, decommit)?;
-        }
+        let bytes_resident =
+            unsafe { self.reset_all_memory_contents(pagemap, keep_resident, decommit)? };
 
         self.dirty = false;
-        Ok(())
+        Ok(bytes_resident)
     }
 
     #[allow(dead_code, reason = "only used in some cfgs")]
@@ -537,7 +539,7 @@ impl MemoryImageSlot {
         pagemap: Option<&PageMap>,
         keep_resident: HostAlignedByteCount,
         decommit: impl FnMut(*mut u8, usize),
-    ) -> Result<()> {
+    ) -> Result<usize> {
         match vm::decommit_behavior() {
             DecommitBehavior::Zero => {
                 // If we're not on Linux then there's no generic platform way to
@@ -546,13 +548,13 @@ impl MemoryImageSlot {
                 //
                 // Additionally the previous image, if any, is dropped here
                 // since it's no longer applicable to this mapping.
-                self.reset_with_anon_memory()
+                self.reset_with_anon_memory()?;
+                Ok(0)
             }
             DecommitBehavior::RestoreOriginalMapping => {
-                unsafe {
-                    self.reset_with_original_mapping(pagemap, keep_resident, decommit);
-                }
-                Ok(())
+                let bytes_resident =
+                    unsafe { self.reset_with_original_mapping(pagemap, keep_resident, decommit) };
+                Ok(bytes_resident)
             }
         }
     }
@@ -563,29 +565,25 @@ impl MemoryImageSlot {
         pagemap: Option<&PageMap>,
         keep_resident: HostAlignedByteCount,
         decommit: impl FnMut(*mut u8, usize),
-    ) {
+    ) -> usize {
         assert_eq!(
             vm::decommit_behavior(),
             DecommitBehavior::RestoreOriginalMapping
         );
 
         unsafe {
-            match &self.image {
+            return match &self.image {
                 // If there's a backing image then manually resetting a region
                 // is a bit trickier than without an image, so delegate to the
                 // helper function below.
-                Some(image) => {
-                    reset_with_pagemap(
-                        pagemap,
-                        self.base.as_mut_ptr(),
-                        self.accessible,
-                        keep_resident,
-                        |region| {
-                            manually_reset_region(self.base.as_mut_ptr().addr(), image, region)
-                        },
-                        decommit,
-                    );
-                }
+                Some(image) => reset_with_pagemap(
+                    pagemap,
+                    self.base.as_mut_ptr(),
+                    self.accessible,
+                    keep_resident,
+                    |region| manually_reset_region(self.base.as_mut_ptr().addr(), image, region),
+                    decommit,
+                ),
 
                 // If there's no memory image for this slot then pages are always
                 // manually reset back to zero or given to `decommit`.
@@ -597,7 +595,7 @@ impl MemoryImageSlot {
                     |region| region.fill(0),
                     decommit,
                 ),
-            }
+            };
         }
 
         /// Manually resets `region` back to its original contents as specified
