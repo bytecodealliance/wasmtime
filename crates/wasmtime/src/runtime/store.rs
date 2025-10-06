@@ -81,7 +81,7 @@ use crate::RootSet;
 use crate::ThrownException;
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentStoreData;
-#[cfg(feature = "component-model-async")]
+#[cfg(feature = "component-model")]
 use crate::component::concurrent;
 #[cfg(feature = "async")]
 use crate::fiber;
@@ -480,8 +480,7 @@ pub struct StoreOpaque {
     component_calls: vm::component::CallContexts,
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
-
-    #[cfg(feature = "component-model-async")]
+    #[cfg(feature = "component-model")]
     concurrent_state: concurrent::ConcurrentState,
 
     /// State related to the executor of wasm code.
@@ -695,7 +694,7 @@ impl<T> Store<T> {
             #[cfg(feature = "component-model")]
             host_resource_data: Default::default(),
             executor: Executor::new(engine),
-            #[cfg(feature = "component-model-async")]
+            #[cfg(feature = "component-model")]
             concurrent_state: Default::default(),
         };
         let mut inner = Box::new(StoreInner {
@@ -2301,7 +2300,7 @@ at https://bytecodealliance.org/security.
         )
     }
 
-    #[cfg(feature = "component-model-async")]
+    #[cfg(feature = "component-model")]
     pub(crate) fn component_resource_state_with_instance_and_concurrent_state(
         &mut self,
         instance: crate::component::Instance,

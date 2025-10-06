@@ -1,4 +1,3 @@
-#[cfg(feature = "component-model-async")]
 use crate::component::concurrent::ConcurrentState;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
@@ -480,7 +479,7 @@ pub struct LiftContext<'a> {
 
     calls: &'a mut CallContexts,
 
-    #[cfg(feature = "component-model-async")]
+    #[cfg_attr(not(feature = "component-model-async"), allow(unused))]
     concurrent_state: &'a mut ConcurrentState,
 }
 
@@ -502,40 +501,20 @@ impl<'a> LiftContext<'a> {
         let memory = options
             .memory
             .map(|_| options.memory(unsafe { &*(store as *const StoreOpaque) }));
-        #[cfg(feature = "component-model-async")]
-        {
-            let (calls, host_table, host_resource_data, instance, concurrent_state) =
-                store.component_resource_state_with_instance_and_concurrent_state(instance_handle);
-            let (component, instance) = instance.component_and_self();
+        let (calls, host_table, host_resource_data, instance, concurrent_state) =
+            store.component_resource_state_with_instance_and_concurrent_state(instance_handle);
+        let (component, instance) = instance.component_and_self();
 
-            LiftContext {
-                memory,
-                options,
-                types: component.types(),
-                instance,
-                instance_handle,
-                calls,
-                host_table,
-                host_resource_data,
-                concurrent_state,
-            }
-        }
-        #[cfg(not(feature = "component-model-async"))]
-        {
-            let (calls, host_table, host_resource_data, instance) =
-                store.component_resource_state_with_instance(instance_handle);
-            let (component, instance) = instance.component_and_self();
-
-            LiftContext {
-                memory,
-                options,
-                types: component.types(),
-                instance,
-                instance_handle,
-                calls,
-                host_table,
-                host_resource_data,
-            }
+        LiftContext {
+            memory,
+            options,
+            types: component.types(),
+            instance,
+            instance_handle,
+            calls,
+            host_table,
+            host_resource_data,
+            concurrent_state,
         }
     }
 

@@ -9,6 +9,9 @@ use core::pin::pin;
 use core::task::{Context, Poll, Waker};
 use wasmtime_environ::component::{InterfaceType, RuntimeComponentInstanceIndex};
 
+#[derive(Default)]
+pub struct ConcurrentState;
+
 fn should_have_failed_validation<T>(what: &str) -> Result<T> {
     // This should be unreachable; if we trap here, it indicates a
     // bug in Wasmtime rather than in the guest.

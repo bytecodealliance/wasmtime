@@ -9,7 +9,7 @@ use wasmtime_environ::PrimaryMap;
 
 #[derive(Default)]
 pub struct ComponentStoreData {
-    pub(crate) instances: PrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
+    instances: PrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -46,6 +46,24 @@ impl ComponentStoreData {
         }
 
         crate::component::concurrent::tls::set(store, move || drop(futures));
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn assert_guest_tables_empty(&mut self) {
+        for (_, instance) in self.instances.iter_mut() {
+            let Some(instance) = instance.as_mut() else {
+                continue;
+            };
+
+            assert!(
+                instance
+                    .get_mut()
+                    .guest_tables()
+                    .0
+                    .iter()
+                    .all(|(_, table)| table.is_empty())
+            );
+        }
     }
 }
 

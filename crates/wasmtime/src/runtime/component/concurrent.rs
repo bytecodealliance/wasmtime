@@ -875,20 +875,10 @@ impl<T> StoreContextMut<'_, T> {
     #[doc(hidden)]
     pub fn assert_concurrent_state_empty(self) {
         let store = self.0;
-        for (_, instance) in store.store_data_mut().components.instances.iter_mut() {
-            let Some(instance) = instance.as_mut() else {
-                continue;
-            };
-
-            assert!(
-                instance
-                    .get_mut()
-                    .guest_tables()
-                    .0
-                    .iter()
-                    .all(|(_, table)| table.is_empty())
-            );
-        }
+        store
+            .store_data_mut()
+            .components
+            .assert_guest_tables_empty();
         let state = store.concurrent_state_mut();
         assert!(
             state.table.get_mut().is_empty(),
