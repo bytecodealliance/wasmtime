@@ -177,7 +177,7 @@ impl TargetIsa for X64Backend {
     }
 
     fn has_native_fma(&self) -> bool {
-        self.x64_flags.has_fma()
+        self.x64_flags.has_avx() && self.x64_flags.has_fma()
     }
 
     fn has_round(&self) -> bool {
