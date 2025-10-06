@@ -140,13 +140,23 @@ mod tests {
         )
     ";
 
+    pub(crate) fn small_pool_config() -> PoolingAllocationConfig {
+        let mut config = PoolingAllocationConfig::new();
+
+        config.total_memories(10);
+        config.max_memory_size(2 << 16);
+        config.total_tables(10);
+        config.table_elements(10);
+        config.total_stacks(1);
+
+        config
+    }
+
     #[test]
     #[cfg_attr(miri, ignore)]
     fn smoke_test() {
         // Start with nothing
-        let engine =
-            Engine::new(&Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()))
-                .unwrap();
+        let engine = Engine::new(&Config::new().allocation_strategy(small_pool_config())).unwrap();
         let metrics = engine.pooling_allocator_metrics().unwrap();
 
         assert_eq!(metrics.core_instances(), 0);
@@ -187,7 +197,7 @@ mod tests {
     #[test]
     #[cfg_attr(any(miri, not(target_os = "linux")), ignore)]
     fn unused_memories_tables_and_more() -> Result<()> {
-        let mut pool = PoolingAllocationConfig::default();
+        let mut pool = small_pool_config();
         pool.linear_memory_keep_resident(65536);
         pool.table_keep_resident(65536);
         pool.pagemap_scan(Enabled::Auto);
@@ -301,7 +311,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn gc_heaps() -> Result<()> {
-        let pool = PoolingAllocationConfig::default();
+        let pool = small_pool_config();
         let mut config = Config::new();
         config.allocation_strategy(pool);
         let engine = Engine::new(&config)?;
@@ -321,7 +331,7 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(miri, ignore)]
     async fn stacks() -> Result<()> {
-        let pool = PoolingAllocationConfig::default();
+        let pool = small_pool_config();
         let mut config = Config::new();
         config.allocation_strategy(pool);
         config.async_support(true);
