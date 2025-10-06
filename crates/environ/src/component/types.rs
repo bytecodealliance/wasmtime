@@ -243,6 +243,14 @@ indices! {
 
     /// An index into `Component::options` at the end of compilation.
     pub struct OptionsIndex(u32);
+
+    /// An index that doesn't actually index into a list but instead represents
+    /// a unique counter.
+    ///
+    /// This is used for "abstract" resources which aren't actually instantiated
+    /// in the component model. For example this represents a resource in a
+    /// component or instance type, but not an actual concrete instance.
+    pub struct AbstractResourceIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the
@@ -1106,15 +1114,56 @@ pub struct TypeErrorContextTable {
 
 /// Metadata about a resource table added to a component.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
-pub struct TypeResourceTable {
-    /// The original resource that this table contains.
+pub enum TypeResourceTable {
+    /// This resource is for an actual concrete resource which has runtime state
+    /// associated with it.
     ///
-    /// This is used when destroying resources within this table since this
-    /// original definition will know how to execute destructors.
-    pub ty: ResourceIndex,
+    /// This is used for any resource which might actually enter a component.
+    /// For example when a resource is either imported or defined in a component
+    /// it'll get this case.
+    Concrete {
+        /// The original resource that this table contains.
+        ///
+        /// This is used when destroying resources within this table since this
+        /// original definition will know how to execute destructors.
+        ty: ResourceIndex,
 
-    /// The component instance that contains this resource table.
-    pub instance: RuntimeComponentInstanceIndex,
+        /// The component instance that contains this resource table.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// This table does not actually exist at runtime but instead represents
+    /// type information for an uninstantiable resource. This tracks, for
+    /// example, resources in component and instance types.
+    Abstract(AbstractResourceIndex),
+}
+
+impl TypeResourceTable {
+    /// Asserts that this is `TypeResourceTable::Concrete` and returns the `ty`
+    /// field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is `TypeResourceTable::Abstract`.
+    pub fn unwrap_concrete_ty(&self) -> ResourceIndex {
+        match self {
+            TypeResourceTable::Concrete { ty, .. } => *ty,
+            TypeResourceTable::Abstract(_) => panic!("not a concrete resource table"),
+        }
+    }
+
+    /// Asserts that this is `TypeResourceTable::Concrete` and returns the
+    /// `instance` field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is `TypeResourceTable::Abstract`.
+    pub fn unwrap_concrete_instance(&self) -> RuntimeComponentInstanceIndex {
+        match self {
+            TypeResourceTable::Concrete { instance, .. } => *instance,
+            TypeResourceTable::Abstract(_) => panic!("not a concrete resource table"),
+        }
+    }
 }
 
 /// Shape of a "list" interface type.

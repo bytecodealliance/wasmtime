@@ -1854,7 +1854,7 @@ impl<'a> ComponentItemDef<'a> {
         // Once `path` has been iterated over it must be the case that the final
         // item is a resource type, in which case a lookup can be performed.
         match cur {
-            ComponentItemDef::Type(TypeDef::Resource(idx)) => types[idx].ty,
+            ComponentItemDef::Type(TypeDef::Resource(idx)) => types[idx].unwrap_concrete_ty(),
             _ => unreachable!(),
         }
     }
