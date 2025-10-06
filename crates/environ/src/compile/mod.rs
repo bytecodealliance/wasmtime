@@ -128,6 +128,9 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
     /// Set the tunables for this compiler.
     fn set_tunables(&mut self, tunables: Tunables) -> Result<()>;
 
+    /// Get the tunables used by this compiler.
+    fn tunables(&self) -> Option<&Tunables>;
+
     /// Builds a new [`Compiler`] object from this configuration.
     fn build(&self) -> Result<Box<dyn Compiler>>;
 

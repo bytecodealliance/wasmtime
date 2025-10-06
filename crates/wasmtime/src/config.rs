@@ -2396,7 +2396,7 @@ impl Config {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn build_compiler(
         mut self,
-        tunables: &Tunables,
+        tunables: &mut Tunables,
         features: WasmFeatures,
     ) -> Result<(Self, Box<dyn wasmtime_environ::Compiler>)> {
         let target = self.compiler_target();
@@ -2535,6 +2535,7 @@ impl Config {
         for flag in self.compiler_config.flags.iter() {
             compiler.enable(flag)?;
         }
+        *tunables = compiler.tunables().cloned().unwrap();
 
         #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
         if let Some(cache_store) = &self.compiler_config.cache_store {

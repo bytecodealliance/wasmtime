@@ -96,7 +96,7 @@ impl Engine {
     /// disable these two compiler settings will cause errors.
     pub fn new(config: &Config) -> Result<Engine> {
         let config = config.clone();
-        let (tunables, features) = config.validate()?;
+        let (mut tunables, features) = config.validate()?;
 
         #[cfg(feature = "runtime")]
         if tunables.signals_based_traps {
@@ -113,7 +113,9 @@ impl Engine {
         }
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
-        let (config, compiler) = config.build_compiler(&tunables, features)?;
+        let (config, compiler) = config.build_compiler(&mut tunables, features)?;
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        let _ = &mut tunables;
 
         Ok(Engine {
             inner: Arc::new(EngineInner {
