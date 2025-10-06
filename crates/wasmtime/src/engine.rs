@@ -115,6 +115,8 @@ impl Engine {
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         let (config, compiler) = config.build_compiler(&mut tunables, features)?;
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        let _ = &mut tunables;
 
         Ok(Engine {
             inner: Arc::new(EngineInner {
