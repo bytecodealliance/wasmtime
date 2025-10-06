@@ -29,6 +29,11 @@ pub struct StackPool {
 }
 
 impl StackPool {
+    #[cfg(test)]
+    pub fn enabled() -> bool {
+        true
+    }
+
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
         use rustix::mm::{MprotectFlags, mprotect};
 

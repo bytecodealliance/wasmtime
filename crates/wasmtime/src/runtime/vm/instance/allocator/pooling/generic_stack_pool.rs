@@ -28,6 +28,11 @@ pub struct StackPool {
 }
 
 impl StackPool {
+    #[cfg(test)]
+    pub fn enabled() -> bool {
+        false
+    }
+
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
         Ok(StackPool {
             stack_size: config.stack_size,

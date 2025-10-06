@@ -119,6 +119,7 @@ impl PoolingAllocatorMetrics {
 
 #[cfg(test)]
 mod tests {
+    use crate::vm::instance::allocator::pooling::StackPool;
     use crate::{
         Config, Enabled, InstanceAllocationStrategy, Module, PoolingAllocationConfig, Result,
         Store,
@@ -339,7 +340,7 @@ mod tests {
         drop(store);
         assert_eq!(metrics.stacks(), 0);
         assert_eq!(metrics.unused_stack_bytes_resident(), None);
-        if cfg!(unix) {
+        if StackPool::enabled() {
             assert_eq!(metrics.unused_warm_stacks(), 1);
         } else {
             assert_eq!(metrics.unused_warm_stacks(), 0);
