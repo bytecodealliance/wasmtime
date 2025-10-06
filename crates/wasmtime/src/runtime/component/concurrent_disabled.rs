@@ -1,6 +1,6 @@
 use crate::Uninhabited;
+use crate::component::Val;
 use crate::component::func::{ComponentType, LiftContext, LowerContext};
-use crate::component::{Instance, Val};
 use crate::runtime::vm::VMStore;
 use anyhow::{Result, anyhow};
 use core::future::Future;
@@ -18,17 +18,14 @@ fn should_have_failed_validation<T>(what: &str) -> Result<T> {
     ))
 }
 
-impl Instance {
-    pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
-        self,
-        _store: &mut dyn VMStore,
-        future: impl Future<Output = Result<R>> + Send + 'static,
-        _caller_instance: RuntimeComponentInstanceIndex,
-    ) -> Result<R> {
-        match pin!(future).poll(&mut Context::from_waker(Waker::noop())) {
-            Poll::Ready(result) => result,
-            Poll::Pending => should_have_failed_validation("async lowered import"),
-        }
+pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
+    _store: &mut dyn VMStore,
+    future: impl Future<Output = Result<R>> + Send + 'static,
+    _caller_instance: RuntimeComponentInstanceIndex,
+) -> Result<R> {
+    match pin!(future).poll(&mut Context::from_waker(Waker::noop())) {
+        Poll::Ready(result) => result,
+        Poll::Pending => should_have_failed_validation("async lowered import"),
     }
 }
 

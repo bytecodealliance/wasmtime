@@ -294,6 +294,7 @@ impl Func {
                 store.0.async_support(),
                 "cannot use `call_async` without enabling async support in the config"
             );
+            let mut store = store;
             store
                 .on_fiber(|store| self.call_impl(store, params, results))
                 .await?

@@ -1,5 +1,6 @@
+use crate::component::concurrent;
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, Accessor, Status};
+use crate::component::concurrent::{Accessor, Status};
 use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::slice_to_storage_mut;
