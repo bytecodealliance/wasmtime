@@ -2855,10 +2855,6 @@ impl Instance {
         let state = self.concurrent_state_mut(store);
         let task = state.get_mut(guest_task)?;
 
-        if wait && task.callback.is_some() {
-            bail!("cannot call `task.wait` from async-lifted export with callback");
-        }
-
         // If we're waiting, and there are no events immediately available,
         // suspend the fiber until that changes.
         if wait {
