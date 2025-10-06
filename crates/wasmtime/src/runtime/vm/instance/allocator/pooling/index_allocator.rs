@@ -48,10 +48,20 @@ impl SimpleIndexAllocator {
         self.0.free(index, bytes_resident);
     }
 
+    /// Returns the number of previously-used slots in this allocator which are
+    /// not currently in use.
+    ///
+    /// Note that this acquires a `Mutex` for synchronization at this time to
+    /// read the internal counter information.
     pub fn unused_warm_slots(&self) -> u32 {
         self.0.unused_warm_slots()
     }
 
+    /// Returns the number of bytes that are resident in previously-used slots
+    /// in this allocator which are not currently in use.
+    ///
+    /// Note that this acquires a `Mutex` for synchronization at this time to
+    /// read the internal counter information.
     pub fn unused_bytes_resident(&self) -> usize {
         self.0.unused_bytes_resident()
     }
@@ -359,10 +369,20 @@ impl ModuleAffinityIndexAllocator {
         inner.module_affine.keys().copied().collect()
     }
 
+    /// Returns the number of previously-used slots in this allocator which are
+    /// not currently in use.
+    ///
+    /// Note that this acquires a `Mutex` for synchronization at this time to
+    /// read the internal counter information.
     pub fn unused_warm_slots(&self) -> u32 {
         self.0.lock().unwrap().unused_warm_slots
     }
 
+    /// Returns the number of bytes that are resident in previously-used slots
+    /// in this allocator which are not currently in use.
+    ///
+    /// Note that this acquires a `Mutex` for synchronization at this time to
+    /// read the internal counter information.
     pub fn unused_bytes_resident(&self) -> usize {
         self.0.lock().unwrap().unused_bytes_resident
     }
