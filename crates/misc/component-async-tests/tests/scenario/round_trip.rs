@@ -236,9 +236,9 @@ pub async fn test_round_trip(
             component_async_tests::round_trip::bindings::RoundTrip::new(&mut store, &instance)?;
 
         if call_style == 0 || !cfg!(miri) {
-            // Run the test using `Instance::run_concurrent`:
-            instance
-                .run_concurrent(&mut store, {
+            // Run the test using `StoreContextMut::run_concurrent`:
+            store
+                .run_concurrent({
                     let inputs_and_outputs = inputs_and_outputs
                         .iter()
                         .map(|(a, b)| (String::from(*a), String::from(*b)))
@@ -266,7 +266,7 @@ pub async fn test_round_trip(
                 })
                 .await??;
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
 
         if call_style == 1 || !cfg!(miri) {
@@ -309,23 +309,18 @@ pub async fn test_round_trip(
             }
 
             let (tx, rx) = oneshot::channel();
-            instance.spawn(
-                &mut store,
-                Task {
-                    instance,
-                    inputs_and_outputs: inputs_and_outputs
-                        .iter()
-                        .map(|(a, b)| (String::from(*a), String::from(*b)))
-                        .collect::<Vec<_>>(),
-                    tx,
-                },
-            );
+            store.spawn(Task {
+                instance,
+                inputs_and_outputs: inputs_and_outputs
+                    .iter()
+                    .map(|(a, b)| (String::from(*a), String::from(*b)))
+                    .collect::<Vec<_>>(),
+                tx,
+            });
 
-            instance
-                .run_concurrent(&mut store, async |_| rx.await)
-                .await??;
+            store.run_concurrent(async |_| rx.await).await??;
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
 
         if call_style == 2 || !cfg!(miri) {
@@ -345,7 +340,7 @@ pub async fn test_round_trip(
                 );
             }
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
     }
 
@@ -382,8 +377,8 @@ pub async fn test_round_trip(
             .ok_or_else(|| anyhow!("can't find `[async]foo` in instance"))?;
 
         if call_style == 3 || !cfg!(miri) {
-            instance
-                .run_concurrent(&mut store, async |store| {
+            store
+                .run_concurrent(async |store| {
                     // Start three concurrent calls and then join them all:
                     let mut futures = FuturesUnordered::new();
                     for (input, output) in inputs_and_outputs {
@@ -411,7 +406,7 @@ pub async fn test_round_trip(
                 })
                 .await??;
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
 
         if call_style == 4 || !cfg!(miri) {
@@ -432,7 +427,7 @@ pub async fn test_round_trip(
                 foo_function.post_return_async(&mut store).await?;
             }
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
     }
 

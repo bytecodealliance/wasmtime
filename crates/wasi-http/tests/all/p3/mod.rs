@@ -138,12 +138,9 @@ async fn run_cli(path: &str, server: &Server) -> anyhow::Result<()> {
     wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
     wasmtime_wasi_http::p3::add_to_linker(&mut linker)
         .context("failed to link `wasi:http@0.3.x`")?;
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let command = Command::new(&mut store, &instance)?;
-    instance
-        .run_concurrent(store, async |store| {
-            command.wasi_cli_run().call_run(store).await
-        })
+    let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+    store
+        .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
@@ -170,14 +167,13 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
     wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
     wasmtime_wasi_http::p3::add_to_linker(&mut linker)
         .context("failed to link `wasi:http@0.3.x`")?;
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let proxy = Proxy::new(&mut store, &instance)?;
+    let proxy = Proxy::instantiate_async(&mut store, &component, &linker).await?;
     let (req, io) = Request::from_http(req);
     let (tx, rx) = tokio::sync::oneshot::channel();
     let ((handle_result, ()), res) = try_join!(
         async move {
-            instance
-                .run_concurrent(&mut store, async |store| {
+            store
+                .run_concurrent(async |store| {
                     try_join!(
                         async {
                             let (res, task) = match proxy.handle(store, req).await? {

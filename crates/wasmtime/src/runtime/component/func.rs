@@ -276,12 +276,12 @@ impl Func {
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
-        let mut store = store.as_context_mut();
+        let store = store.as_context_mut();
 
         #[cfg(feature = "component-model-async")]
         {
-            self.instance
-                .run_concurrent_trap_on_idle(&mut store, async |store| {
+            store
+                .run_concurrent_trap_on_idle(async |store| {
                     self.call_concurrent_dynamic(store, params, results, false)
                         .await
                         .map(drop)
@@ -294,6 +294,7 @@ impl Func {
                 store.0.async_support(),
                 "cannot use `call_async` without enabling async support in the config"
             );
+            let mut store = store;
             store
                 .on_fiber(|store| self.call_impl(store, params, results))
                 .await?

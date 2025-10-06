@@ -389,8 +389,8 @@ impl ServeCommand {
 
         let instance = linker.instantiate_pre(&component)?;
         #[cfg(feature = "component-model-async")]
-        let instance = match wasmtime_wasi_http::p3::bindings::ProxyIndices::new(&instance) {
-            Ok(indices) => ProxyPre::P3(indices, instance),
+        let instance = match wasmtime_wasi_http::p3::bindings::ProxyPre::new(instance.clone()) {
+            Ok(pre) => ProxyPre::P3(pre),
             Err(_) => ProxyPre::P2(p2::ProxyPre::new(instance)?),
         };
         #[cfg(not(feature = "component-model-async"))]
@@ -734,10 +734,7 @@ struct ProxyHandlerInner {
 enum ProxyPre {
     P2(p2::ProxyPre<Host>),
     #[cfg(feature = "component-model-async")]
-    P3(
-        wasmtime_wasi_http::p3::bindings::ProxyIndices,
-        wasmtime::component::InstancePre<Host>,
-    ),
+    P3(wasmtime_wasi_http::p3::bindings::ProxyPre<Host>),
 }
 
 impl ProxyPre {
@@ -745,11 +742,7 @@ impl ProxyPre {
         Ok(match self {
             ProxyPre::P2(pre) => Proxy::P2(pre.instantiate_async(store).await?),
             #[cfg(feature = "component-model-async")]
-            ProxyPre::P3(indices, pre) => {
-                let instance = pre.instantiate_async(&mut *store).await?;
-                let proxy = indices.load(&mut *store, &instance)?;
-                Proxy::P3(proxy, instance)
-            }
+            ProxyPre::P3(pre) => Proxy::P3(pre.instantiate_async(store).await?),
         })
     }
 }
@@ -757,10 +750,7 @@ impl ProxyPre {
 enum Proxy {
     P2(p2::Proxy),
     #[cfg(feature = "component-model-async")]
-    P3(
-        wasmtime_wasi_http::p3::bindings::Proxy,
-        wasmtime::component::Instance,
-    ),
+    P3(wasmtime_wasi_http::p3::bindings::Proxy),
 }
 
 impl ProxyHandlerInner {
@@ -852,14 +842,14 @@ async fn handle_request(
             Ok(result.map(|body| body.map_err(|e| e.into()).boxed()))
         }
         #[cfg(feature = "component-model-async")]
-        Proxy::P3(proxy, instance) => {
+        Proxy::P3(proxy) => {
             use wasmtime_wasi_http::p3::bindings::http::types::{ErrorCode, Request};
 
             let (tx, rx) = tokio::sync::oneshot::channel();
 
             tokio::task::spawn(async move {
-                let guest_result = instance
-                    .run_concurrent(&mut store, async move |store| {
+                let guest_result = store
+                    .run_concurrent(async move |store| {
                         let (req, body) = req.into_parts();
                         let body = body.map_err(ErrorCode::from_hyper_request_error);
                         let req = http::Request::from_parts(req, body);

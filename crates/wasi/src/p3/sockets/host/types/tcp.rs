@@ -282,7 +282,6 @@ impl HostTcpSocketWithStore for WasiSockets {
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
     ) -> SocketResult<StreamReader<Resource<TcpSocket>>> {
-        let instance = store.instance();
         let getter = store.getter();
         store.with(|mut store| {
             let socket = get_socket_mut(store.get().table, &socket)?;
@@ -292,7 +291,6 @@ impl HostTcpSocketWithStore for WasiSockets {
             let family = socket.address_family();
             let options = socket.non_inherited_options().clone();
             Ok(StreamReader::new(
-                instance,
                 &mut store,
                 ListenStreamProducer {
                     listener,
@@ -334,7 +332,6 @@ impl HostTcpSocketWithStore for WasiSockets {
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        let instance = store.instance();
         store.with(|mut store| {
             let socket = get_socket_mut(store.get().table, &socket)?;
             match socket.start_receive() {
@@ -343,19 +340,18 @@ impl HostTcpSocketWithStore for WasiSockets {
                     let (result_tx, result_rx) = oneshot::channel();
                     Ok((
                         StreamReader::new(
-                            instance,
                             &mut store,
                             ReceiveStreamProducer {
                                 stream,
                                 result: Some(result_tx),
                             },
                         ),
-                        FutureReader::new(instance, &mut store, result_rx),
+                        FutureReader::new(&mut store, result_rx),
                     ))
                 }
                 None => Ok((
-                    StreamReader::new(instance, &mut store, iter::empty()),
-                    FutureReader::new(instance, &mut store, async {
+                    StreamReader::new(&mut store, iter::empty()),
+                    FutureReader::new(&mut store, async {
                         anyhow::Ok(Err(ErrorCode::InvalidState))
                     }),
                 )),

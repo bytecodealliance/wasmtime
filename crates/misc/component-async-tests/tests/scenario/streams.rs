@@ -143,9 +143,9 @@ pub async fn async_closed_streams() -> Result<()> {
             let (mut input_tx, input_rx) = mpsc::channel(1);
             let (output_tx, mut output_rx) = mpsc::channel(1);
             let reader = if direct_producer {
-                StreamReader::new(instance, &mut store, DirectPipeProducer(input_rx))
+                StreamReader::new(&mut store, DirectPipeProducer(input_rx))
             } else {
-                StreamReader::new(instance, &mut store, PipeProducer::new(input_rx))
+                StreamReader::new(&mut store, PipeProducer::new(input_rx))
             };
             if direct_consumer {
                 reader.pipe(&mut store, DirectPipeConsumer(output_tx));
@@ -153,8 +153,8 @@ pub async fn async_closed_streams() -> Result<()> {
                 reader.pipe(&mut store, PipeConsumer::new(output_tx));
             }
 
-            instance
-                .run_concurrent(&mut store, async |_| {
+            store
+                .run_concurrent(async |_| {
                     let (a, b) = future::join(
                         async {
                             for &value in &values {
@@ -183,11 +183,11 @@ pub async fn async_closed_streams() -> Result<()> {
     {
         let (input_tx, input_rx) = oneshot::channel();
         let (output_tx, output_rx) = oneshot::channel();
-        FutureReader::new(instance, &mut store, OneshotProducer::new(input_rx))
+        FutureReader::new(&mut store, OneshotProducer::new(input_rx))
             .pipe(&mut store, OneshotConsumer::new(output_tx));
 
-        instance
-            .run_concurrent(&mut store, async |_| {
+        store
+            .run_concurrent(async |_| {
                 _ = input_tx.send(value);
                 assert_eq!(value, output_rx.await?);
                 anyhow::Ok(())
@@ -198,14 +198,14 @@ pub async fn async_closed_streams() -> Result<()> {
     // Next, test stream host->guest
     {
         let (mut tx, rx) = mpsc::channel(1);
-        let rx = StreamReader::new(instance, &mut store, PipeProducer::new(rx));
+        let rx = StreamReader::new(&mut store, PipeProducer::new(rx));
 
         let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
 
         let values = values.clone();
 
-        instance
-            .run_concurrent(&mut store, async move |accessor| {
+        store
+            .run_concurrent(async move |accessor| {
                 let (a, b) = future::join(
                     async {
                         for &value in &values {
@@ -230,14 +230,14 @@ pub async fn async_closed_streams() -> Result<()> {
     // Next, test futures host->guest
     {
         let (tx, rx) = oneshot::channel();
-        let rx = FutureReader::new(instance, &mut store, OneshotProducer::new(rx));
+        let rx = FutureReader::new(&mut store, OneshotProducer::new(rx));
         let (_, rx_ignored) = oneshot::channel();
-        let rx_ignored = FutureReader::new(instance, &mut store, OneshotProducer::new(rx_ignored));
+        let rx_ignored = FutureReader::new(&mut store, OneshotProducer::new(rx_ignored));
 
         let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
 
-        instance
-            .run_concurrent(&mut store, async move |accessor| {
+        store
+            .run_concurrent(async move |accessor| {
                 _ = tx.send(value);
                 closed_streams
                     .local_local_closed()
@@ -284,8 +284,8 @@ pub async fn async_closed_stream() -> Result<()> {
 
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let guest = closed_stream::ClosedStreamGuest::new(&mut store, &instance)?;
-    instance
-        .run_concurrent(&mut store, async move |accessor| {
+    store
+        .run_concurrent(async move |accessor| {
             let stream = guest.local_local_closed_stream().call_get(accessor).await?;
 
             let (tx, mut rx) = mpsc::channel(1);

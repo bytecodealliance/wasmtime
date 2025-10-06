@@ -102,12 +102,14 @@ pub async fn test_run_bool(components: &[&str], v: bool) -> Result<()> {
         });
     }
 
-    let instance = linker.instantiate_async(&mut store, &component).await?;
     let borrowing_host =
-        component_async_tests::borrowing_host::bindings::BorrowingHost::new(&mut store, &instance)?;
+        component_async_tests::borrowing_host::bindings::BorrowingHost::instantiate_async(
+            &mut store, &component, &linker,
+        )
+        .await?;
 
-    instance
-        .run_concurrent(&mut store, async move |accessor| {
+    store
+        .run_concurrent(async move |accessor| {
             // Start three concurrent calls and then join them all:
             let mut futures = FuturesUnordered::new();
             for _ in 0..3 {

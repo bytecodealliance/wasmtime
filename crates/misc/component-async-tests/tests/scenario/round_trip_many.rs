@@ -250,8 +250,8 @@ async fn test_round_trip_many(
         )?;
 
         if call_style == 0 {
-            instance
-                .run_concurrent(&mut store, {
+            store
+                .run_concurrent({
                     let c = c.clone();
                     let e = e.clone();
                     let f = f.clone();
@@ -293,7 +293,7 @@ async fn test_round_trip_many(
                 })
                 .await??;
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
 
         if call_style == 1 {
@@ -329,7 +329,7 @@ async fn test_round_trip_many(
                 );
             }
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
     }
 
@@ -391,8 +391,8 @@ async fn test_round_trip_many(
         };
 
         if call_style == 2 {
-            instance
-                .run_concurrent(&mut store, async |store| -> wasmtime::Result<_> {
+            store
+                .run_concurrent(async |store| -> wasmtime::Result<_> {
                     // Start three concurrent calls and then join them all:
                     let mut futures = FuturesUnordered::new();
                     for (input, output) in inputs_and_outputs {
@@ -416,7 +416,7 @@ async fn test_round_trip_many(
                 })
                 .await??;
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
 
         if call_style == 3 {
@@ -433,7 +433,7 @@ async fn test_round_trip_many(
                 foo_function.post_return_async(&mut store).await?;
             }
 
-            instance.assert_concurrent_state_empty(&mut store);
+            store.assert_concurrent_state_empty();
         }
     }
 

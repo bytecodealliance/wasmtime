@@ -232,11 +232,10 @@ where
             };
 
             let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
-            self.func
-                .instance
-                .run_concurrent_trap_on_idle(wrapper.store.as_context_mut(), async |_| {
-                    Ok(result.await?.0)
-                })
+            wrapper
+                .store
+                .as_context_mut()
+                .run_concurrent_trap_on_idle(async |_| Ok(result.await?.0))
                 .await?
         }
         #[cfg(not(feature = "component-model-async"))]
