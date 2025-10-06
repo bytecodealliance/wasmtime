@@ -729,13 +729,16 @@ impl ComponentInstance {
     /// This is used when lowering borrows to skip table management and instead
     /// thread through the underlying representation directly.
     pub fn resource_owned_by_own_instance(&self, ty: TypeResourceTableIndex) -> bool {
-        let resource = &self.component.types()[ty];
+        let (resource_ty, resource_instance) = match self.component.types()[ty] {
+            TypeResourceTable::Concrete { ty, instance } => (ty, instance),
+            TypeResourceTable::Abstract(_) => return false,
+        };
         let component = self.component.env_component();
-        let idx = match component.defined_resource_index(resource.ty) {
+        let idx = match component.defined_resource_index(resource_ty) {
             Some(idx) => idx,
             None => return false,
         };
-        resource.instance == component.defined_resource_instances[idx]
+        resource_instance == component.defined_resource_instances[idx]
     }
 
     /// Returns the runtime state of resources associated with this component.
@@ -763,7 +766,7 @@ impl ComponentInstance {
         &self,
         ty: TypeResourceTableIndex,
     ) -> (Option<NonNull<VMFuncRef>>, Option<InstanceFlags>) {
-        let resource = self.component.types()[ty].ty;
+        let resource = self.component.types()[ty].unwrap_concrete_ty();
         let dtor = self.resource_destructor(resource);
         let component = self.component.env_component();
         let flags = component.defined_resource_index(resource).map(|i| {
