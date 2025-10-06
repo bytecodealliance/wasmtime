@@ -28,6 +28,42 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn imm64_rotl(&mut self, ty: Type, x: Imm64, k: Imm64) -> Imm64 {
+            let bw: u32 = ty.bits().min(64);
+            let amt: u32 = if bw == 0 { 0 } else { (k.bits() as u32) % bw };
+
+            let xv = x.bits() as u64;
+            let v = match bw {
+                8 => (xv as u8).rotate_left(amt) as u64,
+                16 => (xv as u16).rotate_left(amt) as u64,
+                32 => (xv as u32).rotate_left(amt) as u64,
+                64 => xv.rotate_left(amt),
+                _ => xv,
+            };
+
+            let masked = v & self.ty_mask(ty);
+            Imm64::new(masked as i64)
+        }
+
+        #[inline]
+        fn imm64_rotr(&mut self, ty: Type, x: Imm64, k: Imm64) -> Imm64 {
+            let bw: u32 = ty.bits().min(64);
+            let amt: u32 = if bw == 0 { 0 } else { (k.bits() as u32) % bw };
+
+            let xv = x.bits() as u64;
+            let v = match bw {
+                8 => (xv as u8).rotate_right(amt) as u64,
+                16 => (xv as u16).rotate_right(amt) as u64,
+                32 => (xv as u32).rotate_right(amt) as u64,
+                64 => xv.rotate_right(amt),
+                _ => xv,
+            };
+
+            let masked = v & self.ty_mask(ty);
+            Imm64::new(masked as i64)
+        }
+
+        #[inline]
         fn imm64_sdiv(&mut self, ty: Type, x: Imm64, y: Imm64) -> Option<Imm64> {
             // Sign extend `x` and `y`.
             let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
