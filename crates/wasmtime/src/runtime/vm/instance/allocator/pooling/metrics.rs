@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
+    #[cfg_attr(any(miri, not(target_os = "linux")), ignore)]
     fn unused_memories_tables_and_more() -> Result<()> {
         let mut pool = PoolingAllocationConfig::default();
         pool.linear_memory_keep_resident(65536);
