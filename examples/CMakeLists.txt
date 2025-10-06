@@ -15,7 +15,7 @@ function(CREATE_TARGET TARGET TARGET_PATH)
   endif()
 
   # This is only used in fib-debug.c right now and it only works with static
-  # linking beacuse the required symbols aren't exported in the shared library, so
+  # linking because the required symbols aren't exported in the shared library, so
   # only when shared libs are disabled is this turned on.
   if (NOT BUILD_SHARED_LIBS)
     target_compile_definitions(wasmtime-${TARGET} PRIVATE WASMTIME_TEST_ONLY)
