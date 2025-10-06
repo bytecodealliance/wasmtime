@@ -50,7 +50,11 @@ fn stack_values_two_frames() -> anyhow::Result<()> {
     "#,
             |config| {
                 config.compiler_inlining(inlining);
-                config.compiler_force_inlining(inlining);
+                if inlining {
+                    unsafe {
+                        config.cranelift_flag_set("wasmtime_inlining_intra_module", "true");
+                    }
+                }
             },
             |mut caller: Caller<'_, ()>| {
                 let mut stack = caller.stack_values().unwrap();

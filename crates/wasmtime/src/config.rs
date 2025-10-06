@@ -6,7 +6,7 @@ use core::str::FromStr;
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 use wasmparser::WasmFeatures;
-use wasmtime_environ::{ConfigTunables, IntraModuleInlining, TripleExt, Tunables};
+use wasmtime_environ::{ConfigTunables, TripleExt, Tunables};
 
 #[cfg(feature = "runtime")]
 use crate::memory::MemoryCreator;
@@ -2081,17 +2081,6 @@ impl Config {
     /// the Wasmtime version 36).
     pub fn compiler_inlining(&mut self, inlining: bool) -> &mut Self {
         self.tunables.inlining = Some(inlining);
-        self
-    }
-
-    /// Whether to force all possible inlining.
-    pub fn compiler_force_inlining(&mut self, inlining: bool) -> &mut Self {
-        let inlining = if inlining {
-            IntraModuleInlining::Yes
-        } else {
-            IntraModuleInlining::No
-        };
-        self.tunables.inlining_intra_module = Some(inlining);
         self
     }
 
