@@ -3544,6 +3544,10 @@ impl Inst {
                 };
                 inst.emit(sink, emit_info, state);
             }
+
+            &Inst::SequencePoint { .. } => {
+                // Nothing.
+            }
         }
 
         state.clear_post_insn();

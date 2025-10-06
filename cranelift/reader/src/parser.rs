@@ -15,8 +15,8 @@ use cranelift_codegen::ir::immediates::{
 };
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::pcc::{BaseExpr, Expr, Fact};
-use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, UserExternalNameRef};
+use cranelift_codegen::ir::{self, StackSlotKey, UserExternalNameRef};
+use cranelift_codegen::ir::{DebugTag, types::*};
 
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, BlockArg, Constant, ConstantData,
@@ -956,6 +956,38 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse an optional list of debug tags.
+    fn optional_debug_tags(&mut self) -> ParseResult<Vec<DebugTag>> {
+        if self.optional(Token::LAngle) {
+            let mut tags = vec![];
+            while !self.optional(Token::RAngle) {
+                match self.token() {
+                    Some(Token::Integer(_)) => {
+                        let value: u32 = self.match_uimm32("expected a u32 value")?.into();
+                        tags.push(DebugTag::User(value));
+                    }
+                    Some(Token::StackSlot(slot)) => {
+                        self.consume();
+                        tags.push(DebugTag::StackSlot(StackSlot::from_u32(slot)));
+                    }
+                    _ => {
+                        return err!(
+                            self.loc,
+                            "expected integer user value or stack slot in debug tags"
+                        );
+                    }
+                }
+                if !self.optional(Token::Comma) {
+                    self.match_token(Token::RAngle, "expected `,` or `>`")?;
+                    break;
+                }
+            }
+            Ok(tags)
+        } else {
+            Ok(vec![])
+        }
+    }
+
     /// Parse a list of literals (i.e. integers, floats, booleans); e.g. `0 1 2 3`, usually as
     /// part of something like `vconst.i32x4 [0 1 2 3]`.
     fn parse_literals_to_constant_data(&mut self, ty: Type) -> ParseResult<ConstantData> {
@@ -1510,7 +1542,7 @@ impl<'a> Parser<'a> {
     //                   | "spill_slot"
     //                   | "incoming_arg"
     //                   | "outgoing_arg"
-    // stack-slot-flag ::= "align" "=" Bytes
+    // stack-slot-flag ::= "align" "=" Bytes | "key" "=" uimm64
     fn parse_stack_slot_decl(&mut self) -> ParseResult<(StackSlot, StackSlotData)> {
         let ss = self.match_ss("expected stack slot number: ss«n»")?;
         self.match_token(Token::Equal, "expected '=' in stack slot declaration")?;
@@ -1527,29 +1559,42 @@ impl<'a> Parser<'a> {
             return err!(self.loc, "stack slot too large");
         }
 
-        // Parse flags.
-        let align = if self.token() == Some(Token::Comma) {
+        let mut align = 1;
+        let mut key = None;
+
+        while self.token() == Some(Token::Comma) {
             self.consume();
-            self.match_token(
-                Token::Identifier("align"),
-                "expected a valid stack-slot flag (currently only `align`)",
-            )?;
-            self.match_token(Token::Equal, "expected `=` after flag")?;
-            let align: i64 = self
-                .match_imm64("expected alignment-size after `align` flag")?
-                .into();
-            u32::try_from(align)
-                .map_err(|_| self.error("alignment must be a 32-bit unsigned integer"))?
-        } else {
-            1
-        };
+            match self.token() {
+                Some(Token::Identifier("align")) => {
+                    self.consume();
+                    self.match_token(Token::Equal, "expected `=` after flag")?;
+                    let align64: i64 = self
+                        .match_imm64("expected alignment-size after `align` flag")?
+                        .into();
+                    align = u32::try_from(align64)
+                        .map_err(|_| self.error("alignment must be a 32-bit unsigned integer"))?;
+                }
+                Some(Token::Identifier("key")) => {
+                    self.consume();
+                    self.match_token(Token::Equal, "expected `=` after flag")?;
+                    let value = self.match_uimm64("expected `u64` value for `key` flag")?;
+                    key = Some(StackSlotKey::new(value.into()));
+                }
+                _ => {
+                    return Err(self.error("invalid flag for stack slot"));
+                }
+            }
+        }
 
         if !align.is_power_of_two() {
             return err!(self.loc, "stack slot alignment is not a power of two");
         }
         let align_shift = u8::try_from(align.ilog2()).unwrap(); // Always succeeds: range 0..=31.
 
-        let data = StackSlotData::new(kind, bytes as u32, align_shift);
+        let data = match key {
+            Some(key) => StackSlotData::new_with_key(kind, bytes as u32, align_shift, key),
+            None => StackSlotData::new(kind, bytes as u32, align_shift),
+        };
 
         // Collect any trailing comments.
         self.token();
@@ -2103,10 +2148,13 @@ impl<'a> Parser<'a> {
             Some(Token::Value(_))
             | Some(Token::Identifier(_))
             | Some(Token::LBracket)
-            | Some(Token::SourceLoc(_)) => true,
+            | Some(Token::SourceLoc(_))
+            | Some(Token::LAngle) => true,
             _ => false,
         } {
             let srcloc = self.optional_srcloc()?;
+
+            let debug_tags = self.optional_debug_tags()?;
 
             // We need to parse instruction results here because they are shared
             // between the parsing of value aliases and the parsing of instructions.
@@ -2127,10 +2175,10 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::Equal) => {
                     self.consume();
-                    self.parse_instruction(&results, srcloc, ctx, block)?;
+                    self.parse_instruction(&results, srcloc, debug_tags, ctx, block)?;
                 }
                 _ if !results.is_empty() => return err!(self.loc, "expected -> or ="),
-                _ => self.parse_instruction(&results, srcloc, ctx, block)?,
+                _ => self.parse_instruction(&results, srcloc, debug_tags, ctx, block)?,
             }
         }
 
@@ -2521,6 +2569,7 @@ impl<'a> Parser<'a> {
         &mut self,
         results: &[Value],
         srcloc: ir::SourceLoc,
+        debug_tags: Vec<DebugTag>,
         ctx: &mut Context,
         block: Block,
     ) -> ParseResult<()> {
@@ -2560,16 +2609,22 @@ impl<'a> Parser<'a> {
         // instruction ::=  [inst-results "="] Opcode(opc) ["." Type] * ...
         let inst_data = self.parse_inst_operands(ctx, opcode, explicit_ctrl_type)?;
 
-        // We're done parsing the instruction data itself.
-        //
-        // We still need to check that the number of result values in the source
-        // matches the opcode or function call signature. We also need to create
-        // values with the right type for all the instruction results and parse
-        // and attach stack map entries, if present.
         let ctrl_typevar = self.infer_typevar(ctx, opcode, explicit_ctrl_type, &inst_data)?;
         let inst = ctx.function.dfg.make_inst(inst_data);
-        if opcode.is_call() && !opcode.is_return() && self.optional(Token::Comma) {
-            self.match_identifier("stack_map", "expected `stack_map = [...]`")?;
+
+        // Attach stack map, if present.
+        if self.optional(Token::Comma) {
+            self.match_token(
+                Token::Identifier("stack_map"),
+                "expected `stack_map = [...]`",
+            )?;
+            if !opcode.is_call() || opcode.is_return() {
+                return err!(
+                    self.loc,
+                    "stack map can only be attached to a (non-tail) call"
+                );
+            }
+
             self.match_token(Token::Equal, "expected `= [...]`")?;
             self.match_token(Token::LBracket, "expected `[...]`")?;
             while !self.optional(Token::RBracket) {
@@ -2594,6 +2649,13 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+
+        // We're done parsing the instruction data itself.
+        //
+        // We still need to check that the number of result values in
+        // the source matches the opcode or function call
+        // signature. We also need to create values with the right
+        // type for all the instruction results.
         let num_results =
             ctx.function
                 .dfg
@@ -2605,6 +2667,9 @@ impl<'a> Parser<'a> {
 
         if !srcloc.is_default() {
             ctx.function.set_srcloc(inst, srcloc);
+        }
+        if !debug_tags.is_empty() {
+            ctx.function.debug_tags.set(inst, debug_tags);
         }
 
         if results.len() != num_results {

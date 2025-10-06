@@ -919,6 +919,7 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::LabelAddress { dst, .. } => {
             collector.reg_def(dst);
         }
+        Inst::SequencePoint { .. } => {}
         Inst::StackProbeLoop { start, end, .. } => {
             collector.reg_early_def(start);
             collector.reg_use(end);
@@ -2892,6 +2893,9 @@ impl Inst {
             &Inst::LabelAddress { dst, label } => {
                 let dst = pretty_print_reg(dst.to_reg());
                 format!("label_address {dst}, {label:?}")
+            }
+            &Inst::SequencePoint {} => {
+                format!("sequence_point")
             }
             &Inst::StackProbeLoop { start, end, step } => {
                 let start = pretty_print_reg(start.to_reg());

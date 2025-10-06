@@ -74,11 +74,8 @@ impl TargetIsa for S390xBackend {
         let (vcode, regalloc_result) = self.compile_vcode(func, domtree, ctrl_plane)?;
 
         let emit_result = vcode.emit(&regalloc_result, want_disasm, flags, ctrl_plane);
-        let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer;
-        let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
-        let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
         if let Some(disasm) = emit_result.disasm.as_ref() {
             log::debug!("disassembly:\n{disasm}");
@@ -86,11 +83,8 @@ impl TargetIsa for S390xBackend {
 
         Ok(CompiledCodeStencil {
             buffer,
-            frame_size,
             vcode: emit_result.disasm,
             value_labels_ranges,
-            sized_stackslot_offsets,
-            dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
         })

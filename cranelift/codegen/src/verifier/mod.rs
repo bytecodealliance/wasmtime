@@ -2025,6 +2025,21 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    pub fn debug_tags(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult {
+        // Tags can only be present on calls and sequence points.
+        let op = self.func.dfg.insts[inst].opcode();
+        let tags_allowed = op.is_call() || op == Opcode::SequencePoint;
+        let has_tags = self.func.debug_tags.has(inst);
+        if has_tags && !tags_allowed {
+            return errors.fatal((
+                inst,
+                "debug tags present on non-call, non-sequence point instruction".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         self.verify_global_values(errors)?;
         self.verify_memory_types(errors)?;
@@ -2043,6 +2058,7 @@ impl<'a> Verifier<'a> {
                 self.typecheck(inst, errors)?;
                 self.immediate_constraints(inst, errors)?;
                 self.iconst_bounds(inst, errors)?;
+                self.debug_tags(inst, errors)?;
             }
 
             self.encodable_as_bb(block, errors)?;
