@@ -20,12 +20,12 @@ static void exit_with_error(const char *message, wasmtime_error_t *error,
 static wasm_trap_t *hello_callback(void *env, wasmtime_caller_t *caller,
                                    const wasmtime_val_t *args, size_t nargs,
                                    wasmtime_val_t *results, size_t nresults) {
-  (void) env;
-  (void) caller;
-  (void) args;
-  (void) nargs;
-  (void) results;
-  (void) nresults;
+  (void)env;
+  (void)caller;
+  (void)args;
+  (void)nargs;
+  (void)results;
+  (void)nresults;
   printf("Calling back...\n");
   printf("> Hello World!\n");
   return NULL;

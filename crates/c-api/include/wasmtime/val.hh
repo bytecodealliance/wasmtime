@@ -82,7 +82,7 @@ public:
 
   /// Creates a new `ExternRef` which is separately rooted from this one.
   ExternRef clone(Store::Context cx) {
-    (void) cx;
+    (void)cx;
     return *this;
   }
 
@@ -94,7 +94,7 @@ public:
   /// Unroots this value from the context provided, enabling a future GC to
   /// collect the internal object if there are no more references.
   void unroot(Store::Context cx) {
-    (void) cx;
+    (void)cx;
     wasmtime_externref_unroot(NULL, &val);
     wasmtime_externref_set_null(&val);
   }
@@ -161,14 +161,14 @@ public:
 
   /// Creates a new `AnyRef` which is separately rooted from this one.
   AnyRef clone(Store::Context cx) {
-    (void) cx;
+    (void)cx;
     return *this;
   }
 
   /// Unroots this value from the context provided, enabling a future GC to
   /// collect the internal object if there are no more references.
   void unroot(Store::Context cx) {
-    (void) cx;
+    (void)cx;
     wasmtime_anyref_unroot(NULL, &val);
     wasmtime_anyref_set_null(&val);
   }
@@ -394,7 +394,7 @@ public:
   /// Note that `externref` is a nullable reference, hence the `optional` return
   /// value.
   std::optional<ExternRef> externref(Store::Context cx) const {
-    (void) cx;
+    (void)cx;
     if (val.kind != WASMTIME_EXTERNREF) {
       std::abort();
     }
@@ -412,7 +412,7 @@ public:
   /// Note that `anyref` is a nullable reference, hence the `optional` return
   /// value.
   std::optional<AnyRef> anyref(Store::Context cx) const {
-    (void) cx;
+    (void)cx;
     if (val.kind != WASMTIME_ANYREF) {
       std::abort();
     }
@@ -431,10 +431,9 @@ public:
   /// value.
   std::optional<Func> funcref() const;
 
-
   /// Unroots any GC references this `Val` points to within the `cx` provided.
   void unroot(Store::Context cx) {
-    (void) cx;
+    (void)cx;
     wasmtime_val_unroot(NULL, &val);
     val.kind = WASMTIME_I32;
     val.of.i32 = 0;
