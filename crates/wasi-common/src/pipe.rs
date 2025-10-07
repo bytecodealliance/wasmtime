@@ -17,7 +17,7 @@ use std::sync::{Arc, RwLock};
 ///
 /// A variety of `From` impls are provided so that common pipe types are easy to create. For example:
 ///
-/// ```no_run
+/// ```rust
 /// use wasi_common::{pipe::ReadPipe, WasiCtx, Table};
 /// let stdin = ReadPipe::from("hello from stdin!");
 /// // Bring these instances from elsewhere (e.g. wasi-cap-std-sync or wasi-cap-std-tokio):
@@ -114,7 +114,7 @@ impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
 
 /// A virtual pipe write end.
 ///
-/// ```no_run
+/// ```rust
 /// use wasi_common::{pipe::WritePipe, WasiCtx, Table};
 /// let stdout = WritePipe::new_in_memory();
 /// // Bring these instances from elsewhere (e.g. wasi-cap-std-sync or wasi-cap-std-tokio):
