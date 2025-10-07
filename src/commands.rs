@@ -39,3 +39,8 @@ pub use self::settings::*;
 mod objdump;
 #[cfg(feature = "objdump")]
 pub use self::objdump::*;
+
+#[cfg(feature = "wizer")]
+mod wizer;
+#[cfg(feature = "wizer")]
+pub use self::wizer::*;
