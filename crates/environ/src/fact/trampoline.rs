@@ -17,11 +17,11 @@
 
 use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
-    FlatType, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
-    PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
-    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex,
-    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
-    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
+    FlatType, InterfaceType, LiftABI, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS,
+    PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding,
+    Transcode, TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex,
+    TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex,
+    TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -572,6 +572,16 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.instruction(I32Const(PREPARE_ASYNC_NO_RESULT.cast_signed()));
             }
         }
+        let lift_abi = if adapter.lift.options.async_ {
+            if adapter.lift.options.callback.is_some() {
+                LiftABI::Stackless
+            } else {
+                LiftABI::Stackful
+            }
+        } else {
+            LiftABI::Synchronous
+        };
+        self.instruction(I32Const(lift_abi as i32));
 
         // forward all our own arguments on to the host stub
         for index in 0..lower_sig.params.len() {

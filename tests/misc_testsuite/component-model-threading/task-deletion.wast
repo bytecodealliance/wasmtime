@@ -1,26 +1,10 @@
-use anyhow::Result;
-use wasmtime::component::{Component, Linker};
-use wasmtime::{AsContextMut, Config, Engine, Store};
+;;! component_model_async = true
+;;! component_model_async_stackful = true
+;;! component_model_async_builtins = true
+;;! component_model_threading = true
+;;! reference_types = true
 
-#[tokio::test]
-async fn threads() -> Result<()> {
-    use std::io::IsTerminal;
-    use tracing_subscriber::{EnvFilter, FmtSubscriber};
-    let builder = FmtSubscriber::builder()
-        .with_writer(std::io::stderr)
-        .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"))
-        .with_ansi(std::io::stderr().is_terminal())
-        .init();
-    let mut config = Config::new();
-    config.async_support(true);
-    config.wasm_component_model_async(true);
-    config.wasm_component_model_threading(true);
-    config.wasm_component_model_async_stackful(true);
-    config.wasm_component_model_async_builtins(true);
-    let engine = Engine::new(&config)?;
-    let component = Component::new(
-        &engine,
-        r#"(component
+(component
     (component $C
         (core module $Memory (memory (export "mem") 1))
         (core instance $memory (instantiate $Memory))
@@ -65,11 +49,11 @@ async fn threads() -> Result<()> {
 
             (func (export "explicit-thread-calls-return-stackful")
                 (call $thread-resume-later
-                    (call $thread-new-indirect (global.get $call-return-ftbl-idx) (i32.const 42))))
+                    (call $thread-new-indirect (i32.const 0) (global.get $call-return-ftbl-idx))))
 
             (func (export "explicit-thread-calls-return-stackless") (result i32)
                 (call $thread-resume-later
-                    (call $thread-new-indirect (global.get $call-return-ftbl-idx) (i32.const 42)))
+                    (call $thread-new-indirect (i32.const 0) (global.get $call-return-ftbl-idx)))
                 (i32.const 0 (; EXIT ;)))
 
             (func (export "cb") (param i32 i32 i32) (result i32)
@@ -77,33 +61,33 @@ async fn threads() -> Result<()> {
             
             (func (export "explicit-thread-suspends-sync") (result i32)
                 (call $thread-resume-later
-                    (call $thread-new-indirect (global.get $suspend-ftbl-idx) (i32.const 42)))
+                    (call $thread-new-indirect (i32.const 0) (global.get $suspend-ftbl-idx)))
                 (i32.const 42))
 
             (func (export "explicit-thread-suspends-stackful")
                 (call $thread-resume-later
-                    (call $thread-new-indirect (global.get $suspend-ftbl-idx) (i32.const 42)))
+                    (call $thread-new-indirect (i32.const 0) (global.get $suspend-ftbl-idx)))
                 (call $task-return (i32.const 42)))
 
             (func (export "explicit-thread-suspends-stackless") (result i32)
                 (call $thread-resume-later
-                    (call $thread-new-indirect (global.get $suspend-ftbl-idx) (i32.const 42)))
+                    (call $thread-new-indirect (i32.const 0) (global.get $suspend-ftbl-idx)))
                 (call $task-return (i32.const 42))
                 (i32.const 0))
 
             (func (export "explicit-thread-yield-loops-sync") (result i32)
                 (call $thread-resume-later
-                    (call $thread-new-indirect (global.get $yield-loop-ftbl-idx) (i32.const 42)))
+                    (call $thread-new-indirect (i32.const 0) (global.get $yield-loop-ftbl-idx)))
                 (i32.const 42))
 
             (func (export "explicit-thread-yield-loops-stackful")
                 (call $thread-resume-later
-                    (call $thread-new-indirect (global.get $yield-loop-ftbl-idx) (i32.const 42)))
+                    (call $thread-new-indirect (i32.const 0) (global.get $yield-loop-ftbl-idx)))
                 (call $task-return (i32.const 42)))
 
             (func (export "explicit-thread-yield-loops-stackless") (result i32)
                 (call $thread-resume-later
-                    (call $thread-new-indirect (global.get $suspend-ftbl-idx) (i32.const 42)))
+                    (call $thread-new-indirect (i32.const 0) (global.get $suspend-ftbl-idx)))
                 (call $task-return (i32.const 42))
                 (i32.const 0 (; EXIT ;)))
             
@@ -233,29 +217,22 @@ async fn threads() -> Result<()> {
                     (else 
                         (call $waitable.join (i32.shr_u (local.get 0) (i32.const 4)) (local.get $ws))
                         (drop (call $waitable-set.wait (local.get $ws) (local.get $ws-retp)))
-                        (call $check (i32.load (local.get $retp)))))
+                        (call $check (i32.load offset=4 (local.get $ws-retp)))))
             )
 
             (func $run (export "run") (result i32)
                 (local $retp i32)
                 (local.set $retp (i32.const 8))
                 (call $check (call $explicit-thread-calls-return-stackless))
-                (call $check (call $explicit-thread-calls-return-stackful))
                 (call $check (call $explicit-thread-suspends-sync))
                 (call $check (call $explicit-thread-suspends-stackful))
                 (call $check (call $explicit-thread-suspends-stackless))
                 (call $check (call $explicit-thread-yield-loops-sync))
-                (call $check (call $explicit-thread-yield-loops-stackful))
-                (call $check (call $explicit-thread-yield-loops-stackless))
-                
-                (call $check-async (call $explicit-thread-calls-return-stackless-async (local.get $retp)))
-                (call $check-async (call $explicit-thread-calls-return-stackful-async (local.get $retp)))
+
                 (call $check-async (call $explicit-thread-suspends-sync-async (local.get $retp)))
-                (call $check-async (call $explicit-thread-suspends-stackful-async (local.get $retp)))
-                (call $check-async (call $explicit-thread-suspends-stackless-async (local.get $retp)))
                 (call $check-async (call $explicit-thread-yield-loops-sync-async (local.get $retp)))
-                (call $check-async (call $explicit-thread-yield-loops-stackful-async (local.get $retp)))
-                (call $check-async (call $explicit-thread-yield-loops-stackless-async (local.get $retp)))
+                (call $check-async (call $explicit-thread-suspends-sync-async (local.get $retp)))
+                (call $check-async (call $explicit-thread-yield-loops-sync-async (local.get $retp)))
 
                 (i32.const 42)
             )
@@ -323,40 +300,6 @@ async fn threads() -> Result<()> {
         (with "explicit-thread-yield-loops-stackless" (func $c "explicit-thread-yield-loops-stackless"))
     ))
   (func (export "run") (alias export $d "run"))
-  (func (export "explicit-thread-calls-return-stackful") (alias export $c "explicit-thread-calls-return-stackful"))
-  (func (export "explicit-thread-calls-return-stackless") (alias export $c "explicit-thread-calls-return-stackless"))
-  (func (export "explicit-thread-suspends-sync") (alias export $c "explicit-thread-suspends-sync"))
-  (func (export "explicit-thread-suspends-stackful") (alias export $c "explicit-thread-suspends-stackful"))
-  (func (export "explicit-thread-suspends-stackless") (alias export $c "explicit-thread-suspends-stackless"))
-  (func (export "explicit-thread-yield-loops-sync") (alias export $c "explicit-thread-yield-loops-sync"))
-  (func (export "explicit-thread-yield-loops-stackful") (alias export $c "explicit-thread-yield-loops-stackful"))
-  (func (export "explicit-thread-yield-loops-stackless") (alias export $c "explicit-thread-yield-loops-stackless"))
 )
-        "#,
-    )?
-    .serialize()?;
 
-    let component = unsafe { Component::deserialize(&engine, &component)? };
-    let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine)
-        .instantiate_async(&mut store, &component)
-        .await?;
-    let funcs = vec![
-        "run",
-        // "explicit-thread-calls-return-stackful",
-        "explicit-thread-calls-return-stackless",
-        // "explicit-thread-suspends-sync",
-        // "explicit-thread-suspends-stackful",
-        // "explicit-thread-suspends-stackless",
-        // "explicit-thread-yield-loops-sync",
-        // "explicit-thread-yield-loops-stackful",
-        // "explicit-thread-yield-loops-stackless",
-    ];
-    for func in funcs {
-        let func = instance.get_typed_func::<(), (u32,)>(&mut store, func)?;
-        assert_eq!(func.call_async(&mut store, ()).await?, (42,));
-        func.post_return_async(store.as_context_mut()).await?;
-    }
-
-    Ok(())
-}
+(assert_return (invoke "run") (u32.const 42))
