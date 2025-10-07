@@ -117,7 +117,7 @@ int main() {
   is_i31 = wasmtime_anyref_i31_get_u(context, &elem.of.anyref, &i31val);
   assert(is_i31);
   assert(i31val == 1234);
-  wasmtime_val_unroot(context, &elem);
+  wasmtime_val_unroot(&elem);
 
   printf("Touching `anyref` global...\n");
 
@@ -141,7 +141,7 @@ int main() {
   is_i31 = wasmtime_anyref_i31_get_u(context, &global_val.of.anyref, &i31val);
   assert(is_i31);
   assert(i31val == 1234);
-  wasmtime_val_unroot(context, &global_val);
+  wasmtime_val_unroot(&global_val);
 
   printf("Passing `anyref` into func...\n");
 
@@ -179,8 +179,8 @@ int main() {
   is_i31 = wasmtime_anyref_i31_get_u(context, &results[0].of.anyref, &i31val);
   assert(is_i31);
   assert(i31val == 42);
-  wasmtime_val_unroot(context, &results[0]);
-  wasmtime_val_unroot(context, &anyref_val);
+  wasmtime_val_unroot(&results[0]);
+  wasmtime_val_unroot(&anyref_val);
 
   // We can GC any now-unused references to our anyref that the store is
   // holding.

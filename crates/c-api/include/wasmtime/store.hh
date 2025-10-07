@@ -191,6 +191,10 @@ public:
 
   /// Explicit function to acquire a `Context` from this store.
   Context context() { return this; }
+
+  /// Runs a garbage collection pass in the referenced store to collect loose
+  /// GC-managed objects, if any are available.
+  void gc() { context().gc(); }
 };
 
 } // namespace wasmtime

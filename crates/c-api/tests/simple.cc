@@ -63,7 +63,6 @@ TEST(ExternRef, Smoke) {
   ExternRef b(store, 3);
   EXPECT_STREQ(std::any_cast<const char *>(a.data(store)), "foo");
   EXPECT_EQ(std::any_cast<int>(b.data(store)), 3);
-  a.unroot(store);
   a = b;
 }
 
