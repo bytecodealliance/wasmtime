@@ -6,7 +6,7 @@ use wasm_encoder::SectionId;
 pub mod types_interner;
 
 /// A collection of info about modules within a module linking bundle.
-pub(crate) struct ModuleContext<'a> {
+pub struct ModuleContext<'a> {
     arena: Vec<ModuleInfo<'a>>,
     types: TypesInterner,
 }
@@ -14,7 +14,7 @@ pub(crate) struct ModuleContext<'a> {
 impl<'a> ModuleContext<'a> {
     /// Construct a new `ModuleContext`, pre-populated with an empty root
     /// module.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             arena: vec![ModuleInfo::Defined(DefinedModuleInfo::default())],
             types: TypesInterner::default(),
@@ -22,12 +22,12 @@ impl<'a> ModuleContext<'a> {
     }
 
     /// Get the root module.
-    pub fn root(&self) -> Module {
+    pub(crate) fn root(&self) -> Module {
         Module { id: 0 }
     }
 
     /// Get the interned types set for this module context.
-    pub fn types(&self) -> &TypesInterner {
+    pub(crate) fn types(&self) -> &TypesInterner {
         &self.types
     }
 
@@ -47,6 +47,13 @@ impl<'a> ModuleContext<'a> {
         match &mut self.arena[module.id] {
             ModuleInfo::Defined(d) => d,
         }
+    }
+
+    pub(crate) fn has_wasi_initialize(&self, module: Module) -> bool {
+        self.defined(module)
+            .exports
+            .iter()
+            .any(|e| e.name == "_initialize")
     }
 }
 
