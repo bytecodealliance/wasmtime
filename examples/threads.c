@@ -43,8 +43,8 @@ uint64_t get_thread_id() {
 
 // A function to be called from Wasm code.
 own wasm_trap_t *callback(const wasm_val_vec_t *args, wasm_val_vec_t *results) {
-  (void) args;
-  (void) results;
+  (void)args;
+  (void)results;
   printf("> Thread %lu running\n", (uint64_t)get_thread_id());
   return NULL;
 }
