@@ -8,15 +8,14 @@
   <strong>A <a href="https://bytecodealliance.org/">Bytecode Alliance</a> project</strong>
 
   <p>
-    <a href="https://github.com/bytecodealliance/wizer/actions?query=workflow%3ACI"><img src="https://github.com/bytecodealliance/wizer/workflows/CI/badge.svg" alt="build status" /></a>
     <a href="https://bytecodealliance.zulipchat.com/#narrow/stream/223391-wasm"><img src="https://img.shields.io/badge/zulip-join_chat-brightgreen.svg" alt="zulip chat" /></a>
-    <a href="https://docs.rs/wizer"><img src="https://docs.rs/wizer/badge.svg" alt="Documentation Status" /></a>
+    <a href="https://docs.rs/wasmtime-wizer"><img src="https://docs.rs/wasmtime-wizer/badge.svg" alt="Documentation Status" /></a>
   </p>
 
   <h3>
-    <a href="https://docs.rs/wizer">API Docs</a>
+    <a href="https://docs.rs/wasmtime-wizer">API Docs</a>
     <span> | </span>
-    <a href="https://github.com/bytecodealliance/wizer/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/bytecodealliance/wasmtime/blob/main/CONTRIBUTING.md">Contributing</a>
     <span> | </span>
     <a href="https://bytecodealliance.zulipchat.com/#narrow/stream/223391-wasm">Chat</a>
   </h3>
@@ -64,25 +63,13 @@ which `wasm-opt` can remove.
 
 [binaryen]: https://github.com/WebAssembly/binaryen
 
-## Install
-
-Download the a pre-built release from the
-[releases](https://github.com/bytecodealliance/wizer/releases) page. Unarchive
-the binary and place it in your `$PATH`.
-
-Alternatively you can install via `cargo`:
-
-```shell-session
-cargo install wizer --all-features
-```
-
 ## Example Usage
 
 First, make sure your Wasm module exports an initialization function named
 `wizer.initialize`. For example, in Rust you can export it like this:
 
 ```rust
-#[export_name = "wizer.initialize"]
+#[unsafe(export_name = "wizer.initialize")]
 pub extern "C" fn init() {
     // Your initialization code goes here...
 }
@@ -93,7 +80,7 @@ For a complete C++ example, see [this](https://github.com/bytecodealliance/wizer
 Then, if your Wasm module is named `input.wasm`, run the `wizer` CLI:
 
 ```shell-session
-wizer input.wasm -o initialized.wasm
+wasmtime wizer input.wasm -o initialized.wasm
 ```
 
 Now you have a pre-initialized version of your Wasm module at
@@ -102,7 +89,7 @@ Now you have a pre-initialized version of your Wasm module at
 More details, flags, and options can be found via `--help`:
 
 ```shell-session
-wizer --help
+wasmtime wizer --help
 ```
 
 ## Caveats
@@ -120,11 +107,8 @@ wizer --help
 
 Add a dependency in your `Cargo.toml`:
 
-```toml
-# Cargo.toml
-
-[dependencies]
-wizer = "9"
+```shell-session
+cargo add wasmtime-wizer
 ```
 
 And then use the `wizer::Wizer` builder to configure and run Wizer:
@@ -133,31 +117,11 @@ And then use the `wizer::Wizer` builder to configure and run Wizer:
 use wizer::Wizer;
 
 let input_wasm = get_input_wasm_bytes();
-
 let initialized_wasm_bytes = Wizer::new()
-    .allow_wasi(true)?
-    .run(&input_wasm)?;
+    .run(&mut store, &input_wasm, |store, module| {
+        linker.instantiate(store, module)
+    })?;
 ```
-
-## Using Wizer with a custom Linker
-
-If you want your module to be able to import other modules during instantiation, you can
-use the `.make_linker(...)` builder method to provide your own Linker, for example:
-
-```rust
-use wizer::Wizer;
-
-let input_wasm = get_input_wasm_bytes();
-let initialized_wasm_bytes = Wizer::new()
-    .make_linker(Some(Rc::new(|e: &wasmtime::Engine| {
-        let mut linker = wasmtime::Linker::new(e);
-        linker.func_wrap("foo", "bar", |x: i32| x + 1)?;
-        Ok(linker)
-    })))
-    .run(&input_wasm)?;
-```
-
-Note that `allow_wasi(true)` and a custom linker are currently mutually exclusive
 
 ## How Does it Work?
 

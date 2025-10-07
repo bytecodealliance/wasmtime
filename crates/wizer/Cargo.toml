@@ -3,7 +3,6 @@ description = "The WebAssembly Pre-Initializer"
 documentation = "https://docs.rs/wasmtime-wizer"
 edition.workspace = true
 rust-version.workspace = true
-exclude = ["**.wasm"]
 license = "Apache-2.0 WITH LLVM-exception"
 name = "wasmtime-wizer"
 readme = "./README.md"

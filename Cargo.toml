@@ -162,6 +162,9 @@ members = [
   "crates/wasi-preview1-component-adapter/verify",
   "crates/wasi-tls-nativetls",
   "crates/wizer/fuzz",
+  "crates/wizer/tests/regex-test",
+  "crates/wizer/benches/regex-bench",
+  "crates/wizer/benches/uap-bench",
   "examples/fib-debug/wasm",
   "examples/wasm",
   "examples/tokio/wasm",
@@ -419,6 +422,7 @@ flate2 = "1.1.4"
 tokio-util = "0.7.16"
 arbtest = "0.3.2"
 rayon = "1.5.3"
+regex = "1.9.1"
 
 # =============================================================================
 #
