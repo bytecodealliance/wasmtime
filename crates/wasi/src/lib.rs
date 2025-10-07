@@ -180,7 +180,7 @@
 //! [async]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
 
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 use wasmtime::component::Linker;
 
