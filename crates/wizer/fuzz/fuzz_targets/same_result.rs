@@ -93,7 +93,7 @@ fuzz_target!(|data: &[u8]| {
     }
 
     'init_loop: for init_func in init_funcs {
-        log::debug!("Using initialization function: {:?}", init_func);
+        log::debug!("Using initialization function: {init_func:?}");
 
         // Create a wizened snapshot of the given Wasm using `init_func` as the
         // initialization routine.
@@ -122,7 +122,7 @@ fuzz_target!(|data: &[u8]| {
                 // it as a main function.
                 continue 'main_loop;
             }
-            log::debug!("Using main function: {:?}", main_func);
+            log::debug!("Using main function: {main_func:?}");
 
             let mut store = Store::new(&engine, ());
 
@@ -167,9 +167,8 @@ fuzz_target!(|data: &[u8]| {
                 (s, r) => {
                     panic!(
                         "divergence between whether the main function traps or not!\n\n\
-                         no snapshotting result = {:?}\n\n\
-                         snapshotted result = {:?}",
-                        r, s,
+                         no snapshotting result = {r:?}\n\n\
+                         snapshotted result = {s:?}",
                     );
                 }
             }
@@ -223,6 +222,6 @@ fn assert_val_eq(a: &Val, b: &Val) {
             a == b || (a.is_nan() && b.is_nan())
         }),
         (Val::V128(a), Val::V128(b)) => assert_eq!(a, b),
-        _ => panic!("{:?} != {:?}", a, b),
+        _ => panic!("{a:?} != {b:?}"),
     }
 }

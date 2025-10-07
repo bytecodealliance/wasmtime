@@ -196,7 +196,11 @@ impl Wizer {
         self.snapshot(cx, store, &instance)
     }
 
-    /// TODO
+    /// First half of [`Self::run`] which instruments the provided `wasm` and
+    /// produces a new wasm module which should be run by a runtime.
+    ///
+    /// After the returned wasm is executed the context returned here and the
+    /// state of the instance should be passed to [`Self::snapshot`].
     pub fn instrument<'a>(&self, wasm: &'a [u8]) -> anyhow::Result<(ModuleContext<'a>, Vec<u8>)> {
         // Make sure we're given valid Wasm from the get go.
         self.wasm_validate(&wasm)?;
@@ -218,7 +222,12 @@ impl Wizer {
         Ok((cx, instrumented_wasm))
     }
 
-    /// TODO
+    /// Second half of [`Self::run`] which takes the [`ModuleContext`] returned
+    /// by [`Self::instrument`] and the state of the `instance` after it has
+    /// possibly executed its initialization function.
+    ///
+    /// This returns a new WebAssembly binary which has all state
+    /// pre-initialized.
     pub fn snapshot<T>(
         &self,
         mut cx: ModuleContext<'_>,
@@ -234,7 +243,7 @@ impl Wizer {
         if cfg!(debug_assertions) {
             if let Err(error) = self.wasm_validate(&rewritten_wasm) {
                 #[cfg(feature = "wasmprinter")]
-                let wat = wasmprinter::print_bytes(&wasm)
+                let wat = wasmprinter::print_bytes(&rewritten_wasm)
                     .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
                 #[cfg(not(feature = "wasmprinter"))]
                 let wat = "`wasmprinter` cargo feature is not enabled".to_string();
