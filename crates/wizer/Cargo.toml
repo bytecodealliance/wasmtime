@@ -38,7 +38,7 @@ clap = { workspace = true, optional = true }
 wasm-encoder = { workspace = true }
 wasmparser = { workspace = true }
 wasmprinter = { workspace = true, optional = true }
-wasmtime = { workspace = true, features = ['std', 'runtime', 'cranelift'] }
+wasmtime = { workspace = true, features = ['std', 'runtime', 'cranelift', 'cache', 'threads', 'gc', 'gc-null'] }
 wasmtime-wasi = { workspace = true, features = ["p1"] }
 
 [dev-dependencies]
@@ -46,6 +46,7 @@ criterion = { workspace = true }
 env_logger = { workspace = true }
 wasmprinter = { workspace = true }
 wat = { workspace = true }
+wasmtime = { workspace = true, features = ['wat'] }
 
 [features]
 # Enable this dependency to get messages with WAT disassemblies when certain
