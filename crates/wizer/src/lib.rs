@@ -97,7 +97,7 @@ pub struct Wizer {
 fn parse_rename(s: &str) -> Result<(String, String)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
     if parts.len() != 2 {
-        bail!("must contain exactly one equals character ('=')");
+        anyhow::bail!("must contain exactly one equals character ('=')");
     }
     Ok((parts[0].into(), parts[1].into()))
 }
@@ -211,9 +211,7 @@ impl Wizer {
                     .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
                 #[cfg(not(feature = "wasmprinter"))]
                 let wat = "`wasmprinter` cargo feature is not enabled".to_string();
-                panic!(
-                    "instrumented Wasm is not valid: {error:?}\n\nWAT:\n{wat}"
-                );
+                panic!("instrumented Wasm is not valid: {error:?}\n\nWAT:\n{wat}");
             }
         }
 
@@ -255,7 +253,7 @@ impl Wizer {
         let mut wasm = wasm;
         let mut parsers = vec![wasmparser::Parser::new(0)];
         while !parsers.is_empty() {
-            let payload = match parsers.last_mut().unwrap().parse(wasm, true).unwrap() {
+            let payload = match parsers.last_mut().unwrap().parse(wasm, true)? {
                 wasmparser::Chunk::NeedMoreData(_) => unreachable!(),
                 wasmparser::Chunk::Parsed { consumed, payload } => {
                     wasm = &wasm[consumed..];
