@@ -4,9 +4,6 @@
 
 #![deny(missing_docs)]
 
-#[cfg(fuzzing)]
-pub mod dummy;
-#[cfg(not(fuzzing))]
 mod dummy;
 
 mod info;
@@ -28,12 +25,10 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::rc::Rc;
-#[cfg(feature = "structopt")]
-use structopt::StructOpt;
 use wasmtime::{Engine, Extern};
 use wasmtime_wasi::{
-    preview1::{self, WasiP1Ctx},
     WasiCtxBuilder,
+    p1::{self, WasiP1Ctx},
 };
 
 const DEFAULT_INHERIT_STDIO: bool = true;
@@ -59,7 +54,7 @@ pub(crate) type Store = wasmtime::Store<StoreData>;
 /// The type of linker that Wizer uses when evaluating the initialization function.
 pub type Linker = wasmtime::Linker<StoreData>;
 
-#[cfg(feature = "structopt")]
+#[cfg(feature = "clap")]
 fn parse_map_dirs(s: &str) -> anyhow::Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.split("::").collect();
     if parts.len() != 2 {
@@ -89,14 +84,14 @@ fn parse_map_dirs(s: &str) -> anyhow::Result<(String, PathBuf)> {
 ///   snapshot the new table state, but funcrefs and externrefs don't have
 ///   identity and aren't comparable in the Wasm spec, which makes snapshotting
 ///   difficult.
-#[cfg_attr(feature = "structopt", derive(StructOpt))]
+#[cfg_attr(feature = "clap", derive(clap::Parser))]
 #[derive(Clone)]
 pub struct Wizer {
     /// The Wasm export name of the function that should be executed to
     /// initialize the Wasm module.
     #[cfg_attr(
-        feature = "structopt",
-        structopt(short = "f", long = "init-func", default_value = "wizer.initialize")
+        feature = "clap",
+        arg(short = 'f', long = "init-func", default_value = "wizer.initialize")
     )]
     init_func: String,
 
@@ -115,9 +110,9 @@ pub struct Wizer {
     /// When module linking is enabled, these renames are only applied to the
     /// outermost module.
     #[cfg_attr(
-        feature = "structopt",
-        structopt(
-            short = "r",
+        feature = "clap",
+        arg(
+            short = 'r',
             long = "rename-func",
             alias = "func-rename",
             value_name = "dst=src"
@@ -137,7 +132,7 @@ pub struct Wizer {
     /// randomization is added during initialization time and you don't ever
     /// re-randomize at runtime, then that randomization will become per-module
     /// rather than per-instance.
-    #[cfg_attr(feature = "structopt", structopt(long = "allow-wasi"))]
+    #[cfg_attr(feature = "clap", arg(long = "allow-wasi"))]
     allow_wasi: bool,
 
     /// Provide an additional preloaded module that is available to the
@@ -157,16 +152,16 @@ pub struct Wizer {
     /// The format of this option is `name=file.{wasm,wat}`; e.g.,
     /// `intrinsics=stubs.wat`. Multiple instances of the option may
     /// appear.
-    #[cfg_attr(feature = "structopt", structopt(long = "preload"))]
+    #[cfg_attr(feature = "clap", arg(long = "preload"))]
     preload: Vec<String>,
 
     /// Like `preload` above, but with the module contents provided,
     /// rather than a filename. This is more useful for programmatic
     /// use-cases where the embedding tool may also embed a Wasm module.
-    #[cfg_attr(feature = "structopt", structopt(skip))]
+    #[cfg_attr(feature = "clap", arg(skip))]
     preload_bytes: Vec<(String, Vec<u8>)>,
 
-    #[cfg_attr(feature = "structopt", structopt(skip))]
+    #[cfg_attr(feature = "clap", arg(skip))]
     make_linker: Option<Rc<dyn Fn(&wasmtime::Engine) -> anyhow::Result<Linker>>>,
 
     /// When using WASI during initialization, should `stdin`, `stderr`, and
@@ -174,8 +169,8 @@ pub struct Wizer {
     ///
     /// This is true by default.
     #[cfg_attr(
-        feature = "structopt",
-        structopt(long = "inherit-stdio", value_name = "true|false")
+        feature = "clap",
+        arg(long = "inherit-stdio", value_name = "true|false")
     )]
     inherit_stdio: Option<bool>,
 
@@ -183,10 +178,7 @@ pub struct Wizer {
     /// inherited?
     ///
     /// This is false by default.
-    #[cfg_attr(
-        feature = "structopt",
-        structopt(long = "inherit-env", value_name = "true|false")
-    )]
+    #[cfg_attr(feature = "clap", arg(long = "inherit-env", value_name = "true|false"))]
     inherit_env: Option<bool>,
 
     /// After initialization, should the Wasm module still export the
@@ -195,8 +187,8 @@ pub struct Wizer {
     /// This is `false` by default, meaning that the initialization function is
     /// no longer exported from the Wasm module.
     #[cfg_attr(
-        feature = "structopt",
-        structopt(long = "keep-init-func", value_name = "true|false")
+        feature = "clap",
+        arg(long = "keep-init-func", value_name = "true|false")
     )]
     keep_init_func: Option<bool>,
 
@@ -204,10 +196,7 @@ pub struct Wizer {
     /// should be made available?
     ///
     /// None are available by default.
-    #[cfg_attr(
-        feature = "structopt",
-        structopt(long = "dir", parse(from_os_str), value_name = "directory")
-    )]
+    #[cfg_attr(feature = "clap", arg(long = "dir", value_name = "directory"))]
     dirs: Vec<PathBuf>,
 
     /// When using WASI during initialization, which guest directories should be
@@ -219,21 +208,21 @@ pub struct Wizer {
     ///
     /// None are mapped by default.
     #[cfg_attr(
-        feature = "structopt",
-        structopt(long = "mapdir", value_name = "GUEST_DIR::HOST_DIR", parse(try_from_str = parse_map_dirs))
+        feature = "clap",
+        arg(long = "mapdir", value_name = "GUEST_DIR::HOST_DIR", value_parser = parse_map_dirs)
     )]
     map_dirs: Vec<(String, PathBuf)>,
 
     /// Enable or disable Wasm multi-memory proposal.
     ///
     /// Enabled by default.
-    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    #[cfg_attr(feature = "clap", arg(long, value_name = "true|false"))]
     wasm_multi_memory: Option<bool>,
 
     /// Enable or disable the Wasm multi-value proposal.
     ///
     /// Enabled by default.
-    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    #[cfg_attr(feature = "clap", arg(long, value_name = "true|false"))]
     wasm_multi_value: Option<bool>,
 
     /// Enable or disable Wasm bulk memory operations.
@@ -243,13 +232,13 @@ pub struct Wizer {
     /// `table.copy` will be rejected.
     ///
     /// Enabled by default.
-    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    #[cfg_attr(feature = "clap", arg(long, value_name = "true|false"))]
     wasm_bulk_memory: Option<bool>,
 
     /// Enable or disable the Wasm SIMD128 proposal.
     ///
     /// Enabled by default.
-    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    #[cfg_attr(feature = "clap", arg(long, value_name = "true|false"))]
     wasm_simd: Option<bool>,
 
     /// Enable or disable the Wasm reference-types proposal.
@@ -259,7 +248,7 @@ pub struct Wizer {
     /// in the reference-types proposal.
     ///
     /// Enabled by default.
-    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    #[cfg_attr(feature = "clap", arg(long, value_name = "true|false"))]
     wasm_reference_types: Option<bool>,
 }
 
@@ -879,7 +868,7 @@ impl Wizer {
         };
 
         if self.allow_wasi {
-            preview1::add_to_linker_sync(&mut linker, |ctx: &mut StoreData| {
+            p1::add_to_linker_sync(&mut linker, |ctx: &mut StoreData| {
                 ctx.wasi_ctx.as_mut().unwrap()
             })?;
         }

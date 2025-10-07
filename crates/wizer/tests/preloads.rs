@@ -1,6 +1,6 @@
 use anyhow::Result;
+use wasmtime_wizer::Wizer;
 use wat::parse_str as wat_to_wasm;
-use wizer::Wizer;
 
 const PRELOAD1: &'static str = r#"
 (module

@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use wasm_encoder::ConstExpr;
-use wasmtime_wasi::{preview1, WasiCtxBuilder};
+use wasmtime_wasi::{WasiCtxBuilder, p1};
+use wasmtime_wizer::{StoreData, Wizer};
 use wat::parse_str as wat_to_wasm;
-use wizer::{StoreData, Wizer};
 
 fn run_wat(args: &[wasmtime::Val], expected: i32, wat: &str) -> Result<()> {
     let _ = env_logger::try_init();
@@ -69,7 +69,7 @@ fn wizen_and_run_wasm(
         .define_name(&mut store, "f", thunk)?
         .define(&mut store, "x", "f", thunk)?;
 
-    preview1::add_to_linker_sync(&mut linker, |wasi| wasi.wasi_ctx.as_mut().unwrap())?;
+    p1::add_to_linker_sync(&mut linker, |wasi| wasi.wasi_ctx.as_mut().unwrap())?;
 
     let instance = linker.instantiate(&mut store, &module)?;
 
@@ -231,9 +231,10 @@ fn reject_table_copy() -> Result<()> {
     assert!(result.is_err());
 
     let err = result.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("unsupported `table.copy` instruction"));
+    assert!(
+        err.to_string()
+            .contains("unsupported `table.copy` instruction")
+    );
 
     Ok(())
 }
@@ -268,9 +269,10 @@ fn reject_table_get_set() -> Result<()> {
     assert!(result.is_err());
 
     let err = result.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("reference types support is not enabled"),);
+    assert!(
+        err.to_string()
+            .contains("reference types support is not enabled"),
+    );
 
     Ok(())
 }
@@ -300,9 +302,10 @@ fn reject_table_get_set_with_reference_types_enabled() -> Result<()> {
     assert!(result.is_err());
 
     let err = result.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("unsupported `table.get` instruction"),);
+    assert!(
+        err.to_string()
+            .contains("unsupported `table.get` instruction"),
+    );
 
     Ok(())
 }
@@ -331,9 +334,10 @@ fn reject_table_grow_with_reference_types_enabled() -> anyhow::Result<()> {
     assert!(result.is_err());
 
     let err = result.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("unsupported `ref.func` instruction"));
+    assert!(
+        err.to_string()
+            .contains("unsupported `ref.func` instruction")
+    );
 
     Ok(())
 }
@@ -391,9 +395,10 @@ fn reject_table_init() -> Result<()> {
     assert!(result.is_err());
 
     let err = result.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("unsupported `table.init` instruction"));
+    assert!(
+        err.to_string()
+            .contains("unsupported `table.init` instruction")
+    );
 
     Ok(())
 }
@@ -421,9 +426,10 @@ fn reject_elem_drop() -> Result<()> {
     assert!(result.is_err());
 
     let err = result.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("unsupported `elem.drop` instruction"));
+    assert!(
+        err.to_string()
+            .contains("unsupported `elem.drop` instruction")
+    );
 
     Ok(())
 }
@@ -446,9 +452,10 @@ fn reject_data_drop() -> Result<()> {
     assert!(result.is_err());
 
     let err = result.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("unsupported `data.drop` instruction"));
+    assert!(
+        err.to_string()
+            .contains("unsupported `data.drop` instruction")
+    );
 
     Ok(())
 }

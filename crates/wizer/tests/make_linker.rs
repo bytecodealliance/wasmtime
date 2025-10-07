@@ -1,8 +1,8 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::rc::Rc;
 use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime_wizer::Wizer;
 use wat::parse_str as wat_to_wasm;
-use wizer::Wizer;
 
 fn get_wizer() -> Wizer {
     let mut wizer = Wizer::new();
