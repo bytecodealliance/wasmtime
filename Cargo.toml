@@ -59,6 +59,7 @@ wasmtime-wasi-keyvalue = { workspace = true, optional = true }
 wasmtime-wasi-threads = { workspace = true, optional = true }
 wasmtime-wasi-http = { workspace = true, optional = true }
 wasmtime-unwinder = { workspace = true }
+wasmtime-wizer = { workspace = true }
 clap = { workspace = true }
 clap_complete = { workspace = true, optional = true }
 anyhow = { workspace = true, features = ['std'] }
@@ -266,6 +267,7 @@ wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version 
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=39.0.0", package = 'wasmtime-internal-wit-bindgen' }
 wasmtime-math = { path = "crates/math", version = "=39.0.0", package = 'wasmtime-internal-math'  }
 wasmtime-unwinder = { path = "crates/unwinder", version = "=39.0.0", package = 'wasmtime-internal-unwinder' }
+wasmtime-wizer = { path = "crates/wizer", version = "=39.0.0" }
 
 # Miscellaneous crates without a `wasmtime-*` prefix in their name but still
 # used in the `wasmtime-*` family of crates depending on various features/etc.
@@ -415,6 +417,7 @@ termcolor = "1.4.1"
 flate2 = "1.1.4"
 tokio-util = "0.7.16"
 arbtest = "0.3.2"
+rayon = "1.5.3"
 
 # =============================================================================
 #
