@@ -1399,4 +1399,3 @@ block0(v0: f64x2, v1: f64x2):
 ;   ushr v4.2d, v1.2d, #0x3f
 ;   sli v0.2d, v4.2d, #0x3f
 ;   ret
-
