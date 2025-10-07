@@ -38,7 +38,7 @@ clap = { workspace = true, optional = true }
 wasm-encoder = { workspace = true }
 wasmparser = { workspace = true }
 wasmprinter = { workspace = true, optional = true }
-wasmtime = { workspace = true }
+wasmtime = { workspace = true, features = ['std', 'runtime', 'cranelift'] }
 wasmtime-wasi = { workspace = true, features = ["p1"] }
 
 [dev-dependencies]
