@@ -1,9 +1,13 @@
 use criterion::{Criterion, criterion_group, criterion_main};
+use std::cell::LazyCell;
 use std::convert::TryFrom;
+use std::process::Command;
 use wasmtime_wasi::p1::WasiP1Ctx;
 
 fn run_iter(linker: &wasmtime::Linker<WasiP1Ctx>, module: &wasmtime::Module) {
-    let wasi = wasmtime_wasi::WasiCtxBuilder::new().build_p1();
+    let wasi = wasmtime_wasi::WasiCtxBuilder::new()
+        .inherit_stdio()
+        .build_p1();
     let mut store = wasmtime::Store::new(linker.engine(), wasi);
     let instance = linker.instantiate(&mut store, module).unwrap();
 
@@ -36,23 +40,41 @@ fn run_iter(linker: &wasmtime::Linker<WasiP1Ctx>, module: &wasmtime::Module) {
 
 fn bench_uap(c: &mut Criterion) {
     let mut group = c.benchmark_group("uap");
-    group.bench_function("control", |b| {
-        let engine = wasmtime::Engine::default();
-        let module =
-            wasmtime::Module::new(&engine, &include_bytes!("uap_bench.control.wasm")).unwrap();
-        let mut linker = wasmtime::Linker::new(&engine);
-        wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s| s).unwrap();
 
-        b.iter(|| run_iter(&linker, &module));
+    let control_wasm = LazyCell::new(|| {
+        let status = Command::new("cargo")
+            .args(&["build", "--target", "wasm32-wasip1", "--release", "-q"])
+            .current_dir("./benches/uap-bench")
+            .status()
+            .unwrap();
+        assert!(status.success());
+        std::fs::read("../../target/wasm32-wasip1/release/uap_bench.wasm").unwrap()
+    });
+    let mut config = wasmtime::Config::new();
+    config.force_memory_init_memfd(true);
+    let engine = wasmtime::Engine::new(&config).unwrap();
+    let mut linker = wasmtime::Linker::new(&engine);
+    wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s| s).unwrap();
+    let control = LazyCell::new(|| wasmtime::Module::new(&engine, &*control_wasm).unwrap());
+
+    group.bench_function("control", |b| {
+        LazyCell::force(&control);
+        b.iter(|| run_iter(&linker, &control));
+    });
+
+    let wizer = LazyCell::new(|| {
+        let wasi = wasmtime_wasi::WasiCtxBuilder::new().build_p1();
+        let mut store = wasmtime::Store::new(linker.engine(), wasi);
+        let wizened = wasmtime_wizer::Wizer::new()
+            .run(&mut store, &control_wasm, |store, module| {
+                linker.instantiate(store, module)
+            })
+            .unwrap();
+        wasmtime::Module::new(&engine, &wizened).unwrap()
     });
     group.bench_function("wizer", |b| {
-        let engine = wasmtime::Engine::default();
-        let module =
-            wasmtime::Module::new(&engine, &include_bytes!("uap_bench.wizer.wasm")).unwrap();
-        let mut linker = wasmtime::Linker::new(&engine);
-        wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s| s).unwrap();
-
-        b.iter(|| run_iter(&linker, &module));
+        LazyCell::force(&wizer);
+        b.iter(|| run_iter(&linker, &wizer));
     });
     group.finish();
 }

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::process::Command;
 use wasm_encoder::ConstExpr;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
 use wasmtime_wasi::{WasiCtxBuilder, p1};
@@ -453,10 +454,17 @@ fn reject_data_drop() -> Result<()> {
 
 #[test]
 fn rust_regex() -> Result<()> {
+    let status = Command::new("cargo")
+        .args(&["build", "--target=wasm32-wasip1", "-q"])
+        .current_dir("./tests/regex-test")
+        .status()
+        .expect("failed to build regex test case");
+    assert!(status.success());
     wizen_and_run_wasm(
         &[wasmtime::Val::I32(13)],
         42,
-        &include_bytes!("../regex_test.wasm")[..],
+        &std::fs::read("../../target/wasm32-wasip1/debug/regex_test.wasm")
+            .expect("failed to read regex test case"),
         get_wizer(),
     )
 }

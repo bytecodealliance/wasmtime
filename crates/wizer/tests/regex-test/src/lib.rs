@@ -1,22 +1,16 @@
 use regex::Regex;
+use std::sync::LazyLock;
 
 /// A regex that matches numbers that start with "1".
-static mut REGEX: Option<Regex> = None;
+static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^1\d*$").unwrap());
 
-#[export_name = "wizer.initialize"]
+#[unsafe(export_name = "wizer.initialize")]
 pub fn init() {
-    unsafe {
-        REGEX = Some(Regex::new(r"^1\d*$").unwrap());
-    }
+    LazyLock::force(&REGEX);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub fn run(n: i32) -> i32 {
     let s = format!("{}", n);
-    let regex = unsafe { REGEX.as_ref().unwrap() };
-    if regex.is_match(&s) {
-        42
-    } else {
-        0
-    }
+    if REGEX.is_match(&s) { 42 } else { 0 }
 }
