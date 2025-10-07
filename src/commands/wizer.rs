@@ -1,58 +1,81 @@
-use anyhow::Context;
+use crate::commands::run::{CliInstance, RunCommand};
+use crate::common::{RunCommon, RunTarget};
+use anyhow::{Context, Result};
 use std::fs;
-use std::io::{self, BufRead, Write};
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
+use wasmtime::Module;
 use wasmtime_wizer::Wizer;
 
-#[allow(missing_docs)] // inherit the docs of the `Wizer` field
 #[derive(clap::Parser)]
+#[expect(missing_docs, reason = "inheriting wizer's docs")]
 pub struct WizerCommand {
+    #[command(flatten)]
+    run: RunCommon,
+
+    #[command(flatten)]
+    wizer: Wizer,
+
     /// The input Wasm module's file path.
-    ///
-    /// If not specified, then `stdin` is used.
-    input: Option<PathBuf>,
+    input: PathBuf,
 
     /// The file path to write the output Wasm module to.
     ///
     /// If not specified, then `stdout` is used.
     #[arg(short = 'o', long)]
     output: Option<PathBuf>,
-
-    #[clap(flatten)]
-    wizer: Wizer,
 }
 
 impl WizerCommand {
     /// Runs the command.
-    pub fn execute(self) -> anyhow::Result<()> {
-        let stdin = io::stdin();
-        let mut input: Box<dyn BufRead> = if let Some(input) = self.input.as_ref() {
-            Box::new(io::BufReader::new(
-                fs::File::open(input).context("failed to open input file")?,
-            ))
+    pub fn execute(mut self) -> Result<()> {
+        self.run.common.init_logging()?;
+
+        // Read the input wasm, possibly from stdin.
+        let mut wasm = Vec::new();
+        if self.input.to_str() == Some("-") {
+            io::stdin()
+                .read_to_end(&mut wasm)
+                .context("failed to read input Wasm module from stdin")?;
         } else {
-            Box::new(stdin.lock())
+            wasm = fs::read(&self.input).context("failed to read input Wasm module")?;
+        }
+
+        // Instrument the input wasm with wizer.
+        let (cx, instrumented_wasm) = self.wizer.instrument(&wasm)?;
+
+        // Execute a rough equivalent of
+        // `wasmtime run --invoke <..> <instrumented-wasm>`
+        let mut run = RunCommand {
+            run: self.run,
+            argv0: None,
+            invoke: Some(self.wizer.get_init_func().to_string()),
+            module_and_args: vec![self.input.clone().into()],
+            preloads: Vec::new(), // TODO
+        };
+        let engine = run.new_engine()?;
+        let main = RunTarget::Core(Module::new(&engine, &instrumented_wasm)?);
+        let (mut store, mut linker) = run.new_store_and_linker(&engine, &main)?;
+        #[allow(
+            irrefutable_let_patterns,
+            reason = "infallible when components are disabled"
+        )]
+        let CliInstance::Core(instance) =
+            run.instantiate_and_run(&engine, &mut linker, &main, &mut store)?
+        else {
+            unreachable!()
         };
 
-        let mut output: Box<dyn Write> = if let Some(output) = self.output.as_ref() {
-            Box::new(io::BufWriter::new(
-                fs::File::create(output).context("failed to create output file")?,
-            ))
-        } else {
-            Box::new(io::stdout())
-        };
+        // Use our state to capture a snapshot with Wizer and then serialize
+        // that.
+        let final_wasm = self.wizer.snapshot(cx, &mut store, &instance)?;
 
-        let mut input_wasm = vec![];
-        input
-            .read_to_end(&mut input_wasm)
-            .context("failed to read input Wasm module")?;
-
-        let output_wasm = self.wizer.run(&input_wasm)?;
-
-        output
-            .write_all(&output_wasm)
-            .context("failed to write to output")?;
-
+        match &self.output {
+            Some(file) => fs::write(file, &final_wasm).context("failed to write output file")?,
+            None => std::io::stdout()
+                .write_all(&final_wasm)
+                .context("failed to write output to stdout")?,
+        }
         Ok(())
     }
 }
