@@ -81,7 +81,6 @@ macro_rules! isle_common_prelude_methods {
             assert!(type_width <= 64);
             let x = x.sign_extend_from_width(type_width).bits();
             let y = y.sign_extend_from_width(type_width).bits();
-            let shift = 64 - type_width;
 
             // iN::min % -1 is defined as 0 in wasm so no need
             // to check for it
