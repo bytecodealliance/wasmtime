@@ -295,7 +295,7 @@ jobs:
           --exclude wasmtime-cli \
           --exclude test-programs \
           --exclude cranelift-codegen-meta \
-          --features call-hook
+          --all-features
       env:
         RUSTDOCFLAGS: --cfg=docsrs
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
