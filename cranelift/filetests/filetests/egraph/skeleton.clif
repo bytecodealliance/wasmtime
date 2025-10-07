@@ -151,10 +151,9 @@ block0:
 
 ;function %cprop_srem_i8_min() -> i8 fast {
 ;block0:
-;     v0 = iconst.i8 -128
-;     v1 = iconst.i8 -1
-;     v2 = srem v0, v1  ; v0 = -128, v1 = -1
-;     return v2
+;     v3 = iconst.i8 0
+;     v2 -> v3
+;     return v3  ; v3 = 0
 ;}
 
 function %cprop_srem_i64_min() -> i64 {
@@ -167,10 +166,9 @@ block0:
 
 ;function %cprop_srem_i64_min() -> i64 fast {
 ;block0:
-;     v0 = iconst.i64 -9223372036854775808
-;     v1 = iconst.i64 -1
-;     v2 = srem v0, v1  ; v0 = -9223372036854775808, v1 = -1
-;     return v2
+;     v3 = iconst.i64 0
+;     v2 -> v3
+;     return v3  ; v3 = 0
 ;}
 
 function %cprop_srem() -> i32 {
