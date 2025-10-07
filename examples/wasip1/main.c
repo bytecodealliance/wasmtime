@@ -99,6 +99,7 @@ int main() {
     exit_with_error("error calling default export", error, trap);
 
   // Clean up after ourselves at this point
+  wasmtime_linker_delete(linker);
   wasmtime_module_delete(module);
   wasmtime_store_delete(store);
   wasm_engine_delete(engine);

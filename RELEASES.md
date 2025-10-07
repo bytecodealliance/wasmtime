@@ -1,3 +1,14 @@
+## 37.0.2
+
+Released 2025-10-07.
+
+### Fixed
+
+* Fix a memory leak in the C API when using `anyref` or `externref`.
+  [CVE-2025-61670](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-vvp9-h8p2-xwfc).
+
+--------------------------------------------------------------------------------
+
 ## 37.0.1
 
 Released 2025-09-23.
@@ -8,6 +19,8 @@ Released 2025-09-23.
   instructions on aarch64; a zero-extension on the offset was fixed to properly
   sign-extend instead.
   [#11734](https://github.com/bytecodealliance/wasmtime/pull/11734)
+
+--------------------------------------------------------------------------------
 
 ## 37.0.0
 
