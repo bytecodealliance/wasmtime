@@ -656,6 +656,11 @@ jobs:
           - os: ubuntu-24.04
             flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_RUST_EXAMPLES=OFF
             name: Linux (static linking)
+
+          # Run tests with ASAN for leak checking primarily.
+          - os: ubuntu-24.04
+            flags: -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON
+            name: Linux (ASAN)
     steps:
     - uses: actions/checkout@v4
       with:
@@ -789,10 +794,10 @@ jobs:
 
         # Enable environment variable to indicate SDE is being used
         echo WASMTIME_TEST_SDE=1 >> $GITHUB_ENV
-        
+
         # Generic variable for skipping tests that are problematic under SDE (performance, compatibility, etc.)
         echo WASMTIME_TEST_NO_SDE=1 >> $GITHUB_ENV
-        
+
         # Similar to QEMU, reduce memory usage during SDE emulation
         echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
 
@@ -803,11 +808,11 @@ jobs:
 
         curl --retry 5 --retry-all-errors -o sde.tar.xz \
           https://downloadmirror.intel.com/859732/sde-external-${{ env.SDE_BUILD_VERSION }}-lin.tar.xz
-        
+
         mkdir -p ${{ runner.tool_cache }}/sde
         tar xJf sde.tar.xz --strip-components=1 -C ${{ runner.tool_cache }}/sde
         rm sde.tar.xz
-        
+
         chmod +x ${{ runner.tool_cache }}/sde/sde64
       if: matrix.sde != ''
 
