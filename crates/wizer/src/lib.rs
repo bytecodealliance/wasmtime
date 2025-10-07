@@ -4,8 +4,6 @@
 
 #![deny(missing_docs)]
 
-mod dummy;
-
 mod info;
 mod instrument;
 mod parse;
@@ -20,7 +18,6 @@ use wasmparser::WasmFeatures;
 pub use wasmtime;
 
 use anyhow::Context;
-use dummy::dummy_imports;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -888,7 +885,7 @@ impl Wizer {
             self.do_preload(engine, &mut *store, &mut linker, &name[..], &bytes[..])?;
         }
 
-        dummy_imports(&mut *store, &module, &mut linker)?;
+        linker.define_unknown_imports_as_traps(&module)?;
 
         let instance = linker
             .instantiate(&mut *store, module)
