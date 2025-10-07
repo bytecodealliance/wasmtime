@@ -51,13 +51,6 @@ pub const PREPARE_ASYNC_WITH_RESULT: u32 = u32::MAX - 1;
 /// callee is an async-lifted export.
 pub const START_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
 
-/// The ABI used for lowering the import involved in a `prepare_call` call
-#[derive(Copy, Clone)]
-enum LowerABI {
-    Synchronous = 0,
-    Asynchronous = 1,
-}
-
 /// The ABI used for lifting the export involved in a `prepare_call` call
 #[derive(Copy, Clone)]
 pub enum LiftABI {

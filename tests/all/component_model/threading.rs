@@ -9,8 +9,7 @@ async fn threads() -> Result<()> {
     let builder = FmtSubscriber::builder()
         .with_writer(std::io::stderr)
         .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"))
-        .with_ansi(std::io::stderr().is_terminal())
-        .init();
+        .with_ansi(std::io::stderr().is_terminal());
     let mut config = Config::new();
     config.async_support(true);
     config.wasm_component_model_async(true);
@@ -343,14 +342,14 @@ async fn threads() -> Result<()> {
         .await?;
     let funcs = vec![
         "run",
-        // "explicit-thread-calls-return-stackful",
+        "explicit-thread-calls-return-stackful",
         "explicit-thread-calls-return-stackless",
-        // "explicit-thread-suspends-sync",
-        // "explicit-thread-suspends-stackful",
-        // "explicit-thread-suspends-stackless",
-        // "explicit-thread-yield-loops-sync",
-        // "explicit-thread-yield-loops-stackful",
-        // "explicit-thread-yield-loops-stackless",
+        "explicit-thread-suspends-sync",
+        "explicit-thread-suspends-stackful",
+        "explicit-thread-suspends-stackless",
+        "explicit-thread-yield-loops-sync",
+        "explicit-thread-yield-loops-stackful",
+        "explicit-thread-yield-loops-stackless",
     ];
     for func in funcs {
         let func = instance.get_typed_func::<(), (u32,)>(&mut store, func)?;

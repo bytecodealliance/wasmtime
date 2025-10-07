@@ -84,7 +84,7 @@ use std::vec::Vec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::Trap;
 use wasmtime_environ::component::{
-    CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, LiftABI, LowerABI, MAX_FLAT_PARAMS,
+    CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, LiftABI, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
     RuntimeComponentInstanceIndex, RuntimeTableIndex, StringEncoding,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
@@ -2424,7 +2424,7 @@ impl Instance {
 
                 if task.exited {
                     if task.ready_to_delete() {
-                        Waitable::Guest(guest_task).delete_from(state);
+                        Waitable::Guest(guest_task).delete_from(state)?;
                     }
                 }
             }
@@ -3042,7 +3042,7 @@ impl Instance {
                 }
                 state.guest_thread = old_thread;
                 if state.get_mut(task_id)?.ready_to_delete() {
-                    Waitable::Guest(task_id).delete_from(state);
+                    Waitable::Guest(task_id).delete_from(state)?;
                 }
                 log::trace!("thread start: restored {old_thread:?} as current thread");
 
@@ -4178,11 +4178,17 @@ impl GuestTask {
         self.lift_result.is_none()
     }
     fn ready_to_delete(&self) -> bool {
-        let all_threads_completed = self.threads.is_empty();
-        match &self.caller {
-            Caller::Guest { .. } => all_threads_completed,
-            Caller::Host { .. } => all_threads_completed,
-        }
+        let threads_completed = self.threads.is_empty();
+        let has_sync_result = matches!(self.sync_result, SyncResult::Produced(_));
+        let has_event = self.common.event.is_some();
+        let ready = threads_completed && !has_sync_result && !has_event;
+        log::trace!(
+            "ready to delete? {ready} (threads_completed: {}, has_sync_result: {}, has_event: {})",
+            threads_completed,
+            has_sync_result,
+            has_event
+        );
+        ready
     }
     fn new(
         state: &mut ConcurrentState,
@@ -5025,6 +5031,7 @@ impl TaskId {
     /// Should only be called once for a given task, and only after either
     /// the task has completed or the instance has trapped.
     pub(crate) fn remove_if_not_lowered_params<T>(&self, store: StoreContextMut<T>) -> Result<()> {
+        /*
         if self
             .handle
             .instance()
@@ -5036,6 +5043,7 @@ impl TaskId {
             Waitable::Guest(self.task)
                 .delete_from(self.handle.instance().concurrent_state_mut(store.0))?
         }
+        Ok(())*/
         Ok(())
     }
 }
