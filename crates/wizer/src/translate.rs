@@ -24,8 +24,8 @@ pub(crate) fn global_type(ty: wasmparser::GlobalType) -> wasm_encoder::GlobalTyp
 
 pub(crate) fn memory_type(ty: wasmparser::MemoryType) -> wasm_encoder::MemoryType {
     wasm_encoder::MemoryType {
-        minimum: ty.initial.into(),
-        maximum: ty.maximum.map(|val| val.into()),
+        minimum: ty.initial,
+        maximum: ty.maximum.map(|val| val),
         memory64: ty.memory64,
         shared: ty.shared,
         page_size_log2: None,

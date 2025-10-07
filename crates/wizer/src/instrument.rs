@@ -111,11 +111,11 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
                 // and instantiations under well-known names so we can inspect
                 // them after initialization.
                 for (i, (j, _)) in entry.module.defined_globals(cx).enumerate() {
-                    let name = format!("__wizer_global_{}", i);
+                    let name = format!("__wizer_global_{i}");
                     exports.export(&name, wasm_encoder::ExportKind::Global, j);
                 }
                 for (i, (j, _)) in entry.module.defined_memories(cx).enumerate() {
-                    let name = format!("__wizer_memory_{}", i);
+                    let name = format!("__wizer_memory_{i}");
                     exports.export(&name, wasm_encoder::ExportKind::Memory, j);
                 }
 

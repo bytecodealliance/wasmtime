@@ -1,11 +1,11 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use std::convert::TryFrom;
-use wizer::StoreData;
+use wasmtime_wasi::p1::WasiP1Ctx;
 
 fn run_iter(
-    linker: &wasmtime::Linker<StoreData>,
+    linker: &wasmtime::Linker<WasiP1Ctx>,
     module: &wasmtime::Module,
-    mut store: &mut wasmtime::Store<StoreData>,
+    mut store: &mut wasmtime::Store<WasiP1Ctx>,
 ) {
     let instance = linker.instantiate(&mut store, module).unwrap();
 
@@ -28,40 +28,24 @@ fn bench_regex(c: &mut Criterion) {
     group.bench_function("control", |b| {
         let engine = wasmtime::Engine::default();
         let wasi = wasmtime_wasi::WasiCtxBuilder::new().build_p1();
-        let mut store = wasmtime::Store::new(
-            &engine,
-            StoreData {
-                wasi_ctx: Some(wasi),
-            },
-        );
+        let mut store = wasmtime::Store::new(&engine, wasi);
         let module =
             wasmtime::Module::new(store.engine(), &include_bytes!("regex_bench.control.wasm"))
                 .unwrap();
         let mut linker = wasmtime::Linker::new(&engine);
-        wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |s: &mut StoreData| {
-            s.wasi_ctx.as_mut().unwrap()
-        })
-        .unwrap();
+        wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s| s).unwrap();
 
         b.iter(|| run_iter(&linker, &module, &mut store));
     });
     group.bench_function("wizer", |b| {
         let engine = wasmtime::Engine::default();
         let wasi = wasmtime_wasi::WasiCtxBuilder::new().build_p1();
-        let mut store = wasmtime::Store::new(
-            &engine,
-            StoreData {
-                wasi_ctx: Some(wasi),
-            },
-        );
+        let mut store = wasmtime::Store::new(&engine, wasi);
         let module =
             wasmtime::Module::new(store.engine(), &include_bytes!("regex_bench.control.wasm"))
                 .unwrap();
         let mut linker = wasmtime::Linker::new(&engine);
-        wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |s: &mut StoreData| {
-            s.wasi_ctx.as_mut().unwrap()
-        })
-        .unwrap();
+        wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s| s).unwrap();
 
         b.iter(|| run_iter(&linker, &module, &mut store));
     });

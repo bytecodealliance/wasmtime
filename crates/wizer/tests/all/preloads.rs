@@ -49,7 +49,7 @@ fn run_with_preloads(args: &[wasmtime::Val], wat: &str) -> Result<wasmtime::Val>
         .ok_or_else(|| anyhow::anyhow!("no `run` function on test module"))?;
     let mut returned = vec![wasmtime::Val::I32(0)];
     run.call(&mut store, args, &mut returned)?;
-    Ok(returned[0].clone())
+    Ok(returned[0])
 }
 
 #[test]
