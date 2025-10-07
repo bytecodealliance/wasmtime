@@ -161,6 +161,7 @@ members = [
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
   "crates/wasi-tls-nativetls",
+  "crates/wizer/fuzz",
   "examples/fib-debug/wasm",
   "examples/wasm",
   "examples/tokio/wasm",
