@@ -271,7 +271,7 @@ wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version 
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=39.0.0", package = 'wasmtime-internal-wit-bindgen' }
 wasmtime-math = { path = "crates/math", version = "=39.0.0", package = 'wasmtime-internal-math'  }
 wasmtime-unwinder = { path = "crates/unwinder", version = "=39.0.0", package = 'wasmtime-internal-unwinder' }
-wasmtime-wizer = { path = "crates/wizer", version = "=39.0.0" }
+wasmtime-wizer = { path = "crates/wizer", version = "39.0.0" }
 
 # Miscellaneous crates without a `wasmtime-*` prefix in their name but still
 # used in the `wasmtime-*` family of crates depending on various features/etc.
