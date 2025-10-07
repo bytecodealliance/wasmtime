@@ -17,10 +17,6 @@ workspace = true
 [package.metadata.docs.rs]
 all-features = true
 
-[[bin]]
-name = "wizer"
-required-features = ["env_logger", "clap"]
-
 [[bench]]
 name = "regex"
 harness = false
@@ -31,7 +27,6 @@ harness = false
 
 [dependencies]
 anyhow = { workspace = true }
-env_logger = { workspace = true, optional = true }
 log = { workspace = true }
 rayon = { workspace = true }
 clap = { workspace = true, optional = true }
