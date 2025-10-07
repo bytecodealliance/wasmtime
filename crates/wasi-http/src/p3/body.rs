@@ -40,6 +40,12 @@ pub(crate) enum Body {
     },
 }
 
+impl std::fmt::Debug for Body {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        "Body { .. }".fmt(f)
+    }
+}
+
 /// [FutureConsumer] implementation for future passed to `consume-body`.
 struct BodyResultConsumer(
     Option<oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>>,
@@ -69,7 +75,7 @@ where
 
 impl Body {
     /// Implementation of `consume-body` shared between requests and responses
-    pub(crate) fn consume<T>(
+    pub fn consume<T>(
         self,
         mut store: Access<'_, T, WasiHttp>,
         fut: FutureReader<Result<(), ErrorCode>>,
@@ -114,7 +120,7 @@ impl Body {
     }
 
     /// Implementation of `drop` shared between requests and responses
-    pub(crate) fn drop(self, mut store: impl AsContextMut) {
+    pub fn drop(self, mut store: impl AsContextMut) {
         if let Body::Guest {
             contents_rx,
             mut trailers_rx,
@@ -256,7 +262,7 @@ impl<D> StreamConsumer<D> for UnlimitedGuestBodyConsumer {
 }
 
 /// [http_body::Body] implementation for bodies originating in the guest.
-pub(crate) struct GuestBody {
+pub struct GuestBody {
     contents_rx: Option<mpsc::Receiver<Result<Bytes, ErrorCode>>>,
     trailers_rx: Option<oneshot::Receiver<Result<Option<Arc<http::HeaderMap>>, ErrorCode>>>,
     content_length: Option<u64>,
@@ -264,7 +270,7 @@ pub(crate) struct GuestBody {
 
 impl GuestBody {
     /// Construct a new [GuestBody]
-    pub(crate) fn new<T: 'static>(
+    pub fn new<T: 'static>(
         mut store: impl AsContextMut<Data = T>,
         contents_rx: Option<StreamReader<u8>>,
         trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
