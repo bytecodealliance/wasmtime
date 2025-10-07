@@ -1,5 +1,6 @@
 use crate::{WasmtimeStoreContextMut, abort};
-use std::{mem::MaybeUninit, num::NonZeroU64, os::raw::c_void, ptr};
+use std::mem::{ManuallyDrop, MaybeUninit};
+use std::{num::NonZeroU64, os::raw::c_void, ptr};
 use wasmtime::{AnyRef, ExternRef, I31, OwnedRooted, Ref, RootScope, Val};
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
@@ -207,11 +208,23 @@ macro_rules! ref_wrapper {
                 ))
             }
 
-            pub unsafe fn from_wasmtime(self) -> Option<OwnedRooted<$wasmtime>> {
+            pub unsafe fn into_wasmtime(self) -> Option<OwnedRooted<$wasmtime>> {
+                ManuallyDrop::new(self).to_owned()
+            }
+
+            unsafe fn to_owned(&self) -> Option<OwnedRooted<$wasmtime>> {
                 let store_id = NonZeroU64::new(self.store_id)?;
                 Some(OwnedRooted::from_owned_raw_parts_for_c_api(
                     store_id, self.a, self.b, self.c,
                 ))
+            }
+        }
+
+        impl Drop for $c {
+            fn drop(&mut self) {
+                unsafe {
+                    let _ = self.to_owned();
+                }
             }
         }
 
@@ -248,7 +261,6 @@ ref_wrapper!(ExternRef => wasmtime_externref_t);
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_clone(
-    _cx: WasmtimeStoreContextMut<'_>,
     anyref: Option<&wasmtime_anyref_t>,
     out: &mut MaybeUninit<wasmtime_anyref_t>,
 ) {
@@ -257,12 +269,11 @@ pub unsafe extern "C" fn wasmtime_anyref_clone(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_anyref_unroot(
-    _cx: WasmtimeStoreContextMut<'_>,
-    val: Option<&mut MaybeUninit<wasmtime_anyref_t>>,
-) {
-    if let Some(val) = val.and_then(|v| v.assume_init_read().from_wasmtime()) {
-        drop(val);
+pub unsafe extern "C" fn wasmtime_anyref_unroot(val: Option<&mut ManuallyDrop<wasmtime_anyref_t>>) {
+    if let Some(val) = val {
+        unsafe {
+            ManuallyDrop::drop(val);
+        }
     }
 }
 
@@ -371,7 +382,6 @@ pub unsafe extern "C" fn wasmtime_externref_data(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_externref_clone(
-    _cx: WasmtimeStoreContextMut<'_>,
     externref: Option<&wasmtime_externref_t>,
     out: &mut MaybeUninit<wasmtime_externref_t>,
 ) {
@@ -381,11 +391,12 @@ pub unsafe extern "C" fn wasmtime_externref_clone(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_externref_unroot(
-    _cx: WasmtimeStoreContextMut<'_>,
-    val: Option<&mut MaybeUninit<wasmtime_externref_t>>,
+    val: Option<&mut ManuallyDrop<wasmtime_externref_t>>,
 ) {
-    if let Some(val) = val.and_then(|v| v.assume_init_read().from_wasmtime()) {
-        drop(val);
+    if let Some(val) = val {
+        unsafe {
+            ManuallyDrop::drop(val);
+        }
     }
 }
 

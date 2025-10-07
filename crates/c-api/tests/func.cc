@@ -88,10 +88,9 @@ TEST(TypedFunc, Call) {
                 {ValKind::ExternRef, ValKind::ExternRef});
     Func f(store, ty, [](auto caller, auto params, auto results) {
       caller.context().gc();
-      EXPECT_TRUE(params[0].externref(caller));
-      EXPECT_EQ(std::any_cast<int>(params[0].externref(caller)->data(caller)),
-                100);
-      EXPECT_FALSE(params[1].externref(caller));
+      EXPECT_TRUE(params[0].externref());
+      EXPECT_EQ(std::any_cast<int>(params[0].externref()->data(caller)), 100);
+      EXPECT_FALSE(params[1].externref());
       results[0] = ExternRef(caller, int(3));
       results[1] = std::optional<ExternRef>(std::nullopt);
       caller.context().gc();

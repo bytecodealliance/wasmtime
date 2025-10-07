@@ -43,6 +43,8 @@ uint64_t get_thread_id() {
 
 // A function to be called from Wasm code.
 own wasm_trap_t *callback(const wasm_val_vec_t *args, wasm_val_vec_t *results) {
+  (void)args;
+  (void)results;
   printf("> Thread %lu running\n", (uint64_t)get_thread_id());
   return NULL;
 }
@@ -117,7 +119,7 @@ void *run(void *args_abs) {
   return NULL;
 }
 
-int main(int argc, const char *argv[]) {
+int main() {
   // Initialize.
   wasm_engine_t *engine = wasm_engine_new();
 
