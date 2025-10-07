@@ -17,7 +17,7 @@ mod translate;
 pub use wasmtime;
 
 pub use crate::info::ModuleContext;
-use anyhow::{Context, bail};
+use anyhow::Context;
 use std::collections::{HashMap, HashSet};
 use wasmtime::{Extern, Module, Result, Store};
 
@@ -212,8 +212,7 @@ impl Wizer {
                 #[cfg(not(feature = "wasmprinter"))]
                 let wat = "`wasmprinter` cargo feature is not enabled".to_string();
                 panic!(
-                    "instrumented Wasm is not valid: {:?}\n\nWAT:\n{}",
-                    error, wat
+                    "instrumented Wasm is not valid: {error:?}\n\nWAT:\n{wat}"
                 );
             }
         }
@@ -241,7 +240,7 @@ impl Wizer {
                     .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
                 #[cfg(not(feature = "wasmprinter"))]
                 let wat = "`wasmprinter` cargo feature is not enabled".to_string();
-                panic!("rewritten Wasm is not valid: {:?}\n\nWAT:\n{}", error, wat);
+                panic!("rewritten Wasm is not valid: {error:?}\n\nWAT:\n{wat}");
             }
         }
 
@@ -357,7 +356,7 @@ impl Wizer {
         if let Some(export) = instance.get_export(&mut *store, "_initialize") {
             if let Extern::Func(func) = export {
                 func.typed::<(), ()>(&store)
-                    .and_then(|f| f.call(&mut *store, ()).map_err(Into::into))
+                    .and_then(|f| f.call(&mut *store, ()))
                     .context("calling the Reactor initialization function")?;
 
                 if self.init_func == "_initialize" {

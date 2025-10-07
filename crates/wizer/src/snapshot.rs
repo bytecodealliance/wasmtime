@@ -97,7 +97,7 @@ fn snapshot_globals(
     let mut globals = vec![];
     let mut index = 0;
     loop {
-        let name = format!("__wizer_global_{}", index);
+        let name = format!("__wizer_global_{index}");
         match instance.get_global(&mut *ctx, &name) {
             None => break,
             Some(global) => {
@@ -122,7 +122,7 @@ fn snapshot_memories(
     let mut data_segments = vec![];
     let mut memory_index = 0;
     loop {
-        let name = format!("__wizer_memory_{}", memory_index);
+        let name = format!("__wizer_memory_{memory_index}");
         let memory = match instance.get_memory(&mut *ctx, &name) {
             None => break,
             Some(memory) => memory,
