@@ -41,6 +41,9 @@ impl WizerCommand {
             wasm = fs::read(&self.input).context("failed to read input Wasm module")?;
         }
 
+        #[cfg(feature = "wat")]
+        let wasm = wat::parse_bytes(&wasm)?;
+
         // Instrument the input wasm with wizer.
         let (cx, instrumented_wasm) = self.wizer.instrument(&wasm)?;
 
