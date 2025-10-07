@@ -83,15 +83,8 @@ macro_rules! isle_common_prelude_methods {
             let y = y.sign_extend_from_width(type_width).bits();
             let shift = 64 - type_width;
 
-            // NB: We can't rely on `checked_div` to detect `ty::MIN / -1`
-            // (which overflows and should trap) because we are working with
-            // `i64` values here, and `i32::MIN != i64::MIN`, for
-            // example. Therefore, we have to explicitly check for this case
-            // ourselves.
-            let min = ((self.ty_smin(ty) as i64) << shift) >> shift;
-            if x == min && y == -1 {
-                return None;
-            }
+            // iN::min % -1 is defined as 0 in wasm so no need
+            // to check for it
 
             let result = x.checked_rem(y)?;
             Some(Imm64::new(result).mask_to_width(type_width))
