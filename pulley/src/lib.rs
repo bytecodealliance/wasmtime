@@ -1,6 +1,6 @@
 //! The pulley bytecode for fast interpreters.
 
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(pulley_tail_calls, feature(explicit_tail_calls))]
 #![cfg_attr(pulley_tail_calls, allow(incomplete_features, unstable_features))]
 #![deny(missing_docs)]
