@@ -21,6 +21,10 @@ function(CREATE_TARGET TARGET TARGET_PATH)
     target_compile_definitions(wasmtime-${TARGET} PRIVATE WASMTIME_TEST_ONLY)
   endif()
 
+  if (CMAKE_C_FLAGS MATCHES ".*-fsanitize=address.*")
+    target_compile_definitions(wasmtime-${TARGET} PRIVATE WASMTIME_ASAN)
+  endif()
+
   set_target_properties(wasmtime-${TARGET} PROPERTIES
     OUTPUT_NAME wasmtime-${TARGET}
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<0:>

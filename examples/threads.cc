@@ -31,8 +31,13 @@ std::string readFile(const char *name) {
   return strStream.str();
 }
 
+#if defined(WASMTIME_ASAN)
+const int N_THREADS = 1;
+const int N_REPS = 1;
+#else
 const int N_THREADS = 10;
 const int N_REPS = 3;
+#endif
 
 std::mutex print_mutex;
 
