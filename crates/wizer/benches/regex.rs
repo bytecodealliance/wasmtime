@@ -2,11 +2,9 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use std::convert::TryFrom;
 use wasmtime_wasi::p1::WasiP1Ctx;
 
-fn run_iter(
-    linker: &wasmtime::Linker<WasiP1Ctx>,
-    module: &wasmtime::Module,
-    mut store: &mut wasmtime::Store<WasiP1Ctx>,
-) {
+fn run_iter(linker: &wasmtime::Linker<WasiP1Ctx>, module: &wasmtime::Module) {
+    let wasi = wasmtime_wasi::WasiCtxBuilder::new().build_p1();
+    let mut store = wasmtime::Store::new(linker.engine(), wasi);
     let instance = linker.instantiate(&mut store, module).unwrap();
 
     let memory = instance.get_memory(&mut store, "memory").unwrap();
@@ -27,27 +25,21 @@ fn bench_regex(c: &mut Criterion) {
     let mut group = c.benchmark_group("regex");
     group.bench_function("control", |b| {
         let engine = wasmtime::Engine::default();
-        let wasi = wasmtime_wasi::WasiCtxBuilder::new().build_p1();
-        let mut store = wasmtime::Store::new(&engine, wasi);
         let module =
-            wasmtime::Module::new(store.engine(), &include_bytes!("regex_bench.control.wasm"))
-                .unwrap();
+            wasmtime::Module::new(&engine, &include_bytes!("regex_bench.control.wasm")).unwrap();
         let mut linker = wasmtime::Linker::new(&engine);
         wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s| s).unwrap();
 
-        b.iter(|| run_iter(&linker, &module, &mut store));
+        b.iter(|| run_iter(&linker, &module));
     });
     group.bench_function("wizer", |b| {
         let engine = wasmtime::Engine::default();
-        let wasi = wasmtime_wasi::WasiCtxBuilder::new().build_p1();
-        let mut store = wasmtime::Store::new(&engine, wasi);
         let module =
-            wasmtime::Module::new(store.engine(), &include_bytes!("regex_bench.control.wasm"))
-                .unwrap();
+            wasmtime::Module::new(&engine, &include_bytes!("regex_bench.wizer.wasm")).unwrap();
         let mut linker = wasmtime::Linker::new(&engine);
         wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s| s).unwrap();
 
-        b.iter(|| run_iter(&linker, &module, &mut store));
+        b.iter(|| run_iter(&linker, &module));
     });
     group.finish();
 }
