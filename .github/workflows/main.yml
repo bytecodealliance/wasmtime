@@ -623,6 +623,7 @@ jobs:
     - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
     - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
     - run: cargo fuzz build --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
+    - run: cargo fuzz build --dev --fuzz-dir ./crates/wizer/fuzz
 
   # Perform all tests of the c-api
   test_capi:
