@@ -38,6 +38,7 @@ TEST(component, instantiate) {
   CHECK_ERR(error);
 
   wasmtime_component_linker_delete(linker);
+  wasmtime_component_delete(component);
 
   wasmtime_store_delete(store);
   wasm_engine_delete(engine);
