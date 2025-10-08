@@ -20,7 +20,13 @@ const KNOWN_FAILURES: &[&str] = &[
     "filesystem-read-directory",
     // FIXME(#11524)
     "remove_directory_trailing_slashes",
+    #[cfg(target_vendor = "apple")]
+    "filesystem-advise",
     // FIXME(WebAssembly/wasi-testsuite#128)
+    #[cfg(windows)]
+    "fd_fdstat_set_rights",
+    #[cfg(windows)]
+    "path_link",
     #[cfg(windows)]
     "dangling_fd",
     #[cfg(windows)]
