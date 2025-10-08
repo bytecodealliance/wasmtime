@@ -779,7 +779,12 @@ impl Config {
         self
     }
 
-    fn wasm_feature(&mut self, flag: WasmFeatures, enable: bool) -> &mut Self {
+    /// Explicitly sets the status of a given `WasmFeature`. This is a
+    /// low-level method that does not necessarily imply that wasmtime
+    /// _supports_ a feature. It should only be used to _disable_
+    /// features that callers want to be rejected by the parser or
+    /// _enable_ features callers are certain that wasmtime supports.
+    pub fn wasm_feature(&mut self, flag: WasmFeatures, enable: bool) -> &mut Self {
         self.enabled_features.set(flag, enable);
         self.disabled_features.set(flag, !enable);
         self
