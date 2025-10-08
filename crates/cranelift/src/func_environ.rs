@@ -3746,14 +3746,13 @@ impl FuncEnvironment<'_> {
         _operand_types: Option<&[WasmValType]>,
         builder: &mut FunctionBuilder,
         state: &FuncTranslationStacks,
-        srcloc: ir::SourceLoc,
     ) -> WasmResult<()> {
         if self.tunables.consume_fuel {
             self.fuel_before_op(op, builder, state.reachable());
         }
         if state.reachable() && self.state_slot.is_some() {
             let inst = builder.ins().sequence_point();
-            let tags = self.debug_tags(state, srcloc);
+            let tags = self.debug_tags(state, builder.srcloc());
             builder.func.debug_tags.set(inst, tags);
         }
 

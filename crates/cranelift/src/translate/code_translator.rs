@@ -124,7 +124,6 @@ pub fn translate_operator(
     builder: &mut FunctionBuilder,
     stack: &mut FuncTranslationStacks,
     environ: &mut FuncEnvironment<'_>,
-    srcloc: ir::SourceLoc,
 ) -> WasmResult<()> {
     log::trace!("Translating Wasm opcode: {op:?}");
 
@@ -135,6 +134,7 @@ pub fn translate_operator(
 
     // Given that we believe the current block is reachable, the FunctionBuilder ought to agree.
     debug_assert!(!builder.is_unreachable());
+    let srcloc = builder.srcloc();
 
     let operand_types = operand_types.unwrap_or_else(|| {
         panic!("should always have operand types available for valid, reachable ops; op = {op:?}")

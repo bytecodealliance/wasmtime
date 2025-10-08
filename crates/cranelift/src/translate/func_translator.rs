@@ -254,23 +254,14 @@ fn parse_function_body(
 
     while !reader.eof() {
         let pos = reader.original_position();
-        let srcloc = cur_srcloc(&reader.get_binary_reader());
-        builder.set_srcloc(srcloc);
+        builder.set_srcloc(cur_srcloc(&reader.get_binary_reader()));
 
         let op = reader.read()?;
         let operand_types =
             validate_op_and_get_operand_types(validator, environ, &mut operand_types, &op, pos)?;
 
-        environ.before_translate_operator(&op, operand_types, builder, stack, srcloc)?;
-        translate_operator(
-            validator,
-            &op,
-            operand_types,
-            builder,
-            stack,
-            environ,
-            srcloc,
-        )?;
+        environ.before_translate_operator(&op, operand_types, builder, stack)?;
+        translate_operator(validator, &op, operand_types, builder, stack, environ)?;
         environ.after_translate_operator(&op, validator, builder, stack)?;
     }
     environ.debug_instrumentation_at_end(builder)?;
