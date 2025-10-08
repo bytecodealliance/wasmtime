@@ -18,6 +18,7 @@ target
 .z3-trace
 foo
 .cargo
+.DS_Store
 publish
 vendor
 examples/build
