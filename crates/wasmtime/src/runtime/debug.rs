@@ -162,13 +162,13 @@ impl<'a> StackView<'a> {
     }
 
     /// Get the number of locals in this frame.
-    pub fn num_locals(&self) -> usize {
-        self.frame_data().locals.len()
+    pub fn num_locals(&self) -> u32 {
+        u32::try_from(self.frame_data().locals.len()).unwrap()
     }
 
     /// Get the depth of the operand stack in this frame.
-    pub fn num_stacks(&self) -> usize {
-        self.frame_data().stack.len()
+    pub fn num_stacks(&self) -> u32 {
+        u32::try_from(self.frame_data().stack.len()).unwrap()
     }
 
     /// Get the type and value of the given local in this frame.
@@ -177,9 +177,9 @@ impl<'a> StackView<'a> {
     ///
     /// Panics if the index is out-of-range (greater than
     /// `num_locals()`).
-    pub fn local(&mut self, index: usize) -> Val {
+    pub fn local(&mut self, index: u32) -> Val {
         let data = self.frame_data();
-        let (offset, ty) = data.locals[index];
+        let (offset, ty) = data.locals[usize::try_from(index).unwrap()];
         let slot_addr = data.slot_addr;
         // SAFETY: compiler produced metadata to describe this local
         // slot and stored a value of the correct type into it.
@@ -193,9 +193,9 @@ impl<'a> StackView<'a> {
     /// from there are more recently pushed values.  In other words,
     /// index order reads the Wasm virtual machine's abstract stack
     /// state left-to-right.
-    pub fn stack(&mut self, index: usize) -> Val {
+    pub fn stack(&mut self, index: u32) -> Val {
         let data = self.frame_data();
-        let (offset, ty) = data.stack[index];
+        let (offset, ty) = data.stack[usize::try_from(index).unwrap()];
         let slot_addr = data.slot_addr;
         // SAFETY: compiler produced metadata to describe this
         // operand-stack slot and stored a value of the correct type
