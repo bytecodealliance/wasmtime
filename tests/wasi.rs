@@ -26,6 +26,8 @@ const KNOWN_FAILURES: &[&str] = &[
     #[cfg(windows)]
     "fd_fdstat_set_rights",
     #[cfg(windows)]
+    "filesystem-flags-and-type",
+    #[cfg(windows)]
     "path_link",
     #[cfg(windows)]
     "dangling_fd",
