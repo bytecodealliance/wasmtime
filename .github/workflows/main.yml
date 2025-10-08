@@ -295,6 +295,9 @@ jobs:
           --exclude wasmtime-cli \
           --exclude test-programs \
           --exclude cranelift-codegen-meta \
+          --exclude wasmtime-wasi-nn \
+          --exclude wasmtime-fuzzing \
+          --exclude wasm-spec-interpreter \
           --all-features
       env:
         RUSTDOCFLAGS: --cfg=docsrs
