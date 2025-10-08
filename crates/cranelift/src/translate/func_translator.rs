@@ -261,8 +261,7 @@ fn parse_function_body(
         let operand_types =
             validate_op_and_get_operand_types(validator, environ, &mut operand_types, &op, pos)?;
 
-        environ.debug_instrumentation_before_op(builder, stack, srcloc)?;
-        environ.before_translate_operator(&op, operand_types, builder, stack)?;
+        environ.before_translate_operator(&op, operand_types, builder, stack, srcloc)?;
         translate_operator(
             validator,
             &op,
@@ -272,8 +271,7 @@ fn parse_function_body(
             environ,
             srcloc,
         )?;
-        environ.after_translate_operator(&op, operand_types, builder, stack)?;
-        environ.debug_instrumentation_after_op(validator, builder, stack)?;
+        environ.after_translate_operator(&op, validator, builder, stack)?;
     }
     environ.debug_instrumentation_at_end(builder)?;
     environ.after_translate_function(builder, stack)?;

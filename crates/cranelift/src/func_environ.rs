@@ -1328,35 +1328,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    /// Perform debug instrumentation prior to translating an
-    /// operator.
-    pub(crate) fn debug_instrumentation_before_op(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        stack: &mut FuncTranslationStacks,
-        srcloc: ir::SourceLoc,
-    ) -> WasmResult<()> {
-        if stack.reachable() && self.state_slot.is_some() {
-            let inst = builder.ins().sequence_point();
-            let tags = self.debug_tags(stack, srcloc);
-            builder.func.debug_tags.set(inst, tags);
-        }
-        Ok(())
-    }
-
-    /// Perform debug instrumentation after translating an operator.
-    pub(crate) fn debug_instrumentation_after_op(
-        &mut self,
-        validator: &FuncValidator<impl WasmModuleResources>,
-        builder: &mut FunctionBuilder,
-        stack: &mut FuncTranslationStacks,
-    ) -> WasmResult<()> {
-        if stack.reachable() {
-            self.update_state_slot_stack(validator, builder, stack)?;
-        }
-        Ok(())
-    }
-
     /// Perform debug instrumentation before translating the whole function.
     pub(crate) fn debug_instrumentation_at_start(
         &mut self,
@@ -3775,22 +3746,32 @@ impl FuncEnvironment<'_> {
         _operand_types: Option<&[WasmValType]>,
         builder: &mut FunctionBuilder,
         state: &FuncTranslationStacks,
+        srcloc: ir::SourceLoc,
     ) -> WasmResult<()> {
         if self.tunables.consume_fuel {
             self.fuel_before_op(op, builder, state.reachable());
         }
+        if state.reachable() && self.state_slot.is_some() {
+            let inst = builder.ins().sequence_point();
+            let tags = self.debug_tags(state, srcloc);
+            builder.func.debug_tags.set(inst, tags);
+        }
+
         Ok(())
     }
 
     pub fn after_translate_operator(
         &mut self,
         op: &Operator,
-        _operand_types: Option<&[WasmValType]>,
+        validator: &FuncValidator<impl WasmModuleResources>,
         builder: &mut FunctionBuilder,
-        state: &FuncTranslationStacks,
+        state: &mut FuncTranslationStacks,
     ) -> WasmResult<()> {
         if self.tunables.consume_fuel && state.reachable() {
             self.fuel_after_op(op, builder);
+        }
+        if state.reachable() {
+            self.update_state_slot_stack(validator, builder, state)?;
         }
         Ok(())
     }
