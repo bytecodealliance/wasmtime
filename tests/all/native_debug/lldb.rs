@@ -197,12 +197,7 @@ check: exited with status
 #[ignore]
 pub fn dwarf_generic() -> Result<()> {
     let output = lldb_with_script(
-        &[
-            "-Ccache=n",
-            "-Ddebug-info",
-            "-Oopt-level=0",
-            DWARF_GENERIC,
-        ],
+        &["-Ccache=n", "-Ddebug-info", "-Oopt-level=0", DWARF_GENERIC],
         r#"br set -n debug_break -C up
 r
 p __vmctx->set()
@@ -426,12 +421,7 @@ check: exited with status
 #[ignore]
 pub fn dwarf_fission() -> Result<()> {
     let output = lldb_with_script(
-        &[
-            "-Ccache=n",
-            "-Ddebug-info",
-            "-Oopt-level=0",
-            DWARF_FISSION,
-        ],
+        &["-Ccache=n", "-Ddebug-info", "-Oopt-level=0", DWARF_FISSION],
         r#"breakpoint set --file dwarf_fission.c --line 8
 r
 fr v
