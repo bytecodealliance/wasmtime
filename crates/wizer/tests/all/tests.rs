@@ -458,6 +458,7 @@ fn rust_regex() -> Result<()> {
         .args(&["build", "--target=wasm32-wasip1", "-q"])
         .current_dir("./tests/regex-test")
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("RUSTFLAGS")
         .status()
         .expect("failed to build regex test case");
     assert!(status.success());
