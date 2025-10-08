@@ -588,12 +588,19 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut exception_tables = ExceptionTableBuilder::default();
         let mut frame_tables = FrameTableBuilder::default();
 
-        let mut frame_descriptors = HashMap::new();
-        if self.tunables.debug_instrumentation {
-            for (_, key, func) in funcs {
+        let funcs = funcs
+            .iter()
+            .map(|(sym, key, func)| {
                 debug_assert!(!func.is::<Option<CompilerContext>>());
                 debug_assert!(func.is::<CompiledFunction>());
                 let func = func.downcast_ref::<CompiledFunction>().unwrap();
+                (sym, *key, func)
+            })
+            .collect::<Vec<_>>();
+
+        let mut frame_descriptors = HashMap::new();
+        if self.tunables.debug_instrumentation {
+            for (_, key, func) in &funcs {
                 frame_descriptors.insert(
                     *key,
                     func.debug_slot_descriptor
@@ -606,10 +613,6 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, _key, func)) in funcs.iter().enumerate() {
-            debug_assert!(!func.is::<Option<CompilerContext>>());
-            debug_assert!(func.is::<CompiledFunction>());
-            let func = func.downcast_ref::<CompiledFunction>().unwrap();
-
             let (sym_id, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
             log::trace!("symbol id {sym_id:?} = {sym:?}");
 
