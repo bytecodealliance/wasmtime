@@ -462,6 +462,7 @@ default = [
   "addr2line",
   "debug-builtins",
   "component-model",
+  "component-model-async",
   "threads",
   "gc",
   "gc-drc",
