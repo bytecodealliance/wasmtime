@@ -536,10 +536,6 @@ criteria = "safe-to-deploy"
 version = "2.14.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.serde_yaml]]
-version = "0.9.34+deprecated"
-criteria = "safe-to-run"
-
 [[exemptions.shuffling-allocator]]
 version = "1.1.2"
 criteria = "safe-to-deploy"
@@ -604,10 +600,6 @@ criteria = "safe-to-deploy"
 [[exemptions.typenum]]
 version = "1.15.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.unsafe-libyaml]]
-version = "0.2.11"
-criteria = "safe-to-run"
 
 [[exemptions.untrusted]]
 version = "0.9.0"
