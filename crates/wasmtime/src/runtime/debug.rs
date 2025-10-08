@@ -1,7 +1,7 @@
 //! Debugging API.
 
 use crate::{
-    AnyRef, ExnRef, ExternRef, Func, Instance, Module, Val, ValType,
+    AnyRef, ExnRef, ExternRef, Func, Instance, Module, Val,
     store::{AutoAssertNoGc, StoreOpaque},
     vm::{CurrentActivationBacktrace, VMContext},
 };
@@ -12,6 +12,8 @@ use wasmtime_environ::{
     FrameTableDescriptorIndex, FrameValType, FuncKey,
 };
 use wasmtime_unwinder::Frame;
+
+use super::store::AsStoreOpaque;
 
 impl StoreOpaque {
     /// Provide an object that captures Wasm stack state, including
@@ -34,11 +36,14 @@ impl StoreOpaque {
         }
 
         let iter = unsafe { CurrentActivationBacktrace::new(self) };
-        Some(StackView {
+        let mut view = StackView {
             iter,
             is_trapping_frame: false,
             frames: vec![],
-        })
+            current: None,
+        };
+        view.move_up(); // Load the first frame.
+        Some(view)
     }
 }
 
@@ -69,11 +74,14 @@ pub struct StackView<'a> {
     /// frame in a physical frame (i.e., for inlining); thus, its size
     /// is bounded by our inlining depth.
     frames: Vec<VirtualFrame>,
+
+    /// Currently focused virtual frame.
+    current: Option<FrameData>,
 }
 
-impl<'a> Iterator for StackView<'a> {
-    type Item = FrameView;
-    fn next(&mut self) -> Option<Self::Item> {
+impl<'a> StackView<'a> {
+    /// Move up to the next frame in the activation.
+    pub fn move_up(&mut self) {
         // If there are no virtual frames to yield, take and decode
         // the next physical frame.
         //
@@ -84,14 +92,115 @@ impl<'a> Iterator for StackView<'a> {
         // functions or other things that we completely ignore). If
         // this ever changes, we can remove the assert and convert
         // this to a loop that polls until it finds virtual frames.
+        self.current = None;
         if self.frames.is_empty() {
-            let next_frame = self.iter.next()?;
-            self.frames = VirtualFrame::decode(self.iter.store, next_frame, self.is_trapping_frame);
+            let Some(next_frame) = self.iter.next() else {
+                return;
+            };
+            self.frames =
+                VirtualFrame::decode(&mut self.iter.store, next_frame, self.is_trapping_frame);
             debug_assert!(!self.frames.is_empty());
             self.is_trapping_frame = false;
         }
 
-        self.frames.pop().map(move |vf| FrameView::new(vf))
+        // Take a frame and focus it as the current one.
+        self.current = self.frames.pop().map(|vf| FrameData::compute(vf));
+    }
+
+    /// Has the iterator reached the end of the activation?
+    pub fn done(&self) -> bool {
+        self.current.is_none()
+    }
+
+    fn frame_data(&self) -> &FrameData {
+        self.current.as_ref().expect("No current frame")
+    }
+
+    fn raw_instance(&self) -> &crate::vm::Instance {
+        // Read out the vmctx slot.
+        // SAFETY: vmctx is always at offset 0 in the slot.
+        let vmctx: *mut VMContext = unsafe { *(self.frame_data().slot_addr as *mut _) };
+        let vmctx = NonNull::new(vmctx).expect("null vmctx in debug state slot");
+        // SAFETY: the stored vmctx value is a valid instance in this
+        // store; we only visit frames from this store in the
+        // backtrace.
+        let instance = unsafe { crate::vm::Instance::from_vmctx(vmctx) };
+        // SAFETY: the instance pointer read above is valid.
+        unsafe { instance.as_ref() }
+    }
+
+    /// Get the instance associated with the current frame.
+    pub fn instance(&mut self) -> Instance {
+        let instance = self.raw_instance();
+        Instance::from_wasmtime(instance.id(), self.iter.store.as_store_opaque())
+    }
+
+    /// Get the module associated with the current frame, if any
+    /// (i.e., not a container instance for a host-created entity).
+    pub fn module(&self) -> Option<&Module> {
+        let instance = self.raw_instance();
+        instance.runtime_module()
+    }
+
+    /// Get the raw function index associated with the current frame, and the
+    /// PC as an offset within its code section, if it is a Wasm
+    /// function directly from the given `Module` (rather than a
+    /// trampoline).
+    pub fn wasm_function_index_and_pc(&self) -> Option<(DefinedFuncIndex, u32)> {
+        let data = self.frame_data();
+        let FuncKey::DefinedWasmFunction(module, func) = data.func_key else {
+            return None;
+        };
+        debug_assert_eq!(
+            module,
+            self.module()
+                .expect("module should be defined if this is a defined function")
+                .env_module()
+                .module_index
+        );
+        Some((func, data.wasm_pc))
+    }
+
+    /// Get the number of locals in this frame.
+    pub fn num_locals(&self) -> usize {
+        self.frame_data().locals.len()
+    }
+
+    /// Get the depth of the operand stack in this frame.
+    pub fn num_stacks(&self) -> usize {
+        self.frame_data().stack.len()
+    }
+
+    /// Get the type and value of the given local in this frame.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out-of-range (greater than
+    /// `num_locals()`).
+    pub fn local(&mut self, index: usize) -> Val {
+        let data = self.frame_data();
+        let (offset, ty) = data.locals[index];
+        let slot_addr = data.slot_addr;
+        // SAFETY: compiler produced metadata to describe this local
+        // slot and stored a value of the correct type into it.
+        unsafe { read_value(&mut self.iter.store, slot_addr, offset, ty) }
+    }
+
+    /// Get the type and value of the given operand-stack value in
+    /// this frame.
+    ///
+    /// Index 0 corresponds to the bottom-of-stack, and higher indices
+    /// from there are more recently pushed values.  In other words,
+    /// index order reads the Wasm virtual machine's abstract stack
+    /// state left-to-right.
+    pub fn stack(&mut self, index: usize) -> Val {
+        let data = self.frame_data();
+        let (offset, ty) = data.stack[index];
+        let slot_addr = data.slot_addr;
+        // SAFETY: compiler produced metadata to describe this
+        // operand-stack slot and stored a value of the correct type
+        // into it.
+        unsafe { read_value(&mut self.iter.store, slot_addr, offset, ty) }
     }
 }
 
@@ -120,7 +229,11 @@ struct VirtualFrame {
 impl VirtualFrame {
     /// Return virtual frames corresponding to a physical frame, from
     /// outermost to innermost.
-    fn decode(store: &StoreOpaque, frame: Frame, is_trapping_frame: bool) -> Vec<VirtualFrame> {
+    fn decode(
+        store: &mut AutoAssertNoGc<'_>,
+        frame: Frame,
+        is_trapping_frame: bool,
+    ) -> Vec<VirtualFrame> {
         let module = store
             .modules()
             .lookup_module_by_pc(frame.pc())
@@ -150,8 +263,8 @@ impl VirtualFrame {
     }
 }
 
-/// A view of a frame that can decode values in that frame.
-pub struct FrameView {
+/// Data computed when we visit a given frame.
+struct FrameData {
     slot_addr: usize,
     func_key: FuncKey,
     wasm_pc: u32,
@@ -173,8 +286,8 @@ pub struct FrameView {
     stack: Vec<(FrameStateSlotOffset, FrameValType)>,
 }
 
-impl FrameView {
-    fn new(frame: VirtualFrame) -> Self {
+impl FrameData {
+    fn compute(frame: VirtualFrame) -> Self {
         let frame_table = frame.module.frame_table();
         // Parse the frame descriptor.
         let (data, slot_to_fp_offset) = frame_table
@@ -197,98 +310,13 @@ impl FrameView {
         // keep the borrow to the module alive.
         let locals = frame_state_slot.locals().collect::<Vec<_>>();
 
-        FrameView {
+        FrameData {
             slot_addr,
             func_key: frame_state_slot.func_key(),
             wasm_pc: frame.wasm_pc,
             stack,
             locals,
         }
-    }
-
-    fn raw_instance<'a>(&self, _store: &'a mut StoreOpaque) -> &'a crate::vm::Instance {
-        // Read out the vmctx slot.
-        // SAFETY: vmctx is always at offset 0 in the slot.
-        let vmctx: *mut VMContext = unsafe { *(self.slot_addr as *mut _) };
-        let vmctx = NonNull::new(vmctx).expect("null vmctx in debug state slot");
-        // SAFETY: the stored vmctx value is a valid instance in this
-        // store; we only visit frames from this store in the
-        // backtrace.
-        let instance = unsafe { crate::vm::Instance::from_vmctx(vmctx) };
-        // SAFETY: the instance pointer read above is valid.
-        unsafe { instance.as_ref() }
-    }
-
-    /// Get the instance associated with this frame.
-    pub fn instance(&self, view: &mut StackView<'_>) -> Instance {
-        let instance = self.raw_instance(view.iter.store);
-        Instance::from_wasmtime(instance.id(), view.iter.store)
-    }
-
-    /// Get the module associated with this frame, if any (i.e., not a
-    /// container instance for a host-created entity).
-    pub fn module<'a>(&self, view: &'a mut StackView<'_>) -> Option<&'a Module> {
-        let instance = self.raw_instance(view.iter.store);
-        instance.runtime_module()
-    }
-
-    /// Get the raw function index associated with this frame, and the
-    /// PC as an offset within its code section, if it is a Wasm
-    /// function directly from the given `Module` (rather than a
-    /// trampoline).
-    pub fn wasm_function_index_and_pc(
-        &self,
-        view: &mut StackView<'_>,
-    ) -> Option<(DefinedFuncIndex, u32)> {
-        let FuncKey::DefinedWasmFunction(module, func) = self.func_key else {
-            return None;
-        };
-        debug_assert_eq!(
-            module,
-            self.module(view)
-                .expect("module should be defined if this is a defined function")
-                .env_module()
-                .module_index
-        );
-        Some((func, self.wasm_pc))
-    }
-
-    /// Get the number of locals in this frame.
-    pub fn num_locals(&self) -> usize {
-        self.locals.len()
-    }
-
-    /// Get the depth of the operand stack in this frame.
-    pub fn num_stacks(&self) -> usize {
-        self.stack.len()
-    }
-
-    /// Get the type and value of the given local in this frame.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the index is out-of-range (greater than
-    /// `num_locals()`).
-    pub fn local(&self, view: &mut StackView<'_>, index: usize) -> (ValType, Val) {
-        let (offset, ty) = self.locals[index];
-        // SAFETY: compiler produced metadata to describe this local
-        // slot and stored a value of the correct type into it.
-        unsafe { read_value(view.iter.store, self.slot_addr, offset, ty) }
-    }
-
-    /// Get the type and value of the given operand-stack value in
-    /// this frame.
-    ///
-    /// Index 0 corresponds to the bottom-of-stack, and higher indices
-    /// from there are more recently pushed values.  In other words,
-    /// index order reads the Wasm virtual machine's abstract stack
-    /// state left-to-right.
-    pub fn stack(&self, view: &mut StackView<'_>, index: usize) -> (ValType, Val) {
-        let (offset, ty) = self.stack[index];
-        // SAFETY: compiler produced metadata to describe this
-        // operand-stack slot and stored a value of the correct type
-        // into it.
-        unsafe { read_value(view.iter.store, self.slot_addr, offset, ty) }
     }
 }
 
@@ -303,11 +331,11 @@ impl FrameView {
 /// instrumentation is correct, and as long as the tables are
 /// preserved through serialization).
 unsafe fn read_value(
-    store: &mut StoreOpaque,
+    store: &mut AutoAssertNoGc<'_>,
     slot_base: usize,
     offset: FrameStateSlotOffset,
     ty: FrameValType,
-) -> (ValType, Val) {
+) -> Val {
     let address = slot_base.wrapping_add(usize::try_from(offset.offset()).unwrap());
 
     // SAFETY: each case reads a value from memory that should be
@@ -315,46 +343,46 @@ unsafe fn read_value(
     match ty {
         FrameValType::I32 => {
             let value = unsafe { *(address as *const i32) };
-            (ValType::I32, Val::I32(value))
+            Val::I32(value)
         }
         FrameValType::I64 => {
             let value = unsafe { *(address as *const i64) };
-            (ValType::I64, Val::I64(value))
+            Val::I64(value)
         }
         FrameValType::F32 => {
             let value = unsafe { *(address as *const u32) };
-            (ValType::F32, Val::F32(value))
+            Val::F32(value)
         }
         FrameValType::F64 => {
             let value = unsafe { *(address as *const u64) };
-            (ValType::F64, Val::F64(value))
+            Val::F64(value)
         }
         FrameValType::V128 => {
             let value = unsafe { *(address as *const u128) };
-            (ValType::V128, Val::V128(value.into()))
+            Val::V128(value.into())
         }
         FrameValType::AnyRef => {
             let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { *(address as *const u32) };
             let value = AnyRef::_from_raw(&mut nogc, value);
-            (ValType::ANYREF, Val::AnyRef(value))
+            Val::AnyRef(value)
         }
         FrameValType::ExnRef => {
             let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { *(address as *const u32) };
             let value = ExnRef::_from_raw(&mut nogc, value);
-            (ValType::EXNREF, Val::ExnRef(value))
+            Val::ExnRef(value)
         }
         FrameValType::ExternRef => {
             let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { *(address as *const u32) };
             let value = ExternRef::_from_raw(&mut nogc, value);
-            (ValType::EXTERNREF, Val::ExternRef(value))
+            Val::ExternRef(value)
         }
         FrameValType::FuncRef => {
             let value = unsafe { *(address as *const *mut c_void) };
             let value = unsafe { Func::_from_raw(store, value) };
-            (ValType::EXTERNREF, Val::FuncRef(value))
+            Val::FuncRef(value)
         }
         FrameValType::ContRef => {
             unimplemented!("contref values are not implemented in the host API yet")

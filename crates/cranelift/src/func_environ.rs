@@ -1238,6 +1238,19 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // stack, that means that values were popped and then new
             // values were pushed; hence, these operand-stack values
             // are "dirty" and need to be flushed to the stackslot.
+            //
+            // N.B.: note that we don't re-sync GC-rooted values, and
+            // we don't root the instrumentation slots
+            // explicitly. This is safe as long as we don't have a
+            // moving GC, because the value that we're observing in
+            // the main program dataflow is already rooted in the main
+            // program (we are only storing an extra copy of it). But
+            // if/when we do build a moving GC, we will need to handle
+            // this, probably by invalidating the "freshness" of all
+            // ref-typed values after a safepoint and re-writing them
+            // to the instrumentation slot; or alternately, extending
+            // the debug instrumentation mechanism to be able to
+            // directly refer to the user stack-slot.
             for i in stack.stack_shape.len()..stack.stack.len() {
                 let parent_shape = i
                     .checked_sub(1)

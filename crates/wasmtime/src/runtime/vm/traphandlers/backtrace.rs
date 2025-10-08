@@ -28,6 +28,8 @@ use crate::runtime::vm::{
     Unwind, VMStoreContext,
     traphandlers::{CallThreadState, tls},
 };
+#[cfg(feature = "debug")]
+use crate::store::AutoAssertNoGc;
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
@@ -329,7 +331,7 @@ impl Backtrace {
 /// An iterator over one Wasm activation.
 #[cfg(feature = "debug")]
 pub(crate) struct CurrentActivationBacktrace<'a> {
-    pub(crate) store: &'a mut StoreOpaque,
+    pub(crate) store: AutoAssertNoGc<'a>,
     inner: Box<dyn Iterator<Item = Frame>>,
 }
 
@@ -370,6 +372,7 @@ impl<'a> CurrentActivationBacktrace<'a> {
             wasmtime_unwinder::frame_iterator(unwind, exit_pc, exit_fp, trampoline_fp)
         });
 
+        let store = AutoAssertNoGc::new(store);
         CurrentActivationBacktrace { store, inner }
     }
 }
