@@ -3,96 +3,96 @@
 (rule (simplify
       (clz (fits_in_64 ty)
             (iconst ty kx)))
-      (subsume (iconst ty (imm64_clz ty kx))))
+      (subsume (const ty (imm64_clz ty kx))))
 
 
 (rule (simplify
        (ctz (fits_in_64 ty)
              (iconst ty kx)))
-      (subsume (iconst ty (imm64_ctz ty kx))))
+      (subsume (const ty (imm64_ctz ty kx))))
 
 (rule (simplify
        (iadd (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_wrapping_add k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_wrapping_add k1 k2)))))
 
 (rule (simplify
        (isub (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_wrapping_sub k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_wrapping_sub k1 k2)))))
 
 (rule (simplify
        (imul (fits_in_64 ty)
              (iconst ty (u64_from_imm64 k1))
              (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_wrapping_mul k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_wrapping_mul k1 k2)))))
 
 (rule (simplify_skeleton
        (sdiv (iconst ty k1)
              (iconst ty k2)))
       (if-let d (imm64_sdiv ty k1 k2))
-      (iconst ty d))
+      (const ty d))
 
 (rule (simplify_skeleton
        (srem (iconst ty k1)
              (iconst ty k2)))
       (if-let d (imm64_srem ty k1 k2))
-      (iconst ty d))
+      (const ty d))
 
 (rule (simplify_skeleton
        (udiv (iconst_u ty k1)
              (iconst_u ty k2)))
       (if-let d (u64_checked_div k1 k2))
-      (iconst ty (imm64_masked ty d)))
+      (const ty (imm64_masked ty d)))
 
 (rule (simplify_skeleton
        (urem (iconst_u ty k1)
              (iconst_u ty k2)))
       (if-let d (u64_checked_rem k1 k2))
-      (iconst ty (imm64_masked ty d)))
+      (const ty (imm64_masked ty d)))
 
 (rule (simplify
        (bor (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k1))
             (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_or k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_or k1 k2)))))
 
 (rule (simplify
        (band (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k1))
             (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_and k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_and k1 k2)))))
 
 (rule (simplify
        (bxor (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k1))
             (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_xor k1 k2)))))
+      (subsume (const ty (imm64_masked ty (u64_xor k1 k2)))))
 
 (rule (simplify
        (bnot (fits_in_64 ty)
             (iconst ty (u64_from_imm64 k))))
-      (subsume (iconst ty (imm64_masked ty (u64_not k)))))
+      (subsume (const ty (imm64_masked ty (u64_not k)))))
 
 (rule (simplify (ishl (fits_in_64 ty)
                       (iconst ty k1)
                       (iconst _ k2)))
-      (subsume (iconst ty (imm64_shl ty k1 k2))))
+      (subsume (const ty (imm64_shl ty k1 k2))))
 
 (rule (simplify (ushr (fits_in_64 ty)
                       (iconst ty k1)
                       (iconst _ k2)))
-      (subsume (iconst ty (imm64_ushr ty k1 k2))))
+      (subsume (const ty (imm64_ushr ty k1 k2))))
 
 (rule (simplify (sshr (fits_in_64 ty)
                       (iconst ty k1)
                       (iconst _ k2)))
-      (subsume (iconst ty (imm64_sshr ty k1 k2))))
+      (subsume (const ty (imm64_sshr ty k1 k2))))
 
 (rule (simplify (ireduce narrow (iconst (fits_in_64 _) (u64_from_imm64 imm))))
-      (subsume (iconst narrow (imm64_masked narrow imm))))
+      (subsume (const narrow (imm64_masked narrow imm))))
 
 ;; iconst_[su] support $I128, but do so by extending, so restricting to
 ;; 64-bit or smaller keeps it from just remaking essentially the same thing.
@@ -106,7 +106,7 @@
             cc
             (iconst ty k1)
             (iconst ty k2)))
-      (subsume (iconst result_ty (imm64_icmp ty cc k1 k2))))
+      (subsume (const result_ty (imm64_icmp ty cc k1 k2))))
 
 
 ;; Canonicalize via commutativity: push immediates to the right.
@@ -224,6 +224,7 @@
 
 ;; A splat of a constant can become a direct `vconst` with the appropriate bit
 ;; pattern.
+; TODO: replace vconst splat lines with `(subsume (const dst n)))`
 (rule (simplify (splat (ty_vec128 dst) (iconst $I8 n)))
       (vconst dst (splat8 (u64_uextend_imm64 $I8 n))))
 (rule (simplify (splat (ty_vec128 dst) (iconst $I16 n)))
@@ -305,11 +306,11 @@
 
 ;; Constant fold bswap of a constant.
 (rule (simplify (bswap $I16 (iconst ty (u64_from_imm64 n))))
-      (subsume (iconst $I16 (imm64 (u64_bswap16 n)))))
+      (subsume (const $I16 (imm64 (u64_bswap16 n)))))
 (rule (simplify (bswap $I32 (iconst ty (u64_from_imm64 n))))
-      (subsume (iconst $I32 (imm64 (u64_bswap32 n)))))
+      (subsume (const $I32 (imm64 (u64_bswap32 n)))))
 (rule (simplify (bswap $I64 (iconst ty (u64_from_imm64 n))))
-      (subsume (iconst $I64 (imm64 (u64_bswap64 n)))))
+      (subsume (const $I64 (imm64 (u64_bswap64 n)))))
 
 (decl pure u64_bswap16 (u64) u64)
 (extern constructor u64_bswap16 u64_bswap16)
