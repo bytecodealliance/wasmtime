@@ -99,17 +99,7 @@ impl TestFileCompiler {
     /// [TestFileCompiler::with_host_isa]).
     pub fn new(isa: OwnedTargetIsa) -> Self {
         let mut builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
-        let _ = &mut builder; // require mutability on all architectures
-        #[cfg(target_arch = "x86_64")]
-        {
-            builder.symbol_lookup_fn(Box::new(|name| {
-                if name == "__cranelift_x86_pshufb" {
-                    Some(__cranelift_x86_pshufb as *const u8)
-                } else {
-                    None
-                }
-            }));
-        }
+        builder.symbol_lookup_fn(Box::new(lookup_libcall));
 
         // On Unix platforms force `libm` to get linked into this executable
         // because tests that use libcalls rely on this library being present.
@@ -705,6 +695,83 @@ extern "C-unwind" fn __cranelift_throw(
     _payload2: usize,
 ) -> ! {
     panic!("Throw not implemented on platforms without native backends.");
+}
+
+// Manually define all libcalls here to avoid relying on `libm` or diverging
+// behavior across platforms from libm-like functionality. Note that this also
+// serves as insurance that the libcall implementation in the Cranelift
+// interpreter is the same as the libcall implementation used by compiled code.
+// This is important for differential fuzzing where manual invocations of
+// libcalls are expected to return the same result, so here they get identical
+// implementations.
+fn lookup_libcall(name: &str) -> Option<*const u8> {
+    match name {
+        "ceil" => {
+            extern "C" fn ceil(a: f64) -> f64 {
+                a.ceil()
+            }
+            Some(ceil as *const u8)
+        }
+        "ceilf" => {
+            extern "C" fn ceilf(a: f32) -> f32 {
+                a.ceil()
+            }
+            Some(ceilf as *const u8)
+        }
+        "trunc" => {
+            extern "C" fn trunc(a: f64) -> f64 {
+                a.trunc()
+            }
+            Some(trunc as *const u8)
+        }
+        "truncf" => {
+            extern "C" fn truncf(a: f32) -> f32 {
+                a.trunc()
+            }
+            Some(truncf as *const u8)
+        }
+        "floor" => {
+            extern "C" fn floor(a: f64) -> f64 {
+                a.floor()
+            }
+            Some(floor as *const u8)
+        }
+        "floorf" => {
+            extern "C" fn floorf(a: f32) -> f32 {
+                a.floor()
+            }
+            Some(floorf as *const u8)
+        }
+        "nearbyint" => {
+            extern "C" fn nearbyint(a: f64) -> f64 {
+                a.round_ties_even()
+            }
+            Some(nearbyint as *const u8)
+        }
+        "nearbyintf" => {
+            extern "C" fn nearbyintf(a: f32) -> f32 {
+                a.round_ties_even()
+            }
+            Some(nearbyintf as *const u8)
+        }
+        "fma" => {
+            extern "C" fn fma(a: f64, b: f64, c: f64) -> f64 {
+                a.mul_add(b, c)
+            }
+            Some(fma as *const u8)
+        }
+        "fmaf" => {
+            extern "C" fn fmaf(a: f32, b: f32, c: f32) -> f32 {
+                a.mul_add(b, c)
+            }
+            Some(fmaf as *const u8)
+        }
+
+        #[cfg(target_arch = "x86_64")]
+        "__cranelift_x86_pshufb" => Some(__cranelift_x86_pshufb as *const u8),
+
+        _ => panic!("unknown libcall {name}"),
+    }
 }
 
 #[cfg(target_arch = "x86_64")]
