@@ -16,7 +16,7 @@ fn main() -> Result<()> {
     // debugged in GDB.
     let engine = Engine::new(
         Config::new()
-            .native_debug_info(true)
+            .debug_info(true)
             .cranelift_opt_level(OptLevel::None),
     )?;
     let mut store = Store::new(&engine, ());

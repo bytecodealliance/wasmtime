@@ -31,7 +31,7 @@ impl StoreOpaque {
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
     pub fn stack_values(&mut self) -> Option<StackView<'_>> {
-        if !self.engine().tunables().debug_instrumentation {
+        if !self.engine().tunables().debug_guest {
             return None;
         }
 

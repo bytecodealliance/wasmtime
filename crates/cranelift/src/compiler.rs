@@ -253,7 +253,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let (namespace, index) = key.into_raw_parts();
         context.func.name = UserFuncName::User(UserExternalName { namespace, index });
 
-        if self.tunables.generate_native_debuginfo {
+        if self.tunables.generate_debuginfo {
             context.func.collect_debug_info();
         }
 
@@ -599,7 +599,7 @@ impl wasmtime_environ::Compiler for Compiler {
             .collect::<Vec<_>>();
 
         let mut frame_descriptors = HashMap::new();
-        if self.tunables.debug_instrumentation {
+        if self.tunables.debug_guest {
             for (_, key, func) in &funcs {
                 frame_descriptors.insert(
                     *key,
@@ -633,7 +633,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 range.clone(),
                 func.buffer.call_sites(),
             )?;
-            if self.tunables.debug_instrumentation
+            if self.tunables.debug_guest
                 && let Some(frame_layout) = func.buffer.frame_layout()
             {
                 clif_to_env_frame_tables(
@@ -670,7 +670,7 @@ impl wasmtime_environ::Compiler for Compiler {
             obj.append_section_data(exception_section, bytes, 1);
         });
 
-        if self.tunables.debug_instrumentation {
+        if self.tunables.debug_guest {
             let frame_table_section = obj.add_section(
                 obj.segment_name(StandardSegment::Data).to_vec(),
                 ELF_WASMTIME_FRAMES.as_bytes().to_vec(),
@@ -1438,7 +1438,7 @@ impl FunctionCompiler<'_> {
         }
 
         if body_and_tunables
-            .map(|(_, t)| t.generate_native_debuginfo)
+            .map(|(_, t)| t.generate_debuginfo)
             .unwrap_or(false)
         {
             compiled_function.set_value_labels_ranges(compiled_code.value_labels_ranges.clone());

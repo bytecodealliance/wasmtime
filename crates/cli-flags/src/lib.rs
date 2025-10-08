@@ -263,9 +263,9 @@ wasmtime_option_group! {
     #[serde(rename_all = "kebab-case", deny_unknown_fields)]
     pub struct DebugOptions {
         /// Enable generation of DWARF debug information in compiled code.
-        pub native_debug_info: Option<bool>,
-        /// Enable debug instrumentation for perfect value reconstruction.
-        pub debug_instrumentation: Option<bool>,
+        pub debug_info: Option<bool>,
+        /// Enable guest debugging insrumentation.
+        pub guest_debug: Option<bool>,
         /// Configure whether compiled code can map native addresses to wasm.
         pub address_map: Option<bool>,
         /// Configure whether logging is enabled.
@@ -703,12 +703,12 @@ impl CommonOptions {
             enable => config.cranelift_debug_verifier(enable),
             true => err,
         }
-        if let Some(enable) = self.debug.native_debug_info {
-            config.native_debug_info(enable);
+        if let Some(enable) = self.debug.debug_info {
+            config.debug_info(enable);
         }
         match_feature! {
-            ["debug" : self.debug.debug_instrumentation]
-            enable => config.debug_instrumentation(enable),
+            ["debug" : self.debug.guest_debug]
+            enable => config.guest_debug(enable),
             _ => err,
         }
         if self.debug.coredump.is_some() {

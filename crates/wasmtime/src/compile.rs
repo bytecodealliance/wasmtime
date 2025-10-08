@@ -959,7 +959,7 @@ impl FunctionIndices {
         )?;
 
         // If requested, generate and add DWARF information.
-        if tunables.generate_native_debuginfo {
+        if tunables.generate_debuginfo {
             compiler.append_dwarf(
                 &mut obj,
                 &translations,

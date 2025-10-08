@@ -1192,7 +1192,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Initialize the state slot with an empty layout.
     pub(crate) fn create_state_slot(&mut self, builder: &mut FunctionBuilder) {
-        if self.tunables.debug_instrumentation {
+        if self.tunables.debug_guest {
             let frame_builder = FrameStateSlotBuilder::new(self.key, self.pointer_type().bytes());
 
             // Initially zero-size and with no descriptor; we will fill in

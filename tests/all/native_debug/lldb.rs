@@ -85,7 +85,7 @@ pub fn dwarf_fib_wasm() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             "-Oopt-level=0",
             "--invoke",
             "fib",
@@ -123,7 +123,7 @@ pub fn dwarf_fib_wasm_dwarf5() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             "-Oopt-level=0",
             "--invoke",
             "fib",
@@ -161,7 +161,7 @@ pub fn dwarf_fib_wasm_split4() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             "-Oopt-level=0",
             "--invoke",
             "fib",
@@ -199,7 +199,7 @@ pub fn dwarf_generic() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             "-Oopt-level=0",
             DWARF_GENERIC,
         ],
@@ -261,7 +261,7 @@ pub fn dwarf_codegen_optimized() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             "-Oopt-level=2",
             DWARF_CODEGEN_OPTIMIZED,
         ],
@@ -296,7 +296,7 @@ pub fn dwarf_codegen_optimized_wasm_optimized() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             "-Oopt-level=2",
             DWARF_CODEGEN_OPTIMIZED_WASM_OPTIMIZED,
         ],
@@ -332,7 +332,7 @@ pub fn dwarf_fraction_norm() -> Result<()> {
         &[
             "-Ccache=n",
             "-Oopt-level=0",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             DWARF_FRACTION_NORM,
         ],
         r#"b dwarf_fraction_norm.cc:26
@@ -362,7 +362,7 @@ pub fn dwarf_two_removed_branches() -> Result<()> {
         &[
             "-Ccache=n",
             "-Oopt-level=0",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             DWARF_TWO_REMOVED_BRANCHES,
         ],
         r#"r"#,
@@ -385,7 +385,7 @@ pub fn dwarf_spilled_frame_base() -> Result<()> {
         &[
             "-Ccache=n",
             "-Oopt-level=0",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             DWARF_SPILLED_FRAME_BASE,
         ],
         r#"b dwarf_spilled_frame_base.c:13
@@ -428,7 +428,7 @@ pub fn dwarf_fission() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             "-Oopt-level=0",
             DWARF_FISSION,
         ],
@@ -459,7 +459,7 @@ check: exited with status = 0
 
 fn test_dwarf_simple(wasm: &str, extra_args: &[&str]) -> Result<()> {
     println!("testing {wasm:?}");
-    let mut args = vec!["-Ccache=n", "-Oopt-level=0", "-Dnative-debug-info"];
+    let mut args = vec!["-Ccache=n", "-Oopt-level=0", "-Ddebug-info"];
     args.extend(extra_args);
     args.push(wasm);
     let output = lldb_with_script(
@@ -527,7 +527,7 @@ fn dwarf_multiple_codegen_units() -> Result<()> {
     ] {
         println!("testing {wasm:?}");
         let output = lldb_with_script(
-            &["-Ccache=n", "-Oopt-level=0", "-Dnative-debug-info", wasm],
+            &["-Ccache=n", "-Oopt-level=0", "-Ddebug-info", wasm],
             r#"
 breakpoint set --file dwarf_multiple_codegen_units.rs --line 3
 breakpoint set --file dwarf_multiple_codegen_units.rs --line 10

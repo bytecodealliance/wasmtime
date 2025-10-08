@@ -8,7 +8,7 @@ fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + '
     f: F,
 ) -> anyhow::Result<()> {
     let mut config = Config::default();
-    config.debug_instrumentation(true);
+    config.guest_debug(true);
     config.wasm_exceptions(true);
     c(&mut config);
     let engine = Engine::new(&config)?;

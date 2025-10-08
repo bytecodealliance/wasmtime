@@ -55,7 +55,7 @@ fn test_debug_dwarf_gdb() -> Result<()> {
     let output = gdb_with_script(
         &[
             "-Ccache=n",
-            "-Dnative-debug-info",
+            "-Ddebug-info",
             "-Oopt-level=0",
             "--invoke",
             "fib",

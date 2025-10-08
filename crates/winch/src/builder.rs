@@ -63,12 +63,12 @@ impl CompilerBuilder for Builder {
             bail!("Winch requires the signals-based-traps option to be enabled");
         }
 
-        if tunables.generate_native_debuginfo {
+        if tunables.generate_debuginfo {
             bail!("Winch does not currently support generating native debug information");
         }
 
-        if tunables.debug_instrumentation {
-            bail!("Winch does not currently support debug instrumentation");
+        if tunables.debug_guest {
+            bail!("Winch does not currently support guest-level debugging");
         }
 
         self.tunables = Some(tunables.clone());
