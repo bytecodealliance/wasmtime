@@ -211,7 +211,7 @@ impl<'a> StackView<'a> {
 /// progpoint lookup (Wasm PC, frame descriptor index, stack shape).
 struct VirtualFrame {
     /// The frame pointer.
-    fp: usize,
+    fp: *const u8,
     /// The resolved module handle for the physical PC.
     ///
     /// The module for each inlined frame within the physical frame is
@@ -253,7 +253,7 @@ impl VirtualFrame {
 
         program_points
             .map(|(wasm_pc, frame_descriptor, stack_shape)| VirtualFrame {
-                fp: frame.fp(),
+                fp: core::ptr::with_exposed_provenance(frame.fp()),
                 module: module.clone(),
                 wasm_pc,
                 frame_descriptor,
@@ -265,7 +265,7 @@ impl VirtualFrame {
 
 /// Data computed when we visit a given frame.
 struct FrameData {
-    slot_addr: usize,
+    slot_addr: *const u8,
     func_key: FuncKey,
     wasm_pc: u32,
     /// Shape of locals in this frame.
@@ -332,11 +332,11 @@ impl FrameData {
 /// preserved through serialization).
 unsafe fn read_value(
     store: &mut AutoAssertNoGc<'_>,
-    slot_base: usize,
+    slot_base: *const u8,
     offset: FrameStateSlotOffset,
     ty: FrameValType,
 ) -> Val {
-    let address = slot_base.wrapping_add(usize::try_from(offset.offset()).unwrap());
+    let address = unsafe { slot_base.offset(isize::try_from(offset.offset()).unwrap()) };
 
     // SAFETY: each case reads a value from memory that should be
     // valid according to our safety condition.
