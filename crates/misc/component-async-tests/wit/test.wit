@@ -348,16 +348,3 @@ world sleep-post-return-caller {
 world closed-stream-guest {
   export closed-stream;
 }
-
-interface coop {
-  get-index: async func() -> u32;
-}
-
-world coop-threads-callee {
-  export coop;
-}
-
-world coop-threads-caller {
-  import coop;
-  export run;
-}

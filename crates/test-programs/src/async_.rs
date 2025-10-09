@@ -115,17 +115,6 @@ pub unsafe fn context_set(_: u32) {
 }
 
 #[cfg(target_arch = "wasm32")]
-#[link(wasm_import_module = "$root")]
-unsafe extern "C" {
-    #[link_name = "[thread-index]"]
-    pub fn thread_index() -> u32;
-}
-#[cfg(not(target_arch = "wasm32"))]
-pub unsafe fn thread_index() -> u32 {
-    unreachable!()
-}
-
-#[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "[export]$root")]
 unsafe extern "C" {
     #[link_name = "[task-cancel]"]

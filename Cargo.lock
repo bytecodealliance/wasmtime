@@ -4613,8 +4613,6 @@ name = "wasmtime-environ"
 version = "38.0.0"
 dependencies = [
  "anyhow",
- "arbitrary",
- "arbtest",
  "clap",
  "cpp_demangle",
  "cranelift-bitset",
@@ -4989,7 +4987,6 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
- "env_logger 0.11.5",
  "flate2",
  "futures",
  "http",

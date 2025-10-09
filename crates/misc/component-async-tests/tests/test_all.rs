@@ -13,7 +13,6 @@ mod scenario;
 
 use scenario::backpressure::{async_backpressure_callee, async_backpressure_caller};
 use scenario::borrowing::{async_borrowing_callee, async_borrowing_caller};
-use scenario::coop_threads::{async_coop_threads_callee, async_coop_threads_caller};
 use scenario::error_context::{
     async_error_context, async_error_context_callee, async_error_context_caller,
 };
