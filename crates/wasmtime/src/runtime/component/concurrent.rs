@@ -84,8 +84,8 @@ use std::vec::Vec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::Trap;
 use wasmtime_environ::component::{
-    CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, LiftABI, MAX_FLAT_PARAMS,
-    MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
+    CanonicalOptions, CanonicalOptionsDataModel, ExportIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
     RuntimeComponentInstanceIndex, RuntimeTableIndex, StringEncoding,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
     TypeFuncIndex, TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
@@ -2011,7 +2011,6 @@ impl Instance {
         memory: *mut VMMemoryDefinition,
         string_encoding: u8,
         caller_info: CallerInfo,
-        lift_abi: LiftABI,
     ) -> Result<()> {
         self.id().get(store.0).check_may_leave(caller_instance)?;
 
@@ -2152,7 +2151,6 @@ impl Instance {
             },
             None,
             callee_instance,
-            lift_abi,
         )?;
 
         let guest_task = state.push(new_task)?;
@@ -3469,7 +3467,6 @@ pub trait VMComponentAsyncStore {
         task_return_type: TypeTupleIndex,
         string_encoding: u8,
         result_count: u32,
-        lift_abi: LiftABI,
         storage: *mut ValRaw,
         storage_len: usize,
     ) -> Result<()>;
@@ -3635,7 +3632,6 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         task_return_type: TypeTupleIndex,
         string_encoding: u8,
         result_count_or_max_if_async: u32,
-        lift_abi: LiftABI,
         storage: *mut ValRaw,
         storage_len: usize,
     ) -> Result<()> {
@@ -3668,7 +3664,6 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
                         result_count,
                     },
                 },
-                lift_abi,
             )
         }
     }
@@ -4185,8 +4180,6 @@ pub(crate) struct GuestTask {
     exited: bool,
     /// Threads belonging to this task
     threads: HashSet<TableId<GuestThread>>,
-    /// The ABI used for lifting the export implementing this task
-    lift_abi: LiftABI,
     /// The state of the host future that represents an async task, which must
     /// be dropped before we can delete the task.
     host_future_state: HostFutureState,
@@ -4225,7 +4218,6 @@ impl GuestTask {
         caller: Caller,
         callback: Option<CallbackFn>,
         component_instance: RuntimeComponentInstanceIndex,
-        lift_abi: LiftABI,
     ) -> Result<Self> {
         let sync_call_set = state.push(WaitableSet::default())?;
         let host_future_state = match &caller {
@@ -4259,7 +4251,6 @@ impl GuestTask {
             function_index: None,
             exited: false,
             threads: HashSet::new(),
-            lift_abi,
             host_future_state,
         })
     }
@@ -5106,15 +5097,6 @@ pub(crate) fn prepare_call<T, R>(
     let token = StoreToken::new(store.as_context_mut());
     let state = handle.instance().concurrent_state_mut(store.0);
     let async_ = options.async_();
-    let lift_abi = if async_ {
-        if callback.is_some() {
-            LiftABI::Stackless
-        } else {
-            LiftABI::Stackful
-        }
-    } else {
-        LiftABI::Synchronous
-    };
 
     assert!(state.guest_thread.is_none());
 
@@ -5167,7 +5149,6 @@ pub(crate) fn prepare_call<T, R>(
             ) as CallbackFn
         }),
         component_instance,
-        lift_abi,
     )?;
     task.function_index = Some(handle.index());
 

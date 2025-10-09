@@ -860,7 +860,6 @@ unsafe fn prepare_call(
     task_return_type: u32,
     string_encoding: u32,
     result_count_or_max_if_async: u32,
-    lift_abi: u32,
     storage: *mut u8,
     storage_len: usize,
 ) -> Result<()> {
@@ -875,7 +874,6 @@ unsafe fn prepare_call(
             TypeTupleIndex::from_u32(task_return_type),
             u8::try_from(string_encoding).unwrap(),
             result_count_or_max_if_async,
-            LiftABI::from_u32(lift_abi),
             storage.cast::<crate::ValRaw>(),
             storage_len,
         )

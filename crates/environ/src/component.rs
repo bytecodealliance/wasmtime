@@ -51,29 +51,6 @@ pub const PREPARE_ASYNC_WITH_RESULT: u32 = u32::MAX - 1;
 /// callee is an async-lifted export.
 pub const START_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
 
-/// The ABI used for lifting the export involved in a `prepare_call` call
-#[derive(Copy, Clone)]
-pub enum LiftABI {
-    /// Synchronous ABI
-    Synchronous = 0,
-    /// Stackless Asynchronous ABI
-    Stackless = 1,
-    /// Stackful Asynchronous ABI
-    Stackful = 2,
-}
-
-impl LiftABI {
-    /// Convert from an integer representation to a LiftABI
-    pub fn from_u32(abi: u32) -> LiftABI {
-        match abi {
-            0 => LiftABI::Synchronous,
-            1 => LiftABI::Stackless,
-            2 => LiftABI::Stackful,
-            _ => panic!("Unexpected lift ABI type"),
-        }
-    }
-}
-
 mod artifacts;
 mod info;
 mod names;
@@ -155,7 +132,6 @@ macro_rules! foreach_builtin_component_function {
                 task_return_type: u32,
                 string_encoding: u32,
                 result_count_or_max_if_async: u32,
-                lift_abi: u32,
                 storage: ptr_u8,
                 storage_len: size
             ) -> bool;

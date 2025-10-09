@@ -572,16 +572,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.instruction(I32Const(PREPARE_ASYNC_NO_RESULT.cast_signed()));
             }
         }
-        let lift_abi = if adapter.lift.options.async_ {
-            if adapter.lift.options.callback.is_some() {
-                LiftABI::Stackless
-            } else {
-                LiftABI::Stackful
-            }
-        } else {
-            LiftABI::Synchronous
-        };
-        self.instruction(I32Const(lift_abi as i32));
 
         // forward all our own arguments on to the host stub
         for index in 0..lower_sig.params.len() {
