@@ -4,7 +4,84 @@ Unreleased.
 
 ### Added
 
+* A number of new Cranelift peephole ISLE optimizations have been added.
+  [#11637](https://github.com/bytecodealliance/wasmtime/pull/11637)
+  [#11638](https://github.com/bytecodealliance/wasmtime/pull/11638)
+  [#11640](https://github.com/bytecodealliance/wasmtime/pull/11640)
+  [#11641](https://github.com/bytecodealliance/wasmtime/pull/11641)
+  [#11642](https://github.com/bytecodealliance/wasmtime/pull/11642)
+  [#11647](https://github.com/bytecodealliance/wasmtime/pull/11647)
+  [#11648](https://github.com/bytecodealliance/wasmtime/pull/11648)
+  [#11663](https://github.com/bytecodealliance/wasmtime/pull/11663)
+  [#11680](https://github.com/bytecodealliance/wasmtime/pull/11680)
+  [#11681](https://github.com/bytecodealliance/wasmtime/pull/11681)
+
+* Cranelift's "fastalloc", or Wasmtime's `SinglePass` register allocation
+  option, now works again.
+  [#11712](https://github.com/bytecodealliance/wasmtime/pull/11712)
+
+* CLIF now supports bitwise operations on 64-bit vector types.
+  [#11708](https://github.com/bytecodealliance/wasmtime/pull/11708)
+
+* The `wasmtime run` subcommand now support WASIp3 HTTP interfaces via
+  `-Sp3,http`.
+  [#11741](https://github.com/bytecodealliance/wasmtime/pull/11741)
+
+* Cranelift's x64 and aarch64 backends now have specialized lowering rules for
+  loads/stores from stack slots.
+  [#11727](https://github.com/bytecodealliance/wasmtime/pull/11727)
+
+* Wasmtime supports converting a `StreamReader`, optionally, back into the
+  original host representation to have specialized routines if the stream is
+  from the host and not a guest.
+  [#11763](https://github.com/bytecodealliance/wasmtime/pull/11763)
+
 ### Changed
+
+* Wasmtime internally no longer uses `setjmp` or `longjmp` for implementing
+  WebAssembly traps. Instead Cranelift exception handling is now used meaning
+  that Wasmtime no longer has a platform dependency on these symbols. Users of
+  bare-metal platforms will no longer need to implement these two functions.
+  [#11592](https://github.com/bytecodealliance/wasmtime/pull/11592)
+
+* Wasmtime now guarantees that `*.cwasm` files built with a release of Wasmtime
+  will continue to be compatible with future patch releases of that same major
+  version of Wasmtime.
+  [#11687](https://github.com/bytecodealliance/wasmtime/pull/11687)
+
+* Components now properly enforce that guests cannot exit the component instance
+  during a post-return call.
+  [#11688](https://github.com/bytecodealliance/wasmtime/pull/11688)
+
+* Wasmtime internally manages functions with a generic `FuncKey` type instead of
+  specially-handling all the different kinds of functions that might make up a
+  single compilation.
+  [#11630](https://github.com/bytecodealliance/wasmtime/pull/11630)
+
+* Wasmtime now requires Rust 1.88.0 to compile.
+  [#11709](https://github.com/bytecodealliance/wasmtime/pull/11709)
+
+* Wasmtime no longer generates a trap in `run_concurrent` when the future being
+  run is idle.
+  [#11756](https://github.com/bytecodealliance/wasmtime/pull/11756)
+
+* Some unused Cranelift settings and flags have been removed.
+  [#11744](https://github.com/bytecodealliance/wasmtime/pull/11744)
+
+### Fixed
+
+* Tail calls on s390x with some specific epilogues have been fixed.
+  [#11689](https://github.com/bytecodealliance/wasmtime/pull/11689)
+
+* A memory leak in wasi-nn has been fixed.
+  [#11704](https://github.com/bytecodealliance/wasmtime/pull/11704)
+
+* Aliasing a WebAssembly tag from a core module in a component has been fixed.
+  [#11699](https://github.com/bytecodealliance/wasmtime/pull/11699)
+
+* CMake-based builds for iOS and other non-macOS targets on Apple platforms have
+  been fixed.
+  [#11782](https://github.com/bytecodealliance/wasmtime/pull/11782)
 
 --------------------------------------------------------------------------------
 
