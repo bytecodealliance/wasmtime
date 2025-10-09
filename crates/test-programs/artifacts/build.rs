@@ -111,7 +111,7 @@ impl Artifacts {
             let adapter = match test.name.as_str() {
                 "reactor" => &reactor_adapter,
                 s if s.starts_with("p3_") => &reactor_adapter,
-                s if s.starts_with("api_proxy") => &proxy_adapter,
+                s if s.starts_with("p2_api_proxy") => &proxy_adapter,
                 _ => &command_adapter,
             };
             let path = match &test.core_wasm {
