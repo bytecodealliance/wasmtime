@@ -76,6 +76,8 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+#[cfg(feature = "debug")]
+use crate::DebuggingSessionState;
 use crate::RootSet;
 #[cfg(feature = "gc")]
 use crate::ThrownException;
@@ -488,6 +490,13 @@ pub struct StoreOpaque {
     /// For example if Pulley is enabled and configured then this will store a
     /// Pulley interpreter.
     executor: Executor,
+
+    /// Whether a debugging session is currently active for this
+    /// store. This state is set while in host code and applies to
+    /// direct Wasm activations (but not re-entrant activations if
+    /// that Wasm calls back into the host).
+    #[cfg(feature = "debug")]
+    pub(crate) debugging_state: DebuggingSessionState,
 }
 
 /// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
@@ -696,6 +705,8 @@ impl<T> Store<T> {
             executor: Executor::new(engine),
             #[cfg(feature = "component-model")]
             concurrent_state: Default::default(),
+            #[cfg(feature = "debug")]
+            debugging_state: DebuggingSessionState::default(),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -707,6 +718,12 @@ impl<T> Store<T> {
         });
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
+
+        // This backpointer is used only from a signal/trap
+        // context to get back to the current store from the
+        // VMStoreContext, which is reachable via TLS.
+        let raw_store_backpointer: *mut StoreOpaque = &mut inner.inner as *mut _;
+        *inner.vm_store_context.store.get_mut() = raw_store_backpointer;
 
         // Wasmtime uses the callee argument to host functions to learn about
         // the original pointer to the `Store` itself, allowing it to
@@ -1184,7 +1201,7 @@ impl<T> Store<T> {
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
     #[cfg(feature = "debug")]
-    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
         self.inner.debug_frames()
     }
 }
@@ -1317,8 +1334,8 @@ impl<'a, T> StoreContextMut<'a, T> {
     ///
     /// See ['Store::debug_frames`] for more details.
     #[cfg(feature = "debug")]
-    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
-        self.0.inner.debug_frames()
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
+        self.0.debug_frames()
     }
 }
 
@@ -2501,10 +2518,19 @@ at https://bytecodealliance.org/security.
     }
 
     #[cfg(feature = "gc")]
-    fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
+    pub(crate) fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
         let vmexnref = self.take_pending_exception()?;
         let mut nogc = AutoAssertNoGc::new(self);
         Some(Rooted::new(&mut nogc, vmexnref.into()))
+    }
+
+    #[cfg(feature = "debug")]
+    pub(crate) fn take_pending_exception_owned_rooted(
+        &mut self,
+    ) -> Option<crate::OwnedRooted<ExnRef>> {
+        let vmexnref = self.take_pending_exception()?;
+        let mut nogc = AutoAssertNoGc::new(self);
+        Some(crate::OwnedRooted::new(&mut nogc, vmexnref.into()))
     }
 
     #[cfg(feature = "gc")]
@@ -2704,6 +2730,12 @@ impl AsStoreOpaque for StoreOpaque {
 impl AsStoreOpaque for dyn VMStore {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque {
         self
+    }
+}
+
+impl<T: 'static> AsStoreOpaque for Store<T> {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        &mut self.inner.inner
     }
 }
 

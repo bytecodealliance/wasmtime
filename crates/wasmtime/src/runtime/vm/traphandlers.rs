@@ -15,6 +15,11 @@ mod signals;
 #[cfg(all(has_native_signals))]
 pub use self::signals::*;
 
+#[cfg(all(has_native_signals))]
+mod inject_call;
+#[cfg(all(has_native_signals))]
+pub use self::inject_call::*;
+
 #[cfg(feature = "gc")]
 use crate::ThrownException;
 use crate::runtime::module::lookup_code;
@@ -41,9 +46,29 @@ pub use self::tls::{AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 pub use traphandlers::SignalHandler;
 
+#[allow(
+    dead_code,
+    reason = "some registers not used when debug trap handling is disabled"
+)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct TrapRegisters {
     pub pc: usize,
     pub fp: usize,
+    pub sp: usize,
+    pub arg0: usize,
+    pub arg1: usize,
+}
+
+#[allow(
+    dead_code,
+    reason = "some registers not used when debug trap handling is disabled"
+)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum TrapResumeArgs {
+    /// Exception ABI argument values.
+    Handler(usize, usize),
+    /// Ordinary call ABI argument values.
+    Call(usize, usize),
 }
 
 /// Return value from `test_if_trap`.
@@ -55,7 +80,7 @@ pub(crate) enum TrapTest {
     #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
     HandledByEmbedder,
     /// This is a wasm trap, it needs to be handled.
-    Trap(Handler),
+    Trap(Handler, TrapResumeArgs),
 }
 
 fn lazy_per_thread_init() {
@@ -580,7 +605,7 @@ mod call_thread_state {
                 #[cfg(feature = "coredump")]
                 capture_coredump: store.engine().config().coredump_on_trap,
                 vm_store_context: store.vm_store_context_ptr(),
-                prev: Cell::new(ptr::null()),
+                prev: Cell::new(ptr::null_mut()),
                 old_state,
             }
         }
@@ -630,9 +655,10 @@ mod call_thread_state {
         /// Panics if this activation is already in a linked list (e.g.
         /// `self.prev` is set).
         #[inline]
-        pub(crate) unsafe fn push(&self) {
+        pub(crate) unsafe fn push(&mut self) {
             assert!(self.prev.get().is_null());
-            self.prev.set(tls::raw::replace(self));
+            let old = tls::raw::replace(self);
+            self.prev.set(old);
         }
 
         /// Pops this `CallThreadState` from the linked list stored in TLS.
@@ -645,7 +671,7 @@ mod call_thread_state {
         /// Panics if this activation isn't the head of the list.
         #[inline]
         pub(crate) unsafe fn pop(&self) {
-            let prev = self.prev.replace(ptr::null());
+            let prev = self.prev.replace(ptr::null_mut());
             let head = tls::raw::replace(prev);
             assert!(core::ptr::eq(head, self));
         }
@@ -661,9 +687,39 @@ mod call_thread_state {
         /// a store to just before this activation was called but saves off the
         /// fields of this activation to get restored/resumed at a later time.
         #[cfg(feature = "async")]
-        pub(super) unsafe fn swap(&self) {
+        pub(super) unsafe fn swap(&mut self) {
             unsafe fn swap<T>(a: &core::cell::UnsafeCell<T>, b: &mut T) {
                 unsafe { core::mem::swap(&mut *a.get(), b) }
+            }
+
+            #[cfg(feature = "debug")]
+            unsafe {
+                let vm_store_context = self.vm_store_context.as_mut();
+                if vm_store_context.store().debugging_state.active {
+                    let entry_fp = *vm_store_context.last_wasm_entry_fp.get();
+                    let old = vm_store_context
+                        .store_mut()
+                        .debugging_state
+                        .entry_fp
+                        .replace(entry_fp);
+                    assert!(old.is_none());
+
+                    let exit_fp = vm_store_context.last_wasm_exit_fp();
+                    let old = vm_store_context
+                        .store_mut()
+                        .debugging_state
+                        .exit_fp
+                        .replace(exit_fp);
+                    assert!(old.is_none());
+
+                    let exit_pc = *vm_store_context.last_wasm_exit_pc.get();
+                    let old = vm_store_context
+                        .store_mut()
+                        .debugging_state
+                        .exit_pc
+                        .replace(exit_pc);
+                    assert!(old.is_none());
+                }
             }
 
             unsafe {
@@ -803,6 +859,31 @@ impl CallThreadState {
                 }
             }
         };
+
+        // If we are in a debug session and are about to unwind due to
+        // a trap, suspend our fiber first to produce a debug-step
+        // result.
+        #[cfg(feature = "debug")]
+        if store.debugging_state.active
+            && let UnwindState::UnwindToHost {
+                reason: UnwindReason::Trap(trap),
+                ..
+            } = &state
+        {
+            let yield_ = match trap {
+                TrapReason::User(_) => crate::DebugYield::TrapHostError,
+                TrapReason::Jit { trap, .. } | TrapReason::Wasm(trap) => {
+                    crate::DebugYield::TrapHost(*trap)
+                }
+                TrapReason::Exception => crate::DebugYield::TrapHostException,
+            };
+            let old = store.debugging_state.debug_yield.replace(yield_);
+            assert!(old.is_none());
+            store.with_blocking(|_store, ctx| {
+                ctx.suspend(crate::fiber::StoreFiberYield::KeepStore)
+                    .unwrap();
+            });
+        }
 
         // Avoid unused-variable warning in non-exceptions/GC build.
         let _ = store;
@@ -964,11 +1045,51 @@ impl CallThreadState {
             return TrapTest::NotWasm;
         };
 
-        // If all that passed then this is indeed a wasm trap, so return the
-        // `Handler` setup in the original wasm frame.
-        self.set_jit_trap(regs, faulting_addr, trap);
+        // If all that passed then this is indeed a wasm trap; we will
+        // handle it either directly or by injecting a call to a
+        // trap-hostcall.
+
+        let resumable = trap == wasmtime_environ::Trap::ResumableBreakpoint;
+
+        if !resumable {
+            // Only set the trap info (and hence pay the cost of
+            // computing the backtrace) if this is a Wasm-level trap,
+            // not a resumable breakpoint.
+            self.set_jit_trap(regs, faulting_addr, trap);
+        }
+
+        // If a debug session is active on the store, then we will
+        // inject a hostcall so that we can suspend the fiber and
+        // introspect its post-trap state.
+        #[cfg(feature = "debug")]
+        unsafe {
+            let vm_store_context = &mut *self.vm_store_context.as_ptr();
+            if vm_store_context.store().debugging_state.active {
+                let mut pc = regs.pc;
+                let mut arg0 = regs.arg0;
+                let mut arg1 = regs.arg1;
+                vm_store_context
+                    .inject_trap_handler_hostcall(resumable, &mut pc, &mut arg0, &mut arg1);
+                let old = vm_store_context
+                    .store_mut()
+                    .debugging_state
+                    .debug_yield
+                    .replace(crate::DebugYield::TrapSignal(regs, trap));
+                assert!(old.is_none());
+
+                let handler = Handler {
+                    pc: pc,
+                    sp: regs.sp,
+                    fp: regs.fp,
+                };
+                return TrapTest::Trap(handler, TrapResumeArgs::Call(arg0, arg1));
+            }
+        }
+
+        // Otherwise: return the `Handler` setup in the original wasm
+        // frame so that the signal handler resumes to it.
         let entry_handler = self.entry_trap_handler();
-        TrapTest::Trap(entry_handler)
+        TrapTest::Trap(entry_handler, TrapResumeArgs::Handler(0, 0))
     }
 
     pub(crate) fn set_jit_trap(
@@ -1091,7 +1212,7 @@ pub(crate) mod tls {
     pub(super) mod raw {
         use super::CallThreadState;
 
-        pub type Ptr = *const CallThreadState;
+        pub type Ptr = *mut CallThreadState;
 
         const _: () = {
             assert!(core::mem::align_of::<CallThreadState>() > 1);
@@ -1108,7 +1229,7 @@ pub(crate) mod tls {
 
         fn tls_set(ptr: Ptr, initialized: bool) {
             let encoded = ptr.map_addr(|a| a | usize::from(initialized));
-            crate::runtime::vm::sys::tls_set(encoded.cast_mut().cast::<u8>());
+            crate::runtime::vm::sys::tls_set(encoded.cast::<u8>());
         }
 
         #[cfg_attr(feature = "async", inline(never))] // see module docs
@@ -1218,7 +1339,7 @@ pub(crate) mod tls {
             // current state then describes the youngest activation which is
             // restored via the loop below.
             unsafe {
-                if let Some(state) = self.state.as_ref() {
+                if let Some(state) = self.state.as_mut() {
                     state.swap();
                 }
             }
@@ -1228,7 +1349,7 @@ pub(crate) mod tls {
             // list as stored in the state of this current thread.
             let mut ptr = self.state;
             unsafe {
-                while let Some(state) = ptr.as_ref() {
+                while let Some(state) = ptr.as_mut() {
                     ptr = state.prev.replace(core::ptr::null_mut());
                     state.push();
                 }
@@ -1306,7 +1427,7 @@ pub(crate) mod tls {
                 let ptr = raw::get();
                 if ptr == thread_head {
                     unsafe {
-                        if let Some(state) = ret.state.as_ref() {
+                        if let Some(state) = ret.state.as_mut() {
                             state.swap();
                         }
                     }
@@ -1322,7 +1443,7 @@ pub(crate) mod tls {
                 // order.
                 unsafe {
                     (*ptr).pop();
-                    if let Some(state) = ret.state.as_ref() {
+                    if let Some(state) = ret.state.as_mut() {
                         (*ptr).prev.set(state);
                     }
                 }

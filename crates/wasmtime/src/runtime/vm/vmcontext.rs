@@ -7,6 +7,7 @@ pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
+use crate::vm::InjectedCallState;
 use crate::vm::stack_switching::VMStackChain;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -1184,6 +1185,25 @@ pub struct VMStoreContext {
     /// situation while this field is read it'll never classify a fault as an
     /// guard page fault.
     pub async_guard_range: Range<*mut u8>,
+
+    /// Raw back-pointer to VMStore.
+    ///
+    /// This pointer is used when we have only the `VMStoreContext` in
+    /// a trap (signal-handling) context and need to get back to the
+    /// store to, for example, set up a yield to a debugger.
+    pub store: UnsafeCell<*mut StoreOpaque>,
+
+    /// Register state to restore into signal frame for injected trap
+    /// hostcalls.
+    ///
+    /// When `VMStoreContext::inject_trap_handler_hostcall()` is used
+    /// from within a signal handler to redirect execution to a
+    /// hostcall on trap, we overwrite some signal register state to
+    /// give context to the hostcall. Those overwritten register
+    /// values are saved here, and placed back into a trampoline
+    /// register-save frame so that they are restored properly if we
+    /// resume the original guest code.
+    pub injected_call_state: UnsafeCell<Option<InjectedCallState>>,
 }
 
 impl VMStoreContext {
@@ -1266,6 +1286,30 @@ impl Default for VMStoreContext {
             last_wasm_entry_trap_handler: UnsafeCell::new(0),
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
+            store: UnsafeCell::new(ptr::null_mut()),
+            injected_call_state: UnsafeCell::new(None),
+        }
+    }
+}
+
+impl VMStoreContext {
+    /// During a trap context, when we do not have access to the Store
+    /// directly, we can get it from the VMStoreContext which is
+    /// reachable from TLS.
+    pub(crate) unsafe fn store(&self) -> &StoreOpaque {
+        unsafe {
+            (*self.store.get())
+                .as_ref()
+                .expect("Store backpointer must not be null")
+        }
+    }
+
+    /// Like [`store`] but returns a mutable borrow.
+    pub(crate) unsafe fn store_mut(&mut self) -> &mut StoreOpaque {
+        unsafe {
+            (*self.store.get())
+                .as_mut()
+                .expect("Store backpointer must not be null")
         }
     }
 }
@@ -1327,7 +1371,7 @@ mod test_vmstore_context {
         assert_eq!(
             offset_of!(VMStoreContext, stack_chain),
             usize::from(offsets.ptr.vmstore_context_stack_chain())
-        )
+        );
     }
 }
 

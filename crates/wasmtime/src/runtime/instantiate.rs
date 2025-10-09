@@ -9,9 +9,9 @@ use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
 use alloc::sync::Arc;
 use core::str;
 use wasmtime_environ::{
-    CompiledFunctionsTable, CompiledModuleInfo, DefinedFuncIndex, EntityRef, FilePos, FuncIndex,
-    FuncKey, FunctionLoc, FunctionName, Metadata, Module, ModuleInternedTypeIndex,
-    StaticModuleIndex,
+    BuiltinFunctionIndex, CompiledFunctionsTable, CompiledModuleInfo, DefinedFuncIndex, EntityRef,
+    FilePos, FuncIndex, FuncKey, FunctionLoc, FunctionName, Metadata, Module,
+    ModuleInternedTypeIndex, StaticModuleIndex,
 };
 
 /// A compiled wasm module, ready to be instantiated.
@@ -164,6 +164,18 @@ impl CompiledModule {
     /// that don't have access to a compiler when created.
     pub fn wasm_to_array_trampoline(&self, signature: ModuleInternedTypeIndex) -> Option<&[u8]> {
         let key = FuncKey::WasmToArrayTrampoline(signature);
+        let loc = self.index.func_loc(key)?;
+        Some(&self.text()[loc.start as usize..][..loc.length as usize])
+    }
+
+    /// Get the Wasm-to-builtin trampoline for the given builtin function.
+    ///
+    /// These trampolines are ordinarily invoked only from native
+    /// compiled Wasm code. However, in certain cases (e.g. when
+    /// synthesizing a hostcall upon a signal) we may need the address
+    /// as well.
+    pub fn wasm_to_builtin_trampoline(&self, builtin: BuiltinFunctionIndex) -> Option<&[u8]> {
+        let key = FuncKey::WasmToBuiltinTrampoline(builtin);
         let loc = self.index.func_loc(key)?;
         Some(&self.text()[loc.start as usize..][..loc.length as usize])
     }

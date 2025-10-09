@@ -238,6 +238,18 @@ pub trait PtrSize {
         self.vmstore_context_last_wasm_entry_trap_handler() + self.size()
     }
 
+    /// Return the offset of the `wasm_exit_on_trap_trampoline` field
+    /// of `VMStoreContext`.
+    fn vmstore_context_wasm_exit_on_trap_trampoline(&self) -> u8 {
+        self.vmstore_context_stack_chain() + self.size()
+    }
+
+    /// Return the offset of the `wasm_exit_on_trap_hostcall` field
+    /// of `VMStoreContext`.
+    fn vmstore_context_wasm_exit_on_trap_hostcall(&self) -> u8 {
+        self.vmstore_context_wasm_exit_on_trap_trampoline() + self.size()
+    }
+
     // Offsets within `VMMemoryDefinition`
 
     /// The offset of the `base` field.

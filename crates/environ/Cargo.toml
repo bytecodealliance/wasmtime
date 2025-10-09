@@ -80,3 +80,4 @@ std = [
   'wasmparser/std',
   'indexmap/std',
 ]
+debug = []
