@@ -177,7 +177,6 @@ members = [
 ]
 exclude = [
   'docs/rust_wasi_markdown_parser',
-  'crates/wizer',
 ]
 
 [workspace.package]
