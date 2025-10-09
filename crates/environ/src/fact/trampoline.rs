@@ -17,11 +17,11 @@
 
 use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
-    FlatType, InterfaceType, LiftABI, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS,
-    PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding,
-    Transcode, TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex,
-    TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex,
-    TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
+    FlatType, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
+    PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
+    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex,
+    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
+    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
