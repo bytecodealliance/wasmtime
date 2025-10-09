@@ -246,12 +246,6 @@ fn run_cmd(cmd: &mut Command) {
 }
 
 fn find_crates(dir: &Path, ws: &Workspace, dst: &mut Vec<Crate>) {
-    // Temporary exclusion of Wizer to get reverted in #11805 with full Wizer
-    // integration.
-    if dir.ends_with("wizer") {
-        return;
-    }
-
     if dir.join("Cargo.toml").exists() {
         let krate = read_crate(Some(ws), &dir.join("Cargo.toml"));
         if !krate.publish || CRATES_TO_PUBLISH.iter().any(|c| krate.name == *c) {
