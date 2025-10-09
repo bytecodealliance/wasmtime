@@ -604,14 +604,23 @@ enum SuspendReason {
     /// The fiber is yielding and should be resumed once other tasks have had a
     /// chance to run.
     Yielding {
+        /// The thread that is yielding
         thread: QualifiedThreadId,
+        /// The thread it is yielding to, if any (used for debug output)
+        #[allow(dead_code)]
         to: Option<QualifiedThreadId>,
+        /// Whether the yield is cancellable (used for debug output)
+        #[allow(dead_code)]
         cancellable: bool,
     },
     /// The fiber was explicitly suspended with a call to `thread.suspend` or `thread.switch-to`.
     ExplicitlySuspending {
         thread: QualifiedThreadId,
+        /// The thread it is yielding to, if any (used for debug output)
+        #[allow(dead_code)]
         to: Option<QualifiedThreadId>,
+        /// Whether the suspend is cancellable (used for debug output)
+        #[allow(dead_code)]
         cancellable: bool,
     },
 }
@@ -4058,7 +4067,7 @@ enum GuestThreadState {
     Pending,
     Completed,
 }
-pub(crate) struct GuestThread {
+pub struct GuestThread {
     /// Context-local state used to implement the `context.{get,set}`
     /// intrinsics.
     context: [u32; 2],
