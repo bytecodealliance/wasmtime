@@ -2,7 +2,7 @@ use super::*;
 use test_programs_artifacts::*;
 use wasi_common::sync::{WasiCtxBuilder, add_to_linker};
 
-foreach_preview1!(assert_test_exists);
+foreach_p1!(assert_test_exists);
 
 fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);
@@ -69,55 +69,55 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
 // wasi-tests.
 #[test_log::test]
 fn preview1_big_random_buf() {
-    run(PREVIEW1_BIG_RANDOM_BUF, true).unwrap()
+    run(P1_BIG_RANDOM_BUF, true).unwrap()
 }
 #[test_log::test]
 fn preview1_clock_time_get() {
-    run(PREVIEW1_CLOCK_TIME_GET, true).unwrap()
+    run(P1_CLOCK_TIME_GET, true).unwrap()
 }
 #[test_log::test]
 fn preview1_close_preopen() {
-    run(PREVIEW1_CLOSE_PREOPEN, true).unwrap()
+    run(P1_CLOSE_PREOPEN, true).unwrap()
 }
 #[test_log::test]
 fn preview1_dangling_fd() {
-    run(PREVIEW1_DANGLING_FD, true).unwrap()
+    run(P1_DANGLING_FD, true).unwrap()
 }
 #[test_log::test]
 fn preview1_dangling_symlink() {
-    run(PREVIEW1_DANGLING_SYMLINK, true).unwrap()
+    run(P1_DANGLING_SYMLINK, true).unwrap()
 }
 #[test_log::test]
 fn preview1_directory_seek() {
-    run(PREVIEW1_DIRECTORY_SEEK, true).unwrap()
+    run(P1_DIRECTORY_SEEK, true).unwrap()
 }
 #[test_log::test]
 fn preview1_dir_fd_op_failures() {
-    run(PREVIEW1_DIR_FD_OP_FAILURES, true).unwrap()
+    run(P1_DIR_FD_OP_FAILURES, true).unwrap()
 }
 #[test_log::test]
 fn preview1_fd_advise() {
-    run(PREVIEW1_FD_ADVISE, true).unwrap()
+    run(P1_FD_ADVISE, true).unwrap()
 }
 #[test_log::test]
 fn preview1_fd_filestat_get() {
-    run(PREVIEW1_FD_FILESTAT_GET, true).unwrap()
+    run(P1_FD_FILESTAT_GET, true).unwrap()
 }
 #[test_log::test]
 fn preview1_fd_filestat_set() {
-    run(PREVIEW1_FD_FILESTAT_SET, true).unwrap()
+    run(P1_FD_FILESTAT_SET, true).unwrap()
 }
 #[test_log::test]
 fn preview1_fd_flags_set() {
-    run(PREVIEW1_FD_FLAGS_SET, true).unwrap()
+    run(P1_FD_FLAGS_SET, true).unwrap()
 }
 #[test_log::test]
 fn preview1_fd_readdir() {
-    run(PREVIEW1_FD_READDIR, true).unwrap()
+    run(P1_FD_READDIR, true).unwrap()
 }
 #[test_log::test]
 fn preview1_file_allocate() {
-    run(PREVIEW1_FILE_ALLOCATE, true).unwrap()
+    run(P1_FILE_ALLOCATE, true).unwrap()
 }
 // This test is outside of linux because the behavior of `pwrite`, which this
 // test bottoms out into, differs across platforms. The wasi-common crate
@@ -126,158 +126,158 @@ fn preview1_file_allocate() {
 #[test_log::test]
 #[cfg_attr(not(target_os = "linux"), ignore)]
 fn preview1_file_pread_pwrite() {
-    run(PREVIEW1_FILE_PREAD_PWRITE, true).unwrap()
+    run(P1_FILE_PREAD_PWRITE, true).unwrap()
 }
 #[test_log::test]
 fn preview1_file_read_write() {
-    run(PREVIEW1_FILE_READ_WRITE, true).unwrap()
+    run(P1_FILE_READ_WRITE, true).unwrap()
 }
 #[test_log::test]
 fn preview1_file_seek_tell() {
-    run(PREVIEW1_FILE_SEEK_TELL, true).unwrap()
+    run(P1_FILE_SEEK_TELL, true).unwrap()
 }
 #[test_log::test]
 fn preview1_file_truncation() {
-    run(PREVIEW1_FILE_TRUNCATION, true).unwrap()
+    run(P1_FILE_TRUNCATION, true).unwrap()
 }
 #[test_log::test]
 fn preview1_file_unbuffered_write() {
-    run(PREVIEW1_FILE_UNBUFFERED_WRITE, true).unwrap()
+    run(P1_FILE_UNBUFFERED_WRITE, true).unwrap()
 }
 #[test_log::test]
 fn preview1_interesting_paths() {
-    run(PREVIEW1_INTERESTING_PATHS, true).unwrap()
+    run(P1_INTERESTING_PATHS, true).unwrap()
 }
 #[test_log::test]
 fn preview1_regular_file_isatty() {
-    run(PREVIEW1_REGULAR_FILE_ISATTY, true).unwrap()
+    run(P1_REGULAR_FILE_ISATTY, true).unwrap()
 }
 #[test_log::test]
 fn preview1_nofollow_errors() {
-    run(PREVIEW1_NOFOLLOW_ERRORS, true).unwrap()
+    run(P1_NOFOLLOW_ERRORS, true).unwrap()
 }
 #[test_log::test]
 fn preview1_overwrite_preopen() {
-    run(PREVIEW1_OVERWRITE_PREOPEN, true).unwrap()
+    run(P1_OVERWRITE_PREOPEN, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_exists() {
-    run(PREVIEW1_PATH_EXISTS, true).unwrap()
+    run(P1_PATH_EXISTS, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_filestat() {
-    run(PREVIEW1_PATH_FILESTAT, true).unwrap()
+    run(P1_PATH_FILESTAT, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_link() {
-    run(PREVIEW1_PATH_LINK, true).unwrap()
+    run(P1_PATH_LINK, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_open_create_existing() {
-    run(PREVIEW1_PATH_OPEN_CREATE_EXISTING, true).unwrap()
+    run(P1_PATH_OPEN_CREATE_EXISTING, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_open_read_write() {
-    run(PREVIEW1_PATH_OPEN_READ_WRITE, true).unwrap()
+    run(P1_PATH_OPEN_READ_WRITE, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_open_dirfd_not_dir() {
-    run(PREVIEW1_PATH_OPEN_DIRFD_NOT_DIR, true).unwrap()
+    run(P1_PATH_OPEN_DIRFD_NOT_DIR, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_open_missing() {
-    run(PREVIEW1_PATH_OPEN_MISSING, true).unwrap()
+    run(P1_PATH_OPEN_MISSING, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_open_nonblock() {
-    run(PREVIEW1_PATH_OPEN_NONBLOCK, true).unwrap()
+    run(P1_PATH_OPEN_NONBLOCK, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_rename_dir_trailing_slashes() {
-    run(PREVIEW1_PATH_RENAME_DIR_TRAILING_SLASHES, true).unwrap()
+    run(P1_PATH_RENAME_DIR_TRAILING_SLASHES, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_rename() {
-    run(PREVIEW1_PATH_RENAME, true).unwrap()
+    run(P1_PATH_RENAME, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_symlink_trailing_slashes() {
-    run(PREVIEW1_PATH_SYMLINK_TRAILING_SLASHES, true).unwrap()
+    run(P1_PATH_SYMLINK_TRAILING_SLASHES, true).unwrap()
 }
 #[test_log::test]
 fn preview1_poll_oneoff_files() {
-    run(PREVIEW1_POLL_ONEOFF_FILES, false).unwrap()
+    run(P1_POLL_ONEOFF_FILES, false).unwrap()
 }
 #[test_log::test]
 fn preview1_poll_oneoff_stdio() {
-    run(PREVIEW1_POLL_ONEOFF_STDIO, true).unwrap()
+    run(P1_POLL_ONEOFF_STDIO, true).unwrap()
 }
 #[test_log::test]
 fn preview1_readlink() {
-    run(PREVIEW1_READLINK, true).unwrap()
+    run(P1_READLINK, true).unwrap()
 }
 #[test_log::test]
 fn preview1_remove_directory() {
-    run(PREVIEW1_REMOVE_DIRECTORY, true).unwrap()
+    run(P1_REMOVE_DIRECTORY, true).unwrap()
 }
 #[test_log::test]
 fn preview1_remove_nonempty_directory() {
-    run(PREVIEW1_REMOVE_NONEMPTY_DIRECTORY, true).unwrap()
+    run(P1_REMOVE_NONEMPTY_DIRECTORY, true).unwrap()
 }
 #[test_log::test]
 fn preview1_renumber() {
-    run(PREVIEW1_RENUMBER, true).unwrap()
+    run(P1_RENUMBER, true).unwrap()
 }
 #[test_log::test]
 fn preview1_sched_yield() {
-    run(PREVIEW1_SCHED_YIELD, true).unwrap()
+    run(P1_SCHED_YIELD, true).unwrap()
 }
 #[test_log::test]
 fn preview1_stdio() {
-    run(PREVIEW1_STDIO, true).unwrap()
+    run(P1_STDIO, true).unwrap()
 }
 #[test_log::test]
 fn preview1_stdio_isatty() {
     if test_programs_artifacts::stdio_is_terminal() {
         // Inherit stdio, which is a terminal in the test runner's environment:
-        run(PREVIEW1_STDIO_ISATTY, true).unwrap()
+        run(P1_STDIO_ISATTY, true).unwrap()
     }
 }
 #[test_log::test]
 fn preview1_stdio_not_isatty() {
     // Don't inherit stdio, test asserts each is not tty:
-    run(PREVIEW1_STDIO_NOT_ISATTY, false).unwrap()
+    run(P1_STDIO_NOT_ISATTY, false).unwrap()
 }
 
 #[test_log::test]
 fn preview1_symlink_create() {
-    run(PREVIEW1_SYMLINK_CREATE, true).unwrap()
+    run(P1_SYMLINK_CREATE, true).unwrap()
 }
 #[test_log::test]
 fn preview1_symlink_filestat() {
-    run(PREVIEW1_SYMLINK_FILESTAT, true).unwrap()
+    run(P1_SYMLINK_FILESTAT, true).unwrap()
 }
 #[test_log::test]
 fn preview1_symlink_loop() {
-    run(PREVIEW1_SYMLINK_LOOP, true).unwrap()
+    run(P1_SYMLINK_LOOP, true).unwrap()
 }
 #[test_log::test]
 fn preview1_unlink_file_trailing_slashes() {
-    run(PREVIEW1_UNLINK_FILE_TRAILING_SLASHES, true).unwrap()
+    run(P1_UNLINK_FILE_TRAILING_SLASHES, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_open_preopen() {
-    run(PREVIEW1_PATH_OPEN_PREOPEN, true).unwrap()
+    run(P1_PATH_OPEN_PREOPEN, true).unwrap()
 }
 #[test_log::test]
 fn preview1_unicode_output() {
-    run(PREVIEW1_UNICODE_OUTPUT, true).unwrap()
+    run(P1_UNICODE_OUTPUT, true).unwrap()
 }
 #[test_log::test]
 fn preview1_file_write() {
-    run(PREVIEW1_FILE_WRITE, true).unwrap()
+    run(P1_FILE_WRITE, true).unwrap()
 }
 #[test_log::test]
 fn preview1_path_open_lots() {
-    run(PREVIEW1_PATH_OPEN_LOTS, true).unwrap()
+    run(P1_PATH_OPEN_LOTS, true).unwrap()
 }

@@ -79,7 +79,8 @@ async fn api_time() -> Result<()> {
         .wall_clock(FakeWallClock)
         .build();
 
-    let (mut store, command) = instantiate(API_TIME_COMPONENT, CommandCtx { table, wasi }).await?;
+    let (mut store, command) =
+        instantiate(P2_API_TIME_COMPONENT, CommandCtx { table, wasi }).await?;
 
     command
         .wasi_cli_run()
@@ -101,7 +102,7 @@ async fn api_read_only() -> Result<()> {
         .build();
 
     let (mut store, command) =
-        instantiate(API_READ_ONLY_COMPONENT, CommandCtx { table, wasi }).await?;
+        instantiate(P2_API_READ_ONLY_COMPONENT, CommandCtx { table, wasi }).await?;
 
     command
         .wasi_cli_run()
@@ -151,7 +152,7 @@ async fn api_reactor() -> Result<()> {
     add_to_linker_async(&mut linker)?;
 
     let mut store = Store::new(&engine, CommandCtx { table, wasi });
-    let component = Component::from_file(&engine, API_REACTOR_COMPONENT)?;
+    let component = Component::from_file(&engine, P2_API_REACTOR_COMPONENT)?;
     let reactor = TestReactor::instantiate_async(&mut store, &component, &linker).await?;
 
     // Show that integration with the WASI context is working - the guest will
