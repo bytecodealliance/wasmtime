@@ -4457,7 +4457,6 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "tokio",
- "tracing-subscriber",
  "wasm-encoder",
  "wasm-wave",
  "wasmparser 0.239.0",
@@ -4566,7 +4565,6 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "tracing-subscriber",
  "walkdir",
  "wasi-common",
  "wasm-encoder",
@@ -4615,6 +4613,8 @@ name = "wasmtime-environ"
 version = "38.0.0"
 dependencies = [
  "anyhow",
+ "arbitrary",
+ "arbtest",
  "clap",
  "cpp_demangle",
  "cranelift-bitset",
@@ -4989,6 +4989,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
+ "env_logger 0.11.5",
  "flate2",
  "futures",
  "http",
