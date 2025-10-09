@@ -1481,6 +1481,41 @@ impl Func {
     pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
         self.vm_func_ref(store).as_ptr().addr()
     }
+
+    /// Run an async call on a store within a debugger context,
+    /// providing intermediate debug-step results when execution
+    /// yields for any debug-related event (or fuel pauses).
+    ///
+    /// This invocation yields debug events within the immediately
+    /// invoked activation, but not further down the stack if the Wasm
+    /// calls back out into the host and then that calls back into
+    /// Wasm. In other words, the scope of the debug session ends when
+    /// Wasm calls back out.
+    ///
+    /// Returns `None` if debug instrumentation is not enabled for the
+    /// engine containing this store.
+    #[cfg(feature = "debug")] // N.B.: `debug` implies `async`.
+    pub fn debug_call<'a>(
+        &'a self,
+        mut store: impl AsContextMut<Data: Send> + 'a,
+        params: &'a [Val],
+        results: &'a mut [Val],
+    ) -> Option<crate::DebugSession<'a>> {
+        use crate::store::AsStoreOpaque;
+        assert!(store.as_context_mut().engine().config().async_support);
+        if !store.as_context_mut().engine().tunables().debug_guest {
+            return None;
+        }
+        let was_active =
+            core::mem::replace(&mut store.as_context_mut().0.debugging_state.active, true);
+        assert!(
+            !was_active,
+            "Nested debugging sessions on one store are not supported"
+        );
+        let raw_store = NonNull::from_mut(store.as_context_mut().0.as_store_opaque());
+        let future = self.call_async(store, params, results);
+        Some(crate::DebugSession::new(raw_store, future))
+    }
 }
 
 /// Prepares for entrance into WebAssembly.
@@ -2227,6 +2262,15 @@ impl<T> Caller<'_, T> {
     /// [`Store::fuel_async_yield_interval`](crate::Store::fuel_async_yield_interval)
     pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
         self.store.fuel_async_yield_interval(interval)
+    }
+
+    /// Provide an object that captures Wasm stack state, including
+    /// Wasm VM-level values (locals and operand stack).
+    ///
+    /// See ['Store::stack_values`] for more details.
+    #[cfg(feature = "debug")]
+    pub fn stack_values(&mut self) -> Option<crate::StackView<'_>> {
+        self.store.stack_values()
     }
 }
 

@@ -30,15 +30,15 @@ pub enum FuncKeyKind {
     WasmToBuiltinTrampoline = FuncKey::new_kind(0b011),
 
     /// A Pulley-specific host call.
-    PulleyHostCall = FuncKey::new_kind(0b100),
+    PulleyHostCall = FuncKey::new_kind(0b101),
 
     /// A Wasm-caller to component builtin trampoline.
     #[cfg(feature = "component-model")]
-    ComponentTrampoline = FuncKey::new_kind(0b101),
+    ComponentTrampoline = FuncKey::new_kind(0b110),
 
     /// A Wasm-caller to array-callee `resource.drop` trampoline.
     #[cfg(feature = "component-model")]
-    ResourceDropTrampoline = FuncKey::new_kind(0b110),
+    ResourceDropTrampoline = FuncKey::new_kind(0b111),
 }
 
 impl From<FuncKeyKind> for u32 {
@@ -390,6 +390,25 @@ impl FuncKey {
                 Self::ResourceDropTrampoline
             }
         }
+    }
+
+    /// Create a key from a raw packed `u64` representation.
+    ///
+    /// Should only be given a value produced by `into_raw_u64()`.
+    ///
+    /// Panics when given an invalid value.
+    pub fn from_raw_u64(value: u64) -> Self {
+        let hi = u32::try_from(value >> 32).unwrap();
+        let lo = u32::try_from(value & 0xffff_ffff).unwrap();
+        FuncKey::from_raw_parts(hi, lo)
+    }
+
+    /// Produce a packed `u64` representation of this key.
+    ///
+    /// May be used with `from_raw_64()` to reconstruct this key.
+    pub fn into_raw_u64(&self) -> u64 {
+        let (hi, lo) = self.into_raw_parts();
+        (u64::from(hi) << 32) | u64::from(lo)
     }
 
     /// Unwrap a `FuncKey::DefinedWasmFunction` or else panic.

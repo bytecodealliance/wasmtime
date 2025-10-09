@@ -1,9 +1,11 @@
 use crate::{Relocation, mach_reloc_to_reloc, mach_trap_to_trap};
 use cranelift_codegen::{
-    Final, MachBufferFinalized, MachSrcLoc, ValueLabelsRanges, ir, isa::unwind::CfaUnwindInfo,
-    isa::unwind::UnwindInfo,
+    Final, MachBufferFinalized, MachBufferFrameLayout, MachSrcLoc, ValueLabelsRanges, ir,
+    isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo,
 };
-use wasmtime_environ::{FilePos, InstructionAddressMap, PrimaryMap, TrapInformation};
+use wasmtime_environ::{
+    FilePos, FrameStateSlotBuilder, InstructionAddressMap, PrimaryMap, TrapInformation,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Metadata to translate from binary offsets back to the original
@@ -44,8 +46,6 @@ pub struct CompiledFunctionMetadata {
     pub cfa_unwind_info: Option<CfaUnwindInfo>,
     /// Mapping of value labels and their locations.
     pub value_labels_ranges: ValueLabelsRanges,
-    /// Allocated stack slots.
-    pub sized_stack_slots: ir::StackSlots,
     /// Start source location.
     pub start_srcloc: FilePos,
     /// End source location.
@@ -63,6 +63,8 @@ pub struct CompiledFunction {
     /// The metadata for the compiled function, including unwind information
     /// the function address map.
     metadata: CompiledFunctionMetadata,
+    /// Debug metadata for the top-level function's state slot.
+    pub debug_slot_descriptor: Option<FrameStateSlotBuilder>,
 }
 
 impl CompiledFunction {
@@ -79,6 +81,7 @@ impl CompiledFunction {
             name_map,
             alignment,
             metadata: Default::default(),
+            debug_slot_descriptor: None,
         }
     }
 
@@ -155,9 +158,11 @@ impl CompiledFunction {
         self.metadata.cfa_unwind_info = Some(unwind);
     }
 
-    /// Set the sized stack slots.
-    pub fn set_sized_stack_slots(&mut self, slots: ir::StackSlots) {
-        self.metadata.sized_stack_slots = slots;
+    /// Returns the frame-layout metadata for this function.
+    pub fn frame_layout(&self) -> &MachBufferFrameLayout {
+        self.buffer
+            .frame_layout()
+            .expect("Single-function MachBuffer must have frame layout information")
     }
 }
 
