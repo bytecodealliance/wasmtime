@@ -1,6 +1,6 @@
 ;;! target = "aarch64"
 ;;! test = "compile"
-;;! flags = ["-Wexceptions=yes", "-Wgc=yes", "-Ddebug-instrumentation=yes"]
+;;! flags = ["-Wexceptions=yes", "-Wgc=yes", "-Dguest-debug=yes"]
 
 (module
   (tag $t (param i32))
