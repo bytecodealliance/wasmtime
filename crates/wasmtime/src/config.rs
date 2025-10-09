@@ -2130,7 +2130,7 @@ impl Config {
             | WasmFeatures::CM_ERROR_CONTEXT
             | WasmFeatures::CM_GC;
 
-        #[allow(unused_mut)]
+        #[allow(unused_mut, reason = "easier to avoid #[cfg]")]
         let mut unsupported = !features_known_to_wasmtime;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
