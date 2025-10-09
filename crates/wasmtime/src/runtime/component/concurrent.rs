@@ -1459,6 +1459,7 @@ impl Instance {
         let state = self.concurrent_state_mut(store);
 
         state.guest_thread = old_thread;
+        old_thread.map(|t| state.get_mut(t).unwrap().state = GuestThreadState::Running);
         log::trace!("resume_fiber: restore current thread {old_thread:?}");
 
         if let Some(mut fiber) = fiber {
@@ -1477,7 +1478,6 @@ impl Instance {
                     state.push_low_priority(WorkItem::ResumeFiber(fiber));
                 }
                 SuspendReason::ExplicitlySuspending { thread, .. } => {
-                    // TODO do this earlier?
                     state.get_mut(thread)?.state = GuestThreadState::Suspended(fiber);
                 }
                 SuspendReason::Waiting { set, thread } => {
@@ -1740,6 +1740,10 @@ impl Instance {
             let token = StoreToken::new(store);
             move |store: &mut dyn VMStore, instance: Instance| {
                 let mut storage = [MaybeUninit::uninit(); MAX_FLAT_PARAMS];
+                instance
+                    .concurrent_state_mut(store)
+                    .get_mut(guest_thread)?
+                    .state = GuestThreadState::Running;
                 let task = instance
                     .concurrent_state_mut(store)
                     .get_task_mut(guest_thread)?;
@@ -1756,7 +1760,6 @@ impl Instance {
                     if let Some(mut flags) = flags {
                         flags.set_may_enter(false);
                     }
-                    log::trace!("calling {callee:p} from guest thread {guest_thread:?}");
                     crate::Func::call_unchecked_raw(
                         &mut store,
                         callee.as_non_null(),
@@ -1836,6 +1839,7 @@ impl Instance {
 
                 let state = instance.concurrent_state_mut(store);
                 state.guest_thread = old_thread;
+                old_thread.map(|t| state.get_mut(t).unwrap().state = GuestThreadState::Running);
                 log::trace!("stackless call: restored {old_thread:?} as current thread");
 
                 // SAFETY: `wasmparser` will have validated that the callback
@@ -2410,6 +2414,7 @@ impl Instance {
 
         // Reset the current thread to point to the caller as it resumes control.
         state.guest_thread = Some(caller);
+        state.get_mut(caller)?.state = GuestThreadState::Running;
         log::trace!("popped current thread {guest_thread:?}; new thread is {caller:?}");
 
         if let Some(storage) = storage {
@@ -3041,6 +3046,7 @@ impl Instance {
                     bail!(Trap::NoAsyncResult);
                 }
                 state.guest_thread = old_thread;
+                old_thread.map(|t| state.get_mut(t).unwrap().state = GuestThreadState::Running);
                 if state.get_mut(task_id)?.ready_to_delete() {
                     Waitable::Guest(task_id).delete_from(state)?;
                 }
