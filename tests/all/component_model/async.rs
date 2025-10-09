@@ -315,6 +315,10 @@ async fn drop_resource_async() -> Result<()> {
     Ok(())
 }
 
+/// Test task deletion in three situations, for every combination of lift/lower/(guest/host):
+/// 1. An explicit thread calls task.return
+/// 2. An explicit thread suspends indefinitely
+/// 3. An explicit thread yield loops indefinitely
 #[tokio::test]
 async fn task_deletion() -> Result<()> {
     let mut config = Config::new();
@@ -330,7 +334,7 @@ async fn task_deletion() -> Result<()> {
     (component $C
         (core module $Memory (memory (export "mem") 1))
         (core instance $memory (instantiate $Memory))
-        ;; Defines the table for the thread start functions, of which there are two
+        ;; Defines the table for the thread start functions
         (core module $libc
             (table (export "__indirect_function_table") 3 funcref))
         (core module $CM
