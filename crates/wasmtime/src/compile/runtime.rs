@@ -91,8 +91,13 @@ impl<'a> CodeBuilder<'a> {
 
         #[cfg(not(feature = "cache"))]
         {
-            let (mmap, info_and_types) =
-                build_artifacts(self.engine, &wasm, dwarf_package.as_deref(), state)?;
+            let (mmap, info_and_types) = build_artifacts(
+                self.engine,
+                &wasm,
+                dwarf_package.as_deref(),
+                unsafe_intrinsics_import,
+                state,
+            )?;
             let code = publish_mmap(self.engine, mmap.0)?;
             return Ok((code, info_and_types));
         }

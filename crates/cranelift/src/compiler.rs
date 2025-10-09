@@ -844,11 +844,11 @@ impl InliningCompiler for Compiler {
                 .user_named_funcs()
                 .values()
                 .map(|name| FuncKey::from_raw_parts(name.namespace, name.index))
-                .filter(|key| {
-                    matches!(
-                        key,
-                        FuncKey::DefinedWasmFunction(..) | FuncKey::UnsafeIntrinsic(..)
-                    )
+                .filter(|key| match key {
+                    FuncKey::DefinedWasmFunction(..) => true,
+                    #[cfg(feature = "component-model")]
+                    FuncKey::UnsafeIntrinsic(..) => true,
+                    _ => false,
                 }),
         );
         Ok(())
@@ -905,29 +905,28 @@ impl InliningCompiler for Compiler {
                 let callee = &caller.params.user_named_funcs()[callee];
                 let callee = FuncKey::from_raw_parts(callee.namespace, callee.index);
                 match callee {
-                    FuncKey::DefinedWasmFunction(..) | FuncKey::UnsafeIntrinsic(..) => {
-                        match (self.0)(callee) {
-                            None => InlineCommand::KeepCall,
-                            Some(func_body) => {
-                                debug_assert!(!func_body.code.is::<CompiledFunction>());
-                                debug_assert!(func_body.code.is::<Option<CompilerContext>>());
-                                let cx = func_body
-                                    .code
-                                    .downcast_ref::<Option<CompilerContext>>()
-                                    .unwrap();
-                                InlineCommand::Inline {
-                                    callee: Cow::Borrowed(
-                                        &cx.as_ref().unwrap().codegen_context.func,
-                                    ),
-                                    // We've already visited the callee for inlining
-                                    // due to our bottom-up approach, no need to
-                                    // visit it again.
-                                    visit_callee: false,
-                                }
-                            }
+                    FuncKey::DefinedWasmFunction(..) => {}
+                    #[cfg(feature = "component-model")]
+                    FuncKey::UnsafeIntrinsic(..) => {}
+                    _ => return InlineCommand::KeepCall,
+                }
+                match (self.0)(callee) {
+                    None => InlineCommand::KeepCall,
+                    Some(func_body) => {
+                        debug_assert!(!func_body.code.is::<CompiledFunction>());
+                        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
+                        let cx = func_body
+                            .code
+                            .downcast_ref::<Option<CompilerContext>>()
+                            .unwrap();
+                        InlineCommand::Inline {
+                            callee: Cow::Borrowed(&cx.as_ref().unwrap().codegen_context.func),
+                            // We've already visited the callee for inlining
+                            // due to our bottom-up approach, no need to
+                            // visit it again.
+                            visit_callee: false,
                         }
                     }
-                    _ => InlineCommand::KeepCall,
                 }
             }
         }
