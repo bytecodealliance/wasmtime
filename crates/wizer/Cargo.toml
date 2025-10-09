@@ -1,0 +1,70 @@
+[package]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+categories = ["command-line-utilities", "development-tools", "wasm"]
+description = "The WebAssembly Pre-Initializer"
+documentation = "https://docs.rs/wizer"
+edition = "2018"
+exclude = ["**.wasm"]
+homepage = "https://github.com/bytecodealliance/wizer"
+license = "Apache-2.0 WITH LLVM-exception"
+name = "wizer"
+readme = "./README.md"
+repository = "https://github.com/bytecodealliance/wizer"
+version = "10.0.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "wizer"
+required-features = ["env_logger", "structopt"]
+
+[[bench]]
+name = "regex"
+harness = false
+
+[[bench]]
+name = "uap"
+harness = false
+
+[dependencies]
+anyhow = "1.0.97"
+cap-std = "3.4.3"
+env_logger = { version = "0.11.8", optional = true }
+log = "0.4.27"
+rayon = "1.10.0"
+structopt = { version = "0.3.26", optional = true }
+wasm-encoder = "0.238.0"
+wasmparser = "0.238.0"
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true, features = ["preview1"] }
+
+# Enable this dependency to get messages with WAT disassemblies when certain
+# internal panics occur.
+[dependencies.wasmprinter]
+workspace = true
+optional = true
+
+[workspace.dependencies]
+wasmprinter = "0.238.0"
+wasmtime = "36"
+wasmtime-wasi = "36"
+
+[dev-dependencies]
+criterion = "0.5.1"
+env_logger = "0.11.8"
+wasmprinter = { workspace = true }
+wat = "1.238.0"
+
+[workspace]
+members = [
+    "benches/regex-bench",
+    "benches/uap-bench",
+    "fuzz",
+    "tests/regex-test",
+]
+
+[profile.bench]
+debug = true
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(fuzzing)'] }
