@@ -194,27 +194,83 @@ impl<'a> CodeBuilder<'a> {
     /// "compile-time builtins"; that is, satisfying a Wasm import via
     /// special-cased, embedder-specific code at compile time. You should never
     /// use these intrinsics to intentionally subvert the Wasm sandbox. You
-    /// should strive to implement safe functions on top of these intrinsics
-    /// that, regardless of any value given as arguments, your functions
-    /// *cannot* result in loading from or storing to invalid pointers, or any
-    /// other kind of unsafety. See below for an example of the intended use
-    /// cases.
+    /// should strive to implement safe functions that encapsulate your uses of
+    /// these intrinsics such that, regardless of any value given as arguments,
+    /// your functions *cannot* result in loading from or storing to invalid
+    /// pointers, or any other kind of unsafety. See below for an example of the
+    /// intended use cases.
     ///
     /// Wasmtime's unsafe intrinsics can only be exposed to Wasm components, not
     /// core modules, currently.
     ///
     /// # Safety
     ///
-    /// TODO FITZGEN
+    /// Extreme care must be taken when using these intrinsics.
     ///
-    /// * non-null
-    /// * aligned
-    /// * sized
-    /// * provenance
-    /// * data races
+    /// All memory operated upon by these intrinsics must be reachable from the
+    /// `T` in a `Store<T>`. That is, all addresses should be derived, via
+    /// pointer arithmetic and transitive loads, from the result of the
+    /// `store-data-address` intrinsic.
     ///
-    /// * `T` in `Store<T>` must be as expected
-    /// * `T` must be `repr(C)`
+    /// Additionally, usage of these intrinsics is inherently tied to a
+    /// particular `T` type. It is wildly unsafe to run a Wasm program that uses
+    /// unsafe intrinsics to access the store's `T` inside a `Store<U>`. You
+    /// must only run Wasm that uses unsafe intrinsics in a `Store<T>` where the
+    /// `T` is the type expected by the Wasm's unsafe-intrinsics usage.
+    ///
+    /// Furthermore, usage of these intrinsics is not only tied to a particular
+    /// `T` type, but also to `T`'s layout on the host platform. The size and
+    /// alignment of `T`, the offsets of its fields, and those fields' size and
+    /// alignment can all vary across not only architecture but also operating
+    /// system. With care, you can define your `T` type such that its layout is
+    /// identical across the platforms that you run Wasm on, allowing you to
+    /// reuse the same Wasm binary and its unsafe-intrinsics usage on all your
+    /// platforms. Failing that, you must only run a Wasm program that uses
+    /// unsafe intrinsics on the host platform that its unsafe-intrinsic usafe
+    /// is specialized to. See the portability section and example below for
+    /// more details.
+    ///
+    /// Finally, every pointer loaded from or stored to must:
+    ///
+    /// * Be non-null
+    ///
+    /// * Be aligned to the access type's natural alignment (e.g. 8-byte alignment
+    ///   for `u64`, 4-byte alignment for `u32`, etc...)
+    ///
+    /// * Point to a memory block that is valid to read from (for loads) or
+    ///   valid to write to (for stores)
+    ///
+    /// * Point to a memory block that is at least as large as the access type's
+    ///   natural size (e.g. 1 byte for `u8`, 2 bytes for `u16`, etc...)
+    ///
+    /// * Point to a memory block that is not accessed concurrently by any other
+    ///   threads
+    ///
+    /// Failure to uphold any of these invariants will lead to unsafety,
+    /// undefined behavior, and/or data races.
+    ///
+    /// You are *strongly* encouraged to add assertions for the layout
+    /// properties that your unsafe-intrinsics usage's safety relies upon:
+    ///
+    /// ```rust
+    /// /// This type is used as `wasmtime::Store<MyData>` and accessed by Wasm via
+    /// /// unsafe intrinsics.
+    /// #[repr(C)]
+    /// struct MyData {
+    ///     id: u64,
+    ///     counter: u32,
+    ///     buf: [u8; 4],
+    /// }
+    ///
+    /// // Assert that the layout is what our Wasm's unsafe-intrinsics usage expects.
+    /// static _MY_DATA_LAYOUT_ASSERTIONS: () = {
+    ///     assert!(core::mem::size_of::<MyData>() == 16);
+    ///     assert!(core::mem::align_of::<MyData>() == 8);
+    ///     assert!(core::mem::offset_of!(MyData, id) == 0);
+    ///     assert!(core::mem::offset_of!(MyData, counter) == 8);
+    ///     assert!(core::mem::offset_of!(MyData, buf) == 12);
+    /// };
+    /// ```
     ///
     /// # Intrinsics
     ///
@@ -232,11 +288,13 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// ## `*-native-load`
     ///
-    /// These intrinsics perform an unsandboxed load from native memory.
+    /// These intrinsics perform an unsandboxed, unsynchronized load from native
+    /// memory, using the native endianness.
     ///
     /// ## `*-native-store`
     ///
-    /// These intrinsics perform an unsandboxed store to native memory.
+    /// These intrinsics perform an unsandboxed, unsynchronized store to native
+    /// memory, using the native endianness.
     ///
     /// ## `store-data-address`
     ///
@@ -253,6 +311,35 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// Loads and stores are always performed using the architecture's native
     /// endianness.
+    ///
+    /// Addresses passed to and returned from these intrinsics are always
+    /// 64-bits large. The upper half of the value is simply ignored on 32-bit
+    /// architectures.
+    ///
+    /// With care, you can design your store's `T` type such that accessing it
+    /// via these intrinsics is portable, and you can reuse a single Wasm binary
+    /// (and its set of intrinsic calls) across all of the platforms, with the
+    /// following rules of thumb:
+    ///
+    /// * Only access `u8`, `u16`, `u32`, and `u64` data via these intrinsics
+    ///
+    /// * If you need to access other types of data, encode it into those types
+    ///   and then access the encoded data from the intrinsics
+    ///
+    /// * Use `union`s to encode pointers and pointer-sized data as a `u64` and
+    ///   then access it via the `u64-native-{load,store}` intrinsics:
+    ///
+    ///   ```rust
+    ///   union ExposedPointer {
+    ///       pointer: *mut u8,
+    ///       _layout: u64,
+    ///   }
+    ///
+    ///   static _EXPOSED_POINTER_LAYOUT_ASSERTIONS: () = {
+    ///       assert!(core::mem::size_of::<ExposedPointer>() == 8);
+    ///       assert!(core::mem::align_of::<ExposedPointer>() == 8);
+    ///   };
+    ///   ```
     ///
     /// # Example
     ///
