@@ -2118,30 +2118,24 @@ impl Config {
             | WasmFeatures::EXTENDED_CONST
             | WasmFeatures::COMPONENT_MODEL
             | WasmFeatures::FUNCTION_REFERENCES
-            | WasmFeatures::MEMORY_CONTROL
             | WasmFeatures::GC
             | WasmFeatures::CUSTOM_PAGE_SIZES
-            | WasmFeatures::LEGACY_EXCEPTIONS
             | WasmFeatures::GC_TYPES
             | WasmFeatures::STACK_SWITCHING
             | WasmFeatures::WIDE_ARITHMETIC
-            | WasmFeatures::CM_VALUES
-            | WasmFeatures::CM_NESTED_NAMES
             | WasmFeatures::CM_ASYNC
             | WasmFeatures::CM_ASYNC_STACKFUL
             | WasmFeatures::CM_ASYNC_BUILTINS
             | WasmFeatures::CM_THREADING
             | WasmFeatures::CM_ERROR_CONTEXT
-            | WasmFeatures::CM_FIXED_SIZE_LIST
             | WasmFeatures::CM_GC;
 
-        let features_unknown_to_wasmtime = !features_known_to_wasmtime;
+        #[allow(unused_mut)]
+        let mut unsupported = !features_known_to_wasmtime;
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         match self.compiler_config.strategy {
             None | Some(Strategy::Cranelift) => {
-                let mut unsupported = WasmFeatures::empty();
-
                 // Pulley at this time fundamentally doesn't support the
                 // `threads` proposal, notably shared memory, because Rust can't
                 // safely implement loads/stores in the face of shared memory.
@@ -2170,10 +2164,9 @@ impl Config {
                         unsupported |= WasmFeatures::STACK_SWITCHING;
                     }
                 }
-                unsupported | features_unknown_to_wasmtime
             }
             Some(Strategy::Winch) => {
-                let mut unsupported = WasmFeatures::GC
+                unsupported |= WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::RELAXED_SIMD
                     | WasmFeatures::TAIL_CALL
@@ -2193,12 +2186,10 @@ impl Config {
                     // them.
                     _ => {}
                 }
-                unsupported | features_unknown_to_wasmtime
             }
             Some(Strategy::Auto) => unreachable!(),
         }
-        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
-        return features_unknown_to_wasmtime;
+        unsupported
     }
 
     /// Calculates the set of features that are enabled for this `Config`.
