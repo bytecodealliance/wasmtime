@@ -360,16 +360,15 @@ impl<'a> CurrentActivationBacktrace<'a> {
     /// while within host code called from that activation (which will
     /// ordinarily be ensured if the `store`'s lifetime came from the
     /// host entry point) then everything will be sound.
-    pub(crate) unsafe fn new(store: &'a mut StoreOpaque) -> CurrentActivationBacktrace<'a> {
-        // Get the initial exit FP, exit PC, and entry FP.
-        let vm_store_context = store.vm_store_context();
-        let exit_pc = unsafe { *(*vm_store_context).last_wasm_exit_pc.get() };
-        let exit_fp = unsafe { (*vm_store_context).last_wasm_exit_fp() };
-        let trampoline_fp = unsafe { *(*vm_store_context).last_wasm_entry_fp.get() };
+    pub(crate) unsafe fn new(
+        store: &'a mut StoreOpaque,
+        entry_fp: usize,
+        exit_fp: usize,
+        exit_pc: usize,
+    ) -> CurrentActivationBacktrace<'a> {
         let unwind = store.unwinder();
-        // Establish the iterator.
         let inner = Box::new(unsafe {
-            wasmtime_unwinder::frame_iterator(unwind, exit_pc, exit_fp, trampoline_fp)
+            wasmtime_unwinder::frame_iterator(unwind, exit_pc, exit_fp, entry_fp)
         });
 
         let store = AutoAssertNoGc::new(store);

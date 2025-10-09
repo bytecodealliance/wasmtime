@@ -76,6 +76,8 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+#[cfg(feature = "debug")]
+use crate::DebuggingSessionState;
 use crate::RootSet;
 #[cfg(feature = "gc")]
 use crate::ThrownException;
@@ -488,6 +490,13 @@ pub struct StoreOpaque {
     /// For example if Pulley is enabled and configured then this will store a
     /// Pulley interpreter.
     executor: Executor,
+
+    /// Whether a debugging session is currently active for this
+    /// store. This state is set while in host code and applies to
+    /// direct Wasm activations (but not re-entrant activations if
+    /// that Wasm calls back into the host).
+    #[cfg(feature = "debug")]
+    pub(crate) debugging_state: DebuggingSessionState,
 }
 
 /// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
@@ -696,6 +705,8 @@ impl<T> Store<T> {
             executor: Executor::new(engine),
             #[cfg(feature = "component-model")]
             concurrent_state: Default::default(),
+            #[cfg(feature = "debug")]
+            debugging_state: DebuggingSessionState::default(),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -707,6 +718,12 @@ impl<T> Store<T> {
         });
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
+
+        // This backpointer is used only from a signal/trap
+        // context to get back to the current store from the
+        // VMStoreContext, which is reachable via TLS.
+        let raw_store_backpointer: *mut StoreOpaque = &mut inner.inner as *mut _;
+        *inner.vm_store_context.store.get_mut() = raw_store_backpointer;
 
         // Wasmtime uses the callee argument to host functions to learn about
         // the original pointer to the `Store` itself, allowing it to

@@ -2,18 +2,20 @@
 
 use crate::{
     AnyRef, ExnRef, ExternRef, Func, Instance, Module, Val,
+    runtime::store::AsStoreOpaque,
     store::{AutoAssertNoGc, StoreOpaque},
     vm::{CurrentActivationBacktrace, VMContext},
 };
+use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::{ffi::c_void, ptr::NonNull};
+use core::{ffi::c_void, pin::Pin, ptr::NonNull, task::Poll};
 use wasmtime_environ::{
     DefinedFuncIndex, FrameInstPos, FrameStackShape, FrameStateSlot, FrameStateSlotOffset,
-    FrameTableDescriptorIndex, FrameValType, FuncKey,
+    FrameTableDescriptorIndex, FrameValType, FuncKey, Trap,
 };
 use wasmtime_unwinder::Frame;
 
-use super::store::AsStoreOpaque;
+use super::vm::TrapRegisters;
 
 impl StoreOpaque {
     /// Provide an object that captures Wasm stack state, including
@@ -35,7 +37,15 @@ impl StoreOpaque {
             return None;
         }
 
-        let iter = unsafe { CurrentActivationBacktrace::new(self) };
+        let (entry_fp, exit_fp, exit_pc) = unsafe {
+            (
+                *self.vm_store_context().last_wasm_entry_fp.get(),
+                self.vm_store_context().last_wasm_exit_fp(),
+                *self.vm_store_context().last_wasm_exit_pc.get(),
+            )
+        };
+
+        let iter = unsafe { CurrentActivationBacktrace::new(self, entry_fp, exit_fp, exit_pc) };
         let mut view = StackView {
             iter,
             is_trapping_frame: false,
@@ -387,5 +397,221 @@ unsafe fn read_value(
         FrameValType::ContRef => {
             unimplemented!("contref values are not implemented in the host API yet")
         }
+    }
+}
+
+/// A "debug session": a future that is the result of
+/// `Func::debug_call(...)`.
+///
+/// A debug session owns the store while active, and runs an inner
+/// user-provided closure that performs some action (e.g., invoke some
+/// Wasm function) while setting up a debug context on the store.
+///
+/// This debug context allows the debug session to return an
+/// intermediate [`DebugStepResult`] each time some debug action
+/// occurs. These actions could include completing the inner closure,
+/// hitting a breakpoint or watchpoint, or hitting a trap.
+pub struct DebugSession<'a> {
+    /// Raw pointer to store. We own this only when control is yielded
+    /// back to us from the future, and we use it only to introspect
+    /// the stack (and eventually to update breakpoints, etc).
+    /// Ownership of the store itself tmus passes back and forth
+    /// dynamically.
+    ///
+    /// As long as we know that the future is not running, we can
+    /// safely access this (i.e., we own the store). We never let
+    /// `future` escape, so we maintain this invariant solely within
+    /// this file.
+    raw_store: NonNull<StoreOpaque>,
+    state: DebugSessionState<'a>,
+}
+
+type WasmFuture<'a> = Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'a>>;
+
+enum DebugSessionState<'a> {
+    Created(WasmFuture<'a>),
+    Running {
+        future: WasmFuture<'a>,
+        entry_fp: usize,
+        exit_fp: usize,
+        exit_pc: usize,
+    },
+    Trapped {
+        future: WasmFuture<'a>,
+        entry_fp: usize,
+        regs: TrapRegisters,
+    },
+    Finished,
+}
+
+/// State kept on `StoreOpaque` and used/updated by trap handling to
+/// know when debugging is active and to pass state back to us.
+#[derive(Default)]
+pub(crate) struct DebuggingSessionState {
+    /// Is debugging active on this store?
+    pub(crate) active: bool,
+    /// State yielded back when the inner future returns from its
+    /// poll.
+    pub(crate) debug_yield: Option<DebugYield>,
+    /// Entry FP on the stack, saved every time the future yields so
+    /// we can properly walk the stack.
+    pub(crate) entry_fp: Option<usize>,
+    pub(crate) exit_fp: Option<usize>,
+    pub(crate) exit_pc: Option<usize>,
+}
+
+/// State set on a store to communicate a debug event on yield.
+pub(crate) enum DebugYield {
+    Trap(TrapRegisters, Trap),
+}
+
+/// A "debug step result": one event that happens when running actions
+/// in a `debug_call` invocation on a store.
+#[derive(Debug)]
+pub enum DebugStepResult {
+    /// The call completed and returned a value.
+    Complete,
+    /// The call completed and return an error.
+    Error(anyhow::Error),
+    /// The call completed and threw an uncaught exception.
+    UncaughtException(ExnRef),
+    /// A Wasm trap occurred.
+    Trap(Trap),
+}
+
+impl<'a> DebugSession<'a> {
+    pub(crate) fn new(
+        raw_store: NonNull<StoreOpaque>,
+        future: impl Future<Output = anyhow::Result<()>> + 'a,
+    ) -> Self {
+        Self {
+            raw_store,
+            state: DebugSessionState::Created(Box::pin(future)),
+        }
+    }
+
+    /// Get an owning borrow of the associated store.
+    ///
+    /// # Safety
+    ///
+    /// Requires that `future` is not running and has yielded from
+    /// within Wasm code at a point that logically passes ownership of
+    /// the store back (i.e., a trap or breakpoint).
+    unsafe fn store_mut(&mut self) -> &mut StoreOpaque {
+        unsafe { self.raw_store.as_mut() }
+    }
+
+    /// Run until the next debug step result: completion, a trap, or
+    /// some kind of pause/break.
+    pub fn next(&mut self) -> impl Future<Output = Option<DebugStepResult>> + '_ {
+        struct Fut<'b, 'c>(&'b mut DebugSession<'c>);
+
+        impl<'b, 'c> Future for Fut<'b, 'c> {
+            type Output = Option<DebugStepResult>;
+            fn poll(
+                mut self: Pin<&mut Self>,
+                cx: &mut core::task::Context<'_>,
+            ) -> Poll<Self::Output> {
+                match core::mem::replace(&mut self.0.state, DebugSessionState::Finished) {
+                    DebugSessionState::Finished => Poll::Ready(None),
+                    // N.B.: we poll the Wasm function execution
+                    // future if it's still normally running *or* if
+                    // it trapped; in the latter case, when we resume,
+                    // it performs the ordinary exception-throw to
+                    // unwind the fiber, because we can't drop the
+                    // fiber without completing it. In essence, a trap
+                    // "pauses" with a debug-step result so we can
+                    // examine the stack, then finishes the teardown.
+                    DebugSessionState::Trapped { mut future, .. }
+                    | DebugSessionState::Created(mut future)
+                    | DebugSessionState::Running { mut future, .. } => {
+                        match future.as_mut().poll(cx) {
+                            Poll::Ready(value) => {
+                                self.0.state = DebugSessionState::Finished;
+                                match value {
+                                    Ok(()) => Poll::Ready(Some(DebugStepResult::Complete)),
+                                    Err(e) => Poll::Ready(Some(DebugStepResult::Error(e))),
+                                }
+                            }
+                            Poll::Pending => {
+                                // If there was an explicit debug yield,
+                                // translate that to a step result. Otherwise,
+                                // yield nothing.
+                                let store = unsafe { self.0.store_mut() };
+                                let entry_fp = store.debugging_state.entry_fp.take().unwrap();
+                                let exit_fp = store.debugging_state.exit_fp.take().unwrap();
+                                let exit_pc = store.debugging_state.exit_pc.take().unwrap();
+
+                                match store.debugging_state.debug_yield.take() {
+                                    Some(DebugYield::Trap(regs, trapcode)) => {
+                                        self.0.state = DebugSessionState::Trapped {
+                                            regs,
+                                            entry_fp,
+                                            future,
+                                        };
+                                        Poll::Ready(Some(DebugStepResult::Trap(trapcode)))
+                                    }
+                                    None => {
+                                        self.0.state = DebugSessionState::Running {
+                                            future,
+                                            entry_fp,
+                                            exit_fp,
+                                            exit_pc,
+                                        };
+                                        Poll::Pending
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Fut(self)
+    }
+
+    /// Provide a view of the current execution state.
+    ///
+    /// Returns `None` if execution has already completed.
+    pub fn stack_values(&mut self) -> Option<StackView<'_>> {
+        let (entry_fp, exit_fp, exit_pc, is_trapping_frame) = match &self.state {
+            DebugSessionState::Created(..) => return None,
+            DebugSessionState::Running {
+                entry_fp,
+                exit_fp,
+                exit_pc,
+                ..
+            } => (*entry_fp, *exit_fp, *exit_pc, false),
+            DebugSessionState::Trapped { entry_fp, regs, .. } => {
+                (*entry_fp, regs.fp, regs.pc, true)
+            }
+            DebugSessionState::Finished => return None,
+        };
+
+        let store = unsafe { self.store_mut() };
+        let iter = unsafe { CurrentActivationBacktrace::new(store, entry_fp, exit_fp, exit_pc) };
+        let mut view = StackView {
+            iter,
+            is_trapping_frame,
+            frames: vec![],
+            current: None,
+        };
+        view.move_up(); // Load the first frame.
+        Some(view)
+    }
+}
+
+impl<'a> Drop for DebugSession<'a> {
+    fn drop(&mut self) {
+        // SAFETY: if we are dropping the session, then the inner
+        // future is not running, because we do not let it escape and
+        // a poll on `next()`'s future (which takes a mut-borrow on
+        // `DebugSession`) is the only way to run it. Hence, we can
+        // claim ownership of the store.
+        let store = unsafe { self.store_mut() };
+        assert!(store.debugging_state.debug_yield.is_none());
+        assert!(store.debugging_state.active);
+        store.debugging_state.active = false;
     }
 }

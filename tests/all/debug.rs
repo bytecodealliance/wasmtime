@@ -1,20 +1,28 @@
 //! Tests for instrumentation-based debugging.
 
-use wasmtime::{Caller, Config, Engine, Extern, Func, Instance, Module, Store};
+use wasmtime::{
+    Caller, Config, DebugStepResult, Engine, Extern, Func, Instance, Module, Store, Val,
+};
 
-fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + 'static>(
-    wat: &str,
+fn get_module_and_store<C: Fn(&mut Config)>(
     c: C,
-    f: F,
-) -> anyhow::Result<()> {
+    wat: &str,
+) -> anyhow::Result<(Module, Store<()>)> {
     let mut config = Config::default();
     config.guest_debug(true);
     config.wasm_exceptions(true);
     c(&mut config);
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, wat)?;
+    Ok((module, Store::new(&engine, ())))
+}
 
-    let mut store = Store::new(&engine, ());
+fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + 'static>(
+    wat: &str,
+    c: C,
+    f: F,
+) -> anyhow::Result<()> {
+    let (module, mut store) = get_module_and_store(c, wat)?;
     let func = Func::wrap(&mut store, move |caller: Caller<'_, ()>| {
         f(caller);
     });
@@ -107,4 +115,54 @@ fn stack_values_exceptions() -> anyhow::Result<()> {
             assert!(stack.done());
         },
     )
+}
+
+#[tokio::test]
+async fn catch_trap() -> anyhow::Result<()> {
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+        },
+        r#"
+    (module
+      (func (export "add") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add
+        unreachable))
+    "#,
+    )?;
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "add").unwrap();
+    let mut results = [Val::I32(0)];
+    let mut future = func
+        .debug_call(&mut store, &[Val::I32(1), Val::I32(2)], &mut results[..])
+        .expect("debug session not supported");
+
+    assert!(matches!(
+        future.next().await,
+        Some(DebugStepResult::Trap(
+            wasmtime::Trap::UnreachableCodeReached
+        ))
+    ));
+
+    {
+        let mut stack = future.stack_values().expect("stack view is available");
+        assert!(!stack.done());
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 40);
+        assert_eq!(stack.num_stacks(), 1);
+        assert_eq!(stack.stack(0).unwrap_i32(), 3);
+        stack.move_up();
+        assert!(stack.done());
+    }
+
+    assert!(matches!(
+        future.next().await,
+        Some(DebugStepResult::Error(_))
+    ));
+    assert!(future.next().await.is_none());
+    assert!(future.next().await.is_none());
+
+    Ok(())
 }
