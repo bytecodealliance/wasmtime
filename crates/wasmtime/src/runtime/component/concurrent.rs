@@ -4012,6 +4012,9 @@ enum Caller {
         /// dropping it when the refcount goes to zero is sufficient to notify
         /// the receiver.
         exit_tx: Arc<oneshot::Sender<()>>,
+        /// If true, there's a host future that must be dropped before the task
+        /// can be deleted.
+        host_future_present: bool,
         /// If true, call `post-return` function (if any) automatically.
         call_post_return_automatically: bool,
     },
@@ -4114,6 +4117,13 @@ impl SyncResult {
     }
 }
 
+#[derive(Debug)]
+enum HostFutureState {
+    NotApplicable,
+    Live,
+    Dropped,
+}
+
 /// Represents a pending guest task.
 pub(crate) struct GuestTask {
     /// See `WaitableCommon`
@@ -4166,6 +4176,9 @@ pub(crate) struct GuestTask {
     threads: HashSet<TableId<GuestThread>>,
     /// The ABI used for lifting the export implementing this task
     lift_abi: LiftABI,
+    /// The state of the host future that represents an async task, which must
+    /// be dropped before we can delete the task.
+    host_future_state: HostFutureState,
 }
 
 impl GuestTask {
@@ -4181,12 +4194,16 @@ impl GuestTask {
         let threads_completed = self.threads.is_empty();
         let has_sync_result = matches!(self.sync_result, SyncResult::Produced(_));
         let has_event = self.common.event.is_some();
-        let ready = threads_completed && !has_sync_result && !has_event;
+        let ready = threads_completed
+            && !has_sync_result
+            && !has_event
+            && !matches!(self.host_future_state, HostFutureState::Live);
         log::trace!(
-            "ready to delete? {ready} (threads_completed: {}, has_sync_result: {}, has_event: {})",
+            "ready to delete? {ready} (threads_completed: {}, has_sync_result: {}, has_event: {}, host_future_state: {:?})",
             threads_completed,
             has_sync_result,
-            has_event
+            has_event,
+            self.host_future_state
         );
         ready
     }
@@ -4200,7 +4217,19 @@ impl GuestTask {
         lift_abi: LiftABI,
     ) -> Result<Self> {
         let sync_call_set = state.push(WaitableSet::default())?;
-
+        let host_future_state = match &caller {
+            Caller::Guest { .. } => HostFutureState::NotApplicable,
+            Caller::Host {
+                host_future_present,
+                ..
+            } => {
+                if *host_future_present {
+                    HostFutureState::Live
+                } else {
+                    HostFutureState::NotApplicable
+                }
+            }
+        };
         Ok(Self {
             common: WaitableCommon::default(),
             lower_params: Some(lower_params),
@@ -4220,6 +4249,7 @@ impl GuestTask {
             exited: false,
             threads: HashSet::new(),
             lift_abi,
+            host_future_state,
         })
     }
 
@@ -4268,6 +4298,7 @@ impl GuestTask {
                         // once all transitive subtasks of the host call have
                         // exited:
                         exit_tx: exit_tx.clone(),
+                        host_future_present: false,
                         call_post_return_automatically: true,
                     };
                 }
@@ -5026,24 +5057,27 @@ pub(crate) struct TaskId {
 }
 
 impl TaskId {
-    /// Remove the specified task from the concurrent state to which it belongs.
-    ///
-    /// Should only be called once for a given task, and only after either
-    /// the task has completed or the instance has trapped.
-    pub(crate) fn remove_if_not_lowered_params<T>(&self, store: StoreContextMut<T>) -> Result<()> {
-        /*
-        if self
+    /// The host future for an async task was dropped. If the parameters have not been lowered yet,
+    /// it is no longer valid to do so, as the lowering closure would see a dangling pointer. In this case,
+    /// we delete the task eagerly. Otherwise, there may be running threads, or ones that are suspended
+    /// and can be resumed by other tasks for this component, so we mark the future as dropped
+    /// and delete the task when all threads are done.
+    pub(crate) fn host_future_dropped<T>(&self, store: StoreContextMut<T>) -> Result<()> {
+        let task = self
             .handle
             .instance()
             .concurrent_state_mut(store.0)
-            .get_mut(self.task)?
-            .lower_params
-            .is_some()
-        {
+            .get_mut(self.task)?;
+        if !task.have_lowered_parameters() {
             Waitable::Guest(self.task)
                 .delete_from(self.handle.instance().concurrent_state_mut(store.0))?
+        } else {
+            task.host_future_state = HostFutureState::Dropped;
+            if task.ready_to_delete() {
+                Waitable::Guest(self.task)
+                    .delete_from(self.handle.instance().concurrent_state_mut(store.0))?
+            }
         }
-        Ok(())*/
         Ok(())
     }
 }
@@ -5057,6 +5091,7 @@ pub(crate) fn prepare_call<T, R>(
     mut store: StoreContextMut<T>,
     handle: Func,
     param_count: usize,
+    host_future_present: bool,
     call_post_return_automatically: bool,
     lower_params: impl FnOnce(Func, StoreContextMut<T>, &mut [MaybeUninit<ValRaw>]) -> Result<()>
     + Send
@@ -5111,6 +5146,7 @@ pub(crate) fn prepare_call<T, R>(
         Caller::Host {
             tx: Some(tx),
             exit_tx: Arc::new(exit_tx),
+            host_future_present,
             call_post_return_automatically,
         },
         callback.map(|callback| {

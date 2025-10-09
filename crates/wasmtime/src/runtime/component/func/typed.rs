@@ -193,7 +193,7 @@ where
 
             let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
             let prepared =
-                self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
+                self.prepare_call(store.as_context_mut(), true, false, move |cx, ty, dst| {
                     // SAFETY: The goal here is to get `Params`, a non-`'static`
                     // value, to live long enough to the lowering of the
                     // parameters. We're guaranteed that `Params` lives in the
@@ -209,9 +209,9 @@ where
                     // this closure, which ensures that the task will be removed
                     // from the concurrent state to which it belongs when the
                     // containing `Future` is dropped, so long as the parameters
-                    // have not yet been lowered. This ensures that this closure will
-                    // never be called if it hasn't already, meaning it will never see
-                    // a dangling pointer.
+                    // have not yet been lowered. Since this closure is removed from
+                    // the task after the parameters are lowered, it will never be called
+                    // after the containing `Future` is dropped.
                     let params = unsafe { ptr.cast::<Params>().as_ref() };
                     Self::lower_args(cx, ty, dst, params)
                 })?;
@@ -224,7 +224,7 @@ where
             impl<'a, T> Drop for RemoveOnDrop<'a, T> {
                 fn drop(&mut self) {
                     self.task
-                        .remove_if_not_lowered_params(self.store.as_context_mut())
+                        .host_future_dropped(self.store.as_context_mut())
                         .unwrap();
                 }
             }
@@ -285,7 +285,7 @@ where
             );
 
             let prepared =
-                self.prepare_call(store.as_context_mut(), true, move |cx, ty, dst| {
+                self.prepare_call(store.as_context_mut(), false, true, move |cx, ty, dst| {
                     Self::lower_args(cx, ty, dst, &params)
                 })?;
             concurrent::queue_call(store, prepared)
@@ -322,6 +322,7 @@ where
     fn prepare_call<T>(
         self,
         store: StoreContextMut<'_, T>,
+        host_future_present: bool,
         call_post_return_automatically: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
@@ -351,6 +352,7 @@ where
             store,
             self.func,
             param_count,
+            host_future_present,
             call_post_return_automatically,
             move |func, store, params_out| {
                 func.with_lower_context(store, call_post_return_automatically, |cx, ty| {
