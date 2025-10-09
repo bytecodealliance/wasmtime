@@ -321,29 +321,133 @@ impl<'a> CodeBuilder<'a> {
     /// (and its set of intrinsic calls) across all of the platforms, with the
     /// following rules of thumb:
     ///
-    /// * Only access `u8`, `u16`, `u32`, and `u64` data via these intrinsics
+    /// * Only access `u8`, `u16`, `u32`, and `u64` data via these intrinsics.
     ///
     /// * If you need to access other types of data, encode it into those types
-    ///   and then access the encoded data from the intrinsics
+    ///   and then access the encoded data from the intrinsics.
     ///
     /// * Use `union`s to encode pointers and pointer-sized data as a `u64` and
-    ///   then access it via the `u64-native-{load,store}` intrinsics:
-    ///
-    ///   ```rust
-    ///   union ExposedPointer {
-    ///       pointer: *mut u8,
-    ///       _layout: u64,
-    ///   }
-    ///
-    ///   static _EXPOSED_POINTER_LAYOUT_ASSERTIONS: () = {
-    ///       assert!(core::mem::size_of::<ExposedPointer>() == 8);
-    ///       assert!(core::mem::align_of::<ExposedPointer>() == 8);
-    ///   };
-    ///   ```
+    ///   then access it via the `u64-native-{load,store}` intrinsics. See
+    ///   `ExposedPointer` in the example below.
     ///
     /// # Example
     ///
-    /// TODO FITZGEN
+    /// TODO FITZGEN: what is this? zero-copy access to a host buffer
+    ///
+    /// ```rust
+    /// use std::mem;
+    /// use std::num::NonZeroUsize;
+    /// use wasmtime::*;
+    ///
+    /// // A `*mut u8` pointer that is exposed directly to Wasm via unsafe intrinsics.
+    /// union ExposedPointer {
+    ///     pointer: *mut u8,
+    ///     padding: u64,
+    /// }
+    ///
+    /// static _EXPOSED_POINTER_LAYOUT_ASSERTIONS: () = {
+    ///     assert!(mem::size_of::<ExposedPointer>() == 8);
+    ///     assert!(mem::align_of::<ExposedPointer>() == 8);
+    /// };
+    ///
+    /// impl ExposedPointer {
+    ///     /// Wrap the given pointer into an `ExposedPointer`.
+    ///     fn new(pointer: *mut u8) -> Self {
+    ///         // NB: Zero-initialize to avoid potential footguns with accessing
+    ///         // undefined bytes.
+    ///         let mut p = Self { padding: 0 };
+    ///         p.pointer = pointer;
+    ///         p
+    ///     }
+    ///
+    ///     /// Get the wrapped pointer.
+    ///     fn get(&self) -> *mut u8 {
+    ///         unsafe { self.pointer }
+    ///     }
+    /// }
+    ///
+    /// /// This is the `T` type we will put inside our
+    /// /// `wasmtime::Store<T>`s. It contains a pointer to a heap-allocated buffer
+    /// /// in host memory, which we will give Wasm zero-copy access to via unsafe
+    /// /// intrinsics.
+    /// #[repr(C)]
+    /// struct StoreData {
+    ///     buf_ptr: ExposedPointer,
+    ///     buf_len: u64,
+    /// }
+    ///
+    /// static _STORE_DATA_LAYOUT_ASSERTIONS: () = {
+    ///     assert!(mem::size_of::<StoreData>() == 16);
+    ///     assert!(mem::align_of::<StoreData>() == 8);
+    ///     assert!(mem::offset_of!(StoreData, buf_ptr) == 0);
+    ///     assert!(mem::offset_of!(StoreData, buf_len) == 8);
+    /// };
+    ///
+    /// impl StoreData {
+    ///     /// Create a new `StoreData`, allocating an inner buffer of `capacity`
+    ///     /// bytes.
+    ///     fn new(capacity: NonZeroUsize) -> Result<Self> {
+    ///         let layout = std::alloc::Layout::array::<u8>(capacity.get())?
+    ///         let ptr = unsafe { std::alloc::alloc_zeroed(layout) };
+    ///         ensure!(!ptr.is_null(), "failed to allocate buffer");
+    ///         Ok(Self {
+    ///             buf_ptr: ExposedPointer::new(ptr),
+    ///             buf_len: u64::try_from(capacity).unwrap(),
+    ///         })
+    ///     }
+    ///
+    ///     /// Get the inner buffer as a shared slice.
+    ///     fn buf(&self) -> &[u8] {
+    ///         let ptr = self.buf_ptr.get().cast_const();
+    ///         let len = usize::try_from(self.buf_len).unwrap();
+    ///         unsafe {
+    ///             std::slice::from_raw_parts(ptr, len)
+    ///         }
+    ///     }
+    ///
+    ///     /// Get the inner buffer as a mutable slice.
+    ///     fn buf_mut(&mut self) -> &mut [u8] {
+    ///         let ptr = self.buf_ptr.get()
+    ///         let len = usize::try_from(self.buf_len).unwrap();
+    ///         unsafe {
+    ///             std::slice::from_raw_parts_mut(ptr, len)
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// # fn _foo() -> Result<()> {
+    /// let engine = Engine::default();
+    ///
+    /// let mut builder = CodeBuilder::new();
+    /// builder.expose_unsafe_intrinsics("unsafe-intrinsics");
+    /// builder.wasm_binary_or_text(r#"
+    ///     (component
+    ///         ;; Import the unsafe intrinsics that we will use.
+    ///         (import "unsafe-intrinsics"
+    ///             (instance $intrinsics
+    ///                 (export "store-data-address" (func (result u64)))
+    ///                 (export "u64-native-load" (func (param "pointer" u64) (result u64)))
+    ///                 (export "u64-native-store" (func (param "pointer" u64) (param "value" u64)))
+    ///             )
+    ///         )
+    ///
+    ///         ;; A component that encapsulates and hides the intrinsics' unsafety.
+    ///         ;; TODO FITZGEN
+    ///
+    ///         ;; A component that uses the safe API.
+    ///         ;; TODO FITZGEN
+    ///
+    ///         ;; Instantiate and link the components.
+    ///         ;; TODO FITZGEN
+    ///     )
+    /// "#.as_bytes())?;
+    ///
+    /// let component = builder.compile_component()?;
+    ///
+    /// todo!("FITZGEN")
+    /// # Ok(())
+    /// # }
+    /// ```
     pub unsafe fn expose_unsafe_intrinsics(&mut self, import_name: impl Into<String>) -> &mut Self {
         self.unsafe_intrinsics_import = Some(import_name.into());
         self
