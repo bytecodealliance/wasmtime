@@ -1121,11 +1121,11 @@ mod test_programs {
             use self::$name as _;
         };
     }
-    foreach_cli!(assert_test_exists);
+    foreach_p2_cli!(assert_test_exists);
 
     #[test]
     fn cli_hello_stdout() -> Result<()> {
-        run_wasmtime(&["run", "-Wcomponent-model", CLI_HELLO_STDOUT_COMPONENT])?;
+        run_wasmtime(&["run", "-Wcomponent-model", P2_CLI_HELLO_STDOUT_COMPONENT])?;
         Ok(())
     }
 
@@ -1134,7 +1134,7 @@ mod test_programs {
         run_wasmtime(&[
             "run",
             "-Wcomponent-model",
-            CLI_ARGS_COMPONENT,
+            P2_CLI_ARGS_COMPONENT,
             "hello",
             "this",
             "",
@@ -1147,7 +1147,7 @@ mod test_programs {
     #[test]
     fn cli_stdin_empty() -> Result<()> {
         let mut child = get_wasmtime_command()?
-            .args(&["run", "-Wcomponent-model", CLI_STDIN_EMPTY_COMPONENT])
+            .args(&["run", "-Wcomponent-model", P2_CLI_STDIN_EMPTY_COMPONENT])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
@@ -1168,7 +1168,7 @@ mod test_programs {
     #[test]
     fn cli_stdin() -> Result<()> {
         let mut child = get_wasmtime_command()?
-            .args(&["run", "-Wcomponent-model", CLI_STDIN_COMPONENT])
+            .args(&["run", "-Wcomponent-model", P2_CLI_STDIN_COMPONENT])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
@@ -1189,7 +1189,7 @@ mod test_programs {
     #[test]
     fn cli_splice_stdin() -> Result<()> {
         let mut child = get_wasmtime_command()?
-            .args(&["run", "-Wcomponent-model", CLI_SPLICE_STDIN_COMPONENT])
+            .args(&["run", "-Wcomponent-model", P2_CLI_SPLICE_STDIN_COMPONENT])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
@@ -1226,7 +1226,7 @@ mod test_programs {
             "-Wcomponent-model",
             "--env=frabjous=day",
             "--env=callooh=callay",
-            CLI_ENV_COMPONENT,
+            P2_CLI_ENV_COMPONENT,
         ])?;
         Ok(())
     }
@@ -1241,7 +1241,7 @@ mod test_programs {
             "run",
             "-Wcomponent-model",
             &format!("--dir={}::/", dir.path().to_str().unwrap()),
-            CLI_FILE_READ_COMPONENT,
+            P2_CLI_FILE_READ_COMPONENT,
         ])?;
         Ok(())
     }
@@ -1257,7 +1257,7 @@ mod test_programs {
             "run",
             "-Wcomponent-model",
             &format!("--dir={}::/", dir.path().to_str().unwrap()),
-            CLI_FILE_APPEND_COMPONENT,
+            P2_CLI_FILE_APPEND_COMPONENT,
         ])?;
 
         let contents = std::fs::read(dir.path().join("bar.txt"))?;
@@ -1282,7 +1282,7 @@ mod test_programs {
             "run",
             "-Wcomponent-model",
             &format!("--dir={}::/", dir.path().to_str().unwrap()),
-            CLI_FILE_DIR_SYNC_COMPONENT,
+            P2_CLI_FILE_DIR_SYNC_COMPONENT,
         ])?;
 
         Ok(())
@@ -1290,20 +1290,20 @@ mod test_programs {
 
     #[test]
     fn cli_exit_success() -> Result<()> {
-        run_wasmtime(&["run", "-Wcomponent-model", CLI_EXIT_SUCCESS_COMPONENT])?;
+        run_wasmtime(&["run", "-Wcomponent-model", P2_CLI_EXIT_SUCCESS_COMPONENT])?;
         Ok(())
     }
 
     #[test]
     fn cli_exit_default() -> Result<()> {
-        run_wasmtime(&["run", "-Wcomponent-model", CLI_EXIT_DEFAULT_COMPONENT])?;
+        run_wasmtime(&["run", "-Wcomponent-model", P2_CLI_EXIT_DEFAULT_COMPONENT])?;
         Ok(())
     }
 
     #[test]
     fn cli_exit_failure() -> Result<()> {
         let output = get_wasmtime_command()?
-            .args(&["run", "-Wcomponent-model", CLI_EXIT_FAILURE_COMPONENT])
+            .args(&["run", "-Wcomponent-model", P2_CLI_EXIT_FAILURE_COMPONENT])
             .output()?;
         assert!(!output.status.success());
         assert_eq!(output.status.code(), Some(1));
@@ -1317,7 +1317,7 @@ mod test_programs {
                 "run",
                 "-Wcomponent-model",
                 "-Scli-exit-with-code",
-                CLI_EXIT_WITH_CODE_COMPONENT,
+                P2_CLI_EXIT_WITH_CODE_COMPONENT,
             ])
             .output()?;
         assert!(!output.status.success());
@@ -1328,7 +1328,7 @@ mod test_programs {
     #[test]
     fn cli_exit_panic() -> Result<()> {
         let output = get_wasmtime_command()?
-            .args(&["run", "-Wcomponent-model", CLI_EXIT_PANIC_COMPONENT])
+            .args(&["run", "-Wcomponent-model", P2_CLI_EXIT_PANIC_COMPONENT])
             .output()?;
         assert!(!output.status.success());
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1351,14 +1351,14 @@ mod test_programs {
             "run",
             "-Wcomponent-model",
             &format!("--dir={}::/", dir.path().to_str().unwrap()),
-            CLI_DIRECTORY_LIST_COMPONENT,
+            P2_CLI_DIRECTORY_LIST_COMPONENT,
         ])?;
         Ok(())
     }
 
     #[test]
     fn cli_default_clocks() -> Result<()> {
-        run_wasmtime(&["run", "-Wcomponent-model", CLI_DEFAULT_CLOCKS_COMPONENT])?;
+        run_wasmtime(&["run", "-Wcomponent-model", P2_CLI_DEFAULT_CLOCKS_COMPONENT])?;
         Ok(())
     }
 
@@ -1367,7 +1367,7 @@ mod test_programs {
         run_wasmtime(&[
             "run",
             "-Wcomponent-model",
-            CLI_EXPORT_CABI_REALLOC_COMPONENT,
+            P2_CLI_EXPORT_CABI_REALLOC_COMPONENT,
         ])?;
         Ok(())
     }
@@ -1379,7 +1379,7 @@ mod test_programs {
                 "-Ccache=no",
                 "-Wcomponent-model",
                 "-Scli,http,preview2",
-                HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT,
+                P2_HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT,
             ],
             None,
         )?;
@@ -1418,12 +1418,12 @@ mod test_programs {
             Ok(())
         }
 
-        run(&["run", "-Spreview2=n", CLI_STDIO_WRITE_FLUSHES])?;
-        run(&["run", "-Spreview2=y", CLI_STDIO_WRITE_FLUSHES])?;
+        run(&["run", "-Spreview2=n", P2_CLI_STDIO_WRITE_FLUSHES])?;
+        run(&["run", "-Spreview2=y", P2_CLI_STDIO_WRITE_FLUSHES])?;
         run(&[
             "run",
             "-Wcomponent-model",
-            CLI_STDIO_WRITE_FLUSHES_COMPONENT,
+            P2_CLI_STDIO_WRITE_FLUSHES_COMPONENT,
         ])?;
         Ok(())
     }
@@ -1435,7 +1435,7 @@ mod test_programs {
                 "-Wcomponent-model",
                 // Turn on network but turn off TCP
                 "-Sinherit-network,tcp=no",
-                CLI_NO_TCP_COMPONENT,
+                P2_CLI_NO_TCP_COMPONENT,
             ],
             None,
         )?;
@@ -1451,7 +1451,7 @@ mod test_programs {
                 "-Wcomponent-model",
                 // Turn on network but turn off UDP
                 "-Sinherit-network,udp=no",
-                CLI_NO_UDP_COMPONENT,
+                P2_CLI_NO_UDP_COMPONENT,
             ],
             None,
         )?;
@@ -1467,7 +1467,7 @@ mod test_programs {
                 "-Wcomponent-model",
                 // Turn on network but ensure name lookup is disabled
                 "-Sinherit-network,allow-ip-name-lookup=no",
-                CLI_NO_IP_NAME_LOOKUP_COMPONENT,
+                P2_CLI_NO_IP_NAME_LOOKUP_COMPONENT,
             ],
             None,
         )?;
@@ -1478,8 +1478,8 @@ mod test_programs {
 
     #[test]
     fn cli_sleep() -> Result<()> {
-        run_wasmtime(&["run", CLI_SLEEP])?;
-        run_wasmtime(&["run", CLI_SLEEP_COMPONENT])?;
+        run_wasmtime(&["run", P2_CLI_SLEEP])?;
+        run_wasmtime(&["run", P2_CLI_SLEEP_COMPONENT])?;
         Ok(())
     }
 
@@ -1491,12 +1491,12 @@ mod test_programs {
             // Tests pass when we wait till the Wasm has (likely) gone to sleep.
             "-Wtimeout=250ms",
         ] {
-            let e = run_wasmtime(&["run", timeout, CLI_SLEEP_FOREVER]).unwrap_err();
+            let e = run_wasmtime(&["run", timeout, P2_CLI_SLEEP_FOREVER]).unwrap_err();
             let e = e.to_string();
             println!("Got error: {e}");
             assert!(e.contains("interrupt"));
 
-            let e = run_wasmtime(&["run", timeout, CLI_SLEEP_FOREVER_COMPONENT]).unwrap_err();
+            let e = run_wasmtime(&["run", timeout, P2_CLI_SLEEP_FOREVER_COMPONENT]).unwrap_err();
             let e = e.to_string();
             println!("Got error: {e}");
             assert!(e.contains("interrupt"));
@@ -1694,7 +1694,7 @@ mod test_programs {
 
     #[tokio::test]
     async fn cli_serve_echo_env() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
             cmd.arg("--env=FOO=bar");
             cmd.arg("--env=BAR");
             cmd.arg("-Scli");
@@ -1737,7 +1737,7 @@ mod test_programs {
 
     #[tokio::test]
     async fn cli_serve_outgoing_body_config() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
             cmd.arg("-Scli");
             cmd.arg("-Shttp-outgoing-body-buffer-chunks=2");
             cmd.arg("-Shttp-outgoing-body-chunk-size=1024");
@@ -1765,7 +1765,7 @@ mod test_programs {
     // to implement a more graceful shutdown routine for `wasmtime
     // serve`.
     async fn cli_serve_respect_pooling_options() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
             cmd.arg("-Opooling-total-memories=0").arg("-Scli");
         })?;
 
@@ -1789,7 +1789,7 @@ mod test_programs {
 
     #[test]
     fn cli_large_env() -> Result<()> {
-        for wasm in [CLI_LARGE_ENV, CLI_LARGE_ENV_COMPONENT] {
+        for wasm in [P2_CLI_LARGE_ENV, P2_CLI_LARGE_ENV_COMPONENT] {
             println!("run {wasm:?}");
             let mut cmd = get_wasmtime_command()?;
             cmd.arg("run").arg("-Sinherit-env").arg(wasm);
@@ -1813,7 +1813,7 @@ mod test_programs {
 
     #[tokio::test]
     async fn cli_serve_only_one_process_allowed() -> Result<()> {
-        let wasm = CLI_SERVE_ECHO_ENV_COMPONENT;
+        let wasm = P2_CLI_SERVE_ECHO_ENV_COMPONENT;
         let server = WasmtimeServe::new(wasm, |cmd| {
             cmd.arg("-Scli");
         })?;
@@ -1842,7 +1842,7 @@ mod test_programs {
     // process.
     #[tokio::test]
     async fn cli_serve_quick_rebind_allowed() -> Result<()> {
-        let wasm = CLI_SERVE_ECHO_ENV_COMPONENT;
+        let wasm = P2_CLI_SERVE_ECHO_ENV_COMPONENT;
         let server = WasmtimeServe::new(wasm, |cmd| {
             cmd.arg("-Scli");
         })?;
@@ -1888,7 +1888,7 @@ mod test_programs {
 
     #[tokio::test]
     async fn cli_serve_with_print() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
             cmd.arg("-Scli");
         })?;
 
@@ -1937,7 +1937,7 @@ stderr [1] :: start a print 1234
 
     #[tokio::test]
     async fn cli_serve_with_print_no_prefix() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
             cmd.arg("-Scli");
             cmd.arg("--no-logging-prefix");
         })?;
@@ -1987,7 +1987,7 @@ start a print 1234
 
     #[tokio::test]
     async fn cli_serve_authority_and_scheme() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
             cmd.arg("-Scli");
         })?;
 
@@ -2018,15 +2018,15 @@ start a print 1234
 
     #[test]
     fn cli_argv0() -> Result<()> {
-        run_wasmtime(&["run", "--argv0=a", CLI_ARGV0, "a"])?;
-        run_wasmtime(&["run", "--argv0=b", CLI_ARGV0_COMPONENT, "b"])?;
-        run_wasmtime(&["run", "--argv0=foo.wasm", CLI_ARGV0, "foo.wasm"])?;
+        run_wasmtime(&["run", "--argv0=a", P2_CLI_ARGV0, "a"])?;
+        run_wasmtime(&["run", "--argv0=b", P2_CLI_ARGV0_COMPONENT, "b"])?;
+        run_wasmtime(&["run", "--argv0=foo.wasm", P2_CLI_ARGV0, "foo.wasm"])?;
         Ok(())
     }
 
     #[tokio::test]
     async fn cli_serve_config() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_CONFIG_COMPONENT, |cmd| {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_CONFIG_COMPONENT, |cmd| {
             cmd.arg("-Scli");
             cmd.arg("-Sconfig");
             cmd.arg("-Sconfig-var=hello=world");
@@ -2059,7 +2059,7 @@ start a print 1234
 
     #[tokio::test]
     async fn cli_serve_keyvalue() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_KEYVALUE_COMPONENT, |cmd| {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_KEYVALUE_COMPONENT, |cmd| {
             cmd.arg("-Scli");
             cmd.arg("-Skeyvalue");
             cmd.arg("-Skeyvalue-in-memory-data=hello=world");
@@ -2097,7 +2097,7 @@ start a print 1234
             "--dir=/::/a",
             "--dir=/::/b",
             "--dir=/::/c",
-            CLI_MULTIPLE_PREOPENS_COMPONENT,
+            P2_CLI_MULTIPLE_PREOPENS_COMPONENT,
         ])?;
         Ok(())
     }
@@ -2130,12 +2130,12 @@ start a print 1234
 
     #[tokio::test]
     async fn cli_serve_return_before_set() -> Result<()> {
-        cli_serve_guest_never_invoked_set(CLI_SERVE_RETURN_BEFORE_SET_COMPONENT).await
+        cli_serve_guest_never_invoked_set(P2_CLI_SERVE_RETURN_BEFORE_SET_COMPONENT).await
     }
 
     #[tokio::test]
     async fn cli_serve_trap_before_set() -> Result<()> {
-        cli_serve_guest_never_invoked_set(CLI_SERVE_TRAP_BEFORE_SET_COMPONENT).await
+        cli_serve_guest_never_invoked_set(P2_CLI_SERVE_TRAP_BEFORE_SET_COMPONENT).await
     }
 
     #[test]
@@ -2144,7 +2144,7 @@ start a print 1234
             "run",
             "-Wcomponent-model-async",
             "-Sp3",
-            CLI_P3_HELLO_STDOUT_COMPONENT,
+            P3_CLI_HELLO_STDOUT_COMPONENT,
         ]);
         if cfg!(feature = "component-model-async") {
             let output = output?;
@@ -2160,13 +2160,13 @@ start a print 1234
 
         #[test]
         fn cli_hello_stdout() -> Result<()> {
-            println!("{CLI_HELLO_STDOUT_COMPONENT}");
+            println!("{P2_CLI_HELLO_STDOUT_COMPONENT}");
             let output = run_wasmtime(&[
                 "run",
                 "-Wcomponent-model",
                 "--invoke",
                 "run()",
-                CLI_HELLO_STDOUT_COMPONENT,
+                P2_CLI_HELLO_STDOUT_COMPONENT,
             ])?;
             // First this component prints "hello, world", then the invoke
             // result is printed as "ok".
@@ -2183,7 +2183,7 @@ start a print 1234
             "-Wcomponent-model-async",
             "--invoke",
             "echo(\"hello?\")",
-            CLI_INVOKE_ASYNC_COMPONENT,
+            P2_CLI_INVOKE_ASYNC_COMPONENT,
         ])?;
         assert_eq!(output, "\"hello?\"\n");
         Ok(())
@@ -2218,19 +2218,19 @@ start a print 1234
 
     #[test]
     fn cli_p1_much_stdout() -> Result<()> {
-        run_much_stdout(CLI_P1_MUCH_STDOUT_COMPONENT, &[])
+        run_much_stdout(P1_CLI_MUCH_STDOUT_COMPONENT, &[])
     }
 
     #[test]
     fn cli_p2_much_stdout() -> Result<()> {
-        run_much_stdout(CLI_P2_MUCH_STDOUT_COMPONENT, &[])
+        run_much_stdout(P2_CLI_MUCH_STDOUT_COMPONENT, &[])
     }
 
     #[test]
     #[cfg_attr(not(feature = "component-model-async"), ignore)]
     fn cli_p3_much_stdout() -> Result<()> {
         run_much_stdout(
-            CLI_P3_MUCH_STDOUT_COMPONENT,
+            P3_CLI_MUCH_STDOUT_COMPONENT,
             &["-Wcomponent-model-async", "-Sp3"],
         )
     }
@@ -2238,7 +2238,7 @@ start a print 1234
     #[tokio::test]
     #[cfg_attr(not(feature = "component-model-async"), ignore)]
     async fn cli_serve_p3_hello_world() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_P3_HELLO_WORLD_COMPONENT, |cmd| {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
             cmd.arg("-Wcomponent-model-async");
             cmd.arg("-Sp3,cli");
         })?;

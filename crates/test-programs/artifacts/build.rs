@@ -74,9 +74,9 @@ impl Artifacts {
             // generates a `foreach_*` macro below.
             let kind = match test.name.as_str() {
                 s if s.starts_with("p1_") => "p1",
-                s if s.starts_with("p2_http_") => "http",
-                s if s.starts_with("p2_cli_") => "cli",
-                s if s.starts_with("p2_api_") => "api",
+                s if s.starts_with("p2_http_") => "p2_http",
+                s if s.starts_with("p2_cli_") => "p2_cli",
+                s if s.starts_with("p2_api_") => "p2_api",
                 s if s.starts_with("p2_") => "p2",
                 s if s.starts_with("nn_") => "nn",
                 s if s.starts_with("piped_") => "piped",

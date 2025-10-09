@@ -3,7 +3,7 @@ use test_programs_artifacts::*;
 use wasi_common::WasiCtx;
 use wasi_common::tokio::{WasiCtxBuilder, add_to_linker};
 
-foreach_preview1!(assert_test_exists);
+foreach_p1!(assert_test_exists);
 
 pub fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
     let prefix = format!("wasi_tokio_{exe_name}_");
@@ -78,218 +78,214 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
 // wasi-tests.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_big_random_buf() {
-    run(PREVIEW1_BIG_RANDOM_BUF, true).await.unwrap()
+    run(P1_BIG_RANDOM_BUF, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_clock_time_get() {
-    run(PREVIEW1_CLOCK_TIME_GET, true).await.unwrap()
+    run(P1_CLOCK_TIME_GET, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_close_preopen() {
-    run(PREVIEW1_CLOSE_PREOPEN, true).await.unwrap()
+    run(P1_CLOSE_PREOPEN, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_dangling_fd() {
-    run(PREVIEW1_DANGLING_FD, true).await.unwrap()
+    run(P1_DANGLING_FD, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_dangling_symlink() {
-    run(PREVIEW1_DANGLING_SYMLINK, true).await.unwrap()
+    run(P1_DANGLING_SYMLINK, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_directory_seek() {
-    run(PREVIEW1_DIRECTORY_SEEK, true).await.unwrap()
+    run(P1_DIRECTORY_SEEK, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_dir_fd_op_failures() {
-    run(PREVIEW1_DIR_FD_OP_FAILURES, true).await.unwrap()
+    run(P1_DIR_FD_OP_FAILURES, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_fd_advise() {
-    run(PREVIEW1_FD_ADVISE, true).await.unwrap()
+    run(P1_FD_ADVISE, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_fd_filestat_get() {
-    run(PREVIEW1_FD_FILESTAT_GET, true).await.unwrap()
+    run(P1_FD_FILESTAT_GET, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_fd_filestat_set() {
-    run(PREVIEW1_FD_FILESTAT_SET, true).await.unwrap()
+    run(P1_FD_FILESTAT_SET, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_fd_flags_set() {
-    run(PREVIEW1_FD_FLAGS_SET, true).await.unwrap()
+    run(P1_FD_FLAGS_SET, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_fd_readdir() {
-    run(PREVIEW1_FD_READDIR, true).await.unwrap()
+    run(P1_FD_READDIR, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_file_allocate() {
-    run(PREVIEW1_FILE_ALLOCATE, true).await.unwrap()
+    run(P1_FILE_ALLOCATE, true).await.unwrap()
 }
 // see sync.rs for notes about ignores here
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 #[cfg_attr(not(target_os = "linux"), ignore)]
 async fn preview1_file_pread_pwrite() {
-    run(PREVIEW1_FILE_PREAD_PWRITE, true).await.unwrap()
+    run(P1_FILE_PREAD_PWRITE, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_file_read_write() {
-    run(PREVIEW1_FILE_READ_WRITE, true).await.unwrap()
+    run(P1_FILE_READ_WRITE, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_file_seek_tell() {
-    run(PREVIEW1_FILE_SEEK_TELL, true).await.unwrap()
+    run(P1_FILE_SEEK_TELL, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_file_truncation() {
-    run(PREVIEW1_FILE_TRUNCATION, true).await.unwrap()
+    run(P1_FILE_TRUNCATION, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_file_unbuffered_write() {
-    run(PREVIEW1_FILE_UNBUFFERED_WRITE, true).await.unwrap()
+    run(P1_FILE_UNBUFFERED_WRITE, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_interesting_paths() {
-    run(PREVIEW1_INTERESTING_PATHS, true).await.unwrap()
+    run(P1_INTERESTING_PATHS, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_regular_file_isatty() {
-    run(PREVIEW1_REGULAR_FILE_ISATTY, false).await.unwrap()
+    run(P1_REGULAR_FILE_ISATTY, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_nofollow_errors() {
-    run(PREVIEW1_NOFOLLOW_ERRORS, true).await.unwrap()
+    run(P1_NOFOLLOW_ERRORS, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_overwrite_preopen() {
-    run(PREVIEW1_OVERWRITE_PREOPEN, true).await.unwrap()
+    run(P1_OVERWRITE_PREOPEN, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_exists() {
-    run(PREVIEW1_PATH_EXISTS, true).await.unwrap()
+    run(P1_PATH_EXISTS, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_filestat() {
-    run(PREVIEW1_PATH_FILESTAT, true).await.unwrap()
+    run(P1_PATH_FILESTAT, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_link() {
-    run(PREVIEW1_PATH_LINK, true).await.unwrap()
+    run(P1_PATH_LINK, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_open_create_existing() {
-    run(PREVIEW1_PATH_OPEN_CREATE_EXISTING, true).await.unwrap()
+    run(P1_PATH_OPEN_CREATE_EXISTING, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_open_read_write() {
-    run(PREVIEW1_PATH_OPEN_READ_WRITE, true).await.unwrap()
+    run(P1_PATH_OPEN_READ_WRITE, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_open_dirfd_not_dir() {
-    run(PREVIEW1_PATH_OPEN_DIRFD_NOT_DIR, true).await.unwrap()
+    run(P1_PATH_OPEN_DIRFD_NOT_DIR, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_open_missing() {
-    run(PREVIEW1_PATH_OPEN_MISSING, true).await.unwrap()
+    run(P1_PATH_OPEN_MISSING, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_open_nonblock() {
-    run(PREVIEW1_PATH_OPEN_NONBLOCK, true).await.unwrap()
+    run(P1_PATH_OPEN_NONBLOCK, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_rename_dir_trailing_slashes() {
-    run(PREVIEW1_PATH_RENAME_DIR_TRAILING_SLASHES, true)
+    run(P1_PATH_RENAME_DIR_TRAILING_SLASHES, true)
         .await
         .unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_rename() {
-    run(PREVIEW1_PATH_RENAME, true).await.unwrap()
+    run(P1_PATH_RENAME, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_symlink_trailing_slashes() {
-    run(PREVIEW1_PATH_SYMLINK_TRAILING_SLASHES, true)
-        .await
-        .unwrap()
+    run(P1_PATH_SYMLINK_TRAILING_SLASHES, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_poll_oneoff_files() {
-    run(PREVIEW1_POLL_ONEOFF_FILES, false).await.unwrap()
+    run(P1_POLL_ONEOFF_FILES, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_poll_oneoff_stdio() {
-    run(PREVIEW1_POLL_ONEOFF_STDIO, true).await.unwrap()
+    run(P1_POLL_ONEOFF_STDIO, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_readlink() {
-    run(PREVIEW1_READLINK, true).await.unwrap()
+    run(P1_READLINK, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_remove_directory() {
-    run(PREVIEW1_REMOVE_DIRECTORY, true).await.unwrap()
+    run(P1_REMOVE_DIRECTORY, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_remove_nonempty_directory() {
-    run(PREVIEW1_REMOVE_NONEMPTY_DIRECTORY, true).await.unwrap()
+    run(P1_REMOVE_NONEMPTY_DIRECTORY, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_renumber() {
-    run(PREVIEW1_RENUMBER, true).await.unwrap()
+    run(P1_RENUMBER, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_sched_yield() {
-    run(PREVIEW1_SCHED_YIELD, true).await.unwrap()
+    run(P1_SCHED_YIELD, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_stdio() {
-    run(PREVIEW1_STDIO, true).await.unwrap()
+    run(P1_STDIO, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_stdio_isatty() {
     // Only a valid test if the host executable's stdio is a terminal:
     if test_programs_artifacts::stdio_is_terminal() {
         // Inherit stdio, test asserts it is a tty:
-        run(PREVIEW1_STDIO_ISATTY, true).await.unwrap()
+        run(P1_STDIO_ISATTY, true).await.unwrap()
     }
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_stdio_not_isatty() {
     // Don't inherit stdio, test asserts each is not tty:
-    run(PREVIEW1_STDIO_NOT_ISATTY, false).await.unwrap()
+    run(P1_STDIO_NOT_ISATTY, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_symlink_create() {
-    run(PREVIEW1_SYMLINK_CREATE, true).await.unwrap()
+    run(P1_SYMLINK_CREATE, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_symlink_filestat() {
-    run(PREVIEW1_SYMLINK_FILESTAT, true).await.unwrap()
+    run(P1_SYMLINK_FILESTAT, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_symlink_loop() {
-    run(PREVIEW1_SYMLINK_LOOP, true).await.unwrap()
+    run(P1_SYMLINK_LOOP, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_unlink_file_trailing_slashes() {
-    run(PREVIEW1_UNLINK_FILE_TRAILING_SLASHES, true)
-        .await
-        .unwrap()
+    run(P1_UNLINK_FILE_TRAILING_SLASHES, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_open_preopen() {
-    run(PREVIEW1_PATH_OPEN_PREOPEN, true).await.unwrap()
+    run(P1_PATH_OPEN_PREOPEN, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_unicode_output() {
-    run(PREVIEW1_UNICODE_OUTPUT, true).await.unwrap()
+    run(P1_UNICODE_OUTPUT, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_file_write() {
-    run(PREVIEW1_FILE_WRITE, true).await.unwrap()
+    run(P1_FILE_WRITE, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_open_lots() {
-    run(PREVIEW1_PATH_OPEN_LOTS, true).await.unwrap()
+    run(P1_PATH_OPEN_LOTS, true).await.unwrap()
 }
