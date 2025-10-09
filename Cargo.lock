@@ -4684,6 +4684,7 @@ dependencies = [
  "wasmtime-wasi-threads",
  "wasmtime-wasi-tls",
  "wasmtime-wast",
+ "wasmtime-wizer",
  "wast 240.0.0",
  "wat",
  "windows-sys 0.60.2",
@@ -5209,6 +5210,24 @@ dependencies = [
  "wasmparser 0.240.0",
  "wasmtime",
  "wast 240.0.0",
+]
+
+[[package]]
+name = "wasmtime-wizer"
+version = "39.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "criterion",
+ "env_logger 0.11.5",
+ "log",
+ "rayon",
+ "wasm-encoder 0.240.0",
+ "wasmparser 0.240.0",
+ "wasmprinter",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wat",
 ]
 
 [[package]]
