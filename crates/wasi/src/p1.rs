@@ -130,7 +130,7 @@ use wasmtime_wasi_io::bindings::wasi::io::poll::Host as _;
 ///
 ///             wasi: WasiCtxBuilder::new()
 ///                 .arg("./foo.wasm")
-///                 // .. more customization if necesssary ..
+///                 // .. more customization if necessary ..
 ///                 .build_p1(),
 ///         }
 ///     }
