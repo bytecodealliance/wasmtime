@@ -83,6 +83,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wast",
     "wasmtime-internal-c-api-macros",
     "wasmtime-c-api-impl",
+    "wasmtime-wizer",
     "wasmtime-cli-flags",
     "wasmtime-internal-explorer",
     "wasmtime-cli",
@@ -106,6 +107,7 @@ const PUBLIC_CRATES: &[&str] = &[
     "wasmtime-wasi-keyvalue",
     "wasmtime-wasi-threads",
     "wasmtime-cli",
+    "wasmtime-wizer",
     // All cranelift crates are considered "public" in that they can't have
     // breaking API changes in patch releases.
     "cranelift-srcgen",
@@ -244,12 +246,6 @@ fn run_cmd(cmd: &mut Command) {
 }
 
 fn find_crates(dir: &Path, ws: &Workspace, dst: &mut Vec<Crate>) {
-    // Temporary exclusion of Wizer to get reverted in #11805 with full Wizer
-    // integration.
-    if dir.ends_with("wizer") {
-        return;
-    }
-
     if dir.join("Cargo.toml").exists() {
         let krate = read_crate(Some(ws), &dir.join("Cargo.toml"));
         if !krate.publish || CRATES_TO_PUBLISH.iter().any(|c| krate.name == *c) {

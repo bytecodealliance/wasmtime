@@ -1,6 +1,6 @@
 use crate::info::{
-    types_interner::{EntityType, TypeId},
     Module, ModuleContext,
+    types_interner::{EntityType, TypeId},
 };
 use crate::stack_ext::StackExt;
 use anyhow::{Context, Result};

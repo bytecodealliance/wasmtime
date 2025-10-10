@@ -1,8 +1,8 @@
 //! The module for the Wasmtime CLI commands.
 
-#[cfg(feature = "run")]
+#[cfg(any(feature = "run", feature = "wizer"))]
 mod run;
-#[cfg(feature = "run")]
+#[cfg(any(feature = "run", feature = "wizer"))]
 pub use self::run::*;
 
 #[cfg(feature = "serve")]
@@ -39,3 +39,8 @@ pub use self::settings::*;
 mod objdump;
 #[cfg(feature = "objdump")]
 pub use self::objdump::*;
+
+#[cfg(feature = "wizer")]
+mod wizer;
+#[cfg(feature = "wizer")]
+pub use self::wizer::*;

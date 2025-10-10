@@ -1,18 +1,18 @@
 [package]
 name = "uap-bench"
 version = "0.1.0"
-authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
-edition = "2018"
+publish = false
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [lib]
 crate-type = ["cdylib"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lints]
+workspace = true
 
 [dependencies]
-serde = { version = "1.0.197", features = ["derive"] }
-regex = "1.10.4"
+serde = { workspace = true, features = ["derive"] }
+regex = { workspace = true }
 serde_yaml = "0.9.34"
-
-[features]
-wizer = []
