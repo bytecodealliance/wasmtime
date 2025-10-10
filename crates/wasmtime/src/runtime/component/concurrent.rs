@@ -3941,7 +3941,7 @@ impl GuestThread {
     fn new_implicit(parent_task: TableId<GuestTask>) -> Self {
         Self {
             context: [0; 2],
-            parent_task: parent_task,
+            parent_task,
             wake_on_cancel: None,
             state: GuestThreadState::NotStartedImplicit,
         }
