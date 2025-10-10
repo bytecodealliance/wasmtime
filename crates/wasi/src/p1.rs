@@ -150,7 +150,9 @@ pub struct WasiP1Ctx {
 impl WasiP1Ctx {
     pub(crate) fn new(wasi: WasiCtx) -> Self {
         Self {
-            table: ResourceTable::new(),
+            table: ResourceTable::builder()
+                .sanitizer(wasmtime::component::ResourceSanitizer::new())
+                .build(),
             wasi,
             adapter: WasiP1Adapter::new(),
         }
