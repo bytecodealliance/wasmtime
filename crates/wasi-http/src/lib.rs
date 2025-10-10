@@ -225,6 +225,7 @@ mod http_impl;
 mod types_impl;
 
 pub mod body;
+pub mod handler;
 pub mod io;
 pub mod types;
 

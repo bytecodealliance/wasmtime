@@ -21,10 +21,10 @@ if [[ "$target_dir" == "" ]]; then
 fi
 
 # Build Wasmtime.
-cargo build --manifest-path "$cargo_toml" --release -p wasmtime-cli
+cargo build --manifest-path "$cargo_toml" --release -p wasmtime-cli --features component-model-async
 
 # Spawn `wasmtime serve` in the background.
-"$target_dir/release/wasmtime" serve "$@" &
+"$target_dir/release/wasmtime" serve -Sp3 -Wcomponent-model-async "$@" &
 pid=$!
 
 # Give it a second to print its diagnostic information and get the server up and
