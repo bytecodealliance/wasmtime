@@ -284,6 +284,8 @@ impl Inst {
             Inst::DummyUse { .. } => InstructionSet::Base,
 
             Inst::LabelAddress { .. } => InstructionSet::Base,
+
+            Inst::SequencePoint { .. } => InstructionSet::Base,
         }
     }
 
@@ -1011,6 +1013,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         Inst::LabelAddress { dst, .. } => {
             collector.reg_def(dst);
         }
+        Inst::SequencePoint { .. } => {}
     }
 }
 
@@ -3413,6 +3416,9 @@ impl Inst {
             &Inst::LabelAddress { dst, label } => {
                 let dst = pretty_print_reg(dst.to_reg());
                 format!("label_address {dst}, {label:?}")
+            }
+            &Inst::SequencePoint {} => {
+                format!("sequence_point")
             }
         }
     }

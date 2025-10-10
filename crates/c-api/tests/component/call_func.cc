@@ -78,6 +78,7 @@ TEST(component, call_func) {
 
   wasmtime_component_export_index_delete(f);
   wasmtime_component_linker_delete(linker);
+  wasmtime_component_delete(component);
 
   wasmtime_store_delete(store);
   wasm_engine_delete(engine);

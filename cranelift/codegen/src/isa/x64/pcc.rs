@@ -211,6 +211,8 @@ pub(crate) fn check(
 
         Inst::LabelAddress { .. } => Err(PccError::UnimplementedInst),
 
+        Inst::SequencePoint { .. } => Ok(()),
+
         Inst::External { .. } => Ok(()), // TODO: unsure what to do about this!
     }
 }

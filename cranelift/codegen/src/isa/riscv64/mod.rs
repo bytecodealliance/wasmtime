@@ -75,11 +75,8 @@ impl TargetIsa for Riscv64Backend {
 
         let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
         let emit_result = vcode.emit(&regalloc_result, want_disasm, &self.flags, ctrl_plane);
-        let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer;
-        let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
-        let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
         if let Some(disasm) = emit_result.disasm.as_ref() {
             log::debug!("disassembly:\n{disasm}");
@@ -87,11 +84,8 @@ impl TargetIsa for Riscv64Backend {
 
         Ok(CompiledCodeStencil {
             buffer,
-            frame_size,
             vcode: emit_result.disasm,
             value_labels_ranges,
-            sized_stackslot_offsets,
-            dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
         })
@@ -282,7 +276,13 @@ fn isa_constructor(
     // - Zifencei: Instruction-Fetch Fence
     //
     // Ensure that those combination of features is enabled.
-    if !isa_flags.has_g() {
+    if !(isa_flags.has_m()
+        && isa_flags.has_a()
+        && isa_flags.has_f()
+        && isa_flags.has_d()
+        && isa_flags.has_zicsr()
+        && isa_flags.has_zifencei())
+    {
         return Err(CodegenError::Unsupported(
             "The RISC-V Backend currently requires all the features in the G Extension enabled"
                 .into(),

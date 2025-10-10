@@ -1,0 +1,108 @@
+test compile precise-output
+target x86_64
+
+function %f0(i32, i32) -> i32 {
+    ss0 = explicit_slot 64, key = 1234
+    ;; not colocated -- shows interesting case where tags attach to
+    ;; multiple VCode insts.
+    fn0 = %f1(i32, i32)
+block0(v0: i32, v1: i32):
+<ss0, 0, 0>      call fn0(v0, v1)
+<ss0, 1, 0>      sequence_point
+            v2 = iadd v0, v1
+                 return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x50, %rsp
+;   movq %r12, 0x40(%rsp)
+;   movq %r14, 0x48(%rsp)
+; block0:
+;   load_ext_name %f1+0, %rdx
+;   ; ^-- debug @ Pre: [StackSlot(ss0), User(0), User(0)]
+;   movq %rsi, %r12
+;   movq %rdi, %r14
+;   call    *%rdx
+;   ; ^-- debug @ Post: [StackSlot(ss0), User(0), User(0)]
+;   sequence_point
+;   ; ^-- debug @ Pre: [StackSlot(ss0), User(1), User(0)]
+;   leal (%r14, %r12), %eax
+;   movq 0x40(%rsp), %r12
+;   movq 0x48(%rsp), %r14
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x50, %rsp
+;   movq %r12, 0x40(%rsp)
+;   movq %r14, 0x48(%rsp)
+; block1: ; offset 0x12
+;   movabsq $0, %rdx ; reloc_external Abs8 %f1 0
+;   movq %rsi, %r12
+;   movq %rdi, %r14
+;   callq *%rdx
+;   leal (%r14, %r12), %eax
+;   movq 0x40(%rsp), %r12
+;   movq 0x48(%rsp), %r14
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f1(i32, i32) -> i32 {
+    ss0 = explicit_slot 64, key = 1234
+    fn0 = colocated %f1(i32, i32)
+block0(v0: i32, v1: i32):
+<ss0, 0, 0>      call fn0(v0, v1)
+<ss0, 1, 0>      sequence_point
+            v2 = iadd v0, v1
+                 return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x50, %rsp
+;   movq %rbx, 0x40(%rsp)
+;   movq %r15, 0x48(%rsp)
+; block0:
+;   movq %rdi, %rbx
+;   movq %rsi, %r15
+;   call    TestCase(%f1)
+;   ; ^-- debug @ Post: [StackSlot(ss0), User(0), User(0)]
+;   sequence_point
+;   ; ^-- debug @ Pre: [StackSlot(ss0), User(1), User(0)]
+;   leal (%rbx, %r15), %eax
+;   movq 0x40(%rsp), %rbx
+;   movq 0x48(%rsp), %r15
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x50, %rsp
+;   movq %rbx, 0x40(%rsp)
+;   movq %r15, 0x48(%rsp)
+; block1: ; offset 0x12
+;   movq %rdi, %rbx
+;   movq %rsi, %r15
+;   callq 0x1d ; reloc_external CallPCRel4 %f1 -4
+;   leal (%rbx, %r15), %eax
+;   movq 0x40(%rsp), %rbx
+;   movq 0x48(%rsp), %r15
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

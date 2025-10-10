@@ -318,9 +318,13 @@ pub struct PoolingInstanceAllocator {
 
     #[cfg(feature = "gc")]
     gc_heaps: GcHeapPool,
+    #[cfg(feature = "gc")]
+    live_gc_heaps: AtomicUsize,
 
     #[cfg(feature = "async")]
     stacks: StackPool,
+    #[cfg(feature = "async")]
+    live_stacks: AtomicUsize,
 
     pagemap: Option<PageMap>,
 }
@@ -350,10 +354,16 @@ impl Drop for PoolingInstanceAllocator {
         debug_assert!(self.tables.is_empty());
 
         #[cfg(feature = "gc")]
-        debug_assert!(self.gc_heaps.is_empty());
+        {
+            debug_assert!(self.gc_heaps.is_empty());
+            debug_assert_eq!(self.live_gc_heaps.load(Ordering::Acquire), 0);
+        }
 
         #[cfg(feature = "async")]
-        debug_assert!(self.stacks.is_empty());
+        {
+            debug_assert!(self.stacks.is_empty());
+            debug_assert_eq!(self.live_stacks.load(Ordering::Acquire), 0);
+        }
     }
 }
 
@@ -372,8 +382,12 @@ impl PoolingInstanceAllocator {
             live_tables: AtomicUsize::new(0),
             #[cfg(feature = "gc")]
             gc_heaps: GcHeapPool::new(config)?,
+            #[cfg(feature = "gc")]
+            live_gc_heaps: AtomicUsize::new(0),
             #[cfg(feature = "async")]
             stacks: StackPool::new(config)?,
+            #[cfg(feature = "async")]
+            live_stacks: AtomicUsize::new(0),
             pagemap: match config.pagemap_scan {
                 Enabled::Auto => PageMap::new(),
                 Enabled::Yes => Some(PageMap::new().ok_or_else(|| {
@@ -704,7 +718,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         // reservation.
         let mut image = memory.unwrap_static_image();
         let mut queue = DecommitQueue::default();
-        image
+        let bytes_resident = image
             .clear_and_remain_ready(
                 self.pagemap.as_ref(),
                 self.memories.keep_resident,
@@ -722,7 +736,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         // SAFETY: this image is not in use and its memory regions were enqueued
         // with `push_raw` above.
         unsafe {
-            queue.push_memory(allocation_index, image);
+            queue.push_memory(allocation_index, image, bytes_resident);
         }
         self.merge_or_flush(queue);
     }
@@ -770,7 +784,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         // method is called and additionally all image ranges are pushed with
         // the understanding that the memory won't get used until the whole
         // queue is flushed.
-        unsafe {
+        let bytes_resident = unsafe {
             self.tables.reset_table_pages_to_zero(
                 self.pagemap.as_ref(),
                 allocation_index,
@@ -778,34 +792,37 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 |ptr, len| {
                     queue.push_raw(ptr, len);
                 },
-            );
-        }
+            )
+        };
 
         // SAFETY: the table has had all its memory regions enqueued above.
         unsafe {
-            queue.push_table(allocation_index, table);
+            queue.push_table(allocation_index, table, bytes_resident);
         }
         self.merge_or_flush(queue);
     }
 
     #[cfg(feature = "async")]
     fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack> {
-        self.with_flush_and_retry(|| self.stacks.allocate())
+        let ret = self.with_flush_and_retry(|| self.stacks.allocate())?;
+        self.live_stacks.fetch_add(1, Ordering::Relaxed);
+        Ok(ret)
     }
 
     #[cfg(feature = "async")]
     unsafe fn deallocate_fiber_stack(&self, mut stack: wasmtime_fiber::FiberStack) {
+        self.live_stacks.fetch_sub(1, Ordering::Relaxed);
         let mut queue = DecommitQueue::default();
         // SAFETY: the stack is no longer in use by definition when this
         // function is called and memory ranges pushed here are otherwise no
         // longer in use.
-        unsafe {
+        let bytes_resident = unsafe {
             self.stacks
-                .zero_stack(&mut stack, |ptr, len| queue.push_raw(ptr, len));
-        }
+                .zero_stack(&mut stack, |ptr, len| queue.push_raw(ptr, len))
+        };
         // SAFETY: this stack's memory regions were enqueued above.
         unsafe {
-            queue.push_stack(stack);
+            queue.push_stack(stack, bytes_resident);
         }
         self.merge_or_flush(queue);
     }
@@ -834,8 +851,11 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         memory_alloc_index: MemoryAllocationIndex,
         memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
-        self.gc_heaps
-            .allocate(engine, gc_runtime, memory_alloc_index, memory)
+        let ret = self
+            .gc_heaps
+            .allocate(engine, gc_runtime, memory_alloc_index, memory)?;
+        self.live_gc_heaps.fetch_add(1, Ordering::Relaxed);
+        Ok(ret)
     }
 
     #[cfg(feature = "gc")]
@@ -844,6 +864,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         allocation_index: GcHeapAllocationIndex,
         gc_heap: Box<dyn GcHeap>,
     ) -> (MemoryAllocationIndex, Memory) {
+        self.live_gc_heaps.fetch_sub(1, Ordering::Relaxed);
         self.gc_heaps.deallocate(allocation_index, gc_heap)
     }
 

@@ -1383,8 +1383,11 @@
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule band_fits_in_64 -3 (lower (has_type (fits_in_64 ty) (band x y)))
+(rule band_fits_in_64 -4 (lower (has_type (fits_in_64 (ty_int ty)) (band x y)))
       (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))
+
+(rule -3 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (band x y)))
+      (and_vec x y (float_vector_size_in_64 ty)))
 
 ;; Implementation of `band` for vector types.
 (rule -2 (lower (has_type (ty_vec64 ty) (band x y))) 
@@ -1417,8 +1420,11 @@
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule bor_fits_in_64 -3 (lower (has_type (fits_in_64 ty) (bor x y)))
+(rule bor_fits_in_64 -4 (lower (has_type (fits_in_64 (ty_int ty)) (bor x y)))
       (alu_rs_imm_logic_commutative (ALUOp.Orr) ty x y))
+
+(rule -3 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (bor x y)))
+      (orr_vec x y (float_vector_size_in_64 ty)))
 
 ;; Implementation of `bor` for vector types.
 (rule -2 (lower (has_type (ty_vec64 ty) (bor x y))) 
@@ -1472,8 +1478,11 @@
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule bxor_fits_in_64 -3 (lower (has_type (fits_in_64 ty) (bxor x y)))
+(rule bxor_fits_in_64 -4 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
       (alu_rs_imm_logic_commutative (ALUOp.Eor) ty x y))
+
+(rule -3 (lower (has_type (fits_in_64 (ty_scalar_float ty)) (bxor x y))) 
+      (eor_vec x y (float_vector_size_in_64 ty)))
 
 ;; Implementation of `bxor` for vector types.
 (rule -2 (lower (has_type (ty_vec64 ty) (bxor x y))) 
@@ -3271,3 +3280,9 @@
 (rule (lower (get_exception_handler_address (u64_from_imm64 idx) block))
       (let ((succ_label MachLabel (block_exn_successor_label block idx)))
         (a64_label_address succ_label)))
+
+;; Rules for `sequence_point` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sequence_point))
+      (side_effect
+       (a64_sequence_point)))

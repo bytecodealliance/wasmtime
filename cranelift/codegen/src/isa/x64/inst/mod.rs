@@ -106,7 +106,8 @@ impl Inst {
             | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
-            | Inst::LabelAddress { .. } => true,
+            | Inst::LabelAddress { .. }
+            | Inst::SequencePoint => true,
 
             Inst::Atomic128RmwSeq { .. } | Inst::Atomic128XchgSeq { .. } => emit_info.cmpxchg16b(),
 
@@ -828,6 +829,10 @@ impl PrettyPrint for Inst {
                 format!("label_address {dst}, {label:?}")
             }
 
+            Inst::SequencePoint {} => {
+                format!("sequence_point")
+            }
+
             Inst::External { inst } => {
                 format!("{inst}")
             }
@@ -1192,6 +1197,8 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::LabelAddress { dst, .. } => {
             collector.reg_def(dst);
         }
+
+        Inst::SequencePoint { .. } => {}
 
         Inst::External { inst } => {
             inst.visit(&mut external::RegallocVisitor { collector });

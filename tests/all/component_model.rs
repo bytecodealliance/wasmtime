@@ -19,7 +19,6 @@ mod nested;
 mod post_return;
 mod resources;
 mod strings;
-mod threading;
 
 #[test]
 #[cfg_attr(miri, ignore)]

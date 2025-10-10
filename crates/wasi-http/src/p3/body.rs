@@ -9,6 +9,7 @@ use core::task::{Context, Poll, ready};
 use http::HeaderMap;
 use http_body::Body as _;
 use http_body_util::combinators::BoxBody;
+use std::any::{Any, TypeId};
 use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
@@ -92,19 +93,13 @@ impl Body {
                 result_tx,
             } => {
                 fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
-                let instance = store.instance();
-                (
-                    StreamReader::new(instance, &mut store, iter::empty()),
-                    trailers_rx,
-                )
+                (StreamReader::new(&mut store, iter::empty()), trailers_rx)
             }
             Body::Host { body, result_tx } => {
                 fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
-                let instance = store.instance();
                 let (trailers_tx, trailers_rx) = oneshot::channel();
                 (
                     StreamReader::new(
-                        instance,
                         &mut store,
                         HostBodyStreamProducer {
                             body,
@@ -112,7 +107,7 @@ impl Body {
                             getter,
                         },
                     ),
-                    FutureReader::new(instance, &mut store, trailers_rx),
+                    FutureReader::new(&mut store, trailers_rx),
                 )
             }
         }
@@ -445,8 +440,8 @@ where
 }
 
 /// [StreamProducer] implementation for bodies originating in the host.
-struct HostBodyStreamProducer<T> {
-    body: BoxBody<Bytes, ErrorCode>,
+pub(crate) struct HostBodyStreamProducer<T> {
+    pub(crate) body: BoxBody<Bytes, ErrorCode>,
     trailers: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, ErrorCode>>>,
     getter: fn(&mut T) -> WasiHttpCtxView<'_>,
 }
@@ -535,5 +530,14 @@ where
         };
         self.close(res);
         Poll::Ready(Ok(StreamResult::Dropped))
+    }
+
+    fn try_into(me: Pin<Box<Self>>, ty: TypeId) -> Result<Box<dyn Any>, Pin<Box<Self>>> {
+        if ty == TypeId::of::<Self>() {
+            let me = Pin::into_inner(me);
+            Ok(me)
+        } else {
+            Err(me)
+        }
     }
 }

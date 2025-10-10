@@ -1,5 +1,5 @@
 use crate::cdsl::isa::TargetIsa;
-use crate::cdsl::settings::{PredicateNode, SettingGroupBuilder};
+use crate::cdsl::settings::SettingGroupBuilder;
 
 pub(crate) fn define() -> TargetIsa {
     let mut settings = SettingGroupBuilder::new("x86");
@@ -111,26 +111,6 @@ pub(crate) fn define() -> TargetIsa {
         "LZCNT: CPUID.EAX=80000001H:ECX.LZCNT[bit 5]",
         false,
     );
-
-    settings.add_predicate("use_cmpxchg16b", predicate!(has_cmpxchg16b));
-    settings.add_predicate("use_sse3", predicate!(has_sse3));
-    settings.add_predicate("use_ssse3", predicate!(has_ssse3));
-    settings.add_predicate("use_sse41", predicate!(has_sse41));
-    settings.add_predicate("use_sse42", predicate!(has_sse41 && has_sse42));
-    settings.add_predicate("use_fma", predicate!(has_avx && has_fma));
-
-    settings.add_predicate("use_avx", predicate!(has_avx));
-    settings.add_predicate("use_avx2", predicate!(has_avx && has_avx2));
-    settings.add_predicate("use_avx512bitalg", predicate!(has_avx512bitalg));
-    settings.add_predicate("use_avx512dq", predicate!(has_avx512dq));
-    settings.add_predicate("use_avx512vl", predicate!(has_avx512vl));
-    settings.add_predicate("use_avx512vbmi", predicate!(has_avx512vbmi));
-    settings.add_predicate("use_avx512f", predicate!(has_avx512f));
-
-    settings.add_predicate("use_popcnt", predicate!(has_popcnt && has_sse42));
-    settings.add_predicate("use_bmi1", predicate!(has_bmi1));
-    settings.add_predicate("use_bmi2", predicate!(has_bmi2));
-    settings.add_predicate("use_lzcnt", predicate!(has_lzcnt));
 
     let sse3 = settings.add_preset("sse3", "SSE3 and earlier.", preset!(has_sse3));
     let ssse3 = settings.add_preset("ssse3", "SSSE3 and earlier.", preset!(sse3 && has_ssse3));

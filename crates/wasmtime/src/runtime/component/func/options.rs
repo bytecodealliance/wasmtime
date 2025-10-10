@@ -1,3 +1,4 @@
+use crate::component::concurrent::ConcurrentState;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::component::{Instance, ResourceType};
@@ -477,6 +478,9 @@ pub struct LiftContext<'a> {
     host_resource_data: &'a mut HostResourceData,
 
     calls: &'a mut CallContexts,
+
+    #[cfg_attr(not(feature = "component-model-async"), allow(unused))]
+    concurrent_state: &'a mut ConcurrentState,
 }
 
 #[doc(hidden)]
@@ -497,8 +501,8 @@ impl<'a> LiftContext<'a> {
         let memory = options
             .memory
             .map(|_| options.memory(unsafe { &*(store as *const StoreOpaque) }));
-        let (calls, host_table, host_resource_data, instance) =
-            store.component_resource_state_with_instance(instance_handle);
+        let (calls, host_table, host_resource_data, instance, concurrent_state) =
+            store.component_resource_state_with_instance_and_concurrent_state(instance_handle);
         let (component, instance) = instance.component_and_self();
 
         LiftContext {
@@ -510,6 +514,7 @@ impl<'a> LiftContext<'a> {
             calls,
             host_table,
             host_resource_data,
+            concurrent_state,
         }
     }
 
@@ -537,6 +542,11 @@ impl<'a> LiftContext<'a> {
     /// Returns the component instance that is being lifted from.
     pub fn instance_handle(&self) -> Instance {
         self.instance_handle
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_state_mut(&mut self) -> &mut ConcurrentState {
+        self.concurrent_state
     }
 
     /// Lifts an `own` resource from the guest at the `idx` specified into its

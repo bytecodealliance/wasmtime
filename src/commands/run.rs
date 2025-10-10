@@ -588,10 +588,8 @@ impl RunCommand {
         if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
             if let Ok(command) = wasmtime_wasi::p3::bindings::Command::new(&mut *store, &instance) {
                 result = Some(
-                    instance
-                        .run_concurrent(&mut *store, async |store| {
-                            command.wasi_cli_run().call_run(store).await
-                        })
+                    store
+                        .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
                         .await?,
                 );
             }

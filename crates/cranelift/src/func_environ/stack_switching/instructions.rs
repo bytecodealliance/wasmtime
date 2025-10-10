@@ -443,7 +443,7 @@ pub(crate) mod stack_switching_helpers {
     }
 
     impl VMStackChain {
-        /// Creates a `Self` corressponding to `VMStackChain::Continuation(contref)`.
+        /// Creates a `Self` corresponding to `VMStackChain::Continuation(contref)`.
         pub fn from_continuation<'a>(
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
@@ -463,7 +463,7 @@ pub(crate) mod stack_switching_helpers {
             }
         }
 
-        /// Creates a `Self` corressponding to `VMStackChain::Absent`.
+        /// Creates a `Self` corresponding to `VMStackChain::Absent`.
         pub fn absent<'a>(
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
@@ -957,7 +957,7 @@ pub fn vmctx_load_stack_chain<'a>(
 }
 
 /// Stores the given stack chain saved in the `VMContext`, overwriting the
-/// exsiting one.
+/// existing one.
 pub fn vmctx_store_stack_chain<'a>(
     env: &mut crate::func_environ::FuncEnvironment<'a>,
     builder: &mut FunctionBuilder,
@@ -1397,7 +1397,7 @@ pub(crate) fn translate_resume<'a>(
                 .map(|tag_index| tag_address(env, builder, tag_index))
                 .collect();
 
-            // Store all tag addresess in the handler list.
+            // Store all tag addresses in the handler list.
             handler_list.store_data_entries(env, builder, &all_tag_addresses);
 
             // To enable distinguishing switch and suspend handlers when searching the handler list:

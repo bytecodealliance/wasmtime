@@ -1,0 +1,42 @@
+test inline precise-output
+target x86_64
+
+function %f0(i32, i32) -> i32 {
+    ss0 = explicit_slot 64, key = 0xfedc_ba98_7654_3210
+block0(v0: i32, v1: i32):
+<ss0, 1, 0>      sequence_point
+            v2 = iadd v0, v1
+                 return v2
+}
+
+; (no functions inlined into %f0)
+
+function %f1() -> i32 {
+    fn0 = %f0(i32, i32) -> i32
+    ss0 = explicit_slot 64, key = 0x1234_5678_9abc_def0
+block0():
+            v0 = iconst.i32 10
+<ss0, 2, 2> v1 = call fn0(v0, v0)
+            return v1
+}
+
+; function %f1() -> i32 fast {
+;     ss0 = explicit_slot 64, key = 1311768467463790320
+;     ss1 = explicit_slot 64, key = 18364758544493064720
+;     sig0 = (i32, i32) -> i32 fast
+;     fn0 = %f0 sig0
+;
+;                                 block0:
+;                                     v0 = iconst.i32 10
+;                                     jump block1
+;
+;                                 block1:
+; <ss0, 2, 2, ss1, 1, 0>              sequence_point 
+;                                     v3 = iadd.i32 v0, v0  ; v0 = 10, v0 = 10
+;                                     jump block2(v3)
+;
+;                                 block2(v2: i32):
+;                                     v1 -> v2
+;                                     return v1
+; }
+

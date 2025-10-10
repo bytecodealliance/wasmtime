@@ -46,6 +46,7 @@ macro_rules! to_str {
     };
 }
 
+#[cfg(feature = "async")]
 pub(crate) use to_str;
 
 #[unsafe(no_mangle)]

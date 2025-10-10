@@ -101,6 +101,8 @@ pub struct ArenaMemoryProvider {
     segments: Vec<Segment>,
 }
 
+unsafe impl Send for ArenaMemoryProvider {}
+
 impl ArenaMemoryProvider {
     /// Create a new memory region with the given size.
     pub fn new_with_size(reserve_size: usize) -> Result<Self, region::Error> {
@@ -280,5 +282,11 @@ mod tests {
 
         let _ = arena.allocate_readwrite(900_000, 1).unwrap();
         let _ = arena.allocate_readwrite(200_000, 1).unwrap_err();
+    }
+
+    #[test]
+    fn test_is_send() {
+        fn assert_is_send<T: Send>() {}
+        assert_is_send::<ArenaMemoryProvider>();
     }
 }

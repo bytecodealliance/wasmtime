@@ -1144,7 +1144,7 @@ impl<'a> TrampolineCompiler<'a> {
         let should_run_destructor =
             self.raise_if_negative_one(self.builder.func.dfg.inst_results(call)[0]);
 
-        let resource_ty = self.types[resource].ty;
+        let resource_ty = self.types[resource].unwrap_concrete_ty();
         let resource_def = self
             .component
             .defined_resource_index(resource_ty)
@@ -1222,7 +1222,7 @@ impl<'a> TrampolineCompiler<'a> {
         // the same component instance that defined the resource as the
         // component is calling itself.
         if let Some(def) = resource_def {
-            if self.types[resource].instance != def.instance {
+            if self.types[resource].unwrap_concrete_instance() != def.instance {
                 let flags = self.builder.ins().load(
                     ir::types::I32,
                     trusted,
@@ -1242,7 +1242,7 @@ impl<'a> TrampolineCompiler<'a> {
         if has_destructor {
             let rep = self.builder.ins().ushr_imm(should_run_destructor, 1);
             let rep = self.builder.ins().ireduce(ir::types::I32, rep);
-            let index = self.types[resource].ty;
+            let index = self.types[resource].unwrap_concrete_ty();
             // NB: despite the vmcontext storing nullable funcrefs for function
             // pointers we know this is statically never null due to the
             // `has_destructor` check above.

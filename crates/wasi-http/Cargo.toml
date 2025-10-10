@@ -11,6 +11,9 @@ description = "Experimental HTTP library for WebAssembly in Wasmtime"
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = ["default-send-request"]
 default-send-request = ["dep:tokio-rustls", "dep:rustls", "dep:webpki-roots"]
@@ -51,3 +54,4 @@ base64 = { workspace = true }
 flate2 = { workspace = true }
 wasm-compose = { workspace = true }
 tempfile = { workspace = true }
+env_logger = { workspace = true }

@@ -25,6 +25,11 @@ static void exit_with_error(const char *message, wasmtime_error_t *error,
 wasm_trap_t *callback(void *env, wasmtime_caller_t *caller,
                       const wasmtime_val_t *args, size_t nargs,
                       wasmtime_val_t *results, size_t nresults) {
+  (void)env;
+  (void)caller;
+  (void)nargs;
+  (void)nresults;
+
   printf("Calling back...\n");
   printf("> %" PRIu32 " %" PRIu64 "\n", args[0].of.i32, args[1].of.i64);
   printf("\n");
@@ -38,6 +43,11 @@ wasm_trap_t *callback(void *env, wasmtime_caller_t *caller,
 wasm_trap_t *closure_callback(void *env, wasmtime_caller_t *caller,
                               const wasmtime_val_t *args, size_t nargs,
                               wasmtime_val_t *results, size_t nresults) {
+  (void)caller;
+  (void)args;
+  (void)nargs;
+  (void)nresults;
+
   int i = *(int *)env;
   printf("Calling back closure...\n");
   printf("> %d\n", i);
@@ -47,7 +57,7 @@ wasm_trap_t *closure_callback(void *env, wasmtime_caller_t *caller,
   return NULL;
 }
 
-int main(int argc, const char *argv[]) {
+int main() {
   // Initialize.
   printf("Initializing...\n");
   wasm_engine_t *engine = wasm_engine_new();

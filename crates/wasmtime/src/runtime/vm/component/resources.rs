@@ -197,7 +197,7 @@ impl ResourceTables<'_> {
             TypedResource::Host(_) => self.host_table.as_mut().unwrap(),
             TypedResource::Component { ty, .. } => {
                 let (tables, types) = self.guest.as_mut().unwrap();
-                &mut tables[types[*ty].instance]
+                &mut tables[types[*ty].unwrap_concrete_instance()]
             }
         }
     }
@@ -207,7 +207,7 @@ impl ResourceTables<'_> {
             TypedResourceIndex::Host(_) => self.host_table.as_mut().unwrap(),
             TypedResourceIndex::Component { ty, .. } => {
                 let (tables, types) = self.guest.as_mut().unwrap();
-                &mut tables[types[*ty].instance]
+                &mut tables[types[*ty].unwrap_concrete_instance()]
             }
         }
     }

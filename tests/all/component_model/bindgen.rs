@@ -121,10 +121,9 @@ mod no_imports_concurrent {
 
         let linker = Linker::new(&engine);
         let mut store = Store::new(&engine, ());
-        let instance = linker.instantiate_async(&mut store, &component).await?;
-        let no_imports = NoImports::new(&mut store, &instance)?;
-        instance
-            .run_concurrent(&mut store, async move |accessor| {
+        let no_imports = NoImports::instantiate_async(&mut store, &component, &linker).await?;
+        store
+            .run_concurrent(async move |accessor| {
                 let mut futures = FuturesUnordered::new();
                 futures.push(no_imports.call_bar(accessor).boxed());
                 futures.push(no_imports.foo().call_foo(accessor).boxed());
@@ -286,12 +285,9 @@ mod one_import_concurrent {
         let mut linker = Linker::new(&engine);
         foo::add_to_linker::<_, MyImports>(&mut linker, |x| x)?;
         let mut store = Store::new(&engine, MyImports::default());
-        let instance = linker.instantiate_async(&mut store, &component).await?;
-        let no_imports = NoImports::new(&mut store, &instance)?;
-        instance
-            .run_concurrent(&mut store, async move |accessor| {
-                no_imports.call_bar(accessor).await
-            })
+        let no_imports = NoImports::instantiate_async(&mut store, &component, &linker).await?;
+        store
+            .run_concurrent(async move |accessor| no_imports.call_bar(accessor).await)
             .await??;
         assert!(store.data().hit);
         Ok(())

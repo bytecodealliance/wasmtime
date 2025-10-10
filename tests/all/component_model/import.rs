@@ -833,8 +833,8 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     if concurrent {
-        instance
-            .run_concurrent(&mut store, async move |accessor| {
+        store
+            .run_concurrent(async move |accessor| {
                 anyhow::Ok(run.call_concurrent(accessor, ()).await?.0)
             })
             .await??;
@@ -957,8 +957,8 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     let run = instance.get_func(&mut store, "run").unwrap();
 
     if concurrent {
-        instance
-            .run_concurrent(&mut store, async |store| {
+        store
+            .run_concurrent(async |store| {
                 run.call_concurrent(store, &[], &mut []).await?;
                 anyhow::Ok(())
             })

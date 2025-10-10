@@ -34,6 +34,7 @@ use rustc_hash::FxHashMap;
 use core::cmp::Ordering;
 use core::fmt::{self, Write};
 use core::mem::take;
+use core::ops::Range;
 use cranelift_entity::{Keys, entity_impl};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -102,6 +103,15 @@ pub struct VCode<I: VCodeInst> {
     /// are safepoints, and only for a subset of those that have an associated
     /// user stack map.
     user_stack_maps: FxHashMap<BackwardsInsnIndex, ir::UserStackMap>,
+
+    /// A map from backwards instruction index to the debug tags for
+    /// that instruction. Each entry indexes a range in the
+    /// `debug_tag_pool`.
+    debug_tags: FxHashMap<BackwardsInsnIndex, Range<u32>>,
+
+    /// Pooled storage for sequences of debug tags; indexed by entries
+    /// in `debug_tags`.
+    debug_tag_pool: Vec<ir::DebugTag>,
 
     /// Operands: pre-regalloc references to virtual registers with
     /// constraints, in one flattened array. This allows the regalloc
@@ -221,17 +231,8 @@ pub struct EmitResult {
     /// epilogue(s), and makes use of the regalloc results.
     pub disasm: Option<String>,
 
-    /// Offsets of sized stackslots.
-    pub sized_stackslot_offsets: PrimaryMap<StackSlot, u32>,
-
-    /// Offsets of dynamic stackslots.
-    pub dynamic_stackslot_offsets: PrimaryMap<DynamicStackSlot, u32>,
-
     /// Value-labels information (debug metadata).
     pub value_labels_ranges: ValueLabelsRanges,
-
-    /// Stack frame size.
-    pub frame_size: u32,
 }
 
 /// A builder for a VCode function body.
@@ -617,6 +618,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         let old_entry = self.vcode.user_stack_maps.insert(inst, stack_map);
         debug_assert!(old_entry.is_none());
     }
+
+    /// Add debug tags for the associated instruction.
+    pub fn add_debug_tags(&mut self, inst: BackwardsInsnIndex, entries: &[ir::DebugTag]) {
+        let start = u32::try_from(self.vcode.debug_tag_pool.len()).unwrap();
+        self.vcode.debug_tag_pool.extend(entries.iter().cloned());
+        let end = u32::try_from(self.vcode.debug_tag_pool.len()).unwrap();
+        self.vcode.debug_tags.insert(inst, start..end);
+    }
 }
 
 const NO_INST_OFFSET: CodeOffset = u32::MAX;
@@ -637,6 +646,8 @@ impl<I: VCodeInst> VCode<I> {
             vreg_types: vec![],
             insts: Vec::with_capacity(10 * n_blocks),
             user_stack_maps: FxHashMap::default(),
+            debug_tags: FxHashMap::default(),
+            debug_tag_pool: vec![],
             operands: Vec::with_capacity(30 * n_blocks),
             operand_ranges: Ranges::with_capacity(10 * n_blocks),
             clobbers: FxHashMap::default(),
@@ -938,8 +949,11 @@ impl<I: VCodeInst> VCode<I> {
                                 // function.
                                 let index = iix.to_backwards_insn_index(self.num_insts());
                                 let user_stack_map = self.user_stack_maps.remove(&index);
-                                let user_stack_map_disasm =
-                                    user_stack_map.as_ref().map(|m| format!("  ; {m:?}"));
+                                let user_stack_map_disasm = if want_disasm {
+                                    user_stack_map.as_ref().map(|m| format!("  ; {m:?}"))
+                                } else {
+                                    None
+                                };
                                 (user_stack_map, user_stack_map_disasm)
                             };
 
@@ -950,11 +964,50 @@ impl<I: VCodeInst> VCode<I> {
                             None
                         };
 
+                        // Place debug tags in the emission buffer
+                        // either at the offset prior to the
+                        // instruction or after the instruction,
+                        // depending on whether this is a call. See
+                        // the documentation on [`MachDebugTagPos`]
+                        // for details on why.
+                        let mut debug_tag_disasm = None;
+                        let mut place_debug_tags =
+                            |this: &VCode<I>, pos: MachDebugTagPos, buffer: &mut MachBuffer<I>| {
+                                // As above, translate the forward instruction
+                                // index to a backward index for the lookup.
+                                let debug_tag_range = {
+                                    let index = iix.to_backwards_insn_index(this.num_insts());
+                                    this.debug_tags.get(&index)
+                                };
+                                if let Some(range) = debug_tag_range {
+                                    let start = usize::try_from(range.start).unwrap();
+                                    let end = usize::try_from(range.end).unwrap();
+                                    let tags = &this.debug_tag_pool[start..end];
+
+                                    if want_disasm {
+                                        debug_tag_disasm =
+                                            Some(format!("  ; ^-- debug @ {pos:?}: {tags:?}"));
+                                    }
+                                    buffer.push_debug_tags(pos, tags);
+                                }
+                            };
+                        let debug_tag_pos =
+                            if self.insts[iix.index()].call_type() == CallType::Regular {
+                                MachDebugTagPos::Post
+                            } else {
+                                MachDebugTagPos::Pre
+                            };
+
+                        if debug_tag_pos == MachDebugTagPos::Pre {
+                            place_debug_tags(&self, debug_tag_pos, &mut buffer);
+                        }
+
                         // If the instruction we are about to emit is
                         // a return, place an epilogue at this point
                         // (and don't emit the return; the actual
                         // epilogue will contain it).
                         if self.insts[iix.index()].is_term() == MachTerminator::Ret {
+                            log::trace!("emitting epilogue");
                             for inst in self.abi.gen_epilogue() {
                                 do_emit(&inst, &mut disasm, &mut buffer, &mut state);
                             }
@@ -981,6 +1034,8 @@ impl<I: VCodeInst> VCode<I> {
                             );
                             debug_assert!(allocs.next().is_none());
 
+                            log::trace!("emitting: {:?}", self.insts[iix.index()]);
+
                             // Emit the instruction!
                             do_emit(
                                 &self.insts[iix.index()],
@@ -988,8 +1043,17 @@ impl<I: VCodeInst> VCode<I> {
                                 &mut buffer,
                                 &mut state,
                             );
+
+                            if debug_tag_pos == MachDebugTagPos::Post {
+                                place_debug_tags(&self, debug_tag_pos, &mut buffer);
+                            }
+
                             if let Some(stack_map_disasm) = stack_map_disasm {
                                 disasm.push_str(&stack_map_disasm);
+                                disasm.push('\n');
+                            }
+                            if let Some(debug_tag_disasm) = debug_tag_disasm {
+                                disasm.push_str(&debug_tag_disasm);
                                 disasm.push('\n');
                             }
                         }
@@ -1113,17 +1177,16 @@ impl<I: VCodeInst> VCode<I> {
         self.monotonize_inst_offsets(&mut inst_offsets[..], func_body_len);
         let value_labels_ranges =
             self.compute_value_labels_ranges(regalloc, &inst_offsets[..], func_body_len);
-        let frame_size = self.abi.frame_size();
+
+        // Store metadata about frame layout in the MachBuffer.
+        buffer.set_frame_layout(self.abi.frame_slot_metadata());
 
         EmitResult {
             buffer: buffer.finish(&self.constants, ctrl_plane),
             bb_offsets,
             bb_edges,
             disasm: if want_disasm { Some(disasm) } else { None },
-            sized_stackslot_offsets: self.abi.sized_stackslot_offsets().clone(),
-            dynamic_stackslot_offsets: self.abi.dynamic_stackslot_offsets().clone(),
             value_labels_ranges,
-            frame_size,
         }
     }
 

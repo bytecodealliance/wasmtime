@@ -823,18 +823,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
                 let dtor = dtor.clone();
                 cx.as_context_mut().block_on(move |mut store| {
                     Box::pin(async move {
-                        // NOTE: We currently pass `None` as the `instance`
-                        // parameter to `Accessor::new` because we don't have ready
-                        // access to it, meaning `dtor` will panic if it tries to
-                        // use `Accessor::instance`.  We could plumb that through
-                        // from the `wasmtime-cranelift`-generated code, but we plan
-                        // to remove `Accessor::instance` once all instances in a
-                        // store share the same concurrent state, at which point we
-                        // won't need it anyway.
-                        let accessor = &Accessor::new(
-                            crate::store::StoreToken::new(store.as_context_mut()),
-                            None,
-                        );
+                        let accessor =
+                            &Accessor::new(crate::store::StoreToken::new(store.as_context_mut()));
                         let mut future = std::pin::pin!(dtor(accessor, param));
                         std::future::poll_fn(|cx| {
                             crate::component::concurrent::tls::set(store.0, || {

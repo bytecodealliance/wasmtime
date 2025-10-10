@@ -4,18 +4,19 @@ use crate::p3::bindings::http::types::{
     HostRequestOptions, HostRequestWithStore, HostResponse, HostResponseWithStore, Method, Request,
     RequestOptions, RequestOptionsError, Response, Scheme, StatusCode, Trailers,
 };
-use crate::p3::body::Body;
+use crate::p3::body::{Body, HostBodyStreamProducer};
 use crate::p3::{HeaderResult, HttpError, RequestOptionsResult, WasiHttp, WasiHttpCtxView};
 use anyhow::Context as _;
+use core::mem;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
 use http::header::CONTENT_LENGTH;
 use std::sync::Arc;
 use tokio::sync::oneshot;
-use wasmtime::StoreContextMut;
 use wasmtime::component::{
     Access, Accessor, FutureProducer, FutureReader, Resource, ResourceTable, StreamReader,
 };
+use wasmtime::{AsContextMut, StoreContextMut};
 
 fn get_fields<'a>(
     table: &'a ResourceTable,
@@ -318,19 +319,31 @@ impl HostRequestWithStore for WasiHttp {
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
         options: Option<Resource<RequestOptions>>,
     ) -> wasmtime::Result<(Resource<Request>, FutureReader<Result<(), ErrorCode>>)> {
-        let instance = store.instance();
         store.with(|mut store| {
             let (result_tx, result_rx) = oneshot::channel();
+            let body = match contents
+                .map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(store.as_context_mut()))
+            {
+                Some(Ok(mut producer)) => Body::Host {
+                    body: mem::take(&mut producer.body),
+                    result_tx,
+                },
+                Some(Err(rx)) => Body::Guest {
+                    contents_rx: Some(rx),
+                    trailers_rx: trailers,
+                    result_tx,
+                },
+                None => Body::Guest {
+                    contents_rx: None,
+                    trailers_rx: trailers,
+                    result_tx,
+                },
+            };
             let WasiHttpCtxView { table, .. } = store.get();
             let headers = delete_fields(table, headers)?;
             let options = options
                 .map(|options| delete_request_options(table, options))
                 .transpose()?;
-            let body = Body::Guest {
-                contents_rx: contents,
-                trailers_rx: trailers,
-                result_tx,
-            };
             let req = Request {
                 method: http::Method::GET,
                 scheme: None,
@@ -343,11 +356,7 @@ impl HostRequestWithStore for WasiHttp {
             let req = table.push(req).context("failed to push request to table")?;
             Ok((
                 req,
-                FutureReader::new(
-                    instance,
-                    &mut store,
-                    GuestBodyResultProducer::Receiver(result_rx),
-                ),
+                FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx)),
             ))
         })
     }
@@ -599,16 +608,28 @@ impl HostResponseWithStore for WasiHttp {
         contents: Option<StreamReader<u8>>,
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     ) -> wasmtime::Result<(Resource<Response>, FutureReader<Result<(), ErrorCode>>)> {
-        let instance = store.instance();
         store.with(|mut store| {
             let (result_tx, result_rx) = oneshot::channel();
+            let body = match contents
+                .map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(store.as_context_mut()))
+            {
+                Some(Ok(mut producer)) => Body::Host {
+                    body: mem::take(&mut producer.body),
+                    result_tx,
+                },
+                Some(Err(rx)) => Body::Guest {
+                    contents_rx: Some(rx),
+                    trailers_rx: trailers,
+                    result_tx,
+                },
+                None => Body::Guest {
+                    contents_rx: None,
+                    trailers_rx: trailers,
+                    result_tx,
+                },
+            };
             let WasiHttpCtxView { table, .. } = store.get();
             let headers = delete_fields(table, headers)?;
-            let body = Body::Guest {
-                contents_rx: contents,
-                trailers_rx: trailers,
-                result_tx,
-            };
             let res = Response {
                 status: http::StatusCode::OK,
                 headers: headers.into(),
@@ -619,11 +640,7 @@ impl HostResponseWithStore for WasiHttp {
                 .context("failed to push response to table")?;
             Ok((
                 res,
-                FutureReader::new(
-                    instance,
-                    &mut store,
-                    GuestBodyResultProducer::Receiver(result_rx),
-                ),
+                FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx)),
             ))
         })
     }

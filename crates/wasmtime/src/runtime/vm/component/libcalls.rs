@@ -671,11 +671,11 @@ fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u8) -> Result<()> {
 #[cfg(feature = "component-model-async")]
 fn backpressure_set(
     store: &mut dyn VMStore,
-    instance: Instance,
+    _instance: Instance,
     caller_instance: u32,
     enabled: u32,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).backpressure_modify(
+    store.concurrent_state_mut().backpressure_modify(
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         |_| Some(if enabled != 0 { 1 } else { 0 }),
     )
@@ -684,11 +684,11 @@ fn backpressure_set(
 #[cfg(feature = "component-model-async")]
 fn backpressure_modify(
     store: &mut dyn VMStore,
-    instance: Instance,
+    _instance: Instance,
     caller_instance: u32,
     increment: u8,
 ) -> Result<()> {
-    instance.concurrent_state_mut(store).backpressure_modify(
+    store.concurrent_state_mut().backpressure_modify(
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         |old| {
             if increment != 0 {
@@ -733,10 +733,10 @@ fn waitable_set_new(
     instance: Instance,
     caller_instance: u32,
 ) -> Result<u32> {
-    instance
-        .id()
-        .get_mut(store)
-        .waitable_set_new(RuntimeComponentInstanceIndex::from_u32(caller_instance))
+    instance.waitable_set_new(
+        store,
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
+    )
 }
 
 #[cfg(feature = "component-model-async")]
@@ -782,7 +782,8 @@ fn waitable_set_drop(
     caller_instance: u32,
     set: u32,
 ) -> Result<()> {
-    instance.id().get_mut(store).waitable_set_drop(
+    instance.waitable_set_drop(
+        store,
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         set,
     )
@@ -796,7 +797,8 @@ fn waitable_join(
     waitable: u32,
     set: u32,
 ) -> Result<()> {
-    instance.id().get_mut(store).waitable_join(
+    instance.waitable_join(
+        store,
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         waitable,
         set,
@@ -826,7 +828,8 @@ fn subtask_drop(
     caller_instance: u32,
     task_id: u32,
 ) -> Result<()> {
-    instance.id().get_mut(store).subtask_drop(
+    instance.subtask_drop(
+        store,
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         task_id,
     )
@@ -934,7 +937,8 @@ fn future_transfer(
     src_table: u32,
     dst_table: u32,
 ) -> Result<u32> {
-    instance.id().get_mut(store).future_transfer(
+    instance.future_transfer(
+        store,
         src_idx,
         TypeFutureTableIndex::from_u32(src_table),
         TypeFutureTableIndex::from_u32(dst_table),
@@ -949,7 +953,8 @@ fn stream_transfer(
     src_table: u32,
     dst_table: u32,
 ) -> Result<u32> {
-    instance.id().get_mut(store).stream_transfer(
+    instance.stream_transfer(
+        store,
         src_idx,
         TypeStreamTableIndex::from_u32(src_table),
         TypeStreamTableIndex::from_u32(dst_table),
@@ -966,10 +971,7 @@ fn error_context_transfer(
 ) -> Result<u32> {
     let src_table = TypeComponentLocalErrorContextTableIndex::from_u32(src_table);
     let dst_table = TypeComponentLocalErrorContextTableIndex::from_u32(dst_table);
-    instance
-        .id()
-        .get_mut(store)
-        .error_context_transfer(src_idx, src_table, dst_table)
+    instance.error_context_transfer(store, src_idx, src_table, dst_table)
 }
 
 #[cfg(feature = "component-model-async")]
@@ -990,7 +992,8 @@ fn future_new(
     caller_instance: u32,
     ty: u32,
 ) -> Result<ResourcePair> {
-    instance.id().get_mut(store).future_new(
+    instance.future_new(
+        store,
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         TypeFutureTableIndex::from_u32(ty),
     )
@@ -1111,7 +1114,8 @@ fn stream_new(
     caller_instance: u32,
     ty: u32,
 ) -> Result<ResourcePair> {
-    instance.id().get_mut(store).stream_new(
+    instance.stream_new(
+        store,
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         TypeStreamTableIndex::from_u32(ty),
     )
@@ -1329,7 +1333,8 @@ fn error_context_drop(
     ty: u32,
     err_ctx_handle: u32,
 ) -> Result<()> {
-    instance.id().get_mut(store).error_context_drop(
+    instance.error_context_drop(
+        store,
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         TypeComponentLocalErrorContextTableIndex::from_u32(ty),
         err_ctx_handle,
@@ -1367,8 +1372,8 @@ fn context_set(
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_index(store: &mut dyn VMStore, instance: Instance) -> Result<u32> {
-    instance.concurrent_state_mut(store).thread_index()
+fn thread_index(store: &mut dyn VMStore, _instance: Instance) -> Result<u32> {
+    store.concurrent_state_mut().thread_index()
 }
 
 #[cfg(feature = "component-model-async")]

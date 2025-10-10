@@ -259,8 +259,12 @@ fn decorate_block<FW: FuncWriter>(
     aliases: &SecondaryMap<Value, Vec<Value>>,
     block: Block,
 ) -> fmt::Result {
-    // Indent all instructions if any srclocs are present.
-    let indent = if func.rel_srclocs().is_empty() { 4 } else { 36 };
+    // Indent all instructions if any srclocs or debug tags are present.
+    let indent = if func.rel_srclocs().is_empty() && func.debug_tags.is_empty() {
+        4
+    } else {
+        36
+    };
 
     func_w.write_block_header(w, func, block, indent)?;
     for a in func.dfg.block_params(block).iter().cloned() {
@@ -336,7 +340,7 @@ fn write_instruction(
     func: &Function,
     aliases: &SecondaryMap<Value, Vec<Value>>,
     inst: Inst,
-    indent: usize,
+    mut indent: usize,
 ) -> fmt::Result {
     // Prefix containing source location, encoding, and value locations.
     let mut s = String::with_capacity(16);
@@ -346,6 +350,9 @@ fn write_instruction(
     if !srcloc.is_default() {
         write!(s, "{srcloc} ")?;
     }
+
+    // Write out any debug tags.
+    write_debug_tags(w, &func, inst, &mut indent)?;
 
     // Write out prefix and indent the instruction.
     write!(w, "{s:indent$}")?;
@@ -568,6 +575,26 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             write!(w, "{sep}{arg} = {imm}")?;
             sep = ", ";
         }
+    }
+    Ok(())
+}
+
+fn write_debug_tags(
+    w: &mut dyn Write,
+    func: &Function,
+    inst: Inst,
+    indent: &mut usize,
+) -> fmt::Result {
+    let tags = func.debug_tags.get(inst);
+    if !tags.is_empty() {
+        let tags = tags
+            .iter()
+            .map(|tag| format!("{tag}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let s = format!("<{tags}> ");
+        write!(w, "{s}")?;
+        *indent = indent.saturating_sub(s.len());
     }
     Ok(())
 }

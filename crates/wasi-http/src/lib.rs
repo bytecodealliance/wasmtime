@@ -218,6 +218,7 @@
 #![deny(missing_docs)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod error;
 mod http_impl;

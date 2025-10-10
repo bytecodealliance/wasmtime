@@ -490,13 +490,12 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         fd: Resource<Descriptor>,
         offset: Filesize,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        let instance = store.instance();
         store.with(|mut store| {
             let file = get_file(store.get().table, &fd)?;
             if !file.perms.contains(FilePerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, iter::empty()),
-                    FutureReader::new(instance, &mut store, async {
+                    StreamReader::new(&mut store, iter::empty()),
+                    FutureReader::new(&mut store, async {
                         anyhow::Ok(Err(ErrorCode::NotPermitted))
                     }),
                 ));
@@ -506,7 +505,6 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let (result_tx, result_rx) = oneshot::channel();
             Ok((
                 StreamReader::new(
-                    instance,
                     &mut store,
                     ReadStreamProducer {
                         file,
@@ -515,7 +513,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                         task: None,
                     },
                 ),
-                FutureReader::new(instance, &mut store, result_rx),
+                FutureReader::new(&mut store, result_rx),
             ))
         })
     }
@@ -634,13 +632,12 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         StreamReader<DirectoryEntry>,
         FutureReader<Result<(), ErrorCode>>,
     )> {
-        let instance = store.instance();
         store.with(|mut store| {
             let dir = get_dir(store.get().table, &fd)?;
             if !dir.perms.contains(DirPerms::READ) {
                 return Ok((
-                    StreamReader::new(instance, &mut store, iter::empty()),
-                    FutureReader::new(instance, &mut store, async {
+                    StreamReader::new(&mut store, iter::empty()),
+                    FutureReader::new(&mut store, async {
                         anyhow::Ok(Err(ErrorCode::NotPermitted))
                     }),
                 ));
@@ -651,7 +648,6 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             let stream = if allow_blocking_current_thread {
                 match dir.entries() {
                     Ok(readdir) => StreamReader::new(
-                        instance,
                         &mut store,
                         FallibleIteratorProducer::new(
                             readdir.filter_map(|e| map_dir_entry(e).transpose()),
@@ -660,13 +656,13 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     ),
                     Err(e) => {
                         result_tx.send(Err(e.into())).unwrap();
-                        StreamReader::new(instance, &mut store, iter::empty())
+                        StreamReader::new(&mut store, iter::empty())
                     }
                 }
             } else {
-                StreamReader::new(instance, &mut store, ReadDirStream::new(dir, result_tx))
+                StreamReader::new(&mut store, ReadDirStream::new(dir, result_tx))
             };
-            Ok((stream, FutureReader::new(instance, &mut store, result_rx)))
+            Ok((stream, FutureReader::new(&mut store, result_rx)))
         })
     }
 
