@@ -1,14 +1,17 @@
-use crate::ScopeVec;
+use crate::Abi;
 use crate::component::dfg::AbstractInstantiations;
 use crate::component::*;
 use crate::prelude::*;
 use crate::{
-    EngineOrModuleTypeIndex, EntityIndex, ModuleEnvironment, ModuleInternedTypeIndex,
-    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, TagIndex, Tunables, TypeConvert,
+    EngineOrModuleTypeIndex, EntityIndex, FuncKey, ModuleEnvironment, ModuleInternedTypeIndex,
+    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, ScopeVec, TagIndex, Tunables, TypeConvert,
     WasmHeapType, WasmResult, WasmValType,
 };
+use anyhow::Context;
 use anyhow::anyhow;
+use anyhow::ensure;
 use anyhow::{Result, bail};
+use core::str::FromStr;
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
@@ -73,6 +76,9 @@ pub struct Translator<'a, 'data> {
     /// As frames are popped from `lexical_scopes` their completed component
     /// will be pushed onto this list.
     static_components: PrimaryMap<StaticComponentIndex, Translation<'data>>,
+
+    /// The top-level import name for Wasmtime's unsafe intrinsics, if any.
+    unsafe_intrinsics_import: Option<&'a str>,
 }
 
 /// Representation of the syntactic scope of a component meaning where it is
@@ -175,6 +181,9 @@ struct Translation<'data> {
 enum LocalInitializer<'data> {
     // imports
     Import(ComponentImportName<'data>, ComponentEntityType),
+
+    // An import of an intrinsic for compile-time builtins.
+    IntrinsicsImport,
 
     // canonical function sections
     Lower {
@@ -425,7 +434,16 @@ impl<'a, 'data> Translator<'a, 'data> {
             static_components: Default::default(),
             static_modules: Default::default(),
             scope_vec,
+            unsafe_intrinsics_import: None,
         }
+    }
+
+    /// Expose Wasmtime's unsafe intrinsics under the given top-level import
+    /// name.
+    pub fn expose_intrinsics(&mut self, name: &'a str) -> &mut Self {
+        assert!(self.unsafe_intrinsics_import.is_none());
+        self.unsafe_intrinsics_import = Some(name);
+        self
     }
 
     /// Translates the binary `component`.
@@ -566,7 +584,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                         .is_none()
                 );
 
-                match arg {
+                let known_func = match arg {
                     CoreDef::InstanceFlags(_) => unreachable!("instance flags are not a function"),
 
                     // We could in theory inline these trampolines, so it could
@@ -582,6 +600,11 @@ impl<'a, 'data> Translator<'a, 'data> {
                     // wouldn't ever inline them, but it just doesn't seem worth
                     // the effort.
                     CoreDef::Trampoline(_) => continue,
+
+                    // This import is a compile-time builtin intrinsic, we
+                    // should inline its implementation during function
+                    // translation.
+                    CoreDef::UnsafeIntrinsic(i) => FuncKey::UnsafeIntrinsic(Abi::Wasm, *i),
 
                     // This imported function is an export from another
                     // instance, a perfect candidate for becoming an inlinable
@@ -613,14 +636,15 @@ impl<'a, 'data> Translator<'a, 'data> {
                             continue;
                         };
 
-                        assert!(
-                            self.static_modules[module].known_imported_functions[imported_func]
-                                .is_none()
-                        );
-                        self.static_modules[module].known_imported_functions[imported_func] =
-                            Some((*arg_module, arg_module_def_func));
+                        FuncKey::DefinedWasmFunction(*arg_module, arg_module_def_func)
                     }
-                }
+                };
+
+                assert!(
+                    self.static_modules[module].known_imported_functions[imported_func].is_none()
+                );
+                self.static_modules[module].known_imported_functions[imported_func] =
+                    Some(known_func);
             }
         }
     }
@@ -725,9 +749,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                     let ty = types
                         .component_entity_type_of_import(import.name.0)
                         .unwrap();
-                    self.result
-                        .initializers
-                        .push(LocalInitializer::Import(import.name, ty));
+
+                    if self.is_unsafe_intrinsics_import(import.name.0) {
+                        self.check_unsafe_intrinsics_import(import.name.0, ty)?;
+                        self.result
+                            .initializers
+                            .push(LocalInitializer::IntrinsicsImport);
+                    } else {
+                        self.result
+                            .initializers
+                            .push(LocalInitializer::Import(import.name, ty));
+                    }
                 }
             }
 
@@ -1554,6 +1586,136 @@ impl<'a, 'data> Translator<'a, 'data> {
         let types = self.validator.types(0).unwrap();
         let id = types.core_function_at(index);
         self.types.module_types_builder().intern_type(types, id)
+    }
+
+    fn is_unsafe_intrinsics_import(&self, import: &str) -> bool {
+        self.lexical_scopes.is_empty()
+            && self
+                .unsafe_intrinsics_import
+                .is_some_and(|name| import == name)
+    }
+
+    fn check_unsafe_intrinsics_import(&self, import: &str, ty: ComponentEntityType) -> Result<()> {
+        let types = &self.validator.types(0).unwrap();
+
+        let ComponentEntityType::Instance(instance_ty) = ty else {
+            bail!("bad unsafe intrinsics import: import `{import}` must be an instance import")
+        };
+        let instance_ty = &types[instance_ty];
+
+        ensure!(
+            instance_ty.defined_resources.is_empty(),
+            "bad unsafe intrinsics import: import `{import}` cannot define any resources"
+        );
+        ensure!(
+            instance_ty.explicit_resources.is_empty(),
+            "bad unsafe intrinsics import: import `{import}` cannot export any resources"
+        );
+
+        for (name, ty) in &instance_ty.exports {
+            use wasmparser::PrimitiveValType as P;
+
+            let ComponentEntityType::Func(func_ty) = ty else {
+                bail!(
+                    "bad unsafe intrinsics import: imported instance `{import}` must \
+                     only export functions"
+                )
+            };
+            let func_ty = &types[*func_ty];
+
+            // `wasmparser::PrimitiveValType` does not implement `Eq`, so we
+            // implement it here for just the types we need to check below.
+            let prim_val_ty_eq = |a: P, b: P| -> bool {
+                match (a, b) {
+                    (P::U8, P::U8) => true,
+                    (P::U8, _) => false,
+
+                    (P::U16, P::U16) => true,
+                    (P::U16, _) => false,
+
+                    (P::U32, P::U32) => true,
+                    (P::U32, _) => false,
+
+                    (P::U64, P::U64) => true,
+                    (P::U64, _) => false,
+
+                    _ => unreachable!(),
+                }
+            };
+
+            // Check the actual `func_ty` against our expected parameter and
+            // result types.
+            let check = |expected_params: &[P], expected_result: Option<P>| -> Result<()> {
+                let expected_params_len = expected_params.len();
+                let actual_params_len = func_ty.params.len();
+                ensure!(
+                    expected_params_len == actual_params_len,
+                    "bad unsafe intrinsics import at `{import}`: function `{name}` must have \
+                     {expected_params_len} parameters, found {actual_params_len}"
+                );
+
+                for (i, ((_, actual_ty), expected_ty)) in
+                    func_ty.params.iter().zip(expected_params).enumerate()
+                {
+                    let ComponentValType::Primitive(actual_ty) = *actual_ty else {
+                        bail!(
+                            "bad unsafe intrinsics import at `{import}`: parameter {i} to function \
+                             `{name}` must be `{expected_ty:?}`, found `{actual_ty:?}`"
+                        );
+                    };
+                    ensure!(
+                        prim_val_ty_eq(*expected_ty, actual_ty),
+                        "bad unsafe intrinsics import at `{import}`: parameter {i} to function \
+                         `{name}` must be `{expected_ty:?}`, found `{actual_ty:?}`"
+                    );
+                }
+
+                match (expected_result, func_ty.result) {
+                    (None, None) => {}
+                    (None, Some(actual)) => bail!(
+                        "bad unsafe intrinsics import at `{import}`: function `{name}` must have no \
+                         return type, found `{actual:?}`"
+                    ),
+                    (Some(expected), None) => bail!(
+                        "bad unsafe intrinsics import at `{import}`: function `{name}` must return \
+                         `{expected:?}`, found no return type"
+                    ),
+                    (Some(expected), Some(actual)) => {
+                        let ComponentValType::Primitive(actual) = actual else {
+                            bail!(
+                                "bad unsafe intrinsics import at `{import}`: function `{name}` must \
+                                 return  `{expected:?}`, found `{actual:?}`"
+                            );
+                        };
+
+                        ensure!(
+                            prim_val_ty_eq(expected, actual),
+                            "bad unsafe intrinsics import at `{import}`: function `{name}` must return \
+                             `{expected:?}`, found `{actual:?}`"
+                        )
+                    }
+                }
+
+                Ok(())
+            };
+
+            let intrinsic = UnsafeIntrinsic::from_str(name)
+                .with_context(|| format!("bad unsafe intrinsics import at `{import}`"))?;
+            match intrinsic {
+                x if x == UnsafeIntrinsic::u8_native_load() => check(&[P::U64], Some(P::U8))?,
+                x if x == UnsafeIntrinsic::u16_native_load() => check(&[P::U64], Some(P::U16))?,
+                x if x == UnsafeIntrinsic::u32_native_load() => check(&[P::U64], Some(P::U32))?,
+                x if x == UnsafeIntrinsic::u64_native_load() => check(&[P::U64], Some(P::U64))?,
+                x if x == UnsafeIntrinsic::u8_native_store() => check(&[P::U64, P::U8], None)?,
+                x if x == UnsafeIntrinsic::u16_native_store() => check(&[P::U64, P::U16], None)?,
+                x if x == UnsafeIntrinsic::u32_native_store() => check(&[P::U64, P::U32], None)?,
+                x if x == UnsafeIntrinsic::u64_native_store() => check(&[P::U64, P::U64], None)?,
+                x if x == UnsafeIntrinsic::store_data_address() => check(&[], Some(P::U64))?,
+                _ => unreachable!("unknown intrinsic: {intrinsic:?}"),
+            }
+        }
+
+        Ok(())
     }
 }
 

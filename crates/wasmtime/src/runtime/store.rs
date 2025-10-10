@@ -706,6 +706,9 @@ impl<T> Store<T> {
             data: ManuallyDrop::new(data),
         });
 
+        let store_data = <*const T>::from(inner.data()).cast_mut().cast::<()>();
+        inner.inner.vm_store_context.store_data = store_data;
+
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
 
         // Wasmtime uses the callee argument to host functions to learn about

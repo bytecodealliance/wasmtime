@@ -50,7 +50,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tempfile::TempDir;
-use wasmtime::{Engine, OptLevel, Strategy};
+use wasmtime::{CodeBuilder, CodeHint, Engine, OptLevel, Strategy};
 use wasmtime_cli_flags::CommonOptions;
 
 fn main() -> Result<()> {
@@ -124,6 +124,7 @@ struct TestConfig {
     flags: Option<TestConfigFlags>,
     objdump: Option<TestConfigFlags>,
     filter: Option<String>,
+    unsafe_intrinsics: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -208,15 +209,26 @@ impl Test {
             }
         }
         let engine = Engine::new(&config).context("failed to create engine")?;
-        let wasm = wat::parse_file(&self.path)?;
-        let elf = if wasmparser::Parser::is_component(&wasm) {
-            engine
-                .precompile_component(&wasm)
-                .context("failed to compile component")?
-        } else {
-            engine
-                .precompile_module(&wasm)
-                .context("failed to compile module")?
+
+        let mut builder = CodeBuilder::new(&engine);
+        builder.wasm_binary_or_text_file(&self.path)?;
+        if let Some(name) = self.config.unsafe_intrinsics.as_deref() {
+            unsafe {
+                builder.expose_unsafe_intrinsics(name);
+            }
+        }
+
+        let elf = match builder.hint() {
+            Some(CodeHint::Component) => builder
+                .compile_component_serialized()
+                .context("failed to compile component")?,
+            Some(CodeHint::Module) => builder
+                .compile_module_serialized()
+                .context("failed to compile module")?,
+            None => bail!(
+                "contents of `{}` do not look like a Wasm component or module",
+                self.path.display()
+            ),
         };
 
         match self.config.test {

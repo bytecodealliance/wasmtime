@@ -49,6 +49,7 @@
 use crate::component::*;
 use crate::prelude::*;
 use crate::{EntityIndex, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
+use cranelift_entity::packed_option::PackedOption;
 use serde_derive::{Deserialize, Serialize};
 
 /// Metadata as a result of compiling a component.
@@ -161,6 +162,10 @@ pub struct Component {
 
     /// WebAssembly type signature of all trampolines.
     pub trampolines: PrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
+
+    /// A map from a `UnsafeIntrinsic::index()` to that intrinsic's
+    /// module-interned type.
+    pub unsafe_intrinsics: [PackedOption<ModuleInternedTypeIndex>; UnsafeIntrinsic::len() as usize],
 
     /// The number of lowered host functions (maximum `LoweredIndex`) needed to
     /// instantiate this component.
@@ -382,6 +387,8 @@ pub enum CoreDef {
     /// This is a reference to a Cranelift-generated trampoline which is
     /// described in the `trampolines` array.
     Trampoline(TrampolineIndex),
+    /// An intrinsic for compile-time builtins.
+    UnsafeIntrinsic(UnsafeIntrinsic),
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
