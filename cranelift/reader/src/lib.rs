@@ -77,9 +77,9 @@ pub fn parse_sets_and_triple(flag_set: &[String], flag_triple: &str) -> Result<O
             isa::LookupError::SupportDisabled => {
                 anyhow::anyhow!("support for triple '{triple_name}' is disabled")
             }
-            isa::LookupError::Unsupported => anyhow::anyhow!(
-                "support for triple '{triple_name}' is not implemented yet"
-            ),
+            isa::LookupError::Unsupported => {
+                anyhow::anyhow!("support for triple '{triple_name}' is not implemented yet")
+            }
         })?;
 
         // Try to parse system-wide unknown settings as target-specific settings.

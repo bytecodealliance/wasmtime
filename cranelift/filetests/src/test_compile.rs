@@ -85,9 +85,7 @@ impl SubTest for TestCompile {
                     disas.disas().to_string()
                 }
                 _ => {
-                    let cs = isa
-                        .to_capstone()
-                        .map_err(|e| anyhow::format_err!("{e}"))?;
+                    let cs = isa.to_capstone().map_err(|e| anyhow::format_err!("{e}"))?;
                     compiled_code.disassemble(Some(&params), &cs)?
                 }
             };

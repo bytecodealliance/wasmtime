@@ -1411,9 +1411,7 @@ impl StoreOpaque {
         fn bump(slot: &mut usize, max: usize, amt: usize, desc: &str) -> Result<()> {
             let new = slot.saturating_add(amt);
             if new > max {
-                bail!(
-                    "resource limit exceeded: {desc} count too high at {new}"
-                );
+                bail!("resource limit exceeded: {desc} count too high at {new}");
             }
             *slot = new;
             Ok(())
