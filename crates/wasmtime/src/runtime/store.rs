@@ -2508,10 +2508,19 @@ at https://bytecodealliance.org/security.
     }
 
     #[cfg(feature = "gc")]
-    fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
+    pub(crate) fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
         let vmexnref = self.take_pending_exception()?;
         let mut nogc = AutoAssertNoGc::new(self);
         Some(Rooted::new(&mut nogc, vmexnref.into()))
+    }
+
+    #[cfg(feature = "debug")]
+    pub(crate) fn take_pending_exception_owned_rooted(
+        &mut self,
+    ) -> Option<crate::OwnedRooted<ExnRef>> {
+        let vmexnref = self.take_pending_exception()?;
+        let mut nogc = AutoAssertNoGc::new(self);
+        Some(crate::OwnedRooted::new(&mut nogc, vmexnref.into()))
     }
 
     #[cfg(feature = "gc")]
@@ -2711,6 +2720,12 @@ impl AsStoreOpaque for StoreOpaque {
 impl AsStoreOpaque for dyn VMStore {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque {
         self
+    }
+}
+
+impl<T: 'static> AsStoreOpaque for Store<T> {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        &mut self.inner.inner
     }
 }
 

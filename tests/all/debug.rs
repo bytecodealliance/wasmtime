@@ -166,3 +166,104 @@ async fn catch_trap() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn catch_host_error() -> anyhow::Result<()> {
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+        },
+        r#"
+    (module
+      (import "" "hostcall" (func))
+      (func (export "main") (param i32 i32)
+        call 0))
+    "#,
+    )?;
+    let host_func = Func::wrap(&mut store, || -> anyhow::Result<()> {
+        Err(anyhow::anyhow!("custom error"))
+    });
+    let instance = Instance::new_async(&mut store, &module, &[Extern::Func(host_func)]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [];
+    let mut future = func
+        .debug_call(&mut store, &[Val::I32(1), Val::I32(2)], &mut results[..])
+        .expect("debug session not supported");
+
+    assert!(matches!(
+        future.next().await,
+        Some(DebugStepResult::HostcallError)
+    ));
+
+    {
+        let mut stack = future.stack_values().expect("stack view is available");
+        assert!(!stack.done());
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 53);
+        assert_eq!(stack.num_locals(), 2);
+        assert_eq!(stack.local(0).unwrap_i32(), 1);
+        assert_eq!(stack.local(1).unwrap_i32(), 2);
+        stack.move_up();
+        assert!(stack.done());
+    }
+
+    assert!(matches!(
+        future.next().await,
+        Some(DebugStepResult::Error(_))
+    ));
+    assert!(future.next().await.is_none());
+    assert!(future.next().await.is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn catch_exception() -> anyhow::Result<()> {
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.async_support(true);
+        },
+        r#"
+    (module
+      (tag $t (param i32))
+      (func (export "main") (param i32)
+        (throw $t (i32.add (i32.const 1) (local.get 0)))))
+    "#,
+    )?;
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [];
+    let mut future = func
+        .debug_call(&mut store, &[Val::I32(100)], &mut results[..])
+        .expect("debug session not supported");
+
+    let next = future.next().await.expect("there should be a next event");
+    match next {
+        DebugStepResult::UncaughtException(e) => {
+            assert_eq!(e.field(&mut future, 0).unwrap().unwrap_i32(), 101);
+        }
+        _ => panic!("unexpected step result {next:?}"),
+    }
+
+    {
+        let mut stack = future.stack_values().expect("stack view is available");
+        assert!(!stack.done());
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
+        assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 44);
+        assert_eq!(stack.num_locals(), 1);
+        assert_eq!(stack.local(0).unwrap_i32(), 100);
+        assert_eq!(stack.num_stacks(), 1);
+        assert_eq!(stack.stack(0).unwrap_i32(), 101);
+        stack.move_up();
+        assert!(stack.done());
+    }
+
+    assert!(matches!(
+        future.next().await,
+        Some(DebugStepResult::Error(_))
+    ));
+    assert!(future.next().await.is_none());
+    assert!(future.next().await.is_none());
+
+    Ok(())
+}

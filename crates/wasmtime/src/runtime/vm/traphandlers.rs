@@ -860,6 +860,31 @@ impl CallThreadState {
             }
         };
 
+        // If we are in a debug session and are about to unwind due to
+        // a trap, suspend our fiber first to produce a debug-step
+        // result.
+        #[cfg(feature = "debug")]
+        if store.debugging_state.active
+            && let UnwindState::UnwindToHost {
+                reason: UnwindReason::Trap(trap),
+                ..
+            } = &state
+        {
+            let yield_ = match trap {
+                TrapReason::User(_) => crate::DebugYield::TrapHostError,
+                TrapReason::Jit { trap, .. } | TrapReason::Wasm(trap) => {
+                    crate::DebugYield::TrapHost(*trap)
+                }
+                TrapReason::Exception => crate::DebugYield::TrapHostException,
+            };
+            let old = store.debugging_state.debug_yield.replace(yield_);
+            assert!(old.is_none());
+            store.with_blocking(|_store, ctx| {
+                ctx.suspend(crate::fiber::StoreFiberYield::KeepStore)
+                    .unwrap();
+            });
+        }
+
         // Avoid unused-variable warning in non-exceptions/GC build.
         let _ = store;
 
@@ -1049,7 +1074,7 @@ impl CallThreadState {
                     .store_mut()
                     .debugging_state
                     .debug_yield
-                    .replace(crate::DebugYield::Trap(regs, trap));
+                    .replace(crate::DebugYield::TrapSignal(regs, trap));
                 assert!(old.is_none());
 
                 let handler = Handler {

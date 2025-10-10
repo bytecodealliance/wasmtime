@@ -1495,13 +1495,12 @@ impl Func {
     /// Returns `None` if debug instrumentation is not enabled for the
     /// engine containing this store.
     #[cfg(feature = "debug")] // N.B.: `debug` implies `async`.
-    pub fn debug_call<'a>(
+    pub fn debug_call<'a, T: Send + 'static>(
         &'a self,
-        mut store: impl AsContextMut<Data: Send> + 'a,
+        mut store: impl AsContextMut<Data = T> + 'a,
         params: &'a [Val],
         results: &'a mut [Val],
-    ) -> Option<crate::DebugSession<'a>> {
-        use crate::store::AsStoreOpaque;
+    ) -> Option<crate::DebugSession<'a, T>> {
         assert!(store.as_context_mut().engine().config().async_support);
         if !store.as_context_mut().engine().tunables().debug_guest {
             return None;
@@ -1512,7 +1511,7 @@ impl Func {
             !was_active,
             "Nested debugging sessions on one store are not supported"
         );
-        let raw_store = NonNull::from_mut(store.as_context_mut().0.as_store_opaque());
+        let raw_store = NonNull::from_mut(store.as_context_mut().0);
         let future = self.call_async(store, params, results);
         Some(crate::DebugSession::new(raw_store, future))
     }
