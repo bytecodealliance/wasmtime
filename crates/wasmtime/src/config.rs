@@ -1879,7 +1879,7 @@ impl Config {
             // This case requires special precondition for assertion in SerializedModule::to_bytes
             ModuleVersionStrategy::Custom(ref v) => {
                 if v.as_bytes().len() > 255 {
-                    bail!("custom module version cannot be more than 255 bytes: {}", v);
+                    bail!("custom module version cannot be more than 255 bytes: {v}");
                 }
             }
             _ => {}
@@ -2567,8 +2567,7 @@ impl Config {
                 .ensure_setting_unset_or_given("stack_switch_model", model)
             {
                 bail!(
-                    "compiler option 'stack_switch_model' must be set to '{}' on this platform",
-                    model
+                    "compiler option 'stack_switch_model' must be set to '{model}' on this platform"
                 );
             }
         }

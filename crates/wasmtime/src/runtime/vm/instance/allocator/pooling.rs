@@ -467,7 +467,7 @@ impl PoolingInstanceAllocator {
         // double-check we accounted for all the bytes
         assert_eq!(remaining, 0);
 
-        bail!("{}", message)
+        bail!("{message}")
     }
 
     #[cfg(feature = "component-model")]

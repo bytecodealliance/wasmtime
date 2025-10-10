@@ -29,7 +29,7 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<dyn SubTest>> {
         match option {
             TestOption::Flag("precise-output") => test.precise_output = true,
             TestOption::Flag("expect-fail") => test.expect_fail = true,
-            _ => anyhow::bail!("unknown option on {}", parsed),
+            _ => anyhow::bail!("unknown option on {parsed}"),
         }
     }
     Ok(Box::new(test))
@@ -87,7 +87,7 @@ impl SubTest for TestCompile {
                 _ => {
                     let cs = isa
                         .to_capstone()
-                        .map_err(|e| anyhow::format_err!("{}", e))?;
+                        .map_err(|e| anyhow::format_err!("{e}"))?;
                     compiled_code.disassemble(Some(&params), &cs)?
                 }
             };

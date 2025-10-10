@@ -1344,6 +1344,12 @@ criteria = "safe-to-deploy"
 delta = "0.24.1 -> 0.25.0"
 notes = "All minor changes, even a net reduction of `unsafe`."
 
+[[audits.addr2line]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.25.0 -> 0.25.1"
+notes = "Minor updates, looks like a minor bug fix, nothing awry."
+
 [[audits.adler]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1430,6 +1436,12 @@ criteria = "safe-to-run"
 version = "0.3.1"
 notes = "Nothing unusual; the most notable bit was a terminal escape sequence to make a random seed bold."
 
+[[audits.arbtest]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.3.1 -> 0.3.2"
+notes = "Minor new feature, nothing out of the ordinary."
+
 [[audits.arrayref]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -1447,6 +1459,12 @@ notes = """
 Well documented invariants, good assertions for those invariants in unsafe code,
 and tested with MIRI to boot. LGTM.
 """
+
+[[audits.atomic-waker]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.1.2"
+notes = "Contains `unsafe` code but it's well-documented and scoped to what it's intended to be doing. Otherwise a well-focused and straightforward crate."
 
 [[audits.atty]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1553,6 +1571,12 @@ who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 version = "3.11.1"
 notes = "I am the author of this crate."
+
+[[audits.bytes]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.10.0 -> 1.10.1"
+notes = "Minor bugfix release."
 
 [[audits.bytesize]]
 who = "Andrew Brown <andrew.brown@intel.com>"
@@ -1904,6 +1928,12 @@ criteria = "safe-to-deploy"
 delta = "1.2.19 -> 1.2.22"
 notes = "Minor changes, nothing related to `unsafe`"
 
+[[audits.cc]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.2.30 -> 1.2.41"
+notes = "This is a trusted rust-lang/rust crate"
+
 [[audits.cfg-if]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1936,6 +1966,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.2.3"
 notes = "No `unsafe` code in the crate and no usage of `std`"
+
+[[audits.cobs]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.3 -> 0.3.0"
+notes = "Nothing out of the ordinary, virtually no unsafe code."
 
 [[audits.codespan-reporting]]
 who = "Jamey Sharp <jsharp@fastly.com>"
@@ -2113,6 +2149,12 @@ criteria = "safe-to-deploy"
 version = "0.4.0"
 notes = "No `unsafe` code and only uses `std` in ways one would expect the crate to do so."
 
+[[audits.embedded-io]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.0 -> 0.6.1"
+notes = "Major updates, but almost all safe code. Lots of pruning/deletions, nothing out of the ordrinary."
+
 [[audits.errno]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -2207,6 +2249,12 @@ criteria = "safe-to-deploy"
 delta = "0.1.5 -> 0.1.6"
 notes = "Just a dependency version bump"
 
+[[audits.find-msvc-tools]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.0 -> 0.1.4"
+notes = "Nothing out of the ordinary for a crate finding MSVC tooling."
+
 [[audits.flate2]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -2221,6 +2269,12 @@ notes = """
 Minor updates, mostly a new changelog with many lines. No new `unsafe` code and
 mostly just updating Rust idioms.
 """
+
+[[audits.flate2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.1.0 -> 1.1.4"
+notes = "Minor amounts of unsafe code but what you would expect from interfacing with FFI libraries. Otherwise nothing major."
 
 [[audits.foldhash]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -2420,6 +2474,12 @@ criteria = "safe-to-deploy"
 delta = "0.31.1 -> 0.32.0"
 notes = "Ever more DWARF to parse, but also no new `unsafe` and everything looks like gimli."
 
+[[audits.gimli]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.32.0 -> 0.32.3"
+notes = "Ever more dwarf, it never ends! (nothing out of the ordinary)"
+
 [[audits.glob]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -2470,6 +2530,12 @@ notes = "Minor changes for a `no_std` upgrade but otherwise everything looks as 
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.2.0 -> 0.3.0"
+
+[[audits.hermit-abi]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.9 -> 0.5.2"
+notes = "API updates and looks like libc, nothing new here."
 
 [[audits.home]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -2903,6 +2969,12 @@ criteria = "safe-to-deploy"
 delta = "0.4.22 -> 0.4.27"
 notes = "Lots of minor updates to macros and such, nothing touching `unsafe`"
 
+[[audits.log]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.27 -> 0.4.28"
+notes = "Minor doc updates and lots new tests, nothing out of the ordinary."
+
 [[audits.mach2]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -2913,6 +2985,12 @@ notes = "It does unsafe FFI bindings, as expected. I didn't check the FFI bindin
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.1.0"
+
+[[audits.matchers]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.0 -> 0.2.0"
+notes = "Some unsafe code, but not more than before. Nothing awry."
 
 [[audits.memfd]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -2944,6 +3022,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.6.3 -> 0.6.4"
 notes = "This commit only updated the dependency `rustix`, so same as before."
+
+[[audits.memfd]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.6.4 -> 0.6.5"
+notes = "Just updating dependencies"
 
 [[audits.memoffset]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3041,6 +3125,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.46.0"
 notes = "one use of unsafe to call windows specific api to get console handle."
+
+[[audits.nu-ansi-term]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.46.0 -> 0.50.1"
+notes = "Lots of stylistic/rust-related chanegs, plus new features, but nothing out of the ordrinary."
 
 [[audits.num-traits]]
 who = "Andrew Brown <andrew.brown@intel.com>"
@@ -3305,6 +3395,12 @@ notes = """
 I've audited the unsafe code to do what it looks like it's doing. Otherwise the
 crate is a standard serializer/deserializer crate.
 """
+
+[[audits.postcard]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.8 -> 1.1.3"
+notes = "Substantial updates, but nothing out of the ordinary one would expect from a serialization crate. Minor `unsafe` updates, but nothing major from what was already there."
 
 [[audits.pretty_env_logger]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3608,6 +3704,12 @@ criteria = "safe-to-deploy"
 delta = "1.11.0 -> 1.13.2"
 notes = "Mostly minor updates, the one semi-substantial update looks good."
 
+[[audits.smallvec]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.13.2 -> 1.14.0"
+notes = "Minor new feature, nothing out of the ordinary."
+
 [[audits.socket2]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -3618,6 +3720,12 @@ notes = "Minor OS compat updates but otherwise nothing major here."
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.4.9 -> 0.4.4"
+
+[[audits.socket2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.5.7 -> 0.6.0"
+notes = "Lots of cfg changes and such but nothing out of the ordinary."
 
 [[audits.spin]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3716,6 +3824,12 @@ criteria = "safe-to-deploy"
 delta = "3.20.0 -> 3.21.0"
 notes = "Only minor manifest/CI changes."
 
+[[audits.tempfile]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "3.21.0 -> 3.23.0"
+notes = "Doc/test/platform updates, nothing out of the ordinary."
+
 [[audits.terminal_size]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -3751,11 +3865,23 @@ criteria = "safe-to-run"
 delta = "0.2.11 -> 0.2.16"
 notes = "Crate implementation was moved to a `*-macros` crate, crate is very small as a result."
 
+[[audits.test-log]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.2.16 -> 0.2.18"
+notes = "Minor updates, nothing changing unsafe"
+
 [[audits.test-log-macros]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
 version = "0.2.16"
 notes = "Simple procedural macro copied from its previous source."
+
+[[audits.test-log-macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.2.16 -> 0.2.18"
+notes = "Standard macro changes, nothing out of place"
 
 [[audits.thread_local]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -3848,6 +3974,12 @@ criteria = "safe-to-deploy"
 delta = "0.1.21 -> 0.1.26"
 notes = "This range notably updated `syn` to 2.x.x and otherwise adds a few features here and there but nothing out of the ordering for a procedural macro."
 
+[[audits.tracing-attributes]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.28 -> 0.1.30"
+notes = "Few code changes, a pretty minor update."
+
 [[audits.tracing-core]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -3857,6 +3989,12 @@ This is a relatively minor set of releases with minor refactorings and bug
 fixes. Nothing fundamental was added in these changes.
 """
 
+[[audits.tracing-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.33 -> 0.1.34"
+notes = "Mostly just an update with Rust stylistic conventions changing. Nothing awry."
+
 [[audits.tracing-log]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -3865,6 +4003,12 @@ notes = """
 This is a standard adapter between the `log` ecosystem and the `tracing`
 ecosystem. There's one `unsafe` block in this crate and it's well-scoped.
 """
+
+[[audits.tracing-log]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.3 -> 0.2.0"
+notes = "Nothing out of the ordinary, a typical major version update and nothing awry."
 
 [[audits.tracing-subscriber]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -5119,6 +5263,12 @@ criteria = "safe-to-deploy"
 delta = "1.2.0 -> 1.3.1"
 notes = "Minor changes to MacOS-specific code."
 
+[[audits.xattr]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.3.1 -> 1.6.1"
+notes = "Refactorings and minor updates, nothing out of place."
+
 [[audits.yoke]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -5205,7 +5355,7 @@ end = "2025-12-02"
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-07-23"
-end = "2024-07-06"
+end = "2026-10-10"
 
 [[trusted.backtrace]]
 criteria = "safe-to-deploy"
@@ -5236,6 +5386,12 @@ criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-06-09"
 end = "2024-07-15"
+
+[[trusted.bytes]]
+criteria = "safe-to-deploy"
+user-id = 359 # Sean McArthur (seanmonstar)
+start = "2019-11-27"
+end = "2026-10-10"
 
 [[trusted.bytes]]
 criteria = "safe-to-deploy"
@@ -5385,7 +5541,7 @@ end = "2026-10-08"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2022-01-21"
-end = "2024-07-14"
+end = "2026-10-10"
 
 [[trusted.filecheck]]
 criteria = "safe-to-deploy"
@@ -5399,6 +5555,12 @@ user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-04-23"
 end = "2025-02-15"
 
+[[trusted.find-msvc-tools]]
+criteria = "safe-to-deploy"
+user-id = 539 # Josh Stone (cuviper)
+start = "2025-08-29"
+end = "2026-10-10"
+
 [[trusted.flate2]]
 criteria = "safe-to-deploy"
 user-id = 4333 # Josh Triplett (joshtriplett)
@@ -5409,13 +5571,49 @@ end = "2025-02-15"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-09-15"
-end = "2024-07-14"
+end = "2026-10-10"
+
+[[trusted.h2]]
+criteria = "safe-to-deploy"
+user-id = 359 # Sean McArthur (seanmonstar)
+start = "2019-03-13"
+end = "2026-10-10"
 
 [[trusted.hashbrown]]
 criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2019-04-02"
 end = "2025-12-02"
+
+[[trusted.http]]
+criteria = "safe-to-deploy"
+user-id = 359 # Sean McArthur (seanmonstar)
+start = "2019-04-05"
+end = "2026-10-10"
+
+[[trusted.http-body]]
+criteria = "safe-to-deploy"
+user-id = 359 # Sean McArthur (seanmonstar)
+start = "2019-10-01"
+end = "2026-10-10"
+
+[[trusted.http-body-util]]
+criteria = "safe-to-deploy"
+user-id = 359 # Sean McArthur (seanmonstar)
+start = "2022-10-25"
+end = "2026-10-10"
+
+[[trusted.httparse]]
+criteria = "safe-to-deploy"
+user-id = 359 # Sean McArthur (seanmonstar)
+start = "2019-07-03"
+end = "2026-10-10"
+
+[[trusted.hyper]]
+criteria = "safe-to-deploy"
+user-id = 359 # Sean McArthur (seanmonstar)
+start = "2019-03-01"
+end = "2026-10-10"
 
 [[trusted.indexmap]]
 criteria = "safe-to-deploy"
@@ -5439,7 +5637,7 @@ end = "2024-07-14"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2022-01-22"
-end = "2024-07-14"
+end = "2026-10-10"
 
 [[trusted.is_terminal_polyfill]]
 criteria = "safe-to-deploy"
@@ -5452,6 +5650,18 @@ criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-05-02"
 end = "2024-07-06"
+
+[[trusted.jiff]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2024-02-17"
+end = "2026-10-10"
+
+[[trusted.jiff-static]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2025-03-06"
+end = "2026-10-10"
 
 [[trusted.jobserver]]
 criteria = "safe-to-deploy"
@@ -5471,11 +5681,23 @@ user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2021-01-27"
 end = "2024-07-06"
 
+[[trusted.libc]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2024-08-15"
+end = "2026-10-10"
+
 [[trusted.libm]]
 criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2022-02-06"
 end = "2024-07-06"
+
+[[trusted.libm]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2024-10-26"
+end = "2026-10-10"
 
 [[trusted.linux-raw-sys]]
 criteria = "safe-to-deploy"
@@ -5493,7 +5715,13 @@ end = "2024-07-06"
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-07-07"
-end = "2024-07-15"
+end = "2026-10-10"
+
+[[trusted.num_cpus]]
+criteria = "safe-to-deploy"
+user-id = 359 # Sean McArthur (seanmonstar)
+start = "2019-06-10"
+end = "2026-10-10"
 
 [[trusted.once_cell_polyfill]]
 criteria = "safe-to-deploy"
@@ -5565,7 +5793,7 @@ end = "2024-07-15"
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-02-25"
-end = "2024-07-15"
+end = "2026-10-10"
 
 [[trusted.regex-syntax]]
 criteria = "safe-to-deploy"
@@ -5597,11 +5825,23 @@ user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2020-02-16"
 end = "2024-07-06"
 
+[[trusted.semver]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2021-05-25"
+end = "2026-10-10"
+
 [[trusted.serde]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-03-01"
 end = "2025-12-02"
+
+[[trusted.serde_core]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2025-09-13"
+end = "2026-10-10"
 
 [[trusted.serde_derive]]
 criteria = "safe-to-deploy"
@@ -5619,13 +5859,19 @@ end = "2026-03-19"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2023-01-20"
-end = "2025-02-12"
+end = "2026-10-10"
 
 [[trusted.serde_yaml]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-05-02"
 end = "2026-10-08"
+
+[[trusted.slab]]
+criteria = "safe-to-deploy"
+user-id = 6741 # Alice Ryhl (Darksonn)
+start = "2021-10-13"
+end = "2026-10-10"
 
 [[trusted.socket2]]
 criteria = "safe-to-deploy"
@@ -5643,7 +5889,7 @@ end = "2025-12-02"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-10-27"
-end = "2024-07-14"
+end = "2026-10-10"
 
 [[trusted.tar]]
 criteria = "safe-to-deploy"
@@ -5681,6 +5927,18 @@ user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-10-09"
 end = "2025-11-13"
 
+[[trusted.tokio]]
+criteria = "safe-to-deploy"
+user-id = 6741 # Alice Ryhl (Darksonn)
+start = "2020-12-25"
+end = "2026-10-10"
+
+[[trusted.tokio-util]]
+criteria = "safe-to-deploy"
+user-id = 6741 # Alice Ryhl (Darksonn)
+start = "2021-01-12"
+end = "2026-10-10"
+
 [[trusted.toml]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
@@ -5691,19 +5949,31 @@ end = "2024-07-06"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2022-12-14"
-end = "2025-02-12"
+end = "2026-10-10"
 
 [[trusted.toml_datetime]]
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2022-10-21"
-end = "2025-02-12"
+end = "2026-10-10"
 
 [[trusted.toml_edit]]
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2021-09-13"
 end = "2025-02-12"
+
+[[trusted.toml_parser]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2025-07-08"
+end = "2026-10-10"
+
+[[trusted.toml_writer]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2025-07-08"
+end = "2026-10-10"
 
 [[trusted.unicode-ident]]
 criteria = "safe-to-deploy"
@@ -5913,7 +6183,7 @@ end = "2026-10-08"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2023-02-22"
-end = "2025-02-12"
+end = "2026-10-10"
 
 [[trusted.winx]]
 criteria = "safe-to-deploy"

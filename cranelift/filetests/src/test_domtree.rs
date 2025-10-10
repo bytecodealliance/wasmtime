@@ -28,7 +28,7 @@ struct TestDomtree;
 pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "domtree");
     if !parsed.options.is_empty() {
-        anyhow::bail!("No options allowed on {}", parsed)
+        anyhow::bail!("No options allowed on {parsed}")
     }
     Ok(Box::new(TestDomtree))
 }
@@ -61,36 +61,31 @@ impl SubTest for TestDomtree {
 
                 let expected_block = match func.layout.inst_block(inst) {
                     Some(expected_block) => expected_block,
-                    _ => anyhow::bail!("instruction {} is not in layout", inst),
+                    _ => anyhow::bail!("instruction {inst} is not in layout"),
                 };
                 for src_block in tail.split_whitespace() {
                     let block = match context.details.map.lookup_str(src_block) {
                         Some(AnyEntity::Block(block)) => block,
-                        _ => anyhow::bail!("expected defined block, got {}", src_block),
+                        _ => anyhow::bail!("expected defined block, got {src_block}"),
                     };
 
                     // Annotations say that `expected_block` is the idom of `block`.
                     if expected.insert(block, expected_block).is_some() {
-                        anyhow::bail!("multiple dominators for {}", src_block);
+                        anyhow::bail!("multiple dominators for {src_block}");
                     }
 
                     // Compare to computed domtree.
                     match domtree.idom(block) {
                         Some(got_block) if got_block != expected_block => {
                             anyhow::bail!(
-                                "mismatching idoms for {}:\n\
-                                 want: {}, got: {}",
-                                src_block,
-                                inst,
-                                got_block
+                                "mismatching idoms for {src_block}:\n\
+                                 want: {inst}, got: {got_block}"
                             );
                         }
                         None => {
                             anyhow::bail!(
-                                "mismatching idoms for {}:\n\
-                                 want: {}, got: unreachable",
-                                src_block,
-                                inst
+                                "mismatching idoms for {src_block}:\n\
+                                 want: {inst}, got: unreachable"
                             );
                         }
                         _ => {}
@@ -109,10 +104,8 @@ impl SubTest for TestDomtree {
         {
             if let Some(got_block) = domtree.idom(block) {
                 anyhow::bail!(
-                    "mismatching idoms for renumbered {}:\n\
-                     want: unreachable, got: {}",
-                    block,
-                    got_block
+                    "mismatching idoms for renumbered {block}:\n\
+                     want: unreachable, got: {got_block}"
                 );
             }
         }

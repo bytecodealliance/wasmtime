@@ -41,7 +41,7 @@ impl DiffEngine for SpecInterpreter {
 
     fn instantiate(&mut self, wasm: &[u8]) -> Result<Box<dyn DiffInstance>> {
         let instance = wasm_spec_interpreter::instantiate(wasm)
-            .map_err(|e| anyhow!("failed to instantiate in spec interpreter: {}", e))?;
+            .map_err(|e| anyhow!("failed to instantiate in spec interpreter: {e}"))?;
         Ok(Box::new(SpecInstance { instance }))
     }
 

@@ -75,11 +75,10 @@ pub fn parse_sets_and_triple(flag_set: &[String], flag_triple: &str) -> Result<O
 
         let mut isa_builder = isa::lookup(triple).map_err(|err| match err {
             isa::LookupError::SupportDisabled => {
-                anyhow::anyhow!("support for triple '{}' is disabled", triple_name)
+                anyhow::anyhow!("support for triple '{triple_name}' is disabled")
             }
             isa::LookupError::Unsupported => anyhow::anyhow!(
-                "support for triple '{}' is not implemented yet",
-                triple_name
+                "support for triple '{triple_name}' is not implemented yet"
             ),
         })?;
 

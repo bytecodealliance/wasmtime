@@ -464,8 +464,7 @@ impl WasmtimeOptionValue for wasmtime::OptLevel {
             "2" => Ok(wasmtime::OptLevel::Speed),
             "s" => Ok(wasmtime::OptLevel::SpeedAndSize),
             other => bail!(
-                "unknown optimization level `{}`, only 0,1,2,s accepted",
-                other
+                "unknown optimization level `{other}`, only 0,1,2,s accepted"
             ),
         }
     }
@@ -487,8 +486,7 @@ impl WasmtimeOptionValue for wasmtime::RegallocAlgorithm {
             "backtracking" => Ok(wasmtime::RegallocAlgorithm::Backtracking),
             "single-pass" => Ok(wasmtime::RegallocAlgorithm::SinglePass),
             other => bail!(
-                "unknown regalloc algorithm`{}`, only backtracking,single-pass accepted",
-                other
+                "unknown regalloc algorithm`{other}`, only backtracking,single-pass accepted"
             ),
         }
     }

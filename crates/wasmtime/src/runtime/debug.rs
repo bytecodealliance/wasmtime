@@ -81,14 +81,14 @@ fn ensure_supported_elf_format(bytes: &[u8]) -> Result<Endianness, Error> {
     let kind = match object::FileKind::parse(bytes) {
         Ok(file) => file,
         Err(err) => {
-            bail!("Failed to parse file: {}", err);
+            bail!("Failed to parse file: {err}");
         }
     };
     let header = match kind {
         object::FileKind::Elf64 => match object::elf::FileHeader64::<Endianness>::parse(bytes) {
             Ok(header) => header,
             Err(err) => {
-                bail!("Unsupported ELF file: {}", err);
+                bail!("Unsupported ELF file: {err}");
             }
         },
         _ => {
@@ -103,7 +103,7 @@ fn ensure_supported_elf_format(bytes: &[u8]) -> Result<Endianness, Error> {
         EM_S390 => (),
         EM_RISCV => (),
         machine => {
-            bail!("Unsupported ELF target machine: {:x}", machine);
+            bail!("Unsupported ELF target machine: {machine:x}");
         }
     }
     ensure!(

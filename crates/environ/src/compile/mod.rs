@@ -362,7 +362,7 @@ pub trait Compiler: Send + Sync {
             Pulley32 | Pulley32be => (Architecture::Riscv64, obj::EF_WASMTIME_PULLEY32),
             Pulley64 | Pulley64be => (Architecture::Riscv64, obj::EF_WASMTIME_PULLEY64),
             architecture => {
-                anyhow::bail!("target architecture {:?} is unsupported", architecture,);
+                anyhow::bail!("target architecture {architecture:?} is unsupported");
             }
         };
         let mut obj = Object::new(

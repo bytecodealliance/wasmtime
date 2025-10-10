@@ -1412,9 +1412,7 @@ impl StoreOpaque {
             let new = slot.saturating_add(amt);
             if new > max {
                 bail!(
-                    "resource limit exceeded: {} count too high at {}",
-                    desc,
-                    new
+                    "resource limit exceeded: {desc} count too high at {new}"
                 );
             }
             *slot = new;
