@@ -109,8 +109,8 @@ pub enum Trap {
     AsyncDeadlock,
 
     /// When the `component-model` feature is enabled this trap represents a
-    /// scenario where one component tried to call an import at a time when it
-    /// was not legal to do so.
+    /// scenario where a component instance tried to call an import or intrinsic
+    /// when it wasn't allowed to, e.g. from a post-return function.
     CannotLeaveComponent,
     // if adding a variant here be sure to update the `check!` macro below
 }
