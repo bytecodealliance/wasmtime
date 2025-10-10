@@ -276,15 +276,22 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.anyhow]]
-version = "1.0.93"
-when = "2024-11-06"
+version = "1.0.100"
+when = "2025-09-19"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
+[[publisher.arbitrary]]
+version = "1.4.2"
+when = "2025-08-14"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
+
 [[publisher.async-trait]]
-version = "0.1.71"
-when = "2023-07-05"
+version = "0.1.89"
+when = "2025-08-14"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -317,8 +324,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.bytes]]
-version = "1.5.0"
-when = "2023-09-07"
+version = "1.10.0"
+when = "2025-02-03"
 user-id = 6741
 user-login = "Darksonn"
 user-name = "Alice Ryhl"
@@ -612,8 +619,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.fd-lock]]
-version = "4.0.2"
-when = "2023-12-29"
+version = "4.0.4"
+when = "2025-03-10"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -632,6 +639,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.find-msvc-tools]]
+version = "0.1.0"
+when = "2025-08-29"
+user-id = 539
+user-login = "cuviper"
+user-name = "Josh Stone"
+
 [[publisher.flate2]]
 version = "1.0.26"
 when = "2023-04-28"
@@ -640,11 +654,18 @@ user-login = "joshtriplett"
 user-name = "Josh Triplett"
 
 [[publisher.fs-set-times]]
-version = "0.20.1"
-when = "2023-12-01"
+version = "0.20.3"
+when = "2025-03-10"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
+
+[[publisher.h2]]
+version = "0.4.4"
+when = "2024-04-03"
+user-id = 359
+user-login = "seanmonstar"
+user-name = "Sean McArthur"
 
 [[publisher.hashbrown]]
 version = "0.15.2"
@@ -653,9 +674,44 @@ user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
+[[publisher.http]]
+version = "1.3.1"
+when = "2025-03-11"
+user-id = 359
+user-login = "seanmonstar"
+user-name = "Sean McArthur"
+
+[[publisher.http-body]]
+version = "1.0.1"
+when = "2024-07-12"
+user-id = 359
+user-login = "seanmonstar"
+user-name = "Sean McArthur"
+
+[[publisher.http-body-util]]
+version = "0.1.3"
+when = "2025-03-11"
+user-id = 359
+user-login = "seanmonstar"
+user-name = "Sean McArthur"
+
+[[publisher.httparse]]
+version = "1.10.1"
+when = "2025-03-03"
+user-id = 359
+user-login = "seanmonstar"
+user-name = "Sean McArthur"
+
+[[publisher.hyper]]
+version = "1.7.0"
+when = "2025-08-18"
+user-id = 359
+user-login = "seanmonstar"
+user-name = "Sean McArthur"
+
 [[publisher.indexmap]]
-version = "2.7.0"
-when = "2024-12-01"
+version = "2.11.4"
+when = "2025-09-18"
 user-id = 539
 user-login = "cuviper"
 user-name = "Josh Stone"
@@ -675,8 +731,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.is-terminal]]
-version = "0.4.10"
-when = "2023-12-28"
+version = "0.4.16"
+when = "2025-03-07"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -716,18 +772,16 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.libc]]
-version = "0.2.146"
-when = "2023-06-06"
-user-id = 2915
-user-login = "Amanieu"
-user-name = "Amanieu d'Antras"
+version = "0.2.177"
+when = "2025-10-09"
+user-id = 55123
+user-login = "rust-lang-owner"
 
 [[publisher.libm]]
-version = "0.2.8"
-when = "2023-10-06"
-user-id = 2915
-user-login = "Amanieu"
-user-name = "Amanieu d'Antras"
+version = "0.2.15"
+when = "2025-05-06"
+user-id = 55123
+user-login = "rust-lang-owner"
 
 [[publisher.linux-raw-sys]]
 version = "0.4.14"
@@ -744,11 +798,18 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.memchr]]
-version = "2.5.0"
-when = "2022-04-30"
+version = "2.7.6"
+when = "2025-09-25"
 user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
+
+[[publisher.num_cpus]]
+version = "1.17.0"
+when = "2025-05-30"
+user-id = 359
+user-login = "seanmonstar"
+user-name = "Sean McArthur"
 
 [[publisher.once_cell_polyfill]]
 version = "1.70.1"
@@ -812,15 +873,15 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.regex-automata]]
-version = "0.1.10"
-when = "2021-06-01"
+version = "0.3.3"
+when = "2023-07-12"
 user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.regex-automata]]
-version = "0.3.3"
-when = "2023-07-12"
+version = "0.4.11"
+when = "2025-09-25"
 user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
@@ -874,16 +935,30 @@ user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
+[[publisher.semver]]
+version = "1.0.27"
+when = "2025-09-14"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
 [[publisher.serde]]
-version = "1.0.215"
-when = "2024-11-11"
+version = "1.0.228"
+when = "2025-09-27"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.serde_core]]
+version = "1.0.228"
+when = "2025-09-27"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.serde_derive]]
-version = "1.0.215"
-when = "2024-11-11"
+version = "1.0.228"
+when = "2025-09-27"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -896,8 +971,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.serde_spanned]]
-version = "0.6.5"
-when = "2023-12-19"
+version = "1.0.3"
+when = "2025-10-09"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -908,6 +983,13 @@ when = "2024-03-25"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
+
+[[publisher.slab]]
+version = "0.4.11"
+when = "2025-08-08"
+user-id = 6741
+user-login = "Darksonn"
+user-name = "Alice Ryhl"
 
 [[publisher.syn]]
 version = "1.0.92"
@@ -924,8 +1006,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.system-interface]]
-version = "0.27.1"
-when = "2024-02-13"
+version = "0.27.3"
+when = "2024-12-04"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -959,8 +1041,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.thiserror]]
-version = "2.0.12"
-when = "2025-03-03"
+version = "2.0.17"
+when = "2025-09-28"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -973,29 +1055,50 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.thiserror-impl]]
-version = "2.0.12"
-when = "2025-03-03"
+version = "2.0.17"
+when = "2025-09-28"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
+[[publisher.tokio]]
+version = "1.47.1"
+when = "2025-08-01"
+user-id = 6741
+user-login = "Darksonn"
+user-name = "Alice Ryhl"
+
+[[publisher.tokio-util]]
+version = "0.7.16"
+when = "2025-08-03"
+user-id = 6741
+user-login = "Darksonn"
+user-name = "Alice Ryhl"
+
 [[publisher.toml]]
-version = "0.8.10"
-when = "2024-02-05"
+version = "0.9.8"
+when = "2025-10-09"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.toml_datetime]]
-version = "0.6.5"
-when = "2023-10-23"
+version = "0.7.3"
+when = "2025-10-09"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
-[[publisher.toml_edit]]
-version = "0.22.4"
-when = "2024-02-06"
+[[publisher.toml_parser]]
+version = "1.0.4"
+when = "2025-10-09"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.toml_writer]]
+version = "1.0.4"
+when = "2025-10-09"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -1050,8 +1153,8 @@ user-login = "hsivonen"
 user-name = "Henri Sivonen"
 
 [[publisher.walkdir]]
-version = "2.3.3"
-when = "2023-03-16"
+version = "2.5.0"
+when = "2024-03-01"
 user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
@@ -1574,8 +1677,8 @@ user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
 [[publisher.winnow]]
-version = "0.5.39"
-when = "2024-02-06"
+version = "0.7.13"
+when = "2025-08-22"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -1652,6 +1755,12 @@ notes = "No notable changes"
 who = "Johan Andersson <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"
 delta = "0.3.0 -> 0.4.0"
+notes = "No unsafe usage or ambient capabilities"
+
+[[audits.embark-studios.audits.similar]]
+who = "Johan Andersson <opensource@embark-studios.com>"
+criteria = "safe-to-deploy"
+version = "2.2.1"
 notes = "No unsafe usage or ambient capabilities"
 
 [[audits.embark-studios.audits.strum]]
@@ -1812,6 +1921,16 @@ who = "Tim Geoghegan <timg@divviup.org>"
 criteria = "safe-to-run"
 delta = "0.5.1 -> 0.6.0"
 notes = "No new unsafe code and nothing suspicious in build scripts."
+
+[[audits.isrg.audits.criterion]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-run"
+delta = "0.6.0 -> 0.7.0"
+
+[[audits.isrg.audits.criterion-plot]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-run"
+delta = "0.5.0 -> 0.6.0"
 
 [[audits.isrg.audits.crunchy]]
 who = "David Cook <dcook@divviup.org>"
@@ -2091,6 +2210,18 @@ criteria = "safe-to-deploy"
 delta = "1.2.11 -> 1.2.12"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.cc]]
+who = "Erich Gubler <erichdongubler@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "1.2.12 -> 1.2.16"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.cc]]
+who = "Erich Gubler <erichdongubler@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "1.2.16 -> 1.2.30"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.core-foundation]]
 who = "Teodor Tanasoaia <ttanasoaia@mozilla.com>"
 criteria = "safe-to-deploy"
@@ -2232,6 +2363,12 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Valentin Gosu <valentin.gosu@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "1.2.0 -> 1.2.1"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.form_urlencoded]]
+who = "edgul <ed.guloien@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "1.2.1 -> 1.2.2"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.futures-core]]
@@ -2469,6 +2606,12 @@ criteria = "safe-to-deploy"
 delta = "1.0.2 -> 1.0.3"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.idna]]
+who = "edgul <ed.guloien@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.3 -> 1.1.0"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.idna_adapter]]
 who = "Valentin Gosu <valentin.gosu@gmail.com>"
 criteria = "safe-to-deploy"
@@ -2487,18 +2630,6 @@ criteria = "safe-to-deploy"
 version = "1.4.0"
 notes = "I have read over the macros, and audited the unsafe code."
 aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.libc]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "0.2.147 -> 0.2.148"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.libc]]
-who = "Erich Gubler <erichdongubler@gmail.com>"
-criteria = "safe-to-deploy"
-delta = "0.2.171 -> 0.2.176"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.libloading]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
@@ -2580,18 +2711,6 @@ version = "0.1.45"
 notes = "All code written or reviewed by Josh Stone."
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
-[[audits.mozilla.audits.num_cpus]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "1.13.1 -> 1.14.0"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.num_cpus]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "1.14.0 -> 1.15.0"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
 [[audits.mozilla.audits.once_cell]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
@@ -2620,6 +2739,12 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Valentin Gosu <valentin.gosu@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "2.3.0 -> 2.3.1"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.percent-encoding]]
+who = "edgul <ed.guloien@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "2.3.1 -> 2.3.2"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.pkg-config]]
@@ -2706,17 +2831,13 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 [[audits.mozilla.audits.similar]]
 who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"
-version = "2.2.0"
-notes = """
-Algorithm crate implemented entirely in safe rust. Does no platform-specific
-logic, only implementing diffing and string manipulation algorithms.
-"""
+delta = "2.2.1 -> 2.7.0"
 aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
 
-[[audits.mozilla.audits.slab]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
+[[audits.mozilla.audits.smallvec]]
+who = "Erich Gubler <erichdongubler@gmail.com>"
 criteria = "safe-to-deploy"
-delta = "0.4.6 -> 0.4.7"
+delta = "1.14.0 -> 1.15.1"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.socket2]]
@@ -2846,6 +2967,54 @@ dependencies make sense, and no side-effectful std functions are used.
 """
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.tracing]]
+who = "Mark Hammond <mhammond@skippinet.com.au>"
+criteria = "safe-to-deploy"
+delta = "0.1.37 -> 0.1.41"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.tracing-attributes]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "0.1.24"
+notes = "No unsafe code, macros extensively tested and produce reasonable code."
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.tracing-attributes]]
+who = "Mark Hammond <mhammond@skippinet.com.au>"
+criteria = "safe-to-deploy"
+delta = "0.1.24 -> 0.1.28"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.tracing-core]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "0.1.30"
+notes = """
+Most unsafe code is in implementing non-std sync primitives. Unsafe impls are
+logically correct and justified in comments, and unsafe code is sound and
+justified in comments.
+"""
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.tracing-core]]
+who = "Mark Hammond <mhammond@skippinet.com.au>"
+criteria = "safe-to-deploy"
+delta = "0.1.30 -> 0.1.33"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.tracing-subscriber]]
+who = "Mark Hammond <mhammond@skippinet.com.au>"
+criteria = "safe-to-deploy"
+delta = "0.3.17 -> 0.3.19"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.tracing-subscriber]]
+who = "Mark Hammond <mhammond@skippinet.com.au>"
+criteria = "safe-to-deploy"
+delta = "0.3.19 -> 0.3.20"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.url]]
 who = "Valentin Gosu <valentin.gosu@gmail.com>"
 criteria = "safe-to-deploy"
@@ -2874,6 +3043,12 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Valentin Gosu <valentin.gosu@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "2.5.1 -> 2.5.4"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.url]]
+who = "edgul <ed.guloien@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "2.5.4 -> 2.5.7"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.utf16_iter]]

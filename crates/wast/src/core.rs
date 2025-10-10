@@ -44,7 +44,7 @@ pub fn val(ctx: &mut WastContext, v: &CoreConst) -> Result<Val> {
             Val::AnyRef(Some(x))
         }
         NullRef => Val::AnyRef(None),
-        other => bail!("couldn't convert {:?} to a runtime value", other),
+        other => bail!("couldn't convert {other:?} to a runtime value"),
     })
 }
 
@@ -217,10 +217,8 @@ where
         Ok(())
     } else {
         bail!(
-            "expected {:18} / {0:#018x}\n\
-             actual   {:18} / {1:#018x}",
-            expected,
-            actual
+            "expected {expected:18} / {expected:#018x}\n\
+             actual   {actual:18} / {actual:#018x}"
         )
     }
 }
@@ -379,13 +377,11 @@ fn match_v128(actual: u128, expected: &V128) -> Result<()> {
                 return Ok(());
             }
             bail!(
-                "expected {:4?}\n\
-                 actual   {:4?}\n\
+                "expected {expected:4?}\n\
+                 actual   {actual:4?}\n\
                  \n\
-                 expected (hex) {0:02x?}\n\
-                 actual (hex)   {1:02x?}",
-                expected,
-                actual,
+                 expected (hex) {expected:02x?}\n\
+                 actual (hex)   {actual:02x?}",
             )
         }
         V128::I16 { value } => {
@@ -403,13 +399,11 @@ fn match_v128(actual: u128, expected: &V128) -> Result<()> {
                 return Ok(());
             }
             bail!(
-                "expected {:6?}\n\
-                 actual   {:6?}\n\
+                "expected {expected:6?}\n\
+                 actual   {actual:6?}\n\
                  \n\
-                 expected (hex) {0:04x?}\n\
-                 actual (hex)   {1:04x?}",
-                expected,
-                actual,
+                 expected (hex) {expected:04x?}\n\
+                 actual (hex)   {actual:04x?}",
             )
         }
         V128::I32 { value } => {
@@ -423,13 +417,11 @@ fn match_v128(actual: u128, expected: &V128) -> Result<()> {
                 return Ok(());
             }
             bail!(
-                "expected {:11?}\n\
-                 actual   {:11?}\n\
+                "expected {expected:11?}\n\
+                 actual   {actual:11?}\n\
                  \n\
-                 expected (hex) {0:08x?}\n\
-                 actual (hex)   {1:08x?}",
-                expected,
-                actual,
+                 expected (hex) {expected:08x?}\n\
+                 actual (hex)   {actual:08x?}",
             )
         }
         V128::I64 { value } => {
@@ -441,13 +433,11 @@ fn match_v128(actual: u128, expected: &V128) -> Result<()> {
                 return Ok(());
             }
             bail!(
-                "expected {:20?}\n\
-                 actual   {:20?}\n\
+                "expected {expected:20?}\n\
+                 actual   {actual:20?}\n\
                  \n\
-                 expected (hex) {0:016x?}\n\
-                 actual (hex)   {1:016x?}",
-                expected,
-                actual,
+                 expected (hex) {expected:016x?}\n\
+                 actual (hex)   {actual:016x?}",
             )
         }
         V128::F32 { value } => {

@@ -68,7 +68,7 @@ pub fn run(options: &Options) -> Result<()> {
     match errors {
         0 => Ok(()),
         1 => anyhow::bail!("1 failure"),
-        n => anyhow::bail!("{} failures", n),
+        n => anyhow::bail!("{n} failures"),
     }
 }
 
@@ -97,7 +97,7 @@ fn run_file_contents(file_contents: String) -> Result<()> {
 
                 command
                     .run(|_, args| Ok(trampoline.call(&compiled, args)))
-                    .map_err(|s| anyhow::anyhow!("{}", s))?;
+                    .map_err(|s| anyhow::anyhow!("{s}"))?;
             }
         }
     }
@@ -106,7 +106,7 @@ fn run_file_contents(file_contents: String) -> Result<()> {
 
 /// Build an ISA based on the current machine running this code (the host)
 fn create_target_isa(isa_spec: &IsaSpec) -> Result<OwnedTargetIsa> {
-    let builder = host_isa_builder().map_err(|s| anyhow::anyhow!("{}", s))?;
+    let builder = host_isa_builder().map_err(|s| anyhow::anyhow!("{s}"))?;
     match *isa_spec {
         IsaSpec::None(ref flags) => {
             // build an ISA for the current machine

@@ -2173,7 +2173,7 @@ pub fn typecheck_enum(
 
             for (name, expected) in names.iter().zip(expected) {
                 if name != expected {
-                    bail!("expected enum case named {}, found {}", expected, name);
+                    bail!("expected enum case named {expected}, found {name}");
                 }
             }
 
@@ -2204,7 +2204,7 @@ pub fn typecheck_flags(
 
             for (name, expected) in names.iter().zip(expected) {
                 if name != expected {
-                    bail!("expected flag named {}, found {}", expected, name);
+                    bail!("expected flag named {expected}, found {name}");
                 }
             }
 

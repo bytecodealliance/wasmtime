@@ -634,7 +634,7 @@ impl Memory {
                 let page_size = self.wasmtime_ty(store).page_size();
                 Ok(u64::try_from(size).unwrap() / page_size)
             }
-            None => bail!("failed to grow memory by `{}`", delta),
+            None => bail!("failed to grow memory by `{delta}`"),
         }
     }
 
@@ -914,7 +914,7 @@ impl SharedMemory {
                 // the locked region.
                 Ok(u64::try_from(old_size).unwrap() / u64::from(self.page_size()))
             }
-            None => bail!("failed to grow memory by `{}`", delta),
+            None => bail!("failed to grow memory by `{delta}`"),
         }
     }
 
