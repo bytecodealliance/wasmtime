@@ -824,7 +824,7 @@ pub enum Trampoline {
     ThreadYield {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance maybe receive notification
+        /// If `true`, indicates the caller instance may receive notification
         /// of task cancellation.
         cancellable: bool,
     },
@@ -1134,7 +1134,8 @@ pub enum Trampoline {
     ThreadSwitchTo {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance maybe reentered.
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
         cancellable: bool,
     },
 
@@ -1142,7 +1143,8 @@ pub enum Trampoline {
     ThreadSuspend {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance maybe reentered.
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
         cancellable: bool,
     },
 
@@ -1153,7 +1155,8 @@ pub enum Trampoline {
     ThreadYieldTo {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance maybe reentered.
+        /// If `true`, indicates the caller instance may receive notification
+        /// of task cancellation.
         cancellable: bool,
     },
 }
