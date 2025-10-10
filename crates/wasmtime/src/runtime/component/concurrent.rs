@@ -1596,7 +1596,7 @@ impl Instance {
         match code {
             callback_code::EXIT => {
                 log::trace!("implicit thread {guest_thread:?} completed");
-                state.get_mut(guest_thread.thread)?.state = GuestThreadState::Completed;
+                state.delete(guest_thread.thread)?;
                 let task = state.get_mut(guest_thread.task)?;
                 task.threads.remove(&guest_thread.thread);
                 if task.threads.is_empty() && !task.returned_or_cancelled() {
@@ -1859,10 +1859,7 @@ impl Instance {
                 let storage = call(store)?;
 
                 // This is a callback-less call, so the implicit thread has now completed
-                store
-                    .concurrent_state_mut()
-                    .get_mut(guest_thread.thread)?
-                    .state = GuestThreadState::Completed;
+                store.concurrent_state_mut().delete(guest_thread.thread)?;
                 let task = store.concurrent_state_mut().get_mut(guest_thread.task)?;
                 task.threads.remove(&guest_thread.thread);
 
@@ -2960,7 +2957,7 @@ impl Instance {
             store.0.maybe_pop_call_context(thread.task)?;
 
             let state = store.0.concurrent_state_mut();
-            state.get_mut(thread.thread)?.state = GuestThreadState::Completed;
+            state.delete(thread.thread)?;
             let task = state.get_mut(thread.task)?;
             task.threads.remove(&thread.thread);
             log::trace!("explicit thread {thread:?} completed");
@@ -4168,6 +4165,10 @@ impl GuestTask {
             {
                 waitable.delete_from(state)?;
             }
+        }
+
+        for thread in self.threads {
+            state.delete(thread)?;
         }
 
         state.delete(self.sync_call_set)?;
