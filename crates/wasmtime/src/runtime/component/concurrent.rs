@@ -1597,19 +1597,14 @@ impl Instance {
             callback_code::EXIT => {
                 log::trace!("implicit thread {guest_thread:?} completed");
                 state.get_mut(guest_thread.thread)?.state = GuestThreadState::Completed;
-                state
-                    .get_mut(guest_thread.task)?
-                    .threads
-                    .remove(&guest_thread.thread);
-                if state.get_mut(guest_thread.task)?.threads.is_empty()
-                    && !state.get_mut(guest_thread.task)?.returned_or_cancelled()
-                {
+                let task = state.get_mut(guest_thread.task)?;
+                task.threads.remove(&guest_thread.thread);
+                if task.threads.is_empty() && !task.returned_or_cancelled() {
                     bail!(Trap::NoAsyncResult);
                 }
-                let task = state.get_mut(guest_thread.task)?;
                 match &task.caller {
                     Caller::Host { .. } => {
-                        if state.get_mut(guest_thread.task)?.ready_to_delete() {
+                        if task.ready_to_delete() {
                             Waitable::Guest(guest_thread.task).delete_from(state)?;
                         }
                     }
@@ -1868,34 +1863,11 @@ impl Instance {
                     .concurrent_state_mut()
                     .get_mut(guest_thread.thread)?
                     .state = GuestThreadState::Completed;
-                store
-                    .concurrent_state_mut()
-                    .get_mut(guest_thread.task)?
-                    .threads
-                    .remove(&guest_thread.thread);
-
-                // This is a callback-less call, so the implicit thread has now completed
-                store
-                    .concurrent_state_mut()
-                    .get_mut(guest_thread.thread)?
-                    .state = GuestThreadState::Completed;
-                store
-                    .concurrent_state_mut()
-                    .get_mut(guest_thread.task)?
-                    .threads
-                    .remove(&guest_thread.thread);
+                let task = store.concurrent_state_mut().get_mut(guest_thread.task)?;
+                task.threads.remove(&guest_thread.thread);
 
                 if async_ {
-                    if store
-                        .concurrent_state_mut()
-                        .get_mut(guest_thread.task)?
-                        .threads
-                        .is_empty()
-                        && !store
-                            .concurrent_state_mut()
-                            .get_mut(guest_thread.task)?
-                            .returned_or_cancelled()
-                    {
+                    if task.threads.is_empty() && !task.returned_or_cancelled() {
                         bail!(Trap::NoAsyncResult);
                     }
                 } else {
@@ -2393,11 +2365,6 @@ impl Instance {
 
         guest_waitable.join(state, old_set)?;
 
-        // Reset the current thread to point to the caller as it resumes control.
-        state.guest_thread = Some(caller);
-        state.get_mut(caller.thread)?.state = GuestThreadState::Running;
-        log::trace!("popped current thread {guest_thread:?}; new thread is {caller:?}");
-
         if let Some(storage) = storage {
             // The caller used a sync-lowered import to call an async-lifted
             // export, in which case the result, if any, has been stashed in
@@ -2415,6 +2382,11 @@ impl Instance {
                 }
             }
         }
+
+        // Reset the current thread to point to the caller as it resumes control.
+        state.guest_thread = Some(caller);
+        state.get_mut(caller.thread)?.state = GuestThreadState::Running;
+        log::trace!("popped current thread {guest_thread:?}; new thread is {caller:?}");
 
         Ok(status.pack(waitable))
     }
@@ -2989,11 +2961,10 @@ impl Instance {
 
             let state = store.0.concurrent_state_mut();
             state.get_mut(thread.thread)?.state = GuestThreadState::Completed;
-            state.get_mut(thread.task)?.threads.remove(&thread.thread);
+            let task = state.get_mut(thread.task)?;
+            task.threads.remove(&thread.thread);
             log::trace!("explicit thread {thread:?} completed");
-            if state.get_mut(thread.task)?.threads.is_empty()
-                && !state.get_mut(thread.task)?.returned_or_cancelled()
-            {
+            if task.threads.is_empty() && !task.returned_or_cancelled() {
                 bail!(Trap::NoAsyncResult);
             }
             state.guest_thread = old_thread;
@@ -4953,8 +4924,7 @@ impl TaskId {
     pub(crate) fn host_future_dropped<T>(&self, store: StoreContextMut<T>) -> Result<()> {
         let task = store.0.concurrent_state_mut().get_mut(self.task)?;
         if !task.have_lowered_parameters() {
-            Waitable::Guest(self.task)
-                .delete_from(store.0.concurrent_state_mut())?
+            Waitable::Guest(self.task).delete_from(store.0.concurrent_state_mut())?
         } else {
             task.host_future_state = HostFutureState::Dropped;
             if task.ready_to_delete() {
