@@ -1,5 +1,4 @@
 ;;! component_model_async = true
-;;! component_model_async_builtins = true
 
 ;; stream.new
 (component
@@ -56,7 +55,7 @@
     (import "" "stream.cancel-read" (func $stream-cancel-read (param i32) (result i32)))
   )
   (type $stream-type (stream u8))
-  (core func $stream-cancel-read (canon stream.cancel-read $stream-type async))
+  (core func $stream-cancel-read (canon stream.cancel-read $stream-type))
   (core instance $i (instantiate $m (with "" (instance (export "stream.cancel-read" (func $stream-cancel-read))))))
 )
 
@@ -66,7 +65,7 @@
     (import "" "stream.cancel-write" (func $stream-cancel-write (param i32) (result i32)))
   )
   (type $stream-type (stream u8))
-  (core func $stream-cancel-write (canon stream.cancel-write $stream-type async))
+  (core func $stream-cancel-write (canon stream.cancel-write $stream-type))
   (core instance $i (instantiate $m (with "" (instance (export "stream.cancel-write" (func $stream-cancel-write))))))
 )
 
