@@ -920,7 +920,7 @@ async fn total_stacks_limit() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.func_new_async(
         "async",
-        "yield",
+        "thread-yield",
         FuncType::new(&engine, [], []),
         |_caller, _params, _results| {
             Box::new(async {
@@ -934,9 +934,9 @@ async fn total_stacks_limit() -> Result<()> {
         &engine,
         r#"
         (module
-            (import "async" "yield" (func $yield))
+            (import "async" "thread-yield" (func $thread-yield))
             (func (export "run")
-                call $yield
+                call $thread-yield
             )
 
             (func $empty)

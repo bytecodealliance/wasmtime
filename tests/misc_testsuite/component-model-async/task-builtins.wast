@@ -1,5 +1,6 @@
 ;;! component_model_async = true
 ;;! component_model_async_stackful = true
+;;! component_model_threading = true
 
 ;; backpressure.set
 (component
@@ -59,13 +60,13 @@
   (core instance $i (instantiate $m (with "" (instance (export "waitable-set.poll" (func $waitable-set-poll))))))
 )
 
-;; yield
+;; thread.yield
 (component
   (core module $m
-    (import "" "yield" (func $yield (result i32)))
+    (import "" "thread.yield" (func $thread-yield (result i32)))
   )
-  (core func $yield (canon thread.yield cancellable))
-  (core instance $i (instantiate $m (with "" (instance (export "yield" (func $yield))))))
+  (core func $thread-yield (canon thread.yield cancellable))
+  (core instance $i (instantiate $m (with "" (instance (export "thread.yield" (func $thread-yield))))))
 )
 
 ;; subtask.drop
