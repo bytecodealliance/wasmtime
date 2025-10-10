@@ -576,26 +576,9 @@ enum SuspendReason {
     NeedWork,
     /// The fiber is yielding and should be resumed once other tasks have had a
     /// chance to run.
-    Yielding {
-        /// The thread that is yielding
-        thread: QualifiedThreadId,
-        /// The thread it is yielding to, if any (used for debug output)
-        #[allow(dead_code)]
-        to: Option<QualifiedThreadId>,
-        /// Whether the yield is cancellable (used for debug output)
-        #[allow(dead_code)]
-        cancellable: bool,
-    },
+    Yielding { thread: QualifiedThreadId },
     /// The fiber was explicitly suspended with a call to `thread.suspend` or `thread.switch-to`.
-    ExplicitlySuspending {
-        thread: QualifiedThreadId,
-        /// The thread it is yielding to, if any (used for debug output)
-        #[allow(dead_code)]
-        to: Option<QualifiedThreadId>,
-        /// Whether the suspend is cancellable (used for debug output)
-        #[allow(dead_code)]
-        cancellable: bool,
-    },
+    ExplicitlySuspending { thread: QualifiedThreadId },
 }
 
 /// Represents a pending call into guest code for a given guest task.
@@ -3069,21 +3052,13 @@ impl Instance {
 
         let state = store.0.concurrent_state_mut();
         let guest_thread = state.guest_thread.unwrap();
-        let to_thread = match to_thread {
-            Some(t) => Some(QualifiedThreadId::qualify(state, t)?),
-            None => None,
-        };
         let reason = if yielding {
             SuspendReason::Yielding {
                 thread: guest_thread,
-                to: to_thread,
-                cancellable,
             }
         } else {
             SuspendReason::ExplicitlySuspending {
                 thread: guest_thread,
-                to: to_thread,
-                cancellable,
             }
         };
 
@@ -3110,8 +3085,6 @@ impl Instance {
         // First, suspend this fiber, allowing any other threads to run.
         store.suspend(SuspendReason::Yielding {
             thread: guest_thread,
-            to: None,
-            cancellable,
         })?;
 
         log::trace!("waitable check for {guest_thread:?}; set {set:?}");
@@ -3287,11 +3260,7 @@ impl Instance {
                         };
                         concurrent_state.push_high_priority(item);
 
-                        store.suspend(SuspendReason::Yielding {
-                            thread: caller,
-                            to: None,
-                            cancellable: false,
-                        })?;
+                        store.suspend(SuspendReason::Yielding { thread: caller })?;
                         break;
                     }
                 }
