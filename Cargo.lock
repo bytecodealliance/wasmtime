@@ -360,7 +360,7 @@ checksum = "9f83833816c66c986e913b22ac887cec216ea09301802054316fc5301809702c"
 dependencies = [
  "cap-primitives",
  "cap-std",
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "smallvec",
 ]
 
@@ -376,7 +376,7 @@ dependencies = [
  "io-lifetimes",
  "ipnet",
  "maybe-owned",
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "rustix-linux-procfs",
  "windows-sys 0.59.0",
  "winx",
@@ -401,7 +401,7 @@ dependencies = [
  "cap-primitives",
  "io-extras",
  "io-lifetimes",
- "rustix 1.1.2",
+ "rustix 1.0.8",
 ]
 
 [[package]]
@@ -414,7 +414,7 @@ dependencies = [
  "cap-primitives",
  "iana-time-zone",
  "once_cell",
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "winx",
 ]
 
@@ -1295,7 +1295,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2247,9 +2247,9 @@ checksum = "78b3ae25bc7c8c38cec158d1f2757ee79e9b3740fbc7ccf0e59e4b08d793fa89"
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.11.0"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039"
+checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 
 [[package]]
 name = "listenfd"
@@ -3120,15 +3120,15 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "1.1.2"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd15f8a2c5551a84d56efdc1cd049089e409ac19a3072d5037a17fd70719ff3e"
+checksum = "11181fbabf243db407ef8df94a6ce0b2f9a733bd8be4ad02b4eda9602296cac8"
 dependencies = [
  "bitflags 2.9.4",
  "errno",
  "libc",
- "linux-raw-sys 0.11.0",
- "windows-sys 0.52.0",
+ "linux-raw-sys 0.9.4",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3138,7 +3138,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fc84bf7e9aa16c4f2c758f27412dc9841341e16aa682d9c7ac308fe3ee12056"
 dependencies = [
  "once_cell",
- "rustix 1.1.2",
+ "rustix 1.0.8",
 ]
 
 [[package]]
@@ -3593,8 +3593,8 @@ dependencies = [
  "fastrand",
  "getrandom 0.3.1",
  "once_cell",
- "rustix 1.1.2",
- "windows-sys 0.52.0",
+ "rustix 1.0.8",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3612,7 +3612,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b8cb979cb11c32ce1603f8137b22262a9d131aaa5c37b5678025f22b8becd0"
 dependencies = [
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "windows-sys 0.60.2",
 ]
 
@@ -4146,7 +4146,7 @@ dependencies = [
  "io-lifetimes",
  "libc",
  "log",
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "system-interface",
  "tempfile",
  "test-log",
@@ -4489,7 +4489,7 @@ dependencies = [
  "pulley-interpreter",
  "rand 0.9.2",
  "rayon",
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "semver",
  "serde",
  "serde_derive",
@@ -4594,7 +4594,7 @@ dependencies = [
  "object 0.37.3",
  "pulley-interpreter",
  "rayon",
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "serde",
  "serde_derive",
  "serde_json",
@@ -4776,7 +4776,7 @@ dependencies = [
  "filetime",
  "log",
  "postcard",
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "serde",
  "serde_derive",
  "sha2",
@@ -4860,7 +4860,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "libc",
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "wasmtime-internal-versioned-export-macros",
  "windows-sys 0.60.2",
 ]
@@ -4871,7 +4871,7 @@ version = "39.0.0"
 dependencies = [
  "cc",
  "object 0.37.3",
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "wasmtime-internal-versioned-export-macros",
 ]
 
@@ -4994,7 +4994,7 @@ dependencies = [
  "futures",
  "io-extras",
  "io-lifetimes",
- "rustix 1.1.2",
+ "rustix 1.0.8",
  "system-interface",
  "tempfile",
  "test-log",

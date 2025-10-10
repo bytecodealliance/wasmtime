@@ -737,8 +737,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.linux-raw-sys]]
-version = "0.11.0"
-when = "2025-09-09"
+version = "0.9.4"
+when = "2025-04-09"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -854,8 +854,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.rustix]]
-version = "1.1.2"
-when = "2025-09-09"
+version = "1.0.8"
+when = "2025-07-15"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
