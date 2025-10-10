@@ -3955,7 +3955,7 @@ impl GuestThread {
     ) -> Self {
         Self {
             context: [0; 2],
-            parent_task: parent_task,
+            parent_task,
             wake_on_cancel: None,
             state: GuestThreadState::NotStartedExplicit {
                 start_func_table_idx,
