@@ -15,18 +15,19 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tokio::io::{self, AsyncWrite};
 use tokio::sync::Notify;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
+use wasmtime::{AsContextMut, Engine, Store, StoreContextMut, StoreLimits, UpdateDeadline};
+use wasmtime_cli_flags::opt::WasmtimeOptionValue;
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::bindings as p2;
 #[cfg(feature = "component-model-async")]
 use wasmtime_wasi_http::handler::Task;
-use wasmtime_wasi_http::handler::{HandlerState, ProxyHandler, ProxyPre};
+use wasmtime_wasi_http::handler::{HandlerState, ProxyHandler, ProxyPre, StoreBundle};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
@@ -108,6 +109,10 @@ const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
     8080,
 );
 
+fn parse_duration(s: &str) -> Result<Duration, String> {
+    Duration::parse(Some(s)).map_err(|e| e.to_string())
+}
+
 /// Runs a WebAssembly module
 #[derive(Parser)]
 pub struct ServeCommand {
@@ -133,6 +138,34 @@ pub struct ServeCommand {
     /// The WebAssembly component to run.
     #[arg(value_name = "WASM", required = true)]
     component: PathBuf,
+
+    /// Maximum number of requests to send to a single component instance before
+    /// dropping it.
+    ///
+    /// Note that instance reuse is only implemented for WASIp3 handlers at this
+    /// time.
+    #[arg(long, default_value = "128")]
+    max_instance_reuse_count: usize,
+
+    /// Maximum number of concurrent requests to send to a single component
+    /// instance.
+    ///
+    /// Note that instance reuse is only implemented for WASIp3 handlers at this
+    /// time.
+    #[arg(long, default_value = "16")]
+    max_instance_concurrent_reuse_count: usize,
+
+    /// Time to hold an idle component instance for possible reuse before
+    /// dropping it.
+    ///
+    /// A number with no suffix or with an `s` suffix is interpreted as seconds;
+    /// other accepted suffixes include `ms` (milliseconds), `us` or `μs`
+    /// (microseconds), and `ns` (nanoseconds).
+    ///
+    /// Note that instance reuse is only implemented for WASIp3 handlers at this
+    /// time.
+    #[arg(long, default_value = "1s", value_parser = parse_duration)]
+    idle_instance_timeout: Duration,
 }
 
 impl ServeCommand {
@@ -456,7 +489,14 @@ impl ServeCommand {
         };
         let _epoch_thread = epoch_interval.map(|t| EpochThread::spawn(t, engine.clone()));
 
-        let handler = ProxyHandler::new(HostHandlerState { cmd: self, engine }, instance);
+        let handler = ProxyHandler::new(
+            HostHandlerState {
+                cmd: self,
+                engine,
+                component: component.clone(),
+            },
+            instance,
+        );
 
         loop {
             // Wait for a socket, but also "race" against shutdown to break out
@@ -549,13 +589,36 @@ impl ServeCommand {
 struct HostHandlerState {
     cmd: ServeCommand,
     engine: Engine,
+    component: Component,
 }
 
 impl HandlerState for HostHandlerState {
     type StoreData = Host;
 
-    fn new_store(&self) -> Result<Store<Host>> {
-        self.cmd.new_store(&self.engine, None)
+    fn new_store(&self) -> Result<StoreBundle<Host>> {
+        let mut store = self.cmd.new_store(&self.engine, None)?;
+        let write_profile = setup_epoch_handler(&self.cmd, &mut store, self.component.clone())?;
+
+        Ok(StoreBundle {
+            store,
+            write_profile,
+        })
+    }
+
+    fn request_timeout(&self) -> Duration {
+        self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX)
+    }
+
+    fn idle_instance_timeout(&self) -> Duration {
+        self.cmd.idle_instance_timeout
+    }
+
+    fn max_instance_reuse_count(&self) -> usize {
+        self.cmd.max_instance_reuse_count
+    }
+
+    fn max_instance_concurrent_reuse_count(&self) -> usize {
+        self.cmd.max_instance_concurrent_reuse_count
     }
 }
 
@@ -646,7 +709,7 @@ impl Drop for EpochThread {
     }
 }
 
-type WriteProfile = Box<dyn FnOnce(&mut Store<Host>) + Send>;
+type WriteProfile = Box<dyn FnOnce(StoreContextMut<Host>) + Send>;
 
 fn setup_epoch_handler(
     cmd: &ServeCommand,
@@ -656,7 +719,7 @@ fn setup_epoch_handler(
     // Profiling Enabled
     if let Some(Profile::Guest { interval, path }) = &cmd.run.profile {
         #[cfg(feature = "profiling")]
-        return setup_guest_profiler(cmd, store, path.clone(), *interval, component.clone());
+        return setup_guest_profiler(store, path.clone(), *interval, component.clone());
         #[cfg(not(feature = "profiling"))]
         {
             let _ = (path, interval);
@@ -674,7 +737,6 @@ fn setup_epoch_handler(
 
 #[cfg(feature = "profiling")]
 fn setup_guest_profiler(
-    cmd: &ServeCommand,
     store: &mut Store<Host>,
     path: String,
     interval: Duration,
@@ -709,28 +771,17 @@ fn setup_guest_profiler(
         Ok(())
     });
 
-    let start = Instant::now();
-    let timeout = cmd.run.common.wasm.timeout;
     store.epoch_deadline_callback(move |store| {
         sample(store, |profiler, store| {
             profiler.sample(store, std::time::Duration::ZERO)
         });
-
-        // Originally epoch counting was used here; this is problematic in
-        // a lot of cases due to there being a lot of time (e.g. in hostcalls)
-        // when we are not expected to get sample hits.
-        if let Some(timeout) = timeout {
-            if start.elapsed() > timeout {
-                bail!("Timeout expired");
-            }
-        }
 
         Ok(UpdateDeadline::Continue(1))
     });
 
     store.set_epoch_deadline(1);
 
-    let write_profile = Box::new(move |store: &mut Store<Host>| {
+    let write_profile = Box::new(move |mut store: StoreContextMut<Host>| {
         let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
             .expect("profiling doesn't support threads yet");
         if let Err(e) = std::fs::File::create(&path)
@@ -801,7 +852,7 @@ async fn handle_request(
                     return Err(e);
                 }
 
-                write_profile(&mut store);
+                write_profile(store.as_context_mut());
 
                 Ok(())
             });
@@ -836,25 +887,28 @@ async fn handle_request(
 
             let (tx, rx) = tokio::sync::oneshot::channel();
 
-            handler.push(Task::new(
-                Box::new(move |store, proxy| {
-                    Box::pin(async move {
-                        let (req, body) = req.into_parts();
-                        let body = body.map_err(ErrorCode::from_hyper_request_error);
-                        let req = http::Request::from_parts(req, body);
-                        let (request, request_io_result) = Request::from_http(req);
-                        let (res, task) = proxy.handle(store, request).await??;
-                        let res =
-                            store.with(|mut store| res.into_http(&mut store, request_io_result))?;
-                        _ = tx.send(res);
+            handler
+                .push(Task::new(
+                    Box::new(move |store, proxy| {
+                        Box::pin(async move {
+                            let (req, body) = req.into_parts();
+                            let body = body.map_err(ErrorCode::from_hyper_request_error);
+                            let req = http::Request::from_parts(req, body);
+                            let (request, request_io_result) = Request::from_http(req);
+                            let (res, task) = proxy.handle(store, request).await??;
+                            let res = store
+                                .with(|mut store| res.into_http(&mut store, request_io_result))?;
+                            _ = tx.send(res);
 
-                        // Wait for the task to finish.
-                        task.block(store).await;
-                        anyhow::Ok(())
-                    })
-                }),
-                req_id,
-            ));
+                            // Wait for the task to finish.
+                            task.block(store).await;
+                            anyhow::Ok(())
+                        })
+                    }),
+                    req_id,
+                ))
+                .await?;
+
             Ok(rx.await?.map(|body| body.map_err(|err| err.into()).boxed()))
         }
     }

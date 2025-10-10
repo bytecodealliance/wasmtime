@@ -6,6 +6,8 @@ use crate::bindings;
 use crate::p3;
 use anyhow::Result;
 #[cfg(feature = "p3")]
+use anyhow::anyhow;
+#[cfg(feature = "p3")]
 use futures::{
     future::FutureExt,
     stream::{FuturesUnordered, StreamExt},
@@ -27,13 +29,14 @@ use std::sync::{
 };
 #[cfg(feature = "p3")]
 use std::task::Poll;
-#[cfg(feature = "p3")]
 use std::time::Duration;
 #[cfg(feature = "p3")]
 use tokio::sync::Notify;
-use wasmtime::Store;
+#[cfg(feature = "p3")]
+use wasmtime::AsContextMut;
 #[cfg(feature = "p3")]
 use wasmtime::component::Accessor;
+use wasmtime::{Store, StoreContextMut};
 
 /// Represents either a `wasi:http/incoming-handler@0.2.x` or
 /// `wasi:http/handler@0.3.x` pre-instance.
@@ -116,6 +119,15 @@ impl<T> Queue<T> {
     }
 }
 
+/// Bundles a [`Store`] with a callback to write a profile (if configured).
+pub struct StoreBundle<T: 'static> {
+    /// The [`Store`] to use to handle requests.
+    pub store: Store<T>,
+    /// Callback to write a profile (if enabled) once all requests have been
+    /// handled.
+    pub write_profile: Box<dyn FnOnce(StoreContextMut<T>) + Send>,
+}
+
 /// Represents the application-specific state of a web server.
 pub trait HandlerState: 'static + Sync + Send {
     /// The type of the associated data for [`Store`]s created using
@@ -123,7 +135,25 @@ pub trait HandlerState: 'static + Sync + Send {
     type StoreData;
 
     /// Create a new [`Store`] for handling one or more requests.
-    fn new_store(&self) -> Result<Store<Self::StoreData>>;
+    fn new_store(&self) -> Result<StoreBundle<Self::StoreData>>;
+
+    /// Maximum time allowed to handle a request.
+    ///
+    /// In practice, a guest may be allowed to run up to 2x this time in the
+    /// case of instance reuse to avoid penalizing concurrent requests being
+    /// handled by the same instance.
+    fn request_timeout(&self) -> Duration;
+
+    /// Maximum time to keep an idle instance around before dropping it.
+    fn idle_instance_timeout(&self) -> Duration;
+
+    /// Maximum number of requests to handle using a single instance before
+    /// dropping it.
+    fn max_instance_reuse_count(&self) -> usize;
+
+    /// Maximum number of requests to handle concurrently using a single
+    /// instance.
+    fn max_instance_concurrent_reuse_count(&self) -> usize;
 }
 
 struct ProxyHandlerInner<S, T: 'static> {
@@ -137,7 +167,7 @@ struct ProxyHandlerInner<S, T: 'static> {
 }
 
 #[cfg(feature = "p3")]
-struct WorkerState<S, T: 'static>
+struct Worker<S, T: 'static>
 where
     T: Send,
     S: HandlerState<StoreData = T>,
@@ -147,7 +177,7 @@ where
 }
 
 #[cfg(feature = "p3")]
-impl<S, T> WorkerState<S, T>
+impl<S, T> Worker<S, T>
 where
     T: Send,
     S: HandlerState<StoreData = T>,
@@ -165,10 +195,163 @@ where
             }
         }
     }
+
+    async fn run(mut self) -> Result<()> {
+        let handler = &self.handler.0;
+
+        let StoreBundle {
+            mut store,
+            write_profile,
+        } = handler.state.new_store()?;
+
+        let request_timeout = handler.state.request_timeout();
+        let idle_instance_timeout = handler.state.idle_instance_timeout();
+        let max_instance_reuse_count = handler.state.max_instance_reuse_count();
+        let max_instance_concurrent_reuse_count =
+            handler.state.max_instance_concurrent_reuse_count();
+
+        let ProxyPre::P3(pre) = &handler.instance_pre else {
+            // See check in `Self::push`
+            unreachable!()
+        };
+
+        let proxy = &pre.instantiate_async(&mut store).await?;
+        let accept_concurrent = AtomicBool::new(true);
+
+        let mut future = pin!(store.run_concurrent(async |accessor| {
+            let mut reuse_count = 0;
+            let mut timed_out = false;
+            let mut futures = FuturesUnordered::new();
+            let handler = self.handler.clone();
+            while !(futures.is_empty() && reuse_count >= max_instance_reuse_count) {
+                let new_task = {
+                    let future_count = futures.len();
+                    let mut next_future = pin!(async {
+                        if futures.is_empty() {
+                            future::pending().await
+                        } else {
+                            futures.next().await
+                        }
+                    });
+                    let mut next_task = pin!(tokio::time::timeout(
+                        if future_count == 0 {
+                            idle_instance_timeout
+                        } else {
+                            Duration::MAX
+                        },
+                        handler.0.task_queue.pop()
+                    ));
+                    // Poll any existing tasks, and if they're all `Pending`
+                    // _and_ we haven't reached any reuse limits yet, poll for a
+                    // new task from the queue.
+                    future::poll_fn(|cx| match next_future.as_mut().poll(cx) {
+                        Poll::Pending => {
+                            // Note that `Pending` here doesn't necessarily mean
+                            // all tasks are blocked on I/O.  They might simply
+                            // be waiting for some deferred work to be done by
+                            // the next turn of the
+                            // `StoreContextMut::run_concurrent` event loop.
+                            // Therefore, we check `accept_concurrent` here and
+                            // only advertise we have capacity for another task
+                            // if either we have no tasks at all or all our
+                            // tasks really are blocked on I/O.
+                            self.set_available(
+                                reuse_count < max_instance_reuse_count
+                                    && future_count < max_instance_concurrent_reuse_count
+                                    && (future_count == 0 || accept_concurrent.load(Relaxed)),
+                            );
+
+                            if self.available {
+                                next_task.as_mut().poll(cx).map(Some)
+                            } else {
+                                Poll::Pending
+                            }
+                        }
+                        Poll::Ready(Some(Ok(()))) => {
+                            // Task completed; carry on!
+                            Poll::Ready(None)
+                        }
+                        Poll::Ready(Some(Err(_))) => {
+                            // Task timed out; stop accepting new tasks, but
+                            // continue polling until any other, in-progress
+                            // tasks until they have either finished or timed
+                            // out.  This effectively kicks off a "graceful
+                            // shutdown" of the worker, allowing any other
+                            // concurrent tasks time to finish before we drop
+                            // the instance.
+                            //
+                            // TODO: We should also send a cancel request to the
+                            // timed-out task to give it a chance to shut down
+                            // gracefully (and delay dropping the instance for a
+                            // reasonable amount of time), but as of this
+                            // writing Wasmtime does not yet provide an API for
+                            // doing that.  See issue #11833.
+                            timed_out = true;
+                            reuse_count = max_instance_reuse_count;
+                            Poll::Ready(None)
+                        }
+                        Poll::Ready(None) => unreachable!(),
+                    })
+                    .await
+                };
+
+                match new_task {
+                    Some(Ok(task)) => {
+                        // Set `accept_concurrent` to false, conservatively
+                        // assuming that the new task will be CPU-bound, at
+                        // least to begin with.  Only once the
+                        // `StoreContextMut::run_concurrent` event loop returns
+                        // `Pending` will we set `accept_concurrent` back to
+                        // true and consider accepting more tasks.
+                        //
+                        // This approach avoids taking on more than one
+                        // CPU-bound task at a time, which would hurt
+                        // throughput vs. leaving the additional tasks
+                        // for other workers to handle.
+                        accept_concurrent.store(false, Relaxed);
+                        reuse_count += 1;
+
+                        futures.push(tokio::time::timeout(request_timeout, async move {
+                            if let Err(error) = (task.run)(accessor, proxy).await {
+                                eprintln!("[{}] :: {error:?}", task.request_id);
+                            }
+                        }));
+                    }
+                    Some(Err(_)) => break,
+                    None => {}
+                }
+            }
+
+            accessor.with(|mut access| write_profile(access.as_context_mut()));
+
+            if timed_out {
+                Err(anyhow!("guest timed out"))
+            } else {
+                anyhow::Ok(())
+            }
+        }));
+
+        future::poll_fn(|cx| {
+            let poll = future.as_mut().poll(cx);
+            // If the future returns `Pending`, it's either because it's idle
+            // (in which case it can definitely accept a new task) or because
+            // all its tasks are awaiting I/O, in which case it may have
+            // capacity for additional tasks to run concurrently.  Here we set
+            // `accept_concurrent` to true and, if it wasn't already true
+            // before, poll the future one more time so it can ask for another
+            // task if appropriate.
+            if poll.is_pending() && !accept_concurrent.swap(true, Relaxed) {
+                future.as_mut().poll(cx)
+            } else {
+                poll
+            }
+        })
+        .await?
+    }
 }
 
 #[cfg(feature = "p3")]
-impl<S, T> Drop for WorkerState<S, T>
+impl<S, T> Drop for Worker<S, T>
 where
     T: Send,
     S: HandlerState<StoreData = T>,
@@ -215,17 +398,53 @@ impl<S, T> ProxyHandler<S, T> {
     /// This will currently panic if the backing pre-instance is not a
     /// `ProxyPre::P3`.  `ProxyPre::P2` support may be added in the future.
     #[cfg(feature = "p3")]
-    pub fn push(&self, task: Task<T>)
+    pub async fn push(&self, task: Task<T>) -> Result<()>
     where
         T: Send,
         S: HandlerState<StoreData = T>,
     {
         // TODO: Support p2 instances as well as p3 ones
-        let ProxyPre::P3(_) = &self.0.instance_pre else {
+        let ProxyPre::P3(pre) = &self.0.instance_pre else {
             panic!("ProxyHandler::push is only supported for WASIp3 handlers");
         };
-        self.0.task_queue.push(task);
-        self.maybe_start_worker()
+
+        if self.0.state.max_instance_reuse_count() <= 1 {
+            // Use a simplified path when instance reuse is disabled.
+            //
+            // TODO: As of this writing, using the task-queue-and-worker
+            // approach when `max_instance_reuse_count` is small has a pretty
+            // massive (e.g. 86%) performance penalty as measured by
+            // `wasmtime-serve-rps.sh`, which deserves investigation, and
+            // indicates we're probably leaving a lot of performance on the
+            // table even when `max_instance_reuse_count` is large.  Ideally,
+            // we'd narrow the penalty to nothing and remove this special-case
+            // path.
+            let StoreBundle {
+                mut store,
+                write_profile,
+            } = self.0.state.new_store()?;
+
+            let proxy = &pre.instantiate_async(&mut store).await?;
+
+            store
+                .run_concurrent(async |accessor| {
+                    tokio::time::timeout(self.0.state.request_timeout(), async {
+                        if let Err(error) = (task.run)(accessor, proxy).await {
+                            eprintln!("[{}] :: {error:?}", task.request_id);
+                        }
+                    })
+                    .await
+                    .map_err(|_| anyhow!("guest timed out"))
+                })
+                .await??;
+
+            write_profile(store.as_context_mut());
+        } else {
+            self.0.task_queue.push(task);
+            self.maybe_start_worker()
+        }
+
+        Ok(())
     }
 
     /// Generate a unique request ID.
@@ -262,135 +481,12 @@ impl<S, T> ProxyHandler<S, T> {
         T: Send,
         S: HandlerState<StoreData = T>,
     {
-        // TODO: Make these configurable:
-
-        // Maximum total number of tasks to accept before exiting.
-        const MAX_REUSE_COUNT: usize = 128;
-        // Maximum number of concurrent tasks to accept.
-        const MAX_CONCURRENT_REUSE_COUNT: usize = 16;
-        // Maximum idle time (i.e. time with no tasks to run) before exiting.
-        const IDLE_TIMEOUT: Duration = Duration::from_secs(1);
-
-        let mut state = WorkerState {
-            handler: self.clone(),
-            available: true,
-        };
-
         tokio::spawn(
-            async move {
-                let handler = &state.handler.0;
-                let mut store = handler.state.new_store()?;
-                let ProxyPre::P3(pre) = &handler.instance_pre else {
-                    // See check in `Self::push`
-                    unreachable!()
-                };
-                let proxy = &pre.instantiate_async(&mut store).await?;
-                let accept_concurrent = AtomicBool::new(true);
-                let mut future = pin!(store.run_concurrent(async |accessor| {
-                    let mut reuse_count = 0;
-                    let mut futures = FuturesUnordered::new();
-                    let handler = state.handler.clone();
-                    while !(futures.is_empty() && reuse_count >= MAX_REUSE_COUNT) {
-                        let task = {
-                            let future_count = futures.len();
-                            let mut next_future = pin!(async {
-                                if futures.is_empty() {
-                                    future::pending().await
-                                } else {
-                                    futures.next().await
-                                }
-                            });
-                            let mut next_task = pin!(tokio::time::timeout(
-                                IDLE_TIMEOUT,
-                                handler.0.task_queue.pop()
-                            ));
-                            // Poll any existing tasks, and if they're all
-                            // `Pending` _and_ we haven't reached any reuse
-                            // limits yet, poll for a new task from the queue.
-                            future::poll_fn(|cx| match next_future.as_mut().poll(cx) {
-                                Poll::Pending => {
-                                    // Note that `Pending` here doesn't
-                                    // necessarily mean all tasks are blocked on
-                                    // I/O.  They might simply be waiting for
-                                    // some deferred work to be done by the next
-                                    // turn of the
-                                    // `StoreContextMut::run_concurrent` event
-                                    // loop.  Therefore, we check
-                                    // `accept_concurrent` here and only
-                                    // advertise we have capacity for another
-                                    // task if either we have no tasks at all or
-                                    // all our tasks really are blocked on I/O.
-                                    state.set_available(
-                                        reuse_count < MAX_REUSE_COUNT
-                                            && future_count < MAX_CONCURRENT_REUSE_COUNT
-                                            && (future_count == 0
-                                                || accept_concurrent.load(Relaxed)),
-                                    );
-
-                                    if state.available {
-                                        next_task.as_mut().poll(cx).map(Some)
-                                    } else {
-                                        Poll::Pending
-                                    }
-                                }
-                                Poll::Ready(Some(())) => Poll::Ready(None),
-                                Poll::Ready(None) => unreachable!(),
-                            })
-                            .await
-                        };
-
-                        match task {
-                            Some(Ok(task)) => {
-                                // Set `accept_concurrent` to false,
-                                // conservatively assuming that the new task
-                                // will be CPU-bound, at least to begin with.
-                                // Only once the
-                                // `StoreContextMut::run_concurrent` event loop
-                                // returns `Pending` will we set
-                                // `accept_concurrent` back to true and consider
-                                // accepting more tasks.
-                                //
-                                // This approach avoids taking on more than one
-                                // CPU-bound task at a time, which would hurt
-                                // throughput vs. leaving the additional tasks
-                                // for other workers to handle.
-                                accept_concurrent.store(false, Relaxed);
-                                reuse_count += 1;
-
-                                futures.push(async move {
-                                    if let Err(error) = (task.run)(accessor, proxy).await {
-                                        eprintln!("[{}] :: {error:?}", task.request_id);
-                                    }
-                                });
-                            }
-                            Some(Err(_)) => {
-                                break;
-                            }
-                            None => {}
-                        }
-                    }
-
-                    anyhow::Ok(())
-                }));
-
-                future::poll_fn(|cx| {
-                    let poll = future.as_mut().poll(cx);
-                    // If the future returns `Pending`, it's either because it's
-                    // idle (in which case it can definitely accept a new task)
-                    // or because all its tasks are awaiting I/O, in which case
-                    // it may have capacity for additional tasks to run
-                    // concurrently.  Here we set `accept_concurrent` to true
-                    // and, if it wasn't already true before, poll the future
-                    // one more time so it can ask for another task if
-                    // appropriate.
-                    if poll.is_pending() && !accept_concurrent.swap(true, Relaxed) {
-                        future.as_mut().poll(cx)
-                    } else {
-                        poll
-                    }
-                })
-                .await?
+            Worker {
+                handler: self.clone(),
+                available: true,
             }
+            .run()
             .map(|result| {
                 if let Err(error) = result {
                     eprintln!("worker error: {error:?}");
