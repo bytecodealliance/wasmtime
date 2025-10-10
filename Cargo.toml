@@ -323,7 +323,7 @@ fs-set-times = "0.20.1"
 system-interface = { version = "0.27.1", features = ["cap_std_impls"] }
 io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.1"
-rustix = "1.0.3"
+rustix = "1.0.8"
 # wit-bindgen:
 wit-bindgen = { version = "0.46.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.46.0", default-features = false }
@@ -351,16 +351,16 @@ object = { version = "0.37.3", default-features = false, features = ['read_core'
 gimli = { version = "0.32.0", default-features = false, features = ['read'] }
 addr2line = { version = "0.25.0", default-features = false }
 anyhow = { version = "1.0.93", default-features = false }
-windows-sys = "0.60.0"
+windows-sys = "0.60.2"
 env_logger = "0.11.5"
 log = { version = "0.4.27", default-features = false }
-clap = { version = "4.5.17", default-features = false, features = ["std", "derive"] }
-clap_complete = "4.4.7"
+clap = { version = "4.5.48", default-features = false, features = ["std", "derive"] }
+clap_complete = "4.5.58"
 hashbrown = { version = "0.15", default-features = false }
 capstone = "0.13.0"
 smallvec = { version = "1.6.1", features = ["union"] }
 tracing = "0.1.26"
-bitflags = "2.0"
+bitflags = "2.9.4"
 thiserror = "2.0.12"
 async-trait = "0.1.71"
 heck = "0.5"
@@ -381,7 +381,7 @@ walkdir = "2.3.3"
 cfg-if = "1.0"
 tempfile = "3.21.0"
 filecheck = "0.5.0"
-libc = { version = "0.2.112", default-features = true }
+libc = { version = "0.2.176", default-features = true }
 file-per-thread-logger = "0.2.0"
 tokio = { version = "1.43.0", features = [ "rt", "time" ] }
 hyper = "1.0.1"
@@ -391,7 +391,7 @@ http-body-util = "0.1.0"
 bytes = { version = "1.4", default-features = false }
 futures = { version = "0.3.27", default-features = false }
 indexmap = { version = "2.0.0", default-features = false }
-syn = "2.0.25"
+syn = "2.0.106"
 quote = "1.0"
 proc-macro2 = "1.0"
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
