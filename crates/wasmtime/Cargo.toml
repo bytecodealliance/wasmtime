@@ -151,6 +151,7 @@ default = [
   'threads',
   'stack-switching',
   'std',
+  'debug',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -409,3 +410,6 @@ component-model-async-bytes = [
   "component-model-async",
   "dep:bytes",
 ]
+
+# Enables support for guest debugging.
+debug = ['runtime']
