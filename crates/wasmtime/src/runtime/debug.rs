@@ -18,7 +18,7 @@ use wasmtime_unwinder::Frame;
 
 use super::vm::TrapRegisters;
 
-impl StoreOpaque {
+impl<T: 'static> StoreInner<T> {
     /// Provide an object that captures Wasm stack state, including
     /// Wasm VM-level values (locals and operand stack).
     ///
@@ -33,16 +33,17 @@ impl StoreOpaque {
     ///
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
-    pub fn stack_values(&mut self) -> Option<StackView<'_>> {
+    pub fn stack_values(&mut self) -> Option<StackView<'_, T>> {
         if !self.engine().tunables().debug_guest {
             return None;
         }
 
+        let store_opaque = self.as_store_opaque();
         let (entry_fp, exit_fp, exit_pc) = unsafe {
             (
-                *self.vm_store_context().last_wasm_entry_fp.get(),
-                self.vm_store_context().last_wasm_exit_fp(),
-                *self.vm_store_context().last_wasm_exit_pc.get(),
+                *store_opaque.vm_store_context().last_wasm_entry_fp.get(),
+                store_opaque.vm_store_context().last_wasm_exit_fp(),
+                *store_opaque.vm_store_context().last_wasm_exit_pc.get(),
             )
         };
 
@@ -62,12 +63,12 @@ impl StoreOpaque {
 ///
 /// See the documentation on `Store::stack_value` for more information
 /// about which frames this view will show.
-pub struct StackView<'a> {
+pub struct StackView<'a, T: 'static> {
     /// Iterator over frames.
     ///
     /// This iterator owns the store while the view exists (accessible
     /// as `iter.store`).
-    iter: CurrentActivationBacktrace<'a>,
+    iter: CurrentActivationBacktrace<'a, T>,
 
     /// Is the next frame to be visited by the iterator a trapping
     /// frame?
@@ -90,7 +91,7 @@ pub struct StackView<'a> {
     current: Option<FrameData>,
 }
 
-impl<'a> StackView<'a> {
+impl<'a, T: 'static> StackView<'a, T> {
     /// Move up to the next frame in the activation.
     pub fn move_up(&mut self) {
         // If there are no virtual frames to yield, take and decode
@@ -240,11 +241,7 @@ struct VirtualFrame {
 impl VirtualFrame {
     /// Return virtual frames corresponding to a physical frame, from
     /// outermost to innermost.
-    fn decode(
-        store: &mut AutoAssertNoGc<'_>,
-        frame: Frame,
-        is_trapping_frame: bool,
-    ) -> Vec<VirtualFrame> {
+    fn decode(store: &mut StoreOpaque, frame: Frame, is_trapping_frame: bool) -> Vec<VirtualFrame> {
         let module = store
             .modules()
             .lookup_module_by_pc(frame.pc())
@@ -342,7 +339,7 @@ impl FrameData {
 /// instrumentation is correct, and as long as the tables are
 /// preserved through serialization).
 unsafe fn read_value(
-    store: &mut AutoAssertNoGc<'_>,
+    store: &mut StoreOpaque,
     slot_base: *const u8,
     offset: FrameStateSlotOffset,
     ty: FrameValType,
@@ -398,6 +395,18 @@ unsafe fn read_value(
         FrameValType::ContRef => {
             unimplemented!("contref values are not implemented in the host API yet")
         }
+    }
+}
+
+impl<'a, T: 'static> AsContext for StackView<'a, T> {
+    type Data = T;
+    fn as_context(&self) -> StoreContext<'_, Self::Data> {
+        StoreContext(self.iter.store)
+    }
+}
+impl<'a, T: 'static> AsContextMut for StackView<'a, T> {
+    fn as_context_mut(&mut self) -> StoreContextMut<'_, Self::Data> {
+        StoreContextMut(self.iter.store)
     }
 }
 
@@ -633,7 +642,7 @@ impl<'a, T: 'static> DebugSession<'a, T> {
     /// Provide a view of the current execution state.
     ///
     /// Returns `None` if execution has already completed.
-    pub fn stack_values(&mut self) -> Option<StackView<'_>> {
+    pub fn stack_values(&mut self) -> Option<StackView<'_, T>> {
         let (entry_fp, exit_fp, exit_pc, is_trapping_frame) = match &self.state {
             DebugSessionState::Created(..) => return None,
             DebugSessionState::Running {
@@ -654,7 +663,7 @@ impl<'a, T: 'static> DebugSession<'a, T> {
             DebugSessionState::Finished => return None,
         };
 
-        let store = unsafe { self.store_opaque_mut() };
+        let store = unsafe { self.store_mut() };
         let iter = unsafe { CurrentActivationBacktrace::new(store, entry_fp, exit_fp, exit_pc) };
         let mut view = StackView {
             iter,

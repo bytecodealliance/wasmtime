@@ -117,6 +117,39 @@ fn stack_values_exceptions() -> anyhow::Result<()> {
     )
 }
 
+#[test]
+fn gc_access_during_call() -> anyhow::Result<()> {
+    test_stack_values(
+        r#"
+    (module
+      (type $s (struct (field i32)))
+      (import "" "host" (func))
+      (func (export "main")
+        (local $l (ref null $s))
+        (local.set $l (struct.new $s (i32.const 42)))
+        (call 0)))
+    "#,
+        |config| {
+            config.wasm_gc(true);
+        },
+        |mut caller: Caller<'_, ()>| {
+            let mut stack = caller.stack_values().unwrap();
+            assert!(!stack.done());
+            assert_eq!(stack.num_stacks(), 0);
+            assert_eq!(stack.num_locals(), 1);
+            let s = stack
+                .local(0)
+                .unwrap_any_ref()
+                .unwrap()
+                .unwrap_struct(&stack)
+                .unwrap();
+            assert_eq!(s.field(&mut stack, 0).unwrap().unwrap_i32(), 42);
+            stack.move_up();
+            assert!(stack.done());
+        },
+    )
+}
+
 #[tokio::test]
 async fn catch_trap() -> anyhow::Result<()> {
     let (module, mut store) = get_module_and_store(

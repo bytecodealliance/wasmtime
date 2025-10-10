@@ -2268,7 +2268,7 @@ impl<T> Caller<'_, T> {
     ///
     /// See ['Store::stack_values`] for more details.
     #[cfg(feature = "debug")]
-    pub fn stack_values(&mut self) -> Option<crate::StackView<'_>> {
+    pub fn stack_values(&mut self) -> Option<crate::StackView<'_, T>> {
         self.store.stack_values()
     }
 }
