@@ -383,7 +383,6 @@ convert_flags_bidirectional!(
 
 // This implementation, wherever possible, delegates directly to the Snapshot1 implementation,
 // performing the no-op type conversions along the way.
-#[wiggle::async_trait]
 impl wasi_unstable::WasiUnstable for WasiCtx {
     async fn args_get(
         &mut self,

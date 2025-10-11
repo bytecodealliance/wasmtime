@@ -15,7 +15,6 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
-#[wiggle::async_trait]
 impl atoms::Atoms for Ctx {
     fn int_float_args(
         &mut self,
