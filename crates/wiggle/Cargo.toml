@@ -20,7 +20,6 @@ witx = { version = "0.9.1", optional = true }
 wiggle-macro = { workspace = true }
 tracing = { workspace = true }
 bitflags = { workspace = true }
-async-trait = { workspace = true }
 wasmtime = { workspace = true, optional = true }
 anyhow = { workspace = true }
 

@@ -4191,6 +4191,7 @@ name = "wasi-common"
 version = "39.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bitflags 2.9.4",
  "cap-fs-ext",
  "cap-rand",
@@ -5278,7 +5279,6 @@ name = "wiggle"
 version = "39.0.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "bitflags 2.9.4",
  "proptest",
  "thiserror 2.0.17",

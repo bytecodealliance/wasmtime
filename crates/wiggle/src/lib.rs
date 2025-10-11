@@ -6,7 +6,7 @@ use std::mem;
 use std::ops::Range;
 use std::str;
 
-pub use wiggle_macro::{async_trait, from_witx};
+pub use wiggle_macro::from_witx;
 
 pub use anyhow;
 pub use wiggle_macro::wasmtime_integration;
@@ -25,10 +25,6 @@ pub use tracing;
 pub use error::GuestError;
 pub use guest_type::{GuestErrorType, GuestType, GuestTypeTransparent};
 pub use region::Region;
-
-pub mod async_trait_crate {
-    pub use async_trait::*;
-}
 
 #[cfg(feature = "wasmtime")]
 pub mod wasmtime_crate {

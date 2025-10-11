@@ -9,7 +9,7 @@ pub enum OpenResult {
     Dir(Box<dyn WasiDir>),
 }
 
-#[wiggle::async_trait]
+#[async_trait::async_trait]
 pub trait WasiDir: Send + Sync {
     fn as_any(&self) -> &dyn Any;
 

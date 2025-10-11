@@ -24,6 +24,7 @@ cap-std = { workspace = true }
 cap-rand = { workspace = true }
 bitflags = { workspace = true }
 log = { workspace = true }
+async-trait = { workspace = true }
 
 # Optional, enabled by wasmtime feature:
 wasmtime = { workspace = true, optional = true, features = ['runtime'] }
