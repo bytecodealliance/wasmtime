@@ -6,7 +6,6 @@ use std::mem;
 use std::ops::Range;
 use std::str;
 
-pub use async_trait::async_trait;
 pub use wiggle_macro::from_witx;
 
 pub use anyhow;
