@@ -319,6 +319,24 @@ impl TableOps {
         let mut stack = 0;
 
         for mut op in self.ops.iter().copied() {
+            if self.limits.max_types == 0 && matches!(op, TableOp::StructNew(..)) {
+                op = TableOp::Drop();
+            }
+            if self.limits.num_params == 0 {
+                op = match op {
+                    TableOp::LocalGet(_) => TableOp::Null(),
+                    TableOp::LocalSet(_) => TableOp::Drop(),
+                    other => other,
+                };
+            }
+            if self.limits.num_globals == 0 {
+                op = match op {
+                    TableOp::GlobalGet(_) => TableOp::Null(),
+                    TableOp::GlobalSet(_) => TableOp::Drop(),
+                    other => other,
+                };
+            }
+
             op.fixup(&self.limits);
 
             let mut temp = SmallVec::<[_; 4]>::new();
@@ -746,6 +764,63 @@ mod tests {
                 wat
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn struct_new_removed_when_no_types() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
+
+        let mut ops = test_ops(0, 0, 0);
+        ops.limits.max_types = 0;
+        ops.ops = vec![TableOp::StructNew(42)];
+
+        let _ = ops.to_wasm_binary();
+
+        assert!(
+            ops.ops
+                .iter()
+                .all(|op| !matches!(op, TableOp::StructNew(..))),
+            "StructNew should be removed when there are no types"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn local_ops_removed_when_no_params() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
+
+        let mut ops = test_ops(0, 0, 0);
+        ops.limits.num_params = 0;
+        ops.ops = vec![TableOp::LocalGet(42), TableOp::LocalSet(99)];
+
+        let _ = ops.to_wasm_binary();
+
+        assert!(
+            ops.ops
+                .iter()
+                .all(|op| !matches!(op, TableOp::LocalGet(..) | TableOp::LocalSet(..))),
+            "LocalGet/LocalSet should be removed when there are no params"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn global_ops_removed_when_no_globals() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
+
+        let mut ops = test_ops(0, 0, 0);
+        ops.limits.num_globals = 0;
+        ops.ops = vec![TableOp::GlobalGet(42), TableOp::GlobalSet(99)];
+
+        let _ = ops.to_wasm_binary();
+
+        assert!(
+            ops.ops
+                .iter()
+                .all(|op| !matches!(op, TableOp::GlobalGet(..) | TableOp::GlobalSet(..))),
+            "GlobalGet/GlobalSet should be removed when there are no globals"
+        );
         Ok(())
     }
 
