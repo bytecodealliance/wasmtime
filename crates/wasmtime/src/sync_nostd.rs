@@ -7,11 +7,6 @@
 //! something will need to change in the Wasmtime crate to enable the external
 //! system to perform necessary synchronization.
 //!
-//! In the future if these primitives are not suitable we can switch to putting
-//! relevant functions in the `capi.rs` module where we basically require
-//! embedders to implement them instead of doing it ourselves here. It's unclear
-//! if this will be necessary, so this is the chosen starting point.
-//!
 //! See a brief overview of this module in `sync_std.rs` as well.
 
 #![cfg_attr(

@@ -16,6 +16,8 @@ use crate::prelude::*;
 pub mod capi;
 #[cfg(has_virtual_memory)]
 pub mod mmap;
+#[cfg(has_custom_sync)]
+pub mod sync;
 pub mod traphandlers;
 #[cfg(has_host_compiler_backend)]
 pub mod unwind;
