@@ -182,4 +182,48 @@ unsafe extern "C" {
     ///
     /// This value should be returned when later calling `wasmtime_tls_get`.
     pub fn wasmtime_tls_set(ptr: *mut u8);
+
+    /// Creates a new synchronization lock.
+    ///
+    /// Returns an opaque `usize` representing the lock state.
+    /// The lock must be freed with [`wasmtime_sync_lock_free`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_lock_new() -> usize;
+
+    /// Frees a synchronization lock created with [`wasmtime_sync_lock_new`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_lock_free(lock: *mut usize);
+
+    /// Acquires an exclusive lock.
+    ///
+    /// This function blocks until the lock is acquired.
+    /// Must be paired with [`wasmtime_sync_lock_release`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_lock_acquire(lock: *mut usize);
+
+    /// Releases an exclusive lock previously acquired with [`wasmtime_sync_lock_acquire`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_lock_release(lock: *mut usize);
+
+    /// Acquires a read lock on an RwLock.
+    ///
+    /// Multiple readers can hold the lock simultaneously.
+    /// Must be paired with [`wasmtime_sync_rwlock_read_release`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_read(lock: *mut usize);
+
+    /// Releases a read lock previously acquired with [`wasmtime_sync_rwlock_read`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_read_release(lock: *mut usize);
+
+    /// Acquires a write lock on an RwLock.
+    ///
+    /// Only one writer can hold the lock, and no readers can be present.
+    /// Must be paired with [`wasmtime_sync_rwlock_write_release`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_write(lock: *mut usize);
+
+    /// Releases a write lock previously acquired with [`wasmtime_sync_rwlock_write`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_write_release(lock: *mut usize);
 }
