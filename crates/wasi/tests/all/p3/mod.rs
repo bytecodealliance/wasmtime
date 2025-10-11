@@ -150,3 +150,21 @@ async fn p3_file_write() -> anyhow::Result<()> {
 async fn p3_file_write_blocking() -> anyhow::Result<()> {
     run_allow_blocking_current_thread(P3_FILE_WRITE_COMPONENT, true).await
 }
+
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
+)]
+fn p3_cli_hello_stdout() {}
+
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
+)]
+fn p3_cli_much_stdout() {}
+
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
+)]
+fn p3_cli_serve_hello_world() {}

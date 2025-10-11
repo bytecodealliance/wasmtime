@@ -214,7 +214,7 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
         .method(http::Method::GET);
 
     let resp = run_wasi_http(
-        test_programs_artifacts::API_PROXY_COMPONENT,
+        test_programs_artifacts::P2_API_PROXY_COMPONENT,
         req.body(body::empty())?,
         None,
         None,
@@ -346,7 +346,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
     let request = request.body(body::empty())?;
 
     let response = run_wasi_http(
-        test_programs_artifacts::API_PROXY_STREAMING_COMPONENT,
+        test_programs_artifacts::P2_API_PROXY_STREAMING_COMPONENT,
         request,
         send_request,
         None,
@@ -394,7 +394,7 @@ async fn wasi_http_hash_all_with_reject() -> Result<()> {
     let request = request.body(body::empty())?;
 
     let response = run_wasi_http(
-        test_programs_artifacts::API_PROXY_STREAMING_COMPONENT,
+        test_programs_artifacts::P2_API_PROXY_STREAMING_COMPONENT,
         request,
         None,
         Some("forbidden.com".to_string()),
@@ -514,7 +514,7 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
     ))))?;
 
     let response = run_wasi_http(
-        test_programs_artifacts::API_PROXY_STREAMING_COMPONENT,
+        test_programs_artifacts::P2_API_PROXY_STREAMING_COMPONENT,
         request,
         None,
         None,
@@ -546,7 +546,7 @@ async fn wasi_http_without_port() -> Result<()> {
         .uri("https://httpbin.org/get");
 
     let _response: hyper::Response<_> = run_wasi_http(
-        test_programs_artifacts::API_PROXY_FORWARD_REQUEST_COMPONENT,
+        test_programs_artifacts::P2_API_PROXY_FORWARD_REQUEST_COMPONENT,
         req.body(body::empty())?,
         None,
         None,
@@ -569,7 +569,7 @@ async fn wasi_http_no_trap_on_early_drop() -> Result<()> {
         .method(http::Method::GET);
 
     let resp = run_wasi_http(
-        test_programs_artifacts::API_PROXY_COMPONENT,
+        test_programs_artifacts::P2_API_PROXY_COMPONENT,
         req.body(body::empty())?,
         None,
         None,
