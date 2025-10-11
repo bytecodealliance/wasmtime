@@ -61,7 +61,7 @@ pub fn define_module_trait(m: &Module, settings: &CodegenSettings) -> TokenStrea
         };
 
         if !settings.get_async(&m, &f).is_sync() {
-            result = quote!(impl Future<Output = #result> + Send);
+            result = quote!(impl std::future::Future<Output = #result> + Send);
         }
 
         let self_ = if settings.mutable {
