@@ -263,8 +263,8 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 pc: cx.uc_mcontext.pc as usize,
                 fp: cx.uc_mcontext.regs[29] as usize,
                 sp: cx.uc_mcontext.sp as usize,
-                arg0: cx.ucmcontext.regs[0] as usize,
-                arg1: cx.ucmcontext.regs[1] as usize,
+                arg0: cx.uc_mcontext.regs[0] as usize,
+                arg1: cx.uc_mcontext.regs[1] as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "s390x"))] {
             // On s390x, SIGILL and SIGFPE are delivered with the PSW address

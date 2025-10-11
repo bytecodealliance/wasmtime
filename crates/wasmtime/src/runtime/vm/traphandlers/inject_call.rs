@@ -127,12 +127,9 @@ impl VMStoreContext {
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "aarch64")] {
-        /* TODO(cfallin)
         mod aarch64;
         pub const SUPPORTED_ARCH: bool = true;
         pub(crate) use aarch64::*;
-         */
-        pub(crate) use unsupported::*;
     } else if #[cfg(target_arch = "x86_64")] {
         mod x86_64;
         pub const SUPPORTED_ARCH: bool = true;
