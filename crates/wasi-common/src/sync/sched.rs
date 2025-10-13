@@ -21,7 +21,7 @@ impl SyncSched {
         Self {}
     }
 }
-#[wiggle::async_trait]
+#[async_trait::async_trait]
 impl WasiSched for SyncSched {
     async fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error> {
         poll_oneoff(poll).await

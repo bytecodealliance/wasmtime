@@ -1160,7 +1160,6 @@ fn first_non_empty_iovec(
     Ok(GuestPtr::new((0, 0)))
 }
 
-#[async_trait::async_trait]
 // Implement the WasiSnapshotPreview1 trait using only the traits that are
 // required for T, i.e., in terms of the preview 2 wit interface, and state
 // stored in the WasiP1Adapter struct.
