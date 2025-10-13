@@ -1,6 +1,9 @@
+use crate::get_content_length;
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::p3::body::Body;
+use crate::p3::body::{Body, GuestBody};
+use crate::p3::{WasiHttpView, WasiHttpCtxView};
 use bytes::Bytes;
+use wasmtime::AsContextMut;
 use core::time::Duration;
 use http::uri::{Authority, PathAndQuery, Scheme};
 use http::{HeaderMap, Method};
@@ -8,6 +11,7 @@ use http_body_util::BodyExt as _;
 use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
 use tokio::sync::oneshot;
+use anyhow::Context;
 
 /// The concrete type behind a `wasi:http/types/request-options` resource.
 #[derive(Copy, Clone, Debug, Default)]
@@ -119,6 +123,93 @@ impl Request {
             None,
             body.map_err(Into::into).boxed(),
         )
+    }
+
+    /// Convert this [`Request`] into an [`http::Request<BoxBody<Bytes, ErrorCode>>`].
+    ///
+    /// The specified future `fut` can be used to communicate a request processing
+    /// error, if any, back to the caller (e.g., if this request was constructed
+    /// through `wasi:http/types.request#new`).
+    pub fn into_http<T: WasiHttpView + 'static>(
+        self,
+        store: impl AsContextMut<Data = T>,
+        fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
+    ) -> wasmtime::Result<http::Request<BoxBody<Bytes, ErrorCode>>> {
+        self.into_http_with_getter(store, fut, T::http)
+    }
+
+    /// Like [`Self::into_http`], but uses a custom getter for obtaining the [`WasiHttpCtxView`].
+    pub fn into_http_with_getter<T: 'static>(
+        self,
+        store: impl AsContextMut<Data = T>,
+        fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
+        getter: fn(&mut T) -> WasiHttpCtxView<'_>,
+    ) -> wasmtime::Result<http::Request<BoxBody<Bytes, ErrorCode>>> {
+        let Self {
+            method,
+            scheme,
+            authority,
+            path_with_query,
+            headers,
+            options: _,
+            body,
+        } = self;
+
+        // Reconstruct URI from its components
+        let mut uri_builder = http::Uri::builder();
+        if let Some(s) = scheme {
+            uri_builder = uri_builder.scheme(s);
+        }
+        if let Some(a) = authority {
+            uri_builder = uri_builder.authority(a.as_str());
+        }
+        if let Some(pq) = path_with_query {
+            uri_builder = uri_builder.path_and_query(pq.as_str());
+        }
+        let uri = uri_builder
+            .build()
+            .context("failed to build request URI")?;
+
+        let mut builder = http::Request::builder().method(method).uri(uri);
+
+        if let Some(headers_mut) = builder.headers_mut() {
+            *headers_mut = Arc::unwrap_or_clone(headers);
+        } else {
+            tracing::warn!("failed to get mutable headers from http request builder");
+        }
+
+        let body = match body {
+            Body::Guest {
+                contents_rx,
+                trailers_rx,
+                result_tx,
+            } => {
+                // Validate Content-Length if present
+                let headers = match builder.headers_mut() {
+                    Some(headers) => Ok(headers),
+                    None => Err(anyhow::anyhow!("missing headers")),
+                }?;
+                let content_length = get_content_length(headers)
+                    .context("failed to parse `content-length`")?;
+                GuestBody::new(
+                    store,
+                    contents_rx,
+                    trailers_rx,
+                    result_tx,
+                    fut,
+                    content_length,
+                    ErrorCode::HttpRequestBodySize,
+                    getter,
+                )
+                .boxed()
+            }
+            Body::Host { body, result_tx } => {
+                _ = result_tx.send(Box::new(fut));
+                body
+            }
+        };
+
+        Ok(builder.body(body)?)
     }
 }
 
@@ -348,4 +439,42 @@ pub async fn default_send_request(
         };
         conn.await.map_err(ErrorCode::from_hyper_response_error)
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http::Request as HttpRequest;
+    use http_body_util::Full;
+    use std::convert::Infallible;
+
+    struct TestView;
+    impl WasiHttpView for TestView {
+        fn http(&mut self) -> WasiHttpCtxView<'_> {
+            unimplemented!()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_request_into_http() {
+        let (req, fut) = Request::new(
+            Method::GET,
+            Some(Scheme::HTTPS),
+            Some(Authority::from_static("example.com")),
+            Some(PathAndQuery::from_static("/path?query=1")),
+            HeaderMap::new(),
+            None,
+            Full::new(Bytes::from_static(b"body")).map_err(|_| unreachable!()).boxed(),
+        );
+        let (http_req) = req.into_http(TestView, fut).unwrap();
+        assert_eq!(http_req.method(), Method::GET);
+        assert_eq!(
+            http_req.uri(),
+            &http::Uri::from_static("https://example.com/path?query=1")
+        );
+        let body_bytes = hyper::body::to_bytes(http_req.into_body())
+            .await
+            .unwrap();
+        assert_eq!(&body_bytes[..], b"body");
+    }
 }
