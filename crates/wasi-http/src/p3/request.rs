@@ -42,6 +42,44 @@ pub struct Request {
     pub(crate) body: Body,
 }
 
+impl TryFrom<Request> for http::Request<Body> {
+    type Error = http::Error;
+
+    fn try_from(
+        Request {
+            method,
+            scheme,
+            authority,
+            path_with_query,
+            headers,
+            options: _,
+            body,
+        }: Request,
+    ) -> Result<Self, Self::Error> {
+        // Reconstruct URI from its components
+        let mut uri_builder = http::Uri::builder();
+        if let Some(s) = scheme {
+            uri_builder = uri_builder.scheme(s);
+        }
+        if let Some(a) = authority {
+            uri_builder = uri_builder.authority(a.as_str());
+        }
+        if let Some(pq) = path_with_query {
+            uri_builder = uri_builder.path_and_query(pq.as_str());
+        }
+        let uri: http::Uri = uri_builder.build()?;
+
+        let mut req = http::Request::builder().method(method).uri(uri);
+
+        if let Some(headers_mut) = req.headers_mut() {
+            *headers_mut = Arc::unwrap_or_clone(headers);
+        } else {
+            tracing::warn!("failed to get mutable headers from http request builder");
+        }
+        req.body(body)
+    }
+}
+
 impl Request {
     /// Construct a new [Request]
     ///
@@ -144,38 +182,8 @@ impl Request {
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
     ) -> wasmtime::Result<http::Request<BoxBody<Bytes, ErrorCode>>> {
-        let Self {
-            method,
-            scheme,
-            authority,
-            path_with_query,
-            headers,
-            options: _,
-            body,
-        } = self;
-
-        // Reconstruct URI from its components
-        let mut uri_builder = http::Uri::builder();
-        if let Some(s) = scheme {
-            uri_builder = uri_builder.scheme(s);
-        }
-        if let Some(a) = authority {
-            uri_builder = uri_builder.authority(a.as_str());
-        }
-        if let Some(pq) = path_with_query {
-            uri_builder = uri_builder.path_and_query(pq.as_str());
-        }
-        let uri = uri_builder
-            .build()
-            .context("failed to build request URI")?;
-
-        let mut builder = http::Request::builder().method(method).uri(uri);
-
-        if let Some(headers_mut) = builder.headers_mut() {
-            *headers_mut = Arc::unwrap_or_clone(headers);
-        } else {
-            tracing::warn!("failed to get mutable headers from http request builder");
-        }
+        let req = http::Request::try_from(self)?;
+        let (req, body) = req.into_parts();
 
         let body = match body {
             Body::Guest {
@@ -184,11 +192,7 @@ impl Request {
                 result_tx,
             } => {
                 // Validate Content-Length if present
-                let headers = match builder.headers_mut() {
-                    Some(headers) => Ok(headers),
-                    None => Err(anyhow::anyhow!("missing headers")),
-                }?;
-                let content_length = get_content_length(headers)
+                let content_length = get_content_length(&req.headers)
                     .context("failed to parse `content-length`")?;
                 GuestBody::new(
                     store,
@@ -208,7 +212,7 @@ impl Request {
             }
         };
 
-        Ok(builder.body(body)?)
+        Ok(http::Request::from_parts(req, body))
     }
 }
 
