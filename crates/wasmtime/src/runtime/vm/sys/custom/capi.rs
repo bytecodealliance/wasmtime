@@ -229,4 +229,18 @@ unsafe extern "C" {
     /// Releases a write lock previously acquired with [`wasmtime_sync_rwlock_write`].
     #[cfg(has_custom_sync)]
     pub fn wasmtime_sync_rwlock_write_release(lock: *mut usize);
+
+    /// Initializes an RwLock.
+    ///
+    /// The `lock` parameter points to a `usize` that is initially zero.
+    /// Implementations can use zero to mean "initialized but inert", making this
+    /// a no-op, or they can initialize the lock state as needed.
+    ///
+    /// The lock must be freed with [`wasmtime_sync_rwlock_free`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_new(lock: *mut usize);
+
+    /// Frees an RwLock created with [`wasmtime_sync_rwlock_new`].
+    #[cfg(has_custom_sync)]
+    pub fn wasmtime_sync_rwlock_free(lock: *mut usize);
 }

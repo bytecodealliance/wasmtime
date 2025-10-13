@@ -19,9 +19,40 @@ use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 
+/// A host-provided lock handle.
+///
+/// The lock is stored as a `usize` initialized to 0. The host implementation
+/// is responsible for lazy initialization via `wasmtime_sync_lock_new`.
+#[cfg(has_custom_sync)]
+#[derive(Debug)]
+struct HostLock {
+    storage: UnsafeCell<usize>,
+}
+
+#[cfg(has_custom_sync)]
+impl HostLock {
+    const fn new() -> HostLock {
+        HostLock {
+            storage: UnsafeCell::new(0),
+        }
+    }
+
+    fn ensure(&self) -> *mut usize {
+        let ptr = self.storage.get();
+        // SAFETY: The host implementation handles lazy initialization and synchronization.
+        // It's safe to call this multiple times; the implementation ensures idempotency.
+        unsafe {
+            crate::runtime::vm::capi::wasmtime_sync_lock_new(ptr);
+        }
+        ptr
+    }
+}
+
 pub struct OnceLock<T> {
     val: UnsafeCell<MaybeUninit<T>>,
     state: AtomicU8,
+    #[cfg(has_custom_sync)]
+    lock: HostLock,
 }
 
 unsafe impl<T: Send> Send for OnceLock<T> {}
@@ -36,6 +67,8 @@ impl<T> OnceLock<T> {
         OnceLock {
             state: AtomicU8::new(UNINITIALIZED),
             val: UnsafeCell::new(MaybeUninit::uninit()),
+            #[cfg(has_custom_sync)]
+            lock: HostLock::new(),
         }
     }
 
@@ -55,6 +88,7 @@ impl<T> OnceLock<T> {
 
     fn get(&self) -> Option<&T> {
         if self.state.load(Ordering::Acquire) == INITIALIZED {
+            // SAFETY: State is INITIALIZED, so val has been written
             Some(unsafe { (*self.val.get()).assume_init_ref() })
         } else {
             None
@@ -62,6 +96,7 @@ impl<T> OnceLock<T> {
     }
 
     #[cold]
+    #[cfg(not(has_custom_sync))]
     fn try_init<E>(&self, f: impl FnOnce() -> Result<T, E>) -> Result<&T, E> {
         match self.state.compare_exchange(
             UNINITIALIZED,
@@ -81,9 +116,75 @@ impl<T> OnceLock<T> {
                     _ => unreachable!(),
                 },
             },
-            Err(INITIALIZING) => panic!("concurrent initialization only allowed with `std` or `custom-sync-primitives` features"),
+            Err(INITIALIZING) => panic!(
+                "concurrent initialization only allowed with `std` or `custom-sync-primitives` features"
+            ),
             Err(INITIALIZED) => Ok(self.get().unwrap()),
             _ => unreachable!(),
+        }
+    }
+
+    #[cold]
+    #[cfg(has_custom_sync)]
+    fn try_init<E>(&self, f: impl FnOnce() -> Result<T, E>) -> Result<&T, E> {
+        // Ensure lock is created
+        let lock = self.lock.ensure();
+
+        // SAFETY: lock.ensure() returns a valid lock handle from the host
+        unsafe {
+            crate::runtime::vm::capi::wasmtime_sync_lock_acquire(lock);
+        }
+
+        // Check state again under lock
+        let result = match self.state.load(Ordering::Acquire) {
+            UNINITIALIZED => {
+                self.state.store(INITIALIZING, Ordering::Release);
+                match f() {
+                    Ok(val) => {
+                        // SAFETY: We hold the lock and state is INITIALIZING
+                        let ret = unsafe { &*(*self.val.get()).write(val) };
+                        self.state.store(INITIALIZED, Ordering::Release);
+                        Ok(ret)
+                    }
+                    Err(e) => {
+                        self.state.store(UNINITIALIZED, Ordering::Release);
+                        Err(e)
+                    }
+                }
+            }
+            INITIALIZED => {
+                // SAFETY: State is INITIALIZED, so val has been written
+                Ok(unsafe { (*self.val.get()).assume_init_ref() })
+            }
+            _ => panic!("concurrent initialization"),
+        };
+
+        // SAFETY: We acquired the lock above and must now release it
+        unsafe {
+            crate::runtime::vm::capi::wasmtime_sync_lock_release(lock);
+        }
+
+        result
+    }
+}
+
+impl<T> Drop for OnceLock<T> {
+    fn drop(&mut self) {
+        #[cfg(has_custom_sync)]
+        {
+            // SAFETY: We have exclusive access via &mut self
+            let lock_value = unsafe { *self.lock.storage.get() };
+            if lock_value != 0 {
+                // SAFETY: Non-zero means the lock was initialized.
+                // We're in Drop, so the lock is no longer in use.
+                unsafe {
+                    crate::runtime::vm::capi::wasmtime_sync_lock_free(self.lock.storage.get());
+                }
+            }
+        }
+        if self.state.load(Ordering::Acquire) == INITIALIZED {
+            // SAFETY: State is INITIALIZED, so val has been written
+            unsafe { (*self.val.get()).assume_init_drop() };
         }
     }
 }
@@ -94,10 +195,13 @@ impl<T> Default for OnceLock<T> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RwLock<T> {
     val: UnsafeCell<T>,
+    #[cfg(not(has_custom_sync))]
     state: AtomicU32,
+    #[cfg(has_custom_sync)]
+    lock: HostLock,
 }
 
 unsafe impl<T: Send> Send for RwLock<T> {}
@@ -107,10 +211,14 @@ impl<T> RwLock<T> {
     pub const fn new(val: T) -> RwLock<T> {
         RwLock {
             val: UnsafeCell::new(val),
+            #[cfg(not(has_custom_sync))]
             state: AtomicU32::new(0),
+            #[cfg(has_custom_sync)]
+            lock: HostLock::new(),
         }
     }
 
+    #[cfg(not(has_custom_sync))]
     pub fn read(&self) -> impl Deref<Target = T> + '_ {
         const READER_LIMIT: u32 = u32::MAX / 2;
         match self
@@ -133,58 +241,149 @@ impl<T> RwLock<T> {
         }
     }
 
+    #[cfg(has_custom_sync)]
+    pub fn read(&self) -> impl Deref<Target = T> + '_ {
+        let handle = {
+            let ptr = self.lock.storage.get();
+            // SAFETY: The host implementation handles lazy initialization and synchronization.
+            // It's safe to call this multiple times; the implementation ensures idempotency.
+            unsafe {
+                crate::runtime::vm::capi::wasmtime_sync_rwlock_new(ptr);
+                crate::runtime::vm::capi::wasmtime_sync_rwlock_read(ptr);
+            }
+            ptr
+        };
+        RwLockReadGuard {
+            lock: self,
+            #[cfg(has_custom_sync)]
+            handle,
+        }
+    }
+
+    #[cfg(not(has_custom_sync))]
     pub fn write(&self) -> impl DerefMut<Target = T> + '_ {
         match self
             .state
             .compare_exchange(0, u32::MAX, Ordering::Acquire, Ordering::Relaxed)
         {
             Ok(0) => RwLockWriteGuard { lock: self },
-            _ => panic!("concurrent write request, must use `std` or `custom-sync-primitives` features to avoid panicking"),
+            _ => panic!(
+                "concurrent write request, must use `std` or `custom-sync-primitives` features to avoid panicking"
+            ),
+        }
+    }
+
+    #[cfg(has_custom_sync)]
+    pub fn write(&self) -> impl DerefMut<Target = T> + '_ {
+        let handle = {
+            let ptr = self.lock.storage.get();
+            // SAFETY: The host implementation handles lazy initialization and synchronization.
+            // It's safe to call this multiple times; the implementation ensures idempotency.
+            unsafe {
+                crate::runtime::vm::capi::wasmtime_sync_rwlock_new(ptr);
+                crate::runtime::vm::capi::wasmtime_sync_rwlock_write(ptr);
+            }
+            ptr
+        };
+        RwLockWriteGuard {
+            lock: self,
+            #[cfg(has_custom_sync)]
+            handle,
+        }
+    }
+}
+
+impl<T: Default> Default for RwLock<T> {
+    fn default() -> RwLock<T> {
+        RwLock::new(T::default())
+    }
+}
+
+#[cfg(has_custom_sync)]
+impl<T> Drop for RwLock<T> {
+    fn drop(&mut self) {
+        // SAFETY: We have exclusive access via &mut self
+        let lock_value = unsafe { *self.lock.storage.get() };
+        if lock_value != 0 {
+            // SAFETY: Non-zero means the lock was initialized.
+            // We're in Drop, so the lock is no longer in use.
+            unsafe {
+                crate::runtime::vm::capi::wasmtime_sync_rwlock_free(self.lock.storage.get());
+            }
         }
     }
 }
 
 struct RwLockReadGuard<'a, T> {
     lock: &'a RwLock<T>,
+    #[cfg(has_custom_sync)]
+    handle: *mut usize,
 }
 
 impl<T> Deref for RwLockReadGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &T {
+        // SAFETY: We hold the read lock
         unsafe { &*self.lock.val.get() }
     }
 }
 
+#[cfg(not(has_custom_sync))]
 impl<T> Drop for RwLockReadGuard<'_, T> {
     fn drop(&mut self) {
         self.lock.state.fetch_sub(1, Ordering::Release);
     }
 }
 
+#[cfg(has_custom_sync)]
+impl<T> Drop for RwLockReadGuard<'_, T> {
+    fn drop(&mut self) {
+        // SAFETY: We acquired the read lock in RwLock::read()
+        unsafe {
+            crate::runtime::vm::capi::wasmtime_sync_rwlock_read_release(self.handle);
+        }
+    }
+}
+
 struct RwLockWriteGuard<'a, T> {
     lock: &'a RwLock<T>,
+    #[cfg(has_custom_sync)]
+    handle: *mut usize,
 }
 
 impl<T> Deref for RwLockWriteGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &T {
+        // SAFETY: We hold the write lock
         unsafe { &*self.lock.val.get() }
     }
 }
 
 impl<T> DerefMut for RwLockWriteGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
+        // SAFETY: We hold the write lock
         unsafe { &mut *self.lock.val.get() }
     }
 }
 
+#[cfg(not(has_custom_sync))]
 impl<T> Drop for RwLockWriteGuard<'_, T> {
     fn drop(&mut self) {
         match self.lock.state.swap(0, Ordering::Release) {
             u32::MAX => {}
             _ => unreachable!(),
+        }
+    }
+}
+
+#[cfg(has_custom_sync)]
+impl<T> Drop for RwLockWriteGuard<'_, T> {
+    fn drop(&mut self) {
+        // SAFETY: We acquired the write lock in RwLock::write()
+        unsafe {
+            crate::runtime::vm::capi::wasmtime_sync_rwlock_write_release(self.handle);
         }
     }
 }

@@ -118,10 +118,10 @@ pub use crate::runtime::vm::stack_switching::*;
 pub use crate::runtime::vm::store_box::*;
 #[cfg(feature = "std")]
 pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
-#[cfg(has_custom_sync)]
-pub use crate::runtime::vm::sys::sync;
 #[cfg(has_host_compiler_backend)]
 pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
+#[cfg(has_custom_sync)]
+pub(crate) use sys::capi;
 pub use crate::runtime::vm::table::{Table, TableElementType};
 #[cfg(feature = "gc")]
 pub use crate::runtime::vm::throw::*;
