@@ -1,8 +1,6 @@
 //! Final rewrite pass.
 
-use crate::{
-    info::ModuleContext, snapshot::Snapshot, translate, FuncRenames, Wizer, DEFAULT_KEEP_INIT_FUNC,
-};
+use crate::{FuncRenames, Wizer, info::ModuleContext, snapshot::Snapshot, translate};
 use std::convert::TryFrom;
 use wasm_encoder::{ConstExpr, SectionId};
 
@@ -10,18 +8,18 @@ impl Wizer {
     /// Given the initialized snapshot, rewrite the Wasm so that it is already
     /// initialized.
     ///
-    pub(crate) fn rewrite(
+    pub(crate) fn rewrite<T>(
         &self,
         cx: &mut ModuleContext<'_>,
-        store: &crate::Store,
+        store: &wasmtime::Store<T>,
         snapshot: &Snapshot,
         renames: &FuncRenames,
-        has_wasi_initialize: bool,
     ) -> Vec<u8> {
         log::debug!("Rewriting input Wasm to pre-initialized state");
 
         let mut encoder = wasm_encoder::Module::new();
         let module = cx.root();
+        let has_wasi_initialize = cx.has_wasi_initialize(module);
 
         // Encode the initialized data segments from the snapshot rather
         // than the original, uninitialized data segments.
@@ -113,8 +111,7 @@ impl Wizer {
                 s if s.id == u8::from(SectionId::Export) => {
                     let mut exports = wasm_encoder::ExportSection::new();
                     for export in module.exports(cx) {
-                        if (export.name == self.init_func
-                            && !self.keep_init_func.unwrap_or(DEFAULT_KEEP_INIT_FUNC))
+                        if (export.name == self.init_func && !self.get_keep_init_func())
                             || (has_wasi_initialize && export.name == "_initialize")
                         {
                             continue;

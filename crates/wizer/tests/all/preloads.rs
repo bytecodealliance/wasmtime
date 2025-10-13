@@ -1,6 +1,7 @@
 use anyhow::Result;
+use wasmtime::{Instance, Linker, Module};
+use wasmtime_wizer::Wizer;
 use wat::parse_str as wat_to_wasm;
-use wizer::Wizer;
 
 const PRELOAD1: &'static str = r#"
 (module
@@ -20,16 +21,20 @@ const PRELOAD2: &'static str = r#"
 
 fn run_with_preloads(args: &[wasmtime::Val], wat: &str) -> Result<wasmtime::Val> {
     let wasm = wat_to_wasm(wat)?;
-    let mut w = Wizer::new();
-    w.preload_bytes("mod1", PRELOAD1.as_bytes().to_vec())?;
-    w.preload_bytes("mod2", PRELOAD2.as_bytes().to_vec())?;
-    let processed = w.run(&wasm)?;
-
     let engine = wasmtime::Engine::default();
     let mut store = wasmtime::Store::new(&engine, ());
+    let mod1 = Module::new(store.engine(), PRELOAD1)?;
+    let mod2 = Module::new(store.engine(), PRELOAD2)?;
 
-    let mod1 = wasmtime::Module::new(&engine, PRELOAD1.as_bytes())?;
-    let mod2 = wasmtime::Module::new(&engine, PRELOAD2.as_bytes())?;
+    let processed = Wizer::new().run(&mut store, &wasm, |store, module| {
+        let i1 = Instance::new(&mut *store, &mod1, &[])?;
+        let i2 = Instance::new(&mut *store, &mod2, &[])?;
+        let mut linker = Linker::new(store.engine());
+        linker.instance(&mut *store, "mod1", i1)?;
+        linker.instance(&mut *store, "mod2", i2)?;
+        linker.instantiate(store, module)
+    })?;
+
     let testmod = wasmtime::Module::new(&engine, &processed[..])?;
 
     let mod1_inst = wasmtime::Instance::new(&mut store, &mod1, &[])?;
@@ -44,7 +49,7 @@ fn run_with_preloads(args: &[wasmtime::Val], wat: &str) -> Result<wasmtime::Val>
         .ok_or_else(|| anyhow::anyhow!("no `run` function on test module"))?;
     let mut returned = vec![wasmtime::Val::I32(0)];
     run.call(&mut store, args, &mut returned)?;
-    Ok(returned[0].clone())
+    Ok(returned[0])
 }
 
 #[test]

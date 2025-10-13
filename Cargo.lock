@@ -3075,6 +3075,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex-bench"
+version = "0.1.0"
+dependencies = [
+ "regex",
+]
+
+[[package]]
 name = "regex-syntax"
 version = "0.6.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3091,6 +3098,13 @@ name = "regex-syntax"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
+
+[[package]]
+name = "regex-test"
+version = "0.1.0"
+dependencies = [
+ "regex",
+]
 
 [[package]]
 name = "region"
@@ -3985,6 +3999,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 
 [[package]]
+name = "uap-bench"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
 name = "unicode-ident"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4684,6 +4707,7 @@ dependencies = [
  "wasmtime-wasi-threads",
  "wasmtime-wasi-tls",
  "wasmtime-wast",
+ "wasmtime-wizer",
  "wast 240.0.0",
  "wat",
  "windows-sys 0.60.2",
@@ -5209,6 +5233,24 @@ dependencies = [
  "wasmparser 0.240.0",
  "wasmtime",
  "wast 240.0.0",
+]
+
+[[package]]
+name = "wasmtime-wizer"
+version = "39.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "criterion",
+ "env_logger 0.11.5",
+ "log",
+ "rayon",
+ "wasm-encoder 0.240.0",
+ "wasmparser 0.240.0",
+ "wasmprinter",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wat",
 ]
 
 [[package]]
@@ -5758,6 +5800,19 @@ dependencies = [
  "log",
  "thiserror 1.0.65",
  "wast 35.0.2",
+]
+
+[[package]]
+name = "wizer-fuzz"
+version = "0.0.0"
+dependencies = [
+ "env_logger 0.11.5",
+ "libfuzzer-sys",
+ "log",
+ "wasm-smith",
+ "wasmprinter",
+ "wasmtime",
+ "wasmtime-wizer",
 ]
 
 [[package]]

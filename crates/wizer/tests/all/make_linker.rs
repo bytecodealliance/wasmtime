@@ -1,25 +1,26 @@
-use anyhow::{anyhow, Context, Result};
-use std::rc::Rc;
+use anyhow::{Context, Result, anyhow};
 use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime_wizer::Wizer;
 use wat::parse_str as wat_to_wasm;
-use wizer::Wizer;
-
-fn get_wizer() -> Wizer {
-    let mut wizer = Wizer::new();
-    wizer
-        .make_linker(Some(Rc::new(|e: &wasmtime::Engine| {
-            let mut linker = wasmtime::Linker::new(e);
-            linker.func_wrap("foo", "bar", |x: i32| x + 1)?;
-            Ok(linker)
-        })))
-        .unwrap();
-    wizer
-}
 
 fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
     let _ = env_logger::try_init();
 
-    let wasm = get_wizer().run(&wasm)?;
+    let mut config = wasmtime::Config::new();
+    wasmtime::Cache::from_file(None)
+        .map(|cache| config.cache(Some(cache)))
+        .unwrap();
+    config.wasm_multi_memory(true);
+    config.wasm_multi_value(true);
+
+    let engine = wasmtime::Engine::new(&config)?;
+    let wasi_ctx = WasiCtxBuilder::new().build_p1();
+    let mut store = wasmtime::Store::new(&engine, wasi_ctx);
+    let wasm = Wizer::new().run(&mut store, &wasm, |store, module| {
+        let mut linker = wasmtime::Linker::new(module.engine());
+        linker.func_wrap("foo", "bar", |x: i32| x + 1)?;
+        linker.instantiate(store, module)
+    })?;
     log::debug!(
         "=== Wizened Wasm ==========================================================\n\
        {}\n\
@@ -30,14 +31,6 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
         std::fs::write("test.wasm", &wasm).unwrap();
     }
 
-    let mut config = wasmtime::Config::new();
-    wasmtime::Cache::from_file(None)
-        .map(|cache| config.cache(Some(cache)))
-        .unwrap();
-    config.wasm_multi_memory(true);
-    config.wasm_multi_value(true);
-
-    let engine = wasmtime::Engine::new(&config)?;
     let wasi_ctx = WasiCtxBuilder::new().build_p1();
     let mut store = wasmtime::Store::new(&engine, wasi_ctx);
     let module =
@@ -63,9 +56,7 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
     };
     anyhow::ensure!(
         expected == actual,
-        "expected `{}`, found `{}`",
-        expected,
-        actual,
+        "expected `{expected}`, found `{actual}`",
     );
 
     Ok(())
@@ -97,28 +88,4 @@ fn custom_linker() -> Result<()> {
   )
 )"#,
     )
-}
-
-#[test]
-#[should_panic]
-fn linker_and_wasi() {
-    Wizer::new()
-        .make_linker(Some(Rc::new(|e: &wasmtime::Engine| {
-            Ok(wasmtime::Linker::new(e))
-        })))
-        .unwrap()
-        .allow_wasi(true)
-        .unwrap();
-}
-
-#[test]
-#[should_panic]
-fn wasi_and_linker() {
-    Wizer::new()
-        .allow_wasi(true)
-        .unwrap()
-        .make_linker(Some(Rc::new(|e: &wasmtime::Engine| {
-            Ok(wasmtime::Linker::new(e))
-        })))
-        .unwrap();
 }

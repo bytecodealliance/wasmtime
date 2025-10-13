@@ -100,6 +100,9 @@ criteria = []
 [policy.pulley-macros]
 audit-as-crates-io = true
 
+[policy.uap-bench]
+criteria = []
+
 [policy.wasi-common]
 audit-as-crates-io = true
 
@@ -219,6 +222,9 @@ audit-as-crates-io = true
 
 [policy.winch-codegen]
 audit-as-crates-io = true
+
+[policy.wizer-fuzz]
+criteria = []
 
 [[exemptions.addr2line]]
 version = "0.17.0"
