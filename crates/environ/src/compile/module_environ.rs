@@ -581,7 +581,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     self.result.code_index + self.result.module.num_imported_funcs as u32;
                 let func_index = FuncIndex::from_u32(func_index);
 
-                if self.tunables.generate_debuginfo {
+                if self.tunables.debug_native {
                     let sig_index = self.result.module.functions[func_index]
                         .signature
                         .unwrap_module_type_index();
@@ -737,7 +737,7 @@ and for re-adding support for interface types you can see this issue:
     }
 
     fn dwarf_section(&mut self, name: &str, section: &CustomSectionReader<'data>) {
-        if !self.tunables.generate_debuginfo && !self.tunables.parse_wasm_debuginfo {
+        if !self.tunables.debug_native && !self.tunables.parse_wasm_debuginfo {
             self.result.has_unparsed_debuginfo = true;
             return;
         }
@@ -865,12 +865,12 @@ and for re-adding support for interface types you can see this issue:
                 }
                 wasmparser::Name::Module { name, .. } => {
                     self.result.module.name = Some(name.to_string());
-                    if self.tunables.generate_debuginfo {
+                    if self.tunables.debug_native {
                         self.result.debuginfo.name_section.module_name = Some(name);
                     }
                 }
                 wasmparser::Name::Local(reader) => {
-                    if !self.tunables.generate_debuginfo {
+                    if !self.tunables.debug_native {
                         continue;
                     }
                     for f in reader {

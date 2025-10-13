@@ -253,7 +253,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let (namespace, index) = key.into_raw_parts();
         context.func.name = UserFuncName::User(UserExternalName { namespace, index });
 
-        if self.tunables.generate_debuginfo {
+        if self.tunables.debug_native {
             context.func.collect_debug_info();
         }
 
@@ -1438,7 +1438,7 @@ impl FunctionCompiler<'_> {
         }
 
         if body_and_tunables
-            .map(|(_, t)| t.generate_debuginfo)
+            .map(|(_, t)| t.debug_native)
             .unwrap_or(false)
         {
             compiled_function.set_value_labels_ranges(compiled_code.value_labels_ranges.clone());

@@ -442,7 +442,7 @@ impl Config {
     /// By default this option is `false`.
     /// **Note** Enabling this option is not compatible with the Winch compiler.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
-        self.tunables.generate_debuginfo = Some(enable);
+        self.tunables.debug_native = Some(enable);
         self
     }
 

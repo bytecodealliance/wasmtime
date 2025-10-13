@@ -74,7 +74,11 @@ define_tunables! {
         pub memory_reservation_for_growth: u64,
 
         /// Whether or not to generate native DWARF debug information.
-        pub generate_debuginfo: bool,
+        pub debug_native: bool,
+
+        /// Whether we are enabling precise Wasm-level debugging in
+        /// the guest.
+        pub debug_guest: bool,
 
         /// Whether or not to retain DWARF sections in compiled modules.
         pub parse_wasm_debuginfo: bool,
@@ -136,10 +140,6 @@ define_tunables! {
         /// The general size threshold for the sum of the caller's and callee's
         /// sizes, past which we will generally not inline calls anymore.
         pub inlining_sum_size_threshold: u32,
-
-        /// Whether we are enabling precise Wasm-level debugging in
-        /// the guest.
-        pub debug_guest: bool,
     }
 
     pub struct ConfigTunables {
@@ -197,7 +197,7 @@ impl Tunables {
 
             // General options which have the same defaults regardless of
             // architecture.
-            generate_debuginfo: false,
+            debug_native: false,
             parse_wasm_debuginfo: true,
             consume_fuel: false,
             epoch_interruption: false,
