@@ -76,13 +76,6 @@ impl HostLock {
     fn as_ptr(&self) -> *mut usize {
         self.storage.get().cast::<usize>()
     }
-
-    fn free(&mut self) {
-        if self.state.load(Ordering::Acquire) == HOST_LOCK_READY {
-            // SAFETY: State is READY, so storage contains a valid lock handle
-            unsafe { wasmtime_sync_lock_free(self.as_ptr()) };
-        }
-    }
 }
 
 /// OnceLock implementation using host-provided lock
@@ -182,7 +175,11 @@ impl<T> Default for OnceLock<T> {
 
 impl<T> Drop for OnceLock<T> {
     fn drop(&mut self) {
-        self.lock.free();
+        if self.lock.state.load(Ordering::Acquire) == HOST_LOCK_READY {
+            // SAFETY: State is READY, so storage contains a valid lock handle.
+            // We're in Drop, so the lock is no longer in use.
+            unsafe { wasmtime_sync_lock_free(self.lock.as_ptr()) };
+        }
         if self.state.load(Ordering::Acquire) == INITIALIZED {
             // SAFETY: State is INITIALIZED, so val has been written
             unsafe { (*self.val.get()).assume_init_drop() };
@@ -243,7 +240,11 @@ impl<T: Default> Default for RwLock<T> {
 
 impl<T> Drop for RwLock<T> {
     fn drop(&mut self) {
-        self.lock.free();
+        if self.lock.state.load(Ordering::Acquire) == HOST_LOCK_READY {
+            // SAFETY: State is READY, so storage contains a valid lock handle.
+            // We're in Drop, so the lock is no longer in use.
+            unsafe { wasmtime_sync_lock_free(self.lock.as_ptr()) };
+        }
     }
 }
 
