@@ -444,19 +444,50 @@ pub async fn default_send_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use http::Request as HttpRequest;
-    use http_body_util::Full;
-    use std::convert::Infallible;
+    use http_body_util::{BodyExt, Full};
+    use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+    use crate::p3::WasiHttpCtx;
+    use wasmtime::{Engine, Store};
 
-    struct TestView;
-    impl WasiHttpView for TestView {
+    struct TestHttpCtx;
+    struct TestCtx {
+        table: ResourceTable,
+        wasi: WasiCtx,
+        http: TestHttpCtx,
+    }
+
+    impl TestCtx {
+        fn new() -> Self {
+            Self {
+                table: ResourceTable::default(),
+                wasi: WasiCtxBuilder::new().build(),
+                http: TestHttpCtx,
+            }
+        }
+    }
+
+    impl WasiView for TestCtx {
+        fn ctx(&mut self) -> WasiCtxView<'_> {
+            WasiCtxView {
+                ctx: &mut self.wasi,
+                table: &mut self.table,
+            }
+        }
+    }
+
+    impl WasiHttpCtx for TestHttpCtx {}
+
+    impl WasiHttpView for TestCtx {
         fn http(&mut self) -> WasiHttpCtxView<'_> {
-            unimplemented!()
+            WasiHttpCtxView {
+                ctx: &mut self.http,
+                table: &mut self.table,
+            }
         }
     }
 
     #[tokio::test]
-    async fn test_request_into_http() {
+    async fn test_request_into_http() -> Result<(), anyhow::Error> {
         let (req, fut) = Request::new(
             Method::GET,
             Some(Scheme::HTTPS),
@@ -466,15 +497,22 @@ mod tests {
             None,
             Full::new(Bytes::from_static(b"body")).map_err(|_| unreachable!()).boxed(),
         );
-        let (http_req) = req.into_http(TestView, fut).unwrap();
+
+        let engine = Engine::default();
+        let mut store = Store::new(
+            &engine,
+            TestCtx::new(),
+        );
+        let http_req = req.into_http(&mut store, fut).unwrap();
         assert_eq!(http_req.method(), Method::GET);
         assert_eq!(
             http_req.uri(),
             &http::Uri::from_static("https://example.com/path?query=1")
         );
-        let body_bytes = hyper::body::to_bytes(http_req.into_body())
-            .await
-            .unwrap();
-        assert_eq!(&body_bytes[..], b"body");
+        let body_bytes = http_req.into_body().collect()
+            .await?;
+
+        assert_eq!(*body_bytes.to_bytes(), *b"body");
+        Ok(())
     }
 }
