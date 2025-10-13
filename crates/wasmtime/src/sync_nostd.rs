@@ -19,6 +19,14 @@ use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 
+#[cfg(has_custom_sync)]
+use crate::runtime::vm::capi::{
+    wasmtime_sync_lock_acquire, wasmtime_sync_lock_free, wasmtime_sync_lock_new,
+    wasmtime_sync_lock_release, wasmtime_sync_rwlock_free, wasmtime_sync_rwlock_new,
+    wasmtime_sync_rwlock_read, wasmtime_sync_rwlock_read_release, wasmtime_sync_rwlock_write,
+    wasmtime_sync_rwlock_write_release,
+};
+
 /// A host-provided lock handle.
 ///
 /// The lock is stored as a `usize` initialized to 0. The host implementation
@@ -40,9 +48,8 @@ impl HostLock {
     fn ensure(&self) -> *mut usize {
         let ptr = self.storage.get();
         // SAFETY: The host implementation handles lazy initialization and synchronization.
-        // It's safe to call this multiple times; the implementation ensures idempotency.
         unsafe {
-            crate::runtime::vm::capi::wasmtime_sync_lock_new(ptr);
+            wasmtime_sync_lock_new(ptr);
         }
         ptr
     }
@@ -132,7 +139,7 @@ impl<T> OnceLock<T> {
 
         // SAFETY: lock.ensure() returns a valid lock handle from the host
         unsafe {
-            crate::runtime::vm::capi::wasmtime_sync_lock_acquire(lock);
+            wasmtime_sync_lock_acquire(lock);
         }
 
         // Check state again under lock
@@ -161,7 +168,7 @@ impl<T> OnceLock<T> {
 
         // SAFETY: We acquired the lock above and must now release it
         unsafe {
-            crate::runtime::vm::capi::wasmtime_sync_lock_release(lock);
+            wasmtime_sync_lock_release(lock);
         }
 
         result
@@ -176,9 +183,8 @@ impl<T> Drop for OnceLock<T> {
             let lock_value = unsafe { *self.lock.storage.get() };
             if lock_value != 0 {
                 // SAFETY: Non-zero means the lock was initialized.
-                // We're in Drop, so the lock is no longer in use.
                 unsafe {
-                    crate::runtime::vm::capi::wasmtime_sync_lock_free(self.lock.storage.get());
+                    wasmtime_sync_lock_free(self.lock.storage.get());
                 }
             }
         }
@@ -246,10 +252,9 @@ impl<T> RwLock<T> {
         let handle = {
             let ptr = self.lock.storage.get();
             // SAFETY: The host implementation handles lazy initialization and synchronization.
-            // It's safe to call this multiple times; the implementation ensures idempotency.
             unsafe {
-                crate::runtime::vm::capi::wasmtime_sync_rwlock_new(ptr);
-                crate::runtime::vm::capi::wasmtime_sync_rwlock_read(ptr);
+                wasmtime_sync_rwlock_new(ptr);
+                wasmtime_sync_rwlock_read(ptr);
             }
             ptr
         };
@@ -278,10 +283,9 @@ impl<T> RwLock<T> {
         let handle = {
             let ptr = self.lock.storage.get();
             // SAFETY: The host implementation handles lazy initialization and synchronization.
-            // It's safe to call this multiple times; the implementation ensures idempotency.
             unsafe {
-                crate::runtime::vm::capi::wasmtime_sync_rwlock_new(ptr);
-                crate::runtime::vm::capi::wasmtime_sync_rwlock_write(ptr);
+                wasmtime_sync_rwlock_new(ptr);
+                wasmtime_sync_rwlock_write(ptr);
             }
             ptr
         };
@@ -306,9 +310,8 @@ impl<T> Drop for RwLock<T> {
         let lock_value = unsafe { *self.lock.storage.get() };
         if lock_value != 0 {
             // SAFETY: Non-zero means the lock was initialized.
-            // We're in Drop, so the lock is no longer in use.
             unsafe {
-                crate::runtime::vm::capi::wasmtime_sync_rwlock_free(self.lock.storage.get());
+                wasmtime_sync_rwlock_free(self.lock.storage.get());
             }
         }
     }
@@ -341,7 +344,7 @@ impl<T> Drop for RwLockReadGuard<'_, T> {
     fn drop(&mut self) {
         // SAFETY: We acquired the read lock in RwLock::read()
         unsafe {
-            crate::runtime::vm::capi::wasmtime_sync_rwlock_read_release(self.handle);
+            wasmtime_sync_rwlock_read_release(self.handle);
         }
     }
 }
@@ -383,7 +386,7 @@ impl<T> Drop for RwLockWriteGuard<'_, T> {
     fn drop(&mut self) {
         // SAFETY: We acquired the write lock in RwLock::write()
         unsafe {
-            crate::runtime::vm::capi::wasmtime_sync_rwlock_write_release(self.handle);
+            wasmtime_sync_rwlock_write_release(self.handle);
         }
     }
 }
