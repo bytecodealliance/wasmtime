@@ -769,7 +769,7 @@ fn lookup_libcall(name: &str) -> Option<*const u8> {
         "fmaf" => {
             extern "C" fn fmaf(a: f32, b: f32, c: f32) -> f32 {
                 #[cfg(all(target_os = "windows", target_env = "gnu"))]
-                return libm::fma(a, b, c);
+                return libm::fmaf(a, b, c);
                 #[cfg(not(all(target_os = "windows", target_env = "gnu")))]
                 return a.mul_add(b, c);
             }
