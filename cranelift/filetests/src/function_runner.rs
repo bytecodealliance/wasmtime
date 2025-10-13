@@ -755,14 +755,23 @@ fn lookup_libcall(name: &str) -> Option<*const u8> {
             Some(nearbyintf as *const u8)
         }
         "fma" => {
+            // The `fma` function for `x86_64-pc-windows-gnu` is incorrect. Use
+            // `libm`'s instead.  See:
+            // https://github.com/bytecodealliance/wasmtime/issues/4512
             extern "C" fn fma(a: f64, b: f64, c: f64) -> f64 {
-                a.mul_add(b, c)
+                #[cfg(all(target_os = "windows", target_env = "gnu"))]
+                return libm::fma(a, b, c);
+                #[cfg(not(all(target_os = "windows", target_env = "gnu")))]
+                return a.mul_add(b, c);
             }
             Some(fma as *const u8)
         }
         "fmaf" => {
             extern "C" fn fmaf(a: f32, b: f32, c: f32) -> f32 {
-                a.mul_add(b, c)
+                #[cfg(all(target_os = "windows", target_env = "gnu"))]
+                return libm::fma(a, b, c);
+                #[cfg(not(all(target_os = "windows", target_env = "gnu")))]
+                return a.mul_add(b, c);
             }
             Some(fmaf as *const u8)
         }
