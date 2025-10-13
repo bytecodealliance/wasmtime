@@ -13,7 +13,6 @@
 )]
 
 use core::cell::UnsafeCell;
-use core::hint::spin_loop;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicU8, Ordering};
@@ -24,57 +23,28 @@ use super::capi::{
     wasmtime_sync_rwlock_write, wasmtime_sync_rwlock_write_release,
 };
 
-const HOST_LOCK_UNINITIALIZED: u8 = 0;
-const HOST_LOCK_INITIALIZING: u8 = 1;
-const HOST_LOCK_READY: u8 = 2;
-
+/// A host-provided lock handle.
+///
+/// The lock is stored as a `usize` initialized to 0. The host implementation
+/// is responsible for lazy initialization via `wasmtime_sync_lock_new`.
 #[derive(Debug)]
 struct HostLock {
-    state: AtomicU8,
-    storage: UnsafeCell<MaybeUninit<usize>>,
+    storage: UnsafeCell<usize>,
 }
 
 impl HostLock {
     const fn new() -> HostLock {
         HostLock {
-            state: AtomicU8::new(HOST_LOCK_UNINITIALIZED),
-            storage: UnsafeCell::new(MaybeUninit::uninit()),
+            storage: UnsafeCell::new(0),
         }
     }
 
     fn ensure(&self) -> *mut usize {
-        if self.state.load(Ordering::Acquire) != HOST_LOCK_READY {
-            self.initialize();
-        }
-        debug_assert_eq!(self.state.load(Ordering::Relaxed), HOST_LOCK_READY);
-        self.as_ptr()
-    }
-
-    fn initialize(&self) {
-        match self.state.compare_exchange(
-            HOST_LOCK_UNINITIALIZED,
-            HOST_LOCK_INITIALIZING,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        ) {
-            Ok(_) => {
-                // SAFETY: Host-provided function must return a valid lock handle
-                let handle = unsafe { wasmtime_sync_lock_new() };
-                // SAFETY: We won the CAS race, so we have exclusive access to storage
-                unsafe { (*self.storage.get()).write(handle) };
-                self.state.store(HOST_LOCK_READY, Ordering::Release);
-            }
-            Err(HOST_LOCK_READY) => {}
-            Err(_) => {
-                while self.state.load(Ordering::Acquire) == HOST_LOCK_INITIALIZING {
-                    spin_loop();
-                }
-            }
-        }
-    }
-
-    fn as_ptr(&self) -> *mut usize {
-        self.storage.get().cast::<usize>()
+        let ptr = self.storage.get();
+        // SAFETY: The host implementation handles lazy initialization and synchronization.
+        // It's safe to call this multiple times; the implementation ensures idempotency.
+        unsafe { wasmtime_sync_lock_new(ptr) };
+        ptr
     }
 }
 
@@ -175,10 +145,12 @@ impl<T> Default for OnceLock<T> {
 
 impl<T> Drop for OnceLock<T> {
     fn drop(&mut self) {
-        if self.lock.state.load(Ordering::Acquire) == HOST_LOCK_READY {
-            // SAFETY: State is READY, so storage contains a valid lock handle.
+        // SAFETY: We have exclusive access via &mut self
+        let lock_value = unsafe { *self.lock.storage.get() };
+        if lock_value != 0 {
+            // SAFETY: Non-zero means the lock was initialized.
             // We're in Drop, so the lock is no longer in use.
-            unsafe { wasmtime_sync_lock_free(self.lock.as_ptr()) };
+            unsafe { wasmtime_sync_lock_free(self.lock.storage.get()) };
         }
         if self.state.load(Ordering::Acquire) == INITIALIZED {
             // SAFETY: State is INITIALIZED, so val has been written
@@ -225,8 +197,6 @@ impl<T> RwLock<T> {
         }
     }
 
-    // Lazily initializes the lock using compare-and-swap to handle races.
-    // Only one thread's lock will be installed; others are safely freed.
     fn ensure_lock(&self) -> *mut usize {
         self.lock.ensure()
     }
@@ -240,10 +210,12 @@ impl<T: Default> Default for RwLock<T> {
 
 impl<T> Drop for RwLock<T> {
     fn drop(&mut self) {
-        if self.lock.state.load(Ordering::Acquire) == HOST_LOCK_READY {
-            // SAFETY: State is READY, so storage contains a valid lock handle.
+        // SAFETY: We have exclusive access via &mut self
+        let lock_value = unsafe { *self.lock.storage.get() };
+        if lock_value != 0 {
+            // SAFETY: Non-zero means the lock was initialized.
             // We're in Drop, so the lock is no longer in use.
-            unsafe { wasmtime_sync_lock_free(self.lock.as_ptr()) };
+            unsafe { wasmtime_sync_lock_free(self.lock.storage.get()) };
         }
     }
 }

@@ -183,12 +183,15 @@ unsafe extern "C" {
     /// This value should be returned when later calling `wasmtime_tls_get`.
     pub fn wasmtime_tls_set(ptr: *mut u8);
 
-    /// Creates a new synchronization lock.
+    /// Initializes a synchronization lock.
     ///
-    /// Returns an opaque `usize` representing the lock state.
+    /// The `lock` parameter points to a `usize` that is initially zero.
+    /// Implementations can use zero to mean "initialized but inert", making this
+    /// a no-op, or they can initialize the lock state as needed.
+    ///
     /// The lock must be freed with [`wasmtime_sync_lock_free`].
     #[cfg(has_custom_sync)]
-    pub fn wasmtime_sync_lock_new() -> usize;
+    pub fn wasmtime_sync_lock_new(lock: *mut usize);
 
     /// Frees a synchronization lock created with [`wasmtime_sync_lock_new`].
     #[cfg(has_custom_sync)]
