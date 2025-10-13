@@ -1,4 +1,5 @@
 #![no_main]
+#![allow(dead_code)]
 
 use libfuzzer_sys::{arbitrary, fuzz_target};
 use wasmtime_fuzzing::oracles;
