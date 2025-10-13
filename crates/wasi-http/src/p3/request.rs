@@ -39,7 +39,7 @@ pub struct Request {
     /// Request options.
     pub options: Option<Arc<RequestOptions>>,
     /// Request body.
-    pub body: Body,
+    pub(crate) body: Body,
 }
 
 impl Request {
