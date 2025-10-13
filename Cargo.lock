@@ -839,6 +839,7 @@ dependencies = [
  "file-per-thread-logger",
  "filecheck",
  "gimli 0.32.3",
+ "libm",
  "log",
  "num_cpus",
  "pulley-interpreter",
