@@ -1920,6 +1920,7 @@ impl StoreOpaque {
             }
         }
 
+        #[cfg(feature = "debug")]
         if let Some(frame_table) = module_info.frame_table() {
             let relpc = module_info.text_offset(pc);
             for stack_slot in super::debug::gc_refs_in_frame(frame_table, relpc, fp) {
