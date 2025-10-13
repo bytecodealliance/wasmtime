@@ -468,6 +468,10 @@ impl Config {
     /// Breakpoints, watchpoints, and stepping are not yet supported,
     /// but will be added in a future version of Wasmtime.
     ///
+    /// This enables use of the [`crate::StackView`] API which is
+    /// provided by [`crate::Caller::stack_values`] from within a
+    /// hostcall context.
+    ///
     /// ***Note*** Enabling this option is not compatible with the
     /// Winch compiler.
     #[cfg(feature = "debug")]
