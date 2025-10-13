@@ -6,7 +6,7 @@ use crate::bindings;
 use crate::p3;
 use anyhow::Result;
 #[cfg(feature = "p3")]
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 #[cfg(feature = "p3")]
 use futures::{
     future::FutureExt,
@@ -188,9 +188,9 @@ where
             if available {
                 self.handler.0.worker_count.fetch_add(1, SeqCst);
             } else {
-                self.handler.0.worker_count.fetch_sub(1, SeqCst);
-                if !self.handler.0.task_queue.is_empty() {
-                    self.handler.maybe_start_worker();
+                let count = self.handler.0.worker_count.fetch_sub(1, SeqCst);
+                if count == 1 && !self.handler.0.task_queue.is_empty() {
+                    self.handler.start_worker();
                 }
             }
         }
@@ -408,40 +408,40 @@ impl<S, T> ProxyHandler<S, T> {
             panic!("ProxyHandler::push is only supported for WASIp3 handlers");
         };
 
-        if self.0.state.max_instance_reuse_count() <= 1 {
-            // Use a simplified path when instance reuse is disabled.
-            //
-            // TODO: As of this writing, using the task-queue-and-worker
-            // approach when `max_instance_reuse_count` is small has a pretty
-            // massive (e.g. 86%) performance penalty as measured by
-            // `wasmtime-serve-rps.sh`, which deserves investigation, and
-            // indicates we're probably leaving a lot of performance on the
-            // table even when `max_instance_reuse_count` is large.  Ideally,
-            // we'd narrow the penalty to nothing and remove this special-case
-            // path.
-            let StoreBundle {
-                mut store,
-                write_profile,
-            } = self.0.state.new_store()?;
+        match self.0.state.max_instance_reuse_count() {
+            0 => bail!("`max_instance_reuse_count` must be at least 1"),
+            1 => {
+                // Use a simplified path when instance reuse is disabled.
+                //
+                // This provides somewhat (e.g. ~20%) better throughput as
+                // measured by `wasmtime-serve-rps.sh` than the
+                // task-queue-and-workers approach below, so probably worth the
+                // slight code duplication.
+                let StoreBundle {
+                    mut store,
+                    write_profile,
+                } = self.0.state.new_store()?;
 
-            let proxy = &pre.instantiate_async(&mut store).await?;
+                let proxy = &pre.instantiate_async(&mut store).await?;
 
-            store
-                .run_concurrent(async |accessor| {
-                    tokio::time::timeout(self.0.state.request_timeout(), async {
-                        if let Err(error) = (task.run)(accessor, proxy).await {
-                            eprintln!("[{}] :: {error:?}", task.request_id);
-                        }
+                store
+                    .run_concurrent(async |accessor| {
+                        tokio::time::timeout(self.0.state.request_timeout(), async {
+                            if let Err(error) = (task.run)(accessor, proxy).await {
+                                eprintln!("[{}] :: {error:?}", task.request_id);
+                            }
+                        })
+                        .await
+                        .map_err(|_| anyhow!("guest timed out"))
                     })
-                    .await
-                    .map_err(|_| anyhow!("guest timed out"))
-                })
-                .await??;
+                    .await??;
 
-            write_profile(store.as_context_mut());
-        } else {
-            self.0.task_queue.push(task);
-            self.maybe_start_worker()
+                write_profile(store.as_context_mut());
+            }
+            _ => {
+                self.0.task_queue.push(task);
+                self.maybe_start_worker();
+            }
         }
 
         Ok(())
@@ -468,10 +468,8 @@ impl<S, T> ProxyHandler<S, T> {
         T: Send,
         S: HandlerState<StoreData = T>,
     {
-        if self.0.worker_count.fetch_add(1, SeqCst) == 0 {
+        if self.0.worker_count.load(SeqCst) == 0 {
             self.start_worker();
-        } else {
-            self.0.worker_count.fetch_sub(1, SeqCst);
         }
     }
 
@@ -484,7 +482,7 @@ impl<S, T> ProxyHandler<S, T> {
         tokio::spawn(
             Worker {
                 handler: self.clone(),
-                available: true,
+                available: false,
             }
             .run()
             .map(|result| {
