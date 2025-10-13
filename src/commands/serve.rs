@@ -440,6 +440,15 @@ impl ServeCommand {
 
         log::info!("Listening on {}", self.addr);
 
+        let epoch_interval = if let Some(Profile::Guest { interval, .. }) = self.run.profile {
+            Some(interval)
+        } else if let Some(t) = self.run.common.wasm.timeout {
+            Some(EPOCH_INTERRUPT_PERIOD.min(t))
+        } else {
+            None
+        };
+        let _epoch_thread = epoch_interval.map(|t| EpochThread::spawn(t, engine.clone()));
+
         let handler = ProxyHandler::new(self, engine, instance);
 
         loop {
@@ -615,7 +624,7 @@ fn setup_epoch_handler(
     cmd: &ServeCommand,
     store: &mut Store<Host>,
     component: Component,
-) -> Result<(WriteProfile, Option<EpochThread>)> {
+) -> Result<WriteProfile> {
     // Profiling Enabled
     if let Some(Profile::Guest { interval, path }) = &cmd.run.profile {
         #[cfg(feature = "profiling")]
@@ -628,22 +637,11 @@ fn setup_epoch_handler(
     }
 
     // Profiling disabled but there's a global request timeout
-    let epoch_thread = if let Some(timeout) = cmd.run.common.wasm.timeout {
-        let start = Instant::now();
-        store.epoch_deadline_callback(move |_store| {
-            if start.elapsed() > timeout {
-                bail!("Timeout expired");
-            }
-            Ok(UpdateDeadline::Continue(1))
-        });
-        store.set_epoch_deadline(1);
-        let engine = store.engine().clone();
-        Some(EpochThread::spawn(EPOCH_INTERRUPT_PERIOD, engine))
-    } else {
-        None
-    };
+    if cmd.run.common.wasm.timeout.is_some() {
+        store.epoch_deadline_async_yield_and_update(1);
+    }
 
-    Ok((Box::new(|_store| {}), epoch_thread))
+    Ok(Box::new(|_store| {}))
 }
 
 #[cfg(feature = "profiling")]
@@ -653,7 +651,7 @@ fn setup_guest_profiler(
     path: String,
     interval: Duration,
     component: Component,
-) -> Result<(WriteProfile, Option<EpochThread>)> {
+) -> Result<WriteProfile> {
     use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut};
 
     let module_name = "<main>";
@@ -703,8 +701,6 @@ fn setup_guest_profiler(
     });
 
     store.set_epoch_deadline(1);
-    let engine = store.engine().clone();
-    let epoch_thread = Some(EpochThread::spawn(interval, engine));
 
     let write_profile = Box::new(move |store: &mut Store<Host>| {
         let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
@@ -721,7 +717,7 @@ fn setup_guest_profiler(
         }
     });
 
-    Ok((write_profile, epoch_thread))
+    Ok(write_profile)
 }
 
 struct ProxyHandlerInner {
@@ -792,8 +788,8 @@ async fn handle_request(
 
     let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
 
-    let (write_profile, epoch_thread) =
-        setup_epoch_handler(&inner.cmd, &mut store, component.clone())?;
+    let write_profile = setup_epoch_handler(&inner.cmd, &mut store, component.clone())?;
+    let timeout = inner.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX);
 
     match inner.instance_pre.instantiate(&mut store).await? {
         Proxy::P2(proxy) => {
@@ -802,17 +798,20 @@ async fn handle_request(
                 .new_incoming_request(p2::http::types::Scheme::Http, req)?;
             let out = store.data_mut().new_response_outparam(sender)?;
             let task = tokio::task::spawn(async move {
-                if let Err(e) = proxy
-                    .wasi_http_incoming_handler()
-                    .call_handle(&mut store, req, out)
-                    .await
-                {
+                let result = tokio::time::timeout(
+                    timeout,
+                    proxy
+                        .wasi_http_incoming_handler()
+                        .call_handle(&mut store, req, out),
+                )
+                .await
+                .unwrap_or_else(|_| bail!("guest timed out"));
+                if let Err(e) = result {
                     log::error!("[{req_id}] :: {e:?}");
                     return Err(e);
                 }
 
                 write_profile(&mut store);
-                drop(epoch_thread);
 
                 Ok(())
             });
@@ -848,29 +847,30 @@ async fn handle_request(
             let (tx, rx) = tokio::sync::oneshot::channel();
 
             tokio::task::spawn(async move {
-                let guest_result = store
-                    .run_concurrent(async move |store| {
-                        let (req, body) = req.into_parts();
-                        let body = body.map_err(ErrorCode::from_hyper_request_error);
-                        let req = http::Request::from_parts(req, body);
-                        let (request, request_io_result) = Request::from_http(req);
-                        let (res, task) = proxy.handle(store, request).await??;
-                        let res =
-                            store.with(|mut store| res.into_http(&mut store, request_io_result))?;
+                let guest_result = store.run_concurrent(async move |store| {
+                    let (req, body) = req.into_parts();
+                    let body = body.map_err(ErrorCode::from_hyper_request_error);
+                    let req = http::Request::from_parts(req, body);
+                    let (request, request_io_result) = Request::from_http(req);
+                    let (res, task) = proxy.handle(store, request).await??;
+                    let res =
+                        store.with(|mut store| res.into_http(&mut store, request_io_result))?;
 
-                        _ = tx.send(res);
+                    _ = tx.send(res);
 
-                        task.block(store).await;
-                        anyhow::Ok(())
-                    })
-                    .await?;
+                    task.block(store).await;
+                    anyhow::Ok(())
+                });
+
+                let guest_result = tokio::time::timeout(timeout, guest_result)
+                    .await
+                    .unwrap_or_else(|_| bail!("guest timed out"))?;
                 if let Err(e) = guest_result {
                     log::error!("[{req_id}] :: {e:?}");
                     return Err(e);
                 }
 
                 write_profile(&mut store);
-                drop(epoch_thread);
 
                 anyhow::Ok(())
             });

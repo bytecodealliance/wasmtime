@@ -147,6 +147,7 @@ default = [
   'debug-builtins',
   'runtime',
   'component-model',
+  'component-model-async',
   'threads',
   'stack-switching',
   'std',

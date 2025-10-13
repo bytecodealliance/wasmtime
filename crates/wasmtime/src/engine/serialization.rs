@@ -98,19 +98,13 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
         ModuleVersionStrategy::WasmtimeVersion => {
             let version = core::str::from_utf8(version)?;
             if version != env!("CARGO_PKG_VERSION_MAJOR") {
-                bail!(
-                    "Module was compiled with incompatible Wasmtime version '{}'",
-                    version
-                );
+                bail!("Module was compiled with incompatible Wasmtime version '{version}'");
             }
         }
         ModuleVersionStrategy::Custom(v) => {
             let version = core::str::from_utf8(&version)?;
             if version != v {
-                bail!(
-                    "Module was compiled with incompatible version '{}'",
-                    version
-                );
+                bail!("Module was compiled with incompatible version '{version}'");
             }
         }
         ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
@@ -252,10 +246,7 @@ impl Metadata<'_> {
         }
 
         bail!(
-            "Module was compiled with a {} of '{}' but '{}' is expected for the host",
-            feature,
-            found,
-            expected
+            "Module was compiled with a {feature} of '{found}' but '{expected}' is expected for the host"
         );
     }
 

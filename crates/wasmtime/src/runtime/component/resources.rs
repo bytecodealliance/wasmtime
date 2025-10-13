@@ -15,8 +15,8 @@ use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, DefinedResourceIndex, InterfaceType, ResourceIndex,
-    TypeResourceTableIndex,
+    AbstractResourceIndex, CanonicalAbiInfo, ComponentTypes, DefinedResourceIndex, InterfaceType,
+    ResourceIndex, TypeResourceTableIndex,
 };
 
 /// Representation of a resource type in the component model.
@@ -80,6 +80,15 @@ impl ResourceType {
             },
         }
     }
+
+    pub(crate) fn abstract_(types: &ComponentTypes, index: AbstractResourceIndex) -> ResourceType {
+        ResourceType {
+            kind: ResourceTypeKind::Abstract {
+                component: types as *const _ as usize,
+                index,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -100,6 +109,13 @@ enum ResourceTypeKind {
         // to a new resource so there's not really any issue with that.
         component: usize,
         index: ResourceIndex,
+    },
+    /// The type of this resource is considered "abstract" meaning that it
+    /// doesn't actually correspond to anything at runtime but instead it just
+    /// needs to be kept distinct from everything but itself.
+    Abstract {
+        component: usize,
+        index: AbstractResourceIndex,
     },
 }
 

@@ -1,0 +1,27 @@
+
+[package]
+name = "wizer-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+env_logger = "0.11.3"
+libfuzzer-sys = "0.4"
+log = "0.4.21"
+wasm-smith = "0.202.0"
+wasmprinter = { workspace = true }
+wasmtime = { workspace = true }
+
+[dependencies.wizer]
+path = ".."
+
+[[bin]]
+name = "same_result"
+path = "fuzz_targets/same_result.rs"
+test = false
+doc = false

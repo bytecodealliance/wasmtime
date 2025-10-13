@@ -13,6 +13,8 @@ impl PageMap {
 
 /// Resets `ptr` for `len` bytes.
 ///
+/// Returns the number of bytse that are still resident after this returns.
+///
 /// # Safety
 ///
 /// Requires that `ptr` is valid to read and write for `len` bytes.
@@ -23,7 +25,7 @@ pub unsafe fn reset_with_pagemap(
     mut keep_resident: HostAlignedByteCount,
     mut reset_manually: impl FnMut(&mut [u8]),
     mut decommit: impl FnMut(*mut u8, usize),
-) {
+) -> usize {
     keep_resident = keep_resident.min(len);
 
     // `memset` the first `keep_resident` bytes.
@@ -42,5 +44,7 @@ pub unsafe fn reset_with_pagemap(
     len = len.checked_sub(keep_resident).unwrap();
 
     // decommit the rest of it.
-    decommit(ptr, len.byte_count())
+    decommit(ptr, len.byte_count());
+
+    keep_resident.byte_count()
 }

@@ -477,7 +477,7 @@ impl RunCommand {
                     Some(
                         instance
                             .get_func(&mut *store, name)
-                            .ok_or_else(|| anyhow!("no func export named `{}` found", name))?,
+                            .ok_or_else(|| anyhow!("no func export named `{name}` found"))?,
                     )
                 } else {
                     instance
@@ -677,7 +677,7 @@ impl RunCommand {
                 Some(s) => s,
                 None => {
                     if let Some(name) = &self.invoke {
-                        bail!("not enough arguments for `{}`", name)
+                        bail!("not enough arguments for `{name}`")
                     } else {
                         bail!("not enough arguments for command default")
                     }
@@ -700,7 +700,7 @@ impl RunCommand {
                 }),
                 ValType::F32 => Val::F32(val.parse::<f32>()?.to_bits()),
                 ValType::F64 => Val::F64(val.parse::<f64>()?.to_bits()),
-                t => bail!("unsupported argument type {:?}", t),
+                t => bail!("unsupported argument type {t:?}"),
             });
         }
 

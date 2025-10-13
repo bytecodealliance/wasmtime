@@ -107,6 +107,7 @@ int main() {
   assert(error == NULL);
   assert(trap != NULL);
   printf("Got a trap!...\n");
+  wasm_trap_delete(trap);
 
   wasmtime_store_delete(store);
   wasm_engine_delete(engine);

@@ -1059,6 +1059,7 @@ static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
                 (Opcode::AtomicCas, _, &[I128]),
                 (Opcode::AtomicLoad, _, &[I128]),
                 (Opcode::AtomicStore, &[I128, _], _),
+                (Opcode::SequencePoint),
             )
         })
         .filter(|(op, ..)| {

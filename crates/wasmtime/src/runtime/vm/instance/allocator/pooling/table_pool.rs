@@ -181,7 +181,7 @@ impl TablePool {
                 }
                 self.pool
                     .index_allocator
-                    .free(SlotId(self.allocation_index.0));
+                    .free(SlotId(self.allocation_index.0), 0);
             }
         }
     }
@@ -196,10 +196,16 @@ impl TablePool {
     ///
     /// The caller must have already called `reset_table_pages_to_zero` on the
     /// memory and flushed any enqueued decommits for this table's memory.
-    pub unsafe fn deallocate(&self, allocation_index: TableAllocationIndex, table: Table) {
+    pub unsafe fn deallocate(
+        &self,
+        allocation_index: TableAllocationIndex,
+        table: Table,
+        bytes_resident: usize,
+    ) {
         assert!(table.is_static());
         drop(table);
-        self.index_allocator.free(SlotId(allocation_index.0));
+        self.index_allocator
+            .free(SlotId(allocation_index.0), bytes_resident);
     }
 
     /// Reset the given table's memory to zero.
@@ -207,6 +213,9 @@ impl TablePool {
     /// Invokes the given `decommit` function for each region of memory that
     /// needs to be decommitted. It is the caller's responsibility to actually
     /// perform that decommit before this table is reused.
+    ///
+    /// Returns the number of bytse that are still resident in memory in this
+    /// table.
     ///
     /// # Safety
     ///
@@ -218,7 +227,7 @@ impl TablePool {
         allocation_index: TableAllocationIndex,
         table: &mut Table,
         decommit: impl FnMut(*mut u8, usize),
-    ) {
+    ) -> usize {
         assert!(table.is_static());
         let base = self.get(allocation_index);
         let table_byte_size = table.size() * table.element_type().element_size();
@@ -237,6 +246,14 @@ impl TablePool {
                 decommit,
             )
         }
+    }
+
+    pub fn unused_warm_slots(&self) -> u32 {
+        self.index_allocator.unused_warm_slots()
+    }
+
+    pub fn unused_bytes_resident(&self) -> usize {
+        self.index_allocator.unused_bytes_resident()
     }
 }
 

@@ -67,11 +67,11 @@ fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
     let mut builder = CheckerBuilder::new();
     builder
         .text(directives)
-        .map_err(|e| format_err!("unable to build checker: {:?}", e))?;
+        .map_err(|e| format_err!("unable to build checker: {e:?}"))?;
     let checker = builder.finish();
     let check = checker
         .explain(output, NO_VARIABLES)
-        .map_err(|e| format_err!("{:?}", e))?;
+        .map_err(|e| format_err!("{e:?}"))?;
     assert!(check.0, "didn't pass check {}", check.1);
     Ok(())
 }

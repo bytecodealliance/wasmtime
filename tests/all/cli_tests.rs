@@ -2258,6 +2258,28 @@ start a print 1234
         server.finish()?;
         Ok(())
     }
+
+    #[tokio::test]
+    async fn cli_serve_sleep() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_SLEEP_COMPONENT, |cmd| {
+            cmd.arg("-Scli").arg("-Wtimeout=100us");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_server_error());
+        let (stdout, stderr) = server.finish()?;
+        assert_eq!(stdout, "");
+        assert!(stderr.contains("guest timed out"), "bad stderr: {stderr}");
+        Ok(())
+    }
 }
 
 #[test]
