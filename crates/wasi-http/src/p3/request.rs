@@ -1,9 +1,9 @@
 use crate::get_content_length;
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, GuestBody};
-use crate::p3::{WasiHttpView, WasiHttpCtxView};
+use crate::p3::{WasiHttpCtxView, WasiHttpView};
+use anyhow::Context;
 use bytes::Bytes;
-use wasmtime::AsContextMut;
 use core::time::Duration;
 use http::uri::{Authority, PathAndQuery, Scheme};
 use http::{HeaderMap, Method};
@@ -11,7 +11,7 @@ use http_body_util::BodyExt as _;
 use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
 use tokio::sync::oneshot;
-use anyhow::Context;
+use wasmtime::AsContextMut;
 
 /// The concrete type behind a `wasi:http/types/request-options` resource.
 #[derive(Copy, Clone, Debug, Default)]
@@ -192,8 +192,8 @@ impl Request {
                 result_tx,
             } => {
                 // Validate Content-Length if present
-                let content_length = get_content_length(&req.headers)
-                    .context("failed to parse `content-length`")?;
+                let content_length =
+                    get_content_length(&req.headers).context("failed to parse `content-length`")?;
                 GuestBody::new(
                     store,
                     contents_rx,
@@ -447,10 +447,10 @@ pub async fn default_send_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use http_body_util::{BodyExt, Full};
-    use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
     use crate::p3::WasiHttpCtx;
+    use http_body_util::{BodyExt, Full};
     use wasmtime::{Engine, Store};
+    use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
     struct TestHttpCtx;
     struct TestCtx {
@@ -498,22 +498,20 @@ mod tests {
             Some(PathAndQuery::from_static("/path?query=1")),
             HeaderMap::new(),
             None,
-            Full::new(Bytes::from_static(b"body")).map_err(|_| unreachable!()).boxed(),
+            Full::new(Bytes::from_static(b"body"))
+                .map_err(|_| unreachable!())
+                .boxed(),
         );
 
         let engine = Engine::default();
-        let mut store = Store::new(
-            &engine,
-            TestCtx::new(),
-        );
+        let mut store = Store::new(&engine, TestCtx::new());
         let http_req = req.into_http(&mut store, fut).unwrap();
         assert_eq!(http_req.method(), Method::GET);
         assert_eq!(
             http_req.uri(),
             &http::Uri::from_static("https://example.com/path?query=1")
         );
-        let body_bytes = http_req.into_body().collect()
-            .await?;
+        let body_bytes = http_req.into_body().collect().await?;
 
         assert_eq!(*body_bytes.to_bytes(), *b"body");
         Ok(())
