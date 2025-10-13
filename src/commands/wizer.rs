@@ -31,6 +31,13 @@ impl WizerCommand {
     pub fn execute(mut self) -> Result<()> {
         self.run.common.init_logging()?;
 
+        // By default use deterministic relaxed simd operations to guarantee
+        // that if relaxed simd operations are used in a module that they always
+        // produce the same result.
+        if self.run.common.wasm.relaxed_simd_deterministic.is_none() {
+            self.run.common.wasm.relaxed_simd_deterministic = Some(true);
+        }
+
         // Read the input wasm, possibly from stdin.
         let mut wasm = Vec::new();
         if self.input.to_str() == Some("-") {

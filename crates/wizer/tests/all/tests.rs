@@ -836,3 +836,31 @@ fn accept_simd128() -> Result<()> {
         "#,
     )
 }
+
+#[test]
+fn relaxed_simd_deterministic() -> Result<()> {
+    let _ = env_logger::try_init();
+    let wasm = wat_to_wasm(
+        r#"
+(module
+  (global $g (mut i32) i32.const 0)
+  (func (export "wizer.initialize")
+    (v128.const f32x4 2796203.5 0.0 0.0 0.0)
+    (v128.const f32x4 3.0 0.0 0.0 0.0)
+    (v128.const f32x4 8388611.0 0.0 0.0 0.0)
+    f32x4.relaxed_madd
+    f32x4.extract_lane 0
+    i32.reinterpret_f32
+    global.set $g)
+  (func (export "run") (result i32)
+    global.get $g
+  )
+)
+        "#,
+    )?;
+    let wizer = get_wizer();
+
+    // We'll get 0x4b000003 if we have the deterministic `relaxed_madd`
+    // semantics. We might get 0x4b000002 if we don't.
+    wizen_and_run_wasm(&[], 0x4b800003, &wasm, wizer)
+}
