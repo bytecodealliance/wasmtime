@@ -25,7 +25,6 @@ pub struct RequestOptions {
 }
 
 /// The concrete type behind a `wasi:http/types/request` resource.
-#[derive(Debug)]
 pub struct Request {
     /// The method of the request.
     pub method: Method,

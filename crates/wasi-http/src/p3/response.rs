@@ -11,7 +11,6 @@ use std::sync::Arc;
 use wasmtime::AsContextMut;
 
 /// The concrete type behind a `wasi:http/types/response` resource.
-#[derive(Debug)]
 pub struct Response {
     /// The status of the response.
     pub status: StatusCode,
