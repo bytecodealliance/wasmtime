@@ -478,4 +478,12 @@ impl<'a> FrameStateSlot<'a> {
             })
         })
     }
+
+    /// Returns an iterator over all storage in this frame.
+    pub fn stack_and_locals(
+        &self,
+        shape: FrameStackShape,
+    ) -> impl Iterator<Item = (FrameStateSlotOffset, FrameValType)> + '_ {
+        self.locals().chain(self.stack(shape))
+    }
 }

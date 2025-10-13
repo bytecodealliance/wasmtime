@@ -1130,10 +1130,17 @@ impl Module {
         Ok(images)
     }
 
+    /// Get the text offset (relative PC) for a given absolute PC in
+    /// this module.
+    #[cfg(any(feature = "gc", feature = "debug"))]
+    pub(crate) fn text_offset(&self, pc: usize) -> u32 {
+        u32::try_from(pc - self.inner.module.text().as_ptr() as usize).unwrap()
+    }
+
     /// Lookup the stack map at a program counter value.
     #[cfg(feature = "gc")]
     pub(crate) fn lookup_stack_map(&self, pc: usize) -> Option<wasmtime_environ::StackMap<'_>> {
-        let text_offset = u32::try_from(pc - self.inner.module.text().as_ptr() as usize).unwrap();
+        let text_offset = self.text_offset(pc);
         let info = self.inner.code.code_memory().stack_map_data();
         wasmtime_environ::StackMap::lookup(text_offset, info)
     }
@@ -1148,9 +1155,13 @@ impl Module {
     /// Obtain a frame-table parser on this module's frame state slot
     /// (debug instrumentation) metadata.
     #[cfg(feature = "debug")]
-    pub(crate) fn frame_table<'a>(&'a self) -> FrameTable<'a> {
-        FrameTable::parse(self.inner.code.code_memory().frame_tables())
-            .expect("Frame tables were validated on module load")
+    pub(crate) fn frame_table<'a>(&'a self) -> Option<FrameTable<'a>> {
+        let data = self.inner.code.code_memory().frame_tables();
+        if data.is_empty() {
+            None
+        } else {
+            Some(FrameTable::parse(data).expect("Frame tables were validated on module load"))
+        }
     }
 }
 

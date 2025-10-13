@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 use core::{ffi::c_void, ptr::NonNull};
 use wasmtime_environ::{
     DefinedFuncIndex, FrameInstPos, FrameStackShape, FrameStateSlot, FrameStateSlotOffset,
-    FrameTableDescriptorIndex, FrameValType, FuncKey,
+    FrameTable, FrameTableDescriptorIndex, FrameValType, FuncKey,
 };
 use wasmtime_unwinder::Frame;
 
@@ -246,7 +246,7 @@ impl VirtualFrame {
             .expect("Wasm frame PC does not correspond to a module");
         let base = module.code_object().code_memory().text().as_ptr() as usize;
         let pc = frame.pc().wrapping_sub(base);
-        let table = module.frame_table();
+        let table = module.frame_table().unwrap();
         let pc = u32::try_from(pc).expect("PC offset too large");
         let pos = if is_trapping_frame {
             FrameInstPos::Pre
@@ -292,7 +292,7 @@ struct FrameData {
 
 impl FrameData {
     fn compute(frame: VirtualFrame) -> Self {
-        let frame_table = frame.module.frame_table();
+        let frame_table = frame.module.frame_table().unwrap();
         // Parse the frame descriptor.
         let (data, slot_to_fp_offset) = frame_table
             .frame_descriptor(frame.frame_descriptor)
@@ -392,4 +392,39 @@ unsafe fn read_value(
             unimplemented!("contref values are not implemented in the host API yet")
         }
     }
+}
+
+/// Compute raw pointers to all GC refs in the given frame.
+// Note: ideally this would be an impl Iterator, but this is quite
+// awkward because of the locally computed data (FrameStateSlot::parse
+// structured result) within the closure borrowed by a nested closure.
+pub(crate) fn gc_refs_in_frame<'a>(ft: FrameTable<'a>, pc: u32, fp: *mut usize) -> Vec<*mut u32> {
+    let fp = fp.cast::<u8>();
+    let mut ret = vec![];
+    if let Some(frames) = ft.find_program_point(pc, FrameInstPos::Post) {
+        for (_wasm_pc, frame_desc, stack_shape) in frames {
+            let (frame_desc_data, slot_to_fp_offset) = ft.frame_descriptor(frame_desc).unwrap();
+            let frame_base = unsafe { fp.offset(-isize::try_from(slot_to_fp_offset).unwrap()) };
+            let frame_desc = FrameStateSlot::parse(frame_desc_data).unwrap();
+            for (offset, ty) in frame_desc.stack_and_locals(stack_shape) {
+                match ty {
+                    FrameValType::AnyRef | FrameValType::ExnRef | FrameValType::ExternRef => {
+                        let slot = unsafe {
+                            frame_base
+                                .offset(isize::try_from(offset.offset()).unwrap())
+                                .cast::<u32>()
+                        };
+                        ret.push(slot);
+                    }
+                    FrameValType::ContRef | FrameValType::FuncRef => {}
+                    FrameValType::I32
+                    | FrameValType::I64
+                    | FrameValType::F32
+                    | FrameValType::F64
+                    | FrameValType::V128 => {}
+                }
+            }
+        }
+    }
+    ret
 }

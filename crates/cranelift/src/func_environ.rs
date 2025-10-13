@@ -1327,7 +1327,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // N.B.: we always store vmctx at offset 0 in the
             // slot. This is relied upon in
             // crates/wasmtime/src/runtime/debug.rs in
-            // `raw_instance()`.
+            // `raw_instance()`. See also the slot layout computation in crates/environ/src/
             builder.ins().stack_store(vmctx, slot, 0);
         }
     }

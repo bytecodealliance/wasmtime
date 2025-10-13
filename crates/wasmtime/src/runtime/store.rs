@@ -1892,9 +1892,6 @@ impl StoreOpaque {
         gc_roots_list: &mut GcRootsList,
         frame: crate::runtime::vm::Frame,
     ) {
-        use crate::runtime::vm::SendSyncPtr;
-        use core::ptr::NonNull;
-
         let pc = frame.pc();
         debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
 
@@ -1909,29 +1906,43 @@ impl StoreOpaque {
             .lookup_module_by_pc(pc)
             .expect("should have module info for Wasm frame");
 
-        let stack_map = match module_info.lookup_stack_map(pc) {
-            Some(sm) => sm,
-            None => {
-                log::trace!("No stack map for this Wasm frame");
-                return;
-            }
-        };
-        log::trace!(
-            "We have a stack map that maps {} bytes in this Wasm frame",
-            stack_map.frame_size()
-        );
+        if let Some(stack_map) = module_info.lookup_stack_map(pc) {
+            log::trace!(
+                "We have a stack map that maps {} bytes in this Wasm frame",
+                stack_map.frame_size()
+            );
 
-        let sp = unsafe { stack_map.sp(fp) };
-        for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
-            let raw: u32 = unsafe { core::ptr::read(stack_slot) };
-            log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
-
-            let gc_ref = vm::VMGcRef::from_raw_u32(raw);
-            if gc_ref.is_some() {
+            let sp = unsafe { stack_map.sp(fp) };
+            for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
                 unsafe {
-                    gc_roots_list
-                        .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
+                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
                 }
+            }
+        }
+
+        if let Some(frame_table) = module_info.frame_table() {
+            let relpc = module_info.text_offset(pc);
+            for stack_slot in super::debug::gc_refs_in_frame(frame_table, relpc, fp) {
+                unsafe {
+                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "gc")]
+    unsafe fn trace_wasm_stack_slot(&self, gc_roots_list: &mut GcRootsList, stack_slot: *mut u32) {
+        use crate::runtime::vm::SendSyncPtr;
+        use core::ptr::NonNull;
+
+        let raw: u32 = unsafe { core::ptr::read(stack_slot) };
+        log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
+
+        let gc_ref = vm::VMGcRef::from_raw_u32(raw);
+        if gc_ref.is_some() {
+            unsafe {
+                gc_roots_list
+                    .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
             }
         }
     }

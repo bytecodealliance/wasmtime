@@ -108,3 +108,29 @@ fn stack_values_exceptions() -> anyhow::Result<()> {
         },
     )
 }
+
+#[test]
+fn stack_values_dead_gc_ref() -> anyhow::Result<()> {
+    test_stack_values(
+        r#"
+    (module
+      (type $s (struct))
+      (import "" "host" (func))
+      (func (export "main")
+        (struct.new $s)
+        (call 0)
+        (drop)))
+    "#,
+        |config| {
+            config.wasm_gc(true);
+        },
+        |mut caller: Caller<'_, ()>| {
+            let mut stack = caller.stack_values().unwrap();
+            assert!(!stack.done());
+            assert_eq!(stack.num_stacks(), 1);
+            assert!(stack.stack(0).unwrap_anyref().is_some());
+            stack.move_up();
+            assert!(stack.done());
+        },
+    )
+}
