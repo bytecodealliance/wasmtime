@@ -84,9 +84,7 @@ fn wizen_and_run_wasm(
     };
     anyhow::ensure!(
         expected == actual,
-        "expected `{}`, found `{}`",
-        expected,
-        actual,
+        "expected `{expected}`, found `{actual}`",
     );
 
     Ok(())

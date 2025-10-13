@@ -56,9 +56,7 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
     };
     anyhow::ensure!(
         expected == actual,
-        "expected `{}`, found `{}`",
-        expected,
-        actual,
+        "expected `{expected}`, found `{actual}`",
     );
 
     Ok(())
