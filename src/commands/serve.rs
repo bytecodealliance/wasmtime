@@ -2,6 +2,7 @@ use crate::common::{Profile, RunCommon, RunTarget};
 use anyhow::{Result, bail};
 use bytes::Bytes;
 use clap::Parser;
+use futures::future::FutureExt;
 use http::{Response, StatusCode};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::BoxBody;
@@ -20,14 +21,13 @@ use std::{
 use tokio::io::{self, AsyncWrite};
 use tokio::sync::Notify;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{AsContextMut, Engine, Store, StoreContextMut, StoreLimits, UpdateDeadline};
+use wasmtime::{Engine, Store, StoreContextMut, StoreLimits, UpdateDeadline};
 use wasmtime_cli_flags::opt::WasmtimeOptionValue;
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::bindings as p2;
 #[cfg(feature = "component-model-async")]
-use wasmtime_wasi_http::handler::Task;
-use wasmtime_wasi_http::handler::{HandlerState, ProxyHandler, ProxyPre, StoreBundle};
+use wasmtime_wasi_http::handler::p2::bindings as p2;
+use wasmtime_wasi_http::handler::{HandlerState, Proxy, ProxyHandler, ProxyPre, StoreBundle};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
@@ -40,6 +40,10 @@ use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnCtx;
+
+const DEFAULT_WASIP3_MAX_INSTANCE_REUSE_COUNT: usize = 128;
+const DEFAULT_WASIP2_MAX_INSTANCE_REUSE_COUNT: usize = 1;
+const DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT: usize = 16;
 
 struct Host {
     table: wasmtime::component::ResourceTable,
@@ -142,18 +146,18 @@ pub struct ServeCommand {
     /// Maximum number of requests to send to a single component instance before
     /// dropping it.
     ///
-    /// Note that instance reuse is only implemented for WASIp3 handlers at this
-    /// time.
-    #[arg(long, default_value = "128")]
-    max_instance_reuse_count: usize,
+    /// This defaults to 1 for WASIp2 components and 128 for WASIp3 components.
+    #[arg(long)]
+    max_instance_reuse_count: Option<usize>,
 
     /// Maximum number of concurrent requests to send to a single component
     /// instance.
     ///
-    /// Note that instance reuse is only implemented for WASIp3 handlers at this
-    /// time.
-    #[arg(long, default_value = "16")]
-    max_instance_concurrent_reuse_count: usize,
+    /// This defaults to 1 for WASIp2 components and 16 for WASIp3 components.
+    /// Note that setting it to more than 1 will have no effect for WASIp2
+    /// components since they cannot be called concurrently.
+    #[arg(long)]
+    max_instance_concurrent_reuse_count: Option<usize>,
 
     /// Time to hold an idle component instance for possible reuse before
     /// dropping it.
@@ -161,9 +165,6 @@ pub struct ServeCommand {
     /// A number with no suffix or with an `s` suffix is interpreted as seconds;
     /// other accepted suffixes include `ms` (milliseconds), `us` or `μs`
     /// (microseconds), and `ns` (nanoseconds).
-    ///
-    /// Note that instance reuse is only implemented for WASIp3 handlers at this
-    /// time.
     #[arg(long, default_value = "1s", value_parser = parse_duration)]
     idle_instance_timeout: Duration,
 }
@@ -489,11 +490,28 @@ impl ServeCommand {
         };
         let _epoch_thread = epoch_interval.map(|t| EpochThread::spawn(t, engine.clone()));
 
+        let max_instance_reuse_count = self.max_instance_reuse_count.unwrap_or_else(|| {
+            if let ProxyPre::P3(_) = &instance {
+                DEFAULT_WASIP3_MAX_INSTANCE_REUSE_COUNT
+            } else {
+                DEFAULT_WASIP2_MAX_INSTANCE_REUSE_COUNT
+            }
+        });
+
+        let max_instance_concurrent_reuse_count = if let ProxyPre::P3(_) = &instance {
+            self.max_instance_concurrent_reuse_count
+                .unwrap_or(DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT)
+        } else {
+            1
+        };
+
         let handler = ProxyHandler::new(
             HostHandlerState {
                 cmd: self,
                 engine,
-                component: component.clone(),
+                component,
+                max_instance_reuse_count,
+                max_instance_concurrent_reuse_count,
             },
             instance,
         );
@@ -506,7 +524,6 @@ impl ServeCommand {
                 _ = shutdown.requested.notified() => break,
                 v = listener.accept() => v?,
             };
-            let comp = component.clone();
 
             // The Nagle algorithm can impose a significant latency penalty
             // (e.g. 40ms on Linux) on guests which write small, intermittent
@@ -524,11 +541,10 @@ impl ServeCommand {
                     .serve_connection(
                         stream,
                         hyper::service::service_fn(move |req| {
-                            let comp = comp.clone();
                             let h = h.clone();
                             async move {
                                 use http_body_util::{BodyExt, Full};
-                                match handle_request(h, req, comp).await {
+                                match handle_request(h, req).await {
                                     Ok(r) => Ok::<_, Infallible>(r),
                                     Err(e) => {
                                         eprintln!("error: {e:?}");
@@ -590,6 +606,8 @@ struct HostHandlerState {
     cmd: ServeCommand,
     engine: Engine,
     component: Component,
+    max_instance_reuse_count: usize,
+    max_instance_concurrent_reuse_count: usize,
 }
 
 impl HandlerState for HostHandlerState {
@@ -614,11 +632,11 @@ impl HandlerState for HostHandlerState {
     }
 
     fn max_instance_reuse_count(&self) -> usize {
-        self.cmd.max_instance_reuse_count
+        self.max_instance_reuse_count
     }
 
     fn max_instance_concurrent_reuse_count(&self) -> usize {
-        self.cmd.max_instance_concurrent_reuse_count
+        self.max_instance_concurrent_reuse_count
     }
 }
 
@@ -804,8 +822,9 @@ type Request = hyper::Request<hyper::body::Incoming>;
 async fn handle_request(
     handler: ProxyHandler<HostHandlerState, Host>,
     req: Request,
-    component: Component,
 ) -> Result<hyper::Response<BoxBody<Bytes, anyhow::Error>>> {
+    use tokio::sync::oneshot;
+
     let req_id = handler.next_req_id();
 
     log::info!(
@@ -814,104 +833,92 @@ async fn handle_request(
         req.uri()
     );
 
-    match &handler.instance_pre() {
-        ProxyPre::P2(pre) => {
-            let mut store = handler
-                .state()
-                .cmd
-                .new_store(&handler.state().engine, Some(req_id))?;
+    // Here we must declare different channel types for p2 and p3 since p2's
+    // `WasiHttpView::new_response_outparam` expects a specific kind of sender
+    // that uses `p2::http::types::ErrorCode`, and we don't want to have to
+    // convert from the p3 `ErrorCode` to the p2 one, only to convert again to
+    // `anyhow::Error`.
 
-            let write_profile =
-                setup_epoch_handler(&handler.state().cmd, &mut store, component.clone())?;
-            let timeout = handler
-                .state()
-                .cmd
-                .run
-                .common
-                .wasm
-                .timeout
-                .unwrap_or(Duration::MAX);
+    type P2Response = Result<
+        hyper::Response<wasmtime_wasi_http::body::HyperOutgoingBody>,
+        p2::http::types::ErrorCode,
+    >;
+    type P3Response = hyper::Response<BoxBody<Bytes, anyhow::Error>>;
 
-            let proxy = pre.instantiate_async(&mut store).await?;
-            let req = store
-                .data_mut()
-                .new_incoming_request(p2::http::types::Scheme::Http, req)?;
-            let (sender, receiver) = tokio::sync::oneshot::channel();
-            let out = store.data_mut().new_response_outparam(sender)?;
-            let task = tokio::task::spawn(async move {
-                let result = tokio::time::timeout(
-                    timeout,
-                    proxy
-                        .wasi_http_incoming_handler()
-                        .call_handle(&mut store, req, out),
-                )
-                .await
-                .unwrap_or_else(|_| bail!("guest timed out"));
-                if let Err(e) = result {
-                    log::error!("[{req_id}] :: {e:?}");
-                    return Err(e);
-                }
-
-                write_profile(store.as_context_mut());
-
-                Ok(())
-            });
-
-            let result = match receiver.await {
-                Ok(Ok(resp)) => resp,
-                Ok(Err(e)) => bail!(e),
-                Err(_) => {
-                    // An error in the receiver (`RecvError`) only indicates that the
-                    // task exited before a response was sent (i.e., the sender was
-                    // dropped); it does not describe the underlying cause of failure.
-                    // Instead we retrieve and propagate the error from inside the task
-                    // which should more clearly tell the user what went wrong. Note
-                    // that we assume the task has already exited at this point so the
-                    // `await` should resolve immediately.
-                    let e = match task.await {
-                        Ok(Ok(())) => {
-                            bail!("guest never invoked `response-outparam::set` method")
-                        }
-                        Ok(Err(e)) => e,
-                        Err(e) => e.into(),
-                    };
-                    bail!(e.context("guest never invoked `response-outparam::set` method"))
-                }
-            };
-
-            Ok(result.map(|body| body.map_err(|e| e.into()).boxed()))
-        }
-        #[cfg(feature = "component-model-async")]
-        ProxyPre::P3(..) => {
-            use wasmtime_wasi_http::p3::bindings::http::types::{ErrorCode, Request};
-
-            let (tx, rx) = tokio::sync::oneshot::channel();
-
-            handler
-                .push(Task::new(
-                    Box::new(move |store, proxy| {
-                        Box::pin(async move {
-                            let (req, body) = req.into_parts();
-                            let body = body.map_err(ErrorCode::from_hyper_request_error);
-                            let req = http::Request::from_parts(req, body);
-                            let (request, request_io_result) = Request::from_http(req);
-                            let (res, task) = proxy.handle(store, request).await??;
-                            let res = store
-                                .with(|mut store| res.into_http(&mut store, request_io_result))?;
-                            _ = tx.send(res);
-
-                            // Wait for the task to finish.
-                            task.block(store).await;
-                            anyhow::Ok(())
-                        })
-                    }),
-                    req_id,
-                ))
-                .await?;
-
-            Ok(rx.await?.map(|body| body.map_err(|err| err.into()).boxed()))
-        }
+    enum Sender {
+        P2(oneshot::Sender<P2Response>),
+        P3(oneshot::Sender<P3Response>),
     }
+
+    enum Receiver {
+        P2(oneshot::Receiver<P2Response>),
+        P3(oneshot::Receiver<P3Response>),
+    }
+
+    let (tx, rx) = match handler.instance_pre() {
+        ProxyPre::P2(_) => {
+            let (tx, rx) = oneshot::channel();
+            (Sender::P2(tx), Receiver::P2(rx))
+        }
+        ProxyPre::P3(_) => {
+            let (tx, rx) = oneshot::channel();
+            (Sender::P3(tx), Receiver::P3(rx))
+        }
+    };
+
+    handler.spawn(Box::new(move |store, proxy| {
+        Box::pin(
+            async move {
+                match proxy {
+                    Proxy::P2(proxy) => {
+                        let Sender::P2(tx) = tx else { unreachable!() };
+                        let (req, out) = store.with(move |mut store| {
+                            let req = store
+                                .data_mut()
+                                .new_incoming_request(p2::http::types::Scheme::Http, req)?;
+                            let out = store.data_mut().new_response_outparam(tx)?;
+                            anyhow::Ok((req, out))
+                        })?;
+
+                        proxy
+                            .wasi_http_incoming_handler()
+                            .call_handle(store, req, out)
+                            .await
+                    }
+                    Proxy::P3(proxy) => {
+                        use wasmtime_wasi_http::p3::bindings::http::types::{ErrorCode, Request};
+
+                        let Sender::P3(tx) = tx else { unreachable!() };
+                        let (req, body) = req.into_parts();
+                        let body = body.map_err(ErrorCode::from_hyper_request_error);
+                        let req = http::Request::from_parts(req, body);
+                        let (request, request_io_result) = Request::from_http(req);
+                        let (res, task) = proxy.handle(store, request).await??;
+                        let res =
+                            store.with(|mut store| res.into_http(&mut store, request_io_result))?;
+                        _ = tx.send(res.map(|body| body.map_err(|e| e.into()).boxed()));
+
+                        // Wait for the task to finish.
+                        task.block(store).await;
+                        Ok(())
+                    }
+                }
+            }
+            .map(move |result| {
+                if let Err(error) = result {
+                    eprintln!("[{req_id}] :: {error:?}");
+                }
+            }),
+        )
+    }));
+
+    Ok(match rx {
+        Receiver::P2(rx) => rx
+            .await?
+            .map_err(|e| anyhow::Error::from(e))?
+            .map(|body| body.map_err(|e| e.into()).boxed()),
+        Receiver::P3(rx) => rx.await?,
+    })
 }
 
 #[derive(Clone)]

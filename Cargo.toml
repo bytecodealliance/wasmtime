@@ -551,6 +551,7 @@ debug = ["wasmtime-cli-flags/debug", "wasmtime/debug"]
 # for more information on each subcommand.
 serve = [
   "wasi-http",
+  "wasmtime-wasi-http/component-model-async",
   "component-model",
   "dep:http-body-util",
   "dep:http",

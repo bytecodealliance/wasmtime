@@ -1,86 +1,99 @@
 //! Provides utilities useful for dispatching incoming HTTP requests
 //! `wasi:http/handler` guest instances.
 
-use crate::bindings;
 #[cfg(feature = "p3")]
 use crate::p3;
-use anyhow::Result;
-#[cfg(feature = "p3")]
-use anyhow::{anyhow, bail};
-#[cfg(feature = "p3")]
+use anyhow::{Result, anyhow};
 use futures::{
     future::FutureExt,
     stream::{FuturesUnordered, StreamExt},
 };
-#[cfg(feature = "p3")]
 use std::collections::VecDeque;
-#[cfg(feature = "p3")]
 use std::future;
-#[cfg(feature = "p3")]
 use std::pin::{Pin, pin};
 use std::sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering::Relaxed},
+    Arc, Mutex,
+    atomic::{
+        AtomicBool, AtomicU64, AtomicUsize,
+        Ordering::{Relaxed, SeqCst},
+    },
 };
-#[cfg(feature = "p3")]
-use std::sync::{
-    Mutex,
-    atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
-};
-#[cfg(feature = "p3")]
 use std::task::Poll;
 use std::time::Duration;
-#[cfg(feature = "p3")]
 use tokio::sync::Notify;
-#[cfg(feature = "p3")]
 use wasmtime::AsContextMut;
-#[cfg(feature = "p3")]
 use wasmtime::component::Accessor;
 use wasmtime::{Store, StoreContextMut};
+
+/// Alternative p2 bindings generated with `exports: { default: async | store }`
+/// so we can use `TypedFunc::call_concurrent` with both p2 and p3 instances.
+pub mod p2 {
+    #[expect(missing_docs, reason = "bindgen-generated code")]
+    pub mod bindings {
+        wasmtime::component::bindgen!({
+            path: "wit",
+            world: "wasi:http/proxy",
+            imports: { default: tracing },
+            exports: { default: async | store },
+            require_store_data_send: true,
+            with: {
+                // http is in this crate
+                "wasi:http": crate::bindings::http,
+                // Upstream package dependencies
+                "wasi:io": wasmtime_wasi::p2::bindings::io,
+            }
+        });
+
+        pub use wasi::*;
+    }
+}
 
 /// Represents either a `wasi:http/incoming-handler@0.2.x` or
 /// `wasi:http/handler@0.3.x` pre-instance.
 pub enum ProxyPre<T: 'static> {
     /// A `wasi:http/incoming-handler@0.2.x` pre-instance.
-    P2(bindings::ProxyPre<T>),
+    P2(p2::bindings::ProxyPre<T>),
     /// A `wasi:http/handler@0.3.x` pre-instance.
     #[cfg(feature = "p3")]
     P3(p3::bindings::ProxyPre<T>),
 }
 
-/// Represents a task to run using a `wasi:http/handler@0.3.x` instance.
-#[cfg(feature = "p3")]
-pub type TaskFn<T> = Box<
-    dyn for<'a> FnOnce(
-            &'a Accessor<T>,
-            &'a p3::bindings::Proxy,
-        ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'a>>
-        + Send,
->;
-
-/// Pairs a [`TaskFn`] with a request ID.
-#[cfg(feature = "p3")]
-pub struct Task<T: 'static> {
-    run: TaskFn<T>,
-    request_id: u64,
-}
-
-#[cfg(feature = "p3")]
-impl<T> Task<T> {
-    /// Create a new `Task` using the specified function and request ID.
-    pub fn new(run: TaskFn<T>, request_id: u64) -> Self {
-        Self { run, request_id }
+impl<T: 'static> ProxyPre<T> {
+    async fn instantiate_async(&self, store: impl AsContextMut<Data = T>) -> Result<Proxy>
+    where
+        T: Send,
+    {
+        Ok(match self {
+            Self::P2(pre) => Proxy::P2(pre.instantiate_async(store).await?),
+            #[cfg(feature = "p3")]
+            Self::P3(pre) => Proxy::P3(pre.instantiate_async(store).await?),
+        })
     }
 }
 
+/// Represents either a `wasi:http/incoming-handler@0.2.x` or
+/// `wasi:http/handler@0.3.x` instance.
+pub enum Proxy {
+    /// A `wasi:http/incoming-handler@0.2.x` instance.
+    P2(p2::bindings::Proxy),
+    /// A `wasi:http/handler@0.3.x` instance.
+    #[cfg(feature = "p3")]
+    P3(p3::bindings::Proxy),
+}
+
+/// Represents a task to run using a `wasi:http/incoming-handler@0.2.x` or
+/// `wasi:http/handler@0.3.x` instance.
+pub type TaskFn<T> = Box<
+    dyn for<'a> FnOnce(&'a Accessor<T>, &'a Proxy) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
+        + Send,
+>;
+
 /// Async MPMC channel where each item is delivered to at most one consumer.
-#[cfg(feature = "p3")]
 struct Queue<T> {
     queue: Mutex<VecDeque<T>>,
     notify: Notify,
 }
 
-#[cfg(feature = "p3")]
 impl<T> Default for Queue<T> {
     fn default() -> Self {
         Self {
@@ -90,7 +103,6 @@ impl<T> Default for Queue<T> {
     }
 }
 
-#[cfg(feature = "p3")]
 impl<T> Queue<T> {
     fn is_empty(&self) -> bool {
         self.queue.lock().unwrap().is_empty()
@@ -106,6 +118,10 @@ impl<T> Queue<T> {
     }
 
     async fn pop(&self) -> T {
+        // This code comes from the Unbound MPMC Channel example in [the
+        // `tokio::sync::Notify`
+        // docs](https://docs.rs/tokio/latest/tokio/sync/struct.Notify.html).
+
         let mut notified = pin!(self.notify.notified());
 
         loop {
@@ -160,13 +176,10 @@ struct ProxyHandlerInner<S, T: 'static> {
     state: S,
     instance_pre: ProxyPre<T>,
     next_id: AtomicU64,
-    #[cfg(feature = "p3")]
-    task_queue: Queue<Task<T>>,
-    #[cfg(feature = "p3")]
+    task_queue: Queue<TaskFn<T>>,
     worker_count: AtomicUsize,
 }
 
-#[cfg(feature = "p3")]
 struct Worker<S, T: 'static>
 where
     T: Send,
@@ -176,7 +189,6 @@ where
     available: bool,
 }
 
-#[cfg(feature = "p3")]
 impl<S, T> Worker<S, T>
 where
     T: Send,
@@ -210,12 +222,7 @@ where
         let max_instance_concurrent_reuse_count =
             handler.state.max_instance_concurrent_reuse_count();
 
-        let ProxyPre::P3(pre) = &handler.instance_pre else {
-            // See check in `Self::push`
-            unreachable!()
-        };
-
-        let proxy = &pre.instantiate_async(&mut store).await?;
+        let proxy = &handler.instance_pre.instantiate_async(&mut store).await?;
         let accept_concurrent = AtomicBool::new(true);
 
         let mut future = pin!(store.run_concurrent(async |accessor| {
@@ -312,9 +319,7 @@ where
                         reuse_count += 1;
 
                         futures.push(tokio::time::timeout(request_timeout, async move {
-                            if let Err(error) = (task.run)(accessor, proxy).await {
-                                eprintln!("[{}] :: {error:?}", task.request_id);
-                            }
+                            (task)(accessor, proxy).await
                         }));
                     }
                     Some(Err(_)) => break,
@@ -350,7 +355,6 @@ where
     }
 }
 
-#[cfg(feature = "p3")]
 impl<S, T> Drop for Worker<S, T>
 where
     T: Send,
@@ -363,7 +367,8 @@ where
 
 /// Represents the state of a web server.
 ///
-/// Note that this has special support for WASIp3 instance reuse.  See
+/// Note that this supports optional instance reuse, enabled when
+/// `S::max_instance_reuse_count()` returns a number greater than one.  See
 /// [`Self::push`] for details.
 pub struct ProxyHandler<S, T: 'static>(Arc<ProxyHandlerInner<S, T>>);
 
@@ -381,9 +386,7 @@ impl<S, T> ProxyHandler<S, T> {
             state,
             instance_pre,
             next_id: AtomicU64::from(0),
-            #[cfg(feature = "p3")]
             task_queue: Default::default(),
-            #[cfg(feature = "p3")]
             worker_count: AtomicUsize::from(0),
         }))
     }
@@ -392,59 +395,60 @@ impl<S, T> ProxyHandler<S, T> {
     ///
     /// This will either spawn a new background worker to run the task or
     /// deliver it to an already-running worker.
-    ///
-    /// # Panics
-    ///
-    /// This will currently panic if the backing pre-instance is not a
-    /// `ProxyPre::P3`.  `ProxyPre::P2` support may be added in the future.
-    #[cfg(feature = "p3")]
-    pub async fn push(&self, task: Task<T>) -> Result<()>
+    pub fn spawn(&self, task: TaskFn<T>)
     where
         T: Send,
         S: HandlerState<StoreData = T>,
     {
-        // TODO: Support p2 instances as well as p3 ones
-        let ProxyPre::P3(pre) = &self.0.instance_pre else {
-            panic!("ProxyHandler::push is only supported for WASIp3 handlers");
-        };
-
         match self.0.state.max_instance_reuse_count() {
-            0 => bail!("`max_instance_reuse_count` must be at least 1"),
+            0 => panic!("`max_instance_reuse_count` must be at least 1"),
             1 => {
                 // Use a simplified path when instance reuse is disabled.
                 //
                 // This provides somewhat (e.g. ~20%) better throughput as
                 // measured by `wasmtime-serve-rps.sh` than the
                 // task-queue-and-workers approach below, so probably worth the
-                // slight code duplication.
-                let StoreBundle {
-                    mut store,
-                    write_profile,
-                } = self.0.state.new_store()?;
+                // slight code duplication.  TODO: Can we narrow the gap and
+                // remove this path?
+                let handler = self.clone();
 
-                let proxy = &pre.instantiate_async(&mut store).await?;
+                tokio::task::spawn(
+                    async move {
+                        let StoreBundle {
+                            mut store,
+                            write_profile,
+                        } = handler.0.state.new_store()?;
 
-                store
-                    .run_concurrent(async |accessor| {
-                        tokio::time::timeout(self.0.state.request_timeout(), async {
-                            if let Err(error) = (task.run)(accessor, proxy).await {
-                                eprintln!("[{}] :: {error:?}", task.request_id);
-                            }
-                        })
-                        .await
-                        .map_err(|_| anyhow!("guest timed out"))
-                    })
-                    .await??;
+                        let proxy = &handler.0.instance_pre.instantiate_async(&mut store).await?;
 
-                write_profile(store.as_context_mut());
+                        let result = store
+                            .run_concurrent(async |accessor| {
+                                tokio::time::timeout(handler.0.state.request_timeout(), async {
+                                    (task)(accessor, proxy).await
+                                })
+                                .await
+                                .map_err(|_| anyhow!("guest timed out"))
+                            })
+                            .await;
+
+                        write_profile(store.as_context_mut());
+
+                        result?
+                    }
+                    .map(|result| {
+                        if let Err(error) = result {
+                            eprintln!("worker error: {error:?}");
+                        }
+                    }),
+                );
             }
             _ => {
                 self.0.task_queue.push(task);
-                self.maybe_start_worker();
+                if self.0.worker_count.load(SeqCst) == 0 {
+                    self.start_worker();
+                }
             }
         }
-
-        Ok(())
     }
 
     /// Generate a unique request ID.
@@ -462,18 +466,6 @@ impl<S, T> ProxyHandler<S, T> {
         &self.0.instance_pre
     }
 
-    #[cfg(feature = "p3")]
-    fn maybe_start_worker(&self)
-    where
-        T: Send,
-        S: HandlerState<StoreData = T>,
-    {
-        if self.0.worker_count.load(SeqCst) == 0 {
-            self.start_worker();
-        }
-    }
-
-    #[cfg(feature = "p3")]
     fn start_worker(&self)
     where
         T: Send,
