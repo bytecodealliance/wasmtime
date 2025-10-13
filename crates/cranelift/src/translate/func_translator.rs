@@ -250,8 +250,6 @@ fn parse_function_body(
     let mut reader = OperatorsReader::new(reader);
     let mut operand_types = vec![];
 
-    environ.debug_instrumentation_at_start(builder)?;
-
     while !reader.eof() {
         let pos = reader.original_position();
         builder.set_srcloc(cur_srcloc(&reader.get_binary_reader()));
@@ -264,7 +262,7 @@ fn parse_function_body(
         translate_operator(validator, &op, operand_types, builder, stack, environ)?;
         environ.after_translate_operator(&op, validator, builder, stack)?;
     }
-    environ.debug_instrumentation_at_end(builder)?;
+
     environ.after_translate_function(builder, stack)?;
     reader.finish()?;
 

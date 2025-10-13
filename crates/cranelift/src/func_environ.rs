@@ -1327,24 +1327,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             builder.ins().stack_store(vmctx, slot, 0);
         }
     }
-
-    /// Perform debug instrumentation before translating the whole function.
-    pub(crate) fn debug_instrumentation_at_start(
-        &mut self,
-        builder: &mut FunctionBuilder,
-    ) -> WasmResult<()> {
-        self.update_state_slot_vmctx(builder);
-        Ok(())
-    }
-
-    /// Perform debug instrumentation after translating the whole function.
-    pub(crate) fn debug_instrumentation_at_end(
-        &mut self,
-        builder: &mut FunctionBuilder,
-    ) -> WasmResult<()> {
-        self.finish_debug_metadata(builder);
-        Ok(())
-    }
 }
 
 #[derive(Default)]
@@ -3816,6 +3798,8 @@ impl FuncEnvironment<'_> {
             }
         }
 
+        self.update_state_slot_vmctx(builder);
+
         Ok(())
     }
 
@@ -3827,6 +3811,7 @@ impl FuncEnvironment<'_> {
         if self.tunables.consume_fuel && state.reachable() {
             self.fuel_function_exit(builder);
         }
+        self.finish_debug_metadata(builder);
         Ok(())
     }
 
