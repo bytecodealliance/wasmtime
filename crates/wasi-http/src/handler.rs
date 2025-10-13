@@ -201,6 +201,12 @@ where
                 self.handler.0.worker_count.fetch_add(1, SeqCst);
             } else {
                 let count = self.handler.0.worker_count.fetch_sub(1, SeqCst);
+                // This addresses what would otherwise be a race condition in
+                // `ProxyHandler::spawn` where it only starts a worker if the
+                // available worker count is zero.  If we decrement the count to
+                // zero right after `ProxyHandler::spawn` checks it, then no
+                // worker will be started; thus it becomes our responsibility to
+                // start a worker here instead.
                 if count == 1 && !self.handler.0.task_queue.is_empty() {
                     self.handler.start_worker();
                 }
@@ -444,6 +450,11 @@ impl<S, T> ProxyHandler<S, T> {
             }
             _ => {
                 self.0.task_queue.push(task);
+                // Start a new worker to handle the task if there aren't already
+                // any available.  See also `Worker::set_available` for what
+                // happens if the available worker count goes to zero right
+                // after we check it here, and note that we only check the count
+                // _after_ we've pushed the task to the queue.
                 if self.0.worker_count.load(SeqCst) == 0 {
                     self.start_worker();
                 }
