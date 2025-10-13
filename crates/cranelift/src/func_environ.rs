@@ -1324,6 +1324,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn update_state_slot_vmctx(&mut self, builder: &mut FunctionBuilder) {
         if let &Some((slot, _)) = &self.state_slot {
             let vmctx = self.vmctx_val(&mut builder.cursor());
+            // N.B.: we always store vmctx at offset 0 in the
+            // slot. This is relied upon in
+            // crates/wasmtime/src/runtime/debug.rs in
+            // `raw_instance()`.
             builder.ins().stack_store(vmctx, slot, 0);
         }
     }

@@ -83,6 +83,8 @@ impl FrameStateSlotBuilder {
     /// before any stack shapes are defined. The offset in the state
     /// slot is returned.
     pub fn add_local(&mut self, ty: FrameValType) -> FrameStateSlotOffset {
+        // N.B.: the vmctx pointer is always at offset 0, so we add
+        // its size here.
         let offset = FrameStateSlotOffset(self.vmctx_size + self.locals_size);
         let size = ty.storage_size(self.pointer_size);
         self.locals_size += size;
@@ -109,6 +111,9 @@ impl FrameStateSlotBuilder {
                 let (_, ty, offset) = self.stacks[parent.index()];
                 offset.add(ty.storage_size(self.pointer_size))
             })
+            // N.B.: the stack starts at vmctx_size + locals_size,
+            // because the layout puts vmctx first, then locals, then
+            // stack.
             .unwrap_or(FrameStateSlotOffset(self.vmctx_size + self.locals_size));
 
         self.slot_size = core::cmp::max(

@@ -35,6 +35,10 @@ impl StoreOpaque {
             return None;
         }
 
+        // SAFETY: This takes a mutable borrow of `self` (the
+        // `StoreOpaque`), which owns all active stacks in the
+        // store. We do not provide any API that could mutate the
+        // frames that we are walking on the `StackView`.
         let iter = unsafe { CurrentActivationBacktrace::new(self) };
         let mut view = StackView {
             iter,
@@ -63,7 +67,7 @@ pub struct StackView<'a> {
     ///
     /// This alters how we interpret `pc`: for a trap, we look at the
     /// instruction that *starts* at `pc`, while for all frames
-    /// further up the stack (i.e., at a callsite), we look at teh
+    /// further up the stack (i.e., at a callsite), we look at the
     /// instruction that *ends* at `pc`.
     is_trapping_frame: bool,
 
@@ -118,7 +122,9 @@ impl<'a> StackView<'a> {
 
     fn raw_instance(&self) -> &crate::vm::Instance {
         // Read out the vmctx slot.
+
         // SAFETY: vmctx is always at offset 0 in the slot.
+        // (See crates/cranelift/src/func_environ.rs in `update_stack_slot_vmctx()`.)
         let vmctx: *mut VMContext = unsafe { *(self.frame_data().slot_addr as *mut _) };
         let vmctx = NonNull::new(vmctx).expect("null vmctx in debug state slot");
         // SAFETY: the stored vmctx value is a valid instance in this
@@ -247,9 +253,7 @@ impl VirtualFrame {
         } else {
             FrameInstPos::Post
         };
-        let Some(program_points) = table.find_program_point(pc, pos) else {
-            return vec![];
-        };
+        let program_points = table.find_program_point(pc, pos).expect("There must be a program point record in every frame when debug instrumentation is enabled");
 
         program_points
             .map(|(wasm_pc, frame_descriptor, stack_shape)| VirtualFrame {
