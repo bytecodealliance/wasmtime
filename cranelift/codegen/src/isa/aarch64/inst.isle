@@ -1413,6 +1413,12 @@
 (rule (vector_size (dynamic_lane 32 4)) (VectorSize.Size32x4))
 (rule (vector_size (dynamic_lane 64 2)) (VectorSize.Size64x2))
 
+;; Helper for converting the `ScalarSize` of a float value to the corresponding `VectorSize`
+(decl float_vector_size_in_64 (Type) VectorSize)
+(rule (float_vector_size_in_64 $F16) (VectorSize.Size16x4))
+(rule (float_vector_size_in_64 $F32) (VectorSize.Size32x2))
+(rule (float_vector_size_in_64 $F64) (VectorSize.Size8x8))
+
 ;; A floating-point unit (FPU) operation with one arg.
 (type FPUOp1
   (enum

@@ -365,7 +365,7 @@ pub(crate) fn clone_die_attributes<'a>(
                 pending_di_refs.insert(out_entry_id, attr.name(), offset);
                 continue;
             }
-            a => bail!("Unexpected attribute: {:?}", a),
+            a => bail!("Unexpected attribute: {a:?}"),
         };
         let out_entry: &mut write::DebuggingInformationEntry = out_unit.get_mut(out_entry_id);
         out_entry.set(attr.name(), out_attr_value);

@@ -326,10 +326,6 @@ criteria = "safe-to-deploy"
 version = "0.2.6"
 criteria = "safe-to-deploy"
 
-[[exemptions.h2]]
-version = "0.4.4"
-criteria = "safe-to-deploy"
-
 [[exemptions.half]]
 version = "2.4.1"
 criteria = "safe-to-deploy"
@@ -338,27 +334,16 @@ criteria = "safe-to-deploy"
 version = "0.3.9"
 criteria = "safe-to-deploy"
 
-[[exemptions.http]]
-version = "0.2.9"
-criteria = "safe-to-deploy"
-notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
-
-[[exemptions.httparse]]
-version = "1.8.0"
-criteria = "safe-to-deploy"
-notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
-
 [[exemptions.humantime]]
 version = "2.1.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.hyper]]
-version = "1.0.0-rc.3"
-criteria = "safe-to-deploy"
-notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
-
 [[exemptions.indicatif]]
 version = "0.13.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.io-uring]]
+version = "0.7.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.ipnet]]
@@ -414,10 +399,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.num-complex]]
 version = "0.4.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.num_cpus]]
-version = "1.13.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.number_prefix]]
@@ -536,12 +517,12 @@ criteria = "safe-to-deploy"
 version = "2.14.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.serde_yaml]]
-version = "0.9.34+deprecated"
-criteria = "safe-to-run"
-
 [[exemptions.shuffling-allocator]]
 version = "1.1.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.simd-adler32]]
+version = "0.3.7"
 criteria = "safe-to-deploy"
 
 [[exemptions.sized-chunks]]
@@ -580,11 +561,6 @@ criteria = "safe-to-deploy"
 version = "0.3.36"
 criteria = "safe-to-deploy"
 
-[[exemptions.tokio]]
-version = "1.44.2"
-criteria = "safe-to-deploy"
-notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
-
 [[exemptions.tokio-macros]]
 version = "2.5.0"
 criteria = "safe-to-deploy"
@@ -593,21 +569,9 @@ criteria = "safe-to-deploy"
 version = "0.25.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.tracing-attributes]]
-version = "0.1.21"
-criteria = "safe-to-deploy"
-
-[[exemptions.tracing-core]]
-version = "0.1.28"
-criteria = "safe-to-deploy"
-
 [[exemptions.typenum]]
 version = "1.15.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.unsafe-libyaml]]
-version = "0.2.11"
-criteria = "safe-to-run"
 
 [[exemptions.untrusted]]
 version = "0.9.0"

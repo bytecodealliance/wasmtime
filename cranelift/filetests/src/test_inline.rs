@@ -47,7 +47,7 @@ pub fn subtest(parsed: &TestCommand) -> Result<Box<dyn SubTest>> {
         match option {
             TestOption::Flag("precise-output") => test.precise_output = true,
             TestOption::Flag("optimize") => test.optimize = true,
-            _ => anyhow::bail!("unknown option on {}", parsed),
+            _ => anyhow::bail!("unknown option on {parsed}"),
         }
     }
     Ok(Box::new(test))

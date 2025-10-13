@@ -364,7 +364,7 @@ impl TestRunner {
         match self.errors {
             0 => Ok(()),
             1 => anyhow::bail!("1 failure"),
-            n => anyhow::bail!("{} failures", n),
+            n => anyhow::bail!("{n} failures"),
         }
     }
 
@@ -379,7 +379,7 @@ impl TestRunner {
         match self.errors {
             0 => Ok(()),
             1 => anyhow::bail!("1 failure"),
-            n => anyhow::bail!("{} failures", n),
+            n => anyhow::bail!("{n} failures"),
         }
     }
 }

@@ -337,7 +337,7 @@ impl Table {
                 // guarantee that we can fit the table size in a 64-bit integer.
                 Ok(u64::try_from(size).unwrap())
             }
-            None => bail!("failed to grow table by `{}`", delta),
+            None => bail!("failed to grow table by `{delta}`"),
         }
     }
 
