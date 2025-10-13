@@ -50,14 +50,9 @@ pub struct RunCommand {
     #[arg(long, value_name = "FUNCTION")]
     pub invoke: Option<String>,
 
-    /// Load the given WebAssembly module before the main module
-    #[arg(
-        long = "preload",
-        number_of_values = 1,
-        value_name = "NAME=MODULE_PATH",
-        value_parser = parse_preloads,
-    )]
-    pub preloads: Vec<(String, PathBuf)>,
+    #[command(flatten)]
+    #[expect(missing_docs, reason = "don't want to mess with clap doc-strings")]
+    pub preloads: Preloads,
 
     /// Override the value of `argv[0]`, typically the name of the executable of
     /// the application being run.
@@ -75,6 +70,19 @@ pub struct RunCommand {
     /// arguments will be interpreted as arguments to the function specified.
     #[arg(value_name = "WASM", trailing_var_arg = true, required = true)]
     pub module_and_args: Vec<OsString>,
+}
+
+#[expect(missing_docs, reason = "don't want to mess with clap doc-strings")]
+#[derive(Parser, Default, Clone)]
+pub struct Preloads {
+    /// Load the given WebAssembly module before the main module
+    #[arg(
+        long = "preload",
+        number_of_values = 1,
+        value_name = "NAME=MODULE_PATH",
+        value_parser = parse_preloads,
+    )]
+    modules: Vec<(String, PathBuf)>,
 }
 
 /// Dispatch between either a core or component linker.
@@ -226,7 +234,7 @@ impl RunCommand {
                 }
 
                 // Load the preload wasm modules.
-                for (name, path) in self.preloads.iter() {
+                for (name, path) in self.preloads.modules.iter() {
                     // Read the wasm module binary either as `*.wat` or a raw binary
                     let preload_target = self.run.load_module(&engine, path)?;
                     let preload_module = match preload_target {

@@ -1,4 +1,4 @@
-use crate::commands::run::{CliInstance, RunCommand};
+use crate::commands::run::{CliInstance, Preloads, RunCommand};
 use crate::common::{RunCommon, RunTarget};
 use anyhow::{Context, Result};
 use std::fs;
@@ -18,6 +18,9 @@ pub struct WizerCommand {
 
     /// The input Wasm module's file path.
     input: PathBuf,
+
+    #[command(flatten)]
+    preloads: Preloads,
 
     /// The file path to write the output Wasm module to.
     ///
@@ -61,7 +64,7 @@ impl WizerCommand {
             argv0: None,
             invoke: Some(self.wizer.get_init_func().to_string()),
             module_and_args: vec![self.input.clone().into()],
-            preloads: Vec::new(), // TODO
+            preloads: self.preloads.clone(),
         };
         let engine = run.new_engine()?;
         let main = RunTarget::Core(Module::new(&engine, &instrumented_wasm)?);
