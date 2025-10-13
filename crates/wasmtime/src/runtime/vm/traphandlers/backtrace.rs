@@ -351,12 +351,12 @@ impl<'a> CurrentActivationBacktrace<'a> {
     ///
     /// # Safety
     ///
-    /// Although the iterator yields a mutable store back at each
-    /// iteration, this *must not* be used to mutate the stack
-    /// activation itself that this iterator is visiting. While the
-    /// `store` technically owns the stack in question, the only way
-    /// to do this with the current API would be to return back into
-    /// the Wasm activation. As long as this iterator is held and used
+    /// Although the iterator provides mutable store as a public
+    /// field, this *must not* be used to mutate the stack activation
+    /// itself that this iterator is visiting. While the `store`
+    /// technically owns the stack in question, the only way to do
+    /// this with the current API would be to return back into the
+    /// Wasm activation. As long as this iterator is held and used
     /// while within host code called from that activation (which will
     /// ordinarily be ensured if the `store`'s lifetime came from the
     /// host entry point) then everything will be sound.
