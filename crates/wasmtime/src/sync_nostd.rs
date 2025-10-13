@@ -81,7 +81,7 @@ impl<T> OnceLock<T> {
                     _ => unreachable!(),
                 },
             },
-            Err(INITIALIZING) => panic!("concurrent initialization only allowed with `std`"),
+            Err(INITIALIZING) => panic!("concurrent initialization only allowed with `std` or `custom-sync-primitives` features"),
             Err(INITIALIZED) => Ok(self.get().unwrap()),
             _ => unreachable!(),
         }
@@ -128,7 +128,7 @@ impl<T> RwLock<T> {
             }) {
             Ok(_) => RwLockReadGuard { lock: self },
             Err(_) => panic!(
-                "concurrent read request while locked for writing, must use `std` to avoid panic"
+                "concurrent read request while locked for writing, must use `std` or `custom-sync-primitives` features to avoid panic"
             ),
         }
     }
@@ -139,7 +139,7 @@ impl<T> RwLock<T> {
             .compare_exchange(0, u32::MAX, Ordering::Acquire, Ordering::Relaxed)
         {
             Ok(0) => RwLockWriteGuard { lock: self },
-            _ => panic!("concurrent write request, must use `std` to avoid panicking"),
+            _ => panic!("concurrent write request, must use `std` or `custom-sync-primitives` features to avoid panicking"),
         }
     }
 }
