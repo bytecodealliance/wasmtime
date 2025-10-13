@@ -399,7 +399,7 @@ mod sync_nostd;
 #[cfg(all(not(feature = "std"), not(has_custom_sync)))]
 use sync_nostd as sync;
 
-#[cfg(all(not(feature = "std"), has_custom_sync))]
+#[cfg(has_custom_sync)]
 use runtime::vm::sync;
 
 /// A convenience wrapper for `Result<T, anyhow::Error>`.

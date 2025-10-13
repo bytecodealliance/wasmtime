@@ -26,7 +26,7 @@ fn main() {
         && (supported_os || cfg!(feature = "custom-native-signals"))
         && has_host_compiler_backend;
     let has_virtual_memory = supported_os || cfg!(feature = "custom-virtual-memory");
-    let has_custom_sync = cfg!(feature = "custom-sync-primitives");
+    let has_custom_sync = !cfg!(feature = "std") && cfg!(feature = "custom-sync-primitives");
 
     custom_cfg("has_native_signals", has_native_signals);
     custom_cfg("has_virtual_memory", has_virtual_memory);
