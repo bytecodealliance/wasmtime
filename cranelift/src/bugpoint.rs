@@ -996,7 +996,6 @@ impl<'a> CrashCheckContext<'a> {
         }
     }
 
-    #[cfg_attr(test, expect(unreachable_code, reason = "test-specific code"))]
     fn check_for_crash(&mut self, func: &Function) -> CheckResult {
         self.context.clear();
 
@@ -1017,7 +1016,7 @@ impl<'a> CrashCheckContext<'a> {
         }
 
         #[cfg(test)]
-        {
+        if true {
             // For testing purposes we emulate a panic caused by the existence of
             // a `call` instruction.
             let contains_call = func.layout.blocks().any(|block| {
