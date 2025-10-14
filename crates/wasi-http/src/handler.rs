@@ -208,13 +208,13 @@ where
                 // worker will be started; thus it becomes our responsibility to
                 // start a worker here instead.
                 if count == 1 && !self.handler.0.task_queue.is_empty() {
-                    self.handler.start_worker();
+                    self.handler.start_worker(None);
                 }
             }
         }
     }
 
-    async fn run(mut self) -> Result<()> {
+    async fn run(mut self, task: Option<TaskFn<T>>) -> Result<()> {
         let handler = &self.handler.0;
 
         let StoreBundle {
@@ -235,6 +235,31 @@ where
             let mut reuse_count = 0;
             let mut timed_out = false;
             let mut futures = FuturesUnordered::new();
+
+            let accept_task =
+                |task: TaskFn<T>, futures: &mut FuturesUnordered<_>, reuse_count: &mut usize| {
+                    // Set `accept_concurrent` to false, conservatively assuming
+                    // that the new task will be CPU-bound, at least to begin with.
+                    // Only once the `StoreContextMut::run_concurrent` event loop
+                    // returns `Pending` will we set `accept_concurrent` back to
+                    // true and consider accepting more tasks.
+                    //
+                    // This approach avoids taking on more than one CPU-bound task
+                    // at a time, which would hurt throughput vs. leaving the
+                    // additional tasks for other workers to handle.
+                    accept_concurrent.store(false, Relaxed);
+                    *reuse_count += 1;
+
+                    futures.push(tokio::time::timeout(
+                        request_timeout,
+                        (task)(accessor, proxy),
+                    ));
+                };
+
+            if let Some(task) = task {
+                accept_task(task, &mut futures, &mut reuse_count);
+            }
+
             let handler = self.handler.clone();
             while !(futures.is_empty() && reuse_count >= max_instance_reuse_count) {
                 let new_task = {
@@ -310,23 +335,7 @@ where
 
                 match new_task {
                     Some(Ok(task)) => {
-                        // Set `accept_concurrent` to false, conservatively
-                        // assuming that the new task will be CPU-bound, at
-                        // least to begin with.  Only once the
-                        // `StoreContextMut::run_concurrent` event loop returns
-                        // `Pending` will we set `accept_concurrent` back to
-                        // true and consider accepting more tasks.
-                        //
-                        // This approach avoids taking on more than one
-                        // CPU-bound task at a time, which would hurt
-                        // throughput vs. leaving the additional tasks
-                        // for other workers to handle.
-                        accept_concurrent.store(false, Relaxed);
-                        reuse_count += 1;
-
-                        futures.push(tokio::time::timeout(request_timeout, async move {
-                            (task)(accessor, proxy).await
-                        }));
+                        accept_task(task, &mut futures, &mut reuse_count);
                     }
                     Some(Err(_)) => break,
                     None => {}
@@ -408,55 +417,24 @@ impl<S, T> ProxyHandler<S, T> {
     {
         match self.0.state.max_instance_reuse_count() {
             0 => panic!("`max_instance_reuse_count` must be at least 1"),
-            1 => {
-                // Use a simplified path when instance reuse is disabled.
-                //
-                // This provides somewhat (e.g. ~20%) better throughput as
-                // measured by `wasmtime-serve-rps.sh` than the
-                // task-queue-and-workers approach below, so probably worth the
-                // slight code duplication.  TODO: Can we narrow the gap and
-                // remove this path?
-                let handler = self.clone();
-
-                tokio::task::spawn(
-                    async move {
-                        let StoreBundle {
-                            mut store,
-                            write_profile,
-                        } = handler.0.state.new_store()?;
-
-                        let proxy = &handler.0.instance_pre.instantiate_async(&mut store).await?;
-
-                        let result = store
-                            .run_concurrent(async |accessor| {
-                                tokio::time::timeout(handler.0.state.request_timeout(), async {
-                                    (task)(accessor, proxy).await
-                                })
-                                .await
-                                .map_err(|_| anyhow!("guest timed out"))
-                            })
-                            .await;
-
-                        write_profile(store.as_context_mut());
-
-                        result?
-                    }
-                    .map(|result| {
-                        if let Err(error) = result {
-                            eprintln!("worker error: {error:?}");
-                        }
-                    }),
-                );
-            }
             _ => {
-                self.0.task_queue.push(task);
-                // Start a new worker to handle the task if there aren't already
-                // any available.  See also `Worker::set_available` for what
-                // happens if the available worker count goes to zero right
-                // after we check it here, and note that we only check the count
-                // _after_ we've pushed the task to the queue.
-                if self.0.worker_count.load(SeqCst) == 0 {
-                    self.start_worker();
+                if self.0.worker_count.load(Relaxed) == 0 {
+                    // There are no available workers; skip the queue and pass
+                    // the task directly to the worker, which improves
+                    // performance as measured by `wasmtime-server-rps.sh` by
+                    // about 15%.
+                    self.start_worker(Some(task));
+                } else {
+                    self.0.task_queue.push(task);
+                    // Start a new worker to handle the task if the last worker
+                    // just went unavailable.  See also `Worker::set_available`
+                    // for what happens if the available worker count goes to
+                    // zero right after we check it here, and note that we only
+                    // check the count _after_ we've pushed the task to the
+                    // queue.
+                    if self.0.worker_count.load(SeqCst) == 0 {
+                        self.start_worker(None);
+                    }
                 }
             }
         }
@@ -477,7 +455,7 @@ impl<S, T> ProxyHandler<S, T> {
         &self.0.instance_pre
     }
 
-    fn start_worker(&self)
+    fn start_worker(&self, task: Option<TaskFn<T>>)
     where
         T: Send,
         S: HandlerState<StoreData = T>,
@@ -487,7 +465,7 @@ impl<S, T> ProxyHandler<S, T> {
                 handler: self.clone(),
                 available: false,
             }
-            .run()
+            .run(task)
             .map(|result| {
                 if let Err(error) = result {
                     eprintln!("worker error: {error:?}");
