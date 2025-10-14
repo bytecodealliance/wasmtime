@@ -94,6 +94,7 @@ impl Artifacts {
                 // tests added are actually run somewhere, so as long as you're
                 // also adding test code somewhere that's ok.
                 other => {
+                    eprintln!("{test}");
                     panic!("don't know how to classify test name `{other}` to a kind")
                 }
             };
