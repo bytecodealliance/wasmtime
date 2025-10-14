@@ -1093,7 +1093,7 @@ impl Compiler {
 
         // Note that loads and stores are unconditionally done in the
         // little-endian format rather than the host's native-endianness,
-        // despite this load/store being unrelated to execution in wasm itself.
+        // despite this load/store being unrelated to execution in Wasm itself.
         // For more details on this see the `ValRaw` type in
         // `wasmtime::runtime::vm`.
         let flags = ir::MemFlags::new()
@@ -1310,6 +1310,7 @@ impl FunctionCompiler<'_> {
         let block0 = builder.create_block();
         builder.append_block_params_for_function_params(block0);
         builder.switch_to_block(block0);
+        builder.ensure_inserted_block();
         builder.seal_block(block0);
         (builder, block0)
     }

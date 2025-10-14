@@ -4,7 +4,7 @@ use crate::array_call_signature;
 use crate::{
     TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT, compiler::Compiler, wasm_call_signature,
 };
-use anyhow::Result;
+use anyhow::{Result, bail};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
@@ -96,6 +96,85 @@ enum WasmArgs {
     /// The first `n` arguments are passed in registers, but everything after
     /// that is spilled to the stack.
     InRegistersUpTo(usize),
+}
+
+/// Get a function's parameters regardless of the ABI in use.
+///
+/// This emits code to load the parameters from the array-call's ABI's values
+/// vector, if necessary.
+fn abi_params(
+    compiler: &Compiler,
+    builder: &mut FunctionBuilder<'_>,
+    abi: Abi,
+    types: &[WasmValType],
+) -> Vec<ir::Value> {
+    let entry_block = builder
+        .func
+        .layout
+        .entry_block()
+        .expect("should have an entry block");
+    let entry_block_params = builder.func.dfg.block_params(entry_block);
+    match abi {
+        // Wasm and native ABIs pass parameters as normal function parameters.
+        Abi::Wasm => entry_block_params.to_vec(),
+
+        // The array ABI passes a pointer/length as the 3rd/4th arguments and
+        // those are used to load the actual Wasm parameters.
+        Abi::Array => {
+            let &[callee_vmctx, caller_vmctx, values_vec_ptr, values_vec_len] = entry_block_params
+            else {
+                unreachable!()
+            };
+            let mut results =
+                compiler.load_values_from_array(types, builder, values_vec_ptr, values_vec_len);
+            results.splice(0..0, [callee_vmctx, caller_vmctx]);
+            results
+        }
+    }
+}
+
+/// Emit code to return the given result values, regardless of the ABI in use.
+fn abi_return(
+    compiler: &Compiler,
+    builder: &mut FunctionBuilder<'_>,
+    abi: Abi,
+    result_types: &[WasmValType],
+    results: &[ir::Value],
+) {
+    match abi {
+        // The Wasm ABI returns values as usual.
+        Abi::Wasm => {
+            builder.ins().return_(results);
+        }
+
+        // The array ABI stores all results in the pointer/length passed
+        // as arguments to this function, which contractually are required
+        // to have enough space for the results.
+        Abi::Array => {
+            let entry_block = builder
+                .func
+                .layout
+                .entry_block()
+                .expect("should have an entry block");
+            let &[_callee_vmctx, _caller_vmctx, values_vec_ptr, values_vec_len] =
+                builder.func.dfg.block_params(entry_block)
+            else {
+                unreachable!()
+            };
+
+            compiler.store_values_to_array(
+                builder,
+                result_types,
+                results,
+                values_vec_ptr,
+                values_vec_len,
+            );
+
+            // A "true" return value indicates a successful, non-trapping call.
+            let true_value = builder.ins().iconst(ir::types::I8, 1);
+            builder.ins().return_(&[true_value]);
+        }
+    }
 }
 
 impl<'a> TrampolineCompiler<'a> {
@@ -973,7 +1052,7 @@ impl<'a> TrampolineCompiler<'a> {
         // Acquire the result of this function (if any) and interpret it
         // according to `host_result`.
         //
-        // NOte that all match arms here end with `abi_store_results` which
+        // Note that all match arms here end with `abi_store_results` which
         // accounts for the ABI of this function when storing results.
         let result = self.builder.func.dfg.inst_results(call).get(0).copied();
         let result_ty = result.map(|v| self.builder.func.dfg.value_type(v));
@@ -1295,52 +1374,22 @@ impl<'a> TrampolineCompiler<'a> {
     }
 
     fn abi_load_params(&mut self) -> Vec<ir::Value> {
-        let mut block0_params = self.builder.func.dfg.block_params(self.block0).to_vec();
-        match self.abi {
-            // Wasm and native ABIs pass parameters as normal function
-            // parameters.
-            Abi::Wasm => block0_params,
-
-            // The array ABI passes a pointer/length as the 3rd/4th arguments
-            // and those are used to load the actual wasm parameters.
-            Abi::Array => {
-                let results = self.compiler.load_values_from_array(
-                    self.types[self.signature].unwrap_func().params(),
-                    &mut self.builder,
-                    block0_params[2],
-                    block0_params[3],
-                );
-                block0_params.truncate(2);
-                block0_params.extend(results);
-                block0_params
-            }
-        }
+        abi_params(
+            self.compiler,
+            &mut self.builder,
+            self.abi,
+            self.types[self.signature].unwrap_func().params(),
+        )
     }
 
     fn abi_store_results(&mut self, results: &[ir::Value]) {
-        match self.abi {
-            // Wasm/native ABIs return values as usual.
-            Abi::Wasm => {
-                self.builder.ins().return_(results);
-            }
-
-            // The array ABI stores all results in the pointer/length passed
-            // as arguments to this function, which contractually are required
-            // to have enough space for the results.
-            Abi::Array => {
-                let block0_params = self.builder.func.dfg.block_params(self.block0);
-                let (ptr, len) = (block0_params[2], block0_params[3]);
-                self.compiler.store_values_to_array(
-                    &mut self.builder,
-                    self.types[self.signature].unwrap_func().returns(),
-                    results,
-                    ptr,
-                    len,
-                );
-                let true_value = self.builder.ins().iconst(ir::types::I8, 1);
-                self.builder.ins().return_(&[true_value]);
-            }
-        }
+        abi_return(
+            self.compiler,
+            &mut self.builder,
+            self.abi,
+            self.types[self.signature].unwrap_func().returns(),
+            results,
+        );
     }
 
     fn raise_if_host_trapped(&mut self, succeeded: ir::Value) {
@@ -1472,72 +1521,31 @@ impl ComponentCompiler for Compiler {
 
             assert!(builder.func.layout.entry_block().is_none());
             let entry_block = builder.create_block();
-            builder.switch_to_block(entry_block);
-            builder.seal_block(entry_block);
             builder.append_block_params_for_function_params(entry_block);
+            builder.seal_block(entry_block);
+            builder.switch_to_block(entry_block);
+            builder.ensure_inserted_block();
 
-            match abi {
-                Abi::Array => {
-                    let &[
-                        callee_vmctx,
-                        caller_vmctx,
-                        values_vec_ptr,
-                        values_vec_capacity,
-                    ] = builder.func.dfg.block_params(entry_block)
-                    else {
-                        unreachable!()
-                    };
-
-                    let wasm_args = self.load_values_from_array(
-                        wasm_func_ty.params(),
-                        builder,
-                        values_vec_ptr,
-                        values_vec_capacity,
-                    );
-
-                    let mut args = vec![callee_vmctx, caller_vmctx];
-                    args.extend(wasm_args);
-                    args
-                }
-                Abi::Wasm => builder.func.dfg.block_params(entry_block).to_vec(),
-            }
-        };
-
-        let return_ = |compiler: &Compiler,
-                       builder: &mut FunctionBuilder<'_>,
-                       wasm_tys: &[WasmValType],
-                       values: &[ir::Value]| {
-            match abi {
-                Abi::Wasm => {
-                    builder.ins().return_(values);
-                }
-                Abi::Array => {
-                    let entry_block = builder.func.layout.entry_block().unwrap();
-                    let &[_, _, values_vec_ptr, values_vec_capacity] =
-                        builder.func.dfg.block_params(entry_block)
-                    else {
-                        unreachable!()
-                    };
-                    compiler.store_values_to_array(
-                        builder,
-                        wasm_tys,
-                        values,
-                        values_vec_ptr,
-                        values_vec_capacity,
-                    );
-                    // Return zero, the sentinel for "we did not trap".
-                    let zero = builder.ins().iconst(ir::types::I8, 0);
-                    builder.ins().return_(&[zero]);
-                }
-            }
+            abi_params(self, builder, abi, wasm_func_ty.params())
         };
 
         // Emit code for a native-load intrinsic.
-        let load = |builder: &mut FunctionBuilder, clif_ty: ir::Type, wasm_ty: WasmValType| {
+        let load = |builder: &mut FunctionBuilder,
+                    clif_ty: ir::Type,
+                    wasm_ty: WasmValType|
+         -> Result<()> {
             let [_callee_vmctx, _caller_vmctx, pointer] =
                 *init(builder, [WasmValType::I64].into(), [wasm_ty].into())
             else {
                 unreachable!()
+            };
+
+            // Truncate the pointer, if necessary.
+            debug_assert_eq!(builder.func.dfg.value_type(pointer), ir::types::I64);
+            let pointer = match self.isa.pointer_bits() {
+                32 => builder.ins().ireduce(ir::types::I32, pointer),
+                64 => pointer,
+                p => bail!("unsupported architecture: no support for {p}-bit pointers"),
             };
 
             // Do the load!
@@ -1545,25 +1553,45 @@ impl ComponentCompiler for Compiler {
                 .ins()
                 .load(clif_ty, ir::MemFlags::trusted(), pointer, 0);
 
-            // Extend the value, if necessary.
+            // Extend the value, if necessary. When implementing the
+            // `u8-native-load` intrinsic, for example, we will load a Cranelift
+            // value of type `i8` but we need to extend it to an `i32` because
+            // Wasm doesn't have an `i8` core value type.
             let wasm_clif_ty = crate::value_type(&*self.isa, wasm_ty);
             if clif_ty != wasm_clif_ty {
                 assert!(clif_ty.bytes() < wasm_clif_ty.bytes());
+                // NB: all of our unsafe intrinsics for native loads are
+                // unsigned, so we always zero-extend.
                 value = builder.ins().uextend(wasm_clif_ty, value);
             }
 
-            return_(self, builder, &[wasm_ty], &[value]);
+            abi_return(self, builder, abi, &[wasm_ty], &[value]);
+            Ok(())
         };
 
         // Emit code for a native-store intrinsic.
-        let store = |builder: &mut FunctionBuilder, clif_ty: ir::Type, wasm_ty: WasmValType| {
+        let store = |builder: &mut FunctionBuilder,
+                     clif_ty: ir::Type,
+                     wasm_ty: WasmValType|
+         -> Result<()> {
             let [_callee_vmctx, _caller_vmctx, pointer, mut value] =
                 *init(builder, [WasmValType::I64, wasm_ty].into(), [].into())
             else {
                 unreachable!()
             };
 
-            // Truncate the value, if necessary.
+            // Truncate the pointer, if necessary.
+            debug_assert_eq!(builder.func.dfg.value_type(pointer), ir::types::I64);
+            let pointer = match self.isa.pointer_bits() {
+                32 => builder.ins().ireduce(ir::types::I32, pointer),
+                64 => pointer,
+                p => bail!("unsupported architecture: no support for {p}-bit pointers"),
+            };
+
+            // Truncate the value, if necessary. For example, with
+            // `u8-native-store` we will be given an `i32` from Wasm (because
+            // core Wasm does not have an 8-bit integer value type) and we need
+            // to reduce that into an `i8`.
             let wasm_ty = crate::value_type(&*self.isa, wasm_ty);
             if clif_ty != wasm_ty {
                 assert!(clif_ty.bytes() < wasm_ty.bytes());
@@ -1575,33 +1603,34 @@ impl ComponentCompiler for Compiler {
                 .ins()
                 .store(ir::MemFlags::trusted(), value, pointer, 0);
 
-            return_(self, builder, &[], &[]);
+            abi_return(self, builder, abi, &[], &[]);
+            Ok(())
         };
 
         match intrinsic {
             x if x == UnsafeIntrinsic::u8_native_load() => {
-                load(&mut builder, ir::types::I8, WasmValType::I32)
+                load(&mut builder, ir::types::I8, WasmValType::I32)?
             }
             x if x == UnsafeIntrinsic::u16_native_load() => {
-                load(&mut builder, ir::types::I16, WasmValType::I32)
+                load(&mut builder, ir::types::I16, WasmValType::I32)?
             }
             x if x == UnsafeIntrinsic::u32_native_load() => {
-                load(&mut builder, ir::types::I32, WasmValType::I32)
+                load(&mut builder, ir::types::I32, WasmValType::I32)?
             }
             x if x == UnsafeIntrinsic::u64_native_load() => {
-                load(&mut builder, ir::types::I64, WasmValType::I64)
+                load(&mut builder, ir::types::I64, WasmValType::I64)?
             }
             x if x == UnsafeIntrinsic::u8_native_store() => {
-                store(&mut builder, ir::types::I8, WasmValType::I32)
+                store(&mut builder, ir::types::I8, WasmValType::I32)?
             }
             x if x == UnsafeIntrinsic::u16_native_store() => {
-                store(&mut builder, ir::types::I16, WasmValType::I32)
+                store(&mut builder, ir::types::I16, WasmValType::I32)?
             }
             x if x == UnsafeIntrinsic::u32_native_store() => {
-                store(&mut builder, ir::types::I32, WasmValType::I32)
+                store(&mut builder, ir::types::I32, WasmValType::I32)?
             }
             x if x == UnsafeIntrinsic::u64_native_store() => {
-                store(&mut builder, ir::types::I64, WasmValType::I64)
+                store(&mut builder, ir::types::I64, WasmValType::I64)?
             }
             x if x == UnsafeIntrinsic::store_data_address() => {
                 let [callee_vmctx, _caller_vmctx] =
@@ -1623,7 +1652,7 @@ impl ComponentCompiler for Compiler {
                 );
 
                 // Load the `*mut T` out of the `VMStoreContext`.
-                let mut data_address = builder.ins().load(
+                let data_address = builder.ins().load(
                     pointer_type,
                     ir::MemFlags::trusted()
                         .with_readonly()
@@ -1634,11 +1663,19 @@ impl ComponentCompiler for Compiler {
                 );
 
                 // Zero-extend the address if we are on a 32-bit architecture.
-                if pointer_type.bytes() < ir::types::I64.bytes() {
-                    data_address = builder.ins().uextend(ir::types::I64, data_address);
-                }
+                let data_address = match pointer_type.bits() {
+                    32 => builder.ins().uextend(ir::types::I64, data_address),
+                    64 => data_address,
+                    p => bail!("unsupported architecture: no support for {p}-bit pointers"),
+                };
 
-                return_(self, &mut builder, &[WasmValType::I64], &[data_address]);
+                abi_return(
+                    self,
+                    &mut builder,
+                    abi,
+                    &[WasmValType::I64],
+                    &[data_address],
+                );
             }
             otherwise => unreachable!("unknown intrinsic: {otherwise:?}"),
         }
