@@ -282,6 +282,9 @@ impl RunCommand {
             .await
         });
 
+        if let Some(san) = WasiView::ctx(store.data_mut()).table.get_sanitizer() {
+            san.report_live_set(&mut std::io::stderr())?;
+        }
         // Load the main wasm module.
         let instance = match result.unwrap_or_else(|elapsed| {
             Err(anyhow::Error::from(wasmtime::Trap::Interrupt))
