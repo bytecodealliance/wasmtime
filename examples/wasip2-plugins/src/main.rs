@@ -99,7 +99,7 @@ fn load_plugins(state: &mut CalculatorState, plugins_dir: &Path) -> wasmtime::Re
     let linker: Linker<()> = Linker::new(&engine);
 
     if !plugins_dir.is_dir() {
-        return Err(wasmtime::Error::msg("Plugins directory does not exist"));
+        anyhow::bail!("plugins directory does not exist");
     }
 
     for entry in fs::read_dir(plugins_dir)? {
@@ -112,7 +112,7 @@ fn load_plugins(state: &mut CalculatorState, plugins_dir: &Path) -> wasmtime::Re
 }
 
 #[derive(Parser)]
-#[command(name = "calculator")]
+#[command(name = "calculator-host", version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "A calculator with plugin support")]
 struct Args {
     /// The name of the operation
@@ -123,22 +123,18 @@ struct Args {
     y: i32,
 
     #[arg(long, help = "Plugin directory")]
-    plugins: Option<PathBuf>,
+    plugins: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
     // Get plugins directory
     let args = Args::parse();
-    if args.plugins.is_none() {
-        eprintln!("Usage: calculator --plugins <path_to_plugins>");
-        std::process::exit(1);
-    }
 
     // Initialize mapping from plugin names to plugins
     let mut state = CalculatorState::new();
 
     // Load plugins from plugins directory
-    load_plugins(&mut state, args.plugins.unwrap().as_path())?;
+    load_plugins(&mut state, args.plugins.as_path())?;
 
     // Evaluate the expression given on the command line
     (BinaryOperation {

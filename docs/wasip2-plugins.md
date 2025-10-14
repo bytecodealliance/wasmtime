@@ -137,7 +137,7 @@ each file in the directory that has the `.wasm` extension:
 
 ```rust
     if !plugins_dir.is_dir() {
-        return Err(wasmtime::Error::msg("Plugins directory does not exist"));
+        anyhow::bail!("plugins directory does not exist");
     }
 
     for entry in fs::read_dir(plugins_dir)? {

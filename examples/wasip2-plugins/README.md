@@ -9,5 +9,5 @@ Finally, run (for example):
 or
 `target/release/calculator --plugins plugins subtract 1 2`
 
-For more details, see the "Calculator with WebAssembly Plugins"
+For more details, see the ["Calculator with WebAssembly Plugins"](http://docs.wasmtime.dev/wasip2-plugins.html)
 section of the documentation.

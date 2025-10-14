@@ -6,10 +6,11 @@ description = """
 Example Rust-based WebAssembly host that implements a calculator
 with plugins for arithmetic operations.
 """
+publish = false
 
 [dependencies]
-anyhow = "1.0.72"
-clap = { version = "4.5.48", features = ["derive"] }
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
 wasmtime = { workspace = true, features = ['std', 'cranelift'] }
 wasmtime-wasi = { workspace = true }
 
