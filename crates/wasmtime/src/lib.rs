@@ -394,7 +394,6 @@ mod sync_std;
 #[cfg(feature = "std")]
 use sync_std as sync;
 
-#[cfg(not(feature = "std"))]
 mod sync_nostd;
 #[cfg(not(feature = "std"))]
 use sync_nostd as sync;
