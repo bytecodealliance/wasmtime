@@ -10,7 +10,6 @@ mod parse;
 mod rewrite;
 mod snapshot;
 mod stack_ext;
-mod translate;
 
 /// Re-export wasmtime so users can align with our version. This is
 /// especially useful when providing a custom Linker.

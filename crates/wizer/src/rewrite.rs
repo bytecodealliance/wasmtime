@@ -1,7 +1,8 @@
 //! Final rewrite pass.
 
-use crate::{FuncRenames, Wizer, info::ModuleContext, snapshot::Snapshot, translate};
+use crate::{FuncRenames, Wizer, info::ModuleContext, snapshot::Snapshot};
 use std::convert::TryFrom;
+use wasm_encoder::reencode::{Reencode, RoundtripReencoder};
 use wasm_encoder::{ConstExpr, SectionId};
 
 impl Wizer {
@@ -69,7 +70,7 @@ impl Wizer {
                         .defined_memories(cx)
                         .zip(snapshot.memory_mins.iter().copied())
                     {
-                        let mut mem = translate::memory_type(mem);
+                        let mut mem = RoundtripReencoder.memory_type(mem).unwrap();
                         mem.minimum = new_min;
                         memories.memory(mem);
                     }
@@ -83,7 +84,7 @@ impl Wizer {
                     for ((_, glob_ty), val) in
                         module.defined_globals(cx).zip(snapshot.globals.iter())
                     {
-                        let glob_ty = translate::global_type(glob_ty);
+                        let glob_ty = RoundtripReencoder.global_type(glob_ty).unwrap();
                         globals.global(
                             glob_ty,
                             &match val {
@@ -130,7 +131,7 @@ impl Wizer {
                             .get(export.name)
                             .map_or(export.name, |f| f.as_str());
 
-                        let kind = translate::export(export.kind);
+                        let kind = RoundtripReencoder.export_kind(export.kind).unwrap();
                         exports.export(field, kind, export.index);
                     }
                     encoder.section(&exports);
