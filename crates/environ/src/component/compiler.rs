@@ -27,5 +27,6 @@ pub trait ComponentCompiler: Send + Sync {
         component: &ComponentTranslation,
         intrinsic: UnsafeIntrinsic,
         abi: Abi,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody>;
 }

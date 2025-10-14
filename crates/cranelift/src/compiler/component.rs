@@ -1501,6 +1501,7 @@ impl ComponentCompiler for Compiler {
         component: &ComponentTranslation,
         intrinsic: UnsafeIntrinsic,
         abi: Abi,
+        _symbol: &str,
     ) -> Result<CompiledFunctionBody> {
         let offsets = VMComponentOffsets::new(self.isa.pointer_bytes(), &component.component);
         let mut compiler = self.function_compiler();

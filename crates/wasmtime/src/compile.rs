@@ -306,7 +306,7 @@ impl<'a> CompileInputs<'a> {
                                     key: FuncKey::UnsafeIntrinsic(abi, intrinsic),
                                     function: compiler
                                         .component_compiler()
-                                        .compile_intrinsic(tunables, component, intrinsic, abi)
+                                        .compile_intrinsic(tunables, component, intrinsic, abi, &symbol)
                                         .with_context(|| format!("failed to compile `{symbol}`"))?
                                         .into(),
                                     symbol,

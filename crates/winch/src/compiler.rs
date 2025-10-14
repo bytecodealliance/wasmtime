@@ -403,11 +403,20 @@ impl wasmtime_environ::component::ComponentCompiler for NoInlineCompiler {
 
     fn compile_intrinsic(
         &self,
-        _tunables: &Tunables,
-        _component: &ComponentTranslation,
-        _intrinsic: wasmtime_environ::component::UnsafeIntrinsic,
-        _abi: wasmtime_environ::Abi,
+        tunables: &Tunables,
+        component: &ComponentTranslation,
+        intrinsic: wasmtime_environ::component::UnsafeIntrinsic,
+        abi: wasmtime_environ::Abi,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody> {
-        anyhow::bail!("Winch does not yet support intrinsics")
+        let mut body = self
+            .0
+            .component_compiler()
+            .compile_intrinsic(tunables, component, intrinsic, abi, symbol)?;
+        if let Some(c) = self.0.inlining_compiler() {
+            c.finish_compiling(&mut body, None, symbol)
+                .map_err(|e| CompileError::Codegen(e.to_string()))?;
+        }
+        Ok(body)
     }
 }
