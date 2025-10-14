@@ -1168,8 +1168,9 @@ impl<T> Store<T> {
         self.inner.pending_exception.is_some()
     }
 
-    /// Provide an object that captures Wasm stack state, including
-    /// Wasm VM-level values (locals and operand stack).
+    /// Provide an object that views Wasm stack state, including Wasm
+    /// VM-level values (locals and operand stack), when debugging is
+    /// enabled.
     ///
     /// This object views all activations for the current store that
     /// are on the stack. An activation is a contiguous sequence of
@@ -1183,8 +1184,8 @@ impl<T> Store<T> {
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
     #[cfg(feature = "debug")]
-    pub fn stack_values(&mut self) -> Option<crate::StackView<'_>> {
-        self.inner.stack_values()
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
+        self.inner.debug_frames()
     }
 }
 
@@ -1310,13 +1311,14 @@ impl<'a, T> StoreContextMut<'a, T> {
         self.0.inner.pending_exception.is_some()
     }
 
-    /// Provide an object that captures Wasm stack state, including
-    /// Wasm VM-level values (locals and operand stack).
+    /// Provide an object that views Wasm stack state, including Wasm
+    /// VM-level values (locals and operand stack), when debugging is
+    /// enabled.
     ///
-    /// See ['Store::stack_values`] for more details.
+    /// See ['Store::debug_frames`] for more details.
     #[cfg(feature = "debug")]
-    pub fn stack_values(&mut self) -> Option<crate::StackView<'_>> {
-        self.0.inner.stack_values()
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
+        self.0.inner.debug_frames()
     }
 }
 

@@ -914,7 +914,8 @@ struct PreLinkOutput {
     /// Whether or not any of these functions require a GC heap
     needs_gc_heap: bool,
     /// The flattened list of (symbol name, FuncKey, compiled
-    /// function) pairs, as they will be laid out in the object file.
+    /// function) triples, as they will be laid out in the object
+    /// file.
     compiled_funcs: Vec<(String, FuncKey, Box<dyn Any + Send + Sync>)>,
     /// The `FunctionIndices` mapping our function keys to indices in that flat
     /// list.

@@ -30,7 +30,7 @@ impl StoreOpaque {
     ///
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
-    pub fn stack_values(&mut self) -> Option<StackView<'_>> {
+    pub fn debug_frames(&mut self) -> Option<DebugFrameCursor<'_>> {
         if !self.engine().tunables().debug_guest {
             return None;
         }
@@ -38,24 +38,25 @@ impl StoreOpaque {
         // SAFETY: This takes a mutable borrow of `self` (the
         // `StoreOpaque`), which owns all active stacks in the
         // store. We do not provide any API that could mutate the
-        // frames that we are walking on the `StackView`.
+        // frames that we are walking on the `DebugFrameCursor`.
         let iter = unsafe { CurrentActivationBacktrace::new(self) };
-        let mut view = StackView {
+        let mut view = DebugFrameCursor {
             iter,
             is_trapping_frame: false,
             frames: vec![],
             current: None,
         };
-        view.move_up(); // Load the first frame.
+        view.move_to_parent(); // Load the first frame.
         Some(view)
     }
 }
 
-/// A view of values in active Wasm stack frames.
+/// A view of an active stack frame, with the ability to move up the
+/// stack.
 ///
 /// See the documentation on `Store::stack_value` for more information
 /// about which frames this view will show.
-pub struct StackView<'a> {
+pub struct DebugFrameCursor<'a> {
     /// Iterator over frames.
     ///
     /// This iterator owns the store while the view exists (accessible
@@ -83,9 +84,9 @@ pub struct StackView<'a> {
     current: Option<FrameData>,
 }
 
-impl<'a> StackView<'a> {
+impl<'a> DebugFrameCursor<'a> {
     /// Move up to the next frame in the activation.
-    pub fn move_up(&mut self) {
+    pub fn move_to_parent(&mut self) {
         // If there are no virtual frames to yield, take and decode
         // the next physical frame.
         //

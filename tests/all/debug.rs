@@ -57,7 +57,7 @@ fn stack_values_two_frames() -> anyhow::Result<()> {
                 }
             },
             |mut caller: Caller<'_, ()>| {
-                let mut stack = caller.stack_values().unwrap();
+                let mut stack = caller.debug_frames().unwrap();
                 assert!(!stack.done());
                 assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 1);
                 assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 65);
@@ -69,12 +69,12 @@ fn stack_values_two_frames() -> anyhow::Result<()> {
                 assert_eq!(stack.stack(0).unwrap_i32(), 1);
                 assert_eq!(stack.stack(1).unwrap_i32(), 2);
 
-                stack.move_up();
+                stack.move_to_parent();
                 assert!(!stack.done());
                 assert_eq!(stack.wasm_function_index_and_pc().unwrap().0.as_u32(), 0);
                 assert_eq!(stack.wasm_function_index_and_pc().unwrap().1, 55);
 
-                stack.move_up();
+                stack.move_to_parent();
                 assert!(stack.done());
             },
         )?;
@@ -99,11 +99,11 @@ fn stack_values_exceptions() -> anyhow::Result<()> {
     "#,
         |_config| {},
         |mut caller: Caller<'_, ()>| {
-            let mut stack = caller.stack_values().unwrap();
+            let mut stack = caller.debug_frames().unwrap();
             assert!(!stack.done());
             assert_eq!(stack.num_stacks(), 1);
             assert_eq!(stack.stack(0).unwrap_i32(), 42);
-            stack.move_up();
+            stack.move_to_parent();
             assert!(stack.done());
         },
     )
@@ -125,11 +125,11 @@ fn stack_values_dead_gc_ref() -> anyhow::Result<()> {
             config.wasm_gc(true);
         },
         |mut caller: Caller<'_, ()>| {
-            let mut stack = caller.stack_values().unwrap();
+            let mut stack = caller.debug_frames().unwrap();
             assert!(!stack.done());
             assert_eq!(stack.num_stacks(), 1);
             assert!(stack.stack(0).unwrap_anyref().is_some());
-            stack.move_up();
+            stack.move_to_parent();
             assert!(stack.done());
         },
     )

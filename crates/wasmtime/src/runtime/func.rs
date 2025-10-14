@@ -2229,13 +2229,14 @@ impl<T> Caller<'_, T> {
         self.store.fuel_async_yield_interval(interval)
     }
 
-    /// Provide an object that captures Wasm stack state, including
-    /// Wasm VM-level values (locals and operand stack).
+    /// Provide an object that views Wasm stack state, including Wasm
+    /// VM-level values (locals and operand stack), when debugging is
+    /// enabled.
     ///
-    /// See ['Store::stack_values`] for more details.
+    /// See ['Store::debug_frames`] for more details.
     #[cfg(feature = "debug")]
-    pub fn stack_values(&mut self) -> Option<crate::StackView<'_>> {
-        self.store.stack_values()
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
+        self.store.debug_frames()
     }
 }
 
