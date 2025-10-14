@@ -9,7 +9,6 @@ mod instrument;
 mod parse;
 mod rewrite;
 mod snapshot;
-mod stack_ext;
 
 /// Re-export wasmtime so users can align with our version. This is
 /// especially useful when providing a custom Linker.
@@ -205,6 +204,25 @@ impl Wizer {
         self.wasm_validate(&wasm)?;
 
         let cx = parse::parse(wasm)?;
+
+        // When wizening core modules directly some imports aren't supported,
+        // so check for those here.
+        for import in cx.imports() {
+            match import.ty {
+                wasmparser::TypeRef::Global(_) => {
+                    anyhow::bail!("imported globals are not supported")
+                }
+                wasmparser::TypeRef::Table(_) => {
+                    anyhow::bail!("imported tables are not supported")
+                }
+                wasmparser::TypeRef::Memory(_) => {
+                    anyhow::bail!("imported memories are not supported")
+                }
+                wasmparser::TypeRef::Func(_) => {}
+                wasmparser::TypeRef::Tag(_) => {}
+            }
+        }
+
         let instrumented_wasm = instrument::instrument(&cx);
 
         if cfg!(debug_assertions) {
@@ -255,6 +273,10 @@ impl Wizer {
 
     fn wasm_validate(&self, wasm: &[u8]) -> anyhow::Result<()> {
         log::debug!("Validating input Wasm");
+
+        wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all())
+            .validate_all(wasm)
+            .context("wasm validation failed")?;
 
         // Reject bulk memory stuff that manipulates state we don't
         // snapshot. See the comment inside `wasm_features`.

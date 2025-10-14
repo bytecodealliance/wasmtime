@@ -11,7 +11,7 @@ impl Wizer {
     ///
     pub(crate) fn rewrite<T>(
         &self,
-        cx: &mut ModuleContext<'_>,
+        module: &mut ModuleContext<'_>,
         store: &wasmtime::Store<T>,
         snapshot: &Snapshot,
         renames: &FuncRenames,
@@ -19,8 +19,7 @@ impl Wizer {
         log::debug!("Rewriting input Wasm to pre-initialized state");
 
         let mut encoder = wasm_encoder::Module::new();
-        let module = cx.root();
-        let has_wasi_initialize = cx.has_wasi_initialize(module);
+        let has_wasi_initialize = module.has_wasi_initialize();
 
         // Encode the initialized data segments from the snapshot rather
         // than the original, uninitialized data segments.
@@ -50,7 +49,7 @@ impl Wizer {
             }
         };
 
-        for section in module.raw_sections(cx) {
+        for section in module.raw_sections() {
             match section {
                 // Some tools expect the name custom section to come last, even
                 // though custom sections are allowed in any order. Therefore,
@@ -65,9 +64,9 @@ impl Wizer {
                 // memory.
                 s if s.id == u8::from(SectionId::Memory) => {
                     let mut memories = wasm_encoder::MemorySection::new();
-                    assert_eq!(module.defined_memories_len(cx), snapshot.memory_mins.len());
+                    assert_eq!(module.defined_memories_len(), snapshot.memory_mins.len());
                     for ((_, mem), new_min) in module
-                        .defined_memories(cx)
+                        .defined_memories()
                         .zip(snapshot.memory_mins.iter().copied())
                     {
                         let mut mem = RoundtripReencoder.memory_type(mem).unwrap();
@@ -81,8 +80,7 @@ impl Wizer {
                 // rather than the original values.
                 s if s.id == u8::from(SectionId::Global) => {
                     let mut globals = wasm_encoder::GlobalSection::new();
-                    for ((_, glob_ty), val) in
-                        module.defined_globals(cx).zip(snapshot.globals.iter())
+                    for ((_, glob_ty), val) in module.defined_globals().zip(snapshot.globals.iter())
                     {
                         let glob_ty = RoundtripReencoder.global_type(glob_ty).unwrap();
                         globals.global(
@@ -111,7 +109,7 @@ impl Wizer {
                 // then perform any requested renames.
                 s if s.id == u8::from(SectionId::Export) => {
                     let mut exports = wasm_encoder::ExportSection::new();
-                    for export in module.exports(cx) {
+                    for export in module.exports() {
                         if (export.name == self.init_func && !self.get_keep_init_func())
                             || (has_wasi_initialize && export.name == "_initialize")
                         {

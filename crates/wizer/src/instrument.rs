@@ -58,13 +58,12 @@ use wasm_encoder::reencode::{Reencode, RoundtripReencoder};
 /// export their memories and globals individually, that would disturb the
 /// modules locally defined memoryies' and globals' indices, which would require
 /// rewriting the code section, which would break debug info offsets.
-pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
+pub(crate) fn instrument(module: &ModuleContext<'_>) -> Vec<u8> {
     log::debug!("Instrumenting the input Wasm");
 
-    let module = cx.root();
     let mut encoder = wasm_encoder::Module::new();
 
-    for section in module.raw_sections(cx) {
+    for section in module.raw_sections() {
         match section.id {
             // For the exports section, we need to transitively export internal
             // state so that we can read the initialized state after we call the
@@ -73,7 +72,7 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
                 let mut exports = wasm_encoder::ExportSection::new();
 
                 // First, copy over all the original exports.
-                for export in module.exports(cx) {
+                for export in module.exports() {
                     RoundtripReencoder
                         .parse_export(&mut exports, *export)
                         .unwrap();
@@ -82,11 +81,11 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
                 // Now export all of this module's defined globals, memories,
                 // and instantiations under well-known names so we can inspect
                 // them after initialization.
-                for (i, (j, _)) in module.defined_globals(cx).enumerate() {
+                for (i, (j, _)) in module.defined_globals().enumerate() {
                     let name = format!("__wizer_global_{i}");
                     exports.export(&name, wasm_encoder::ExportKind::Global, j);
                 }
-                for (i, (j, _)) in module.defined_memories(cx).enumerate() {
+                for (i, (j, _)) in module.defined_memories().enumerate() {
                     let name = format!("__wizer_memory_{i}");
                     exports.export(&name, wasm_encoder::ExportKind::Memory, j);
                 }
