@@ -298,6 +298,7 @@ jobs:
           --exclude wasmtime-wasi-nn \
           --exclude wasmtime-fuzzing \
           --exclude wasm-spec-interpreter \
+          --exclude calculator \
           --all-features
       env:
         RUSTDOCFLAGS: --cfg=docsrs
