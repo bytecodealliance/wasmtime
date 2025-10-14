@@ -706,7 +706,7 @@ impl<T> Store<T> {
             data: ManuallyDrop::new(data),
         });
 
-        let store_data = <*const T>::from(inner.data()).cast_mut().cast::<()>();
+        let store_data = <*mut T>::from(&mut *inner.data).cast::<()>();
         inner.inner.vm_store_context.store_data = store_data;
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
@@ -751,13 +751,13 @@ impl<T> Store<T> {
         }
     }
 
-    /// Access the underlying data owned by this `Store`.
+    /// Access the underlying `T` data owned by this `Store`.
     #[inline]
     pub fn data(&self) -> &T {
         self.inner.data()
     }
 
-    /// Access the underlying data owned by this `Store`.
+    /// Access the underlying `T` data owned by this `Store`.
     #[inline]
     pub fn data_mut(&mut self) -> &mut T {
         self.inner.data_mut()
@@ -1298,12 +1298,22 @@ impl<'a, T> StoreContextMut<'a, T> {
 impl<T> StoreInner<T> {
     #[inline]
     fn data(&self) -> &T {
-        &self.data
+        unsafe {
+            let data: *const T = &raw const *self.data;
+            let provenance = self.inner.vm_store_context.store_data.cast::<T>();
+            let ptr = provenance.with_addr(data.addr());
+            &*ptr
+        }
     }
 
     #[inline]
     fn data_mut(&mut self) -> &mut T {
-        &mut self.data
+        unsafe {
+            let data: *mut T = &raw mut *self.data;
+            let provenance = self.inner.vm_store_context.store_data.cast::<T>();
+            let ptr = provenance.with_addr(data.addr());
+            &mut *ptr
+        }
     }
 
     #[inline]
