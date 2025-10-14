@@ -266,7 +266,7 @@ fn reject_table_get_set() -> Result<()> {
     let err = result.unwrap_err();
     assert!(
         err.to_string()
-            .contains("unsupported `table.get` instruction"),
+            .contains("unsupported `table.set` instruction"),
         "bad error: {err}",
     );
 
@@ -300,7 +300,7 @@ fn reject_table_get_set_with_reference_types_enabled() -> Result<()> {
     let err = result.unwrap_err();
     assert!(
         err.to_string()
-            .contains("unsupported `table.get` instruction"),
+            .contains("unsupported `table.set` instruction"),
     );
 
     Ok(())
@@ -330,7 +330,7 @@ fn reject_table_grow_with_reference_types_enabled() -> anyhow::Result<()> {
     let err = result.unwrap_err();
     assert!(
         err.to_string()
-            .contains("unsupported `ref.func` instruction")
+            .contains("unsupported `table.grow` instruction")
     );
 
     Ok(())
