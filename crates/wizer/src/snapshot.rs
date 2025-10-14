@@ -1,3 +1,4 @@
+use crate::info::ModuleContext;
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 use std::convert::TryFrom;
 use wasmtime::{AsContext, AsContextMut};
@@ -75,11 +76,15 @@ impl DataSegment {
 /// defaults.
 //
 // TODO: when we support reference types, we will have to snapshot tables.
-pub fn snapshot(ctx: &mut impl AsContextMut, instance: &wasmtime::Instance) -> Snapshot {
+pub fn snapshot(
+    module: &ModuleContext<'_>,
+    ctx: &mut impl AsContextMut,
+    instance: &wasmtime::Instance,
+) -> Snapshot {
     log::debug!("Snapshotting the initialized state");
 
-    let globals = snapshot_globals(&mut *ctx, instance);
-    let (memory_mins, data_segments) = snapshot_memories(&mut *ctx, instance);
+    let globals = snapshot_globals(module, &mut *ctx, instance);
+    let (memory_mins, data_segments) = snapshot_memories(module, &mut *ctx, instance);
 
     Snapshot {
         globals,
@@ -90,28 +95,30 @@ pub fn snapshot(ctx: &mut impl AsContextMut, instance: &wasmtime::Instance) -> S
 
 /// Get the initialized values of all globals.
 fn snapshot_globals(
+    module: &ModuleContext<'_>,
     ctx: &mut impl AsContextMut,
     instance: &wasmtime::Instance,
 ) -> Vec<wasmtime::Val> {
     log::debug!("Snapshotting global values");
-    let mut globals = vec![];
-    let mut index = 0;
-    loop {
-        let name = format!("__wizer_global_{index}");
-        match instance.get_global(&mut *ctx, &name) {
-            None => break,
-            Some(global) => {
-                globals.push(global.get(&mut *ctx));
-                index += 1;
-            }
-        }
-    }
-    globals
+
+    module
+        .defined_global_exports
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|name| {
+            let global = instance
+                .get_global(&mut *ctx, &name)
+                .expect("defined global missing");
+            global.get(&mut *ctx)
+        })
+        .collect()
 }
 
 /// Find the initialized minimum page size of each memory, as well as all
 /// regions of non-zero memory.
 fn snapshot_memories(
+    module: &ModuleContext<'_>,
     ctx: &mut impl AsContextMut,
     instance: &wasmtime::Instance,
 ) -> (Vec<u64>, Vec<DataSegment>) {
@@ -120,13 +127,11 @@ fn snapshot_memories(
     // Find and record non-zero regions of memory (in parallel).
     let mut memory_mins = vec![];
     let mut data_segments = vec![];
-    let mut memory_index = 0;
-    loop {
-        let name = format!("__wizer_memory_{memory_index}");
-        let memory = match instance.get_memory(&mut *ctx, &name) {
-            None => break,
-            Some(memory) => memory,
-        };
+    let iter = module
+        .defined_memories()
+        .zip(module.defined_memory_exports.as_ref().unwrap());
+    for ((memory_index, _), name) in iter {
+        let memory = instance.get_memory(&mut *ctx, &name).unwrap();
         memory_mins.push(memory.size(&*ctx));
 
         let num_wasm_pages = memory.size(&*ctx);
@@ -162,8 +167,6 @@ fn snapshot_memories(
             }
             segments
         }));
-
-        memory_index += 1;
     }
 
     if data_segments.is_empty() {
