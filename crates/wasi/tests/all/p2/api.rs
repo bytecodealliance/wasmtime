@@ -27,7 +27,7 @@ impl WasiView for CommandCtx {
 
 use test_programs_artifacts::*;
 
-foreach_api!(assert_test_exists);
+foreach_p2_api!(assert_test_exists);
 
 async fn instantiate(path: &str, ctx: CommandCtx) -> Result<(Store<CommandCtx>, Command)> {
     let engine = test_programs_artifacts::engine(|config| {
@@ -43,7 +43,7 @@ async fn instantiate(path: &str, ctx: CommandCtx) -> Result<(Store<CommandCtx>, 
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn api_time() -> Result<()> {
+async fn p2_api_time() -> Result<()> {
     struct FakeWallClock;
 
     impl HostWallClock for FakeWallClock {
@@ -79,7 +79,8 @@ async fn api_time() -> Result<()> {
         .wall_clock(FakeWallClock)
         .build();
 
-    let (mut store, command) = instantiate(API_TIME_COMPONENT, CommandCtx { table, wasi }).await?;
+    let (mut store, command) =
+        instantiate(P2_API_TIME_COMPONENT, CommandCtx { table, wasi }).await?;
 
     command
         .wasi_cli_run()
@@ -89,7 +90,7 @@ async fn api_time() -> Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn api_read_only() -> Result<()> {
+async fn p2_api_read_only() -> Result<()> {
     let dir = tempfile::tempdir()?;
 
     std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
@@ -101,7 +102,7 @@ async fn api_read_only() -> Result<()> {
         .build();
 
     let (mut store, command) =
-        instantiate(API_READ_ONLY_COMPONENT, CommandCtx { table, wasi }).await?;
+        instantiate(P2_API_READ_ONLY_COMPONENT, CommandCtx { table, wasi }).await?;
 
     command
         .wasi_cli_run()
@@ -114,19 +115,19 @@ async fn api_read_only() -> Result<()> {
     dead_code,
     reason = "tested in the wasi-http crate, satisfying foreach_api! macro"
 )]
-fn api_proxy() {}
+fn p2_api_proxy() {}
 
 #[expect(
     dead_code,
     reason = "tested in the wasi-http crate, satisfying foreach_api! macro"
 )]
-fn api_proxy_streaming() {}
+fn p2_api_proxy_streaming() {}
 
 #[expect(
     dead_code,
     reason = "tested in the wasi-http crate, satisfying foreach_api! macro"
 )]
-fn api_proxy_forward_request() {}
+fn p2_api_proxy_forward_request() {}
 
 wasmtime::component::bindgen!({
     path: "src/p2/wit",
@@ -141,7 +142,7 @@ wasmtime::component::bindgen!({
 });
 
 #[test_log::test(tokio::test)]
-async fn api_reactor() -> Result<()> {
+async fn p2_api_reactor() -> Result<()> {
     let table = ResourceTable::new();
     let wasi = WasiCtxBuilder::new().env("GOOD_DOG", "gussie").build();
     let engine = test_programs_artifacts::engine(|config| {
@@ -151,7 +152,7 @@ async fn api_reactor() -> Result<()> {
     add_to_linker_async(&mut linker)?;
 
     let mut store = Store::new(&engine, CommandCtx { table, wasi });
-    let component = Component::from_file(&engine, API_REACTOR_COMPONENT)?;
+    let component = Component::from_file(&engine, P2_API_REACTOR_COMPONENT)?;
     let reactor = TestReactor::instantiate_async(&mut store, &component, &linker).await?;
 
     // Show that integration with the WASI context is working - the guest will
