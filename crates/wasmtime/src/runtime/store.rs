@@ -706,7 +706,7 @@ impl<T> Store<T> {
             data: ManuallyDrop::new(data),
         });
 
-        let store_data = <*mut T>::from(&mut *inner.data).cast::<()>();
+        let store_data = <*mut ManuallyDrop<T>>::from(&mut inner.data).cast::<()>();
         inner.inner.vm_store_context.store_data = store_data;
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
@@ -1299,7 +1299,7 @@ impl<T> StoreInner<T> {
     #[inline]
     fn data(&self) -> &T {
         unsafe {
-            let data: *const T = &raw const *self.data;
+            let data: *const ManuallyDrop<T> = &raw const self.data;
             let provenance = self.inner.vm_store_context.store_data.cast::<T>();
             let ptr = provenance.with_addr(data.addr());
             &*ptr
@@ -1309,7 +1309,7 @@ impl<T> StoreInner<T> {
     #[inline]
     fn data_mut(&mut self) -> &mut T {
         unsafe {
-            let data: *mut T = &raw mut *self.data;
+            let data: *mut ManuallyDrop<T> = &raw mut self.data;
             let provenance = self.inner.vm_store_context.store_data.cast::<T>();
             let ptr = provenance.with_addr(data.addr());
             &mut *ptr
@@ -2692,8 +2692,7 @@ impl<T: AsStoreOpaque + ?Sized> AsStoreOpaque for &mut T {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_fuel, refuel, set_fuel};
-    use std::num::NonZeroU64;
+    use super::*;
 
     struct FuelTank {
         pub consumed_fuel: i64,
@@ -2809,5 +2808,30 @@ mod tests {
         assert_eq!(tank.reserve_fuel, 3);
         assert_eq!(tank.consumed_fuel, 4);
         assert_eq!(tank.get_fuel(), 0);
+    }
+
+    #[test]
+    fn store_data_provenance() {
+        // Test that we juggle pointer provenance and all that correctly, and
+        // miri is happy with everything, while allowing both Rust code and
+        // "Wasm" to access and modify the store's `T` data. Note that this is
+        // not actually Wasm mutating the store data here because compiling Wasm
+        // under miri is way too slow.
+
+        unsafe fn run_wasm(store: &mut Store<u32>) {
+            let ptr = store.inner.inner.vm_store_context.store_data.cast::<u32>();
+            unsafe { *ptr += 1 }
+        }
+
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, 0_u32);
+
+        assert_eq!(*store.data(), 0);
+        *store.data_mut() += 1;
+        assert_eq!(*store.data(), 1);
+        unsafe { run_wasm(&mut store) }
+        assert_eq!(*store.data(), 2);
+        *store.data_mut() += 1;
+        assert_eq!(*store.data(), 3);
     }
 }
