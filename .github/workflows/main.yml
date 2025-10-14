@@ -712,6 +712,13 @@ jobs:
     - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
       if: matrix.target != ''
 
+    - name: Set up cargo cache
+      uses: Swatinem/rust-cache@94b28bf00e42c2b783e7dd289d30da129b46838b
+      with:
+        shared-key: "test-${{ matrix.cache_key }}"
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+      if: endsWith(matrix.cache_key, '-wasmtime-cli')
+
     # Fix an ICE for now in gcc when compiling zstd with debuginfo (??)
     - run: echo CFLAGS=-g0 >> $GITHUB_ENV
       if: matrix.target == 'x86_64-pc-windows-gnu'
