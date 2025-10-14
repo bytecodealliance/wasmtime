@@ -2260,8 +2260,8 @@ start a print 1234
     }
 
     #[tokio::test]
-    async fn cli_serve_sleep() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_SLEEP_COMPONENT, |cmd| {
+    async fn p2_cli_serve_sleep() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_SLEEP_COMPONENT, |cmd| {
             cmd.arg("-Scli").arg("-Wtimeout=100us");
         })?;
 
