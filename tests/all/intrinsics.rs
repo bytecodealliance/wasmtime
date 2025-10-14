@@ -6,6 +6,7 @@ use std::{cell::UnsafeCell, path::Path, sync::Arc};
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn native_loads_and_stores() -> Result<()> {
     let engine = Engine::default();
 
@@ -137,6 +138,7 @@ fn native_loads_and_stores() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn cannot_enable_unsafe_intrinsics_for_core_module() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
@@ -154,6 +156,7 @@ fn cannot_enable_unsafe_intrinsics_for_core_module() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn ref_func_of_intrinsic() -> Result<()> {
     let mut config = Config::new();
     config.wasm_function_references(true);
@@ -217,6 +220,7 @@ fn ref_func_of_intrinsic() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_element_segment_with_intrinsic() -> Result<()> {
     let engine = Engine::default();
 
@@ -276,6 +280,7 @@ fn table_element_segment_with_intrinsic() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn intrinsics_not_listed_in_imports() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
@@ -306,6 +311,7 @@ fn intrinsics_not_listed_in_imports() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn unknown_intrinsic_function() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
@@ -337,6 +343,7 @@ fn unknown_intrinsic_function() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn bad_extra_param() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
@@ -371,6 +378,7 @@ fn bad_extra_param() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn bad_missing_param() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
@@ -405,6 +413,7 @@ fn bad_missing_param() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn bad_missing_return() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
@@ -439,6 +448,7 @@ fn bad_missing_return() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn bad_extra_return() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
@@ -473,6 +483,7 @@ fn bad_extra_return() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn bad_param_type() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
@@ -507,6 +518,7 @@ fn bad_param_type() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn bad_result_type() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
@@ -541,6 +553,7 @@ fn bad_result_type() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn store_data_address() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
@@ -606,6 +619,7 @@ fn store_data_address() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn other_import_name() -> Result<()> {
     let engine = Engine::default();
     let mut code_builder = CodeBuilder::new(&engine);
