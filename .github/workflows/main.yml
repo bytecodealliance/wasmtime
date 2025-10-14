@@ -867,10 +867,10 @@ jobs:
     # interfere and cause the `gcc.exe` executable to fail and exit with 1 and
     # no output. It's believed that `bash` adds things like `/usr/bin` to PATH
     # which is the wrong DLL or something like that.
-    - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
+    - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }} --no-fail-fast
       if: runner.os == 'Windows'
       shell: pwsh
-    - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
+    - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }} --no-fail-fast
       if: runner.os != 'Windows'
 
   # Test `wasmtime-wasi-nn` in its own job, as not all of its backends are
