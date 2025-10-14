@@ -706,6 +706,7 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}
+    - uses: ./.github/actions/install-cargo-nextest
 
     # Install targets in order to build various tests throughout the repo
     - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown ${{ matrix.target }}
@@ -1131,7 +1132,6 @@ jobs:
     name: Miri
     runs-on: ubuntu-latest
     env:
-      CARGO_NEXTEST_VERSION: 0.9.88
       MIRIFLAGS: -Zmiri-permissive-provenance
     steps:
     - uses: actions/checkout@v4
@@ -1141,12 +1141,7 @@ jobs:
       with:
         toolchain: wasmtime-ci-pinned-nightly
     - run: rustup component add rust-src miri
-    - uses: actions/cache@v4
-      with:
-        path: ${{ runner.tool_cache }}/cargo-nextest
-        key: cargo-nextest-bin-${{ env.CARGO_NEXTEST_VERSION }}
-    - run: echo "${{ runner.tool_cache }}/cargo-nextest/bin" >> $GITHUB_PATH
-    - run: cargo install --root ${{ runner.tool_cache }}/cargo-nextest --version ${{ env.CARGO_NEXTEST_VERSION }} cargo-nextest --locked
+    - uses: ./.github/actions/install-cargo-nextest
     - run: |
         cargo miri nextest run -j4 --no-fail-fast -p ${{ matrix.crate }}
       if: ${{ matrix.crate }}

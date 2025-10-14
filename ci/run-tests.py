@@ -20,8 +20,18 @@
 
 import subprocess
 import sys
+import os
 
-args = ['cargo', 'test', '--workspace', '--all-features']
+args = ['cargo']
+
+if 'CI' in os.environ:
+    args.append('nextest')
+    args.append('run')
+else:
+    args.append('test')
+
+args.append('--workspace')
+args.append('--all-features')
 args.append('--exclude=test-programs')
 args.append('--exclude=wasmtime-wasi-nn')
 args.append('--exclude=wasmtime-wasi-tls-nativetls')

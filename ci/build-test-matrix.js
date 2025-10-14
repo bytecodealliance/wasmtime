@@ -7,13 +7,8 @@
 const fs = require('fs');
 const { spawn } = require('node:child_process');
 
-// Number of generic buckets to shard crates into. Note that we additionally add
-// single-crate buckets for our biggest crates.
-const GENERIC_BUCKETS = 3;
-
-// Crates which are their own buckets. These are the very slowest to
-// compile-and-test crates.
-const SINGLE_CRATE_BUCKETS = ["wasmtime", "wasmtime-cli", "wasmtime-wasi"];
+// TODO
+const SHARDS = 4;
 
 const ubuntu = 'ubuntu-24.04';
 const windows = 'windows-2025';
@@ -189,79 +184,30 @@ async function getWorkspaceMembers() {
 /// For each given target configuration, shard the workspace's crates into
 /// buckets across that config.
 ///
-/// This is essentially a `flat_map` where each config that logically tests all
-/// crates in the workspace is mapped to N sharded configs that each test only a
-/// subset of crates in the workspace. Each sharded config's subset of crates to
-/// test are disjoint from all its siblings, and the union of all these siblings'
-/// crates to test is the full workspace members set.
-///
-/// With some poetic license around a `crates_to_test` key that doesn't actually
-/// exist, logically each element of the input `configs` list gets transformed
-/// like this:
-///
-///     { os: "ubuntu-latest", isa: "x64", ..., crates: "all" }
-///
-///     ==>
-///
-///     [
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["wasmtime"] },
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["wasmtime-cli"] },
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["wasmtime-wasi"] },
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["cranelift", "cranelift-codegen", ...] },
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["wasmtime-slab", "cranelift-entity", ...] },
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["cranelift-environ", "wasmtime-cli-flags", ...] },
-///       ...
-///     ]
-///
-/// Note that `crates: "all"` is implicit in the input and omitted. Similarly,
-/// `crates: [...]` in each output config is actually implemented via adding a
-/// `bucket` key, which contains the CLI flags we must pass to `cargo` to run
-/// tests for just this config's subset of crates.
+/// TODO
 async function shard(configs) {
-  const members = await getWorkspaceMembers();
-
-  // Divide the workspace crates into N disjoint subsets. Crates that are
-  // particularly expensive to compile and test form their own singleton subset.
-  const buckets = Array.from({ length: GENERIC_BUCKETS }, _ => new Set());
-  let i = 0;
-  for (const crate of members) {
-    if (SINGLE_CRATE_BUCKETS.indexOf(crate) != -1) continue;
-    buckets[i].add(crate);
-    i = (i + 1) % GENERIC_BUCKETS;
-  }
-  for (crate of SINGLE_CRATE_BUCKETS) {
-    buckets.push(new Set([crate]));
-  }
-
   // For each config, expand it into N configs, one for each disjoint set we
   // created above.
   const sharded = [];
   for (const config of configs) {
     // If crates is specified, don't shard, just use the specified crates
-        if (config.crates) {
-          sharded.push(Object.assign(
-            {},
-            config,
-            {
-              bucket: members
-                .map(c => c === config.crates ? `--package ${c}` : `--exclude ${c}`)
-                .join(" ")
-            }
-          ));
-      continue;
-    }
-    for (const bucket of buckets) {
+    if (config.crates) {
       sharded.push(Object.assign(
         {},
         config,
         {
-          name: `${config.name} (${Array.from(bucket).join(', ')})`,
-          // We run tests via `cargo test --workspace`, so exclude crates that
-          // aren't in this bucket, rather than naming only the crates that are
-          // in this bucket.
-          bucket: members
-            .map(c => bucket.has(c) ? `--package ${c}` : `--exclude ${c}`)
-            .join(" "),
+          name: `${config.name} (${config.crates})`,
+        }
+      ));
+      continue;
+    }
+    for (let i = 0; i < SHARDS; i++) {
+      sharded.push(Object.assign(
+        {},
+        config,
+        {
+          name: `${config.name} (${i}/${SHARDS})`,
+          bucket: `--partition hash:${i}/${SHARDS}`,
         }
       ));
     }
