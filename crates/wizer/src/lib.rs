@@ -271,41 +271,29 @@ impl Wizer {
             };
             match payload {
                 wasmparser::Payload::CodeSectionEntry(code) => {
-                    let mut ops = code.get_operators_reader().unwrap();
+                    let mut ops = code.get_operators_reader()?;
                     while !ops.eof() {
-                        match ops.read().unwrap() {
+                        match ops.read()? {
+                            // Table mutations aren't allowed as wizer has no
+                            // way to record a snapshot of a table at this time.
+                            // The only table mutations allowed are those from
+                            // active element segments which can be
+                            // deterministically replayed, so disallow all other
+                            // forms of mutating a table.
+                            //
+                            // Ideally Wizer could take a snapshot of a table
+                            // post-instantiation and then ensure that after
+                            // running initialization the table didn't get
+                            // mutated, allowing these instructions, but that's
+                            // also not possible at this time.
                             wasmparser::Operator::TableCopy { .. } => {
                                 anyhow::bail!("unsupported `table.copy` instruction")
                             }
                             wasmparser::Operator::TableInit { .. } => {
                                 anyhow::bail!("unsupported `table.init` instruction")
                             }
-                            wasmparser::Operator::ElemDrop { .. } => {
-                                anyhow::bail!("unsupported `elem.drop` instruction")
-                            }
-                            wasmparser::Operator::DataDrop { .. } => {
-                                anyhow::bail!("unsupported `data.drop` instruction")
-                            }
                             wasmparser::Operator::TableSet { .. } => {
                                 anyhow::bail!("unsupported `table.set` instruction")
-                            }
-                            wasmparser::Operator::TableGet { .. } => {
-                                anyhow::bail!("unsupported `table.get` instruction")
-                            }
-                            wasmparser::Operator::RefNull { .. } => {
-                                anyhow::bail!("unsupported `ref.null` instruction")
-                            }
-                            wasmparser::Operator::RefIsNull => {
-                                anyhow::bail!("unsupported `ref.is_null` instruction")
-                            }
-                            wasmparser::Operator::TypedSelect { .. } => {
-                                anyhow::bail!("unsupported typed `select` instruction")
-                            }
-                            wasmparser::Operator::RefFunc { .. } => {
-                                anyhow::bail!("unsupported `ref.func` instruction")
-                            }
-                            wasmparser::Operator::TableSize { .. } => {
-                                anyhow::bail!("unsupported `table.size` instruction")
                             }
                             wasmparser::Operator::TableGrow { .. } => {
                                 anyhow::bail!("unsupported `table.grow` instruction")
@@ -313,6 +301,21 @@ impl Wizer {
                             wasmparser::Operator::TableFill { .. } => {
                                 anyhow::bail!("unsupported `table.fill` instruction")
                             }
+
+                            // Wizer has no way of dynamically determining which
+                            // element or data segments were dropped during
+                            // execution so instead disallow these instructions
+                            // entirely. Like above it'd be nice to allow them
+                            // but just forbid their execution during the
+                            // initialization function, but that can't be done
+                            // easily at this time.
+                            wasmparser::Operator::ElemDrop { .. } => {
+                                anyhow::bail!("unsupported `elem.drop` instruction")
+                            }
+                            wasmparser::Operator::DataDrop { .. } => {
+                                anyhow::bail!("unsupported `data.drop` instruction")
+                            }
+
                             _ => continue,
                         }
                     }
