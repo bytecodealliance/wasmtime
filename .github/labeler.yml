@@ -89,3 +89,7 @@
 "winch":
   - "winch/**"
   - "crates/winch/**"
+
+"wizer":
+  - "crates/wizer/**"
+  - "src/commands/wizer.rs"
