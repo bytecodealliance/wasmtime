@@ -214,7 +214,7 @@ Finally, this line of code is responsible for actually evaluating the
 expression that was provided on the command line:
 
 ```rust
-(BinaryOperation{ op: args.op, x: args.x, y: args.y }).run(&mut state)
+args.op.run(&mut state)
 ```
 
 The `BinaryOperation` struct has a `run` method that looks like this:

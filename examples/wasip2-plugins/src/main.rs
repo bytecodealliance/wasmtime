@@ -12,8 +12,8 @@ bindgen!("plugin");
 
 /// A CLI that implements a plugin-based calculator whose
 /// operations are implemented by independent WebAssembly components.
+
 #[derive(Parser)]
-#[clap(name = "calculator-host", version = env!("CARGO_PKG_VERSION"))]
 struct BinaryOperation {
     /// The name of the operation
     op: String,
@@ -115,12 +115,8 @@ fn load_plugins(state: &mut CalculatorState, plugins_dir: &Path) -> wasmtime::Re
 #[command(name = "calculator-host", version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "A calculator with plugin support")]
 struct Args {
-    /// The name of the operation
-    op: String,
-    /// The first operand
-    x: i32,
-    /// The second operand
-    y: i32,
+    #[command(flatten)]
+    op: BinaryOperation,
 
     #[arg(long, help = "Plugin directory")]
     plugins: PathBuf,
@@ -137,10 +133,5 @@ fn main() -> anyhow::Result<()> {
     load_plugins(&mut state, args.plugins.as_path())?;
 
     // Evaluate the expression given on the command line
-    (BinaryOperation {
-        op: args.op,
-        x: args.x,
-        y: args.y,
-    })
-    .run(&mut state)
+    args.op.run(&mut state)
 }
