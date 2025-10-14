@@ -627,8 +627,10 @@ jobs:
 
   # Perform all tests of the c-api
   test_capi:
+    needs: determine
     name: Test C-API ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    if: needs.determine.outputs.test-capi
 
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
@@ -685,7 +687,6 @@ jobs:
       env:
         CTEST_OUTPUT_ON_FAILURE: 1
         CTEST_PARALLEL_LEVEL: 4
-        WASI_SDK_PATH: ${{ runner.temp }}/wasi-sdk-27.0-x86_64-linux
 
   # Perform all tests (debug mode) for `wasmtime`.
   #
