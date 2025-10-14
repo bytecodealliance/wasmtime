@@ -124,7 +124,7 @@ const FULL_MATRIX = [
     "target": "s390x-unknown-linux-gnu",
     "name": "Test Linux s390x",
     "filter": "linux-s390x",
-    "isa": "s390x"
+    "isa": "s390x",
     "gcc_package": "gcc-s390x-linux-gnu",
     "gcc": "s390x-linux-gnu-gcc",
     "qemu": "qemu-s390x -L /usr/s390x-linux-gnu",
