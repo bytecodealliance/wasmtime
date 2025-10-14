@@ -201,7 +201,7 @@ async function shard(configs) {
       ));
       continue;
     }
-    for (let i = 0; i < SHARDS; i++) {
+    for (let i = 1; i <= SHARDS; i++) {
       sharded.push(Object.assign(
         {},
         config,
