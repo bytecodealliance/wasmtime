@@ -21,6 +21,7 @@ struct Artifacts {
     deps: HashSet<String>,
 }
 
+#[derive(Debug)]
 struct Test {
     /// Not all tests can be built at build-time, for example C/C++ tests require
     /// the `WASI_SDK_PATH` environment variable which isn't available on all
