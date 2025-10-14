@@ -1613,8 +1613,6 @@ impl<'a, 'data> Translator<'a, 'data> {
         );
 
         for (name, ty) in &instance_ty.exports {
-            use wasmparser::PrimitiveValType as P;
-
             let ComponentEntityType::Func(func_ty) = ty else {
                 bail!(
                     "bad unsafe intrinsics import: imported instance `{import}` must \
@@ -1623,96 +1621,67 @@ impl<'a, 'data> Translator<'a, 'data> {
             };
             let func_ty = &types[*func_ty];
 
-            // `wasmparser::PrimitiveValType` does not implement `Eq`, so we
-            // implement it here for just the types we need to check below.
-            let prim_val_ty_eq = |a: P, b: P| -> bool {
+            fn ty_eq(a: &InterfaceType, b: &wasmparser::component_types::ComponentValType) -> bool {
+                use wasmparser::{PrimitiveValType as P, component_types::ComponentValType as C};
                 match (a, b) {
-                    (P::U8, P::U8) => true,
-                    (P::U8, _) => false,
+                    (InterfaceType::U8, C::Primitive(P::U8)) => true,
+                    (InterfaceType::U8, _) => false,
 
-                    (P::U16, P::U16) => true,
-                    (P::U16, _) => false,
+                    (InterfaceType::U16, C::Primitive(P::U16)) => true,
+                    (InterfaceType::U16, _) => false,
 
-                    (P::U32, P::U32) => true,
-                    (P::U32, _) => false,
+                    (InterfaceType::U32, C::Primitive(P::U32)) => true,
+                    (InterfaceType::U32, _) => false,
 
-                    (P::U64, P::U64) => true,
-                    (P::U64, _) => false,
+                    (InterfaceType::U64, C::Primitive(P::U64)) => true,
+                    (InterfaceType::U64, _) => false,
 
-                    _ => unreachable!(),
+                    (ty, _) => unreachable!("no unsafe intrinsics use {ty:?}"),
                 }
-            };
+            }
 
-            // Check the actual `func_ty` against our expected parameter and
-            // result types.
-            let check = |expected_params: &[P], expected_result: Option<P>| -> Result<()> {
-                let expected_params_len = expected_params.len();
-                let actual_params_len = func_ty.params.len();
+            fn check_types<'a>(
+                expected: impl ExactSizeIterator<Item = &'a InterfaceType>,
+                actual: impl ExactSizeIterator<Item = &'a wasmparser::component_types::ComponentValType>,
+                kind: &str,
+                import: &str,
+                name: &str,
+            ) -> core::result::Result<(), anyhow::Error> {
+                let expected_len = expected.len();
+                let actual_len = actual.len();
                 ensure!(
-                    expected_params_len == actual_params_len,
+                    expected_len == actual_len,
                     "bad unsafe intrinsics import at `{import}`: function `{name}` must have \
-                     {expected_params_len} parameters, found {actual_params_len}"
+                     {expected_len} {kind}, found {actual_len}"
                 );
 
-                for (i, ((_, actual_ty), expected_ty)) in
-                    func_ty.params.iter().zip(expected_params).enumerate()
-                {
-                    let ComponentValType::Primitive(actual_ty) = *actual_ty else {
-                        bail!(
-                            "bad unsafe intrinsics import at `{import}`: parameter {i} to function \
-                             `{name}` must be `{expected_ty:?}`, found `{actual_ty:?}`"
-                        );
-                    };
+                for (i, (actual_ty, expected_ty)) in actual.zip(expected).enumerate() {
                     ensure!(
-                        prim_val_ty_eq(*expected_ty, actual_ty),
-                        "bad unsafe intrinsics import at `{import}`: parameter {i} to function \
+                        ty_eq(expected_ty, actual_ty),
+                        "bad unsafe intrinsics import at `{import}`: {kind}[{i}] for function \
                          `{name}` must be `{expected_ty:?}`, found `{actual_ty:?}`"
                     );
                 }
-
-                match (expected_result, func_ty.result) {
-                    (None, None) => {}
-                    (None, Some(actual)) => bail!(
-                        "bad unsafe intrinsics import at `{import}`: function `{name}` must have no \
-                         return type, found `{actual:?}`"
-                    ),
-                    (Some(expected), None) => bail!(
-                        "bad unsafe intrinsics import at `{import}`: function `{name}` must return \
-                         `{expected:?}`, found no return type"
-                    ),
-                    (Some(expected), Some(actual)) => {
-                        let ComponentValType::Primitive(actual) = actual else {
-                            bail!(
-                                "bad unsafe intrinsics import at `{import}`: function `{name}` must \
-                                 return  `{expected:?}`, found `{actual:?}`"
-                            );
-                        };
-
-                        ensure!(
-                            prim_val_ty_eq(expected, actual),
-                            "bad unsafe intrinsics import at `{import}`: function `{name}` must return \
-                             `{expected:?}`, found `{actual:?}`"
-                        )
-                    }
-                }
-
                 Ok(())
-            };
+            }
 
             let intrinsic = UnsafeIntrinsic::from_str(name)
                 .with_context(|| format!("bad unsafe intrinsics import at `{import}`"))?;
-            match intrinsic {
-                x if x == UnsafeIntrinsic::u8_native_load() => check(&[P::U64], Some(P::U8))?,
-                x if x == UnsafeIntrinsic::u16_native_load() => check(&[P::U64], Some(P::U16))?,
-                x if x == UnsafeIntrinsic::u32_native_load() => check(&[P::U64], Some(P::U32))?,
-                x if x == UnsafeIntrinsic::u64_native_load() => check(&[P::U64], Some(P::U64))?,
-                x if x == UnsafeIntrinsic::u8_native_store() => check(&[P::U64, P::U8], None)?,
-                x if x == UnsafeIntrinsic::u16_native_store() => check(&[P::U64, P::U16], None)?,
-                x if x == UnsafeIntrinsic::u32_native_store() => check(&[P::U64, P::U32], None)?,
-                x if x == UnsafeIntrinsic::u64_native_store() => check(&[P::U64, P::U64], None)?,
-                x if x == UnsafeIntrinsic::store_data_address() => check(&[], Some(P::U64))?,
-                _ => unreachable!("unknown intrinsic: {intrinsic:?}"),
-            }
+
+            check_types(
+                intrinsic.component_params().iter(),
+                func_ty.params.iter().map(|(_name, ty)| ty),
+                "parameters",
+                &import,
+                &name,
+            )?;
+            check_types(
+                intrinsic.component_results().iter(),
+                func_ty.result.iter(),
+                "results",
+                &import,
+                &name,
+            )?;
         }
 
         Ok(())

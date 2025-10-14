@@ -1510,11 +1510,11 @@ impl ComponentCompiler for Compiler {
         let mut builder = FunctionBuilder::new(&mut ctx.func, cx.func_translator.context());
 
         // Initialize the function, its signature, and entry block.
-        let init = |builder: &mut FunctionBuilder,
-                    params: Box<[WasmValType]>,
-                    results: Box<[WasmValType]>|
-         -> Vec<ir::Value> {
-            let wasm_func_ty = WasmFuncType::new(params, results);
+        let init = |builder: &mut FunctionBuilder| -> Vec<ir::Value> {
+            let wasm_func_ty = WasmFuncType::new(
+                intrinsic.core_params().into(),
+                intrinsic.core_results().into(),
+            );
             builder.func.signature = match abi {
                 Abi::Wasm => wasm_call_signature(&*self.isa, &wasm_func_ty, tunables),
                 Abi::Array => array_call_signature(&*self.isa),
@@ -1531,13 +1531,14 @@ impl ComponentCompiler for Compiler {
         };
 
         // Emit code for a native-load intrinsic.
-        let load = |builder: &mut FunctionBuilder,
-                    clif_ty: ir::Type,
-                    wasm_ty: WasmValType|
-         -> Result<()> {
-            let [_callee_vmctx, _caller_vmctx, pointer] =
-                *init(builder, [WasmValType::I64].into(), [wasm_ty].into())
-            else {
+        let load = |builder: &mut FunctionBuilder| -> Result<()> {
+            debug_assert_eq!(intrinsic.core_params(), &[WasmValType::I64]);
+            debug_assert_eq!(intrinsic.core_results().len(), 1);
+
+            let wasm_ty = intrinsic.core_results()[0];
+            let clif_ty = unsafe_intrinsic_clif_results(intrinsic)[0];
+
+            let [_callee_vmctx, _caller_vmctx, pointer] = *init(builder) else {
                 unreachable!()
             };
 
@@ -1571,13 +1572,14 @@ impl ComponentCompiler for Compiler {
         };
 
         // Emit code for a native-store intrinsic.
-        let store = |builder: &mut FunctionBuilder,
-                     clif_ty: ir::Type,
-                     wasm_ty: WasmValType|
-         -> Result<()> {
-            let [_callee_vmctx, _caller_vmctx, pointer, mut value] =
-                *init(builder, [WasmValType::I64, wasm_ty].into(), [].into())
-            else {
+        let store = |builder: &mut FunctionBuilder| -> Result<()> {
+            debug_assert!(intrinsic.core_results().is_empty());
+            debug_assert!(matches!(intrinsic.core_params(), [WasmValType::I64, _]));
+
+            let wasm_ty = intrinsic.core_params()[1];
+            let clif_ty = unsafe_intrinsic_clif_params(intrinsic)[1];
+
+            let [_callee_vmctx, _caller_vmctx, pointer, mut value] = *init(builder) else {
                 unreachable!()
             };
 
@@ -1609,34 +1611,16 @@ impl ComponentCompiler for Compiler {
         };
 
         match intrinsic {
-            x if x == UnsafeIntrinsic::u8_native_load() => {
-                load(&mut builder, ir::types::I8, WasmValType::I32)?
-            }
-            x if x == UnsafeIntrinsic::u16_native_load() => {
-                load(&mut builder, ir::types::I16, WasmValType::I32)?
-            }
-            x if x == UnsafeIntrinsic::u32_native_load() => {
-                load(&mut builder, ir::types::I32, WasmValType::I32)?
-            }
-            x if x == UnsafeIntrinsic::u64_native_load() => {
-                load(&mut builder, ir::types::I64, WasmValType::I64)?
-            }
-            x if x == UnsafeIntrinsic::u8_native_store() => {
-                store(&mut builder, ir::types::I8, WasmValType::I32)?
-            }
-            x if x == UnsafeIntrinsic::u16_native_store() => {
-                store(&mut builder, ir::types::I16, WasmValType::I32)?
-            }
-            x if x == UnsafeIntrinsic::u32_native_store() => {
-                store(&mut builder, ir::types::I32, WasmValType::I32)?
-            }
-            x if x == UnsafeIntrinsic::u64_native_store() => {
-                store(&mut builder, ir::types::I64, WasmValType::I64)?
-            }
-            x if x == UnsafeIntrinsic::store_data_address() => {
-                let [callee_vmctx, _caller_vmctx] =
-                    *init(&mut builder, [].into(), [WasmValType::I64].into())
-                else {
+            UnsafeIntrinsic::U8NativeLoad => load(&mut builder)?,
+            UnsafeIntrinsic::U16NativeLoad => load(&mut builder)?,
+            UnsafeIntrinsic::U32NativeLoad => load(&mut builder)?,
+            UnsafeIntrinsic::U64NativeLoad => load(&mut builder)?,
+            UnsafeIntrinsic::U8NativeStore => store(&mut builder)?,
+            UnsafeIntrinsic::U16NativeStore => store(&mut builder)?,
+            UnsafeIntrinsic::U32NativeStore => store(&mut builder)?,
+            UnsafeIntrinsic::U64NativeStore => store(&mut builder)?,
+            UnsafeIntrinsic::StoreDataAddress => {
+                let [callee_vmctx, _caller_vmctx] = *init(&mut builder) else {
                     unreachable!()
                 };
                 let pointer_type = self.isa.pointer_type();
@@ -1674,11 +1658,10 @@ impl ComponentCompiler for Compiler {
                     self,
                     &mut builder,
                     abi,
-                    &[WasmValType::I64],
+                    intrinsic.core_results(),
                     &[data_address],
                 );
             }
-            otherwise => unreachable!("unknown intrinsic: {otherwise:?}"),
         }
 
         builder.finalize();
@@ -1688,6 +1671,37 @@ impl ComponentCompiler for Compiler {
         })
     }
 }
+
+macro_rules! unsafe_intrinsic_clif_params_results {
+    (
+        $(
+            $symbol:expr => $variant:ident : $ctor:ident ( $( $param:ident : $param_ty:ident ),* ) $( -> $result_ty:ident )? ;
+        )*
+    ) => {
+        fn unsafe_intrinsic_clif_params(intrinsic: UnsafeIntrinsic) -> &'static [ir::types::Type] {
+            match intrinsic {
+                $(
+                    UnsafeIntrinsic::$variant => &[ $( unsafe_intrinsic_clif_params_results!(@clif_type $param_ty) ),* ],
+                )*
+            }
+        }
+
+        fn unsafe_intrinsic_clif_results(intrinsic: UnsafeIntrinsic) -> &'static [ir::types::Type] {
+            match intrinsic {
+                $(
+                    UnsafeIntrinsic::$variant => &[ $( unsafe_intrinsic_clif_params_results!(@clif_type $result_ty) )? ],
+                )*
+            }
+        }
+    };
+
+    (@clif_type u8) => { ir::types::I8 };
+    (@clif_type u16) => { ir::types::I16 };
+    (@clif_type u32) => { ir::types::I32 };
+    (@clif_type u64) => { ir::types::I64 };
+}
+
+wasmtime_environ::for_each_unsafe_intrinsic!(unsafe_intrinsic_clif_params_results);
 
 impl TrampolineCompiler<'_> {
     fn translate_transcode(

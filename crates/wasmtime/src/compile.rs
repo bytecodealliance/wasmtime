@@ -294,14 +294,14 @@ impl<'a> CompileInputs<'a> {
             macro_rules! push_intrinsic {
                 (
                     $(
-                        $name:ident ( $( $arg:ident : $arg_ty:ty ),* ) $( -> $ret_ty:ty )? ;
+                        $symbol:expr => $variant:ident : $ctor:ident ( $( $param:ident : $param_ty:ident ),* ) $( -> $result_ty:ident )? ;
                     )*
                 ) => {{
                     $(
                         for abi in [Abi::Wasm, Abi::Array] {
                             ret.push_input(move |compiler| {
-                                let intrinsic = wasmtime_environ::component::UnsafeIntrinsic::$name();
-                                let symbol = format!("unsafe_intrinsics::{}", intrinsic.name());
+                                let intrinsic = wasmtime_environ::component::UnsafeIntrinsic::$variant;
+                                let symbol = concat!("unsafe-intrinsics::", $symbol).to_string();
                                 Ok(CompileOutput {
                                     key: FuncKey::UnsafeIntrinsic(abi, intrinsic),
                                     function: compiler
@@ -319,7 +319,7 @@ impl<'a> CompileInputs<'a> {
                     )*
                 }}
             }
-            wasmtime_environ::foreach_intrinsic_function!(push_intrinsic);
+            wasmtime_environ::for_each_unsafe_intrinsic!(push_intrinsic);
         }
 
         for (idx, trampoline) in component.trampolines.iter() {

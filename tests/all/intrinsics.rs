@@ -329,7 +329,7 @@ fn unknown_intrinsic_function() -> Result<()> {
     let err = code_builder.compile_component().map(|_| ()).unwrap_err();
     let err = format!("{err:?}");
     assert!(
-        err.contains("invalid Wasmtime intrinsic: \"unknown\""),
+        err.contains("invalid unsafe intrinsic: \"unknown\""),
         "unexpected error: {err}"
     );
 
@@ -429,8 +429,8 @@ fn bad_missing_return() -> Result<()> {
     let err = format!("{err:?}");
     assert!(
         err.contains(
-            "bad unsafe intrinsics import at `unsafe-intrinsics`: function `u8-native-load` \
-             must return `U8`, found no return type"
+            "bad unsafe intrinsics import at `unsafe-intrinsics`: function `u8-native-load` must \
+             have 1 results, found 0"
         ),
         "unexpected error: {err}"
     );
@@ -464,7 +464,7 @@ fn bad_extra_return() -> Result<()> {
     assert!(
         err.contains(
             "bad unsafe intrinsics import at `unsafe-intrinsics`: function `u8-native-store` \
-             must have no return type, found `Primitive(U32)`"
+             must have 0 results, found 1"
         ),
         "unexpected error: {err}"
     );
@@ -497,8 +497,8 @@ fn bad_param_type() -> Result<()> {
     let err = format!("{err:?}");
     assert!(
         err.contains(
-            "bad unsafe intrinsics import at `unsafe-intrinsics`: parameter 1 to function \
-             `u8-native-store` must be `U8`, found `U16`"
+            "bad unsafe intrinsics import at `unsafe-intrinsics`: parameters[1] for function \
+             `u8-native-store` must be `U8`, found `Primitive(U16)`"
         ),
         "unexpected error: {err}"
     );
@@ -531,8 +531,8 @@ fn bad_result_type() -> Result<()> {
     let err = format!("{err:?}");
     assert!(
         err.contains(
-            "bad unsafe intrinsics import at `unsafe-intrinsics`: function \
-             `u8-native-load` must return `U8`, found `U16`"
+            "bad unsafe intrinsics import at `unsafe-intrinsics`: results[0] for function \
+             `u8-native-load` must be `U8`, found `Primitive(U16)`"
         ),
         "unexpected error: {err}"
     );
