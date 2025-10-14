@@ -29,6 +29,7 @@ fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + '
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn stack_values_two_frames() -> anyhow::Result<()> {
     let _ = env_logger::try_init();
 
@@ -83,6 +84,7 @@ fn stack_values_two_frames() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn stack_values_exceptions() -> anyhow::Result<()> {
     test_stack_values(
         r#"
@@ -110,6 +112,7 @@ fn stack_values_exceptions() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn stack_values_dead_gc_ref() -> anyhow::Result<()> {
     test_stack_values(
         r#"
