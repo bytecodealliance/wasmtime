@@ -71,7 +71,7 @@ impl WasiFile for Stdin {
         Ok(())
     }
     fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(self.0.num_ready_bytes()?)
+        Ok(self.0.num_ready_bytes().unwrap_or(0))
     }
     fn isatty(&self) -> bool {
         #[cfg(unix)]
