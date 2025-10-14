@@ -249,7 +249,7 @@ async function shard(configs) {
 
     let nbucket = 1;
     for (const bucket of buckets) {
-      let bucket_name = `${nbucket}/${buckets.size}`;
+      let bucket_name = `${nbucket}/${buckets.length}`;
       if (bucket.size === 1)
         bucket_name = Array.from(bucket)[0];
 
