@@ -58,10 +58,12 @@ use wasm_encoder::reencode::{Reencode, RoundtripReencoder};
 /// export their memories and globals individually, that would disturb the
 /// modules locally defined memoryies' and globals' indices, which would require
 /// rewriting the code section, which would break debug info offsets.
-pub(crate) fn instrument(module: &ModuleContext<'_>) -> Vec<u8> {
+pub(crate) fn instrument(module: &mut ModuleContext<'_>) -> Vec<u8> {
     log::debug!("Instrumenting the input Wasm");
 
     let mut encoder = wasm_encoder::Module::new();
+    let mut defined_global_exports = Vec::new();
+    let mut defined_memory_exports = Vec::new();
 
     for section in module.raw_sections() {
         match section.id {
@@ -84,10 +86,12 @@ pub(crate) fn instrument(module: &ModuleContext<'_>) -> Vec<u8> {
                 for (i, (j, _)) in module.defined_globals().enumerate() {
                     let name = format!("__wizer_global_{i}");
                     exports.export(&name, wasm_encoder::ExportKind::Global, j);
+                    defined_global_exports.push(name);
                 }
                 for (i, (j, _)) in module.defined_memories().enumerate() {
                     let name = format!("__wizer_memory_{i}");
                     exports.export(&name, wasm_encoder::ExportKind::Memory, j);
+                    defined_memory_exports.push(name);
                 }
 
                 encoder.section(&exports);
@@ -100,6 +104,9 @@ pub(crate) fn instrument(module: &ModuleContext<'_>) -> Vec<u8> {
             }
         }
     }
+
+    module.defined_global_exports = Some(defined_global_exports);
+    module.defined_memory_exports = Some(defined_memory_exports);
 
     encoder.finish()
 }

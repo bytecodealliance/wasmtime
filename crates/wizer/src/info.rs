@@ -50,6 +50,12 @@ pub struct ModuleContext<'a> {
     ///
     /// If this is `None`, then there are no locally defined memories.
     defined_memories_index: Option<u32>,
+
+    /// Export names of defined globals injected by the instrumentation pass.
+    pub(crate) defined_global_exports: Option<Vec<String>>,
+
+    /// Export names of defined memories injected by the instrumentation pass.
+    pub(crate) defined_memory_exports: Option<Vec<String>>,
 }
 
 impl<'a> ModuleContext<'a> {

@@ -203,7 +203,7 @@ impl Wizer {
         // Make sure we're given valid Wasm from the get go.
         self.wasm_validate(&wasm)?;
 
-        let cx = parse::parse(wasm)?;
+        let mut cx = parse::parse(wasm)?;
 
         // When wizening core modules directly some imports aren't supported,
         // so check for those here.
@@ -223,7 +223,7 @@ impl Wizer {
             }
         }
 
-        let instrumented_wasm = instrument::instrument(&cx);
+        let instrumented_wasm = instrument::instrument(&mut cx);
 
         if cfg!(debug_assertions) {
             if let Err(error) = self.wasm_validate(&instrumented_wasm) {
@@ -254,7 +254,7 @@ impl Wizer {
         // Parse rename spec.
         let renames = FuncRenames::parse(&self.func_renames)?;
 
-        let snapshot = snapshot::snapshot(&mut *store, &instance);
+        let snapshot = snapshot::snapshot(&cx, &mut *store, &instance);
         let rewritten_wasm = self.rewrite(&mut cx, store, &snapshot, &renames);
 
         if cfg!(debug_assertions) {
