@@ -130,17 +130,38 @@ void wasmtime_memory_image_free(struct wasmtime_memory_image *image) {
 
 #endif // WASMTIME_VIRTUAL_MEMORY
 
-// Pretend that this platform doesn't have threads where storing in a static is
-// ok.
+#ifdef WASMTIME_CUSTOM_SYNC
+
+// Multi-threaded TLS using pthread
+#include <pthread.h>
+
+static pthread_key_t wasmtime_tls_key;
+static pthread_once_t wasmtime_tls_key_once = PTHREAD_ONCE_INIT;
+
+static void make_tls_key(void) { pthread_key_create(&wasmtime_tls_key, NULL); }
+
+uint8_t *wasmtime_tls_get(void) {
+  pthread_once(&wasmtime_tls_key_once, make_tls_key);
+  return (uint8_t *)pthread_getspecific(wasmtime_tls_key);
+}
+
+void wasmtime_tls_set(uint8_t *val) {
+  pthread_once(&wasmtime_tls_key_once, make_tls_key);
+  pthread_setspecific(wasmtime_tls_key, val);
+}
+
+#else
+
+// Single-threaded TLS using a static variable
 static uint8_t *WASMTIME_TLS = NULL;
 
-uint8_t *wasmtime_tls_get() { return WASMTIME_TLS; }
+uint8_t *wasmtime_tls_get(void) { return WASMTIME_TLS; }
 
 void wasmtime_tls_set(uint8_t *val) { WASMTIME_TLS = val; }
 
-#ifdef WASMTIME_CUSTOM_SYNC
+#endif
 
-#include <pthread.h>
+#ifdef WASMTIME_CUSTOM_SYNC
 
 // Static pools for locks to avoid heap allocation.
 #define MAX_MUTEXES 64
