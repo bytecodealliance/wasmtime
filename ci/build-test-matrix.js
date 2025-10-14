@@ -197,6 +197,7 @@ async function shard(configs) {
         config,
         {
           name: `${config.name} (${config.crates})`,
+          bucket: `-p ${config.crates}`,
         }
       ));
       continue;
