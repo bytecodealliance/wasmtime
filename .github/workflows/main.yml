@@ -416,6 +416,12 @@ jobs:
               -p wasmtime-wasi --no-default-features --features p1
               -p wasmtime-wasi --no-default-features --features p2
               -p wasmtime-wasi --no-default-features --features p3
+
+          - name: wasmtime-wizer
+            checks: |
+              -p wasmtime-wizer --no-default-features
+              -p wasmtime-wizer --no-default-features --features wasmtime
+              -p wasmtime-wizer --no-default-features --features wasmprinter
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
