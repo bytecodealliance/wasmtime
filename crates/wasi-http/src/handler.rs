@@ -9,6 +9,7 @@ use futures::{
     stream::{FuturesUnordered, StreamExt},
 };
 use std::collections::VecDeque;
+use std::collections::btree_map::{BTreeMap, Entry};
 use std::future;
 use std::pin::{Pin, pin};
 use std::sync::{
@@ -19,7 +20,7 @@ use std::sync::{
     },
 };
 use std::task::Poll;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 use wasmtime::AsContextMut;
 use wasmtime::component::Accessor;
@@ -151,7 +152,7 @@ pub trait HandlerState: 'static + Sync + Send {
     type StoreData;
 
     /// Create a new [`Store`] for handling one or more requests.
-    fn new_store(&self) -> Result<StoreBundle<Self::StoreData>>;
+    fn new_store(&self, req_id: Option<u64>) -> Result<StoreBundle<Self::StoreData>>;
 
     /// Maximum time allowed to handle a request.
     ///
@@ -170,6 +171,9 @@ pub trait HandlerState: 'static + Sync + Send {
     /// Maximum number of requests to handle concurrently using a single
     /// instance.
     fn max_instance_concurrent_reuse_count(&self) -> usize;
+
+    /// Called when a worker exits with an error.
+    fn handle_worker_error(&self, error: anyhow::Error);
 }
 
 struct ProxyHandlerInner<S, T: 'static> {
@@ -178,6 +182,40 @@ struct ProxyHandlerInner<S, T: 'static> {
     next_id: AtomicU64,
     task_queue: Queue<TaskFn<T>>,
     worker_count: AtomicUsize,
+}
+
+/// Helper utility to track the start times of tasks accepted by a worker.
+///
+/// This is used to ensure that timeouts are enforced even when the
+/// `StoreContextMut::run_concurrent` event loop is unable to make progress due
+/// to the guest either busy looping or being blocked on a synchronous call to a
+/// host function which has exclusive access to the `Store`.
+#[derive(Default)]
+struct StartTimes(BTreeMap<Instant, usize>);
+
+impl StartTimes {
+    fn add(&mut self, time: Instant) {
+        *self.0.entry(time).or_insert(0) += 1;
+    }
+
+    fn remove(&mut self, time: Instant) {
+        let Entry::Occupied(mut entry) = self.0.entry(time) else {
+            unreachable!()
+        };
+        match *entry.get() {
+            0 => unreachable!(),
+            1 => {
+                entry.remove();
+            }
+            _ => {
+                *entry.get_mut() -= 1;
+            }
+        }
+    }
+
+    fn earliest(&self) -> Option<Instant> {
+        self.0.first_key_value().map(|(&k, _)| k)
+    }
 }
 
 struct Worker<S, T: 'static>
@@ -208,19 +246,19 @@ where
                 // worker will be started; thus it becomes our responsibility to
                 // start a worker here instead.
                 if count == 1 && !self.handler.0.task_queue.is_empty() {
-                    self.handler.start_worker(None);
+                    self.handler.start_worker(None, None);
                 }
             }
         }
     }
 
-    async fn run(mut self, task: Option<TaskFn<T>>) -> Result<()> {
+    async fn run(mut self, task: Option<TaskFn<T>>, req_id: Option<u64>) -> Result<()> {
         let handler = &self.handler.0;
 
         let StoreBundle {
             mut store,
             write_profile,
-        } = handler.state.new_store()?;
+        } = handler.state.new_store(req_id)?;
 
         let request_timeout = handler.state.request_timeout();
         let idle_instance_timeout = handler.state.idle_instance_timeout();
@@ -230,6 +268,7 @@ where
 
         let proxy = &handler.instance_pre.instantiate_async(&mut store).await?;
         let accept_concurrent = AtomicBool::new(true);
+        let task_start_times = Mutex::new(StartTimes::default());
 
         let mut future = pin!(store.run_concurrent(async |accessor| {
             let mut reuse_count = 0;
@@ -250,9 +289,14 @@ where
                     accept_concurrent.store(false, Relaxed);
                     *reuse_count += 1;
 
+                    let start_time = Instant::now().checked_add(request_timeout);
+                    if let Some(start_time) = start_time {
+                        task_start_times.lock().unwrap().add(start_time);
+                    }
+
                     futures.push(tokio::time::timeout(
                         request_timeout,
-                        (task)(accessor, proxy),
+                        (task)(accessor, proxy).map(move |()| start_time),
                     ));
                 };
 
@@ -305,8 +349,11 @@ where
                                 Poll::Pending
                             }
                         }
-                        Poll::Ready(Some(Ok(()))) => {
+                        Poll::Ready(Some(Ok(start_time))) => {
                             // Task completed; carry on!
+                            if let Some(start_time) = start_time {
+                                task_start_times.lock().unwrap().remove(start_time);
+                            }
                             Poll::Ready(None)
                         }
                         Poll::Ready(Some(Err(_))) => {
@@ -351,20 +398,59 @@ where
             }
         }));
 
+        let mut sleep = pin!(tokio::time::sleep(Duration::MAX));
+
         future::poll_fn(|cx| {
             let poll = future.as_mut().poll(cx);
-            // If the future returns `Pending`, it's either because it's idle
-            // (in which case it can definitely accept a new task) or because
-            // all its tasks are awaiting I/O, in which case it may have
-            // capacity for additional tasks to run concurrently.  Here we set
-            // `accept_concurrent` to true and, if it wasn't already true
-            // before, poll the future one more time so it can ask for another
-            // task if appropriate.
-            if poll.is_pending() && !accept_concurrent.swap(true, Relaxed) {
-                future.as_mut().poll(cx)
-            } else {
-                poll
+            if poll.is_pending() {
+                // If the future returns `Pending`, that's either because it's
+                // idle (in which case it can definitely accept a new task) or
+                // because all its tasks are awaiting I/O, in which case it may
+                // have capacity for additional tasks to run concurrently.
+                //
+                // However, if one of the tasks is blocked on a sync call to a
+                // host function which has exclusive access to the `Store`, the
+                // `StoreContextMut::run_concurrent` event loop will be unable
+                // to make progress until that call finishes.  Similarly, if the
+                // task loops indefinitely, subject only to epoch interruption,
+                // the event loop will also be stuck.  Either way, any task
+                // timeouts created inside the `AsyncFnOnce` we passed to
+                // `run_concurrent` won't have a chance to trigger.
+                // Consequently, we need to _also_ enforce timeouts here,
+                // outside the event loop.
+                //
+                // Therefore, we check if the oldest outstanding task has been
+                // running for at least `request_timeout*2`, which is the
+                // maximum time needed for any other concurrent tasks to
+                // complete or time out, at which point we can safely discard
+                // the instance.  If that deadline has not yet arrived, we
+                // schedule a wakeup to occur when it does.
+                if let Some(deadline) = task_start_times
+                    .lock()
+                    .unwrap()
+                    .earliest()
+                    .and_then(|v| v.checked_add(request_timeout.saturating_mul(2)))
+                {
+                    sleep.as_mut().reset(deadline.into());
+                    // Note that this will schedule a wakeup for later if the
+                    // deadline has not yet arrived:
+                    if sleep.as_mut().poll(cx).is_ready() {
+                        // Deadline has been reached; kill the instance with an
+                        // error.
+                        return Poll::Ready(Err(anyhow!("guest timed out")));
+                    }
+                }
+
+                // Otherwise, if no timeouts have elapsed, we set
+                // `accept_concurrent` to true and, if it wasn't already true
+                // before, poll the future one more time so it can ask for
+                // another task if appropriate.
+                if !accept_concurrent.swap(true, Relaxed) {
+                    return future.as_mut().poll(cx);
+                }
             }
+
+            poll
         })
         .await?
     }
@@ -410,7 +496,7 @@ impl<S, T> ProxyHandler<S, T> {
     ///
     /// This will either spawn a new background worker to run the task or
     /// deliver it to an already-running worker.
-    pub fn spawn(&self, task: TaskFn<T>)
+    pub fn spawn(&self, req_id: Option<u64>, task: TaskFn<T>)
     where
         T: Send,
         S: HandlerState<StoreData = T>,
@@ -423,7 +509,7 @@ impl<S, T> ProxyHandler<S, T> {
                     // the task directly to the worker, which improves
                     // performance as measured by `wasmtime-server-rps.sh` by
                     // about 15%.
-                    self.start_worker(Some(task));
+                    self.start_worker(Some(task), req_id);
                 } else {
                     self.0.task_queue.push(task);
                     // Start a new worker to handle the task if the last worker
@@ -433,7 +519,7 @@ impl<S, T> ProxyHandler<S, T> {
                     // check the count _after_ we've pushed the task to the
                     // queue.
                     if self.0.worker_count.load(SeqCst) == 0 {
-                        self.start_worker(None);
+                        self.start_worker(None, req_id);
                     }
                 }
             }
@@ -455,20 +541,21 @@ impl<S, T> ProxyHandler<S, T> {
         &self.0.instance_pre
     }
 
-    fn start_worker(&self, task: Option<TaskFn<T>>)
+    fn start_worker(&self, task: Option<TaskFn<T>>, req_id: Option<u64>)
     where
         T: Send,
         S: HandlerState<StoreData = T>,
     {
+        let handler = self.clone();
         tokio::spawn(
             Worker {
                 handler: self.clone(),
                 available: false,
             }
-            .run(task)
-            .map(|result| {
+            .run(task, req_id)
+            .map(move |result| {
                 if let Err(error) = result {
-                    eprintln!("worker error: {error:?}");
+                    handler.0.state.handle_worker_error(error);
                 }
             }),
         );

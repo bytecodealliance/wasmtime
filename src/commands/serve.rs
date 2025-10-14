@@ -1,5 +1,5 @@
 use crate::common::{Profile, RunCommon, RunTarget};
-use anyhow::{Result, bail};
+use anyhow::{Context as _, Result, bail};
 use bytes::Bytes;
 use clap::Parser;
 use futures::future::FutureExt;
@@ -613,8 +613,8 @@ struct HostHandlerState {
 impl HandlerState for HostHandlerState {
     type StoreData = Host;
 
-    fn new_store(&self) -> Result<StoreBundle<Host>> {
-        let mut store = self.cmd.new_store(&self.engine, None)?;
+    fn new_store(&self, req_id: Option<u64>) -> Result<StoreBundle<Host>> {
+        let mut store = self.cmd.new_store(&self.engine, req_id)?;
         let write_profile = setup_epoch_handler(&self.cmd, &mut store, self.component.clone())?;
 
         Ok(StoreBundle {
@@ -637,6 +637,10 @@ impl HandlerState for HostHandlerState {
 
     fn max_instance_concurrent_reuse_count(&self) -> usize {
         self.max_instance_concurrent_reuse_count
+    }
+
+    fn handle_worker_error(&self, error: anyhow::Error) {
+        eprintln!("worker error: {error}");
     }
 }
 
@@ -866,55 +870,65 @@ async fn handle_request(
         }
     };
 
-    handler.spawn(Box::new(move |store, proxy| {
-        Box::pin(
-            async move {
-                match proxy {
-                    Proxy::P2(proxy) => {
-                        let Sender::P2(tx) = tx else { unreachable!() };
-                        let (req, out) = store.with(move |mut store| {
-                            let req = store
-                                .data_mut()
-                                .new_incoming_request(p2::http::types::Scheme::Http, req)?;
-                            let out = store.data_mut().new_response_outparam(tx)?;
-                            anyhow::Ok((req, out))
-                        })?;
+    handler.spawn(
+        if handler.state().max_instance_reuse_count() == 1 {
+            Some(req_id)
+        } else {
+            None
+        },
+        Box::new(move |store, proxy| {
+            Box::pin(
+                async move {
+                    match proxy {
+                        Proxy::P2(proxy) => {
+                            let Sender::P2(tx) = tx else { unreachable!() };
+                            let (req, out) = store.with(move |mut store| {
+                                let req = store
+                                    .data_mut()
+                                    .new_incoming_request(p2::http::types::Scheme::Http, req)?;
+                                let out = store.data_mut().new_response_outparam(tx)?;
+                                anyhow::Ok((req, out))
+                            })?;
 
-                        proxy
-                            .wasi_http_incoming_handler()
-                            .call_handle(store, req, out)
-                            .await
-                    }
-                    Proxy::P3(proxy) => {
-                        use wasmtime_wasi_http::p3::bindings::http::types::{ErrorCode, Request};
+                            proxy
+                                .wasi_http_incoming_handler()
+                                .call_handle(store, req, out)
+                                .await
+                        }
+                        Proxy::P3(proxy) => {
+                            use wasmtime_wasi_http::p3::bindings::http::types::{
+                                ErrorCode, Request,
+                            };
 
-                        let Sender::P3(tx) = tx else { unreachable!() };
-                        let (req, body) = req.into_parts();
-                        let body = body.map_err(ErrorCode::from_hyper_request_error);
-                        let req = http::Request::from_parts(req, body);
-                        let (request, request_io_result) = Request::from_http(req);
-                        let (res, task) = proxy.handle(store, request).await??;
-                        let res =
-                            store.with(|mut store| res.into_http(&mut store, request_io_result))?;
-                        _ = tx.send(res.map(|body| body.map_err(|e| e.into()).boxed()));
+                            let Sender::P3(tx) = tx else { unreachable!() };
+                            let (req, body) = req.into_parts();
+                            let body = body.map_err(ErrorCode::from_hyper_request_error);
+                            let req = http::Request::from_parts(req, body);
+                            let (request, request_io_result) = Request::from_http(req);
+                            let (res, task) = proxy.handle(store, request).await??;
+                            let res = store
+                                .with(|mut store| res.into_http(&mut store, request_io_result))?;
+                            _ = tx.send(res.map(|body| body.map_err(|e| e.into()).boxed()));
 
-                        // Wait for the task to finish.
-                        task.block(store).await;
-                        Ok(())
+                            // Wait for the task to finish.
+                            task.block(store).await;
+                            Ok(())
+                        }
                     }
                 }
-            }
-            .map(move |result| {
-                if let Err(error) = result {
-                    eprintln!("[{req_id}] :: {error:?}");
-                }
-            }),
-        )
-    }));
+                .map(move |result| {
+                    if let Err(error) = result {
+                        eprintln!("[{req_id}] :: {error:?}");
+                    }
+                }),
+            )
+        }),
+    );
 
     Ok(match rx {
         Receiver::P2(rx) => rx
-            .await?
+            .await
+            .context("guest never invoked `response-outparam::set` method")?
             .map_err(|e| anyhow::Error::from(e))?
             .map(|body| body.map_err(|e| e.into()).boxed()),
         Receiver::P3(rx) => rx.await?,
