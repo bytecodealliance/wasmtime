@@ -256,20 +256,10 @@ extern void wasmtime_tls_set(uint8_t *ptr);
 
 #if defined(WASMTIME_CUSTOM_SYNC)
 /**
- * Initializes a synchronization lock.
+ * Frees a synchronization lock.
  *
- * The `lock` parameter points to a `usize` that is initially zero.
- * Implementations can use zero to mean "initialized but inert", making this
- * a no-op, or they can initialize the lock state as needed.
- *
- * The lock must be freed with [`wasmtime_sync_lock_free`].
- */
-extern void wasmtime_sync_lock_new(uintptr_t *lock);
-#endif
-
-#if defined(WASMTIME_CUSTOM_SYNC)
-/**
- * Frees a synchronization lock created with [`wasmtime_sync_lock_new`].
+ * May be called on a lock that was never used (still has a zero pattern).
+ * The implementation must handle this case gracefully.
  */
 extern void wasmtime_sync_lock_free(uintptr_t *lock);
 #endif
@@ -278,6 +268,7 @@ extern void wasmtime_sync_lock_free(uintptr_t *lock);
 /**
  * Acquires an exclusive lock.
  *
+ * If the lock is uninitialized (zero pattern), it will be initialized lazily.
  * This function blocks until the lock is acquired.
  * Must be paired with [`wasmtime_sync_lock_release`].
  */
@@ -295,6 +286,7 @@ extern void wasmtime_sync_lock_release(uintptr_t *lock);
 /**
  * Acquires a read lock on an RwLock.
  *
+ * If the lock is uninitialized (zero pattern), it will be initialized lazily.
  * Multiple readers can hold the lock simultaneously.
  * Must be paired with [`wasmtime_sync_rwlock_read_release`].
  */
@@ -312,6 +304,7 @@ extern void wasmtime_sync_rwlock_read_release(uintptr_t *lock);
 /**
  * Acquires a write lock on an RwLock.
  *
+ * If the lock is uninitialized (zero pattern), it will be initialized lazily.
  * Only one writer can hold the lock, and no readers can be present.
  * Must be paired with [`wasmtime_sync_rwlock_write_release`].
  */
@@ -327,20 +320,10 @@ extern void wasmtime_sync_rwlock_write_release(uintptr_t *lock);
 
 #if defined(WASMTIME_CUSTOM_SYNC)
 /**
- * Initializes an RwLock.
+ * Frees an RwLock.
  *
- * The `lock` parameter points to a `usize` that is initially zero.
- * Implementations can use zero to mean "initialized but inert", making this
- * a no-op, or they can initialize the lock state as needed.
- *
- * The lock must be freed with [`wasmtime_sync_rwlock_free`].
- */
-extern void wasmtime_sync_rwlock_new(uintptr_t *lock);
-#endif
-
-#if defined(WASMTIME_CUSTOM_SYNC)
-/**
- * Frees an RwLock created with [`wasmtime_sync_rwlock_new`].
+ * May be called on a lock that was never used (still has a zero pattern).
+ * The implementation must handle this case gracefully.
  */
 extern void wasmtime_sync_rwlock_free(uintptr_t *lock);
 #endif
