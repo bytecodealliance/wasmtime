@@ -15,6 +15,7 @@
 // then the symbols will not be required.
 //
 // * `WASMTIME_SIGNALS_BASED_TRAPS` - corresponds to `signals-based-traps`
+// * `WASMTIME_CUSTOM_SYNC` - corresponds to `custom-sync-primitives`
 //
 // Some more information about this header can additionally be found at
 // <https://docs.wasmtime.dev/stability-platform-support.html>.
@@ -23,7 +24,7 @@
 #ifndef _WASMTIME_PLATFORM_H
 #define _WASMTIME_PLATFORM_H
 
-/* Generated with cbindgen:0.28.0 */
+/* Generated with cbindgen:0.29.0 */
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -252,6 +253,97 @@ extern uint8_t *wasmtime_tls_get(void);
  * This value should be returned when later calling `wasmtime_tls_get`.
  */
 extern void wasmtime_tls_set(uint8_t *ptr);
+
+#if defined(WASMTIME_CUSTOM_SYNC)
+/**
+ * Initializes a synchronization lock.
+ *
+ * The `lock` parameter points to a `usize` that is initially zero.
+ * Implementations can use zero to mean "initialized but inert", making this
+ * a no-op, or they can initialize the lock state as needed.
+ *
+ * The lock must be freed with [`wasmtime_sync_lock_free`].
+ */
+extern void wasmtime_sync_lock_new(uintptr_t *lock);
+#endif
+
+#if defined(WASMTIME_CUSTOM_SYNC)
+/**
+ * Frees a synchronization lock created with [`wasmtime_sync_lock_new`].
+ */
+extern void wasmtime_sync_lock_free(uintptr_t *lock);
+#endif
+
+#if defined(WASMTIME_CUSTOM_SYNC)
+/**
+ * Acquires an exclusive lock.
+ *
+ * This function blocks until the lock is acquired.
+ * Must be paired with [`wasmtime_sync_lock_release`].
+ */
+extern void wasmtime_sync_lock_acquire(uintptr_t *lock);
+#endif
+
+#if defined(WASMTIME_CUSTOM_SYNC)
+/**
+ * Releases an exclusive lock previously acquired with [`wasmtime_sync_lock_acquire`].
+ */
+extern void wasmtime_sync_lock_release(uintptr_t *lock);
+#endif
+
+#if defined(WASMTIME_CUSTOM_SYNC)
+/**
+ * Acquires a read lock on an RwLock.
+ *
+ * Multiple readers can hold the lock simultaneously.
+ * Must be paired with [`wasmtime_sync_rwlock_read_release`].
+ */
+extern void wasmtime_sync_rwlock_read(uintptr_t *lock);
+#endif
+
+#if defined(WASMTIME_CUSTOM_SYNC)
+/**
+ * Releases a read lock previously acquired with [`wasmtime_sync_rwlock_read`].
+ */
+extern void wasmtime_sync_rwlock_read_release(uintptr_t *lock);
+#endif
+
+#if defined(WASMTIME_CUSTOM_SYNC)
+/**
+ * Acquires a write lock on an RwLock.
+ *
+ * Only one writer can hold the lock, and no readers can be present.
+ * Must be paired with [`wasmtime_sync_rwlock_write_release`].
+ */
+extern void wasmtime_sync_rwlock_write(uintptr_t *lock);
+#endif
+
+#if defined(WASMTIME_CUSTOM_SYNC)
+/**
+ * Releases a write lock previously acquired with [`wasmtime_sync_rwlock_write`].
+ */
+extern void wasmtime_sync_rwlock_write_release(uintptr_t *lock);
+#endif
+
+#if defined(WASMTIME_CUSTOM_SYNC)
+/**
+ * Initializes an RwLock.
+ *
+ * The `lock` parameter points to a `usize` that is initially zero.
+ * Implementations can use zero to mean "initialized but inert", making this
+ * a no-op, or they can initialize the lock state as needed.
+ *
+ * The lock must be freed with [`wasmtime_sync_rwlock_free`].
+ */
+extern void wasmtime_sync_rwlock_new(uintptr_t *lock);
+#endif
+
+#if defined(WASMTIME_CUSTOM_SYNC)
+/**
+ * Frees an RwLock created with [`wasmtime_sync_rwlock_new`].
+ */
+extern void wasmtime_sync_rwlock_free(uintptr_t *lock);
+#endif
 
 #ifdef __cplusplus
 }  // extern "C"

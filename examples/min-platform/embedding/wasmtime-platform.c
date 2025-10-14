@@ -137,3 +137,99 @@ static uint8_t *WASMTIME_TLS = NULL;
 uint8_t *wasmtime_tls_get() { return WASMTIME_TLS; }
 
 void wasmtime_tls_set(uint8_t *val) { WASMTIME_TLS = val; }
+
+#ifdef WASMTIME_CUSTOM_SYNC
+
+#include <pthread.h>
+
+// Static pools for locks to avoid heap allocation.
+#define MAX_MUTEXES 64
+#define MAX_RWLOCKS 64
+
+static pthread_mutex_t mutex_pool[MAX_MUTEXES];
+static uint8_t mutex_used[MAX_MUTEXES];
+
+static pthread_rwlock_t rwlock_pool[MAX_RWLOCKS];
+static uint8_t rwlock_used[MAX_RWLOCKS];
+
+void wasmtime_sync_lock_new(uintptr_t *lock) {
+  if (*lock == 0) {
+    for (int i = 0; i < MAX_MUTEXES; i++) {
+      if (!mutex_used[i]) {
+        mutex_used[i] = 1;
+        pthread_mutex_init(&mutex_pool[i], NULL);
+        // Store index+1 (0 means uninitialized)
+        *lock = (uintptr_t)(i + 1);
+        return;
+      }
+    }
+    // Out of mutex slots
+    abort();
+  }
+}
+
+void wasmtime_sync_lock_free(uintptr_t *lock) {
+  if (*lock != 0) {
+    int index = (int)*lock - 1;
+    pthread_mutex_destroy(&mutex_pool[index]);
+    mutex_used[index] = 0;
+    *lock = 0;
+  }
+}
+
+void wasmtime_sync_lock_acquire(uintptr_t *lock) {
+  int index = (int)*lock - 1;
+  pthread_mutex_lock(&mutex_pool[index]);
+}
+
+void wasmtime_sync_lock_release(uintptr_t *lock) {
+  int index = (int)*lock - 1;
+  pthread_mutex_unlock(&mutex_pool[index]);
+}
+
+void wasmtime_sync_rwlock_new(uintptr_t *lock) {
+  if (*lock == 0) {
+    for (int i = 0; i < MAX_RWLOCKS; i++) {
+      if (!rwlock_used[i]) {
+        rwlock_used[i] = 1;
+        pthread_rwlock_init(&rwlock_pool[i], NULL);
+        // Store index+1 (0 means uninitialized)
+        *lock = (uintptr_t)(i + 1);
+        return;
+      }
+    }
+    // Out of rwlock slots
+    abort();
+  }
+}
+
+void wasmtime_sync_rwlock_free(uintptr_t *lock) {
+  if (*lock != 0) {
+    int index = (int)*lock - 1;
+    pthread_rwlock_destroy(&rwlock_pool[index]);
+    rwlock_used[index] = 0;
+    *lock = 0;
+  }
+}
+
+void wasmtime_sync_rwlock_read(uintptr_t *lock) {
+  int index = (int)*lock - 1;
+  pthread_rwlock_rdlock(&rwlock_pool[index]);
+}
+
+void wasmtime_sync_rwlock_read_release(uintptr_t *lock) {
+  int index = (int)*lock - 1;
+  pthread_rwlock_unlock(&rwlock_pool[index]);
+}
+
+void wasmtime_sync_rwlock_write(uintptr_t *lock) {
+  int index = (int)*lock - 1;
+  pthread_rwlock_wrlock(&rwlock_pool[index]);
+}
+
+void wasmtime_sync_rwlock_write_release(uintptr_t *lock) {
+  int index = (int)*lock - 1;
+  pthread_rwlock_unlock(&rwlock_pool[index]);
+}
+
+#endif // WASMTIME_CUSTOM_SYNC
