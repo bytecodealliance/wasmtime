@@ -1175,7 +1175,7 @@ pub struct VMStoreContext {
 
     /// A pointer to the embedder's `T` inside a `Store<T>`, for use with the
     /// `store-data-address` unsafe intrinsic.
-    pub store_data: *mut (),
+    pub store_data: Option<VmPtr<()>>,
 
     /// The range, in addresses, of the guard page that is currently in use.
     ///
@@ -1270,7 +1270,7 @@ impl Default for VMStoreContext {
             last_wasm_entry_trap_handler: UnsafeCell::new(0),
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
-            store_data: ptr::null_mut(),
+            store_data: None,
         }
     }
 }
