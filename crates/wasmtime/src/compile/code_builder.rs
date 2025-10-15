@@ -255,7 +255,7 @@ impl<'a> CodeBuilder<'a> {
     /// ```rust
     /// /// This type is used as `wasmtime::Store<MyData>` and accessed by Wasm via
     /// /// unsafe intrinsics.
-    /// #[repr(C)]
+    /// #[repr(C, align(8))]
     /// struct MyData {
     ///     id: u64,
     ///     counter: u32,
@@ -332,14 +332,15 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// # Example
     ///
-    /// TODO FITZGEN: what is this? zero-copy access to a host buffer
+    /// The following example shows how you can use unsafe intrinsics to give
+    /// Wasm direct zero-copy access to a host buffer.
     ///
     /// ```rust
     /// use std::mem;
-    /// use std::num::NonZeroUsize;
     /// use wasmtime::*;
     ///
     /// // A `*mut u8` pointer that is exposed directly to Wasm via unsafe intrinsics.
+    /// #[repr(align(8))]
     /// union ExposedPointer {
     ///     pointer: *mut u8,
     ///     padding: u64,
@@ -383,17 +384,26 @@ impl<'a> CodeBuilder<'a> {
     ///     assert!(mem::offset_of!(StoreData, buf_len) == 8);
     /// };
     ///
+    /// impl Drop for StoreData {
+    ///     fn drop(&mut self) {
+    ///         let len = usize::try_from(self.buf_len).unwrap();
+    ///         let ptr = std::ptr::slice_from_raw_parts_mut(self.buf_ptr.get(), len);
+    ///         unsafe {
+    ///             let _ = Box::from_raw(ptr);
+    ///         }
+    ///     }
+    /// }
+    ///
     /// impl StoreData {
     ///     /// Create a new `StoreData`, allocating an inner buffer of `capacity`
     ///     /// bytes.
-    ///     fn new(capacity: NonZeroUsize) -> Result<Self> {
-    ///         let layout = std::alloc::Layout::array::<u8>(capacity.get())?
-    ///         let ptr = unsafe { std::alloc::alloc_zeroed(layout) };
-    ///         ensure!(!ptr.is_null(), "failed to allocate buffer");
-    ///         Ok(Self {
-    ///             buf_ptr: ExposedPointer::new(ptr),
-    ///             buf_len: u64::try_from(capacity).unwrap(),
-    ///         })
+    ///     fn new(bytes: impl IntoIterator<Item = u8>) -> Self {
+    ///         let buf: Box<[u8]> = bytes.into_iter().collect();
+    ///         let ptr = Box::into_raw(buf);
+    ///         Self {
+    ///             buf_ptr: ExposedPointer::new(ptr.cast::<u8>()),
+    ///             buf_len: u64::try_from(ptr.len()).unwrap(),
+    ///         }
     ///     }
     ///
     ///     /// Get the inner buffer as a shared slice.
@@ -407,7 +417,7 @@ impl<'a> CodeBuilder<'a> {
     ///
     ///     /// Get the inner buffer as a mutable slice.
     ///     fn buf_mut(&mut self) -> &mut [u8] {
-    ///         let ptr = self.buf_ptr.get()
+    ///         let ptr = self.buf_ptr.get();
     ///         let len = usize::try_from(self.buf_len).unwrap();
     ///         unsafe {
     ///             std::slice::from_raw_parts_mut(ptr, len)
@@ -415,11 +425,26 @@ impl<'a> CodeBuilder<'a> {
     ///     }
     /// }
     ///
-    /// # fn _foo() -> Result<()> {
-    /// let engine = Engine::default();
+    /// # fn main() -> Result<()> {
+    /// // Enable function inlining during compilation. If you are using unsafe intrinsics, you
+    /// // almost assuredly want them inlined to avoid function call overheads.
+    /// let mut config = Config::new();
+    /// config.compiler_inlining(true);
     ///
-    /// let mut builder = CodeBuilder::new();
-    /// builder.expose_unsafe_intrinsics("unsafe-intrinsics");
+    /// let engine = Engine::new(&config)?;
+    /// let linker = wasmtime::component::Linker::new(&engine);
+    ///
+    /// // Create a new builder for configuring a Wasm compilation.
+    /// let mut builder = CodeBuilder::new(&engine);
+    ///
+    /// // Allow the code we are building to use Wasmtime's unsafe intrinsics.
+    /// //
+    /// // SAFETY: we wrap all usage of the intrinsics in safe APIs.
+    /// unsafe {
+    ///     builder.expose_unsafe_intrinsics("unsafe-intrinsics");
+    /// }
+    ///
+    /// // Provide the Wasm that we are compiling.
     /// builder.wasm_binary_or_text(r#"
     ///     (component
     ///         ;; Import the unsafe intrinsics that we will use.
@@ -427,24 +452,198 @@ impl<'a> CodeBuilder<'a> {
     ///             (instance $intrinsics
     ///                 (export "store-data-address" (func (result u64)))
     ///                 (export "u64-native-load" (func (param "pointer" u64) (result u64)))
-    ///                 (export "u64-native-store" (func (param "pointer" u64) (param "value" u64)))
+    ///                 (export "u8-native-load" (func (param "pointer" u64) (result u8)))
+    ///                 (export "u8-native-store" (func (param "pointer" u64) (param "value" u8)))
     ///             )
     ///         )
     ///
-    ///         ;; A component that encapsulates and hides the intrinsics' unsafety.
-    ///         ;; TODO FITZGEN
+    ///         ;; A component that encapsulates the intrinsics' unsafety, exposing a safe API
+    ///         ;; built on top of them.
+    ///         (component $safe-api
+    ///             (import "unsafe-intrinsics"
+    ///                 (instance $intrinsics
+    ///                     (export "store-data-address" (func (result u64)))
+    ///                     (export "u64-native-load" (func (param "pointer" u64) (result u64)))
+    ///                     (export "u8-native-load" (func (param "pointer" u64) (result u8)))
+    ///                     (export "u8-native-store" (func (param "pointer" u64) (param "value" u8)))
+    ///                 )
+    ///             )
     ///
-    ///         ;; A component that uses the safe API.
-    ///         ;; TODO FITZGEN
+    ///             ;; The core Wasm module that implements the safe API.
+    ///             (core module $safe-api-impl
+    ///                 (import "" "store-data-address" (func $store-data-address (result i64)))
+    ///                 (import "" "u64-native-load" (func $u64-native-load (param i64) (result i64)))
+    ///                 (import "" "u8-native-load" (func $u8-native-load (param i64) (result i32)))
+    ///                 (import "" "u8-native-store" (func $u8-native-store (param i64 i32)))
     ///
-    ///         ;; Instantiate and link the components.
-    ///         ;; TODO FITZGEN
+    ///                 ;; Load the `StoreData::buf_ptr` field
+    ///                 (func $get-buf-ptr (result i64)
+    ///                     (call $u64-native-load (i64.add (call $store-data-address) (i64.const 0)))
+    ///                 )
+    ///
+    ///                 ;; Load the `StoreData::buf_len` field
+    ///                 (func $get-buf-len (result i64)
+    ///                     (call $u64-native-load (i64.add (call $store-data-address) (i64.const 8)))
+    ///                 )
+    ///
+    ///                 ;; Check that `$i` is within `StoreData` buffer's bounds, raising a trap
+    ///                 ;; otherwise.
+    ///                 (func $bounds-check (param $i i64)
+    ///                     (if (i64.lt_u (local.get $i) (call $get-buf-len))
+    ///                         (then (return))
+    ///                         (else (unreachable))
+    ///                     )
+    ///                 )
+    ///
+    ///                 ;; A safe function to get the `i`th byte from `StoreData`'s buffer, raising
+    ///                 ;; a trap on out-of-bounds accesses.
+    ///                 (func (export "get") (param $i i64) (result i32)
+    ///                     (call $bounds-check (local.get $i))
+    ///                     (call $u8-native-load (i64.add (call $get-buf-ptr) (local.get $i)))
+    ///                 )
+    ///
+    ///                 ;; A safe function to set the `i`th byte in `StoreData`'s buffer, raising
+    ///                 ;; a trap on out-of-bounds accesses.
+    ///                 (func (export "set") (param $i i64) (param $value i32)
+    ///                     (call $bounds-check (local.get $i))
+    ///                     (call $u8-native-store (i64.add (call $get-buf-ptr) (local.get $i))
+    ///                                            (local.get $value))
+    ///                 )
+    ///
+    ///                 ;; A safe function to get the length of the `StoreData` buffer.
+    ///                 (func (export "len") (result i64)
+    ///                     (call $get-buf-len)
+    ///                 )
+    ///             )
+    ///
+    ///             ;; Lower the imported intrinsics from component functions to core functions.
+    ///             (core func $store-data-address' (canon lower (func $intrinsics "store-data-address")))
+    ///             (core func $u64-native-load' (canon lower (func $intrinsics "u64-native-load")))
+    ///             (core func $u8-native-load' (canon lower (func $intrinsics "u8-native-load")))
+    ///             (core func $u8-native-store' (canon lower (func $intrinsics "u8-native-store")))
+    ///
+    ///             ;; Instantiate our safe API implementation, passing in the lowered unsafe
+    ///             ;; intrinsics as its imports.
+    ///             (core instance $instance
+    ///                 (instantiate $safe-api-impl
+    ///                     (with "" (instance
+    ///                         (export "store-data-address" (func $store-data-address'))
+    ///                         (export "u64-native-load" (func $u64-native-load'))
+    ///                         (export "u8-native-load" (func $u8-native-load'))
+    ///                         (export "u8-native-store" (func $u8-native-store'))
+    ///                     ))
+    ///                 )
+    ///             )
+    ///
+    ///             ;; Lift the safe API's exports from core functions to component functions and
+    ///             ;; export them.
+    ///             (func (export "get") (param "i" u64) (result u8)
+    ///                 (canon lift (core func $instance "get"))
+    ///             )
+    ///             (func (export "set") (param "i" u64) (param "value" u8)
+    ///                 (canon lift (core func $instance "set"))
+    ///             )
+    ///             (func (export "len") (result u64)
+    ///                 (canon lift (core func $instance "len"))
+    ///             )
+    ///         )
+    ///
+    ///         ;; A component that uses that safe API to increment each byte in the
+    ///         ;; `StoreData` buffer.
+    ///         (component $main
+    ///             ;; Import the safe API.
+    ///             (import "safe-api"
+    ///                 (instance $safe-api
+    ///                     (export "get" (func (param "i" u64) (result u8)))
+    ///                     (export "set" (func (param "i" u64) (param "value" u8)))
+    ///                     (export "len" (func (result u64)))
+    ///                 )
+    ///             )
+    ///
+    ///             ;; Define this component's core module implementation.
+    ///             (core module $main-impl
+    ///                 (import "" "get" (func $get (param i64) (result i32)))
+    ///                 (import "" "set" (func $set (param i64 i32)))
+    ///                 (import "" "len" (func $len (result i64)))
+    ///
+    ///                 (func (export "main")
+    ///                     (local $i i64)
+    ///                     (local $n i64)
+    ///
+    ///                     (local.set $i (i64.const 0))
+    ///                     (local.set $n (call $len))
+    ///
+    ///                     (loop $loop
+    ///                         ;; When we have iterated over every byte in the
+    ///                         ;; buffer, exit.
+    ///                         (if (i64.ge_u (local.get $i) (local.get $n))
+    ///                             (then (return)))
+    ///
+    ///                         ;; Increment the `i`th byte in the buffer.
+    ///                         (call $set (local.get $i)
+    ///                                    (i32.add (call $get (local.get $i))
+    ///                                             (i32.const 1)))
+    ///
+    ///                         ;; Increment `i` and continue to the next iteration
+    ///                         ;; of the loop.
+    ///                         (local.set $i (i64.add (local.get $i) (i64.const 1)))
+    ///                         (br $loop)
+    ///                     )
+    ///                 )
+    ///             )
+    ///
+    ///             ;; Lower the imported safe APIs from component functions to core functions.
+    ///             (core func $get' (canon lower (func $safe-api "get")))
+    ///             (core func $set' (canon lower (func $safe-api "set")))
+    ///             (core func $len' (canon lower (func $safe-api "len")))
+    ///
+    ///             ;; Instantiate our module, providing the lowered safe APIs as imports.
+    ///             (core instance $instance
+    ///                 (instantiate $main-impl
+    ///                     (with "" (instance
+    ///                         (export "get" (func $get'))
+    ///                         (export "set" (func $set'))
+    ///                         (export "len" (func $len'))
+    ///                     ))
+    ///                 )
+    ///             )
+    ///
+    ///             ;; Lift implementation's `main` from a core function to a component function
+    ///             ;; and export it.
+    ///             (func (export "main")
+    ///                 (canon lift (core func $instance "main"))
+    ///             )
+    ///         )
+    ///
+    ///         ;; Instantiate our safe API component and our main component that consumes
+    ///         ;; it, passing the unsafe intrinsics into the safe API, and the safe API
+    ///         ;; into the main component.
+    ///         (instance $safe-api-instance
+    ///             (instantiate $safe-api (with "unsafe-intrinsics" (instance $intrinsics))))
+    ///         (instance $main-instance
+    ///             (instantiate $main (with "safe-api" (instance $safe-api-instance))))
+    ///
+    ///         ;; Finally, re-export the `main` function!
+    ///         (export "main" (func $main-instance "main"))
     ///     )
-    /// "#.as_bytes())?;
+    /// "#.as_bytes(), None)?;
     ///
+    /// // Finish the builder and compile the component.
     /// let component = builder.compile_component()?;
     ///
-    /// todo!("FITZGEN")
+    /// // Create a new `Store<StoreData>`, wrapping a buffer of the given elements.
+    /// let mut store = Store::new(&engine, StoreData::new([0, 10, 20, 30, 40, 50]));
+    ///
+    /// // Instantiate our component into the store.
+    /// let instance = linker.instantiate(&mut store, &component)?;
+    ///
+    /// // Get the instance's exported `main` function and call it.
+    /// instance
+    ///     .get_typed_func::<(), ()>(&mut store, "main")?
+    ///     .call(&mut store, ())?;
+    ///
+    /// // Our `StoreData`'s buffer had each element incremented directly from Wasm!
+    /// assert_eq!(store.data().buf(), &[1, 11, 21, 31, 41, 51]);
     /// # Ok(())
     /// # }
     /// ```
