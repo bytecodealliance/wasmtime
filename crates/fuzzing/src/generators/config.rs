@@ -845,7 +845,15 @@ impl RegallocAlgorithm {
     fn to_wasmtime(&self) -> wasmtime::RegallocAlgorithm {
         match self {
             RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
-            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::SinglePass,
+            RegallocAlgorithm::SinglePass => {
+                // FIXME(#11850)
+                const SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME: bool = true;
+                if SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME {
+                    wasmtime::RegallocAlgorithm::Backtracking
+                } else {
+                    wasmtime::RegallocAlgorithm::SinglePass
+                }
+            }
         }
     }
 }
