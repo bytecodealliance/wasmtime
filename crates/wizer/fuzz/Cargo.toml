@@ -18,7 +18,7 @@ log = { workspace = true }
 wasm-smith = { workspace = true }
 wasmprinter = { workspace = true }
 wasmtime = { workspace = true }
-wasmtime-wizer = { workspace = true }
+wasmtime-wizer = { workspace = true, features = ["wasmtime"] }
 
 [[bin]]
 name = "same_result"
