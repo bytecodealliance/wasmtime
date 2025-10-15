@@ -2684,3 +2684,46 @@ fn wizer_no_imports_by_default() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn wizer_components() -> Result<()> {
+    let result = wizen(
+        &[],
+        r#"
+(component
+  (core module $a
+    (global (mut i32) (i32.const 0))
+    (func (export "init")
+        i32.const 100
+        global.set 0)
+  )
+  (core instance $a (instantiate $a))
+  (func (export "component-init") (canon lift (core func $a "init")))
+)
+        "#,
+    )?;
+    assert!(result.status.success());
+
+    let component_with_wasi = r#"
+(component
+  (import "wasi:cli/environment@0.2.0" (instance
+    (export "get-arguments" (func (result (list string))))
+  ))
+  (core module $a
+    (global (mut i32) (i32.const 0))
+    (func (export "init")
+        i32.const 100
+        global.set 0)
+  )
+  (core instance $a (instantiate $a))
+  (func (export "component-init") (canon lift (core func $a "init")))
+)
+        "#;
+
+    let result = wizen(&[], component_with_wasi)?;
+    assert!(!result.status.success());
+    let result = wizen(&["-Scli"], component_with_wasi)?;
+    assert!(result.status.success());
+
+    Ok(())
+}

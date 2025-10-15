@@ -1,0 +1,103 @@
+use crate::Wizer;
+use anyhow::bail;
+
+mod info;
+mod instrument;
+mod parse;
+mod rewrite;
+mod snapshot;
+#[cfg(feature = "wasmtime")]
+mod wasmtime;
+#[cfg(feature = "wasmtime")]
+pub use wasmtime::*;
+
+const WIZER_INSTANCE: &str = "wasmtime:wizer/access";
+
+pub use self::info::ComponentContext;
+
+impl Wizer {
+    /// Returns the initialization function that will be run for wizer.
+    pub fn component_init_func(&self) -> &str {
+        self.init_func.as_deref().unwrap_or("component-init")
+    }
+
+    /// Same as [`Wizer::instrument`], except for components.
+    pub fn instrument_component<'a>(
+        &self,
+        wasm: &'a [u8],
+    ) -> anyhow::Result<(ComponentContext<'a>, Vec<u8>)> {
+        // Make sure we're given valid Wasm from the get go.
+        self.wasm_validate(&wasm)?;
+
+        let mut cx = parse::parse(wasm)?;
+        let instrumented_wasm = instrument::instrument(&mut cx)?;
+
+        if cfg!(debug_assertions) {
+            if let Err(error) = self.wasm_validate(&instrumented_wasm) {
+                #[cfg(feature = "wasmprinter")]
+                let wat = wasmprinter::print_bytes(&instrumented_wasm)
+                    .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
+                #[cfg(not(feature = "wasmprinter"))]
+                let wat = "`wasmprinter` cargo feature is not enabled".to_string();
+                panic!("instrumented Wasm is not valid: {error:?}\n\nWAT:\n{wat}");
+            }
+        }
+
+        Ok((cx, instrumented_wasm))
+    }
+
+    /// Same as [`Wizer::snapshot`], except for components.
+    pub async fn snapshot_component(
+        &self,
+        mut cx: ComponentContext<'_>,
+        instance: &mut impl ComponentInstanceState,
+    ) -> anyhow::Result<Vec<u8>> {
+        if !self.func_renames.is_empty() {
+            bail!("components do not support renaming functions");
+        }
+
+        let snapshot = snapshot::snapshot(&cx, instance).await;
+        let rewritten_wasm = self.rewrite_component(&mut cx, &snapshot);
+
+        if cfg!(debug_assertions) {
+            if let Err(error) = self.wasm_validate(&rewritten_wasm) {
+                #[cfg(feature = "wasmprinter")]
+                let wat = wasmprinter::print_bytes(&rewritten_wasm)
+                    .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
+                #[cfg(not(feature = "wasmprinter"))]
+                let wat = "`wasmprinter` cargo feature is not enabled".to_string();
+                panic!("rewritten Wasm is not valid: {error:?}\n\nWAT:\n{wat}");
+            }
+        }
+
+        Ok(rewritten_wasm)
+    }
+}
+
+/// Trait representing the ability to invoke functions on a component to learn
+/// about its internal state.
+pub trait ComponentInstanceState: Send {
+    /// Looks up the exported `instance` which has `func` as an export, calls
+    /// it, and returns the `list<u8>` return type.
+    fn call_func_ret_list_u8(
+        &mut self,
+        instance: &str,
+        func: &str,
+    ) -> impl Future<Output = Vec<u8>> + Send;
+
+    /// Same as [`Self::call_func_ret_list_u8`], but for the `s32` WIT type.
+    fn call_func_ret_s32(&mut self, instance: &str, func: &str)
+    -> impl Future<Output = i32> + Send;
+
+    /// Same as [`Self::call_func_ret_list_u8`], but for the `s64` WIT type.
+    fn call_func_ret_s64(&mut self, instance: &str, func: &str)
+    -> impl Future<Output = i64> + Send;
+
+    /// Same as [`Self::call_func_ret_list_u8`], but for the `f32` WIT type.
+    fn call_func_ret_f32(&mut self, instance: &str, func: &str)
+    -> impl Future<Output = u32> + Send;
+
+    /// Same as [`Self::call_func_ret_list_u8`], but for the `f64` WIT type.
+    fn call_func_ret_f64(&mut self, instance: &str, func: &str)
+    -> impl Future<Output = u64> + Send;
+}

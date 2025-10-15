@@ -3,6 +3,7 @@
 //! See the [`Wizer`] struct for details.
 
 #![deny(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod info;
 mod instrument;
@@ -14,6 +15,10 @@ mod snapshot;
 mod wasmtime;
 #[cfg(feature = "wasmtime")]
 pub use wasmtime::*;
+#[cfg(feature = "component-model")]
+mod component;
+#[cfg(feature = "component-model")]
+pub use component::*;
 
 pub use crate::info::ModuleContext;
 pub use crate::snapshot::SnapshotVal;
@@ -48,11 +53,8 @@ const DEFAULT_KEEP_INIT_FUNC: bool = false;
 pub struct Wizer {
     /// The Wasm export name of the function that should be executed to
     /// initialize the Wasm module.
-    #[cfg_attr(
-        feature = "clap",
-        arg(short = 'f', long, default_value = "wizer.initialize")
-    )]
-    init_func: String,
+    #[cfg_attr(feature = "clap", arg(short = 'f', long))]
+    init_func: Option<String>,
 
     /// Any function renamings to perform.
     ///
@@ -101,6 +103,7 @@ fn parse_rename(s: &str) -> anyhow::Result<(String, String)> {
     Ok((parts[0].into(), parts[1].into()))
 }
 
+#[derive(Default)]
 struct FuncRenames {
     /// For a given export name that we encounter in the original module, a map
     /// to a new name, if any, to emit in the output module.
@@ -139,7 +142,7 @@ impl Wizer {
     /// Construct a new `Wizer` builder.
     pub fn new() -> Self {
         Wizer {
-            init_func: "wizer.initialize".into(),
+            init_func: None,
             func_renames: vec![],
             keep_init_func: None,
         }
@@ -149,13 +152,13 @@ impl Wizer {
     ///
     /// Defaults to `"wizer.initialize"`.
     pub fn init_func(&mut self, init_func: impl Into<String>) -> &mut Self {
-        self.init_func = init_func.into();
+        self.init_func = Some(init_func.into());
         self
     }
 
     /// Returns the initialization function that will be run for wizer.
-    pub fn get_init_func(&self) -> &str {
-        &self.init_func
+    pub fn core_init_func(&self) -> &str {
+        self.init_func.as_deref().unwrap_or("wizer.initialize")
     }
 
     /// Add a function rename to perform.
@@ -226,15 +229,15 @@ impl Wizer {
     ///
     /// This returns a new WebAssembly binary which has all state
     /// pre-initialized.
-    pub fn snapshot(
+    pub async fn snapshot(
         &self,
         mut cx: ModuleContext<'_>,
-        instance: &mut dyn InstanceState,
+        instance: &mut impl InstanceState,
     ) -> anyhow::Result<Vec<u8>> {
         // Parse rename spec.
         let renames = FuncRenames::parse(&self.func_renames)?;
 
-        let snapshot = snapshot::snapshot(&cx, instance);
+        let snapshot = snapshot::snapshot(&cx, instance).await;
         let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames);
 
         if cfg!(debug_assertions) {
@@ -377,7 +380,7 @@ pub trait InstanceState {
     ///
     /// This function panics if `name` isn't an exported global or if the type
     /// of the global doesn't fit in `SnapshotVal`.
-    fn global_get(&mut self, name: &str) -> SnapshotVal;
+    fn global_get(&mut self, name: &str) -> impl Future<Output = SnapshotVal> + Send;
 
     /// Loads the contents of the memory specified by `name`, returning the
     /// entier contents as a `Vec<u8>`.
@@ -385,5 +388,5 @@ pub trait InstanceState {
     /// # Panics
     ///
     /// This function panics if `name` isn't an exported memory.
-    fn memory_contents(&mut self, name: &str) -> Vec<u8>;
+    fn memory_contents(&mut self, name: &str) -> impl Future<Output = Vec<u8>> + Send;
 }

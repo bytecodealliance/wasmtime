@@ -29,11 +29,24 @@ pub struct WizerCommand {
     output: Option<PathBuf>,
 }
 
+enum WizerInfo<'a> {
+    Core(wasmtime_wizer::ModuleContext<'a>),
+    #[cfg(feature = "component-model")]
+    Component(wasmtime_wizer::ComponentContext<'a>),
+}
+
 impl WizerCommand {
     /// Runs the command.
     pub fn execute(mut self) -> Result<()> {
         self.run.common.init_logging()?;
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_time()
+            .enable_io()
+            .build()?;
+        runtime.block_on(self.execute_async())
+    }
 
+    async fn execute_async(mut self) -> Result<()> {
         // By default use deterministic relaxed simd operations to guarantee
         // that if relaxed simd operations are used in a module that they always
         // produce the same result.
@@ -60,41 +73,85 @@ impl WizerCommand {
 
         #[cfg(feature = "wat")]
         let wasm = wat::parse_bytes(&wasm)?;
+        let is_component = wasmparser::Parser::is_component(&wasm);
 
-        // Instrument the input wasm with wizer.
-        let (cx, instrumented_wasm) = self.wizer.instrument(&wasm)?;
-
-        // Execute a rough equivalent of
-        // `wasmtime run --invoke <..> <instrumented-wasm>`
         let mut run = RunCommand {
             run: self.run,
             argv0: None,
-            invoke: Some(self.wizer.get_init_func().to_string()),
+            invoke: Some(if is_component {
+                #[cfg(feature = "component-model")]
+                {
+                    format!("{}()", self.wizer.component_init_func())
+                }
+
+                #[cfg(not(feature = "component-model"))]
+                anyhow::bail!("support for components disabled at compile time");
+            } else {
+                self.wizer.core_init_func().to_string()
+            }),
             module_and_args: vec![self.input.clone().into()],
             preloads: self.preloads.clone(),
         };
         let engine = run.new_engine()?;
-        let main = RunTarget::Core(Module::new(&engine, &instrumented_wasm)?);
-        let (mut store, mut linker) = run.new_store_and_linker(&engine, &main)?;
-        #[allow(
-            irrefutable_let_patterns,
-            reason = "infallible when components are disabled"
-        )]
-        let CliInstance::Core(instance) =
-            run.instantiate_and_run(&engine, &mut linker, &main, &mut store)?
-        else {
-            unreachable!()
+
+        // Instrument the input wasm with wizer.
+        let (cx, main) = if is_component {
+            #[cfg(feature = "component-model")]
+            {
+                let (cx, wasm) = self.wizer.instrument_component(&wasm)?;
+                (
+                    WizerInfo::Component(cx),
+                    RunTarget::Component(wasmtime::component::Component::new(&engine, &wasm)?),
+                )
+            }
+            #[cfg(not(feature = "component-model"))]
+            unreachable!();
+        } else {
+            let (cx, wasm) = self.wizer.instrument(&wasm)?;
+            (
+                WizerInfo::Core(cx),
+                RunTarget::Core(Module::new(&engine, &wasm)?),
+            )
         };
+
+        // Execute a rough equivalent of
+        // `wasmtime run --invoke <..> <instrumented-wasm>`
+        let (mut store, mut linker) = run.new_store_and_linker(&engine, &main)?;
+        let instance = run
+            .instantiate_and_run(&engine, &mut linker, &main, &mut store)
+            .await?;
 
         // Use our state to capture a snapshot with Wizer and then serialize
         // that.
-        let final_wasm = self.wizer.snapshot(
-            cx,
-            &mut wasmtime_wizer::WasmtimeWizer {
-                store: &mut store,
-                instance,
-            },
-        )?;
+        let final_wasm = match (cx, instance) {
+            (WizerInfo::Core(cx), CliInstance::Core(instance)) => {
+                self.wizer
+                    .snapshot(
+                        cx,
+                        &mut wasmtime_wizer::WasmtimeWizer {
+                            store: &mut store,
+                            instance,
+                        },
+                    )
+                    .await?
+            }
+
+            #[cfg(feature = "component-model")]
+            (WizerInfo::Component(cx), CliInstance::Component(instance)) => {
+                self.wizer
+                    .snapshot_component(
+                        cx,
+                        &mut wasmtime_wizer::WasmtimeWizerComponent {
+                            store: &mut store,
+                            instance,
+                        },
+                    )
+                    .await?
+            }
+
+            #[cfg(feature = "component-model")]
+            (WizerInfo::Core(_) | WizerInfo::Component(_), _) => unreachable!(),
+        };
 
         match &self.output {
             Some(file) => fs::write(file, &final_wasm).context("failed to write output file")?,

@@ -1,14 +1,21 @@
 use crate::info::ModuleContext;
-use anyhow::Context;
-use wasmparser::Parser;
+use anyhow::{Context, bail};
+use wasmparser::{Encoding, Parser};
 
 /// Parse the given Wasm bytes into a `ModuleInfo` tree.
 pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>> {
+    parse_with(full_wasm, &mut Parser::new(0).parse_all(full_wasm))
+}
+
+pub(crate) fn parse_with<'a>(
+    full_wasm: &'a [u8],
+    payloads: &mut impl Iterator<Item = wasmparser::Result<wasmparser::Payload<'a>>>,
+) -> anyhow::Result<ModuleContext<'a>> {
     log::debug!("Parsing the input Wasm");
 
     let mut module = ModuleContext::default();
 
-    for payload in Parser::new(0).parse_all(full_wasm) {
+    while let Some(payload) = payloads.next() {
         use wasmparser::Payload::*;
 
         let payload = payload.context("failed to parse Wasm")?;
@@ -18,12 +25,19 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>
         }
 
         match payload {
+            Version {
+                encoding: Encoding::Component,
+                ..
+            } => {
+                bail!("expected a core module, found a component");
+            }
             ImportSection(imports) => import_section(&mut module, imports)?,
             FunctionSection(funcs) => function_section(&mut module, funcs)?,
             TableSection(tables) => table_section(&mut module, tables)?,
             MemorySection(mems) => memory_section(&mut module, mems)?,
             GlobalSection(globals) => global_section(&mut module, globals)?,
             ExportSection(exports) => export_section(&mut module, exports)?,
+            End { .. } => break,
             _ => {}
         }
     }

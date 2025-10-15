@@ -32,7 +32,7 @@ clap = { workspace = true, optional = true }
 wasm-encoder = { workspace = true, features = ['wasmparser'] }
 wasmparser = { workspace = true, features = ['validate', 'features'] }
 wasmprinter = { workspace = true, optional = true }
-wasmtime = { workspace = true, optional = true, features = ['std', 'runtime', 'cranelift', 'cache', 'threads', 'gc', 'gc-null'] }
+wasmtime = { workspace = true, optional = true, features = ['std', 'runtime', 'cranelift', 'cache', 'threads', 'gc', 'gc-null', 'async'] }
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -41,6 +41,7 @@ wasmprinter = { workspace = true }
 wat = { workspace = true }
 wasmtime = { workspace = true, features = ['default'] }
 wasmtime-wasi = { workspace = true, features = ["p1"] }
+tokio = { workspace = true, features = ['macros'] }
 
 [features]
 # Enable this dependency to get messages with WAT disassemblies when certain
@@ -49,6 +50,9 @@ wasmprinter = ['dep:wasmprinter']
 
 # Enables default runtime implementations based on the `wasmtime` crate.
 wasmtime = ['dep:wasmtime']
+
+# Enable support for wizening components.
+component-model = ['wasmtime?/component-model']
 
 [[test]]
 name = "all"

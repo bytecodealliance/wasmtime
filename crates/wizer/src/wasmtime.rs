@@ -5,11 +5,11 @@ use wasmtime::{Extern, Instance, Module, Result, Store, Val};
 impl Wizer {
     /// Initialize the given Wasm, snapshot it, and return the serialized
     /// snapshot as a new, pre-initialized Wasm module.
-    pub fn run<T>(
+    pub async fn run<T: Send>(
         &self,
         store: &mut Store<T>,
         wasm: &[u8],
-        instantiate: impl FnOnce(&mut Store<T>, &Module) -> Result<wasmtime::Instance>,
+        instantiate: impl AsyncFnOnce(&mut Store<T>, &Module) -> Result<wasmtime::Instance>,
     ) -> anyhow::Result<Vec<u8>> {
         let (cx, instrumented_wasm) = self.instrument(wasm)?;
 
@@ -18,38 +18,39 @@ impl Wizer {
             .context("failed to compile the Wasm module")?;
         self.validate_init_func(&module)?;
 
-        let instance = instantiate(store, &module)?;
-        self.initialize(store, &instance)?;
+        let instance = instantiate(store, &module).await?;
+        self.initialize(store, &instance).await?;
         self.snapshot(cx, &mut WasmtimeWizer { store, instance })
+            .await
     }
 
     /// Check that the module exports an initialization function, and that the
     /// function has the correct type.
     fn validate_init_func(&self, module: &wasmtime::Module) -> anyhow::Result<()> {
         log::debug!("Validating the exported initialization function");
-        match module.get_export(&self.init_func) {
+        match module.get_export(self.core_init_func()) {
             Some(wasmtime::ExternType::Func(func_ty)) => {
                 if func_ty.params().len() != 0 || func_ty.results().len() != 0 {
                     anyhow::bail!(
                         "the Wasm module's `{}` function export does not have type `[] -> []`",
-                        &self.init_func
+                        self.core_init_func()
                     );
                 }
             }
             Some(_) => anyhow::bail!(
                 "the Wasm module's `{}` export is not a function",
-                &self.init_func
+                self.core_init_func()
             ),
             None => anyhow::bail!(
                 "the Wasm module does not have a `{}` export",
-                &self.init_func
+                self.core_init_func()
             ),
         }
         Ok(())
     }
 
     /// Instantiate the module and call its initialization function.
-    fn initialize<T>(
+    async fn initialize<T: Send>(
         &self,
         store: &mut Store<T>,
         instance: &wasmtime::Instance,
@@ -58,11 +59,12 @@ impl Wizer {
 
         if let Some(export) = instance.get_export(&mut *store, "_initialize") {
             if let Extern::Func(func) = export {
-                func.typed::<(), ()>(&store)
-                    .and_then(|f| f.call(&mut *store, ()))
+                func.typed::<(), ()>(&store)?
+                    .call_async(&mut *store, ())
+                    .await
                     .context("calling the Reactor initialization function")?;
 
-                if self.init_func == "_initialize" {
+                if self.core_init_func() == "_initialize" {
                     // Don't run `_initialize` twice if the it was explicitly
                     // requested as the init function.
                     return Ok(());
@@ -71,11 +73,12 @@ impl Wizer {
         }
 
         let init_func = instance
-            .get_typed_func::<(), ()>(&mut *store, &self.init_func)
+            .get_typed_func::<(), ()>(&mut *store, self.core_init_func())
             .expect("checked by `validate_init_func`");
         init_func
-            .call(&mut *store, ())
-            .with_context(|| format!("the `{}` function trapped", self.init_func))?;
+            .call_async(&mut *store, ())
+            .await
+            .with_context(|| format!("the `{}` function trapped", self.core_init_func()))?;
 
         Ok(())
     }
@@ -89,8 +92,8 @@ pub struct WasmtimeWizer<'a, T: 'static> {
     pub instance: Instance,
 }
 
-impl<T> InstanceState for WasmtimeWizer<'_, T> {
-    fn global_get(&mut self, name: &str) -> SnapshotVal {
+impl<T: Send> InstanceState for WasmtimeWizer<'_, T> {
+    async fn global_get(&mut self, name: &str) -> SnapshotVal {
         let global = self.instance.get_global(&mut *self.store, name).unwrap();
         match global.get(&mut *self.store) {
             Val::I32(x) => SnapshotVal::I32(x),
@@ -102,7 +105,7 @@ impl<T> InstanceState for WasmtimeWizer<'_, T> {
         }
     }
 
-    fn memory_contents(&mut self, name: &str) -> Vec<u8> {
+    async fn memory_contents(&mut self, name: &str) -> Vec<u8> {
         let memory = self.instance.get_memory(&mut *self.store, name).unwrap();
         memory.data(&self.store).to_vec()
     }
