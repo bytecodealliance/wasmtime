@@ -318,7 +318,7 @@ where
                         if futures.is_empty() {
                             future::pending().await
                         } else {
-                            futures.next().await
+                            futures.next().await.unwrap()
                         }
                     });
                     let mut next_task = pin!(tokio::time::timeout(
@@ -355,14 +355,14 @@ where
                                 Poll::Pending
                             }
                         }
-                        Poll::Ready(Some(Ok(start_time))) => {
+                        Poll::Ready(Ok(start_time)) => {
                             // Task completed; carry on!
                             if let Some(start_time) = start_time {
                                 task_start_times.lock().unwrap().remove(start_time);
                             }
                             Poll::Ready(None)
                         }
-                        Poll::Ready(Some(Err(_))) => {
+                        Poll::Ready(Err(_)) => {
                             // Task timed out; stop accepting new tasks, but
                             // continue polling until any other, in-progress
                             // tasks until they have either finished or timed
@@ -381,7 +381,6 @@ where
                             reuse_count = max_instance_reuse_count;
                             Poll::Ready(None)
                         }
-                        Poll::Ready(None) => unreachable!(),
                     })
                     .await
                 };
