@@ -863,3 +863,61 @@ fn relaxed_simd_deterministic() -> Result<()> {
     // semantics. We might get 0x4b000002 if we don't.
     wizen_and_run_wasm(&[], 0x4b800003, &wasm, wizer)
 }
+
+#[test]
+fn reject_mutable_globals_of_reference_types() -> Result<()> {
+    // Non-mutable globals are fine
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (global funcref (ref.null func))
+  (func (export "wizer.initialize"))
+  (func (export "run") (result i32) i32.const 42)
+)
+        "#,
+    )?;
+
+    // Mutable globals are not fine
+    fails_wizening(
+        r#"
+(module
+  (global (mut funcref) (ref.null func))
+  (func (export "wizer.initialize"))
+  (func (export "run") (result i32) i32.const 42)
+)
+        "#,
+    )?;
+    Ok(())
+}
+
+#[test]
+fn mixture_of_globals() -> Result<()> {
+    let _ = env_logger::try_init();
+    let wasm = wat_to_wasm(
+        r#"
+(module
+  (global $g1 (mut i32) i32.const 1)
+  (global $g2 i32 i32.const 2)
+  (global $g3 (mut i32) i32.const 3)
+  (global $g4 i32 i32.const 4)
+  (func (export "wizer.initialize")
+    (global.set $g1 (i32.const 42))
+    (global.set $g3 (i32.const 43))
+  )
+  (func (export "run") (result i32)
+    global.get $g1
+    global.get $g2
+    global.get $g3
+    global.get $g4
+    i32.add
+    i32.add
+    i32.add
+  )
+)
+        "#,
+    )?;
+    let wizer = get_wizer();
+    wizen_and_run_wasm(&[], 42 + 2 + 43 + 4, &wasm, wizer)
+}

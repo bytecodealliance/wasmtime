@@ -52,7 +52,9 @@ pub struct ModuleContext<'a> {
     defined_memories_index: Option<u32>,
 
     /// Export names of defined globals injected by the instrumentation pass.
-    pub(crate) defined_global_exports: Option<Vec<String>>,
+    ///
+    /// Note that this only tracks defined mutable globals, not all globals.
+    pub(crate) defined_global_exports: Option<Vec<(u32, String)>>,
 
     /// Export names of defined memories injected by the instrumentation pass.
     pub(crate) defined_memory_exports: Option<Vec<String>>,

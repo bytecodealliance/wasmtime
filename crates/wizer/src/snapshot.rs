@@ -12,7 +12,9 @@ const MAX_DATA_SEGMENTS: usize = 10_000;
 /// A "snapshot" of Wasm state from its default value after having been initialized.
 pub struct Snapshot {
     /// Maps global index to its initialized value.
-    pub globals: Vec<SnapshotVal>,
+    ///
+    /// Note that this only tracks defined mutable globals, not all globals.
+    pub globals: Vec<(u32, SnapshotVal)>,
 
     /// A new minimum size for each memory (in units of pages).
     pub memory_mins: Vec<u64>,
@@ -100,7 +102,10 @@ pub fn snapshot(module: &ModuleContext<'_>, ctx: &mut dyn InstanceState) -> Snap
 }
 
 /// Get the initialized values of all globals.
-fn snapshot_globals(module: &ModuleContext<'_>, ctx: &mut dyn InstanceState) -> Vec<SnapshotVal> {
+fn snapshot_globals(
+    module: &ModuleContext<'_>,
+    ctx: &mut dyn InstanceState,
+) -> Vec<(u32, SnapshotVal)> {
     log::debug!("Snapshotting global values");
 
     module
@@ -108,7 +113,7 @@ fn snapshot_globals(module: &ModuleContext<'_>, ctx: &mut dyn InstanceState) -> 
         .as_ref()
         .unwrap()
         .iter()
-        .map(|name| ctx.global_get(&name))
+        .map(|(i, name)| (*i, ctx.global_get(&name)))
         .collect()
 }
 
