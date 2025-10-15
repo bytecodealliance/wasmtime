@@ -93,7 +93,7 @@ pub struct Wizer {
 }
 
 #[cfg(feature = "clap")]
-fn parse_rename(s: &str) -> Result<(String, String)> {
+fn parse_rename(s: &str) -> anyhow::Result<(String, String)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
     if parts.len() != 2 {
         anyhow::bail!("must contain exactly one equals character ('=')");
