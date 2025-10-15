@@ -45,29 +45,65 @@ pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* x
     );
 }
 
-#[unsafe(naked)]
-pub(crate) unsafe extern "C" fn wasmtime_fiber_init(
-    top_of_stack: *mut u8,                        // x0
-    entry_point: extern "C" fn(*mut u8, *mut u8), // x1
-    entry_arg0: *mut u8,                          // x2
+pub(crate) unsafe fn wasmtime_fiber_init(
+    top_of_stack: *mut u8,
+    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_arg0: *mut u8,
 ) {
-    naked_asm!(
-        "
-        larl %r1, {}
-        stg %r1, -48(%r2)  // wasmtime_fiber_start - restored into %r14
-        stg %r2, -112(%r2) // top_of_stack - restored into %r6
-        stg %r3, -104(%r2) // entry_point - restored into %r7
-        stg %r4, -96(%r2)  // entry_arg0 - restored into %r8
-        aghi %r2, -160     // 160 bytes register save area
-        stg %r2, 120(%r2)  // bottom of register save area - restored into %r15
+    #[repr(C)]
+    #[derive(Default)]
+    struct InitialStack {
+        f8: *mut u8,
+        f9: *mut u8,
+        f10: *mut u8,
+        f11: *mut u8,
+        f12: *mut u8,
+        f13: *mut u8,
+        f14: *mut u8,
+        f15: *mut u8,
 
-        // `wasmtime_fiber_switch` has a 64 byte stack.
-        aghi %r2, -64
-        stg %r2, 208(%r2)
-        br %r14
-        ",
-        sym wasmtime_fiber_start,
-    );
+        back_chain: *mut u8,
+        compiler_reserved: *mut u8,
+
+        r2: *mut u8,
+        r3: *mut u8,
+        r4: *mut u8,
+        r5: *mut u8,
+
+        r6: *mut u8,
+        r7: *mut u8,
+        r8: *mut u8,
+        r9: *mut u8,
+        r10: *mut u8,
+        r11: *mut u8,
+        r12: *mut u8,
+        r13: *mut u8,
+        r14: *mut u8,
+        r15: *mut u8,
+
+        f0: *mut u8,
+        f2: *mut u8,
+        f4: *mut u8,
+        f6: *mut u8,
+
+        // unix.rs reserved space
+        last_sp: *mut u8,
+        run_result: *mut u8,
+    }
+
+    unsafe {
+        let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
+        initial_stack.write(InitialStack {
+            r15: (&raw mut (*initial_stack).back_chain).cast(),
+            r14: wasmtime_fiber_start as *mut u8,
+            r6: top_of_stack,
+            r7: entry_point as *mut u8,
+            r8: entry_arg0,
+
+            last_sp: initial_stack.cast(),
+            ..InitialStack::default()
+        });
+    }
 }
 
 #[unsafe(naked)]
@@ -82,7 +118,7 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
         // match the frame layout in `wasmtime_fiber_switch`.
         .cfi_escape 0x0f,    /* DW_CFA_def_cfa_expression */ \
             7,               /* the byte length of this expression */ \
-            0x7f, 0x90, 0x1, /* DW_OP_breg15 0x90 */ \
+            0x7f, 0xa0, 0x1, /* DW_OP_breg15 0x90 */ \
             0x06,            /* DW_OP_deref */ \
             0x23, 0xe0, 0x1  /* DW_OP_plus_uconst 0xe0 */
 

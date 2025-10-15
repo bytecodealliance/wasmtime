@@ -29,26 +29,40 @@ pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* r
     );
 }
 
-#[unsafe(naked)]
-pub(crate) unsafe extern "C" fn wasmtime_fiber_init(
-    top_of_stack: *mut u8,                        // r0
-    entry_point: extern "C" fn(*mut u8, *mut u8), // r1
-    entry_arg0: *mut u8,                          // r2
+pub(crate) unsafe fn wasmtime_fiber_init(
+    top_of_stack: *mut u8,
+    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_arg0: *mut u8,
 ) {
-    naked_asm!(
-        "
-        adr r3, {start}
-        str r3, [r0, #-0x0c] // => lr
-        str r0, [r0, #-0x10] // => r11
-        str r1, [r0, #-0x14] // => r10
-        str r2, [r0, #-0x18] // => r9
+    #[repr(C)]
+    #[derive(Default)]
+    struct InitialStack {
+        r4: *mut u8,
+        r5: *mut u8,
+        r6: *mut u8,
+        r7: *mut u8,
+        r8: *mut u8,
+        r9: *mut u8,
+        r10: *mut u8,
+        r11: *mut u8,
+        lr: *mut u8,
 
-        add r3, r0, #-0x2c
-        str r3, [r0, #-0x08]
-        bx lr
-        ",
-        start = sym wasmtime_fiber_start,
-    );
+        // unix.rs reserved space
+        last_sp: *mut u8,
+        run_result: *mut u8,
+    }
+
+    unsafe {
+        let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
+        initial_stack.write(InitialStack {
+            r9: entry_arg0,
+            r10: entry_point as *mut u8,
+            r11: top_of_stack,
+            lr: wasmtime_fiber_start as *mut u8,
+            last_sp: initial_stack.cast(),
+            ..InitialStack::default()
+        });
+    }
 }
 
 #[unsafe(naked)]
