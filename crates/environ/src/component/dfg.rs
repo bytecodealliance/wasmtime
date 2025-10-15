@@ -64,8 +64,11 @@ pub struct ComponentDfg {
     /// Same as `reallocs`, but for post-return.
     pub post_returns: Intern<PostReturnId, CoreDef>,
 
-    /// Same as `reallocs`, but for post-return.
+    /// Same as `reallocs`, but for memories.
     pub memories: Intern<MemoryId, CoreExport<MemoryIndex>>,
+
+    /// Same as `reallocs`, but for tables.
+    pub tables: Intern<TableId, CoreExport<TableIndex>>,
 
     /// Metadata about identified fused adapters.
     ///
@@ -476,6 +479,25 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
         slot: u32,
     },
+    ThreadIndex,
+    ThreadNewIndirect {
+        instance: RuntimeComponentInstanceIndex,
+        start_func_ty_idx: ComponentTypeIndex,
+        start_func_table_id: TableId,
+    },
+    ThreadSwitchTo {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+    },
+    ThreadSuspend {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+    },
+    ThreadResumeLater,
+    ThreadYieldTo {
+        instance: RuntimeComponentInstanceIndex,
+        cancellable: bool,
+    },
 }
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
@@ -823,6 +845,15 @@ impl LinearizeDfg<'_> {
         )
     }
 
+    fn runtime_table(&mut self, table: TableId) -> RuntimeTableIndex {
+        self.intern(
+            table,
+            |me| &mut me.runtime_tables,
+            |me, table| me.core_export(&me.dfg.tables[table]),
+            |index, export| GlobalInitializer::ExtractTable(ExtractTable { index, export }),
+        )
+    }
+
     fn runtime_realloc(&mut self, realloc: ReallocId) -> RuntimeReallocIndex {
         self.intern(
             realloc,
@@ -1117,6 +1148,38 @@ impl LinearizeDfg<'_> {
             Trampoline::ContextSet { instance, slot } => info::Trampoline::ContextSet {
                 instance: *instance,
                 slot: *slot,
+            },
+            Trampoline::ThreadIndex => info::Trampoline::ThreadIndex,
+            Trampoline::ThreadNewIndirect {
+                instance,
+                start_func_ty_idx,
+                start_func_table_id,
+            } => info::Trampoline::ThreadNewIndirect {
+                instance: *instance,
+                start_func_ty_idx: *start_func_ty_idx,
+                start_func_table_idx: self.runtime_table(*start_func_table_id),
+            },
+            Trampoline::ThreadSwitchTo {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadSwitchTo {
+                instance: *instance,
+                cancellable: *cancellable,
+            },
+            Trampoline::ThreadSuspend {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadSuspend {
+                instance: *instance,
+                cancellable: *cancellable,
+            },
+            Trampoline::ThreadResumeLater => info::Trampoline::ThreadResumeLater,
+            Trampoline::ThreadYieldTo {
+                instance,
+                cancellable,
+            } => info::Trampoline::ThreadYieldTo {
+                instance: *instance,
+                cancellable: *cancellable,
             },
         };
         let i1 = self.trampolines.push(*signature);
