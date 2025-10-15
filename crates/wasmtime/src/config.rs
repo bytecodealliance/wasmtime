@@ -3100,6 +3100,12 @@ pub enum RegallocAlgorithm {
     /// cannot foresee constraints or issues that may occur further
     /// ahead in the code, so the code may have more spills and moves as
     /// a result.
+    ///
+    /// > **Note**: This algorithm is not yet production-ready and has
+    /// > historically had known problems. It is not recommended to enable this
+    /// > algorithm for security-sensitive applications and the Wasmtime project
+    /// > does not consider this configuration option for issuing security
+    /// > advisories at this time.
     SinglePass,
 }
 
