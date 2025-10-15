@@ -83,10 +83,13 @@ pub(crate) fn instrument(module: &mut ModuleContext<'_>) -> Vec<u8> {
                 // Now export all of this module's defined globals, memories,
                 // and instantiations under well-known names so we can inspect
                 // them after initialization.
-                for (i, (j, _)) in module.defined_globals().enumerate() {
+                for (i, ty) in module.defined_globals() {
+                    if !ty.mutable {
+                        continue;
+                    }
                     let name = format!("__wizer_global_{i}");
-                    exports.export(&name, wasm_encoder::ExportKind::Global, j);
-                    defined_global_exports.push(name);
+                    exports.export(&name, wasm_encoder::ExportKind::Global, i);
+                    defined_global_exports.push((i, name));
                 }
                 for (i, (j, _)) in module.defined_memories().enumerate() {
                     let name = format!("__wizer_memory_{i}");

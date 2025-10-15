@@ -258,19 +258,8 @@ impl Wizer {
             .validate_all(wasm)
             .context("wasm validation failed")?;
 
-        // Reject bulk memory stuff that manipulates state we don't
-        // snapshot. See the comment inside `wasm_features`.
-        let mut wasm = wasm;
-        let mut parsers = vec![wasmparser::Parser::new(0)];
-        while !parsers.is_empty() {
-            let payload = match parsers.last_mut().unwrap().parse(wasm, true)? {
-                wasmparser::Chunk::NeedMoreData(_) => unreachable!(),
-                wasmparser::Chunk::Parsed { consumed, payload } => {
-                    wasm = &wasm[consumed..];
-                    payload
-                }
-            };
-            match payload {
+        for payload in wasmparser::Parser::new(0).parse_all(wasm) {
+            match payload? {
                 wasmparser::Payload::CodeSectionEntry(code) => {
                     let mut ops = code.get_operators_reader()?;
                     while !ops.eof() {
@@ -321,10 +310,27 @@ impl Wizer {
                         }
                     }
                 }
-                wasmparser::Payload::End(_) => {
-                    parsers.pop();
+                wasmparser::Payload::GlobalSection(globals) => {
+                    for g in globals {
+                        let g = g?.ty;
+                        if !g.mutable {
+                            continue;
+                        }
+                        match g.content_type {
+                            wasmparser::ValType::I32
+                            | wasmparser::ValType::I64
+                            | wasmparser::ValType::F32
+                            | wasmparser::ValType::F64
+                            | wasmparser::ValType::V128 => {}
+                            wasmparser::ValType::Ref(_) => {
+                                anyhow::bail!(
+                                    "unsupported mutable global containing a reference type"
+                                )
+                            }
+                        }
+                    }
                 }
-                _ => continue,
+                _ => {}
             }
         }
 

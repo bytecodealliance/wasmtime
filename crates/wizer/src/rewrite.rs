@@ -78,24 +78,44 @@ impl Wizer {
                 // Encode the initialized global values from the snapshot,
                 // rather than the original values.
                 s if s.id == u8::from(SectionId::Global) => {
+                    let original_globals = wasmparser::GlobalSectionReader::new(
+                        wasmparser::BinaryReader::new(s.data, 0),
+                    )
+                    .unwrap();
                     let mut globals = wasm_encoder::GlobalSection::new();
-                    for ((_, glob_ty), val) in module.defined_globals().zip(snapshot.globals.iter())
-                    {
-                        let glob_ty = RoundtripReencoder.global_type(glob_ty).unwrap();
-                        globals.global(
-                            glob_ty,
-                            &match val {
-                                SnapshotVal::I32(x) => ConstExpr::i32_const(*x),
-                                SnapshotVal::I64(x) => ConstExpr::i64_const(*x),
-                                SnapshotVal::F32(x) => {
-                                    ConstExpr::f32_const(wasm_encoder::Ieee32::new(*x))
-                                }
-                                SnapshotVal::F64(x) => {
-                                    ConstExpr::f64_const(wasm_encoder::Ieee64::new(*x))
-                                }
-                                SnapshotVal::V128(x) => ConstExpr::v128_const(x.cast_signed()),
-                            },
-                        );
+                    let mut snapshot = snapshot.globals.iter().peekable();
+                    for ((i, glob_ty), global) in module.defined_globals().zip(original_globals) {
+                        let global = global.unwrap();
+                        match snapshot.next_if(|(j, _)| *j == i) {
+                            // This is a mutable global and it was present in
+                            // the snapshot, so translate the snapshot value to
+                            // a constant expression and insert it.
+                            Some((_, val)) => {
+                                assert!(glob_ty.mutable);
+                                let init = match val {
+                                    SnapshotVal::I32(x) => ConstExpr::i32_const(*x),
+                                    SnapshotVal::I64(x) => ConstExpr::i64_const(*x),
+                                    SnapshotVal::F32(x) => {
+                                        ConstExpr::f32_const(wasm_encoder::Ieee32::new(*x))
+                                    }
+                                    SnapshotVal::F64(x) => {
+                                        ConstExpr::f64_const(wasm_encoder::Ieee64::new(*x))
+                                    }
+                                    SnapshotVal::V128(x) => ConstExpr::v128_const(x.cast_signed()),
+                                };
+                                let glob_ty = RoundtripReencoder.global_type(glob_ty).unwrap();
+                                globals.global(glob_ty, &init);
+                            }
+
+                            // This global isn't mutable so preserve its value
+                            // as-is.
+                            None => {
+                                assert!(!glob_ty.mutable);
+                                RoundtripReencoder
+                                    .parse_global(&mut globals, global)
+                                    .unwrap();
+                            }
+                        }
                     }
                     encoder.section(&globals);
                 }
