@@ -1,8 +1,9 @@
 //! Debugging API.
 
 use crate::{
-    AnyRef, ExnRef, ExternRef, Func, Instance, Module, Val,
-    store::{AutoAssertNoGc, StoreOpaque},
+    AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, Instance, Module, StoreContext,
+    StoreContextMut, Val,
+    store::{AutoAssertNoGc, StoreInner, StoreOpaque},
     vm::{CurrentActivationBacktrace, VMContext},
 };
 use alloc::vec::Vec;
@@ -15,7 +16,7 @@ use wasmtime_unwinder::Frame;
 
 use super::store::AsStoreOpaque;
 
-impl StoreOpaque {
+impl<T> StoreInner<T> {
     /// Provide an object that captures Wasm stack state, including
     /// Wasm VM-level values (locals and operand stack).
     ///
@@ -30,7 +31,7 @@ impl StoreOpaque {
     ///
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
-    pub fn debug_frames(&mut self) -> Option<DebugFrameCursor<'_>> {
+    pub fn debug_frames(&mut self) -> Option<DebugFrameCursor<'_, T>> {
         if !self.engine().tunables().debug_guest {
             return None;
         }
@@ -56,12 +57,12 @@ impl StoreOpaque {
 ///
 /// See the documentation on `Store::stack_value` for more information
 /// about which frames this view will show.
-pub struct DebugFrameCursor<'a> {
+pub struct DebugFrameCursor<'a, T: 'static> {
     /// Iterator over frames.
     ///
     /// This iterator owns the store while the view exists (accessible
     /// as `iter.store`).
-    iter: CurrentActivationBacktrace<'a>,
+    iter: CurrentActivationBacktrace<'a, T>,
 
     /// Is the next frame to be visited by the iterator a trapping
     /// frame?
@@ -84,7 +85,7 @@ pub struct DebugFrameCursor<'a> {
     current: Option<FrameData>,
 }
 
-impl<'a> DebugFrameCursor<'a> {
+impl<'a, T: 'static> DebugFrameCursor<'a, T> {
     /// Move up to the next frame in the activation.
     pub fn move_to_parent(&mut self) {
         // If there are no virtual frames to yield, take and decode
@@ -236,11 +237,7 @@ struct VirtualFrame {
 impl VirtualFrame {
     /// Return virtual frames corresponding to a physical frame, from
     /// outermost to innermost.
-    fn decode(
-        store: &mut AutoAssertNoGc<'_>,
-        frame: Frame,
-        is_trapping_frame: bool,
-    ) -> Vec<VirtualFrame> {
+    fn decode(store: &mut StoreOpaque, frame: Frame, is_trapping_frame: bool) -> Vec<VirtualFrame> {
         let module = store
             .modules()
             .lookup_module_by_pc(frame.pc())
@@ -336,7 +333,7 @@ impl FrameData {
 /// instrumentation is correct, and as long as the tables are
 /// preserved through serialization).
 unsafe fn read_value(
-    store: &mut AutoAssertNoGc<'_>,
+    store: &mut StoreOpaque,
     slot_base: *const u8,
     offset: FrameStateSlotOffset,
     ty: FrameValType,
@@ -428,4 +425,16 @@ pub(crate) fn gc_refs_in_frame<'a>(ft: FrameTable<'a>, pc: u32, fp: *mut usize) 
         }
     }
     ret
+}
+
+impl<'a, T: 'static> AsContext for DebugFrameCursor<'a, T> {
+    type Data = T;
+    fn as_context(&self) -> StoreContext<'_, Self::Data> {
+        StoreContext(self.iter.store)
+    }
+}
+impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
+    fn as_context_mut(&mut self) -> StoreContextMut<'_, Self::Data> {
+        StoreContextMut(self.iter.store)
+    }
 }

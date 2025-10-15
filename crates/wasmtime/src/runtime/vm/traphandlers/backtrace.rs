@@ -29,7 +29,7 @@ use crate::runtime::vm::{
     traphandlers::{CallThreadState, tls},
 };
 #[cfg(feature = "debug")]
-use crate::store::AutoAssertNoGc;
+use crate::store::StoreInner;
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
@@ -330,13 +330,13 @@ impl Backtrace {
 
 /// An iterator over one Wasm activation.
 #[cfg(feature = "debug")]
-pub(crate) struct CurrentActivationBacktrace<'a> {
-    pub(crate) store: AutoAssertNoGc<'a>,
+pub(crate) struct CurrentActivationBacktrace<'a, T: 'static> {
+    pub(crate) store: &'a mut StoreInner<T>,
     inner: Box<dyn Iterator<Item = Frame>>,
 }
 
 #[cfg(feature = "debug")]
-impl<'a> CurrentActivationBacktrace<'a> {
+impl<'a, T: 'static> CurrentActivationBacktrace<'a, T> {
     /// Return an iterator over the most recent Wasm activation.
     ///
     /// The iterator captures the store with a mutable borrow, and
@@ -360,7 +360,7 @@ impl<'a> CurrentActivationBacktrace<'a> {
     /// while within host code called from that activation (which will
     /// ordinarily be ensured if the `store`'s lifetime came from the
     /// host entry point) then everything will be sound.
-    pub(crate) unsafe fn new(store: &'a mut StoreOpaque) -> CurrentActivationBacktrace<'a> {
+    pub(crate) unsafe fn new(store: &'a mut StoreInner<T>) -> CurrentActivationBacktrace<'a, T> {
         // Get the initial exit FP, exit PC, and entry FP.
         let vm_store_context = store.vm_store_context();
         let exit_pc = unsafe { *(*vm_store_context).last_wasm_exit_pc.get() };
@@ -372,13 +372,12 @@ impl<'a> CurrentActivationBacktrace<'a> {
             wasmtime_unwinder::frame_iterator(unwind, exit_pc, exit_fp, trampoline_fp)
         });
 
-        let store = AutoAssertNoGc::new(store);
         CurrentActivationBacktrace { store, inner }
     }
 }
 
 #[cfg(feature = "debug")]
-impl<'a> Iterator for CurrentActivationBacktrace<'a> {
+impl<'a, T: 'static> Iterator for CurrentActivationBacktrace<'a, T> {
     type Item = Frame;
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()
