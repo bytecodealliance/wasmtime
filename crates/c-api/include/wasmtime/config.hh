@@ -390,7 +390,8 @@ public:
     wasmtime_config_wasm_wide_arithmetic_set(ptr.get(), enable);
   }
 
-  /// \brief Configures whether the WebAssembly exceptions proposal will be enabled
+  /// \brief Configures whether the WebAssembly exceptions proposal will be
+  /// enabled
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_exceptions
   void wasm_exceptions(bool enable) {
