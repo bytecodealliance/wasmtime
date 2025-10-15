@@ -946,6 +946,37 @@ impl<T> StoreContextMut<'_, T> {
     /// This function can be used to invoke [`Func::call_concurrent`] for
     /// example within the async closure provided here.
     ///
+    /// # Store-blocking behavior
+    ///
+    /// At this time there are certain situations in which the `AsyncFnOnce`
+    /// passed to this function may appear to "block" or get "locked up" in a
+    /// way where progress on some items can be made but they aren't being made.
+    /// A canonical example of this is when the `fun` provided to this function
+    /// attempts to set a timeout for an invocation of a wasm function. In this
+    /// situation the async closure is waiting both on (a) the wasm computation
+    /// to finish, and (b) the timeout to elapse. At this time this setup will
+    /// not always work and the timeout may not reliably fire.
+    ///
+    /// This function will not block the current thread and as such is always
+    /// suitable to run in an `async` context, but the current implementation of
+    /// Wasmtime can lead to situations where a certain wasm computation is
+    /// required to make progress the closure to make progress. This is an
+    /// artifact of Wasmtime's historical implementation of `async` functions
+    /// and is the topic of [#11869] and [#11870]. In the timeout example from
+    /// above it means that Wasmtime can get "wedged" for a bit where (a) must
+    /// progress for a readiness notification of (b) to get delivered.
+    ///
+    /// This effectively means that it's not possible to reliably perform a
+    /// "select" operation within the `fun` closure, which timeouts for example
+    /// are based on. Fixing this requires some relatively major refactoring
+    /// work within Wasmtime itself. This is a known pitfall otherwise and one
+    /// that is intended to be fixed one day. In the meantime it's recommended
+    /// to apply timeouts or such to the entire `run_concurrent` call itself
+    /// rather than internally.
+    ///
+    /// [#11869]: https://github.com/bytecodealliance/wasmtime/issues/11869
+    /// [#11870]: https://github.com/bytecodealliance/wasmtime/issues/11870
+    ///
     /// # Example
     ///
     /// ```
