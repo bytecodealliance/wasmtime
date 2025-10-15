@@ -56,7 +56,7 @@
     (import "" "future.cancel-read" (func $future-cancel-read (param i32) (result i32)))
   )
   (type $future-type (future u8))
-  (core func $future-cancel-read (canon future.cancel-read $future-type async))
+  (core func $future-cancel-read (canon future.cancel-read $future-type))
   (core instance $i (instantiate $m (with "" (instance (export "future.cancel-read" (func $future-cancel-read))))))
 )
 
@@ -66,7 +66,7 @@
     (import "" "future.cancel-write" (func $future-cancel-write (param i32) (result i32)))
   )
   (type $future-type (future u8))
-  (core func $future-cancel-write (canon future.cancel-write $future-type async))
+  (core func $future-cancel-write (canon future.cancel-write $future-type))
   (core instance $i (instantiate $m (with "" (instance (export "future.cancel-write" (func $future-cancel-write))))))
 )
 
