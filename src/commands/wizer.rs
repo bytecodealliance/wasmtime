@@ -41,6 +41,13 @@ impl WizerCommand {
             self.run.common.wasm.relaxed_simd_deterministic = Some(true);
         }
 
+        // Don't provide any WASI imports by default to wizened components. The
+        // `run` command provides the "cli" world as a default so turn that off
+        // here if the command line flags don't otherwise say what to do.
+        if self.run.common.wasi.cli.is_none() {
+            self.run.common.wasi.cli = Some(false);
+        }
+
         // Read the input wasm, possibly from stdin.
         let mut wasm = Vec::new();
         if self.input.to_str() == Some("-") {

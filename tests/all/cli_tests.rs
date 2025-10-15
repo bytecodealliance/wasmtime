@@ -2623,3 +2623,64 @@ fn big_table_in_pooling_allocator() -> Result<()> {
     ])?;
     Ok(())
 }
+
+fn wizen(args: &[&str], wat: &str) -> Result<Output> {
+    let mut cmd = get_wasmtime_command()?;
+    cmd.arg("wizer").args(args).arg("-");
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    stdin.write_all(wat.as_bytes())?;
+    drop(stdin);
+
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        println!(
+            "Failed to execute wasmtime wizer with: {cmd:?}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(output)
+}
+
+#[test]
+fn wizer_no_imports_by_default() -> Result<()> {
+    let result = wizen(
+        &[],
+        r#"(module
+            (func (export "wizer.initialize"))
+        )"#,
+    )?;
+    assert!(result.status.success());
+
+    let result = wizen(
+        &[],
+        r#"(module
+            (import "foo" "bar" (func))
+            (func (export "wizer.initialize"))
+        )"#,
+    )?;
+    assert!(!result.status.success());
+
+    let result = wizen(
+        &[],
+        r#"(module
+            (import "wasi_snapshot_preview1" "fd_write" (func (param i32 i32 i32 i32) (result i32)))
+            (func (export "wizer.initialize"))
+        )"#,
+    )?;
+    assert!(!result.status.success());
+
+    let result = wizen(
+        &["-Scli"],
+        r#"(module
+            (import "wasi_snapshot_preview1" "fd_write" (func (param i32 i32 i32 i32) (result i32)))
+            (func (export "wizer.initialize"))
+        )"#,
+    )?;
+    assert!(result.status.success());
+
+    Ok(())
+}
