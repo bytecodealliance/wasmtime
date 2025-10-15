@@ -49,16 +49,12 @@ fn ensure_compatibility_between_winch_and_signals_based_traps(config: &mut Confi
 
 #[wasmtime_test(strategies(only(Winch)))]
 #[cfg_attr(miri, ignore)]
-fn ensure_compatibility_between_winch_and_generate_native_debuginfo(
-    config: &mut Config,
-) -> Result<()> {
+fn ensure_compatibility_between_winch_and_debug_native(config: &mut Config) -> Result<()> {
     config.debug_info(true);
     let result = Engine::new(&config);
     match result {
         Ok(_) => {
-            anyhow::bail!(
-                "Expected incompatibility between the `generate_native_debuginfo` option and Winch"
-            )
+            anyhow::bail!("Expected incompatibility between the `debug_native` option and Winch")
         }
         Err(e) => {
             assert_eq!(

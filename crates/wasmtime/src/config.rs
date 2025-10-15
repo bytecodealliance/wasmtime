@@ -431,8 +431,9 @@ impl Config {
         self
     }
 
-    /// Configures whether DWARF debug information will be emitted during
-    /// compilation.
+    /// Configures whether DWARF debug information will be emitted
+    /// during compilation for a native debugger on the Wasmtime
+    /// process to consume.
     ///
     /// Note that the `debug-builtins` compile-time Cargo feature must also be
     /// enabled for native debuggers such as GDB or LLDB to be able to debug
@@ -441,7 +442,41 @@ impl Config {
     /// By default this option is `false`.
     /// **Note** Enabling this option is not compatible with the Winch compiler.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
-        self.tunables.generate_native_debuginfo = Some(enable);
+        self.tunables.debug_native = Some(enable);
+        self
+    }
+
+    /// Configures whether compiled guest code will be instrumented to
+    /// provide debugging at the Wasm VM level.
+    ///
+    /// This is required in order to enable a guest-level debugging
+    /// API that can precisely examine Wasm VM state and (eventually,
+    /// once it is complete) set breakpoints and watchpoints and step
+    /// through code.
+    ///
+    /// Without this enabled, debugging can only be done via a native
+    /// debugger operating on the compiled guest code (see
+    /// [`Config::debug_info`] and is "best-effort": we may be able to
+    /// recover some Wasm locals or operand stack values, but it is
+    /// not guaranteed, even when optimizations are disabled.
+    ///
+    /// When this is enabled, additional instrumentation is inserted
+    /// that directly tracks the Wasm VM state at every step. This has
+    /// some performance impact, but allows perfect debugging
+    /// fidelity.
+    ///
+    /// Breakpoints, watchpoints, and stepping are not yet supported,
+    /// but will be added in a future version of Wasmtime.
+    ///
+    /// This enables use of the [`crate::DebugFrameCursor`] API which is
+    /// provided by [`crate::Caller::debug_frames`] from within a
+    /// hostcall context.
+    ///
+    /// ***Note*** Enabling this option is not compatible with the
+    /// Winch compiler.
+    #[cfg(feature = "debug")]
+    pub fn guest_debug(&mut self, enable: bool) -> &mut Self {
+        self.tunables.debug_guest = Some(enable);
         self
     }
 
@@ -2351,6 +2386,10 @@ impl Config {
         } else {
             None
         };
+
+        if !cfg!(feature = "debug") && tunables.debug_guest {
+            bail!("debug instrumentation support was disabled at compile time");
+        }
 
         Ok((tunables, features))
     }

@@ -74,7 +74,11 @@ define_tunables! {
         pub memory_reservation_for_growth: u64,
 
         /// Whether or not to generate native DWARF debug information.
-        pub generate_native_debuginfo: bool,
+        pub debug_native: bool,
+
+        /// Whether we are enabling precise Wasm-level debugging in
+        /// the guest.
+        pub debug_guest: bool,
 
         /// Whether or not to retain DWARF sections in compiled modules.
         pub parse_wasm_debuginfo: bool,
@@ -193,7 +197,7 @@ impl Tunables {
 
             // General options which have the same defaults regardless of
             // architecture.
-            generate_native_debuginfo: false,
+            debug_native: false,
             parse_wasm_debuginfo: true,
             consume_fuel: false,
             epoch_interruption: false,
@@ -210,6 +214,7 @@ impl Tunables {
             inlining_intra_module: IntraModuleInlining::WhenUsingGc,
             inlining_small_callee_size: 50,
             inlining_sum_size_threshold: 2000,
+            debug_guest: false,
         }
     }
 

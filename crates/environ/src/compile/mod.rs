@@ -16,6 +16,7 @@ use std::path;
 use std::sync::Arc;
 
 mod address_map;
+mod frame_table;
 mod module_artifacts;
 mod module_environ;
 mod module_types;
@@ -23,6 +24,7 @@ mod stack_maps;
 mod trap_encoding;
 
 pub use self::address_map::*;
+pub use self::frame_table::*;
 pub use self::module_artifacts::*;
 pub use self::module_environ::*;
 pub use self::module_types::*;
@@ -331,7 +333,7 @@ pub trait Compiler: Send + Sync {
     fn append_code(
         &self,
         obj: &mut Object<'static>,
-        funcs: &[(String, Box<dyn Any + Send + Sync>)],
+        funcs: &[(String, FuncKey, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, FuncKey) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>>;
 

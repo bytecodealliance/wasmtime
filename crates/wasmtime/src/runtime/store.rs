@@ -1167,6 +1167,26 @@ impl<T> Store<T> {
     pub fn has_pending_exception(&self) -> bool {
         self.inner.pending_exception.is_some()
     }
+
+    /// Provide an object that views Wasm stack state, including Wasm
+    /// VM-level values (locals and operand stack), when debugging is
+    /// enabled.
+    ///
+    /// This object views all activations for the current store that
+    /// are on the stack. An activation is a contiguous sequence of
+    /// Wasm frames (called functions) that were called from host code
+    /// and called back out to host code. If there are activations
+    /// from multiple stores on the stack, for example if Wasm code in
+    /// one store calls out to host code which invokes another Wasm
+    /// function in another store, then the other stores are "opaque"
+    /// to our view here in the same way that host code is.
+    ///
+    /// Returns `None` if debug instrumentation is not enabled for
+    /// the engine containing this store.
+    #[cfg(feature = "debug")]
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
+        self.inner.debug_frames()
+    }
 }
 
 impl<'a, T> StoreContext<'a, T> {
@@ -1289,6 +1309,16 @@ impl<'a, T> StoreContextMut<'a, T> {
     #[cfg(feature = "gc")]
     pub fn has_pending_exception(&self) -> bool {
         self.0.inner.pending_exception.is_some()
+    }
+
+    /// Provide an object that views Wasm stack state, including Wasm
+    /// VM-level values (locals and operand stack), when debugging is
+    /// enabled.
+    ///
+    /// See ['Store::debug_frames`] for more details.
+    #[cfg(feature = "debug")]
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
+        self.0.inner.debug_frames()
     }
 }
 
@@ -1864,9 +1894,6 @@ impl StoreOpaque {
         gc_roots_list: &mut GcRootsList,
         frame: crate::runtime::vm::Frame,
     ) {
-        use crate::runtime::vm::SendSyncPtr;
-        use core::ptr::NonNull;
-
         let pc = frame.pc();
         debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
 
@@ -1881,29 +1908,44 @@ impl StoreOpaque {
             .lookup_module_by_pc(pc)
             .expect("should have module info for Wasm frame");
 
-        let stack_map = match module_info.lookup_stack_map(pc) {
-            Some(sm) => sm,
-            None => {
-                log::trace!("No stack map for this Wasm frame");
-                return;
-            }
-        };
-        log::trace!(
-            "We have a stack map that maps {} bytes in this Wasm frame",
-            stack_map.frame_size()
-        );
+        if let Some(stack_map) = module_info.lookup_stack_map(pc) {
+            log::trace!(
+                "We have a stack map that maps {} bytes in this Wasm frame",
+                stack_map.frame_size()
+            );
 
-        let sp = unsafe { stack_map.sp(fp) };
-        for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
-            let raw: u32 = unsafe { core::ptr::read(stack_slot) };
-            log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
-
-            let gc_ref = vm::VMGcRef::from_raw_u32(raw);
-            if gc_ref.is_some() {
+            let sp = unsafe { stack_map.sp(fp) };
+            for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
                 unsafe {
-                    gc_roots_list
-                        .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
+                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
                 }
+            }
+        }
+
+        #[cfg(feature = "debug")]
+        if let Some(frame_table) = module_info.frame_table() {
+            let relpc = module_info.text_offset(pc);
+            for stack_slot in super::debug::gc_refs_in_frame(frame_table, relpc, fp) {
+                unsafe {
+                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "gc")]
+    unsafe fn trace_wasm_stack_slot(&self, gc_roots_list: &mut GcRootsList, stack_slot: *mut u32) {
+        use crate::runtime::vm::SendSyncPtr;
+        use core::ptr::NonNull;
+
+        let raw: u32 = unsafe { core::ptr::read(stack_slot) };
+        log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
+
+        let gc_ref = vm::VMGcRef::from_raw_u32(raw);
+        if gc_ref.is_some() {
+            unsafe {
+                gc_roots_list
+                    .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
             }
         }
     }
