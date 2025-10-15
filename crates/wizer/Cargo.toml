@@ -30,7 +30,7 @@ log = { workspace = true }
 rayon = { workspace = true }
 clap = { workspace = true, optional = true }
 wasm-encoder = { workspace = true, features = ['wasmparser'] }
-wasmparser = { workspace = true }
+wasmparser = { workspace = true, features = ['validate', 'features'] }
 wasmprinter = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true, features = ['std', 'runtime', 'cranelift', 'cache', 'threads', 'gc', 'gc-null'] }
 
