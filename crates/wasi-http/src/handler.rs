@@ -4,10 +4,7 @@
 #[cfg(feature = "p3")]
 use crate::p3;
 use anyhow::{Result, anyhow};
-use futures::{
-    future::FutureExt,
-    stream::{FuturesUnordered, StreamExt},
-};
+use futures::stream::{FuturesUnordered, StreamExt};
 use std::collections::VecDeque;
 use std::collections::btree_map::{BTreeMap, Entry};
 use std::future;
@@ -149,7 +146,7 @@ pub struct StoreBundle<T: 'static> {
 pub trait HandlerState: 'static + Sync + Send {
     /// The type of the associated data for [`Store`]s created using
     /// [`new_store`].
-    type StoreData;
+    type StoreData: Send;
 
     /// Create a new [`Store`] for handling one or more requests.
     fn new_store(&self, req_id: Option<u64>) -> Result<StoreBundle<Self::StoreData>>;
@@ -176,11 +173,11 @@ pub trait HandlerState: 'static + Sync + Send {
     fn handle_worker_error(&self, error: anyhow::Error);
 }
 
-struct ProxyHandlerInner<S, T: 'static> {
+struct ProxyHandlerInner<S: HandlerState> {
     state: S,
-    instance_pre: ProxyPre<T>,
+    instance_pre: ProxyPre<S::StoreData>,
     next_id: AtomicU64,
-    task_queue: Queue<TaskFn<T>>,
+    task_queue: Queue<TaskFn<S::StoreData>>,
     worker_count: AtomicUsize,
 }
 
@@ -218,19 +215,17 @@ impl StartTimes {
     }
 }
 
-struct Worker<S, T: 'static>
+struct Worker<S>
 where
-    T: Send,
-    S: HandlerState<StoreData = T>,
+    S: HandlerState,
 {
-    handler: ProxyHandler<S, T>,
+    handler: ProxyHandler<S>,
     available: bool,
 }
 
-impl<S, T> Worker<S, T>
+impl<S> Worker<S>
 where
-    T: Send,
-    S: HandlerState<StoreData = T>,
+    S: HandlerState,
 {
     fn set_available(&mut self, available: bool) {
         if available != self.available {
@@ -252,7 +247,17 @@ where
         }
     }
 
-    async fn run(mut self, task: Option<TaskFn<T>>, req_id: Option<u64>) -> Result<()> {
+    async fn run(mut self, task: Option<TaskFn<S::StoreData>>, req_id: Option<u64>) {
+        if let Err(error) = self.run_(task, req_id).await {
+            self.handler.0.state.handle_worker_error(error);
+        }
+    }
+
+    async fn run_(
+        &mut self,
+        task: Option<TaskFn<S::StoreData>>,
+        req_id: Option<u64>,
+    ) -> Result<()> {
         let handler = &self.handler.0;
 
         let StoreBundle {
@@ -275,30 +280,31 @@ where
             let mut timed_out = false;
             let mut futures = FuturesUnordered::new();
 
-            let accept_task =
-                |task: TaskFn<T>, futures: &mut FuturesUnordered<_>, reuse_count: &mut usize| {
-                    // Set `accept_concurrent` to false, conservatively assuming
-                    // that the new task will be CPU-bound, at least to begin with.
-                    // Only once the `StoreContextMut::run_concurrent` event loop
-                    // returns `Pending` will we set `accept_concurrent` back to
-                    // true and consider accepting more tasks.
-                    //
-                    // This approach avoids taking on more than one CPU-bound task
-                    // at a time, which would hurt throughput vs. leaving the
-                    // additional tasks for other workers to handle.
-                    accept_concurrent.store(false, Relaxed);
-                    *reuse_count += 1;
+            let accept_task = |task: TaskFn<S::StoreData>,
+                               futures: &mut FuturesUnordered<_>,
+                               reuse_count: &mut usize| {
+                // Set `accept_concurrent` to false, conservatively assuming
+                // that the new task will be CPU-bound, at least to begin with.
+                // Only once the `StoreContextMut::run_concurrent` event loop
+                // returns `Pending` will we set `accept_concurrent` back to
+                // true and consider accepting more tasks.
+                //
+                // This approach avoids taking on more than one CPU-bound task
+                // at a time, which would hurt throughput vs. leaving the
+                // additional tasks for other workers to handle.
+                accept_concurrent.store(false, Relaxed);
+                *reuse_count += 1;
 
-                    let start_time = Instant::now().checked_add(request_timeout);
-                    if let Some(start_time) = start_time {
-                        task_start_times.lock().unwrap().add(start_time);
-                    }
+                let start_time = Instant::now().checked_add(request_timeout);
+                if let Some(start_time) = start_time {
+                    task_start_times.lock().unwrap().add(start_time);
+                }
 
-                    futures.push(tokio::time::timeout(
-                        request_timeout,
-                        (task)(accessor, proxy).map(move |()| start_time),
-                    ));
-                };
+                futures.push(tokio::time::timeout(request_timeout, async move {
+                    (task)(accessor, proxy).await;
+                    start_time
+                }));
+            };
 
             if let Some(task) = task {
                 accept_task(task, &mut futures, &mut reuse_count);
@@ -456,10 +462,9 @@ where
     }
 }
 
-impl<S, T> Drop for Worker<S, T>
+impl<S> Drop for Worker<S>
 where
-    T: Send,
-    S: HandlerState<StoreData = T>,
+    S: HandlerState,
 {
     fn drop(&mut self) {
         self.set_available(false);
@@ -471,18 +476,21 @@ where
 /// Note that this supports optional instance reuse, enabled when
 /// `S::max_instance_reuse_count()` returns a number greater than one.  See
 /// [`Self::push`] for details.
-pub struct ProxyHandler<S, T: 'static>(Arc<ProxyHandlerInner<S, T>>);
+pub struct ProxyHandler<S: HandlerState>(Arc<ProxyHandlerInner<S>>);
 
-impl<S, T> Clone for ProxyHandler<S, T> {
+impl<S: HandlerState> Clone for ProxyHandler<S> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<S, T> ProxyHandler<S, T> {
+impl<S> ProxyHandler<S>
+where
+    S: HandlerState,
+{
     /// Create a new `ProxyHandler` with the specified application state and
     /// pre-instance.
-    pub fn new(state: S, instance_pre: ProxyPre<T>) -> Self {
+    pub fn new(state: S, instance_pre: ProxyPre<S::StoreData>) -> Self {
         Self(Arc::new(ProxyHandlerInner {
             state,
             instance_pre,
@@ -496,11 +504,7 @@ impl<S, T> ProxyHandler<S, T> {
     ///
     /// This will either spawn a new background worker to run the task or
     /// deliver it to an already-running worker.
-    pub fn spawn(&self, req_id: Option<u64>, task: TaskFn<T>)
-    where
-        T: Send,
-        S: HandlerState<StoreData = T>,
-    {
+    pub fn spawn(&self, req_id: Option<u64>, task: TaskFn<S::StoreData>) {
         match self.0.state.max_instance_reuse_count() {
             0 => panic!("`max_instance_reuse_count` must be at least 1"),
             _ => {
@@ -537,27 +541,17 @@ impl<S, T> ProxyHandler<S, T> {
     }
 
     /// Return a reference to the pre-instance.
-    pub fn instance_pre(&self) -> &ProxyPre<T> {
+    pub fn instance_pre(&self) -> &ProxyPre<S::StoreData> {
         &self.0.instance_pre
     }
 
-    fn start_worker(&self, task: Option<TaskFn<T>>, req_id: Option<u64>)
-    where
-        T: Send,
-        S: HandlerState<StoreData = T>,
-    {
-        let handler = self.clone();
+    fn start_worker(&self, task: Option<TaskFn<S::StoreData>>, req_id: Option<u64>) {
         tokio::spawn(
             Worker {
                 handler: self.clone(),
                 available: false,
             }
-            .run(task, req_id)
-            .map(move |result| {
-                if let Err(error) = result {
-                    handler.0.state.handle_worker_error(error);
-                }
-            }),
+            .run(task, req_id),
         );
     }
 }

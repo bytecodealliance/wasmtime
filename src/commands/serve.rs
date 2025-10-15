@@ -824,7 +824,7 @@ fn setup_guest_profiler(
 type Request = hyper::Request<hyper::body::Incoming>;
 
 async fn handle_request(
-    handler: ProxyHandler<HostHandlerState, Host>,
+    handler: ProxyHandler<HostHandlerState>,
     req: Request,
 ) -> Result<hyper::Response<BoxBody<Bytes, anyhow::Error>>> {
     use tokio::sync::oneshot;
