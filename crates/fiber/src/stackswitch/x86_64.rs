@@ -44,9 +44,9 @@ pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* r
 }
 
 pub(crate) unsafe fn wasmtime_fiber_init(
-    top_of_stack: *mut u8,                        // rdi
-    entry_point: extern "C" fn(*mut u8, *mut u8), // rsi
-    entry_arg0: *mut u8,                          // rdx
+    top_of_stack: *mut u8,
+    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_arg0: *mut u8,
 ) {
     #[repr(C)]
     #[derive(Default)]
