@@ -1013,7 +1013,7 @@ fn lift_variant(
     let discriminant = next(src).get_u32();
     let ty = types
         .nth(discriminant as usize)
-        .ok_or_else(|| anyhow!("discriminant {} out of range [0..{})", discriminant, len))?;
+        .ok_or_else(|| anyhow!("discriminant {discriminant} out of range [0..{len})"))?;
     let (value, value_flat) = match ty {
         Some(ty) => (
             Some(Box::new(Val::lift(cx, ty, src)?)),

@@ -20,7 +20,7 @@
 //! Cranelift the body of the callee that is to be inlined.
 
 use crate::cursor::{Cursor as _, FuncCursor};
-use crate::ir::{self, ExceptionTableData, ExceptionTableItem, InstBuilder as _};
+use crate::ir::{self, DebugTag, ExceptionTableData, ExceptionTableItem, InstBuilder as _};
 use crate::result::CodegenResult;
 use crate::trace;
 use crate::traversals::Dfs;
@@ -366,6 +366,13 @@ fn inline_one(
     // callee.
     let mut last_inlined_block = inline_block_layout(func, call_block, callee, &entity_map);
 
+    // Get a copy of debug tags on the call instruction; these are
+    // prepended to debug tags on inlined instructions. Remove them
+    // from the call itself as it will be rewritten to a jump (which
+    // cannot have tags).
+    let call_debug_tags = func.debug_tags.get(call_inst).to_vec();
+    func.debug_tags.set(call_inst, []);
+
     // Translate each instruction from the callee into the caller,
     // appending them to their associated block in the caller.
     //
@@ -402,6 +409,29 @@ fn inline_one(
             });
             let inlined_inst = func.dfg.make_inst(inlined_inst_data);
             func.layout.append_inst(inlined_inst, inlined_block);
+
+            // Copy over debug tags, translating referenced entities
+            // as appropriate.
+            let debug_tags = callee.debug_tags.get(callee_inst);
+            // If there are tags on the inlined instruction, we always
+            // add tags, and we prepend any tags from the call
+            // instruction; but we don't add tags if only the callsite
+            // had them (this would otherwise mean that every single
+            // instruction in an inlined function body would get
+            // tags).
+            if !debug_tags.is_empty() {
+                let tags = call_debug_tags
+                    .iter()
+                    .cloned()
+                    .chain(debug_tags.iter().map(|tag| match *tag {
+                        DebugTag::User(value) => DebugTag::User(value),
+                        DebugTag::StackSlot(slot) => {
+                            DebugTag::StackSlot(entity_map.inlined_stack_slot(slot))
+                        }
+                    }))
+                    .collect::<SmallVec<[_; 4]>>();
+                func.debug_tags.set(inlined_inst, tags);
+            }
 
             let opcode = callee.dfg.insts[callee_inst].opcode();
             if opcode.is_return() {

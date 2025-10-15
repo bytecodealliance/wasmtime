@@ -42,14 +42,19 @@ const array = [
     "os": macos,
     "target": "x86_64-apple-darwin",
     // On OSX all we need to do is configure our deployment target as old as
-    // possible. For now 10.9 is the limit.
-    "env": { "MACOSX_DEPLOYMENT_TARGET": "10.9" },
+    // possible. For now 10.12 is the limit.
+    "env": { "MACOSX_DEPLOYMENT_TARGET": "10.12" },
+    // FIXME(#11783) we saw weird build errors with Rust 1.90 related to being
+    // unable to link stack-switching related symbols using #[naked] and such.
+    // Looks to be solved on beta, and once Rust 1.91 is stable this can be
+    // removed.
+    "rust": "beta",
   },
   {
     "build": "aarch64-macos",
     "os": macos,
     "target": "aarch64-apple-darwin",
-    "env": { "MACOSX_DEPLOYMENT_TARGET": "10.9" },
+    "env": { "MACOSX_DEPLOYMENT_TARGET": "10.12" },
   },
   {
     "build": "x86_64-windows",
@@ -116,7 +121,8 @@ const builds = [];
 for (let build of array) {
   // Perform a "deep clone" roundtripping through JSON for a copy of the build
   // that's normal
-  build.rust = 'default';
+  if (!build.rust)
+    build.rust = 'default';
   builds.push(JSON.parse(JSON.stringify(build)));
 
   // Next generate a "min" build and add it to the builds list. Min builds

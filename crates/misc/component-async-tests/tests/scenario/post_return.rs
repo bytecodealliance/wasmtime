@@ -1,10 +1,15 @@
 use super::util::test_run;
 use crate::scenario::util::{config, make_component};
 use anyhow::Result;
+use component_async_tests::util;
 use component_async_tests::{Ctx, sleep};
+use std::future;
+use std::pin::pin;
 use std::sync::{Arc, Mutex};
-use wasmtime::component::{Linker, ResourceTable};
-use wasmtime::{Engine, Store};
+use std::task::Poll;
+use std::time::Duration;
+use wasmtime::component::{Accessor, Linker, ResourceTable};
+use wasmtime::{AsContextMut, Engine, Store, StoreContextMut};
 use wasmtime_wasi::WasiCtxBuilder;
 
 mod sleep_post_return {
@@ -66,25 +71,65 @@ async fn test_sleep_post_return(components: &[&str]) -> Result<()> {
         },
     );
 
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let guest = sleep_post_return::SleepPostReturnCallee::new(&mut store, &instance)?;
-    instance
-        .run_concurrent(&mut store, async |accessor| {
-            // This function should return immediately, then sleep the specified
-            // number of milliseconds after returning, and then finally exit.
-            let exit = guest
-                .local_local_sleep_post_return()
-                .call_run(accessor, 100)
-                .await?
-                .1;
-            // The function has returned, now we wait for it (and any subtasks
-            // it may have spawned) to exit.
-            exit.block(accessor).await;
-            anyhow::Ok(())
-        })
-        .await??;
+    let guest = sleep_post_return::SleepPostReturnCallee::instantiate_async(
+        &mut store, &component, &linker,
+    )
+    .await?;
+
+    async fn run_with(
+        accessor: &Accessor<Ctx>,
+        guest: &sleep_post_return::SleepPostReturnCallee,
+    ) -> Result<()> {
+        // This function should return immediately, then sleep the specified
+        // number of milliseconds after returning, and then finally exit.
+        let exit = guest
+            .local_local_sleep_post_return()
+            .call_run(accessor, 100)
+            .await?
+            .1;
+        // The function has returned, now we wait for it (and any subtasks
+        // it may have spawned) to exit.
+        exit.block(accessor).await;
+        anyhow::Ok(())
+    }
+
+    async fn run(
+        store: StoreContextMut<'_, Ctx>,
+        guest: &sleep_post_return::SleepPostReturnCallee,
+    ) -> Result<()> {
+        store
+            .run_concurrent(async |accessor| {
+                run_with(accessor, guest).await?;
+
+                // Go idle for a bit before doing it again.  This tests that
+                // `StoreContextMut::run_concurrent` is okay with having no
+                // outstanding guest or host tasks to poll for a while, trusting
+                // that we'll resolve the future independently, with or without
+                // giving it more work to do.
+                util::sleep(Duration::from_millis(100)).await;
+
+                run_with(accessor, guest).await?;
+
+                anyhow::Ok(())
+            })
+            .await?
+    }
+
+    run(store.as_context_mut(), &guest).await?;
     // At this point, all subtasks should have exited, meaning no waitables,
-    // tasks, or other concurrent state should remain present in the instance.
-    instance.assert_concurrent_state_empty(&mut store);
+    // tasks, or other concurrent state should remain present in the store.
+    store.assert_concurrent_state_empty();
+
+    // Do it again, but this time cancel the event loop before it exits:
+    assert!(
+        future::poll_fn(|cx| Poll::Ready(pin!(run(store.as_context_mut(), &guest)).poll(cx)))
+            .await
+            .is_pending()
+    );
+
+    // Assuming the event loop is cancel-safe, this should complete without
+    // errors or panics:
+    run(store.as_context_mut(), &guest).await?;
+
     Ok(())
 }

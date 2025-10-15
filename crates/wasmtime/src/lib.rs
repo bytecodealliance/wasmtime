@@ -279,7 +279,7 @@
 #![deny(missing_docs)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // NB: this list is currently being burned down to remove all features listed
 // here to get warnings in all configurations of Wasmtime.
 #![cfg_attr(
@@ -292,6 +292,17 @@
 // and will prevent the doc build from failing.
 #![cfg_attr(feature = "default", warn(rustdoc::broken_intra_doc_links))]
 #![no_std]
+// Wasmtime liberally uses #[cfg]'d definitions of structures to uninhabited
+// types to reduce the total amount of #[cfg], but rustc warns that much usage
+// of these structures, rightfully, leads to unreachable code. This unreachable
+// code is only conditional, however, so it's generally just annoying to deal
+// with. Disable the `unreachable_code` lint in situations like this when some
+// major features are disabled. If all the features are enabled, though, we
+// still want to get warned about this.
+#![cfg_attr(
+    any(not(feature = "threads"), not(feature = "gc",)),
+    allow(unreachable_code, reason = "see comment")
+)]
 
 #[cfg(feature = "std")]
 #[macro_use]

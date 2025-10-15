@@ -156,9 +156,8 @@ pub use self::generated::wasi::*;
 ///     );
 ///
 ///     // Instantiate the component and we're off to the races.
-///     let instance = linker.instantiate_async(&mut store, &component).await?;
-///     let command = Command::new(&mut store, &instance)?;
-///     let program_result = instance.run_concurrent(&mut store, async move |store| {
+///     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+///     let program_result = store.run_concurrent(async move |store| {
 ///         command.wasi_cli_run().call_run(store).await
 ///     }).await??;
 ///     match program_result {

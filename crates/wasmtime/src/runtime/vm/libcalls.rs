@@ -114,6 +114,7 @@ pub mod raw {
                 // implementation and automatically perform `catch_unwind` along
                 // with conversion of the return value in the face of traps.
                 #[allow(improper_ctypes_definitions, reason = "__m128i known not FFI-safe")]
+                #[allow(unused_variables, reason = "macro-generated")]
                 pub unsafe extern "C" fn $name(
                     vmctx: NonNull<VMContext>,
                     $( $pname : libcall!(@ty $param), )*

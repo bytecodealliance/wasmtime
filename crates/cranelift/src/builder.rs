@@ -102,6 +102,10 @@ impl CompilerBuilder for Builder {
         Ok(())
     }
 
+    fn tunables(&self) -> Option<&Tunables> {
+        self.tunables.as_ref()
+    }
+
     fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
         let isa = self.inner.build()?;
         Ok(Box::new(crate::compiler::Compiler::new(

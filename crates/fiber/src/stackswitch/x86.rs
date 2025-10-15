@@ -10,12 +10,12 @@
 // different so the reserved space at the top of the stack is 8 bytes, not 16
 // bytes. Still two pointers though.
 
-use wasmtime_asm_macros::asm_func;
+use core::arch::naked_asm;
 
-// fn(top_of_stack: *mut u8)
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_switch),
-    "
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8) {
+    naked_asm!(
+        "
         // Load our stack-to-use
         mov eax, 0x4[esp]
         mov ecx, -0x8[eax]
@@ -36,56 +36,62 @@ asm_func!(
         pop ebx
         pop ebp
         ret
-    ",
-);
+        ",
+    )
+}
 
-// fn(
-//    top_of_stack: *mut u8,
-//    entry_point: extern fn(*mut u8, *mut u8),
-//    entry_arg0: *mut u8,
-// )
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
-    "
-        mov eax, 4[esp]
+pub(crate) unsafe fn wasmtime_fiber_init(
+    top_of_stack: *mut u8,
+    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_arg0: *mut u8,
+) {
+    // Our stack from top-to-bottom looks like:
+    //
+    //	  * 8 bytes of reserved space per unix.rs (two-pointers space)
+    //	  * 8 bytes of arguments (two arguments wasmtime_fiber_start forwards)
+    //	  * 4 bytes of return address
+    //	  * 16 bytes of saved registers
+    //
+    // Note that after the return address the stack is conveniently 16-byte
+    // aligned as required, so we just leave the arguments on the stack in
+    // `wasmtime_fiber_start` and immediately do the call.
+    #[repr(C)]
+    #[derive(Default)]
+    struct InitialStack {
+        // state that will get resumed into from a `wasmtime_fiber_switch`
+        // starting up this fiber.
+        edi: *mut u8,
+        esi: *mut u8,
+        ebx: *mut u8,
+        ebp: *mut u8,
+        return_address: *mut u8,
 
-        // move top_of_stack to the 2nd argument
-        mov -0x0c[eax], eax
+        // two arguments to `entry_point`
+        arg1: *mut u8,
+        arg2: *mut u8,
 
-        // move entry_arg0 to the 1st argument
-        mov ecx, 12[esp]
-        mov -0x10[eax], ecx
+        // unix.rs reserved space
+        last_sp: *mut u8,
+        run_result: *mut u8,
+    }
 
-        // Move our start function to the return address which the `ret` in
-        // `wasmtime_fiber_start` will return to.
-        lea ecx, {start}
-        mov -0x14[eax], ecx
+    unsafe {
+        let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
+        initial_stack.write(InitialStack {
+            ebp: entry_point as *mut u8,
+            return_address: wasmtime_fiber_start as *mut u8,
+            arg1: entry_arg0,
+            arg2: top_of_stack,
+            last_sp: initial_stack.cast(),
+            ..InitialStack::default()
+        });
+    }
+}
 
-        // And move `entry_point` to get loaded into `%ebp` through the context
-        // switch. This'll get jumped to in `wasmtime_fiber_start`.
-        mov ecx, 8[esp]
-        mov -0x18[eax], ecx
-
-        // Our stack from top-to-bottom looks like:
-        //
-        //	  * 8 bytes of reserved space per unix.rs (two-pointers space)
-        //	  * 8 bytes of arguments (two arguments wasmtime_fiber_start forwards)
-        //	  * 4 bytes of return address
-        //	  * 16 bytes of saved registers
-        //
-        // Note that after the return address the stack is conveniently 16-byte
-        // aligned as required, so we just leave the arguments on the stack in
-        // `wasmtime_fiber_start` and immediately do the call.
-        lea ecx, -0x24[eax]
-        mov -0x08[eax], ecx
-        ret
-    ",
-    start = sym super::wasmtime_fiber_start,
-);
-
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_start),
-    "
+#[unsafe(naked)]
+unsafe extern "C" fn wasmtime_fiber_start() -> ! {
+    naked_asm!(
+        "
         .cfi_startproc simple
         .cfi_def_cfa_offset 0
         .cfi_escape 0x0f, /* DW_CFA_def_cfa_expression */ \
@@ -105,5 +111,6 @@ asm_func!(
         call ebp
         ud2
         .cfi_endproc
-    ",
-);
+        ",
+    );
+}

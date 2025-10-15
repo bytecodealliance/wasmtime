@@ -1019,6 +1019,9 @@
     ;; A pseudoinstruction that loads the address of a label.
     (LabelAddress (dst WritableReg)
                   (label MachLabel))
+
+    ;; A pseudoinstruction that serves as a sequence point.
+    (SequencePoint)
 ))
 
 ;; Primitive types used in instruction formats.
@@ -4940,6 +4943,11 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))
+
+;; Helper for creating a `SequencePoint` instruction.
+(decl s390x_sequence_point () SideEffectNoResult)
+(rule (s390x_sequence_point)
+      (SideEffectNoResult.Inst (MInst.SequencePoint)))
 
 ;; Implicit conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

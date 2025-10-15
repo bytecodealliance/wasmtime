@@ -11,7 +11,7 @@ fn main() {
     let tests = if cfg!(miri) {
         Vec::new()
     } else {
-        wasmtime_test_util::wast::find_tests(".".as_ref()).unwrap()
+        wasmtime_test_util::wast::find_tests(env!("CARGO_MANIFEST_DIR").as_ref()).unwrap()
     };
 
     let mut trials = Vec::new();

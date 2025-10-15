@@ -873,6 +873,21 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 }
             }
 
+            // If the CLIF instruction had debug tags, copy them to
+            // the VCode. Place on all VCode instructions lowered from
+            // this CLIF instruction.
+            let debug_tags = self.f.debug_tags.get(inst);
+            if !debug_tags.is_empty() && self.vcode.vcode.num_insts() > 0 {
+                let end = self.vcode.vcode.num_insts();
+                for i in start..end {
+                    let backwards_index = BackwardsInsnIndex::new(i);
+                    log::trace!(
+                        "debug tags on {inst}; associating {debug_tags:?} with {backwards_index:?}"
+                    );
+                    self.vcode.add_debug_tags(backwards_index, debug_tags);
+                }
+            }
+
             // maybe insert random instruction
             if ctrl_plane.get_decision() {
                 if ctrl_plane.get_decision() {

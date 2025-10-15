@@ -17,6 +17,10 @@ use std::ops::Range;
 
 const TIMEOUT_NS: u64 = 1_000_000_000;
 
+pub fn supports_ipv6() -> bool {
+    std::env::var("DISABLE_IPV6").is_err()
+}
+
 impl Pollable {
     pub fn block_until(&self, timeout: &Pollable) -> Result<(), ErrorCode> {
         let ready = poll::poll(&[self, timeout]);

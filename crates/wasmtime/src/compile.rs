@@ -890,7 +890,7 @@ impl UnlinkedCompileOutputs<'_> {
             needs_gc_heap |= output.function.needs_gc_heap;
 
             let index = compiled_funcs.len();
-            compiled_funcs.push((output.symbol, output.function.code));
+            compiled_funcs.push((output.symbol, output.key, output.function.code));
 
             if output.start_srcloc != FilePos::none() {
                 indices
@@ -913,9 +913,10 @@ impl UnlinkedCompileOutputs<'_> {
 struct PreLinkOutput {
     /// Whether or not any of these functions require a GC heap
     needs_gc_heap: bool,
-    /// The flattened list of (symbol name, compiled function) pairs, as they
-    /// will be laid out in the object file.
-    compiled_funcs: Vec<(String, Box<dyn Any + Send + Sync>)>,
+    /// The flattened list of (symbol name, FuncKey, compiled
+    /// function) triples, as they will be laid out in the object
+    /// file.
+    compiled_funcs: Vec<(String, FuncKey, Box<dyn Any + Send + Sync>)>,
     /// The `FunctionIndices` mapping our function keys to indices in that flat
     /// list.
     indices: FunctionIndices,
@@ -937,7 +938,7 @@ impl FunctionIndices {
         self,
         mut obj: object::write::Object<'static>,
         engine: &'a Engine,
-        compiled_funcs: Vec<(String, Box<dyn Any + Send + Sync>)>,
+        compiled_funcs: Vec<(String, FuncKey, Box<dyn Any + Send + Sync>)>,
         translations: PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
         dwarf_package_bytes: Option<&[u8]>,
     ) -> Result<(wasmtime_environ::ObjectBuilder<'a>, Artifacts)> {
@@ -959,14 +960,14 @@ impl FunctionIndices {
         )?;
 
         // If requested, generate and add DWARF information.
-        if tunables.generate_native_debuginfo {
+        if tunables.debug_native {
             compiler.append_dwarf(
                 &mut obj,
                 &translations,
                 &|module, func| {
                     let i = self.indices[&FuncKey::DefinedWasmFunction(module, func)];
                     let (symbol, _) = symbol_ids_and_locs[i];
-                    let (_, compiled_func) = &compiled_funcs[i];
+                    let (_, _, compiled_func) = &compiled_funcs[i];
                     (symbol, &**compiled_func)
                 },
                 dwarf_package_bytes,

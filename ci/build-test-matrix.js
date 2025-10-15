@@ -23,8 +23,8 @@ const macos = 'macos-15';
 // the merge queue. Same schema as `FULL_MATRIX`.
 const FAST_MATRIX = [
   {
-    "os": ubuntu,
     "name": "Test Linux x86_64",
+    "os": ubuntu,
     "filter": "linux-x64",
     "isa": "x64",
   },
@@ -54,91 +54,102 @@ const FAST_MATRIX = [
 //   QEMU and installing cross compilers to execute a cross-compiled test suite
 //   on CI.
 //
+// * `sde` - if `true`, indicates this test should use Intel SDE for instruction
+//   emulation. SDE will be set up and configured as the test runner.
+//
 // * `rust` - the Rust version to install, and if unset this'll be set to
 //   `default`
 const FULL_MATRIX = [
   ...FAST_MATRIX,
   {
+    "name": "Test MSRV",
     "os": ubuntu,
-    "name": "Test MSRV on Linux x86_64",
     "filter": "linux-x64",
     "isa": "x64",
     "rust": "msrv",
   },
   {
+    "name": "Test MPK",
     "os": ubuntu,
-    "name": "Test Linux x86_64 with MPK",
     "filter": "linux-x64",
     "isa": "x64"
   },
   {
+    "name": "Test ASAN",
     "os": ubuntu,
-    "name": "Test Linux x86_64 with ASAN",
     "filter": "asan",
     "rust": "wasmtime-ci-pinned-nightly",
     "target": "x86_64-unknown-linux-gnu",
   },
   {
-    "os": macos,
+    "name": "Test Intel SDE",
+    "os": ubuntu,
+    "filter": "sde",
+    "isa": "x64",
+    "sde": true,
+    "crates": "cranelift-tools",
+  },
+  {
     "name": "Test macOS x86_64",
+    "os": macos,
     "filter": "macos-x64",
     "target": "x86_64-apple-darwin",
   },
   {
-    "os": macos,
     "name": "Test macOS arm64",
+    "os": macos,
     "filter": "macos-arm64",
     "target": "aarch64-apple-darwin",
   },
   {
+    "name": "Test MSVC x86_64",
     "os": windows,
-    "name": "Test Windows MSVC x86_64",
     "filter": "windows-x64",
   },
   {
+    "name": "Test MinGW x86_64",
     "os": windows,
     "target": "x86_64-pc-windows-gnu",
-    "name": "Test Windows MinGW x86_64",
     "filter": "mingw-x64"
   },
   {
+    "name": "Test Linux arm64",
     "os": ubuntu + '-arm',
     "target": "aarch64-unknown-linux-gnu",
-    "name": "Test Linux arm64",
     "filter": "linux-arm64",
     "isa": "aarch64",
   },
   {
+    "name": "Test Linux s390x",
     "os": ubuntu,
     "target": "s390x-unknown-linux-gnu",
+    "filter": "linux-s390x",
+    "isa": "s390x",
     "gcc_package": "gcc-s390x-linux-gnu",
     "gcc": "s390x-linux-gnu-gcc",
     "qemu": "qemu-s390x -L /usr/s390x-linux-gnu",
     "qemu_target": "s390x-linux-user",
-    "name": "Test Linux s390x",
-    "filter": "linux-s390x",
-    "isa": "s390x"
   },
   {
+    "name": "Test Linux riscv64",
     "os": ubuntu,
     "target": "riscv64gc-unknown-linux-gnu",
     "gcc_package": "gcc-riscv64-linux-gnu",
     "gcc": "riscv64-linux-gnu-gcc",
     "qemu": "qemu-riscv64 -cpu rv64,v=true,vlen=256,vext_spec=v1.0,zfa=true,zfh=true,zba=true,zbb=true,zbc=true,zbs=true,zbkb=true,zcb=true,zicond=true,zvfh=true -L /usr/riscv64-linux-gnu",
     "qemu_target": "riscv64-linux-user",
-    "name": "Test Linux riscv64",
     "filter": "linux-riscv64",
     "isa": "riscv64",
   },
   {
-    "name": "Tests on i686-unknown-linux-gnu",
+    "name": "Tests Linux i686",
     "os": ubuntu,
     "target": "i686-unknown-linux-gnu",
     "gcc_package": "gcc-i686-linux-gnu",
     "gcc": "i686-linux-gnu-gcc",
   },
   {
-    "name": "Tests on armv7-unknown-linux-gnueabihf",
+    "name": "Tests Linux armv7",
     "os": ubuntu,
     "target": "armv7-unknown-linux-gnueabihf",
     "gcc_package": "gcc-arm-linux-gnueabihf",
@@ -222,12 +233,31 @@ async function shard(configs) {
   // created above.
   const sharded = [];
   for (const config of configs) {
-    for (const bucket of buckets) {
+    // If crates is specified, don't shard, just use the specified crates
+    if (config.crates) {
       sharded.push(Object.assign(
         {},
         config,
         {
-          name: `${config.name} (${Array.from(bucket).join(', ')})`,
+          bucket: members
+            .map(c => c === config.crates ? `--package ${c}` : `--exclude ${c}`)
+            .join(" ")
+        }
+      ));
+      continue;
+    }
+
+    let nbucket = 1;
+    for (const bucket of buckets) {
+      let bucket_name = `${nbucket}/${buckets.length}`;
+      if (bucket.size === 1)
+        bucket_name = Array.from(bucket)[0];
+
+      sharded.push(Object.assign(
+        {},
+        config,
+        {
+          name: `${config.name} (${bucket_name})`,
           // We run tests via `cargo test --workspace`, so exclude crates that
           // aren't in this bucket, rather than naming only the crates that are
           // in this bucket.
@@ -236,6 +266,7 @@ async function shard(configs) {
             .join(" "),
         }
       ));
+      nbucket += 1;
     }
   }
   return sharded;

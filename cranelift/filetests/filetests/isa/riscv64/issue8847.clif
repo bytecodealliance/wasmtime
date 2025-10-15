@@ -6,7 +6,6 @@ set enable_alias_analysis=false
 set enable_llvm_abi_extensions=true
 set enable_multi_ret_implicit_sret
 set machine_code_cfg_info=true
-set enable_jump_tables=false
 set enable_heap_access_spectre_mitigation=false
 target riscv64 has_zcd has_zbkb has_zbc has_zbs has_zicond has_zvl32b has_zvl64b has_zvl128b has_zvl1024b has_zvl2048b has_zvl4096b has_zvl8192b has_zvl16384b has_zvl32768b
 

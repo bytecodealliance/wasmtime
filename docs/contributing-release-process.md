@@ -74,7 +74,7 @@ carry on its way.
 ## Releasing a patch version
 
 Wasmtime does not currently have a cadence for patch version nor a strict set
-of criteria. It's done on an as-needed basis. Two requirements, however are:
+of criteria. It's done on an as-needed basis. Requirements, however, are:
 
 * All changes must land on `main` first (if applicable) and then get backported
   to an older branch. Release branches should already exist from the above
@@ -105,8 +105,9 @@ Like above human interaction is indicated with **bold** text in these steps.
 
 1. **Necessary changes are backported to the `release-2.0.0` branch from
    `main`**
-   * CI may not have been run in some time for release branches so it may be
-     necessary to backport CI fixes and updates from `main` as well.
+   * CI for supported branches is run weekly, even after release, to ensure that
+     it's at most broken for a week. Nevertheless issues come up, so be aware
+     that CI may be green on `main` but red on a release branch.
    * When merging backports maintainers need to double-check that the
      `PUBLIC_CRATES` listed in `scripts/publish.rs` do not have
      semver-API-breaking changes (in the strictest sense). All security fixes
@@ -141,13 +142,13 @@ runbook](./security-vulnerability-runbook.md).
 Release notes for Wasmtime are written in the `RELEASES.md` file in the root of
 the repository. Management of this file looks like:
 
-* (theoretically) All changes on `main` which need to write an entry in
-  `RELEASES.md`.
-* When the `main` branch gets a version the `RELEASES.md` file is emptied and
-  replaced with `ci/RELEASES-template.md`. An entry for the upcoming release is
-  added to the bulleted list at the bottom.
+* (theoretically) All changes on `main` bundle an appropriate update of
+  `RELEASES.md`. In practice this almost never happens.
+* When the `main` branch gets a version bump the `RELEASES.md` file is emptied
+  and replaced with `ci/RELEASES-template.md`. An entry for the upcoming release
+  is added to the bulleted list at the bottom.
 * (realistically) After a `release-X.Y.Z` branch is created release notes are
-  updated and edited on the release branch.
+  updated and edited on the release branch directly.
 
 This means that `RELEASES.md` only has release notes for the release branch that
 it is on. Historical release notes can be found through links at the bottom to

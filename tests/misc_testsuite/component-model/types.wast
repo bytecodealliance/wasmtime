@@ -335,3 +335,21 @@
     (export "b" (type (eq $t2)))
   ))
 )
+
+(component
+  (type (export "x") (component
+    (type $t' (instance
+      (export "r" (type (sub resource)))
+    ))
+    (export "t" (instance $t (type $t')))
+  ))
+)
+
+(component
+  (type (export "x") (instance
+    (type $t' (instance
+      (export "r" (type (sub resource)))
+    ))
+    (export "t" (instance $t (type $t')))
+  ))
+)

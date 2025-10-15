@@ -50,14 +50,9 @@ pub struct RunCommand {
     #[arg(long, value_name = "FUNCTION")]
     pub invoke: Option<String>,
 
-    /// Load the given WebAssembly module before the main module
-    #[arg(
-        long = "preload",
-        number_of_values = 1,
-        value_name = "NAME=MODULE_PATH",
-        value_parser = parse_preloads,
-    )]
-    pub preloads: Vec<(String, PathBuf)>,
+    #[command(flatten)]
+    #[expect(missing_docs, reason = "don't want to mess with clap doc-strings")]
+    pub preloads: Preloads,
 
     /// Override the value of `argv[0]`, typically the name of the executable of
     /// the application being run.
@@ -77,17 +72,53 @@ pub struct RunCommand {
     pub module_and_args: Vec<OsString>,
 }
 
-enum CliLinker {
+#[expect(missing_docs, reason = "don't want to mess with clap doc-strings")]
+#[derive(Parser, Default, Clone)]
+pub struct Preloads {
+    /// Load the given WebAssembly module before the main module
+    #[arg(
+        long = "preload",
+        number_of_values = 1,
+        value_name = "NAME=MODULE_PATH",
+        value_parser = parse_preloads,
+    )]
+    modules: Vec<(String, PathBuf)>,
+}
+
+/// Dispatch between either a core or component linker.
+#[expect(missing_docs, reason = "self-explanatory")]
+pub enum CliLinker {
     Core(wasmtime::Linker<Host>),
     #[cfg(feature = "component-model")]
     Component(wasmtime::component::Linker<Host>),
 }
 
+/// Dispatch between either a core or component instance.
+#[expect(missing_docs, reason = "self-explanatory")]
+pub enum CliInstance {
+    Core(wasmtime::Instance),
+    #[cfg(feature = "component-model")]
+    Component(wasmtime::component::Instance),
+}
+
 impl RunCommand {
     /// Executes the command.
+    #[cfg(feature = "run")]
     pub fn execute(mut self) -> Result<()> {
         self.run.common.init_logging()?;
 
+        let engine = self.new_engine()?;
+        let main = self
+            .run
+            .load_module(&engine, self.module_and_args[0].as_ref())?;
+        let (mut store, mut linker) = self.new_store_and_linker(&engine, &main)?;
+
+        self.instantiate_and_run(&engine, &mut linker, &main, &mut store)?;
+        Ok(())
+    }
+
+    /// Creates a new `Engine` with the configuration for this command.
+    pub fn new_engine(&mut self) -> Result<Engine> {
         let mut config = self.run.common.config(None)?;
         config.async_support(true);
 
@@ -105,13 +136,19 @@ impl RunCommand {
             None => {}
         }
 
-        let engine = Engine::new(&config)?;
+        Engine::new(&config)
+    }
 
-        // Read the wasm module binary either as `*.wat` or a raw binary.
-        let main = self
-            .run
-            .load_module(&engine, self.module_and_args[0].as_ref())?;
-
+    /// Populatse a new `Store` and `CliLinker` with the configuration in this
+    /// command.
+    ///
+    /// The `engine` provided is used to for the store/linker and the `main`
+    /// provided is the module/component that is going to be run.
+    pub fn new_store_and_linker(
+        &mut self,
+        engine: &Engine,
+        main: &RunTarget,
+    ) -> Result<(Store<Host>, CliLinker)> {
         // Validate coredump-on-trap argument
         if let Some(path) = &self.run.common.debug.coredump {
             if path.contains("%") {
@@ -162,13 +199,27 @@ impl RunCommand {
             store.set_fuel(fuel)?;
         }
 
+        Ok((store, linker))
+    }
+
+    /// Executes the `main` after instantiating it within `store`.
+    ///
+    /// This applies all configuration within `self`, such as timeouts and
+    /// profiling, and performs the execution. The resulting instance is
+    /// returned.
+    pub fn instantiate_and_run(
+        &self,
+        engine: &Engine,
+        linker: &mut CliLinker,
+        main: &RunTarget,
+        store: &mut Store<Host>,
+    ) -> Result<CliInstance> {
         // Always run the module asynchronously to ensure that the module can be
         // interrupted, even if it is blocking on I/O or a timeout or something.
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_time()
             .enable_io()
             .build()?;
-
         let dur = self
             .run
             .common
@@ -183,7 +234,7 @@ impl RunCommand {
                 }
 
                 // Load the preload wasm modules.
-                for (name, path) in self.preloads.iter() {
+                for (name, path) in self.preloads.modules.iter() {
                     // Read the wasm module binary either as `*.wat` or a raw binary
                     let preload_target = self.run.load_module(&engine, path)?;
                     let preload_module = match preload_target {
@@ -196,11 +247,11 @@ impl RunCommand {
                     profiled_modules.push((name.to_string(), preload_module.clone()));
 
                     // Add the module's functions to the linker.
-                    match &mut linker {
+                    match linker {
                         #[cfg(feature = "cranelift")]
                         CliLinker::Core(linker) => {
                             linker
-                                .module_async(&mut store, name, &preload_module)
+                                .module_async(&mut *store, name, &preload_module)
                                 .await
                                 .context(format!(
                                     "failed to process preload `{}` at `{}`",
@@ -219,7 +270,7 @@ impl RunCommand {
                     }
                 }
 
-                self.load_main_module(&mut store, &mut linker, &main, profiled_modules)
+                self.load_main_module(store, linker, &main, profiled_modules)
                     .await
                     .with_context(|| {
                         format!(
@@ -232,11 +283,11 @@ impl RunCommand {
         });
 
         // Load the main wasm module.
-        match result.unwrap_or_else(|elapsed| {
+        let instance = match result.unwrap_or_else(|elapsed| {
             Err(anyhow::Error::from(wasmtime::Trap::Interrupt))
                 .with_context(|| format!("timed out after {elapsed}"))
         }) {
-            Ok(()) => (),
+            Ok(instance) => instance,
             Err(e) => {
                 // Exit the process if Wasmtime understands the error;
                 // otherwise, fall back on Rust's default error printing/return
@@ -261,9 +312,9 @@ impl RunCommand {
                 }
                 return Err(e);
             }
-        }
+        };
 
-        Ok(())
+        Ok(instance)
     }
 
     fn compute_argv(&self) -> Result<Vec<String>> {
@@ -421,7 +472,7 @@ impl RunCommand {
         linker: &mut CliLinker,
         main_target: &RunTarget,
         profiled_modules: Vec<(String, Module)>,
-    ) -> Result<()> {
+    ) -> Result<CliInstance> {
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.run.common.wasm.unknown_imports_trap == Some(true) {
@@ -477,7 +528,7 @@ impl RunCommand {
                     Some(
                         instance
                             .get_func(&mut *store, name)
-                            .ok_or_else(|| anyhow!("no func export named `{}` found", name))?,
+                            .ok_or_else(|| anyhow!("no func export named `{name}` found"))?,
                     )
                 } else {
                     instance
@@ -485,10 +536,10 @@ impl RunCommand {
                         .or_else(|| instance.get_func(&mut *store, "_start"))
                 };
 
-                match func {
-                    Some(func) => self.invoke_func(store, func).await,
-                    None => Ok(()),
+                if let Some(func) = func {
+                    self.invoke_func(store, func).await?;
                 }
+                Ok(CliInstance::Core(instance))
             }
             #[cfg(feature = "component-model")]
             CliLinker::Component(linker) => {
@@ -499,7 +550,9 @@ impl RunCommand {
                     self.run_command_component(&mut *store, component, linker)
                         .await
                 };
-                result.map_err(|e| self.handle_core_dump(&mut *store, e))
+                result
+                    .map(CliInstance::Component)
+                    .map_err(|e| self.handle_core_dump(&mut *store, e))
             }
         };
         finish_epoch_handler(store);
@@ -513,7 +566,7 @@ impl RunCommand {
         store: &mut Store<Host>,
         component: &wasmtime::component::Component,
         linker: &mut wasmtime::component::Linker<Host>,
-    ) -> Result<()> {
+    ) -> Result<wasmtime::component::Instance> {
         use wasmtime::component::{
             Val,
             wasm_wave::{
@@ -565,7 +618,7 @@ impl RunCommand {
 
         println!("{}", DisplayFuncResults(&results));
 
-        Ok(())
+        Ok(instance)
     }
 
     /// Execute the default behavior for components on the CLI, looking for
@@ -576,7 +629,7 @@ impl RunCommand {
         store: &mut Store<Host>,
         component: &wasmtime::component::Component,
         linker: &wasmtime::component::Linker<Host>,
-    ) -> Result<()> {
+    ) -> Result<wasmtime::component::Instance> {
         let instance = linker.instantiate_async(&mut *store, component).await?;
 
         let mut result = None;
@@ -588,10 +641,8 @@ impl RunCommand {
         if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
             if let Ok(command) = wasmtime_wasi::p3::bindings::Command::new(&mut *store, &instance) {
                 result = Some(
-                    instance
-                        .run_concurrent(&mut *store, async |store| {
-                            command.wasi_cli_run().call_run(store).await
-                        })
+                    store
+                        .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
                         .await?,
                 );
             }
@@ -613,7 +664,7 @@ impl RunCommand {
         // Translate the `Result<(),()>` produced by wasm into a feigned
         // explicit exit here with status 1 if `Err(())` is returned.
         match wasm_result {
-            Ok(()) => Ok(()),
+            Ok(()) => Ok(instance),
             Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
         }
     }
@@ -679,7 +730,7 @@ impl RunCommand {
                 Some(s) => s,
                 None => {
                     if let Some(name) = &self.invoke {
-                        bail!("not enough arguments for `{}`", name)
+                        bail!("not enough arguments for `{name}`")
                     } else {
                         bail!("not enough arguments for command default")
                     }
@@ -702,7 +753,7 @@ impl RunCommand {
                 }),
                 ValType::F32 => Val::F32(val.parse::<f32>()?.to_bits()),
                 ValType::F64 => Val::F64(val.parse::<f64>()?.to_bits()),
-                t => bail!("unsupported argument type {:?}", t),
+                t => bail!("unsupported argument type {t:?}"),
             });
         }
 
@@ -976,6 +1027,10 @@ impl RunCommand {
                     }
                     CliLinker::Component(linker) => {
                         wasmtime_wasi_http::add_only_http_to_linker_sync(linker)?;
+                        #[cfg(feature = "component-model-async")]
+                        if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
+                            wasmtime_wasi_http::p3::add_to_linker(linker)?;
+                        }
                     }
                 }
 
@@ -1111,7 +1166,7 @@ impl RunCommand {
 /// effectively asserts that there's only one thread. In short much of this is
 /// not compatible with `wasi-threads`.
 #[derive(Default, Clone)]
-struct Host {
+pub struct Host {
     // Legacy wasip1 context using `wasi_common`, not set unless opted-in-to
     // with the CLI.
     legacy_p1_ctx: Option<wasi_common::WasiCtx>,
@@ -1138,6 +1193,8 @@ struct Host {
     wasi_http_outgoing_body_buffer_chunks: Option<usize>,
     #[cfg(feature = "wasi-http")]
     wasi_http_outgoing_body_chunk_size: Option<usize>,
+    #[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
+    p3_http: crate::common::DefaultP3Ctx,
     limits: StoreLimits,
     #[cfg(feature = "profiling")]
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
@@ -1152,12 +1209,16 @@ struct Host {
 
 impl Host {
     fn wasip1_ctx(&mut self) -> &mut wasmtime_wasi::p1::WasiP1Ctx {
-        let ctx = self.wasip1_ctx.as_mut().expect("wasi is not configured");
-        Arc::get_mut(ctx)
-            .expect("wasmtime_wasi is not compatible with threads")
-            .get_mut()
-            .unwrap()
+        unwrap_singlethread_context(&mut self.wasip1_ctx)
     }
+}
+
+fn unwrap_singlethread_context<T>(ctx: &mut Option<Arc<Mutex<T>>>) -> &mut T {
+    let ctx = ctx.as_mut().expect("context not configured");
+    Arc::get_mut(ctx)
+        .expect("context is not compatible with threads")
+        .get_mut()
+        .unwrap()
 }
 
 impl WasiView for Host {
@@ -1188,29 +1249,39 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
     }
 }
 
-#[cfg(not(unix))]
-fn ctx_set_listenfd(num_fd: usize, _builder: &mut WasiCtxBuilder) -> Result<usize> {
-    Ok(num_fd)
-}
-
-#[cfg(unix)]
-fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<usize> {
-    use listenfd::ListenFd;
-
-    for env in ["LISTEN_FDS", "LISTEN_FDNAMES"] {
-        if let Ok(val) = std::env::var(env) {
-            builder.env(env, &val)?;
+#[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
+impl wasmtime_wasi_http::p3::WasiHttpView for Host {
+    fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
+        wasmtime_wasi_http::p3::WasiHttpCtxView {
+            table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
+            ctx: &mut self.p3_http,
         }
     }
+}
 
-    let mut listenfd = ListenFd::from_env();
+fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<usize> {
+    let _ = &mut num_fd;
+    let _ = &mut *builder;
 
-    for i in 0..listenfd.len() {
-        if let Some(stdlistener) = listenfd.take_tcp_listener(i)? {
-            let _ = stdlistener.set_nonblocking(true)?;
-            let listener = TcpListener::from_std(stdlistener);
-            builder.preopened_socket((3 + i) as _, listener)?;
-            num_fd = 3 + i;
+    #[cfg(all(unix, feature = "run"))]
+    {
+        use listenfd::ListenFd;
+
+        for env in ["LISTEN_FDS", "LISTEN_FDNAMES"] {
+            if let Ok(val) = std::env::var(env) {
+                builder.env(env, &val)?;
+            }
+        }
+
+        let mut listenfd = ListenFd::from_env();
+
+        for i in 0..listenfd.len() {
+            if let Some(stdlistener) = listenfd.take_tcp_listener(i)? {
+                let _ = stdlistener.set_nonblocking(true)?;
+                let listener = TcpListener::from_std(stdlistener);
+                builder.preopened_socket((3 + i) as _, listener)?;
+                num_fd = 3 + i;
+            }
         }
     }
 

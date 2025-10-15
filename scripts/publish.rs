@@ -53,7 +53,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // winch
     "winch",
     // wasmtime
-    "wasmtime-internal-asm-macros",
     "wasmtime-internal-versioned-export-macros",
     "wasmtime-internal-slab",
     "wasmtime-internal-component-util",
@@ -84,6 +83,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wast",
     "wasmtime-internal-c-api-macros",
     "wasmtime-c-api-impl",
+    "wasmtime-wizer",
     "wasmtime-cli-flags",
     "wasmtime-internal-explorer",
     "wasmtime-cli",
@@ -107,6 +107,7 @@ const PUBLIC_CRATES: &[&str] = &[
     "wasmtime-wasi-keyvalue",
     "wasmtime-wasi-threads",
     "wasmtime-cli",
+    "wasmtime-wizer",
     // All cranelift crates are considered "public" in that they can't have
     // breaking API changes in patch releases.
     "cranelift-srcgen",

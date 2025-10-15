@@ -573,7 +573,7 @@ pub struct WasmtimeConfig {
     regalloc_algorithm: RegallocAlgorithm,
     debug_info: bool,
     canonicalize_nans: bool,
-    interruptable: bool,
+    interruptible: bool,
     pub(crate) consume_fuel: bool,
     pub(crate) epoch_interruption: bool,
     /// The Wasmtime memory configuration to use.
@@ -838,17 +838,21 @@ impl OptLevel {
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
 enum RegallocAlgorithm {
     Backtracking,
-    // FIXME(#11544 and #11545): rename back to `SinglePass` and handle below
-    // when those issues are fixed
-    TemporarilyDisabledSinglePass,
+    SinglePass,
 }
 
 impl RegallocAlgorithm {
     fn to_wasmtime(&self) -> wasmtime::RegallocAlgorithm {
         match self {
             RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
-            RegallocAlgorithm::TemporarilyDisabledSinglePass => {
-                wasmtime::RegallocAlgorithm::Backtracking
+            RegallocAlgorithm::SinglePass => {
+                // FIXME(#11850)
+                const SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME: bool = true;
+                if SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME {
+                    wasmtime::RegallocAlgorithm::Backtracking
+                } else {
+                    wasmtime::RegallocAlgorithm::SinglePass
+                }
             }
         }
     }

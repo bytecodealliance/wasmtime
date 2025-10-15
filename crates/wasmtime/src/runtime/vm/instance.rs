@@ -346,7 +346,7 @@ impl Instance {
         self.runtime_info.env_module()
     }
 
-    #[cfg(feature = "gc")]
+    #[cfg(any(feature = "gc", feature = "debug"))]
     pub(crate) fn runtime_module(&self) -> Option<&crate::Module> {
         match &self.runtime_info {
             ModuleRuntimeInfo::Module(m) => Some(m),

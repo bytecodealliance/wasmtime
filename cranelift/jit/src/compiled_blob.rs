@@ -101,11 +101,17 @@ impl CompiledBlob {
                     let base = get_address(name);
                     let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
                     let get_page = |x| x & (!0xfff);
-                    let pcrel = i32::try_from(get_page(what as isize) - get_page(at as isize))
-                        .unwrap()
-                        .cast_unsigned();
+                    // NOTE: This should technically be i33 given that this relocation type allows
+                    // a range from -4GB to +4GB, not -2GB to +2GB. But this doesn't really matter
+                    // as the target is unlikely to be more than 2GB from the adrp instruction. We
+                    // need to be careful to not cast to an unsigned int until after doing >> 12 to
+                    // compute the upper 21bits of the pcrel address however as otherwise the top
+                    // bit of the 33bit pcrel address would be forced 0 through zero extension
+                    // instead of being sign extended as it should be.
+                    let pcrel =
+                        i32::try_from(get_page(what as isize) - get_page(at as isize)).unwrap();
                     let iptr = at as *mut u32;
-                    let hi21 = pcrel >> 12;
+                    let hi21 = (pcrel >> 12).cast_unsigned();
                     let lo = (hi21 & 0x3) << 29;
                     let hi = (hi21 & 0x1ffffc) << 3;
                     unsafe { modify_inst32(iptr, |inst| inst | lo | hi) };

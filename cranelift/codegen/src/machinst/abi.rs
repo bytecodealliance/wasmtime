@@ -100,8 +100,8 @@
 
 use crate::CodegenError;
 use crate::entity::SecondaryMap;
-use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, ExceptionTag, Signature};
+use crate::ir::{StackSlotKey, types::*};
 use crate::isa::TargetIsa;
 use crate::settings::ProbestackStrategy;
 use crate::{ir, isa};
@@ -1142,6 +1142,8 @@ pub struct Callee<M: ABIMachineSpec> {
     dynamic_stackslots: PrimaryMap<DynamicStackSlot, u32>,
     /// Offsets to each sized stackslot.
     sized_stackslots: PrimaryMap<StackSlot, u32>,
+    /// Descriptors for sized stackslots.
+    sized_stackslot_keys: SecondaryMap<StackSlot, Option<StackSlotKey>>,
     /// Total stack size of all stackslots
     stackslots_size: u32,
     /// Stack size to be reserved for outgoing arguments.
@@ -1227,6 +1229,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         // Compute sized stackslot locations and total stackslot size.
         let mut end_offset: u32 = 0;
         let mut sized_stackslots = PrimaryMap::new();
+        let mut sized_stackslot_keys = SecondaryMap::new();
 
         for (stackslot, data) in f.sized_stack_slots.iter() {
             // We start our computation possibly unaligned where the previous
@@ -1250,6 +1253,7 @@ impl<M: ABIMachineSpec> Callee<M> {
 
             debug_assert_eq!(stackslot.as_u32() as usize, sized_stackslots.len());
             sized_stackslots.push(start_offset);
+            sized_stackslot_keys[stackslot] = data.key;
         }
 
         // Compute dynamic stackslot locations and total stackslot size.
@@ -1304,6 +1308,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             dynamic_stackslots,
             dynamic_type_sizes,
             sized_stackslots,
+            sized_stackslot_keys,
             stackslots_size,
             outgoing_args_size: 0,
             tail_args_size,
@@ -2139,6 +2144,11 @@ impl<M: ABIMachineSpec> Callee<M> {
         }
     }
 
+    /// Get the raw offset of a sized stackslot in the slot region.
+    pub fn sized_stackslot_offset(&self, slot: StackSlot) -> u32 {
+        self.sized_stackslots[slot]
+    }
+
     /// Produce an instruction that computes a sized stackslot address.
     pub fn sized_stackslot_addr(
         &self,
@@ -2319,22 +2329,29 @@ impl<M: ABIMachineSpec> Callee<M> {
             .expect("frame layout not computed before prologue generation")
     }
 
-    /// Returns the full frame size for the given function, after prologue
-    /// emission has run. This comprises the spill slots and stack-storage
-    /// slots as well as storage for clobbered callee-save registers, but
-    /// not arguments arguments pushed at callsites within this function,
-    /// or other ephemeral pushes.
-    pub fn frame_size(&self) -> u32 {
+    /// Returns the offset from SP to FP for the given function, after
+    /// the prologue has set up the frame. This comprises the spill
+    /// slots and stack-storage slots as well as storage for clobbered
+    /// callee-save registers and outgoing arguments at callsites
+    /// (space for which is reserved during frame setup).
+    pub fn sp_to_fp_offset(&self) -> u32 {
         let frame_layout = self.frame_layout();
-        frame_layout.clobber_size + frame_layout.fixed_frame_storage_size
+        frame_layout.clobber_size
+            + frame_layout.fixed_frame_storage_size
+            + frame_layout.outgoing_args_size
     }
 
     /// Returns offset from the slot base in the current frame to the caller's SP.
     pub fn slot_base_to_caller_sp_offset(&self) -> u32 {
+        // Note: this looks very similar to `frame_size()` above, but
+        // it differs in both endpoints: it measures from the bottom
+        // of stackslots, excluding outgoing args; and it includes the
+        // setup area (FP/LR) size and any extra tail-args space.
         let frame_layout = self.frame_layout();
         frame_layout.clobber_size
             + frame_layout.fixed_frame_storage_size
             + frame_layout.setup_area_size
+            + (frame_layout.tail_args_size - frame_layout.incoming_args_size)
     }
 
     /// Returns the size of arguments expected on the stack.
@@ -2384,6 +2401,28 @@ impl<M: ABIMachineSpec> Callee<M> {
 
         let from = StackAMode::Slot(sp_off);
         <M>::gen_load_stack(from, to_reg.map(Reg::from), ty)
+    }
+
+    /// Provide metadata to be emitted alongside machine code.
+    ///
+    /// This metadata describes the frame layout sufficiently to find
+    /// stack slots, so that runtimes and unwinders can observe state
+    /// set up by compiled code in stackslots allocated for that
+    /// purpose.
+    pub fn frame_slot_metadata(&self) -> MachBufferFrameLayout {
+        let frame_to_fp_offset = self.sp_to_fp_offset();
+        let mut stackslots = SecondaryMap::with_capacity(self.sized_stackslots.len());
+        let storage_area_base = self.frame_layout().outgoing_args_size;
+        for (slot, storage_area_offset) in &self.sized_stackslots {
+            stackslots[slot] = MachBufferStackSlot {
+                offset: storage_area_base.checked_add(*storage_area_offset).unwrap(),
+                key: self.sized_stackslot_keys[slot],
+            };
+        }
+        MachBufferFrameLayout {
+            frame_to_fp_offset,
+            stackslots,
+        }
     }
 }
 

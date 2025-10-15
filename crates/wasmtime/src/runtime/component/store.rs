@@ -37,22 +37,33 @@ impl ComponentStoreData {
     pub(crate) fn drop_fibers_and_futures(store: &mut dyn VMStore) {
         let mut fibers = Vec::new();
         let mut futures = Vec::new();
-        for (_, instance) in store.store_data_mut().components.instances.iter_mut() {
-            let Some(instance) = instance.as_mut() else {
-                continue;
-            };
-
-            instance
-                .get_mut()
-                .concurrent_state_mut()
-                .take_fibers_and_futures(&mut fibers, &mut futures);
-        }
+        store
+            .concurrent_state_mut()
+            .take_fibers_and_futures(&mut fibers, &mut futures);
 
         for mut fiber in fibers {
             fiber.dispose(store);
         }
 
         crate::component::concurrent::tls::set(store, move || drop(futures));
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn assert_guest_tables_empty(&mut self) {
+        for (_, instance) in self.instances.iter_mut() {
+            let Some(instance) = instance.as_mut() else {
+                continue;
+            };
+
+            assert!(
+                instance
+                    .get_mut()
+                    .guest_tables()
+                    .0
+                    .iter()
+                    .all(|(_, table)| table.is_empty())
+            );
+        }
     }
 }
 

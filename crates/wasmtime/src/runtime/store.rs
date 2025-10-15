@@ -81,7 +81,7 @@ use crate::RootSet;
 use crate::ThrownException;
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentStoreData;
-#[cfg(feature = "component-model-async")]
+#[cfg(feature = "component-model")]
 use crate::component::concurrent;
 #[cfg(feature = "async")]
 use crate::fiber;
@@ -480,9 +480,8 @@ pub struct StoreOpaque {
     component_calls: vm::component::CallContexts,
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
-
-    #[cfg(feature = "component-model-async")]
-    concurrent_async_state: concurrent::AsyncState,
+    #[cfg(feature = "component-model")]
+    concurrent_state: concurrent::ConcurrentState,
 
     /// State related to the executor of wasm code.
     ///
@@ -695,8 +694,8 @@ impl<T> Store<T> {
             #[cfg(feature = "component-model")]
             host_resource_data: Default::default(),
             executor: Executor::new(engine),
-            #[cfg(feature = "component-model-async")]
-            concurrent_async_state: Default::default(),
+            #[cfg(feature = "component-model")]
+            concurrent_state: Default::default(),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -1168,6 +1167,26 @@ impl<T> Store<T> {
     pub fn has_pending_exception(&self) -> bool {
         self.inner.pending_exception.is_some()
     }
+
+    /// Provide an object that views Wasm stack state, including Wasm
+    /// VM-level values (locals and operand stack), when debugging is
+    /// enabled.
+    ///
+    /// This object views all activations for the current store that
+    /// are on the stack. An activation is a contiguous sequence of
+    /// Wasm frames (called functions) that were called from host code
+    /// and called back out to host code. If there are activations
+    /// from multiple stores on the stack, for example if Wasm code in
+    /// one store calls out to host code which invokes another Wasm
+    /// function in another store, then the other stores are "opaque"
+    /// to our view here in the same way that host code is.
+    ///
+    /// Returns `None` if debug instrumentation is not enabled for
+    /// the engine containing this store.
+    #[cfg(feature = "debug")]
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
+        self.inner.debug_frames()
+    }
 }
 
 impl<'a, T> StoreContext<'a, T> {
@@ -1291,6 +1310,16 @@ impl<'a, T> StoreContextMut<'a, T> {
     pub fn has_pending_exception(&self) -> bool {
         self.0.inner.pending_exception.is_some()
     }
+
+    /// Provide an object that views Wasm stack state, including Wasm
+    /// VM-level values (locals and operand stack), when debugging is
+    /// enabled.
+    ///
+    /// See ['Store::debug_frames`] for more details.
+    #[cfg(feature = "debug")]
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
+        self.0.inner.debug_frames()
+    }
 }
 
 impl<T> StoreInner<T> {
@@ -1412,11 +1441,7 @@ impl StoreOpaque {
         fn bump(slot: &mut usize, max: usize, amt: usize, desc: &str) -> Result<()> {
             let new = slot.saturating_add(amt);
             if new > max {
-                bail!(
-                    "resource limit exceeded: {} count too high at {}",
-                    desc,
-                    new
-                );
+                bail!("resource limit exceeded: {desc} count too high at {new}");
             }
             *slot = new;
             Ok(())
@@ -1869,9 +1894,6 @@ impl StoreOpaque {
         gc_roots_list: &mut GcRootsList,
         frame: crate::runtime::vm::Frame,
     ) {
-        use crate::runtime::vm::SendSyncPtr;
-        use core::ptr::NonNull;
-
         let pc = frame.pc();
         debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
 
@@ -1886,29 +1908,44 @@ impl StoreOpaque {
             .lookup_module_by_pc(pc)
             .expect("should have module info for Wasm frame");
 
-        let stack_map = match module_info.lookup_stack_map(pc) {
-            Some(sm) => sm,
-            None => {
-                log::trace!("No stack map for this Wasm frame");
-                return;
-            }
-        };
-        log::trace!(
-            "We have a stack map that maps {} bytes in this Wasm frame",
-            stack_map.frame_size()
-        );
+        if let Some(stack_map) = module_info.lookup_stack_map(pc) {
+            log::trace!(
+                "We have a stack map that maps {} bytes in this Wasm frame",
+                stack_map.frame_size()
+            );
 
-        let sp = unsafe { stack_map.sp(fp) };
-        for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
-            let raw: u32 = unsafe { core::ptr::read(stack_slot) };
-            log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
-
-            let gc_ref = vm::VMGcRef::from_raw_u32(raw);
-            if gc_ref.is_some() {
+            let sp = unsafe { stack_map.sp(fp) };
+            for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
                 unsafe {
-                    gc_roots_list
-                        .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
+                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
                 }
+            }
+        }
+
+        #[cfg(feature = "debug")]
+        if let Some(frame_table) = module_info.frame_table() {
+            let relpc = module_info.text_offset(pc);
+            for stack_slot in super::debug::gc_refs_in_frame(frame_table, relpc, fp) {
+                unsafe {
+                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "gc")]
+    unsafe fn trace_wasm_stack_slot(&self, gc_roots_list: &mut GcRootsList, stack_slot: *mut u32) {
+        use crate::runtime::vm::SendSyncPtr;
+        use core::ptr::NonNull;
+
+        let raw: u32 = unsafe { core::ptr::read(stack_slot) };
+        log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
+
+        let gc_ref = vm::VMGcRef::from_raw_u32(raw);
+        if gc_ref.is_some() {
+            unsafe {
+                gc_roots_list
+                    .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
             }
         }
     }
@@ -2301,14 +2338,34 @@ at https://bytecodealliance.org/security.
         )
     }
 
+    #[cfg(feature = "component-model")]
+    pub(crate) fn component_resource_state_with_instance_and_concurrent_state(
+        &mut self,
+        instance: crate::component::Instance,
+    ) -> (
+        &mut vm::component::CallContexts,
+        &mut vm::component::HandleTable,
+        &mut crate::component::HostResourceData,
+        Pin<&mut vm::component::ComponentInstance>,
+        &mut concurrent::ConcurrentState,
+    ) {
+        (
+            &mut self.component_calls,
+            &mut self.component_host_table,
+            &mut self.host_resource_data,
+            instance.id().from_data_get_mut(&mut self.store_data),
+            &mut self.concurrent_state,
+        )
+    }
+
     #[cfg(feature = "async")]
     pub(crate) fn fiber_async_state_mut(&mut self) -> &mut fiber::AsyncState {
         &mut self.async_state
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn concurrent_async_state_mut(&mut self) -> &mut concurrent::AsyncState {
-        &mut self.concurrent_async_state
+    pub(crate) fn concurrent_state_mut(&mut self) -> &mut concurrent::ConcurrentState {
+        &mut self.concurrent_state
     }
 
     #[cfg(feature = "async")]

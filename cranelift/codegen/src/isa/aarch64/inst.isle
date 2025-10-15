@@ -997,6 +997,9 @@
        (LabelAddress (dst WritableReg)
                      (label MachLabel))
 
+       ;; A pseudoinstruction that serves as a sequence point.
+       (SequencePoint)
+
        ;; Emits an inline stack probe loop.
        ;;
        ;; Note that this is emitted post-regalloc so `start` and `end` can be
@@ -1410,6 +1413,12 @@
 (rule (vector_size (dynamic_lane 32 4)) (VectorSize.Size32x4))
 (rule (vector_size (dynamic_lane 64 2)) (VectorSize.Size64x2))
 
+;; Helper for converting the `ScalarSize` of a float value to the corresponding `VectorSize`
+(decl float_vector_size_in_64 (Type) VectorSize)
+(rule (float_vector_size_in_64 $F16) (VectorSize.Size16x4))
+(rule (float_vector_size_in_64 $F32) (VectorSize.Size32x2))
+(rule (float_vector_size_in_64 $F64) (VectorSize.Size8x8))
+
 ;; A floating-point unit (FPU) operation with one arg.
 (type FPUOp1
   (enum
@@ -1526,6 +1535,8 @@
     (Bic)
     ;; Bitwise inclusive or
     (Orr)
+    ;; Bitwise inclusive or not
+    (Orn)
     ;; Bitwise exclusive or
     (Eor)
     ;; Unsigned maximum pairwise
@@ -3222,6 +3233,9 @@
 (decl orr_vec (Reg Reg VectorSize) Reg)
 (rule (orr_vec x y size) (vec_rrr (VecALUOp.Orr) x y size))
 
+(decl orn_vec (Reg Reg VectorSize) Reg)
+(rule (orn_vec x y size) (vec_rrr (VecALUOp.Orn) x y size))
+
 ;; Helpers for generating `and` instructions.
 (spec (and_reg ty a b)
   (provide
@@ -3893,6 +3907,11 @@
 (rule 2 (amode ty (iadd (i32_from_iconst x) y) offset)
         (if-let new_offset (i32_checked_add x offset))
         (amode_no_more_iconst ty y new_offset))
+
+(rule 3
+      (amode ty (stack_addr slot offset1) offset2)
+      (AMode.SlotOffset
+       (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
 
 (decl amode_no_more_iconst (Type Value i32) AMode)
 ;; Base case: move the `offset` into a register and add it to `val` via the
@@ -5193,3 +5212,8 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LabelAddress dst label))))
         dst))
+
+;; Helper for creating a `SequencePoint` instruction.
+(decl a64_sequence_point () SideEffectNoResult)
+(rule (a64_sequence_point)
+      (SideEffectNoResult.Inst (MInst.SequencePoint)))

@@ -127,8 +127,7 @@ impl TryFrom<Address> for PairAMode {
                 }
             }
             other => Err(anyhow!(
-                "Could not convert {:?} to addressing mode for register pairs",
-                other
+                "Could not convert {other:?} to addressing mode for register pairs"
             )),
         }
     }
@@ -145,7 +144,7 @@ impl TryFrom<Address> for AMode {
             IndexedSPOffset { offset, indexing } => {
                 let simm9 = SImm9::maybe_from_i64(offset).ok_or_else(|| {
                     // TODO: non-string error
-                    anyhow!("Failed to convert {} to signed 9-bit offset", offset)
+                    anyhow!("Failed to convert {offset} to signed 9-bit offset")
                 })?;
 
                 if indexing == Pre {

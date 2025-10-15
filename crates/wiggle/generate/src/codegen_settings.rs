@@ -65,8 +65,7 @@ impl ErrorTransform {
                         if let Some(prior_def) = richtype_identifiers.insert(ident.clone(), field.err_loc)
                          {
                             return Err(anyhow!(
-                                    "duplicate rich type identifier of {:?} not allowed. prior definition at {:?}",
-                                    ident, prior_def
+                                    "duplicate rich type identifier of {ident:?} not allowed. prior definition at {prior_def:?}",
                                 ));
                         }
                         Ok(ErrorType::User(UserErrorType {

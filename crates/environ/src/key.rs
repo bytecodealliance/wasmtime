@@ -6,7 +6,7 @@ use crate::component;
 use crate::{
     BuiltinFunctionIndex, DefinedFuncIndex, HostCall, ModuleInternedTypeIndex, StaticModuleIndex,
 };
-use core::cmp;
+use core::{cmp, fmt};
 use serde_derive::{Deserialize, Serialize};
 
 /// The kind of a function that is being compiled, linked, or otherwise
@@ -15,6 +15,7 @@ use serde_derive::{Deserialize, Serialize};
 /// This is like a `FuncKey` but without any payload values.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(test, derive(arbitrary::Arbitrary))]
 pub enum FuncKeyKind {
     /// A Wasm-defined function.
     DefinedWasmFunction = FuncKey::new_kind(0b000),
@@ -76,8 +77,24 @@ impl FuncKeyKind {
 /// The namespace half of a `FuncKey`.
 ///
 /// This is an opaque combination of the key's kind and module index, if any.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct FuncKeyNamespace(u32);
+
+impl fmt::Debug for FuncKeyNamespace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct Hex<T: fmt::LowerHex>(T);
+        impl<T: fmt::LowerHex> fmt::Debug for Hex<T> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{:#x}", self.0)
+            }
+        }
+        f.debug_struct("FuncKeyNamespace")
+            .field("raw", &Hex(self.0))
+            .field("kind", &self.kind())
+            .field("module", &self.module())
+            .finish()
+    }
+}
 
 impl From<FuncKeyNamespace> for u32 {
     fn from(ns: FuncKeyNamespace) -> Self {
@@ -123,6 +140,10 @@ impl FuncKeyNamespace {
         let raw = self.0 & FuncKey::KIND_MASK;
         FuncKeyKind::from_raw(raw)
     }
+
+    fn module(&self) -> u32 {
+        self.0 & FuncKey::MODULE_MASK
+    }
 }
 
 /// The index half of a `FuncKey`.
@@ -153,6 +174,7 @@ impl FuncKeyIndex {
 
 /// ABI signature of functions that are generated here.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(test, derive(arbitrary::Arbitrary))]
 pub enum Abi {
     /// The "wasm" ABI, or suitable to be a `wasm_call` field of a `VMFuncRef`.
     Wasm = 0,
@@ -368,6 +390,25 @@ impl FuncKey {
                 Self::ResourceDropTrampoline
             }
         }
+    }
+
+    /// Create a key from a raw packed `u64` representation.
+    ///
+    /// Should only be given a value produced by `into_raw_u64()`.
+    ///
+    /// Panics when given an invalid value.
+    pub fn from_raw_u64(value: u64) -> Self {
+        let hi = u32::try_from(value >> 32).unwrap();
+        let lo = u32::try_from(value & 0xffff_ffff).unwrap();
+        FuncKey::from_raw_parts(hi, lo)
+    }
+
+    /// Produce a packed `u64` representation of this key.
+    ///
+    /// May be used with `from_raw_64()` to reconstruct this key.
+    pub fn into_raw_u64(&self) -> u64 {
+        let (hi, lo) = self.into_raw_parts();
+        (u64::from(hi) << 32) | u64::from(lo)
     }
 
     /// Unwrap a `FuncKey::DefinedWasmFunction` or else panic.

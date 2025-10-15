@@ -1395,6 +1395,9 @@ impl Wasmtime {
             all_func_flags |= i.all_func_flags;
         }
 
+        all_func_flags |= self.opts.imports.default;
+        all_func_flags |= self.opts.exports.default;
+
         let opt_t_send_bound =
             if all_func_flags.contains(FunctionFlags::ASYNC) || self.opts.require_store_data_send {
                 "+ Send"

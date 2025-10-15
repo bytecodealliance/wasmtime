@@ -33,13 +33,11 @@ async fn run_allow_blocking_current_thread(
         table: Default::default(),
     })?;
     let component = Component::from_file(&engine, path)?;
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let command =
-        Command::new(&mut store, &instance).context("failed to instantiate `wasi:cli/command`")?;
-    instance
-        .run_concurrent(&mut store, async move |store| {
-            command.wasi_cli_run().call_run(store).await
-        })
+    let command = Command::instantiate_async(&mut store, &component, &linker)
+        .await
+        .context("failed to instantiate `wasi:cli/command`")?;
+    store
+        .run_concurrent(async move |store| command.wasi_cli_run().call_run(store).await)
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
@@ -152,3 +150,21 @@ async fn p3_file_write() -> anyhow::Result<()> {
 async fn p3_file_write_blocking() -> anyhow::Result<()> {
     run_allow_blocking_current_thread(P3_FILE_WRITE_COMPONENT, true).await
 }
+
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
+)]
+fn p3_cli_hello_stdout() {}
+
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
+)]
+fn p3_cli_much_stdout() {}
+
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
+)]
+fn p3_cli_serve_hello_world() {}

@@ -73,6 +73,25 @@ fn panic_on_define_after_finalize() {
 }
 
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "checks a debug assertion")]
+#[should_panic(expected = "function \"abc\" with linkage Local must be defined but is not")]
+fn panic_on_declare_without_define() {
+    let flag_builder = settings::builder();
+    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
+    let mut module =
+        ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
+
+    module
+        .declare_function("abc", Linkage::Local, &Signature::new(CallConv::SystemV))
+        .unwrap();
+
+    module.finish();
+}
+
+#[test]
 fn switch_error() {
     use cranelift_codegen::settings;
 

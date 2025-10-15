@@ -15,15 +15,20 @@ use tempfile::TempDir;
 use wit_component::ComponentEncoder;
 
 const KNOWN_FAILURES: &[&str] = &[
-    // FIXME(WebAssembly/wasi-testsuite#117 and #124) - these tests assert the
-    // host runtime supports rights, but we don't.
-    "fd_fdstat_set_rights",
-    "path_link",
+    "filesystem-hard-links",
+    "http-response",
+    "filesystem-read-directory",
     // FIXME(#11524)
     "remove_directory_trailing_slashes",
-    // FIXME(WebAssembly/wasi-testsuite#125)
-    "pwrite-with-append",
+    #[cfg(target_vendor = "apple")]
+    "filesystem-advise",
     // FIXME(WebAssembly/wasi-testsuite#128)
+    #[cfg(windows)]
+    "fd_fdstat_set_rights",
+    #[cfg(windows)]
+    "filesystem-flags-and-type",
+    #[cfg(windows)]
+    "path_link",
     #[cfg(windows)]
     "dangling_fd",
     #[cfg(windows)]
@@ -125,7 +130,9 @@ fn find_tests(path: &Path, trials: &mut Vec<Trial>) -> Result<()> {
         // this is skipped for `wasi-threads` since that's not supported in
         // components and it's also skipped for assemblyscript because that
         // doesn't support the wasip1 adapter.
-        if !path.iter().any(|p| p == "wasi-threads") && !path.iter().any(|p| p == "assemblyscript")
+        if !path.iter().any(|p| p == "wasm32-wasip3")
+            && !path.iter().any(|p| p == "wasi-threads")
+            && !path.iter().any(|p| p == "assemblyscript")
         {
             trials.push(Trial::test(
                 format!("wasip1 adapter - {}", path.display()),
@@ -188,13 +195,20 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
         cmd.arg("--env");
         cmd.arg(format!("{k}={v}"));
     }
+    let mut should_fail = KNOWN_FAILURES.contains(&test_name);
+    if path.iter().any(|p| p == "wasm32-wasip3") {
+        cmd.arg("-Sp3,http").arg("-Wcomponent-model-async");
+        if !cfg!(feature = "component-model-async") {
+            should_fail = true;
+        }
+    }
     cmd.arg(path);
     cmd.args(args);
 
     let result = cmd.output()?;
     td.disable_cleanup(true);
     let ok = spec == result;
-    match (ok, KNOWN_FAILURES.contains(&test_name)) {
+    match (ok, should_fail) {
         // If this test passed and is not a known failure, or if it failed and
         // it's a known failure, then flag this test as "ok".
         (true, false) | (false, true) => Ok(()),

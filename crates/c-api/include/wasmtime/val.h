@@ -74,8 +74,7 @@ static inline bool wasmtime_anyref_is_null(const wasmtime_anyref_t *ref) {
  *
  * The returned reference is stored in `out`.
  */
-WASM_API_EXTERN void wasmtime_anyref_clone(wasmtime_context_t *context,
-                                           const wasmtime_anyref_t *anyref,
+WASM_API_EXTERN void wasmtime_anyref_clone(const wasmtime_anyref_t *anyref,
                                            wasmtime_anyref_t *out);
 
 /**
@@ -91,8 +90,7 @@ WASM_API_EXTERN void wasmtime_anyref_clone(wasmtime_context_t *context,
  * Note that null or i32 anyref values do not need to be unrooted but are still
  * valid to pass to this function.
  */
-WASM_API_EXTERN void wasmtime_anyref_unroot(wasmtime_context_t *context,
-                                            wasmtime_anyref_t *ref);
+WASM_API_EXTERN void wasmtime_anyref_unroot(wasmtime_anyref_t *ref);
 
 /**
  * \brief Converts a raw `anyref` value coming from #wasmtime_val_raw_t into
@@ -250,8 +248,7 @@ WASM_API_EXTERN void *wasmtime_externref_data(wasmtime_context_t *context,
  * eventually be unrooted with #wasmtime_externref_unroot in the future to
  * enable GC'ing it.
  */
-WASM_API_EXTERN void wasmtime_externref_clone(wasmtime_context_t *context,
-                                              const wasmtime_externref_t *ref,
+WASM_API_EXTERN void wasmtime_externref_clone(const wasmtime_externref_t *ref,
                                               wasmtime_externref_t *out);
 
 /**
@@ -265,8 +262,7 @@ WASM_API_EXTERN void wasmtime_externref_clone(wasmtime_context_t *context,
  * Note that null externref values do not need to be unrooted but are still
  * valid to pass to this function.
  */
-WASM_API_EXTERN void wasmtime_externref_unroot(wasmtime_context_t *context,
-                                               wasmtime_externref_t *ref);
+WASM_API_EXTERN void wasmtime_externref_unroot(wasmtime_externref_t *ref);
 
 /**
  * \brief Converts a raw `externref` value coming from #wasmtime_val_raw_t into
@@ -475,8 +471,7 @@ typedef struct wasmtime_val {
  * This method does not need to be called for integers, floats, v128, or
  * funcref values.
  */
-WASM_API_EXTERN void wasmtime_val_unroot(wasmtime_context_t *context,
-                                         wasmtime_val_t *val);
+WASM_API_EXTERN void wasmtime_val_unroot(wasmtime_val_t *val);
 
 /**
  * \brief Clones the value pointed to by `src` into the `dst` provided.
@@ -485,8 +480,7 @@ WASM_API_EXTERN void wasmtime_val_unroot(wasmtime_context_t *context,
  * newly rooted inside of `dst`. When using this API the `dst` should be
  * later unrooted with #wasmtime_val_unroot if it contains GC values.
  */
-WASM_API_EXTERN void wasmtime_val_clone(wasmtime_context_t *context,
-                                        const wasmtime_val_t *src,
+WASM_API_EXTERN void wasmtime_val_clone(const wasmtime_val_t *src,
                                         wasmtime_val_t *dst);
 
 #ifdef __cplusplus

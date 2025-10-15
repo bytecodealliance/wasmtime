@@ -127,7 +127,6 @@ pub(crate) struct SettingGroup {
     pub bool_start_byte_offset: u8,
     pub settings_size: u8,
     pub presets: Vec<Preset>,
-    pub predicates: Vec<Predicate>,
 }
 
 impl SettingGroup {
@@ -139,8 +138,7 @@ impl SettingGroup {
     }
 
     pub fn byte_size(&self) -> u8 {
-        let num_predicates = self.num_bool_settings() + (self.predicates.len() as u8);
-        self.bool_start_byte_offset + (num_predicates + 7) / 8
+        self.bool_start_byte_offset + (self.num_bool_settings() + 7) / 8
     }
 }
 
@@ -160,68 +158,10 @@ struct ProtoSetting {
     specific: ProtoSpecificSetting,
 }
 
-#[derive(Hash, PartialEq, Eq)]
-pub(crate) enum PredicateNode {
-    OwnedBool(BoolSettingIndex),
-    SharedBool(&'static str, &'static str),
-    And(Box<PredicateNode>, Box<PredicateNode>),
-}
-
-impl From<BoolSettingIndex> for PredicateNode {
-    fn from(bool_setting_index: BoolSettingIndex) -> Self {
-        PredicateNode::OwnedBool(bool_setting_index)
-    }
-}
-
-impl<'a> From<(BoolSettingIndex, &'a SettingGroup)> for PredicateNode {
-    fn from(val: (BoolSettingIndex, &'a SettingGroup)) -> Self {
-        let (index, group) = (val.0, val.1);
-        let setting = &group.settings[index.0];
-        PredicateNode::SharedBool(group.name, setting.name)
-    }
-}
-
-impl PredicateNode {
-    fn render(&self, group: &SettingGroup) -> String {
-        match *self {
-            PredicateNode::OwnedBool(bool_setting_index) => format!(
-                "{}.{}()",
-                group.name, group.settings[bool_setting_index.0].name
-            ),
-            PredicateNode::SharedBool(ref group_name, ref bool_name) => {
-                format!("{group_name}.{bool_name}()")
-            }
-            PredicateNode::And(ref lhs, ref rhs) => {
-                format!("{} && {}", lhs.render(group), rhs.render(group))
-            }
-        }
-    }
-}
-
-struct ProtoPredicate {
-    pub name: &'static str,
-    node: PredicateNode,
-}
-
-pub(crate) type SettingPredicateNumber = u8;
-
-pub(crate) struct Predicate {
-    pub name: &'static str,
-    node: PredicateNode,
-    pub number: SettingPredicateNumber,
-}
-
-impl Predicate {
-    pub fn render(&self, group: &SettingGroup) -> String {
-        self.node.render(group)
-    }
-}
-
 pub(crate) struct SettingGroupBuilder {
     name: &'static str,
     settings: Vec<ProtoSetting>,
     presets: Vec<Preset>,
-    predicates: Vec<ProtoPredicate>,
 }
 
 impl SettingGroupBuilder {
@@ -230,7 +170,6 @@ impl SettingGroupBuilder {
             name,
             settings: Vec::new(),
             presets: Vec::new(),
-            predicates: Vec::new(),
         }
     }
 
@@ -256,10 +195,6 @@ impl SettingGroupBuilder {
         comment: &'static str,
         default: bool,
     ) -> BoolSettingIndex {
-        assert!(
-            self.predicates.is_empty(),
-            "predicates must be added after the boolean settings"
-        );
         self.add_setting(
             name,
             description,
@@ -299,10 +234,6 @@ impl SettingGroupBuilder {
         );
     }
 
-    pub fn add_predicate(&mut self, name: &'static str, node: PredicateNode) {
-        self.predicates.push(ProtoPredicate { name, node });
-    }
-
     pub fn add_preset(
         &mut self,
         name: &'static str,
@@ -333,9 +264,6 @@ impl SettingGroupBuilder {
     ///
     /// 1. Byte-sized settings like `NumSetting` and `EnumSetting`.
     /// 2. `BoolSetting` settings.
-    /// 3. Precomputed named predicates.
-    /// 4. Other numbered predicates, including parent predicates that need to be accessible by
-    ///    number.
     ///
     /// Set `self.settings_size` to the length of the byte vector prefix that
     /// contains the settings. All bytes after that are computed, not
@@ -352,7 +280,6 @@ impl SettingGroupBuilder {
             bool_start_byte_offset: 0,
             settings_size: 0,
             presets: Vec::new(),
-            predicates: Vec::new(),
         };
 
         let mut byte_offset = 0;
@@ -400,27 +327,7 @@ impl SettingGroupBuilder {
             predicate_number += 1;
         }
 
-        assert!(
-            group.predicates.is_empty(),
-            "settings_size is the byte size before adding predicates"
-        );
         group.settings_size = group.byte_size();
-
-        // Sort predicates by name to ensure the same order as the Python code.
-        let mut predicates = self.predicates;
-        predicates.sort_by_key(|predicate| predicate.name);
-
-        group
-            .predicates
-            .extend(predicates.into_iter().map(|predicate| {
-                let number = predicate_number;
-                predicate_number += 1;
-                Predicate {
-                    name: predicate.name,
-                    node: predicate.node,
-                    number,
-                }
-            }));
 
         group.presets.extend(self.presets);
 

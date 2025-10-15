@@ -36,29 +36,29 @@ TEST(Val, Smoke) {
   Store store(engine);
   val = std::optional<ExternRef>(std::nullopt);
   EXPECT_EQ(val.kind(), ValKind::ExternRef);
-  EXPECT_EQ(val.externref(store), std::nullopt);
+  EXPECT_EQ(val.externref(), std::nullopt);
 
   val = std::optional<ExternRef>(ExternRef(store, 5));
   EXPECT_EQ(val.kind(), ValKind::ExternRef);
-  EXPECT_EQ(std::any_cast<int>(val.externref(store)->data(store)), 5);
+  EXPECT_EQ(std::any_cast<int>(val.externref()->data(store)), 5);
 
   val = ExternRef(store, 5);
   EXPECT_EQ(val.kind(), ValKind::ExternRef);
-  EXPECT_EQ(std::any_cast<int>(val.externref(store)->data(store)), 5);
+  EXPECT_EQ(std::any_cast<int>(val.externref()->data(store)), 5);
 
   val = std::optional<AnyRef>(std::nullopt);
   EXPECT_EQ(val.kind(), ValKind::AnyRef);
-  EXPECT_EQ(val.anyref(store), std::nullopt);
+  EXPECT_EQ(val.anyref(), std::nullopt);
 
   val = std::optional<AnyRef>(AnyRef::i31(store, 5));
   EXPECT_EQ(val.kind(), ValKind::AnyRef);
-  EXPECT_EQ(val.anyref(store)->i31(store), 5);
-  EXPECT_EQ(val.anyref(store)->u31(store), 5);
+  EXPECT_EQ(val.anyref()->i31(store), 5);
+  EXPECT_EQ(val.anyref()->u31(store), 5);
 
   val = AnyRef::i31(store, -5);
   EXPECT_EQ(val.kind(), ValKind::AnyRef);
-  EXPECT_EQ(val.anyref(store)->i31(store), -5);
-  EXPECT_EQ(val.anyref(store)->u31(store), 0x7ffffffb);
+  EXPECT_EQ(val.anyref()->i31(store), -5);
+  EXPECT_EQ(val.anyref()->u31(store), 0x7ffffffb);
 
   val = std::optional<Func>(std::nullopt);
   EXPECT_EQ(val.kind(), ValKind::FuncRef);
@@ -74,4 +74,83 @@ TEST(Val, Smoke) {
 
   val = func;
   EXPECT_EQ(val.kind(), ValKind::FuncRef);
+}
+
+class SetOnDrop {
+  std::shared_ptr<std::atomic<bool>> flag_;
+
+public:
+  SetOnDrop() : flag_(std::make_shared<std::atomic<bool>>(false)) {}
+  SetOnDrop(const SetOnDrop &) = delete;
+  SetOnDrop(SetOnDrop &&obj) : flag_(obj.flag_) { obj.flag_.reset(); }
+  ~SetOnDrop() {
+    if (flag_)
+      flag_->store(true);
+  }
+
+  const std::shared_ptr<std::atomic<bool>> &flag() { return this->flag_; }
+};
+
+TEST(Val, DropsExternRef) {
+  std::shared_ptr<std::atomic<bool>> flag;
+  Engine engine;
+  Store store(engine);
+
+  // smoke test for `SetOnDrop` itself
+  {
+    SetOnDrop guard;
+    flag = guard.flag();
+    EXPECT_FALSE(flag->load());
+  }
+  EXPECT_TRUE(flag->load());
+
+  // Test that if an `ExternRef` is created and dropped it doesn't leak.
+  {
+    SetOnDrop guard;
+    flag = guard.flag();
+    ExternRef r(store, std::make_shared<SetOnDrop>(std::move(guard)));
+    EXPECT_FALSE(flag->load());
+    store.gc();
+    EXPECT_FALSE(flag->load());
+  }
+  EXPECT_FALSE(flag->load());
+  store.gc();
+  EXPECT_TRUE(flag->load());
+
+  // Test that if a `Val(ExternRef)` is created and dropped it doesn't leak.
+  {
+    SetOnDrop guard;
+    flag = guard.flag();
+    ExternRef r(store, std::make_shared<SetOnDrop>(std::move(guard)));
+    Val v(r);
+    EXPECT_FALSE(flag->load());
+    store.gc();
+    EXPECT_FALSE(flag->load());
+  }
+  EXPECT_FALSE(flag->load());
+  store.gc();
+  EXPECT_TRUE(flag->load());
+
+  // Similar to above testing a variety of APIs.
+  {
+    SetOnDrop guard;
+    flag = guard.flag();
+    ExternRef r(store, std::make_shared<SetOnDrop>(std::move(guard)));
+    ExternRef r2 = r;
+    ExternRef r3(r2);
+    r3 = r2;
+    r = std::move(r2);
+
+    Val v(r3);
+    Val v2 = v;
+    Val v3(v2);
+    v3 = v2;
+    v = std::move(v2);
+
+    store.gc();
+    EXPECT_FALSE(flag->load());
+  }
+  EXPECT_FALSE(flag->load());
+  store.gc();
+  EXPECT_TRUE(flag->load());
 }

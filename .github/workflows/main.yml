@@ -31,7 +31,7 @@ defaults:
 # Cancel any in-flight jobs for the same PR/branch so there's only one active
 # at a time
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}2
   cancel-in-progress: true
 
 jobs:
@@ -200,6 +200,8 @@ jobs:
             echo platform-checks=true >> $GITHUB_OUTPUT
           elif grep -q 'prtest:miri' commits.log; then
             echo test-miri=true >> $GITHUB_OUTPUT
+          elif grep -q 'prtest:capi' commits.log; then
+            echo test-capi=true >> $GITHUB_OUTPUT
           fi
           if grep -q crates.c-api names.log; then
             echo test-capi=true >> $GITHUB_OUTPUT
@@ -253,7 +255,8 @@ jobs:
     name: Doc build
     runs-on: ubuntu-latest
     env:
-      CARGO_MDBOOK_VERSION: 0.4.37
+      MDBOOK_VERSION: 0.4.37
+      MDBOOK_LANGTABS_VERSION: 0.1.1
       RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
@@ -277,13 +280,12 @@ jobs:
     - uses: actions/cache@v4
       with:
         path: ${{ runner.tool_cache }}/mdbook
-        key: cargo-mdbook-bin-${{ env.CARGO_MDBOOK_VERSION }}
+        key: cargo-mdbook-${{ env.MDBOOK_VERSION }}-langtabs-${{ env.MDBOOK_LANGTABS_VERSION }}
     - run: |
         echo "${{ runner.tool_cache }}/mdbook/bin" >> $GITHUB_PATH
-        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook --locked
+        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.MDBOOK_VERSION }} mdbook --locked
+        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.MDBOOK_LANGTABS_VERSION }} mdbook-langtabs --locked
     - run: (cd docs && mdbook build)
-    - run: cargo build -p wasi-common --features wasmtime/wat,wasmtime/cranelift
-    - run: (cd docs && mdbook test -L ../target/debug/deps)
 
     # Build Rust API documentation.
     #
@@ -293,7 +295,11 @@ jobs:
           --exclude wasmtime-cli \
           --exclude test-programs \
           --exclude cranelift-codegen-meta \
-          --features call-hook
+          --exclude wasmtime-wasi-nn \
+          --exclude wasmtime-fuzzing \
+          --exclude wasm-spec-interpreter \
+          --exclude calculator \
+          --all-features
       env:
         RUSTDOCFLAGS: --cfg=docsrs
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
@@ -411,6 +417,12 @@ jobs:
               -p wasmtime-wasi --no-default-features --features p1
               -p wasmtime-wasi --no-default-features --features p2
               -p wasmtime-wasi --no-default-features --features p3
+
+          - name: wasmtime-wizer
+            checks: |
+              -p wasmtime-wizer --no-default-features
+              -p wasmtime-wizer --no-default-features --features wasmtime
+              -p wasmtime-wizer --no-default-features --features wasmprinter
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -618,35 +630,70 @@ jobs:
     - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
     - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
     - run: cargo fuzz build --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
+    - run: cargo fuzz build --dev --fuzz-dir ./crates/wizer/fuzz
 
   # Perform all tests of the c-api
   test_capi:
     needs: determine
-    name: Test C-API ${{ matrix.os }}
+    name: Test C-API ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     if: needs.determine.outputs.test-capi
 
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        include:
+          # This configuration will build C/C++ tests, examples, and Rust tests.
+          # Everything is linked against the C shared library to speed up
+          # linking, and this is intended to be the "main set of tests".
+          #
+          # Run this on windows/mac/linux
+          - os: ubuntu-24.04
+            # Only run the "plugins" example on Linux
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON -DBUILD_RUST_PLUGINS_EXAMPLE=ON
+            name: Linux
+          - os: macos-15
+            flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            name: macOS
+          - os: windows-2025
+            # Note that dynamic linking is disabled here because I don't want to
+            # have to deal with figuring out how to get `wasmtime.dll` onto
+            # `PATH` for various tests.
+            flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON
+            name: Windows
 
+          # This tests using static linking for examples but skips building the
+          # Rust examples as well as C/C++ tests. Intended to be a faster build
+          # which mostly just tests static linking.
+          - os: ubuntu-24.04
+            flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_RUST_EXAMPLES=OFF
+            name: Linux (static linking)
+
+          # Run tests with ASAN for leak checking primarily.
+          - os: ubuntu-24.04
+            flags: -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON
+            name: Linux (ASAN)
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - run: rustup target add wasm32-wasip2
 
-    # Build and test the C API with example C programs along with the example
-    # Rust programs. Note that this only executes if the `determine` step told
-    # us to test the capi which is off-by-default for PRs.
-    - run: rustup target add wasm32-wasip2 # wasip2 target needed by example programs
-    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON
-    - run: cmake --build examples/build --config Debug
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
+    - uses: ./.github/actions/install-plugins-prerequisites
+      if: runner.os == 'Linux'
+
+    - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+    # An ode to MinGW: man you're a pain to work around sometimes
+    - run: rm /usr/bin/link
       if: runner.os == 'Windows'
-    - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
-      if: runner.os != 'Windows'
+
+    - run: cmake -G Ninja -Sexamples -DCMAKE_BUILD_TYPE=Debug -Bexamples/build ${{ matrix.flags }}
+    - run: ninja -C examples/build
+    - run: ninja -C examples/build test
+      env:
+        CTEST_OUTPUT_ON_FAILURE: 1
+        CTEST_PARALLEL_LEVEL: 4
 
   # Perform all tests (debug mode) for `wasmtime`.
   #
@@ -659,6 +706,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       QEMU_BUILD_VERSION: 10.0.3
+      SDE_BUILD_VERSION: 9.58.0-2025-06-16
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
@@ -706,6 +754,13 @@ jobs:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
       if: matrix.qemu != ''
+
+    - uses: actions/cache@v4
+      with:
+        path: ${{ runner.tool_cache }}/sde
+        key: sde-${{ env.SDE_BUILD_VERSION }}
+      if: matrix.sde != ''
+
     - name: Install qemu
       run: |
         set -ex
@@ -741,6 +796,40 @@ jobs:
         ninja -C build install
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.qemu != ''
+
+    - name: Install Intel SDE
+      run: |
+        set -ex
+
+        # Set up SDE as runner for x86_64 targets
+        echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=${{ runner.tool_cache }}/sde/sde64 -future --" >> $GITHUB_ENV
+
+        # SDE emulation is very slow, so use release mode for better performance
+        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
+
+        # Enable environment variable to indicate SDE is being used
+        echo WASMTIME_TEST_SDE=1 >> $GITHUB_ENV
+
+        # Generic variable for skipping tests that are problematic under SDE (performance, compatibility, etc.)
+        echo WASMTIME_TEST_NO_SDE=1 >> $GITHUB_ENV
+
+        # Similar to QEMU, reduce memory usage during SDE emulation
+        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
+
+        # See if SDE is already in the cache
+        if [ -f ${{ runner.tool_cache }}/sde/sde64 ]; then
+          exit 0
+        fi
+
+        curl --retry 5 --retry-all-errors -o sde.tar.xz \
+          https://downloadmirror.intel.com/859732/sde-external-${{ env.SDE_BUILD_VERSION }}-lin.tar.xz
+
+        mkdir -p ${{ runner.tool_cache }}/sde
+        tar xJf sde.tar.xz --strip-components=1 -C ${{ runner.tool_cache }}/sde
+        rm sde.tar.xz
+
+        chmod +x ${{ runner.tool_cache }}/sde/sde64
+      if: matrix.sde != ''
 
     - name: Configure ASAN
       run: |
@@ -789,7 +878,10 @@ jobs:
     # no output. It's believed that `bash` adds things like `/usr/bin` to PATH
     # which is the wrong DLL or something like that.
     - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
+      if: runner.os == 'Windows'
       shell: pwsh
+    - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
+      if: runner.os != 'Windows'
 
   # Test `wasmtime-wasi-nn` in its own job, as not all of its backends are
   # compatible with all targets, and each must be tested separately anyways.
@@ -888,7 +980,7 @@ jobs:
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
         # Only testing release since it is more likely to expose issues with our low-level symbol handling.
-        cargo test --release --test all -- --ignored --test-threads 1 debug::
+        cargo test --release --test all -- --ignored --test-threads 1 native_debug::
       env:
         LLDB: lldb-18
         WASI_SDK_PATH: /tmp/wasi-sdk
@@ -1170,15 +1262,12 @@ jobs:
       - check_js
     if: always()
     steps:
-    - name: Successful test and build
-      if: ${{ !(contains(needs.*.result, 'failure')) }}
-      run: exit 0
-    - name: Failing test and build
-      if: ${{ contains(needs.*.result, 'failure') }}
-      run: exit 1
-    - name: Report failure on cancellation
-      if: ${{ contains(needs.*.result, 'cancelled') || cancelled() }}
-      run: exit 1
+    # Calculate the exit status of the whole CI workflow.
+    # If all dependent jobs were successful, this exits with 0 (and the
+    # outcome job continues successfully). If a some dependent job has
+    # failed, this exits with 1.
+    - name: calculate the correct exit status
+      run: jq --exit-status 'all(.result == "success" or .result == "skipped")' <<< '${{ toJson(needs) }}'
 
   # The purpose of this jobs is to watch for changes on the `release-*`
   # branches of this repository and look for the term

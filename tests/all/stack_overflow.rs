@@ -152,8 +152,7 @@ fn big_stack_works_ok(config: &mut Config) -> Result<()> {
     // Disable cranelift optimizations to ensure that this test doesn't take too
     // long in debug mode due to the large size of its code.
     config.cranelift_opt_level(OptLevel::None);
-    // FIXME(#11544) helps make this test case faster
-    // config.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
+    config.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
     let engine = Engine::new(config)?;
 
     let mut store = Store::new(&engine, ());

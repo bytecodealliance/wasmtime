@@ -232,11 +232,10 @@ where
             };
 
             let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
-            self.func
-                .instance
-                .run_concurrent(wrapper.store.as_context_mut(), async |_| {
-                    Ok(result.await?.0)
-                })
+            wrapper
+                .store
+                .as_context_mut()
+                .run_concurrent_trap_on_idle(async |_| Ok(result.await?.0))
                 .await?
         }
         #[cfg(not(feature = "component-model-async"))]
@@ -2174,7 +2173,7 @@ pub fn typecheck_enum(
 
             for (name, expected) in names.iter().zip(expected) {
                 if name != expected {
-                    bail!("expected enum case named {}, found {}", expected, name);
+                    bail!("expected enum case named {expected}, found {name}");
                 }
             }
 
@@ -2205,7 +2204,7 @@ pub fn typecheck_flags(
 
             for (name, expected) in names.iter().zip(expected) {
                 if name != expected {
-                    bail!("expected flag named {}, found {}", expected, name);
+                    bail!("expected flag named {expected}, found {name}");
                 }
             }
 

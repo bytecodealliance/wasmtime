@@ -1107,10 +1107,11 @@ mod test_programs {
     use anyhow::{Context, Result, bail};
     use http_body_util::BodyExt;
     use hyper::header::HeaderValue;
-    use std::io::{BufRead, BufReader, Read, Write};
+    use std::io::{self, BufRead, BufReader, Read, Write};
     use std::iter;
     use std::net::SocketAddr;
     use std::process::{Child, Command, Stdio};
+    use std::thread::{self, JoinHandle};
     use test_programs_artifacts::*;
     use tokio::net::TcpStream;
 
@@ -1120,20 +1121,20 @@ mod test_programs {
             use self::$name as _;
         };
     }
-    foreach_cli!(assert_test_exists);
+    foreach_p2_cli!(assert_test_exists);
 
     #[test]
-    fn cli_hello_stdout() -> Result<()> {
-        run_wasmtime(&["run", "-Wcomponent-model", CLI_HELLO_STDOUT_COMPONENT])?;
+    fn p2_cli_hello_stdout() -> Result<()> {
+        run_wasmtime(&["run", "-Wcomponent-model", P2_CLI_HELLO_STDOUT_COMPONENT])?;
         Ok(())
     }
 
     #[test]
-    fn cli_args() -> Result<()> {
+    fn p2_cli_args() -> Result<()> {
         run_wasmtime(&[
             "run",
             "-Wcomponent-model",
-            CLI_ARGS_COMPONENT,
+            P2_CLI_ARGS_COMPONENT,
             "hello",
             "this",
             "",
@@ -1144,9 +1145,9 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_stdin_empty() -> Result<()> {
+    fn p2_cli_stdin_empty() -> Result<()> {
         let mut child = get_wasmtime_command()?
-            .args(&["run", "-Wcomponent-model", CLI_STDIN_EMPTY_COMPONENT])
+            .args(&["run", "-Wcomponent-model", P2_CLI_STDIN_EMPTY_COMPONENT])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
@@ -1165,9 +1166,9 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_stdin() -> Result<()> {
+    fn p2_cli_stdin() -> Result<()> {
         let mut child = get_wasmtime_command()?
-            .args(&["run", "-Wcomponent-model", CLI_STDIN_COMPONENT])
+            .args(&["run", "-Wcomponent-model", P2_CLI_STDIN_COMPONENT])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
@@ -1186,9 +1187,9 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_splice_stdin() -> Result<()> {
+    fn p2_cli_splice_stdin() -> Result<()> {
         let mut child = get_wasmtime_command()?
-            .args(&["run", "-Wcomponent-model", CLI_SPLICE_STDIN_COMPONENT])
+            .args(&["run", "-Wcomponent-model", P2_CLI_SPLICE_STDIN_COMPONENT])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
@@ -1219,19 +1220,19 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_env() -> Result<()> {
+    fn p2_cli_env() -> Result<()> {
         run_wasmtime(&[
             "run",
             "-Wcomponent-model",
             "--env=frabjous=day",
             "--env=callooh=callay",
-            CLI_ENV_COMPONENT,
+            P2_CLI_ENV_COMPONENT,
         ])?;
         Ok(())
     }
 
     #[test]
-    fn cli_file_read() -> Result<()> {
+    fn p2_cli_file_read() -> Result<()> {
         let dir = tempfile::tempdir()?;
 
         std::fs::write(dir.path().join("bar.txt"), b"And stood awhile in thought")?;
@@ -1240,13 +1241,13 @@ mod test_programs {
             "run",
             "-Wcomponent-model",
             &format!("--dir={}::/", dir.path().to_str().unwrap()),
-            CLI_FILE_READ_COMPONENT,
+            P2_CLI_FILE_READ_COMPONENT,
         ])?;
         Ok(())
     }
 
     #[test]
-    fn cli_file_append() -> Result<()> {
+    fn p2_cli_file_append() -> Result<()> {
         let dir = tempfile::tempdir()?;
 
         std::fs::File::create(dir.path().join("bar.txt"))?
@@ -1256,7 +1257,7 @@ mod test_programs {
             "run",
             "-Wcomponent-model",
             &format!("--dir={}::/", dir.path().to_str().unwrap()),
-            CLI_FILE_APPEND_COMPONENT,
+            P2_CLI_FILE_APPEND_COMPONENT,
         ])?;
 
         let contents = std::fs::read(dir.path().join("bar.txt"))?;
@@ -1271,7 +1272,7 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_file_dir_sync() -> Result<()> {
+    fn p2_cli_file_dir_sync() -> Result<()> {
         let dir = tempfile::tempdir()?;
 
         std::fs::File::create(dir.path().join("bar.txt"))?
@@ -1281,28 +1282,28 @@ mod test_programs {
             "run",
             "-Wcomponent-model",
             &format!("--dir={}::/", dir.path().to_str().unwrap()),
-            CLI_FILE_DIR_SYNC_COMPONENT,
+            P2_CLI_FILE_DIR_SYNC_COMPONENT,
         ])?;
 
         Ok(())
     }
 
     #[test]
-    fn cli_exit_success() -> Result<()> {
-        run_wasmtime(&["run", "-Wcomponent-model", CLI_EXIT_SUCCESS_COMPONENT])?;
+    fn p2_cli_exit_success() -> Result<()> {
+        run_wasmtime(&["run", "-Wcomponent-model", P2_CLI_EXIT_SUCCESS_COMPONENT])?;
         Ok(())
     }
 
     #[test]
-    fn cli_exit_default() -> Result<()> {
-        run_wasmtime(&["run", "-Wcomponent-model", CLI_EXIT_DEFAULT_COMPONENT])?;
+    fn p2_cli_exit_default() -> Result<()> {
+        run_wasmtime(&["run", "-Wcomponent-model", P2_CLI_EXIT_DEFAULT_COMPONENT])?;
         Ok(())
     }
 
     #[test]
-    fn cli_exit_failure() -> Result<()> {
+    fn p2_cli_exit_failure() -> Result<()> {
         let output = get_wasmtime_command()?
-            .args(&["run", "-Wcomponent-model", CLI_EXIT_FAILURE_COMPONENT])
+            .args(&["run", "-Wcomponent-model", P2_CLI_EXIT_FAILURE_COMPONENT])
             .output()?;
         assert!(!output.status.success());
         assert_eq!(output.status.code(), Some(1));
@@ -1310,13 +1311,13 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_exit_with_code() -> Result<()> {
+    fn p2_cli_exit_with_code() -> Result<()> {
         let output = get_wasmtime_command()?
             .args(&[
                 "run",
                 "-Wcomponent-model",
                 "-Scli-exit-with-code",
-                CLI_EXIT_WITH_CODE_COMPONENT,
+                P2_CLI_EXIT_WITH_CODE_COMPONENT,
             ])
             .output()?;
         assert!(!output.status.success());
@@ -1325,9 +1326,9 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_exit_panic() -> Result<()> {
+    fn p2_cli_exit_panic() -> Result<()> {
         let output = get_wasmtime_command()?
-            .args(&["run", "-Wcomponent-model", CLI_EXIT_PANIC_COMPONENT])
+            .args(&["run", "-Wcomponent-model", P2_CLI_EXIT_PANIC_COMPONENT])
             .output()?;
         assert!(!output.status.success());
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1336,7 +1337,7 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_directory_list() -> Result<()> {
+    fn p2_cli_directory_list() -> Result<()> {
         let dir = tempfile::tempdir()?;
 
         std::fs::File::create(dir.path().join("foo.txt"))?;
@@ -1350,23 +1351,23 @@ mod test_programs {
             "run",
             "-Wcomponent-model",
             &format!("--dir={}::/", dir.path().to_str().unwrap()),
-            CLI_DIRECTORY_LIST_COMPONENT,
+            P2_CLI_DIRECTORY_LIST_COMPONENT,
         ])?;
         Ok(())
     }
 
     #[test]
-    fn cli_default_clocks() -> Result<()> {
-        run_wasmtime(&["run", "-Wcomponent-model", CLI_DEFAULT_CLOCKS_COMPONENT])?;
+    fn p2_cli_default_clocks() -> Result<()> {
+        run_wasmtime(&["run", "-Wcomponent-model", P2_CLI_DEFAULT_CLOCKS_COMPONENT])?;
         Ok(())
     }
 
     #[test]
-    fn cli_export_cabi_realloc() -> Result<()> {
+    fn p2_cli_export_cabi_realloc() -> Result<()> {
         run_wasmtime(&[
             "run",
             "-Wcomponent-model",
-            CLI_EXPORT_CABI_REALLOC_COMPONENT,
+            P2_CLI_EXPORT_CABI_REALLOC_COMPONENT,
         ])?;
         Ok(())
     }
@@ -1378,7 +1379,7 @@ mod test_programs {
                 "-Ccache=no",
                 "-Wcomponent-model",
                 "-Scli,http,preview2",
-                HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT,
+                P2_HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT,
             ],
             None,
         )?;
@@ -1396,7 +1397,7 @@ mod test_programs {
     // wait for input on stdin, and the test here is to ensure that the
     // character shows up here even as the guest is waiting on input via stdin.
     #[test]
-    fn cli_stdio_write_flushes() -> Result<()> {
+    fn p2_cli_stdio_write_flushes() -> Result<()> {
         fn run(args: &[&str]) -> Result<()> {
             println!("running {args:?}");
             let mut child = get_wasmtime_command()?
@@ -1417,24 +1418,24 @@ mod test_programs {
             Ok(())
         }
 
-        run(&["run", "-Spreview2=n", CLI_STDIO_WRITE_FLUSHES])?;
-        run(&["run", "-Spreview2=y", CLI_STDIO_WRITE_FLUSHES])?;
+        run(&["run", "-Spreview2=n", P2_CLI_STDIO_WRITE_FLUSHES])?;
+        run(&["run", "-Spreview2=y", P2_CLI_STDIO_WRITE_FLUSHES])?;
         run(&[
             "run",
             "-Wcomponent-model",
-            CLI_STDIO_WRITE_FLUSHES_COMPONENT,
+            P2_CLI_STDIO_WRITE_FLUSHES_COMPONENT,
         ])?;
         Ok(())
     }
 
     #[test]
-    fn cli_no_tcp() -> Result<()> {
+    fn p2_cli_no_tcp() -> Result<()> {
         let output = super::run_wasmtime_for_output(
             &[
                 "-Wcomponent-model",
                 // Turn on network but turn off TCP
                 "-Sinherit-network,tcp=no",
-                CLI_NO_TCP_COMPONENT,
+                P2_CLI_NO_TCP_COMPONENT,
             ],
             None,
         )?;
@@ -1444,13 +1445,13 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_no_udp() -> Result<()> {
+    fn p2_cli_no_udp() -> Result<()> {
         let output = super::run_wasmtime_for_output(
             &[
                 "-Wcomponent-model",
                 // Turn on network but turn off UDP
                 "-Sinherit-network,udp=no",
-                CLI_NO_UDP_COMPONENT,
+                P2_CLI_NO_UDP_COMPONENT,
             ],
             None,
         )?;
@@ -1460,13 +1461,13 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_no_ip_name_lookup() -> Result<()> {
+    fn p2_cli_no_ip_name_lookup() -> Result<()> {
         let output = super::run_wasmtime_for_output(
             &[
                 "-Wcomponent-model",
                 // Turn on network but ensure name lookup is disabled
                 "-Sinherit-network,allow-ip-name-lookup=no",
-                CLI_NO_IP_NAME_LOOKUP_COMPONENT,
+                P2_CLI_NO_IP_NAME_LOOKUP_COMPONENT,
             ],
             None,
         )?;
@@ -1476,26 +1477,26 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_sleep() -> Result<()> {
-        run_wasmtime(&["run", CLI_SLEEP])?;
-        run_wasmtime(&["run", CLI_SLEEP_COMPONENT])?;
+    fn p2_cli_sleep() -> Result<()> {
+        run_wasmtime(&["run", P2_CLI_SLEEP])?;
+        run_wasmtime(&["run", P2_CLI_SLEEP_COMPONENT])?;
         Ok(())
     }
 
     #[test]
-    fn cli_sleep_forever() -> Result<()> {
+    fn p2_cli_sleep_forever() -> Result<()> {
         for timeout in [
             // Tests still pass when we race with going to sleep.
             "-Wtimeout=1ns",
             // Tests pass when we wait till the Wasm has (likely) gone to sleep.
             "-Wtimeout=250ms",
         ] {
-            let e = run_wasmtime(&["run", timeout, CLI_SLEEP_FOREVER]).unwrap_err();
+            let e = run_wasmtime(&["run", timeout, P2_CLI_SLEEP_FOREVER]).unwrap_err();
             let e = e.to_string();
             println!("Got error: {e}");
             assert!(e.contains("interrupt"));
 
-            let e = run_wasmtime(&["run", timeout, CLI_SLEEP_FOREVER_COMPONENT]).unwrap_err();
+            let e = run_wasmtime(&["run", timeout, P2_CLI_SLEEP_FOREVER_COMPONENT]).unwrap_err();
             let e = e.to_string();
             println!("Got error: {e}");
             assert!(e.contains("interrupt"));
@@ -1507,6 +1508,8 @@ mod test_programs {
     /// Helper structure to manage an invocation of `wasmtime serve`
     struct WasmtimeServe {
         child: Option<Child>,
+        stdout: Option<JoinHandle<io::Result<Vec<u8>>>>,
+        stderr: Option<JoinHandle<io::Result<Vec<u8>>>>,
         addr: SocketAddr,
         shutdown_addr: SocketAddr,
     }
@@ -1539,9 +1542,9 @@ mod test_programs {
             // This is done to figure out what `:0` was bound to in the child
             // process.
             let mut line = String::new();
-            let mut reader = BufReader::new(child.stderr.take().unwrap());
+            let mut stderr = BufReader::new(child.stderr.take().unwrap());
             let mut read_addr_from_line = |prefix: &str| -> Result<SocketAddr> {
-                reader.read_line(&mut line)?;
+                stderr.read_line(&mut line)?;
 
                 if !line.starts_with(prefix) {
                     bail!("input line `{line}` didn't start with `{prefix}`");
@@ -1567,13 +1570,22 @@ mod test_programs {
                 (Err(a), _) | (_, Err(a)) => {
                     child.kill()?;
                     child.wait()?;
-                    reader.read_to_string(&mut line)?;
+                    stderr.read_to_string(&mut line)?;
                     return Err(a.context(line));
                 }
             };
-            assert!(reader.buffer().is_empty());
-            child.stderr = Some(reader.into_inner());
+            let mut stdout = child.stdout.take().unwrap();
             Ok(WasmtimeServe {
+                stdout: Some(thread::spawn(move || {
+                    let mut dst = Vec::new();
+                    stdout.read_to_end(&mut dst).map(|_| dst)
+                })),
+
+                stderr: Some(thread::spawn(move || {
+                    let mut dst = Vec::new();
+                    stderr.read_to_end(&mut dst).map(|_| dst)
+                })),
+
                 child: Some(child),
                 addr,
                 shutdown_addr,
@@ -1582,6 +1594,10 @@ mod test_programs {
 
         /// Completes this server gracefully by printing the output on failure.
         fn finish(mut self) -> Result<(String, String)> {
+            self._finish()
+        }
+
+        fn _finish(&mut self) -> Result<(String, String)> {
             let mut child = self.child.take().unwrap();
 
             // If the child process has already exited, then great! Otherwise
@@ -1598,7 +1614,9 @@ mod test_programs {
             // was already shut down (e.g. panicked or similar), wait for the
             // result here. The result should succeed (e.g. 0 exit status), and
             // if it did then the stdout/stderr are the caller's problem.
-            let output = child.wait_with_output()?;
+            let mut output = child.wait_with_output()?;
+            output.stdout = self.stdout.take().unwrap().join().unwrap()?;
+            output.stderr = self.stderr.take().unwrap().join().unwrap()?;
             if !output.status.success() {
                 bail!("child failed {output:?}");
             }
@@ -1650,37 +1668,33 @@ mod test_programs {
     // if our server goes away.
     impl Drop for WasmtimeServe {
         fn drop(&mut self) {
-            let mut child = match self.child.take() {
-                Some(child) => child,
+            match &mut self.child {
+                Some(child) => match child.kill() {
+                    Ok(()) => {}
+                    Err(e) => {
+                        eprintln!("failed to kill child process {e}");
+                        return;
+                    }
+                },
                 None => return,
-            };
-            if child.kill().is_err() {
-                return;
             }
-            let output = match child.wait_with_output() {
-                Ok(output) => output,
-                Err(_) => return,
-            };
-
-            println!("server status: {}", output.status);
-            if !output.stdout.is_empty() {
-                println!(
-                    "server stdout:\n{}",
-                    String::from_utf8_lossy(&output.stdout)
-                );
-            }
-            if !output.stderr.is_empty() {
-                println!(
-                    "server stderr:\n{}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
+            match self._finish() {
+                Ok((stdout, stderr)) => {
+                    if !stdout.is_empty() {
+                        println!("server stdout:\n{stdout}");
+                    }
+                    if !stderr.is_empty() {
+                        println!("server stderr:\n{stderr}");
+                    }
+                }
+                Err(e) => println!("failed to wait for child or read stdio: {e}"),
             }
         }
     }
 
     #[tokio::test]
-    async fn cli_serve_echo_env() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+    async fn p2_cli_serve_echo_env() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
             cmd.arg("--env=FOO=bar");
             cmd.arg("--env=BAR");
             cmd.arg("-Scli");
@@ -1722,8 +1736,8 @@ mod test_programs {
     }
 
     #[tokio::test]
-    async fn cli_serve_outgoing_body_config() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+    async fn p2_cli_serve_outgoing_body_config() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
             cmd.arg("-Scli");
             cmd.arg("-Shttp-outgoing-body-buffer-chunks=2");
             cmd.arg("-Shttp-outgoing-body-chunk-size=1024");
@@ -1750,8 +1764,8 @@ mod test_programs {
     // end of this test race so the stderr may be present or not. Need
     // to implement a more graceful shutdown routine for `wasmtime
     // serve`.
-    async fn cli_serve_respect_pooling_options() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+    async fn p2_cli_serve_respect_pooling_options() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
             cmd.arg("-Opooling-total-memories=0").arg("-Scli");
         })?;
 
@@ -1774,8 +1788,8 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_large_env() -> Result<()> {
-        for wasm in [CLI_LARGE_ENV, CLI_LARGE_ENV_COMPONENT] {
+    fn p2_cli_large_env() -> Result<()> {
+        for wasm in [P2_CLI_LARGE_ENV, P2_CLI_LARGE_ENV_COMPONENT] {
             println!("run {wasm:?}");
             let mut cmd = get_wasmtime_command()?;
             cmd.arg("run").arg("-Sinherit-env").arg(wasm);
@@ -1798,8 +1812,8 @@ mod test_programs {
     }
 
     #[tokio::test]
-    async fn cli_serve_only_one_process_allowed() -> Result<()> {
-        let wasm = CLI_SERVE_ECHO_ENV_COMPONENT;
+    async fn p2_cli_serve_only_one_process_allowed() -> Result<()> {
+        let wasm = P2_CLI_SERVE_ECHO_ENV_COMPONENT;
         let server = WasmtimeServe::new(wasm, |cmd| {
             cmd.arg("-Scli");
         })?;
@@ -1827,8 +1841,8 @@ mod test_programs {
     // in the next process while it technically could be stolen by another
     // process.
     #[tokio::test]
-    async fn cli_serve_quick_rebind_allowed() -> Result<()> {
-        let wasm = CLI_SERVE_ECHO_ENV_COMPONENT;
+    async fn p2_cli_serve_quick_rebind_allowed() -> Result<()> {
+        let wasm = P2_CLI_SERVE_ECHO_ENV_COMPONENT;
         let server = WasmtimeServe::new(wasm, |cmd| {
             cmd.arg("-Scli");
         })?;
@@ -1873,8 +1887,8 @@ mod test_programs {
     }
 
     #[tokio::test]
-    async fn cli_serve_with_print() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
+    async fn p2_cli_serve_with_print() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
             cmd.arg("-Scli");
         })?;
 
@@ -1922,8 +1936,8 @@ stderr [1] :: start a print 1234
     }
 
     #[tokio::test]
-    async fn cli_serve_with_print_no_prefix() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
+    async fn p2_cli_serve_with_print_no_prefix() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
             cmd.arg("-Scli");
             cmd.arg("--no-logging-prefix");
         })?;
@@ -1972,8 +1986,8 @@ start a print 1234
     }
 
     #[tokio::test]
-    async fn cli_serve_authority_and_scheme() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
+    async fn p2_cli_serve_authority_and_scheme() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
             cmd.arg("-Scli");
         })?;
 
@@ -2003,16 +2017,16 @@ start a print 1234
     }
 
     #[test]
-    fn cli_argv0() -> Result<()> {
-        run_wasmtime(&["run", "--argv0=a", CLI_ARGV0, "a"])?;
-        run_wasmtime(&["run", "--argv0=b", CLI_ARGV0_COMPONENT, "b"])?;
-        run_wasmtime(&["run", "--argv0=foo.wasm", CLI_ARGV0, "foo.wasm"])?;
+    fn p2_cli_argv0() -> Result<()> {
+        run_wasmtime(&["run", "--argv0=a", P2_CLI_ARGV0, "a"])?;
+        run_wasmtime(&["run", "--argv0=b", P2_CLI_ARGV0_COMPONENT, "b"])?;
+        run_wasmtime(&["run", "--argv0=foo.wasm", P2_CLI_ARGV0, "foo.wasm"])?;
         Ok(())
     }
 
     #[tokio::test]
-    async fn cli_serve_config() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_CONFIG_COMPONENT, |cmd| {
+    async fn p2_cli_serve_config() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_CONFIG_COMPONENT, |cmd| {
             cmd.arg("-Scli");
             cmd.arg("-Sconfig");
             cmd.arg("-Sconfig-var=hello=world");
@@ -2033,7 +2047,7 @@ start a print 1234
     }
 
     #[test]
-    fn cli_config() -> Result<()> {
+    fn p2_cli_config() -> Result<()> {
         run_wasmtime(&[
             "run",
             "-Sconfig",
@@ -2044,8 +2058,8 @@ start a print 1234
     }
 
     #[tokio::test]
-    async fn cli_serve_keyvalue() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_KEYVALUE_COMPONENT, |cmd| {
+    async fn p2_cli_serve_keyvalue() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_KEYVALUE_COMPONENT, |cmd| {
             cmd.arg("-Scli");
             cmd.arg("-Skeyvalue");
             cmd.arg("-Skeyvalue-in-memory-data=hello=world");
@@ -2066,7 +2080,7 @@ start a print 1234
     }
 
     #[test]
-    fn cli_keyvalue() -> Result<()> {
+    fn p2_cli_keyvalue() -> Result<()> {
         run_wasmtime(&[
             "run",
             "-Skeyvalue",
@@ -2077,18 +2091,18 @@ start a print 1234
     }
 
     #[test]
-    fn cli_multiple_preopens() -> Result<()> {
+    fn p2_cli_multiple_preopens() -> Result<()> {
         run_wasmtime(&[
             "run",
             "--dir=/::/a",
             "--dir=/::/b",
             "--dir=/::/c",
-            CLI_MULTIPLE_PREOPENS_COMPONENT,
+            P2_CLI_MULTIPLE_PREOPENS_COMPONENT,
         ])?;
         Ok(())
     }
 
-    async fn cli_serve_guest_never_invoked_set(wasm: &str) -> Result<()> {
+    async fn p2_cli_serve_guest_never_invoked_set(wasm: &str) -> Result<()> {
         let server = WasmtimeServe::new(wasm, |cmd| {
             cmd.arg("-Scli");
         })?;
@@ -2115,22 +2129,22 @@ start a print 1234
     }
 
     #[tokio::test]
-    async fn cli_serve_return_before_set() -> Result<()> {
-        cli_serve_guest_never_invoked_set(CLI_SERVE_RETURN_BEFORE_SET_COMPONENT).await
+    async fn p2_cli_serve_return_before_set() -> Result<()> {
+        p2_cli_serve_guest_never_invoked_set(P2_CLI_SERVE_RETURN_BEFORE_SET_COMPONENT).await
     }
 
     #[tokio::test]
-    async fn cli_serve_trap_before_set() -> Result<()> {
-        cli_serve_guest_never_invoked_set(CLI_SERVE_TRAP_BEFORE_SET_COMPONENT).await
+    async fn p2_cli_serve_trap_before_set() -> Result<()> {
+        p2_cli_serve_guest_never_invoked_set(P2_CLI_SERVE_TRAP_BEFORE_SET_COMPONENT).await
     }
 
     #[test]
-    fn cli_p3_hello_stdout() -> Result<()> {
+    fn p2_cli_p3_hello_stdout() -> Result<()> {
         let output = run_wasmtime(&[
             "run",
             "-Wcomponent-model-async",
             "-Sp3",
-            CLI_P3_HELLO_STDOUT_COMPONENT,
+            P3_CLI_HELLO_STDOUT_COMPONENT,
         ]);
         if cfg!(feature = "component-model-async") {
             let output = output?;
@@ -2145,14 +2159,14 @@ start a print 1234
         use super::*;
 
         #[test]
-        fn cli_hello_stdout() -> Result<()> {
-            println!("{CLI_HELLO_STDOUT_COMPONENT}");
+        fn p2_cli_hello_stdout() -> Result<()> {
+            println!("{P2_CLI_HELLO_STDOUT_COMPONENT}");
             let output = run_wasmtime(&[
                 "run",
                 "-Wcomponent-model",
                 "--invoke",
                 "run()",
-                CLI_HELLO_STDOUT_COMPONENT,
+                P2_CLI_HELLO_STDOUT_COMPONENT,
             ])?;
             // First this component prints "hello, world", then the invoke
             // result is printed as "ok".
@@ -2163,13 +2177,13 @@ start a print 1234
 
     #[test]
     #[cfg_attr(not(feature = "component-model-async"), ignore)]
-    fn cli_invoke_async() -> Result<()> {
+    fn p2_cli_invoke_async() -> Result<()> {
         let output = run_wasmtime(&[
             "run",
             "-Wcomponent-model-async",
             "--invoke",
             "echo(\"hello?\")",
-            CLI_INVOKE_ASYNC_COMPONENT,
+            P2_CLI_INVOKE_ASYNC_COMPONENT,
         ])?;
         assert_eq!(output, "\"hello?\"\n");
         Ok(())
@@ -2203,28 +2217,28 @@ start a print 1234
     }
 
     #[test]
-    fn cli_p1_much_stdout() -> Result<()> {
-        run_much_stdout(CLI_P1_MUCH_STDOUT_COMPONENT, &[])
+    fn p1_cli_much_stdout() -> Result<()> {
+        run_much_stdout(P1_CLI_MUCH_STDOUT_COMPONENT, &[])
     }
 
     #[test]
-    fn cli_p2_much_stdout() -> Result<()> {
-        run_much_stdout(CLI_P2_MUCH_STDOUT_COMPONENT, &[])
+    fn p2_cli_much_stdout() -> Result<()> {
+        run_much_stdout(P2_CLI_MUCH_STDOUT_COMPONENT, &[])
     }
 
     #[test]
     #[cfg_attr(not(feature = "component-model-async"), ignore)]
-    fn cli_p3_much_stdout() -> Result<()> {
+    fn p3_cli_much_stdout() -> Result<()> {
         run_much_stdout(
-            CLI_P3_MUCH_STDOUT_COMPONENT,
+            P3_CLI_MUCH_STDOUT_COMPONENT,
             &["-Wcomponent-model-async", "-Sp3"],
         )
     }
 
     #[tokio::test]
     #[cfg_attr(not(feature = "component-model-async"), ignore)]
-    async fn cli_serve_p3_hello_world() -> Result<()> {
-        let server = WasmtimeServe::new(CLI_SERVE_P3_HELLO_WORLD_COMPONENT, |cmd| {
+    async fn p3_cli_serve_hello_world() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
             cmd.arg("-Wcomponent-model-async");
             cmd.arg("-Sp3,cli");
         })?;
@@ -2242,6 +2256,28 @@ start a print 1234
         assert_eq!(result.body(), "Hello, WASI!");
 
         server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_sleep() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_SLEEP_COMPONENT, |cmd| {
+            cmd.arg("-Scli").arg("-Wtimeout=100us");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_server_error());
+        let (stdout, stderr) = server.finish()?;
+        assert_eq!(stdout, "");
+        assert!(stderr.contains("guest timed out"), "bad stderr: {stderr}");
         Ok(())
     }
 }
@@ -2585,5 +2621,66 @@ fn big_table_in_pooling_allocator() -> Result<()> {
         "-Opooling-table-elements=25000",
         "tests/all/cli_tests/big_table.wat",
     ])?;
+    Ok(())
+}
+
+fn wizen(args: &[&str], wat: &str) -> Result<Output> {
+    let mut cmd = get_wasmtime_command()?;
+    cmd.arg("wizer").args(args).arg("-");
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    stdin.write_all(wat.as_bytes())?;
+    drop(stdin);
+
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        println!(
+            "Failed to execute wasmtime wizer with: {cmd:?}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(output)
+}
+
+#[test]
+fn wizer_no_imports_by_default() -> Result<()> {
+    let result = wizen(
+        &[],
+        r#"(module
+            (func (export "wizer.initialize"))
+        )"#,
+    )?;
+    assert!(result.status.success());
+
+    let result = wizen(
+        &[],
+        r#"(module
+            (import "foo" "bar" (func))
+            (func (export "wizer.initialize"))
+        )"#,
+    )?;
+    assert!(!result.status.success());
+
+    let result = wizen(
+        &[],
+        r#"(module
+            (import "wasi_snapshot_preview1" "fd_write" (func (param i32 i32 i32 i32) (result i32)))
+            (func (export "wizer.initialize"))
+        )"#,
+    )?;
+    assert!(!result.status.success());
+
+    let result = wizen(
+        &["-Scli"],
+        r#"(module
+            (import "wasi_snapshot_preview1" "fd_write" (func (param i32 i32 i32 i32) (result i32)))
+            (func (export "wizer.initialize"))
+        )"#,
+    )?;
+    assert!(result.status.success());
+
     Ok(())
 }

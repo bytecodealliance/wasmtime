@@ -478,8 +478,17 @@ impl CompiledFunctionsTable {
             let key_index = index.as_u32() - start.as_u32();
             FuncKeyIndex::from_raw(key_index)
         } else {
-            let sparse_index = index.as_u32() - start.as_u32();
-            let sparse_index = SparseIndex::from_u32(sparse_index);
+            let sparse_offset = index.as_u32() - start.as_u32();
+            let sparse_start = self.sparse_starts[ns_idx];
+            let sparse_index = SparseIndex::from_u32(sparse_start.as_u32() + sparse_offset);
+            debug_assert!(
+                {
+                    let range = self.sparse_range(ns_idx);
+                    range.start <= sparse_index && sparse_index < range.end
+                },
+                "{sparse_index:?} is not within {:?}",
+                self.sparse_range(ns_idx)
+            );
             self.sparse_indices[sparse_index]
         };
         let key = FuncKey::from_parts(key_ns, key_index);
@@ -730,6 +739,74 @@ mod tests {
                 let actual = table.func_by_text_offset(i);
                 assert_eq!(expected, actual);
             }
+        }
+    }
+
+    #[test]
+    fn reverse_lookups() {
+        use arbitrary::{Result, Unstructured};
+
+        arbtest::arbtest(|u| run(u)).budget_ms(1_000);
+
+        fn run(u: &mut Unstructured<'_>) -> Result<()> {
+            let mut funcs = Vec::new();
+
+            // Build up a random set of functions with random indices.
+            for _ in 0..u.int_in_range(1..=200)? {
+                let key = match u.int_in_range(0..=6)? {
+                    0 => FuncKey::DefinedWasmFunction(idx(u, 10)?, idx(u, 200)?),
+                    1 => FuncKey::ArrayToWasmTrampoline(idx(u, 10)?, idx(u, 200)?),
+                    2 => FuncKey::WasmToArrayTrampoline(idx(u, 100)?),
+                    3 => FuncKey::WasmToBuiltinTrampoline(u.arbitrary()?),
+                    4 => FuncKey::PulleyHostCall(u.arbitrary()?),
+                    5 => FuncKey::ComponentTrampoline(u.arbitrary()?, idx(u, 50)?),
+                    6 => FuncKey::ResourceDropTrampoline,
+                    _ => unreachable!(),
+                };
+                funcs.push(key);
+            }
+
+            // Sort/dedup our list of `funcs` to satisfy the requirement of
+            // `CompiledFunctionsTableBuilder::push_func`.
+            funcs.sort();
+            funcs.dedup();
+
+            let mut builder = CompiledFunctionsTableBuilder::new();
+            let mut size = 0;
+            let mut expected = Vec::new();
+            for key in funcs {
+                let length = u.int_in_range(1..=10)?;
+                for _ in 0..length {
+                    expected.push(key);
+                }
+                // println!("push {key:?} - {length}");
+                builder.push_func(
+                    key,
+                    FunctionLoc {
+                        start: size,
+                        length,
+                    },
+                    FilePos::none(),
+                );
+                size += length;
+            }
+            let index = builder.finish();
+
+            let mut expected = expected.iter();
+            for i in 0..size {
+                // println!("lookup {i}");
+                let actual = index.func_by_text_offset(i).unwrap();
+                assert_eq!(Some(&actual), expected.next());
+            }
+
+            Ok(())
+        }
+
+        fn idx<T>(u: &mut Unstructured<'_>, max: usize) -> Result<T>
+        where
+            T: EntityRef,
+        {
+            Ok(T::new(u.int_in_range(0..=max - 1)?))
         }
     }
 }

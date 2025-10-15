@@ -277,6 +277,13 @@ macro_rules! declare_builtin_index {
 
             $for_each_builtin!(declare_builtin_index_constructors);
         }
+
+        #[cfg(test)]
+        impl arbitrary::Arbitrary<'_> for $index_name {
+            fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
+                Ok(Self(u.int_in_range(0..=Self::len() - 1)?))
+            }
+        }
     };
 }
 

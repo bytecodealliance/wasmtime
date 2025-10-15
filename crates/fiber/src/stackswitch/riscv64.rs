@@ -5,12 +5,12 @@
 // all the other bits. Documentation tries to reference various bits here and
 // there but try to make sure to read over everything before tweaking things!
 
-use wasmtime_asm_macros::asm_func;
+use core::arch::naked_asm;
 
-// fn(top_of_stack(rdi): *mut u8)
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_switch),
-    "
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* a0 */) {
+    naked_asm!(
+        "
       // See https://github.com/rust-lang/rust/issues/80608.
       .attribute arch, \"rv64gc\"
 
@@ -80,35 +80,59 @@ asm_func!(
       ld ra,0xc8(sp)
       addi sp , sp , 0xd0
       jr ra
-  ",
-);
+        ",
+    );
+}
 
-// fn(
-//    top_of_stack(a0): *mut u8,
-//    entry_point(a1): extern fn(*mut u8, *mut u8),
-//    entry_arg0(a2): *mut u8,
-// )
-#[rustfmt::skip]
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
-    "
-      lla t0,{}
-      sd t0,-0x18(a0)  // ra,first should be wasmtime_fiber_start.
-      sd a0,-0x20(a0)  // fp pointer.
-      sd a1,-0x28(a0)  // entry_point will load to s1.
-      sd a2,-0x30(a0)  // entry_arg0 will load to s2.
+pub(crate) unsafe fn wasmtime_fiber_init(
+    top_of_stack: *mut u8,
+    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_arg0: *mut u8,
+) {
+    #[repr(C)]
+    #[derive(Default)]
+    struct InitialStack {
+        align_to_16_byte_size: u64,
 
-      //
-      addi t0,a0,-0xe0
-      sd t0,-0x10(a0)
-      ret
-    ",
-    sym super::wasmtime_fiber_start,
-);
+        fs: [f64; 12],
 
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_start),
-    "
+        s11: *mut u8,
+        s10: *mut u8,
+        s9: *mut u8,
+        s8: *mut u8,
+        s7: *mut u8,
+        s6: *mut u8,
+        s5: *mut u8,
+        s4: *mut u8,
+        s3: *mut u8,
+        s2: *mut u8,
+        s1: *mut u8,
+        fp: *mut u8,
+
+        ra: *mut u8,
+
+        // unix.rs reserved space
+        last_sp: *mut u8,
+        run_result: *mut u8,
+    }
+
+    unsafe {
+        let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
+        initial_stack.write(InitialStack {
+            s1: entry_point as *mut u8,
+            s2: entry_arg0,
+            fp: top_of_stack,
+            ra: wasmtime_fiber_start as *mut u8,
+            last_sp: initial_stack.cast(),
+            ..InitialStack::default()
+        });
+    }
+}
+
+#[unsafe(naked)]
+unsafe extern "C" fn wasmtime_fiber_start() -> ! {
+    naked_asm!(
+        "
     .cfi_startproc simple
     .cfi_def_cfa_offset 0
 
@@ -155,4 +179,5 @@ asm_func!(
       .4byte 0
       .cfi_endproc
   ",
-);
+    );
+}

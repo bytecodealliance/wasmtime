@@ -54,7 +54,7 @@ enum TcpState {
     ///
     /// Sockets will not leave this state.
     Listening {
-        /// The raw tokio-basd TCP listener managing the underyling socket.
+        /// The raw tokio-basd TCP listener managing the underlying socket.
         listener: Arc<tokio::net::TcpListener>,
 
         /// The last-accepted connection, set during the `ready` method and read
@@ -332,7 +332,7 @@ impl TcpSocket {
         }
     }
 
-    /// For WASIp2 this retreives the result from the future passed to
+    /// For WASIp2 this retrieves the result from the future passed to
     /// `set_pending_connect`.
     ///
     /// Return states here are:

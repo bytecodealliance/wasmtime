@@ -35,6 +35,7 @@ mod memory_creator;
 mod module;
 mod module_serialize;
 mod name;
+mod native_debug;
 mod noextern;
 mod piped_tests;
 mod pooling_allocator;

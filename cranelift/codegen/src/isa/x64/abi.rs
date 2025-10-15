@@ -33,13 +33,12 @@ impl X64ABIMachineSpec {
             // See: https://github.com/bytecodealliance/wasmtime/issues/7454
             insts.extend(Self::gen_sp_reg_adjust(-(guard_size as i32)));
 
-            // TODO: It would be nice if we could store the imm 0, but we don't have insts for those
-            // so store the stack pointer. Any register will do, since the stack is undefined at this point
-            insts.push(Inst::store(
-                I32,
-                regs::rsp(),
-                Amode::imm_reg(0, regs::rsp()),
-            ));
+            // Touch the current page by storing an immediate zero.
+            // mov  [rsp], 0
+            insts.push(Inst::External {
+                inst: asm::inst::movl_mi::new(Amode::imm_reg(0, regs::rsp()), 0i32.cast_unsigned())
+                    .into(),
+            });
         }
 
         // Restore the stack pointer to its original value

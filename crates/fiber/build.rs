@@ -22,10 +22,6 @@ fn main() {
         println!("cargo:rerun-if-changed=src/windows.c");
         build.file("src/windows.c");
         build.define("VERSIONED_SUFFIX", Some(versioned_suffix!()));
-    } else if arch == "s390x" {
-        println!("cargo:rerun-if-changed=src/stackswitch/s390x.S");
-        build.file("src/stackswitch/s390x.S");
-        build.define("VERSIONED_SUFFIX", Some(versioned_suffix!()));
     } else {
         // assume that this is included via inline assembly in the crate itself,
         // and the crate will otherwise have a `compile_error!` for unsupported

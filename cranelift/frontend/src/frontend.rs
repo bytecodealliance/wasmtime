@@ -338,6 +338,11 @@ impl<'a> FunctionBuilder<'a> {
         self.srcloc = srcloc;
     }
 
+    /// Get the current source location that this builder is using.
+    pub fn srcloc(&self) -> ir::SourceLoc {
+        self.srcloc
+    }
+
     /// Creates a new [`Block`] and returns its reference.
     pub fn create_block(&mut self) -> Block {
         let block = self.func.dfg.make_block();

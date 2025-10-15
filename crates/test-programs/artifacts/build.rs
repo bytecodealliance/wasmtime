@@ -73,11 +73,11 @@ impl Artifacts {
             // Bucket, based on the name of the test, into a "kind" which
             // generates a `foreach_*` macro below.
             let kind = match test.name.as_str() {
-                s if s.starts_with("http_") => "http",
-                s if s.starts_with("preview1_") => "preview1",
-                s if s.starts_with("preview2_") => "preview2",
-                s if s.starts_with("cli_") => "cli",
-                s if s.starts_with("api_") => "api",
+                s if s.starts_with("p1_") => "p1",
+                s if s.starts_with("p2_http_") => "p2_http",
+                s if s.starts_with("p2_cli_") => "p2_cli",
+                s if s.starts_with("p2_api_") => "p2_api",
+                s if s.starts_with("p2_") => "p2",
                 s if s.starts_with("nn_") => "nn",
                 s if s.starts_with("piped_") => "piped",
                 s if s.starts_with("dwarf_") => "dwarf",
@@ -111,7 +111,7 @@ impl Artifacts {
             let adapter = match test.name.as_str() {
                 "reactor" => &reactor_adapter,
                 s if s.starts_with("p3_") => &reactor_adapter,
-                s if s.starts_with("api_proxy") => &proxy_adapter,
+                s if s.starts_with("p2_api_proxy") => &proxy_adapter,
                 _ => &command_adapter,
             };
             let path = match &test.core_wasm {

@@ -172,7 +172,7 @@ impl WastContext {
             return Ok(Export::Core(
                 self.core_linker
                     .get(&mut self.core_store, module, name)
-                    .ok_or_else(|| anyhow!("no item named `{}::{}` found", module, name))?,
+                    .ok_or_else(|| anyhow!("no item named `{module}::{name}` found"))?,
             ));
         }
 
@@ -183,13 +183,13 @@ impl WastContext {
         Ok(match cur {
             InstanceKind::Core(i) => Export::Core(
                 i.get_export(&mut self.core_store, name)
-                    .ok_or_else(|| anyhow!("no item named `{}` found", name))?,
+                    .ok_or_else(|| anyhow!("no item named `{name}` found"))?,
             ),
             #[cfg(feature = "component-model")]
             InstanceKind::Component(store, i) => {
                 let export = i
                     .get_func(&mut *store, name)
-                    .ok_or_else(|| anyhow!("no func named `{}` found", name))?;
+                    .ok_or_else(|| anyhow!("no func named `{name}` found"))?;
                 Export::Component(store, export)
             }
         })
@@ -509,7 +509,7 @@ impl WastContext {
 
     fn assert_trap(&self, result: Outcome, expected: &str) -> Result<()> {
         let trap = match result {
-            Outcome::Ok(values) => bail!("expected trap, got {:?}", values),
+            Outcome::Ok(values) => bail!("expected trap, got {values:?}"),
             Outcome::Trap(t) => t,
         };
         let actual = format!("{trap:?}");
@@ -525,7 +525,7 @@ impl WastContext {
         {
             return Ok(());
         }
-        bail!("expected '{}', got '{}'", expected, actual)
+        bail!("expected '{expected}', got '{actual}'")
     }
 
     fn assert_exception(&mut self, result: Outcome) -> Result<()> {

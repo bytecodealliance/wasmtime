@@ -5,12 +5,12 @@
 // all the other bits. Documentation tries to reference various bits here and
 // there but try to make sure to read over everything before tweaking things!
 
-use wasmtime_asm_macros::asm_func;
+use core::arch::naked_asm;
 
-// fn(top_of_stack(rdi): *mut u8)
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_switch),
-    "
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8 /* rdi */) {
+    naked_asm!(
+        "
         // We're switching to arbitrary code somewhere else, so pessimistically
         // assume that all callee-save register are clobbered. This means we need
         // to save/restore all of them.
@@ -40,41 +40,42 @@ asm_func!(
         pop rbp
         ret
     ",
-);
+    );
+}
 
-// fn(
-//    top_of_stack(rdi): *mut u8,
-//    entry_point(rsi): extern fn(*mut u8, *mut u8),
-//    entry_arg0(rdx): *mut u8,
-// )
-#[rustfmt::skip]
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
-    "
-        // Here we're going to set up a stack frame as expected by
-        // `wasmtime_fiber_switch`. The values we store here will get restored into
-        // registers by that function and the `wasmtime_fiber_start` function will
-        // take over and understands which values are in which registers.
-        //
-        // The first 16 bytes of stack are reserved for metadata, so we start
-        // storing values beneath that.
-        lea rax, {start}[rip]
-        mov -0x18[rdi], rax
-        mov -0x20[rdi], rdi   // loaded into rbp during switch
-        mov -0x28[rdi], rsi   // loaded into rbx during switch
-        mov -0x30[rdi], rdx   // loaded into r12 during switch
+pub(crate) unsafe fn wasmtime_fiber_init(
+    top_of_stack: *mut u8,
+    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_arg0: *mut u8,
+) {
+    #[repr(C)]
+    #[derive(Default)]
+    struct InitialStack {
+        r15: *mut u8,
+        r14: *mut u8,
+        r13: *mut u8,
+        r12: *mut u8,
+        rbx: *mut u8,
+        rbp: *mut u8,
+        return_address: *mut u8,
 
-        // And then we specify the stack pointer resumption should begin at. Our
-        // `wasmtime_fiber_switch` function consumes 6 registers plus a return
-        // pointer, and the top 16 bytes are reserved, so that's:
-        //
-        //	(6 + 1) * 16 + 16 = 0x48
-        lea rax, -0x48[rdi]
-        mov -0x10[rdi], rax
-        ret
-    ",
-    start = sym super::wasmtime_fiber_start,
-);
+        // unix.rs reserved space
+        last_sp: *mut u8,
+        run_result: *mut u8,
+    }
+
+    unsafe {
+        let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
+        initial_stack.write(InitialStack {
+            r12: entry_arg0,
+            rbx: entry_point as *mut u8,
+            rbp: top_of_stack,
+            return_address: wasmtime_fiber_start as *mut u8,
+            last_sp: initial_stack.cast(),
+            ..InitialStack::default()
+        });
+    }
+}
 
 // This is a pretty special function that has no real signature. Its use is to
 // be the "base" function of all fibers. This entrypoint is used in
@@ -88,9 +89,10 @@ asm_func!(
 //
 // If you're curious a decent introduction to CFI things and unwinding is at
 // https://www.imperialviolet.org/2017/01/18/cfi.html
-asm_func!(
-    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_start),
-    "
+#[unsafe(naked)]
+unsafe extern "C" fn wasmtime_fiber_start() -> ! {
+    naked_asm!(
+        "
         // Use the `simple` directive on the startproc here which indicates that
         // some default settings for the platform are omitted, since this
         // function is so nonstandard
@@ -156,5 +158,6 @@ asm_func!(
         call rbx
         ud2
         .cfi_endproc
-    ",
-);
+        ",
+    );
+}
