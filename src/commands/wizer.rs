@@ -81,7 +81,13 @@ impl WizerCommand {
 
         // Use our state to capture a snapshot with Wizer and then serialize
         // that.
-        let final_wasm = self.wizer.snapshot(cx, &mut store, &instance)?;
+        let final_wasm = self.wizer.snapshot(
+            cx,
+            &mut wasmtime_wizer::WasmtimeWizer {
+                store: &mut store,
+                instance,
+            },
+        )?;
 
         match &self.output {
             Some(file) => fs::write(file, &final_wasm).context("failed to write output file")?,

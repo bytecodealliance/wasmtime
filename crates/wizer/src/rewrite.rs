@@ -1,6 +1,6 @@
 //! Final rewrite pass.
 
-use crate::{FuncRenames, Wizer, info::ModuleContext, snapshot::Snapshot};
+use crate::{FuncRenames, SnapshotVal, Wizer, info::ModuleContext, snapshot::Snapshot};
 use std::convert::TryFrom;
 use wasm_encoder::reencode::{Reencode, RoundtripReencoder};
 use wasm_encoder::{ConstExpr, SectionId};
@@ -9,10 +9,9 @@ impl Wizer {
     /// Given the initialized snapshot, rewrite the Wasm so that it is already
     /// initialized.
     ///
-    pub(crate) fn rewrite<T>(
+    pub(crate) fn rewrite(
         &self,
         module: &mut ModuleContext<'_>,
-        store: &wasmtime::Store<T>,
         snapshot: &Snapshot,
         renames: &FuncRenames,
     ) -> Vec<u8> {
@@ -31,7 +30,7 @@ impl Wizer {
                 data_section.active(
                     seg.memory_index,
                     &ConstExpr::i32_const(seg.offset as i32),
-                    seg.data(store).iter().copied(),
+                    seg.data().iter().copied(),
                 );
             }
             Some(data_section)
@@ -86,18 +85,15 @@ impl Wizer {
                         globals.global(
                             glob_ty,
                             &match val {
-                                wasmtime::Val::I32(x) => ConstExpr::i32_const(*x),
-                                wasmtime::Val::I64(x) => ConstExpr::i64_const(*x),
-                                wasmtime::Val::F32(x) => {
+                                SnapshotVal::I32(x) => ConstExpr::i32_const(*x),
+                                SnapshotVal::I64(x) => ConstExpr::i64_const(*x),
+                                SnapshotVal::F32(x) => {
                                     ConstExpr::f32_const(wasm_encoder::Ieee32::new(*x))
                                 }
-                                wasmtime::Val::F64(x) => {
+                                SnapshotVal::F64(x) => {
                                     ConstExpr::f64_const(wasm_encoder::Ieee64::new(*x))
                                 }
-                                wasmtime::Val::V128(x) => {
-                                    ConstExpr::v128_const(x.as_u128() as i128)
-                                }
-                                _ => unreachable!(),
+                                SnapshotVal::V128(x) => ConstExpr::v128_const(x.cast_signed()),
                             },
                         );
                     }

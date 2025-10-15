@@ -1,9 +1,8 @@
+use crate::InstanceState;
 use crate::info::ModuleContext;
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 use std::convert::TryFrom;
-use wasmtime::{AsContext, AsContextMut};
-
-const WASM_PAGE_SIZE: u64 = 65_536;
+use std::sync::Arc;
 
 /// The maximum number of data segments that we will emit. Most
 /// engines support more than this, but we want to leave some
@@ -13,7 +12,7 @@ const MAX_DATA_SEGMENTS: usize = 10_000;
 /// A "snapshot" of Wasm state from its default value after having been initialized.
 pub struct Snapshot {
     /// Maps global index to its initialized value.
-    pub globals: Vec<wasmtime::Val>,
+    pub globals: Vec<SnapshotVal>,
 
     /// A new minimum size for each memory (in units of pages).
     pub memory_mins: Vec<u64>,
@@ -22,14 +21,25 @@ pub struct Snapshot {
     pub data_segments: Vec<DataSegment>,
 }
 
+/// A value from a snapshot, currently a subset of wasm types that aren't
+/// reference types.
+#[expect(missing_docs, reason = "self-describing variants")]
+pub enum SnapshotVal {
+    I32(i32),
+    I64(i64),
+    F32(u32),
+    F64(u64),
+    V128(u128),
+}
+
 /// A data segment initializer for a memory.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct DataSegment {
     /// The index of this data segment's memory.
     pub memory_index: u32,
 
     /// This data segment's initialized memory that it originated from.
-    pub memory: wasmtime::Memory,
+    pub memory: Arc<Vec<u8>>,
 
     /// The offset within the memory that `data` should be copied to.
     pub offset: u32,
@@ -39,10 +49,10 @@ pub struct DataSegment {
 }
 
 impl DataSegment {
-    pub fn data<'a>(&self, ctx: &'a impl AsContext) -> &'a [u8] {
+    pub fn data(&self) -> &[u8] {
         let start = usize::try_from(self.offset).unwrap();
         let end = start + usize::try_from(self.len).unwrap();
-        &self.memory.data(ctx)[start..end]
+        &self.memory[start..end]
     }
 }
 
@@ -67,7 +77,7 @@ impl DataSegment {
         DataSegment {
             offset: self.offset,
             len: self.len + gap + other.len,
-            ..*self
+            ..self.clone()
         }
     }
 }
@@ -76,15 +86,11 @@ impl DataSegment {
 /// defaults.
 //
 // TODO: when we support reference types, we will have to snapshot tables.
-pub fn snapshot(
-    module: &ModuleContext<'_>,
-    ctx: &mut impl AsContextMut,
-    instance: &wasmtime::Instance,
-) -> Snapshot {
+pub fn snapshot(module: &ModuleContext<'_>, ctx: &mut dyn InstanceState) -> Snapshot {
     log::debug!("Snapshotting the initialized state");
 
-    let globals = snapshot_globals(module, &mut *ctx, instance);
-    let (memory_mins, data_segments) = snapshot_memories(module, &mut *ctx, instance);
+    let globals = snapshot_globals(module, ctx);
+    let (memory_mins, data_segments) = snapshot_memories(module, ctx);
 
     Snapshot {
         globals,
@@ -94,11 +100,7 @@ pub fn snapshot(
 }
 
 /// Get the initialized values of all globals.
-fn snapshot_globals(
-    module: &ModuleContext<'_>,
-    ctx: &mut impl AsContextMut,
-    instance: &wasmtime::Instance,
-) -> Vec<wasmtime::Val> {
+fn snapshot_globals(module: &ModuleContext<'_>, ctx: &mut dyn InstanceState) -> Vec<SnapshotVal> {
     log::debug!("Snapshotting global values");
 
     module
@@ -106,12 +108,7 @@ fn snapshot_globals(
         .as_ref()
         .unwrap()
         .iter()
-        .map(|name| {
-            let global = instance
-                .get_global(&mut *ctx, &name)
-                .expect("defined global missing");
-            global.get(&mut *ctx)
-        })
+        .map(|name| ctx.global_get(&name))
         .collect()
 }
 
@@ -119,8 +116,7 @@ fn snapshot_globals(
 /// regions of non-zero memory.
 fn snapshot_memories(
     module: &ModuleContext<'_>,
-    ctx: &mut impl AsContextMut,
-    instance: &wasmtime::Instance,
+    instance: &mut dyn InstanceState,
 ) -> (Vec<u64>, Vec<DataSegment>) {
     log::debug!("Snapshotting memories");
 
@@ -130,19 +126,19 @@ fn snapshot_memories(
     let iter = module
         .defined_memories()
         .zip(module.defined_memory_exports.as_ref().unwrap());
-    for ((memory_index, _), name) in iter {
-        let memory = instance.get_memory(&mut *ctx, &name).unwrap();
-        memory_mins.push(memory.size(&*ctx));
+    for ((memory_index, ty), name) in iter {
+        let memory = Arc::new(instance.memory_contents(&name));
+        let page_size = 1 << ty.page_size_log2.unwrap_or(16);
+        let num_wasm_pages = memory.len() / page_size;
+        memory_mins.push(num_wasm_pages as u64);
 
-        let num_wasm_pages = memory.size(&*ctx);
-
-        let memory_data = memory.data(&*ctx);
+        let memory_data = &memory[..];
 
         // Consider each Wasm page in parallel. Create data segments for each
         // region of non-zero memory.
         data_segments.par_extend((0..num_wasm_pages).into_par_iter().flat_map(|i| {
-            let page_end = ((i + 1) * WASM_PAGE_SIZE) as usize;
-            let mut start = (i * WASM_PAGE_SIZE) as usize;
+            let page_end = (i + 1) * page_size;
+            let mut start = i * page_size;
             let mut segments = vec![];
             while start < page_end {
                 let nonzero = match memory_data[start..page_end]
@@ -159,7 +155,7 @@ fn snapshot_memories(
                     .map_or(page_end, |zero| start + zero);
                 segments.push(DataSegment {
                     memory_index,
-                    memory,
+                    memory: memory.clone(),
                     offset: u32::try_from(start).unwrap(),
                     len: u32::try_from(end - start).unwrap(),
                 });
@@ -186,13 +182,13 @@ fn snapshot_memories(
     // the data length LEB).
     const MIN_ACTIVE_SEGMENT_OVERHEAD: u32 = 4;
     let mut merged_data_segments = Vec::with_capacity(data_segments.len());
-    merged_data_segments.push(data_segments[0]);
+    merged_data_segments.push(data_segments[0].clone());
     for b in &data_segments[1..] {
         let a = merged_data_segments.last_mut().unwrap();
 
         // Only merge segments for the same memory.
         if a.memory_index != b.memory_index {
-            merged_data_segments.push(*b);
+            merged_data_segments.push(b.clone());
             continue;
         }
 
@@ -200,7 +196,7 @@ fn snapshot_memories(
         // more size efficient than leaving them apart.
         let gap = a.gap(b);
         if gap > MIN_ACTIVE_SEGMENT_OVERHEAD {
-            merged_data_segments.push(*b);
+            merged_data_segments.push(b.clone());
             continue;
         }
 
