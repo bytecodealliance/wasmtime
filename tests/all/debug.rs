@@ -1,20 +1,26 @@
 //! Tests for instrumentation-based debugging.
 
-use wasmtime::{Caller, Config, Engine, Extern, Func, Instance, Module, Store};
+use wasmtime::{AsContextMut, Caller, Config, Engine, Extern, Func, Instance, Module, Store};
 
-fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + 'static>(
-    wat: &str,
+fn get_module_and_store<C: Fn(&mut Config)>(
     c: C,
-    f: F,
-) -> anyhow::Result<()> {
+    wat: &str,
+) -> anyhow::Result<(Module, Store<()>)> {
     let mut config = Config::default();
     config.guest_debug(true);
     config.wasm_exceptions(true);
     c(&mut config);
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, wat)?;
+    Ok((module, Store::new(&engine, ())))
+}
 
-    let mut store = Store::new(&engine, ());
+fn test_stack_values<C: Fn(&mut Config), F: Fn(Caller<'_, ()>) + Send + Sync + 'static>(
+    wat: &str,
+    c: C,
+    f: F,
+) -> anyhow::Result<()> {
+    let (module, mut store) = get_module_and_store(c, wat)?;
     let func = Func::wrap(&mut store, move |caller: Caller<'_, ()>| {
         f(caller);
     });
@@ -132,6 +138,49 @@ fn stack_values_dead_gc_ref() -> anyhow::Result<()> {
             assert!(!stack.done());
             assert_eq!(stack.num_stacks(), 1);
             assert!(stack.stack(0).unwrap_anyref().is_some());
+            stack.move_to_parent();
+            assert!(stack.done());
+        },
+    )
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn gc_access_during_call() -> anyhow::Result<()> {
+    test_stack_values(
+        r#"
+    (module
+      (type $s (struct (field i32)))
+      (import "" "host" (func))
+      (func (export "main")
+        (local $l (ref null $s))
+        (local.set $l (struct.new $s (i32.const 42)))
+        (call 0)))
+    "#,
+        |config| {
+            config.wasm_gc(true);
+        },
+        |mut caller: Caller<'_, ()>| {
+            let mut stack = caller.debug_frames().unwrap();
+
+            // Do a GC while we hold the stack cursor.
+            stack.as_context_mut().gc(None);
+
+            assert!(!stack.done());
+            assert_eq!(stack.num_stacks(), 0);
+            assert_eq!(stack.num_locals(), 1);
+            // Note that this struct is dead during the call, and the
+            // ref could otherwise be optimized away (no longer in the
+            // stackmap at this point); but we verify it is still
+            // alive here because it is rooted in the
+            // debug-instrumentation slot.
+            let s = stack
+                .local(0)
+                .unwrap_any_ref()
+                .unwrap()
+                .unwrap_struct(&stack)
+                .unwrap();
+            assert_eq!(s.field(&mut stack, 0).unwrap().unwrap_i32(), 42);
             stack.move_to_parent();
             assert!(stack.done());
         },

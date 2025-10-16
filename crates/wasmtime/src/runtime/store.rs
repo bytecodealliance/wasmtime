@@ -1184,8 +1184,8 @@ impl<T> Store<T> {
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
     #[cfg(feature = "debug")]
-    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
-        self.inner.debug_frames()
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
+        self.as_context_mut().debug_frames()
     }
 }
 
@@ -1309,16 +1309,6 @@ impl<'a, T> StoreContextMut<'a, T> {
     #[cfg(feature = "gc")]
     pub fn has_pending_exception(&self) -> bool {
         self.0.inner.pending_exception.is_some()
-    }
-
-    /// Provide an object that views Wasm stack state, including Wasm
-    /// VM-level values (locals and operand stack), when debugging is
-    /// enabled.
-    ///
-    /// See ['Store::debug_frames`] for more details.
-    #[cfg(feature = "debug")]
-    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
-        self.0.inner.debug_frames()
     }
 }
 
@@ -2704,6 +2694,12 @@ impl AsStoreOpaque for StoreOpaque {
 impl AsStoreOpaque for dyn VMStore {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque {
         self
+    }
+}
+
+impl<T: 'static> AsStoreOpaque for Store<T> {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        &mut self.inner.inner
     }
 }
 

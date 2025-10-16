@@ -2235,8 +2235,8 @@ impl<T> Caller<'_, T> {
     ///
     /// See ['Store::debug_frames`] for more details.
     #[cfg(feature = "debug")]
-    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
-        self.store.debug_frames()
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
+        self.store.as_context_mut().debug_frames()
     }
 }
 
