@@ -3,15 +3,15 @@ use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, GuestBody};
 use crate::p3::{WasiHttpCtxView, WasiHttpView};
 use bytes::Bytes;
-use http::header::HOST;
-use tracing::debug;
 use core::time::Duration;
+use http::header::HOST;
 use http::uri::{Authority, PathAndQuery, Scheme};
 use http::{HeaderMap, HeaderValue, Method, Uri};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
 use tokio::sync::oneshot;
+use tracing::debug;
 use wasmtime::AsContextMut;
 
 /// The concrete type behind a `wasi:http/types/request-options` resource.
@@ -231,32 +231,34 @@ impl Request {
         if let Some(headers_mut) = req.headers_mut() {
             *headers_mut = headers;
         } else {
-            return Err(ErrorCode::InternalError(Some("failed to get mutable headers from request builder".to_string())).into());
+            return Err(ErrorCode::InternalError(Some(
+                "failed to get mutable headers from request builder".to_string(),
+            ))
+            .into());
         }
         let body = match body {
             Body::Guest {
                 contents_rx,
                 trailers_rx,
                 result_tx,
-            } => {
-                GuestBody::new(
-                    store,
-                    contents_rx,
-                    trailers_rx,
-                    result_tx,
-                    fut,
-                    content_length,
-                    ErrorCode::HttpRequestBodySize,
-                    getter,
-                )
-                .boxed()
-            }
+            } => GuestBody::new(
+                store,
+                contents_rx,
+                trailers_rx,
+                result_tx,
+                fut,
+                content_length,
+                ErrorCode::HttpRequestBodySize,
+                getter,
+            )
+            .boxed(),
             Body::Host { body, result_tx } => {
                 _ = result_tx.send(Box::new(fut));
                 body
             }
         };
-        let req = req.method(method)
+        let req = req
+            .method(method)
             .uri(uri)
             .body(body)
             .map_err(|err| ErrorCode::InternalError(Some(err.to_string())))?;
@@ -498,10 +500,10 @@ mod tests {
     use super::*;
     use crate::p3::WasiHttpCtx;
     use anyhow::Result;
-    use std::task::{Context, Waker};
+    use http_body_util::{BodyExt, Full};
     use std::future::Future;
     use std::str::FromStr;
-    use http_body_util::{BodyExt, Full};
+    use std::task::{Context, Waker};
     use wasmtime::{Engine, Store};
     use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
@@ -544,11 +546,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_into_http_schemes() -> Result<()> {
-        let schemes = vec![
-            Some(Scheme::HTTP),
-            Some(Scheme::HTTPS),
-            None,
-        ];
+        let schemes = vec![Some(Scheme::HTTP), Some(Scheme::HTTPS), None];
         let engine = Engine::default();
 
         for scheme in schemes {
@@ -572,7 +570,8 @@ mod tests {
                 &http::Uri::from_str(&format!(
                     "{}://example.com/path?query=1",
                     expected_scheme.as_str()
-                )).unwrap()
+                ))
+                .unwrap()
             );
             let body_bytes = http_req.into_body().collect().await?;
             assert_eq!(*body_bytes.to_bytes(), *b"body");
@@ -589,7 +588,10 @@ mod tests {
     async fn test_request_into_http_invalid_content_length() -> Result<()> {
         let engine = Engine::default();
         let mut headers = HeaderMap::new();
-        headers.insert(http::header::CONTENT_LENGTH, HeaderValue::from_static("invalid"));
+        headers.insert(
+            http::header::CONTENT_LENGTH,
+            HeaderValue::from_static("invalid"),
+        );
 
         let (req, fut) = Request::new(
             Method::GET,
@@ -598,12 +600,12 @@ mod tests {
             None,
             headers,
             None,
-            Full::new(Bytes::new())
-                .map_err(|x| match x {})
-                .boxed(),
+            Full::new(Bytes::new()).map_err(|x| match x {}).boxed(),
         );
         let mut store = Store::new(&engine, TestCtx::new());
-        let result = req.into_http(&mut store, async { Err(ErrorCode::InternalError(Some("uh oh".to_string()))) });
+        let result = req.into_http(&mut store, async {
+            Err(ErrorCode::InternalError(Some("uh oh".to_string())))
+        });
         assert!(matches!(result, Err(_)));
 
         let mut cx = Context::from_waker(Waker::noop());
