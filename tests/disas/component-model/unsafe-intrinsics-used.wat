@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "optimize"
-;;! filter = "unsafe-intrinsics--Wasm"
+;;! filter = "unsafe-intrinsics-wasm-call"
 ;;! unsafe_intrinsics = "unsafe-intrinsics"
 
 ;; Test that only the intrinsics that we actually use get compiled.

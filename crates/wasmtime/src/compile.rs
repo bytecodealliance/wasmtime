@@ -300,14 +300,20 @@ impl<'a> CompileInputs<'a> {
             let intrinsic = UnsafeIntrinsic::from_u32(i);
             for abi in [Abi::Wasm, Abi::Array] {
                 ret.push_input(move |compiler| {
-                    let symbol = format!("unsafe-intrinsics::{abi:?}::{}", intrinsic.name());
+                    let symbol = format!(
+                        "unsafe-intrinsics-{}-{}",
+                        match abi {
+                            Abi::Wasm => "wasm-call",
+                            Abi::Array => "array-call",
+                        },
+                        intrinsic.name(),
+                    );
                     Ok(CompileOutput {
                         key: FuncKey::UnsafeIntrinsic(abi, intrinsic),
                         function: compiler
                             .component_compiler()
                             .compile_intrinsic(tunables, component, intrinsic, abi, &symbol)
-                            .with_context(|| format!("failed to compile `{symbol}`"))?
-                            .into(),
+                            .with_context(|| format!("failed to compile `{symbol}`"))?,
                         symbol,
                         start_srcloc: FilePos::default(),
                         translation: None,
@@ -321,11 +327,15 @@ impl<'a> CompileInputs<'a> {
             for abi in [Abi::Wasm, Abi::Array] {
                 ret.push_input(move |compiler| {
                     let key = FuncKey::ComponentTrampoline(abi, idx);
-                    let mut symbol = trampoline.symbol_name();
-                    symbol.push_str(match abi {
-                        Abi::Wasm => "_wasm_call",
-                        Abi::Array => "_array_call",
-                    });
+                    let symbol = format!(
+                        "component-trampolines[{}]-{}-{}",
+                        idx.as_u32(),
+                        match abi {
+                            Abi::Wasm => "wasm-call",
+                            Abi::Array => "array-call",
+                        },
+                        trampoline.symbol_name(),
+                    );
                     let function = compiler
                         .component_compiler()
                         .compile_trampoline(component, types, key, abi, tunables, &symbol)
