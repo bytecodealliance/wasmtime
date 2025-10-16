@@ -460,6 +460,11 @@ pub extern "C" fn wasmtime_config_wasm_wide_arithmetic_set(c: &mut wasm_config_t
     c.config.wasm_wide_arithmetic(enable);
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_wasm_exceptions_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_exceptions(enable);
+}
+
 #[repr(C)]
 #[derive(Clone)]
 #[cfg(feature = "pooling-allocator")]
