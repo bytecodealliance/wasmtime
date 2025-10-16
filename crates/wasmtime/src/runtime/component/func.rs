@@ -354,7 +354,7 @@ impl Func {
     /// wasm tasks have completed, then there will be no scope of
     /// [`run_concurrent`] anywhere. In this situation the wasm tasks that have
     /// not yet completed will not make progress until [`run_concurrent`] is
-    /// reentered.
+    /// called again.
     ///
     /// Embedders will need to ensure that this future is `await`'d within the
     /// scope of [`run_concurrent`] to ensure that the value can be produced

@@ -948,14 +948,20 @@ impl<T> StoreContextMut<'_, T> {
     ///
     /// # Store-blocking behavior
     ///
-    /// At this time there are certain situations in which the `AsyncFnOnce`
-    /// passed to this function may appear to "block" or get "locked up" in a
-    /// way where progress on some items can be made but they aren't being made.
-    /// A canonical example of this is when the `fun` provided to this function
-    /// attempts to set a timeout for an invocation of a wasm function. In this
-    /// situation the async closure is waiting both on (a) the wasm computation
-    /// to finish, and (b) the timeout to elapse. At this time this setup will
-    /// not always work and the timeout may not reliably fire.
+    ///
+    ///
+    /// At this time there are certain situations in which the `Future` returned
+    /// by the `AsyncFnOnce` passed to this function will not be polled for an
+    /// extended period of time, despite one or more `Waker::wake` events having
+    /// occurred for the task to which it belongs.  This can manifest as the
+    /// `Future` seeming to be "blocked" or "locked up", but is actually due to
+    /// the `Store` being held by e.g. a blocking host function, preventing the
+    /// `Future` from being polled. A canonical example of this is when the
+    /// `fun` provided to this function attempts to set a timeout for an
+    /// invocation of a wasm function. In this situation the async closure is
+    /// waiting both on (a) the wasm computation to finish, and (b) the timeout
+    /// to elapse. At this time this setup will not always work and the timeout
+    /// may not reliably fire.
     ///
     /// This function will not block the current thread and as such is always
     /// suitable to run in an `async` context, but the current implementation of
