@@ -259,7 +259,7 @@ extern void wasmtime_tls_set(uint8_t *ptr);
  * Frees a synchronization lock.
  *
  * May be called on a lock that was never used (still has a zero pattern).
- * The implementation must handle this case gracefully.
+ * The implementor must handle this case gracefully.
  */
 extern void wasmtime_sync_lock_free(uintptr_t *lock);
 #endif
@@ -323,7 +323,7 @@ extern void wasmtime_sync_rwlock_write_release(uintptr_t *lock);
  * Frees an RwLock.
  *
  * May be called on a lock that was never used (still has a zero pattern).
- * The implementation must handle this case gracefully.
+ * The implementor must handle this case gracefully.
  */
 extern void wasmtime_sync_rwlock_free(uintptr_t *lock);
 #endif
