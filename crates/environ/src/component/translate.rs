@@ -440,7 +440,7 @@ impl<'a, 'data> Translator<'a, 'data> {
 
     /// Expose Wasmtime's unsafe intrinsics under the given top-level import
     /// name.
-    pub fn expose_intrinsics(&mut self, name: &'a str) -> &mut Self {
+    pub fn expose_unsafe_intrinsics(&mut self, name: &'a str) -> &mut Self {
         assert!(self.unsafe_intrinsics_import.is_none());
         self.unsafe_intrinsics_import = Some(name);
         self

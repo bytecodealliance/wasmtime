@@ -158,7 +158,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     let mut types = ComponentTypesBuilder::new(&validator);
     let mut translator = Translator::new(tunables, &mut validator, &mut types, &scope);
     if let Some(name) = unsafe_intrinsics_import {
-        translator.expose_intrinsics(name);
+        translator.expose_unsafe_intrinsics(name);
     }
     let (component, mut module_translations) = translator
         .translate(binary)

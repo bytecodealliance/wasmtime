@@ -101,7 +101,11 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_runtime_post_returns: component.num_runtime_post_returns,
             num_runtime_component_instances: component.num_runtime_component_instances,
             num_trampolines: component.trampolines.len().try_into().unwrap(),
-            num_unsafe_intrinsics: UnsafeIntrinsic::len(),
+            num_unsafe_intrinsics: if component.unsafe_intrinsics.iter().any(|i| i.is_some()) {
+                UnsafeIntrinsic::len()
+            } else {
+                0
+            },
             num_resources: component.num_resources,
             magic: 0,
             builtins: 0,
