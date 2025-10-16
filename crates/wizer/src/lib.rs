@@ -208,17 +208,7 @@ impl Wizer {
         }
 
         let instrumented_wasm = instrument::instrument(&mut cx);
-
-        if cfg!(debug_assertions) {
-            if let Err(error) = self.wasm_validate(&instrumented_wasm) {
-                #[cfg(feature = "wasmprinter")]
-                let wat = wasmprinter::print_bytes(&wasm)
-                    .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
-                #[cfg(not(feature = "wasmprinter"))]
-                let wat = "`wasmprinter` cargo feature is not enabled".to_string();
-                panic!("instrumented Wasm is not valid: {error:?}\n\nWAT:\n{wat}");
-            }
-        }
+        self.debug_assert_valid_wasm(&instrumented_wasm);
 
         Ok((cx, instrumented_wasm))
     }
@@ -240,18 +230,23 @@ impl Wizer {
         let snapshot = snapshot::snapshot(&cx, instance).await;
         let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames);
 
-        if cfg!(debug_assertions) {
-            if let Err(error) = self.wasm_validate(&rewritten_wasm) {
-                #[cfg(feature = "wasmprinter")]
-                let wat = wasmprinter::print_bytes(&rewritten_wasm)
-                    .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
-                #[cfg(not(feature = "wasmprinter"))]
-                let wat = "`wasmprinter` cargo feature is not enabled".to_string();
-                panic!("rewritten Wasm is not valid: {error:?}\n\nWAT:\n{wat}");
-            }
-        }
+        self.debug_assert_valid_wasm(&rewritten_wasm);
 
         Ok(rewritten_wasm)
+    }
+
+    fn debug_assert_valid_wasm(&self, wasm: &[u8]) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
+        if let Err(error) = self.wasm_validate(&wasm) {
+            #[cfg(feature = "wasmprinter")]
+            let wat = wasmprinter::print_bytes(&wasm)
+                .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
+            #[cfg(not(feature = "wasmprinter"))]
+            let wat = "`wasmprinter` cargo feature is not enabled".to_string();
+            panic!("instrumented Wasm is not valid: {error:?}\n\nWAT:\n{wat}");
+        }
     }
 
     fn wasm_validate(&self, wasm: &[u8]) -> anyhow::Result<()> {
