@@ -265,7 +265,10 @@ impl Test {
                 let functions = clifs
                     .iter()
                     .map(|clif| {
-                        let mut funcs = cranelift_reader::parse_functions(clif)?;
+                        let mut funcs =
+                            cranelift_reader::parse_functions(clif).with_context(|| {
+                                format!("failed to parse CLIF:\n\"\"\"\n{clif}\n\"\"\"")
+                            })?;
                         if funcs.len() != 1 {
                             bail!("expected one function per clif");
                         }

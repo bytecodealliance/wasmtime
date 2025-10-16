@@ -168,7 +168,6 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         engine,
         &types,
         &component,
-        unsafe_intrinsics_import.is_some(),
         module_translations.iter_mut().map(|(i, translation)| {
             let functions = mem::take(&mut translation.function_body_inputs);
             (i, &*translation, functions)
@@ -274,7 +273,6 @@ impl<'a> CompileInputs<'a> {
         engine: &'a Engine,
         types: &'a wasmtime_environ::component::ComponentTypesBuilder,
         component: &'a wasmtime_environ::component::ComponentTranslation,
-        need_intrinsics: bool,
         module_translations: impl IntoIterator<
             Item = (
                 StaticModuleIndex,
@@ -284,42 +282,39 @@ impl<'a> CompileInputs<'a> {
         >,
     ) -> Self {
         use wasmtime_environ::Abi;
+        use wasmtime_environ::component::UnsafeIntrinsic;
 
         let mut ret = CompileInputs { inputs: vec![] };
 
         ret.collect_inputs_in_translations(types.module_types_builder(), module_translations);
         let tunables = engine.tunables();
 
-        if need_intrinsics {
-            macro_rules! push_intrinsic {
-                (
-                    $(
-                        $symbol:expr => $variant:ident : $ctor:ident ( $( $param:ident : $param_ty:ident ),* ) $( -> $result_ty:ident )? ;
-                    )*
-                ) => {{
-                    $(
-                        for abi in [Abi::Wasm, Abi::Array] {
-                            ret.push_input(move |compiler| {
-                                let intrinsic = wasmtime_environ::component::UnsafeIntrinsic::$variant;
-                                let symbol = concat!("unsafe-intrinsics::", $symbol).to_string();
-                                Ok(CompileOutput {
-                                    key: FuncKey::UnsafeIntrinsic(abi, intrinsic),
-                                    function: compiler
-                                        .component_compiler()
-                                        .compile_intrinsic(tunables, component, intrinsic, abi, &symbol)
-                                        .with_context(|| format!("failed to compile `{symbol}`"))?
-                                        .into(),
-                                    symbol,
-                                    start_srcloc: FilePos::default(),
-                                    translation: None,
-                                    func_body: None,
-                                })
-                            });
-                        }
-                    )*
-                }}
+        for i in component
+            .component
+            .unsafe_intrinsics
+            .iter()
+            .enumerate()
+            .filter_map(|(i, ty)| if ty.is_some() { Some(i) } else { None })
+        {
+            let i = u32::try_from(i).unwrap();
+            let intrinsic = UnsafeIntrinsic::from_u32(i);
+            for abi in [Abi::Wasm, Abi::Array] {
+                ret.push_input(move |compiler| {
+                    let symbol = format!("unsafe-intrinsics::{abi:?}::{}", intrinsic.name());
+                    Ok(CompileOutput {
+                        key: FuncKey::UnsafeIntrinsic(abi, intrinsic),
+                        function: compiler
+                            .component_compiler()
+                            .compile_intrinsic(tunables, component, intrinsic, abi, &symbol)
+                            .with_context(|| format!("failed to compile `{symbol}`"))?
+                            .into(),
+                        symbol,
+                        start_srcloc: FilePos::default(),
+                        translation: None,
+                        func_body: None,
+                    })
+                });
             }
-            wasmtime_environ::for_each_unsafe_intrinsic!(push_intrinsic);
         }
 
         for (idx, trampoline) in component.trampolines.iter() {
@@ -556,6 +551,18 @@ the use case.
             // No inlining: just compile each individual input in parallel.
             engine.run_maybe_parallel(self.inputs, |f| f(compiler))?
         };
+
+        if cfg!(debug_assertions) {
+            let mut symbols: Vec<_> = raw_outputs.iter().map(|i| &i.symbol).collect();
+            symbols.sort();
+            for w in symbols.windows(2) {
+                assert_ne!(
+                    w[0], w[1],
+                    "should never have duplicate symbols, but found two functions with the symbol `{}`",
+                    w[0]
+                );
+            }
+        }
 
         // Now that all functions have been compiled see if any
         // wasmtime-builtin functions are necessary. If so those need to be

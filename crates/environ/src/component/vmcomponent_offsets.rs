@@ -59,7 +59,8 @@ pub struct VMComponentOffsets<P> {
     pub num_runtime_component_instances: u32,
     /// Number of cranelift-compiled trampolines required for this component.
     pub num_trampolines: u32,
-    /// Number of cranelift-compiled intrinsics required for this component.
+    /// Number of `VMFuncRef`s for unsafe intrinsics within this component's
+    /// context.
     pub num_unsafe_intrinsics: u32,
     /// Number of resources within a component which need destructors stored.
     pub num_resources: u32,
@@ -101,8 +102,25 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_runtime_post_returns: component.num_runtime_post_returns,
             num_runtime_component_instances: component.num_runtime_component_instances,
             num_trampolines: component.trampolines.len().try_into().unwrap(),
-            num_unsafe_intrinsics: if component.unsafe_intrinsics.iter().any(|i| i.is_some()) {
-                UnsafeIntrinsic::len()
+            num_unsafe_intrinsics: if let Some(i) = component
+                .unsafe_intrinsics
+                .iter()
+                .rposition(|x| x.is_some())
+            {
+                // Note: We do not currently have an indirection between "the
+                // `i`th unsafe intrinsic in the vmctx" and
+                // `UnsafeIntrinsic::from_u32(i)`, so therefore if we are
+                // compiling in *any* intrinsics, we need to include space for
+                // all of them up to the max `i` that is used.
+                //
+                // We _could_ introduce such an indirection via a map in
+                // `Component` like `PrimaryMap<UnsafeIntrinsicIndex,
+                // UnsafeIntrinsic>`, and that would allow us to densely pack
+                // intrinsics in the vmctx. However we do not do that today
+                // because there are very few unsafe intrinsics, and we do not
+                // see that changing anytime soon, so we aren't wasting much
+                // space.
+                u32::try_from(i + 1).unwrap()
             } else {
                 0
             },

@@ -10,17 +10,19 @@ use serde_derive::{Deserialize, Serialize};
 macro_rules! for_each_unsafe_intrinsic {
     ($mac:ident) => {
         $mac! {
-            "u8-native-load" => U8NativeLoad : u8_native_load(address: u64) -> u8;
-            "u16-native-load" => U16NativeLoad : u16_native_load(address: u64) -> u16;
-            "u32-native-load" => U32NativeLoad : u32_native_load(address: u64) -> u32;
-            "u64-native-load" => U64NativeLoad : u64_native_load(address: u64) -> u64;
-
-            "u8-native-store" => U8NativeStore : u8_native_store(address: u64, value: u8);
-            "u16-native-store" => U16NativeStore : u16_native_store(address: u64, value: u16);
-            "u32-native-store" => U32NativeStore : u32_native_store(address: u64, value: u32);
-            "u64-native-store" => U64NativeStore : u64_native_store(address: u64, value: u64);
-
             "store-data-address" => StoreDataAddress : store_data_address() -> u64;
+
+            "u8-native-load" => U8NativeLoad : u8_native_load(address: u64) -> u8;
+            "u8-native-store" => U8NativeStore : u8_native_store(address: u64, value: u8);
+
+            "u16-native-load" => U16NativeLoad : u16_native_load(address: u64) -> u16;
+            "u16-native-store" => U16NativeStore : u16_native_store(address: u64, value: u16);
+
+            "u32-native-load" => U32NativeLoad : u32_native_load(address: u64) -> u32;
+            "u32-native-store" => U32NativeStore : u32_native_store(address: u64, value: u32);
+
+            "u64-native-load" => U64NativeLoad : u64_native_load(address: u64) -> u64;
+            "u64-native-store" => U64NativeStore : u64_native_store(address: u64, value: u64);
         }
     };
 }
