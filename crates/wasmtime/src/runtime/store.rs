@@ -1311,12 +1311,20 @@ impl<'a, T> StoreContextMut<'a, T> {
 impl<T> StoreInner<T> {
     #[inline]
     fn data(&self) -> &T {
-        unsafe {
-            let data: *const ManuallyDrop<T> = &raw const self.data_no_provenance;
-            let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
-            let ptr = provenance.with_addr(data.addr());
-            &*ptr
-        }
+        // We are actually just accessing `&self.data_no_provenance` but we must
+        // do so with the `VMStoreContext::store_data` pointer's provenance. If
+        // we did otherwise, i.e. directly accessed the field, we would
+        // invalidate that pointer, which would in turn invalidate any direct
+        // `T` accesses that Wasm code makes via unsafe intrinsics.
+        let data: *const ManuallyDrop<T> = &raw const self.data_no_provenance;
+        let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
+        let ptr = provenance.with_addr(data.addr());
+
+        // SAFETY: The pointer is non-null, points to our `T` data, and is valid
+        // to access because of our `&self` borrow.
+        debug_assert_ne!(ptr, core::ptr::null_mut());
+        debug_assert_eq!(ptr.addr(), (&raw const self.data_no_provenance).addr());
+        unsafe { &*ptr }
     }
 
     #[inline]
@@ -1327,12 +1335,16 @@ impl<T> StoreInner<T> {
         Option<&mut ResourceLimiterInner<T>>,
         &mut StoreOpaque,
     ) {
-        let data = unsafe {
-            let data: *mut ManuallyDrop<T> = &raw mut self.data_no_provenance;
-            let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
-            let ptr = provenance.with_addr(data.addr());
-            &mut *ptr
-        };
+        // See the comments about provenance in `StoreInner::data` above.
+        let data: *mut ManuallyDrop<T> = &raw mut self.data_no_provenance;
+        let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
+        let ptr = provenance.with_addr(data.addr());
+
+        // SAFETY: The pointer is non-null, points to our `T` data, and is valid
+        // to access because of our `&mut self` borrow.
+        debug_assert_ne!(ptr, core::ptr::null_mut());
+        debug_assert_eq!(ptr.addr(), (&raw const self.data_no_provenance).addr());
+        let data = unsafe { &mut *ptr };
 
         let limiter = self.limiter.as_mut();
 
