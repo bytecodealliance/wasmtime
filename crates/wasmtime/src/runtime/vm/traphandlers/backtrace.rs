@@ -21,6 +21,8 @@
 //! exit FP and stopping once we reach the entry SP (meaning that the next older
 //! frame is a host frame).
 
+#[cfg(feature = "debug")]
+use crate::StoreContextMut;
 use crate::prelude::*;
 use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::stack_switching::VMStackChain;
@@ -28,8 +30,6 @@ use crate::runtime::vm::{
     Unwind, VMStoreContext,
     traphandlers::{CallThreadState, tls},
 };
-#[cfg(feature = "debug")]
-use crate::store::StoreInner;
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
@@ -331,7 +331,7 @@ impl Backtrace {
 /// An iterator over one Wasm activation.
 #[cfg(feature = "debug")]
 pub(crate) struct CurrentActivationBacktrace<'a, T: 'static> {
-    pub(crate) store: &'a mut StoreInner<T>,
+    pub(crate) store: StoreContextMut<'a, T>,
     inner: Box<dyn Iterator<Item = Frame>>,
 }
 
@@ -360,13 +360,13 @@ impl<'a, T: 'static> CurrentActivationBacktrace<'a, T> {
     /// while within host code called from that activation (which will
     /// ordinarily be ensured if the `store`'s lifetime came from the
     /// host entry point) then everything will be sound.
-    pub(crate) unsafe fn new(store: &'a mut StoreInner<T>) -> CurrentActivationBacktrace<'a, T> {
+    pub(crate) unsafe fn new(store: StoreContextMut<'a, T>) -> CurrentActivationBacktrace<'a, T> {
         // Get the initial exit FP, exit PC, and entry FP.
-        let vm_store_context = store.vm_store_context();
+        let vm_store_context = store.0.vm_store_context();
         let exit_pc = unsafe { *(*vm_store_context).last_wasm_exit_pc.get() };
         let exit_fp = unsafe { (*vm_store_context).last_wasm_exit_fp() };
         let trampoline_fp = unsafe { *(*vm_store_context).last_wasm_entry_fp.get() };
-        let unwind = store.unwinder();
+        let unwind = store.0.unwinder();
         // Establish the iterator.
         let inner = Box::new(unsafe {
             wasmtime_unwinder::frame_iterator(unwind, exit_pc, exit_fp, trampoline_fp)

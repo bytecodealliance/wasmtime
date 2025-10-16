@@ -3,20 +3,22 @@
 use crate::{
     AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, Instance, Module, StoreContext,
     StoreContextMut, Val,
-    store::{AutoAssertNoGc, StoreInner, StoreOpaque},
+    store::{AutoAssertNoGc, StoreOpaque},
     vm::{CurrentActivationBacktrace, VMContext},
 };
 use alloc::vec::Vec;
 use core::{ffi::c_void, ptr::NonNull};
+#[cfg(feature = "gc")]
+use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
     DefinedFuncIndex, FrameInstPos, FrameStackShape, FrameStateSlot, FrameStateSlotOffset,
-    FrameTable, FrameTableDescriptorIndex, FrameValType, FuncKey,
+    FrameTableDescriptorIndex, FrameValType, FuncKey,
 };
 use wasmtime_unwinder::Frame;
 
 use super::store::AsStoreOpaque;
 
-impl<T> StoreInner<T> {
+impl<'a, T> StoreContextMut<'a, T> {
     /// Provide an object that captures Wasm stack state, including
     /// Wasm VM-level values (locals and operand stack).
     ///
@@ -31,7 +33,7 @@ impl<T> StoreInner<T> {
     ///
     /// Returns `None` if debug instrumentation is not enabled for
     /// the engine containing this store.
-    pub fn debug_frames(&mut self) -> Option<DebugFrameCursor<'_, T>> {
+    pub fn debug_frames(self) -> Option<DebugFrameCursor<'a, T>> {
         if !self.engine().tunables().debug_guest {
             return None;
         }
@@ -103,8 +105,11 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
             let Some(next_frame) = self.iter.next() else {
                 return;
             };
-            self.frames =
-                VirtualFrame::decode(&mut self.iter.store, next_frame, self.is_trapping_frame);
+            self.frames = VirtualFrame::decode(
+                self.iter.store.0.as_store_opaque(),
+                next_frame,
+                self.is_trapping_frame,
+            );
             debug_assert!(!self.frames.is_empty());
             self.is_trapping_frame = false;
         }
@@ -140,7 +145,7 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
     /// Get the instance associated with the current frame.
     pub fn instance(&mut self) -> Instance {
         let instance = self.raw_instance();
-        Instance::from_wasmtime(instance.id(), self.iter.store.as_store_opaque())
+        Instance::from_wasmtime(instance.id(), self.iter.store.0.as_store_opaque())
     }
 
     /// Get the module associated with the current frame, if any
@@ -191,7 +196,7 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
         let slot_addr = data.slot_addr;
         // SAFETY: compiler produced metadata to describe this local
         // slot and stored a value of the correct type into it.
-        unsafe { read_value(&mut self.iter.store, slot_addr, offset, ty) }
+        unsafe { read_value(&mut self.iter.store.0, slot_addr, offset, ty) }
     }
 
     /// Get the type and value of the given operand-stack value in
@@ -208,7 +213,7 @@ impl<'a, T: 'static> DebugFrameCursor<'a, T> {
         // SAFETY: compiler produced metadata to describe this
         // operand-stack slot and stored a value of the correct type
         // into it.
-        unsafe { read_value(&mut self.iter.store, slot_addr, offset, ty) }
+        unsafe { read_value(&mut self.iter.store.0, slot_addr, offset, ty) }
     }
 }
 
@@ -396,6 +401,7 @@ unsafe fn read_value(
 // Note: ideally this would be an impl Iterator, but this is quite
 // awkward because of the locally computed data (FrameStateSlot::parse
 // structured result) within the closure borrowed by a nested closure.
+#[cfg(feature = "gc")]
 pub(crate) fn gc_refs_in_frame<'a>(ft: FrameTable<'a>, pc: u32, fp: *mut usize) -> Vec<*mut u32> {
     let fp = fp.cast::<u8>();
     let mut ret = vec![];
@@ -430,11 +436,11 @@ pub(crate) fn gc_refs_in_frame<'a>(ft: FrameTable<'a>, pc: u32, fp: *mut usize) 
 impl<'a, T: 'static> AsContext for DebugFrameCursor<'a, T> {
     type Data = T;
     fn as_context(&self) -> StoreContext<'_, Self::Data> {
-        StoreContext(self.iter.store)
+        StoreContext(self.iter.store.0)
     }
 }
 impl<'a, T: 'static> AsContextMut for DebugFrameCursor<'a, T> {
     fn as_context_mut(&mut self) -> StoreContextMut<'_, Self::Data> {
-        StoreContextMut(self.iter.store)
+        StoreContextMut(self.iter.store.0)
     }
 }

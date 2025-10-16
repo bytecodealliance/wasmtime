@@ -412,7 +412,5 @@ component-model-async-bytes = [
 ]
 
 # Enables support for guest debugging.
-debug = [
-  'runtime',
-  'gc', # For simplicity to avoid too many config conditionals.
-]
+debug = ['runtime']
+
