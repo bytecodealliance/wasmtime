@@ -245,8 +245,20 @@ pub struct StoreInner<T: 'static> {
     #[cfg(target_has_atomic = "64")]
     epoch_deadline_behavior:
         Option<Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>>,
-    // for comments about `ManuallyDrop`, see `Store::into_data`
-    data: ManuallyDrop<T>,
+
+    /// The user's `T` data.
+    ///
+    /// Don't actually access it via this field, however! Use the
+    /// `Store{,Inner,Context,ContextMut}::data[_mut]` methods instead, to
+    /// preserve stacked borrows and provenance in the face of potential
+    /// direct-access of `T` from Wasm code (via unsafe intrinsics).
+    ///
+    /// The only exception to the above is when taking ownership of the value,
+    /// e.g. in `Store::into_data`, after which nothing can access this field
+    /// via raw pointers anymore so there is no more provenance to preserve.
+    ///
+    /// For comments about `ManuallyDrop`, see `Store::into_data`.
+    data_no_provenance: ManuallyDrop<T>,
 }
 
 enum ResourceLimiterInner<T> {
@@ -703,10 +715,11 @@ impl<T> Store<T> {
             call_hook: None,
             #[cfg(target_has_atomic = "64")]
             epoch_deadline_behavior: None,
-            data: ManuallyDrop::new(data),
+            data_no_provenance: ManuallyDrop::new(data),
         });
 
-        let store_data = <NonNull<ManuallyDrop<T>>>::from(&mut inner.data).cast::<()>();
+        let store_data =
+            <NonNull<ManuallyDrop<T>>>::from(&mut inner.data_no_provenance).cast::<()>();
         inner.inner.vm_store_context.store_data = store_data.into();
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
@@ -811,7 +824,7 @@ impl<T> Store<T> {
         unsafe {
             let mut inner = ManuallyDrop::take(&mut self.inner);
             core::mem::forget(self);
-            ManuallyDrop::take(&mut inner.data)
+            ManuallyDrop::take(&mut inner.data_no_provenance)
         }
     }
 
@@ -873,7 +886,7 @@ impl<T> Store<T> {
         // Apply the limits on instances, tables, and memory given by the limiter:
         let inner = &mut self.inner;
         let (instance_limit, table_limit, memory_limit) = {
-            let l = limiter(&mut inner.data);
+            let l = limiter(inner.data_mut());
             (l.instances(), l.tables(), l.memories())
         };
         let innermost = &mut inner.inner;
@@ -1299,7 +1312,7 @@ impl<T> StoreInner<T> {
     #[inline]
     fn data(&self) -> &T {
         unsafe {
-            let data: *const ManuallyDrop<T> = &raw const self.data;
+            let data: *const ManuallyDrop<T> = &raw const self.data_no_provenance;
             let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
             let ptr = provenance.with_addr(data.addr());
             &*ptr
@@ -1307,13 +1320,28 @@ impl<T> StoreInner<T> {
     }
 
     #[inline]
-    fn data_mut(&mut self) -> &mut T {
-        unsafe {
-            let data: *mut ManuallyDrop<T> = &raw mut self.data;
+    fn data_limiter_and_opaque(
+        &mut self,
+    ) -> (
+        &mut T,
+        Option<&mut ResourceLimiterInner<T>>,
+        &mut StoreOpaque,
+    ) {
+        let data = unsafe {
+            let data: *mut ManuallyDrop<T> = &raw mut self.data_no_provenance;
             let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
             let ptr = provenance.with_addr(data.addr());
             &mut *ptr
-        }
+        };
+
+        let limiter = self.limiter.as_mut();
+
+        (data, limiter, &mut self.inner)
+    }
+
+    #[inline]
+    fn data_mut(&mut self) -> &mut T {
+        self.data_limiter_and_opaque().0
     }
 
     #[inline]
@@ -2543,14 +2571,15 @@ unsafe impl<T> VMStore for StoreInner<T> {
     fn resource_limiter_and_store_opaque(
         &mut self,
     ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque) {
-        (
-            self.limiter.as_mut().map(|l| match l {
-                ResourceLimiterInner::Sync(s) => StoreResourceLimiter::Sync(s(&mut self.data)),
-                #[cfg(feature = "async")]
-                ResourceLimiterInner::Async(s) => StoreResourceLimiter::Async(s(&mut self.data)),
-            }),
-            &mut self.inner,
-        )
+        let (data, limiter, opaque) = self.data_limiter_and_opaque();
+
+        let limiter = limiter.map(|l| match l {
+            ResourceLimiterInner::Sync(s) => StoreResourceLimiter::Sync(s(data)),
+            #[cfg(feature = "async")]
+            ResourceLimiterInner::Async(s) => StoreResourceLimiter::Async(s(data)),
+        });
+
+        (limiter, opaque)
     }
 
     #[cfg(target_has_atomic = "64")]
@@ -2600,7 +2629,7 @@ impl<T: fmt::Debug> fmt::Debug for Store<T> {
         let inner = &**self.inner as *const StoreInner<T>;
         f.debug_struct("Store")
             .field("inner", &inner)
-            .field("data", &self.inner.data)
+            .field("data", self.inner.data())
             .finish()
     }
 }
@@ -2609,9 +2638,9 @@ impl<T> Drop for Store<T> {
     fn drop(&mut self) {
         self.run_manual_drop_routines();
 
-        // for documentation on this `unsafe`, see `into_data`.
+        // For documentation on this `unsafe`, see `into_data`.
         unsafe {
-            ManuallyDrop::drop(&mut self.inner.data);
+            ManuallyDrop::drop(&mut self.inner.data_no_provenance);
             ManuallyDrop::drop(&mut self.inner);
         }
     }
