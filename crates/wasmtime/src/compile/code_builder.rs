@@ -207,16 +207,12 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// Extreme care must be taken when using these intrinsics.
     ///
-    /// All memory operated upon by these intrinsics must be reachable from the
-    /// `T` in a `Store<T>`. That is, all addresses should be derived, via
-    /// pointer arithmetic and transitive loads, from the result of the
-    /// `store-data-address` intrinsic.
-    ///
-    /// Additionally, usage of these intrinsics is inherently tied to a
-    /// particular `T` type. It is wildly unsafe to run a Wasm program that uses
-    /// unsafe intrinsics to access the store's `T` inside a `Store<U>`. You
-    /// must only run Wasm that uses unsafe intrinsics in a `Store<T>` where the
-    /// `T` is the type expected by the Wasm's unsafe-intrinsics usage.
+    /// All loads of or stores to pointers derived from `store-data-address` are
+    /// inherently tied to a particular `T` type in a `Store<T>`. It is wildly
+    /// unsafe to run a Wasm program that uses unsafe intrinsics to access the
+    /// store's `T` inside a `Store<U>`. You must only run Wasm that uses unsafe
+    /// intrinsics in a `Store<T>` where the `T` is the type expected by the
+    /// Wasm's unsafe-intrinsics usage.
     ///
     /// Furthermore, usage of these intrinsics is not only tied to a particular
     /// `T` type, but also to `T`'s layout on the host platform. The size and
@@ -226,31 +222,12 @@ impl<'a> CodeBuilder<'a> {
     /// identical across the platforms that you run Wasm on, allowing you to
     /// reuse the same Wasm binary and its unsafe-intrinsics usage on all your
     /// platforms. Failing that, you must only run a Wasm program that uses
-    /// unsafe intrinsics on the host platform that its unsafe-intrinsic usafe
+    /// unsafe intrinsics on the host platform that its unsafe-intrinsic usage
     /// is specialized to. See the portability section and example below for
     /// more details.
     ///
-    /// Finally, every pointer loaded from or stored to must:
-    ///
-    /// * Be non-null
-    ///
-    /// * Be aligned to the access type's natural alignment (e.g. 8-byte alignment
-    ///   for `u64`, 4-byte alignment for `u32`, etc...)
-    ///
-    /// * Point to a memory block that is valid to read from (for loads) or
-    ///   valid to write to (for stores)
-    ///
-    /// * Point to a memory block that is at least as large as the access type's
-    ///   natural size (e.g. 1 byte for `u8`, 2 bytes for `u16`, etc...)
-    ///
-    /// * Point to a memory block that is not accessed concurrently by any other
-    ///   threads
-    ///
-    /// Failure to uphold any of these invariants will lead to unsafety,
-    /// undefined behavior, and/or data races.
-    ///
     /// You are *strongly* encouraged to add assertions for the layout
-    /// properties that your unsafe-intrinsics usage's safety relies upon:
+    /// properties that your unsafe-intrinsic usage's safety relies upon:
     ///
     /// ```rust
     /// /// This type is used as `wasmtime::Store<MyData>` and accessed by Wasm via
@@ -271,6 +248,25 @@ impl<'a> CodeBuilder<'a> {
     ///     assert!(core::mem::offset_of!(MyData, buf) == 12);
     /// };
     /// ```
+    ///
+    /// Finally, every pointer loaded from or stored to must:
+    ///
+    /// * Be non-null
+    ///
+    /// * Be aligned to the access type's natural alignment (e.g. 8-byte alignment
+    ///   for `u64`, 4-byte alignment for `u32`, etc...)
+    ///
+    /// * Point to a memory block that is valid to read from (for loads) or
+    ///   valid to write to (for stores) under Rust's pointer provenance rules
+    ///
+    /// * Point to a memory block that is at least as large as the access type's
+    ///   natural size (e.g. 1 byte for `u8`, 2 bytes for `u16`, etc...)
+    ///
+    /// * Point to a memory block that is not accessed concurrently by any other
+    ///   threads
+    ///
+    /// Failure to uphold any of these invariants will lead to unsafety,
+    /// undefined behavior, and/or data races.
     ///
     /// # Intrinsics
     ///
@@ -301,9 +297,9 @@ impl<'a> CodeBuilder<'a> {
     /// This intrinsic function returns the pointer to the embedder's `T` data
     /// inside a `Store<T>`.
     ///
-    /// All native load and store intinsics should operate on memory addresses
-    /// that are derived from a call to this intrinsic. If you want to expose
-    /// data for raw memory access by Wasm, put it inside the `T` in your
+    /// In general, all native load and store intinsics should operate on memory
+    /// addresses that are derived from a call to this intrinsic. If you want to
+    /// expose data for raw memory access by Wasm, put it inside the `T` in your
     /// `Store<T>` and Wasm's access to that data should derive from this
     /// intrinsic.
     ///
@@ -439,7 +435,8 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// // Allow the code we are building to use Wasmtime's unsafe intrinsics.
     /// //
-    /// // SAFETY: we wrap all usage of the intrinsics in safe APIs.
+    /// // SAFETY: we wrap all usage of the intrinsics in safe APIs and only instantiate the code
+    /// // within a `Store<T>` where `T = StoreData`, as the code expects.
     /// unsafe {
     ///     builder.expose_unsafe_intrinsics("unsafe-intrinsics");
     /// }
