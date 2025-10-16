@@ -921,3 +921,45 @@ fn mixture_of_globals() -> Result<()> {
     let wizer = get_wizer();
     wizen_and_run_wasm(&[], 42 + 2 + 43 + 4, &wasm, wizer)
 }
+
+#[test]
+fn memory_init_and_data_segments() -> Result<()> {
+    let _ = env_logger::try_init();
+    let wasm = wat_to_wasm(
+        r#"
+(module
+  (memory 1)
+
+  (func (export "wizer.initialize")
+    i32.const 2
+    i32.const 0
+    i32.const 2
+    memory.init $a
+  )
+
+  (func (export "run") (result i32)
+    i32.const 4
+    i32.const 0
+    i32.const 2
+    memory.init $a
+    i32.const 6
+    i32.const 0
+    i32.const 2
+    memory.init $c
+
+    i32.const 0
+    i32.load
+    i32.const 4
+    i32.load
+    i32.add
+  )
+
+  (data $a "\01\02")
+  (data $b (i32.const 0) "\03\04")
+  (data $c "\05\06")
+)
+        "#,
+    )?;
+    let wizer = get_wizer();
+    wizen_and_run_wasm(&[], 0x02010403 + 0x06050201, &wasm, wizer)
+}

@@ -1,6 +1,7 @@
 //! Final rewrite pass.
 
 use crate::{FuncRenames, SnapshotVal, Wizer, info::ModuleContext, snapshot::Snapshot};
+use std::cell::Cell;
 use std::convert::TryFrom;
 use wasm_encoder::reencode::{Reencode, RoundtripReencoder};
 use wasm_encoder::{ConstExpr, SectionId};
@@ -22,10 +23,7 @@ impl Wizer {
 
         // Encode the initialized data segments from the snapshot rather
         // than the original, uninitialized data segments.
-        let mut data_section = if snapshot.data_segments.is_empty() {
-            None
-        } else {
-            let mut data_section = wasm_encoder::DataSection::new();
+        let add_data_segments = |data_section: &mut wasm_encoder::DataSection| {
             for seg in &snapshot.data_segments {
                 data_section.active(
                     seg.memory_index,
@@ -33,7 +31,6 @@ impl Wizer {
                     seg.data().iter().copied(),
                 );
             }
-            Some(data_section)
         };
 
         // There are multiple places were we potentially need to check whether
@@ -42,10 +39,16 @@ impl Wizer {
         // all, and so we have to potentially add it at the end of iterating
         // over the original sections. This closure encapsulates all that
         // add-it-if-we-haven't-already logic in one place.
-        let mut add_data_section = |module: &mut wasm_encoder::Module| {
-            if let Some(data_section) = data_section.take() {
-                module.section(&data_section);
+        let added_data_section = Cell::new(false);
+
+        let add_data_section = |encoder: &mut wasm_encoder::Module| {
+            if added_data_section.get() {
+                return;
             }
+            added_data_section.set(true);
+            let mut data_section = wasm_encoder::DataSection::new();
+            add_data_segments(&mut data_section);
+            encoder.section(&data_section);
         };
 
         for section in module.raw_sections() {
@@ -156,16 +159,44 @@ impl Wizer {
                     continue;
                 }
 
+                // Add the data segments that are being added for the snapshot
+                // to the data count section, if present.
                 s if s.id == u8::from(SectionId::DataCount) => {
+                    let mut data = wasmparser::BinaryReader::new(s.data, 0);
+                    let prev = data.read_var_u32().unwrap();
+                    assert!(data.eof());
                     encoder.section(&wasm_encoder::DataCountSection {
-                        count: u32::try_from(snapshot.data_segments.len()).unwrap(),
+                        count: prev + u32::try_from(snapshot.data_segments.len()).unwrap(),
                     });
                 }
 
                 s if s.id == u8::from(SectionId::Data) => {
-                    // TODO: supporting bulk memory will require copying over
-                    // any passive and declared segments.
-                    add_data_section(&mut encoder);
+                    let mut section = wasm_encoder::DataSection::new();
+                    let data = wasmparser::BinaryReader::new(s.data, 0);
+                    for data in wasmparser::DataSectionReader::new(data).unwrap() {
+                        let data = data.unwrap();
+                        match data.kind {
+                            // Active data segments, by definition in wasm, are
+                            // truncated after instantiation. That means that
+                            // for the snapshot all active data segments, which
+                            // are already applied, are all turned into empty
+                            // passive segments instead.
+                            wasmparser::DataKind::Active { .. } => {
+                                section.passive([]);
+                            }
+
+                            // Passive segments are plumbed through as-is.
+                            wasmparser::DataKind::Passive => {
+                                section.passive(data.data.iter().copied());
+                            }
+                        }
+                    }
+
+                    // Append all the initializer data segments before adding
+                    // the section.
+                    add_data_segments(&mut section);
+                    encoder.section(&section);
+                    added_data_section.set(true);
                 }
 
                 s => {
