@@ -168,3 +168,9 @@ fn p3_cli_much_stdout() {}
     reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
 )]
 fn p3_cli_serve_hello_world() {}
+
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
+)]
+fn p3_cli_serve_sleep() {}
