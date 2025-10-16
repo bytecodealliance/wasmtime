@@ -7,6 +7,8 @@ use bytes::Bytes;
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::BoxBody;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use wasmtime::AsContextMut;
 
@@ -88,5 +90,34 @@ impl Response {
             }
         };
         Ok(http::Response::from_parts(res, body))
+    }
+
+    /// Convert [http::Response] into [Response].
+    /// This is the reverse of [Self::into_http].
+    pub fn from_http<B, E>(res: http::Response<B>) -> (Response, impl Future<Output = Result<(), ErrorCode>>)
+    where
+        B: http_body::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
+        E: Into<ErrorCode>,
+    {
+        let (parts, body) = res.into_parts();
+        let (result_tx, result_rx) = tokio::sync::oneshot::channel();
+        
+        let wasi_response = Response {
+            status: parts.status,
+            headers: Arc::new(parts.headers),
+            body: Body::Host {
+                body: body.map_err(|e| e.into()).boxed(),
+                result_tx,
+            },
+        };
+        
+        let io_future = async move {
+            match result_rx.await {
+                Ok(fut) => Pin::from(fut).await,
+                Err(_) => Ok(()),
+            }
+        };
+        
+        (wasi_response, io_future)
     }
 }

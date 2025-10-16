@@ -2,11 +2,12 @@ use crate::get_content_length;
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, GuestBody};
 use crate::p3::{WasiHttpCtxView, WasiHttpView};
-use anyhow::Context;
 use bytes::Bytes;
+use http::header::HOST;
+use tracing::debug;
 use core::time::Duration;
 use http::uri::{Authority, PathAndQuery, Scheme};
-use http::{HeaderMap, Method};
+use http::{HeaderMap, HeaderValue, Method, Uri};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::BoxBody;
 use std::sync::Arc;
@@ -178,22 +179,66 @@ impl Request {
     /// Like [`Self::into_http`], but uses a custom getter for obtaining the [`WasiHttpCtxView`].
     pub fn into_http_with_getter<T: 'static>(
         self,
-        store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
     ) -> wasmtime::Result<http::Request<BoxBody<Bytes, ErrorCode>>> {
-        let req = http::Request::try_from(self)?;
-        let (req, body) = req.into_parts();
-
+        let Request {
+            method,
+            scheme,
+            authority,
+            path_with_query,
+            headers,
+            options: _,
+            body,
+        } = self;
+        let content_length = match get_content_length(&headers) {
+            Ok(content_length) => content_length,
+            Err(err) => {
+                body.drop(&mut store);
+                return Err(ErrorCode::InternalError(Some(format!("{err:#}"))).into());
+            }
+        };
+        let mut headers = Arc::unwrap_or_clone(headers);
+        let mut store_ctx = store.as_context_mut();
+        let WasiHttpCtxView { ctx, table: _ } = getter(store_ctx.data_mut());
+        if ctx.set_host_header() {
+            let host = if let Some(authority) = authority.as_ref() {
+                HeaderValue::try_from(authority.as_str())
+                    .map_err(|err| ErrorCode::InternalError(Some(err.to_string())))?
+            } else {
+                HeaderValue::from_static("")
+            };
+            headers.insert(HOST, host);
+        }
+        let scheme = match scheme {
+            None => ctx.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,
+            Some(scheme) if ctx.is_supported_scheme(&scheme) => scheme,
+            Some(..) => return Err(ErrorCode::HttpProtocolError.into()),
+        };
+        let mut uri = Uri::builder().scheme(scheme);
+        if let Some(authority) = authority {
+            uri = uri.authority(authority)
+        };
+        if let Some(path_with_query) = path_with_query {
+            uri = uri.path_and_query(path_with_query)
+        };
+        let uri = uri.build().map_err(|err| {
+            debug!(?err, "failed to build request URI");
+            ErrorCode::HttpRequestUriInvalid
+        })?;
+        let mut req = http::Request::builder();
+        if let Some(headers_mut) = req.headers_mut() {
+            *headers_mut = headers;
+        } else {
+            return Err(ErrorCode::InternalError(Some("failed to get mutable headers from request builder".to_string())).into());
+        }
         let body = match body {
             Body::Guest {
                 contents_rx,
                 trailers_rx,
                 result_tx,
             } => {
-                // Validate Content-Length if present
-                let content_length =
-                    get_content_length(&req.headers).context("failed to parse `content-length`")?;
                 GuestBody::new(
                     store,
                     contents_rx,
@@ -211,7 +256,11 @@ impl Request {
                 body
             }
         };
-
+        let req = req.method(method)
+            .uri(uri)
+            .body(body)
+            .map_err(|err| ErrorCode::InternalError(Some(err.to_string())))?;
+        let (req, body) = req.into_parts();
         Ok(http::Request::from_parts(req, body))
     }
 }
@@ -448,6 +497,10 @@ pub async fn default_send_request(
 mod tests {
     use super::*;
     use crate::p3::WasiHttpCtx;
+    use anyhow::Result;
+    use std::task::{Context, Waker};
+    use std::future::Future;
+    use std::str::FromStr;
     use http_body_util::{BodyExt, Full};
     use wasmtime::{Engine, Store};
     use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
@@ -490,30 +543,75 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_request_into_http() -> Result<(), anyhow::Error> {
+    async fn test_request_into_http_schemes() -> Result<()> {
+        let schemes = vec![
+            Some(Scheme::HTTP),
+            Some(Scheme::HTTPS),
+            None,
+        ];
+        let engine = Engine::default();
+
+        for scheme in schemes {
+            let (req, fut) = Request::new(
+                Method::GET,
+                scheme.clone(),
+                Some(Authority::from_static("example.com")),
+                Some(PathAndQuery::from_static("/path?query=1")),
+                HeaderMap::new(),
+                None,
+                Full::new(Bytes::from_static(b"body"))
+                    .map_err(|x| match x {})
+                    .boxed(),
+            );
+            let mut store = Store::new(&engine, TestCtx::new());
+            let http_req = req.into_http(&mut store, async { Ok(()) }).unwrap();
+            assert_eq!(http_req.method(), Method::GET);
+            let expected_scheme = scheme.unwrap_or(Scheme::HTTPS); // default scheme
+            assert_eq!(
+                http_req.uri(),
+                &http::Uri::from_str(&format!(
+                    "{}://example.com/path?query=1",
+                    expected_scheme.as_str()
+                )).unwrap()
+            );
+            let body_bytes = http_req.into_body().collect().await?;
+            assert_eq!(*body_bytes.to_bytes(), *b"body");
+            let mut cx = Context::from_waker(Waker::noop());
+            let mut fut = Box::pin(fut);
+            let result = fut.as_mut().poll(&mut cx);
+            assert!(matches!(result, futures::task::Poll::Ready(Ok(()))));
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_request_into_http_invalid_content_length() -> Result<()> {
+        let engine = Engine::default();
+        let mut headers = HeaderMap::new();
+        headers.insert(http::header::CONTENT_LENGTH, HeaderValue::from_static("invalid"));
+
         let (req, fut) = Request::new(
             Method::GET,
-            Some(Scheme::HTTPS),
+            Some(Scheme::HTTP),
             Some(Authority::from_static("example.com")),
-            Some(PathAndQuery::from_static("/path?query=1")),
-            HeaderMap::new(),
             None,
-            Full::new(Bytes::from_static(b"body"))
-                .map_err(|_| unreachable!())
+            headers,
+            None,
+            Full::new(Bytes::new())
+                .map_err(|x| match x {})
                 .boxed(),
         );
-
-        let engine = Engine::default();
         let mut store = Store::new(&engine, TestCtx::new());
-        let http_req = req.into_http(&mut store, fut).unwrap();
-        assert_eq!(http_req.method(), Method::GET);
-        assert_eq!(
-            http_req.uri(),
-            &http::Uri::from_static("https://example.com/path?query=1")
-        );
-        let body_bytes = http_req.into_body().collect().await?;
+        let result = req.into_http(&mut store, async { Err(ErrorCode::InternalError(Some("uh oh".to_string()))) });
+        assert!(matches!(result, Err(_)));
 
-        assert_eq!(*body_bytes.to_bytes(), *b"body");
+        let mut cx = Context::from_waker(Waker::noop());
+        let result = Box::pin(fut).as_mut().poll(&mut cx);
+        // `fut` returns Ok(()), as the error in `into_http` currently drops the body before anything is sent
+        // is this desired behavior?
+        assert!(matches!(result, futures::task::Poll::Ready(Ok(()))));
+
         Ok(())
     }
 }
