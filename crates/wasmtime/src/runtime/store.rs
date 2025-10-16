@@ -707,7 +707,7 @@ impl<T> Store<T> {
         });
 
         let store_data = <NonNull<ManuallyDrop<T>>>::from(&mut inner.data).cast::<()>();
-        inner.inner.vm_store_context.store_data = Some(store_data.into());
+        inner.inner.vm_store_context.store_data = store_data.into();
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
 
@@ -1300,13 +1300,7 @@ impl<T> StoreInner<T> {
     fn data(&self) -> &T {
         unsafe {
             let data: *const ManuallyDrop<T> = &raw const self.data;
-            let provenance = self
-                .inner
-                .vm_store_context
-                .store_data
-                .unwrap()
-                .as_ptr()
-                .cast::<T>();
+            let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
             let ptr = provenance.with_addr(data.addr());
             &*ptr
         }
@@ -1316,13 +1310,7 @@ impl<T> StoreInner<T> {
     fn data_mut(&mut self) -> &mut T {
         unsafe {
             let data: *mut ManuallyDrop<T> = &raw mut self.data;
-            let provenance = self
-                .inner
-                .vm_store_context
-                .store_data
-                .unwrap()
-                .as_ptr()
-                .cast::<T>();
+            let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
             let ptr = provenance.with_addr(data.addr());
             &mut *ptr
         }
@@ -2836,7 +2824,6 @@ mod tests {
                 .inner
                 .vm_store_context
                 .store_data
-                .unwrap()
                 .as_ptr()
                 .cast::<u32>();
             unsafe { *ptr += 1 }
