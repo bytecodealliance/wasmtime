@@ -29,7 +29,7 @@ unsafe fn test_path_rename(dir_fd: wasip1::Fd) {
     wasip1::fd_close(fd).expect("closing a file");
     wasip1::path_remove_directory(dir_fd, "target").expect("removing a directory");
 
-    // Now, try renaming renaming a dir to existing empty dir
+    // Now, try renaming a dir to existing empty dir
     wasip1::path_create_directory(dir_fd, "source").expect("creating a directory");
     wasip1::path_create_directory(dir_fd, "target").expect("creating a directory");
     wasip1::path_rename(dir_fd, "source", dir_fd, "target").expect("renaming a directory");
