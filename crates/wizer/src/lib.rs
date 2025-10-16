@@ -306,6 +306,29 @@ impl Wizer {
                                 anyhow::bail!("unsupported `data.drop` instruction")
                             }
 
+                            // Wizer can't snapshot GC references, so disallow
+                            // any mutation of GC references. This prevents, for
+                            // example, reading something from a table and then
+                            // mutating it.
+                            wasmparser::Operator::StructSet { .. } => {
+                                anyhow::bail!("unsupported `struct.set` instruction")
+                            }
+                            wasmparser::Operator::ArraySet { .. } => {
+                                anyhow::bail!("unsupported `array.set` instruction")
+                            }
+                            wasmparser::Operator::ArrayFill { .. } => {
+                                anyhow::bail!("unsupported `array.fill` instruction")
+                            }
+                            wasmparser::Operator::ArrayCopy { .. } => {
+                                anyhow::bail!("unsupported `array.copy` instruction")
+                            }
+                            wasmparser::Operator::ArrayInitData { .. } => {
+                                anyhow::bail!("unsupported `array.init_data` instruction")
+                            }
+                            wasmparser::Operator::ArrayInitElem { .. } => {
+                                anyhow::bail!("unsupported `array.init_elem` instruction")
+                            }
+
                             _ => continue,
                         }
                     }
