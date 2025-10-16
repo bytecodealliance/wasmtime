@@ -6,6 +6,7 @@ use crate::{
     store::{AutoAssertNoGc, StoreOpaque},
     vm::{CurrentActivationBacktrace, VMContext},
 };
+use alloc::vec;
 use alloc::vec::Vec;
 use core::{ffi::c_void, ptr::NonNull};
 #[cfg(feature = "gc")]
