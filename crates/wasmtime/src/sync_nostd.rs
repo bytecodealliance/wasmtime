@@ -24,18 +24,10 @@ use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 
-#[cfg(has_custom_sync)]
-use crate::runtime::vm::capi::{
-    wasmtime_sync_lock_acquire, wasmtime_sync_lock_free, wasmtime_sync_lock_release,
-    wasmtime_sync_rwlock_free, wasmtime_sync_rwlock_read, wasmtime_sync_rwlock_read_release,
-    wasmtime_sync_rwlock_write, wasmtime_sync_rwlock_write_release,
-};
-
 pub struct OnceLock<T> {
     val: UnsafeCell<MaybeUninit<T>>,
     state: AtomicU8,
-    #[cfg(has_custom_sync)]
-    mutex: RawMutex,
+    mutex: raw::Mutex,
 }
 
 unsafe impl<T: Send> Send for OnceLock<T> {}
@@ -50,8 +42,7 @@ impl<T> OnceLock<T> {
         OnceLock {
             state: AtomicU8::new(UNINITIALIZED),
             val: UnsafeCell::new(MaybeUninit::uninit()),
-            #[cfg(has_custom_sync)]
-            mutex: RawMutex::new(),
+            mutex: raw::Mutex::new(),
         }
     }
 
@@ -79,38 +70,8 @@ impl<T> OnceLock<T> {
     }
 
     #[cold]
-    #[cfg(not(has_custom_sync))]
     fn try_init<E>(&self, f: impl FnOnce() -> Result<T, E>) -> Result<&T, E> {
-        match self.state.compare_exchange(
-            UNINITIALIZED,
-            INITIALIZING,
-            Ordering::Acquire,
-            Ordering::Acquire,
-        ) {
-            Ok(UNINITIALIZED) => match f() {
-                Ok(val) => {
-                    let ret = unsafe { &*(*self.val.get()).write(val) };
-                    let prev = self.state.swap(INITIALIZED, Ordering::Release);
-                    assert_eq!(prev, INITIALIZING);
-                    Ok(ret)
-                }
-                Err(e) => match self.state.swap(UNINITIALIZED, Ordering::Release) {
-                    INITIALIZING => Err(e),
-                    _ => unreachable!(),
-                },
-            },
-            Err(INITIALIZING) => panic!(
-                "concurrent initialization only allowed with `std` or `custom-sync-primitives` features"
-            ),
-            Err(INITIALIZED) => Ok(self.get().unwrap()),
-            _ => unreachable!(),
-        }
-    }
-
-    #[cold]
-    #[cfg(has_custom_sync)]
-    fn try_init<E>(&self, f: impl FnOnce() -> Result<T, E>) -> Result<&T, E> {
-        let _guard = OnceLockGuard::acquire(self.mutex.storage.get());
+        let _guard = OnceLockGuard::new(&self.mutex);
 
         // Check state again under lock
         match self.state.load(Ordering::Acquire) {
@@ -153,54 +114,22 @@ impl<T> Default for OnceLock<T> {
     }
 }
 
-#[cfg(has_custom_sync)]
-#[derive(Debug)]
-struct RawMutex {
-    storage: UnsafeCell<usize>,
+struct OnceLockGuard<'a> {
+    lock: &'a raw::Mutex,
 }
 
-#[cfg(has_custom_sync)]
-impl RawMutex {
-    const fn new() -> RawMutex {
-        RawMutex {
-            storage: UnsafeCell::new(0),
-        }
-    }
-}
-
-#[cfg(has_custom_sync)]
-impl Drop for RawMutex {
-    fn drop(&mut self) {
-        // SAFETY: We have exclusive access via &mut self
-        // The host implementation handles the case where the lock was never used (still zero)
-        unsafe {
-            wasmtime_sync_lock_free(self.storage.get());
-        }
-    }
-}
-
-#[cfg(has_custom_sync)]
-struct OnceLockGuard {
-    lock: *mut usize,
-}
-
-#[cfg(has_custom_sync)]
-impl OnceLockGuard {
-    fn acquire(lock: *mut usize) -> OnceLockGuard {
-        // SAFETY: The host implementation handles lazy initialization in acquire
-        unsafe {
-            wasmtime_sync_lock_acquire(lock);
-        }
+impl<'a> OnceLockGuard<'a> {
+    fn new(lock: &'a raw::Mutex) -> OnceLockGuard<'a> {
+        lock.lock();
         OnceLockGuard { lock }
     }
 }
 
-#[cfg(has_custom_sync)]
-impl Drop for OnceLockGuard {
+impl Drop for OnceLockGuard<'_> {
     fn drop(&mut self) {
         // SAFETY: We acquired the lock in OnceLockGuard::acquire
         unsafe {
-            wasmtime_sync_lock_release(self.lock);
+            self.lock.unlock();
         }
     }
 }
@@ -208,10 +137,7 @@ impl Drop for OnceLockGuard {
 #[derive(Debug)]
 pub struct RwLock<T> {
     val: UnsafeCell<T>,
-    #[cfg(not(has_custom_sync))]
-    state: AtomicU32,
-    #[cfg(has_custom_sync)]
-    lock: RawRwLock,
+    lock: raw::RwLock,
 }
 
 unsafe impl<T: Send> Send for RwLock<T> {}
@@ -221,64 +147,17 @@ impl<T> RwLock<T> {
     pub const fn new(val: T) -> RwLock<T> {
         RwLock {
             val: UnsafeCell::new(val),
-            #[cfg(not(has_custom_sync))]
-            state: AtomicU32::new(0),
-            #[cfg(has_custom_sync)]
-            lock: RawRwLock::new(),
+            lock: raw::RwLock::new(),
         }
     }
 
-    #[cfg(not(has_custom_sync))]
     pub fn read(&self) -> impl Deref<Target = T> + '_ {
-        const READER_LIMIT: u32 = u32::MAX / 2;
-        match self
-            .state
-            .fetch_update(Ordering::Acquire, Ordering::Acquire, |x| match x {
-                u32::MAX => None,
-                n => {
-                    let next = n + 1;
-                    if next < READER_LIMIT {
-                        Some(next)
-                    } else {
-                        None
-                    }
-                }
-            }) {
-            Ok(_) => RwLockReadGuard { lock: self },
-            Err(_) => panic!(
-                "concurrent read request while locked for writing, must use `std` or `custom-sync-primitives` features to avoid panic"
-            ),
-        }
-    }
-
-    #[cfg(has_custom_sync)]
-    pub fn read(&self) -> impl Deref<Target = T> + '_ {
-        // SAFETY: The host implementation handles lazy initialization in read
-        unsafe {
-            wasmtime_sync_rwlock_read(self.lock.storage.get());
-        }
+        self.lock.read();
         RwLockReadGuard { lock: self }
     }
 
-    #[cfg(not(has_custom_sync))]
     pub fn write(&self) -> impl DerefMut<Target = T> + '_ {
-        match self
-            .state
-            .compare_exchange(0, u32::MAX, Ordering::Acquire, Ordering::Relaxed)
-        {
-            Ok(0) => RwLockWriteGuard { lock: self },
-            _ => panic!(
-                "concurrent write request, must use `std` or `custom-sync-primitives` features to avoid panicking"
-            ),
-        }
-    }
-
-    #[cfg(has_custom_sync)]
-    pub fn write(&self) -> impl DerefMut<Target = T> + '_ {
-        // SAFETY: The host implementation handles lazy initialization in write
-        unsafe {
-            wasmtime_sync_rwlock_write(self.lock.storage.get());
-        }
+        self.lock.write();
         RwLockWriteGuard { lock: self }
     }
 }
@@ -286,32 +165,6 @@ impl<T> RwLock<T> {
 impl<T: Default> Default for RwLock<T> {
     fn default() -> RwLock<T> {
         RwLock::new(T::default())
-    }
-}
-
-#[cfg(has_custom_sync)]
-#[derive(Debug)]
-struct RawRwLock {
-    storage: UnsafeCell<usize>,
-}
-
-#[cfg(has_custom_sync)]
-impl RawRwLock {
-    const fn new() -> RawRwLock {
-        RawRwLock {
-            storage: UnsafeCell::new(0),
-        }
-    }
-}
-
-#[cfg(has_custom_sync)]
-impl Drop for RawRwLock {
-    fn drop(&mut self) {
-        // SAFETY: We have exclusive access via &mut self
-        // The host implementation handles the case where the lock was never used (still zero)
-        unsafe {
-            wasmtime_sync_rwlock_free(self.storage.get());
-        }
     }
 }
 
@@ -328,19 +181,12 @@ impl<T> Deref for RwLockReadGuard<'_, T> {
     }
 }
 
-#[cfg(not(has_custom_sync))]
 impl<T> Drop for RwLockReadGuard<'_, T> {
     fn drop(&mut self) {
-        self.lock.state.fetch_sub(1, Ordering::Release);
-    }
-}
-
-#[cfg(has_custom_sync)]
-impl<T> Drop for RwLockReadGuard<'_, T> {
-    fn drop(&mut self) {
-        // SAFETY: We acquired the read lock in RwLock::read()
+        // SAFETY: This type represents a safe read lock being held, so it's
+        // safe to perform the unlock here at the end.
         unsafe {
-            wasmtime_sync_rwlock_read_release(self.lock.lock.storage.get());
+            self.lock.lock.read_unlock();
         }
     }
 }
@@ -365,22 +211,190 @@ impl<T> DerefMut for RwLockWriteGuard<'_, T> {
     }
 }
 
-#[cfg(not(has_custom_sync))]
 impl<T> Drop for RwLockWriteGuard<'_, T> {
     fn drop(&mut self) {
-        match self.lock.state.swap(0, Ordering::Release) {
-            u32::MAX => {}
-            _ => unreachable!(),
+        // SAFETY: This type represents a safe write lock being held, so it's
+        // safe to perform the unlock here at the end.
+        unsafe {
+            self.lock.lock.write_unlock();
+        }
+    }
+}
+
+#[cfg(not(has_custom_sync))]
+use panic_on_contention as raw;
+#[cfg(not(has_custom_sync))]
+mod panic_on_contention {
+    use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+
+    #[derive(Debug)]
+    pub struct Mutex {
+        locked: AtomicBool,
+    }
+
+    impl Mutex {
+        pub const fn new() -> Mutex {
+            Mutex {
+                locked: AtomicBool::new(false),
+            }
+        }
+
+        pub fn lock(&self) {
+            if self.locked.swap(true, Ordering::Acquire) {
+                panic!(
+                    "concurrent lock request, must use `std` or `custom-sync-primitives` features to avoid panicking"
+                );
+            }
+        }
+
+        pub unsafe fn unlock(&self) {
+            self.locked.store(false, Ordering::Release);
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct RwLock {
+        state: AtomicU32,
+    }
+
+    impl RwLock {
+        pub const fn new() -> RwLock {
+            RwLock {
+                state: AtomicU32::new(0),
+            }
+        }
+
+        pub fn read(&self) {
+            const READER_LIMIT: u32 = u32::MAX / 2;
+            match self
+                .state
+                .fetch_update(Ordering::Acquire, Ordering::Acquire, |x| match x {
+                    u32::MAX => None,
+                    n => {
+                        let next = n + 1;
+                        if next < READER_LIMIT {
+                            Some(next)
+                        } else {
+                            None
+                        }
+                    }
+                }) {
+                Ok(_) => {}
+                Err(_) => panic!(
+                    "concurrent read request while locked for writing, must use `std` or `custom-sync-primitives` features to avoid panic"
+                ),
+            }
+        }
+
+        pub unsafe fn read_unlock(&self) {
+            self.state.fetch_sub(1, Ordering::Release);
+        }
+
+        pub fn write(&self) {
+            match self
+                .state
+                .compare_exchange(0, u32::MAX, Ordering::Acquire, Ordering::Relaxed)
+            {
+                Ok(0) => {}
+                _ => panic!(
+                    "concurrent write request, must use `std` or `custom-sync-primitives` features to avoid panicking"
+                ),
+            }
+        }
+
+        pub unsafe fn write_unlock(&self) {
+            match self.state.swap(0, Ordering::Release) {
+                u32::MAX => {}
+                _ => unreachable!(),
+            }
         }
     }
 }
 
 #[cfg(has_custom_sync)]
-impl<T> Drop for RwLockWriteGuard<'_, T> {
-    fn drop(&mut self) {
-        // SAFETY: We acquired the write lock in RwLock::write()
-        unsafe {
-            wasmtime_sync_rwlock_write_release(self.lock.lock.storage.get());
+use custom_capi as raw;
+#[cfg(has_custom_sync)]
+mod custom_capi {
+    use crate::runtime::vm::capi;
+    use core::cell::UnsafeCell;
+
+    #[derive(Debug)]
+    pub struct Mutex {
+        storage: UnsafeCell<usize>,
+    }
+
+    impl Mutex {
+        pub const fn new() -> Mutex {
+            Mutex {
+                storage: UnsafeCell::new(0),
+            }
+        }
+
+        pub fn lock(&self) {
+            unsafe {
+                capi::wasmtime_sync_lock_acquire(self.storage.get());
+            }
+        }
+
+        pub unsafe fn unlock(&self) {
+            unsafe {
+                capi::wasmtime_sync_lock_release(self.storage.get());
+            }
+        }
+    }
+
+    impl Drop for Mutex {
+        fn drop(&mut self) {
+            // SAFETY: We have exclusive access via &mut self
+            // The host implementation handles the case where the lock was never used (still zero)
+            unsafe {
+                capi::wasmtime_sync_lock_free(self.storage.get());
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct RwLock {
+        storage: UnsafeCell<usize>,
+    }
+
+    impl RwLock {
+        pub const fn new() -> RwLock {
+            RwLock {
+                storage: UnsafeCell::new(0),
+            }
+        }
+
+        pub fn read(&self) {
+            unsafe {
+                capi::wasmtime_sync_rwlock_read(self.storage.get());
+            }
+        }
+
+        pub unsafe fn read_unlock(&self) {
+            unsafe {
+                capi::wasmtime_sync_rwlock_read_release(self.storage.get());
+            }
+        }
+
+        pub fn write(&self) {
+            unsafe {
+                capi::wasmtime_sync_rwlock_write(self.storage.get());
+            }
+        }
+
+        pub unsafe fn write_unlock(&self) {
+            unsafe {
+                capi::wasmtime_sync_rwlock_write_release(self.storage.get());
+            }
+        }
+    }
+
+    impl Drop for RwLock {
+        fn drop(&mut self) {
+            unsafe {
+                capi::wasmtime_sync_rwlock_free(self.storage.get());
+            }
         }
     }
 }

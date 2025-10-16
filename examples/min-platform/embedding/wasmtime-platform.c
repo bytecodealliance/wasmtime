@@ -174,7 +174,7 @@ void wasmtime_sync_lock_free(uintptr_t *lock) {
   }
 }
 
-void wasmtime_sync_lock_acquire(uintptr_t *lock) {
+static pthread_mutex_t *mutex_lazy_init(uintptr_t *lock) {
   pthread_mutex_t *mutex = (pthread_mutex_t *)*lock;
   if (mutex == NULL) {
     pthread_mutex_t *new_mutex = malloc(sizeof(pthread_mutex_t));
@@ -190,11 +190,16 @@ void wasmtime_sync_lock_acquire(uintptr_t *lock) {
     }
     mutex = (pthread_mutex_t *)*lock;
   }
+  return mutex;
+}
+
+void wasmtime_sync_lock_acquire(uintptr_t *lock) {
+  pthread_mutex_t *mutex = mutex_lazy_init(lock);
   pthread_mutex_lock(mutex);
 }
 
 void wasmtime_sync_lock_release(uintptr_t *lock) {
-  pthread_mutex_t *mutex = (pthread_mutex_t *)*lock;
+  pthread_mutex_t *mutex = mutex_lazy_init(lock);
   pthread_mutex_unlock(mutex);
 }
 
@@ -207,31 +212,7 @@ void wasmtime_sync_rwlock_free(uintptr_t *lock) {
   }
 }
 
-void wasmtime_sync_rwlock_read(uintptr_t *lock) {
-  pthread_rwlock_t *rwlock = (pthread_rwlock_t *)*lock;
-  if (rwlock == NULL) {
-    pthread_rwlock_t *new_rwlock = malloc(sizeof(pthread_rwlock_t));
-    if (new_rwlock == NULL) {
-      abort();
-    }
-    pthread_rwlock_init(new_rwlock, NULL);
-
-    // Atomically set lock only if it's still NULL
-    if (!__sync_bool_compare_and_swap(lock, 0, (uintptr_t)new_rwlock)) {
-      pthread_rwlock_destroy(new_rwlock);
-      free(new_rwlock);
-    }
-    rwlock = (pthread_rwlock_t *)*lock;
-  }
-  pthread_rwlock_rdlock(rwlock);
-}
-
-void wasmtime_sync_rwlock_read_release(uintptr_t *lock) {
-  pthread_rwlock_t *rwlock = (pthread_rwlock_t *)*lock;
-  pthread_rwlock_unlock(rwlock);
-}
-
-void wasmtime_sync_rwlock_write(uintptr_t *lock) {
+static pthread_rwlock_t *rwlock_lazy_init(uintptr_t *lock) {
   pthread_rwlock_t *rwlock = (pthread_rwlock_t *)*lock;
   if (rwlock == NULL) {
     pthread_rwlock_t *new_rwlock = malloc(sizeof(pthread_rwlock_t));
@@ -248,11 +229,26 @@ void wasmtime_sync_rwlock_write(uintptr_t *lock) {
     }
     rwlock = (pthread_rwlock_t *)*lock;
   }
+  return rwlock;
+}
+
+void wasmtime_sync_rwlock_read(uintptr_t *lock) {
+  pthread_rwlock_t *rwlock = rwlock_lazy_init(lock);
+  pthread_rwlock_rdlock(rwlock);
+}
+
+void wasmtime_sync_rwlock_read_release(uintptr_t *lock) {
+  pthread_rwlock_t *rwlock = rwlock_lazy_init(lock);
+  pthread_rwlock_unlock(rwlock);
+}
+
+void wasmtime_sync_rwlock_write(uintptr_t *lock) {
+  pthread_rwlock_t *rwlock = rwlock_lazy_init(lock);
   pthread_rwlock_wrlock(rwlock);
 }
 
 void wasmtime_sync_rwlock_write_release(uintptr_t *lock) {
-  pthread_rwlock_t *rwlock = (pthread_rwlock_t *)*lock;
+  pthread_rwlock_t *rwlock = rwlock_lazy_init(lock);
   pthread_rwlock_unlock(rwlock);
 }
 
