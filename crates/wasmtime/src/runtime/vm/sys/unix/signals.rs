@@ -1,7 +1,7 @@
 //! Trap handling on Unix based on POSIX signals.
 
 use crate::prelude::*;
-use crate::runtime::vm::traphandlers::{TrapRegisters, TrapTest, tls};
+use crate::runtime::vm::traphandlers::{TrapRegisters, TrapResumeArgs, TrapTest, tls};
 use std::cell::RefCell;
 use std::io;
 use std::mem;
@@ -179,9 +179,9 @@ unsafe extern "C" fn trap_handler(
                 false
             }
             TrapTest::HandledByEmbedder => true,
-            TrapTest::Trap(handler) => {
+            TrapTest::Trap(handler, args) => {
                 unsafe {
-                    store_handler_in_ucontext(context, &handler);
+                    store_handler_in_ucontext(context, &handler, &args);
                 }
                 true
             }
@@ -244,18 +244,27 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_RIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize,
+                sp: cx.uc_mcontext.gregs[libc::REG_RSP as usize] as usize,
+                arg0: cx.uc_mcontext.gregs[libc::REG_RDI as usize] as usize,
+                arg1: cx.uc_mcontext.gregs[libc::REG_RSI as usize] as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "x86"))] {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_EIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_EBP as usize] as usize,
+                sp: cx.uc_mcontext.gregs[libc::REG_ESP as usize] as usize,
+                arg0: 0,
+                arg1: 0,
             }
         } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.pc as usize,
                 fp: cx.uc_mcontext.regs[29] as usize,
+                sp: cx.uc_mcontext.sp as usize,
+                arg0: cx.uc_mcontext.regs[0] as usize,
+                arg1: cx.uc_mcontext.regs[1] as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "s390x"))] {
             // On s390x, SIGILL and SIGFPE are delivered with the PSW address
@@ -277,6 +286,9 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 TrapRegisters {
                     pc: (cx.uc_mcontext.psw.addr - trap_offset) as usize,
                     fp: *(cx.uc_mcontext.gregs[15] as *const usize),
+                    sp: cx.uc_mcontext.gregs[15] as usize,
+                    arg0: cx.uc_mcontext.gregs[2] as usize,
+                    arg1: cx.uc_mcontext.gregs[3] as usize,
                 }
             }
         } else if #[cfg(all(target_vendor = "apple", target_arch = "x86_64"))] {
@@ -285,6 +297,9 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 TrapRegisters {
                     pc: (*cx.uc_mcontext).__ss.__rip as usize,
                     fp: (*cx.uc_mcontext).__ss.__rbp as usize,
+                    sp: (*cx.uc_mcontext).__ss.__rsp as usize,
+                    arg0: (*cx.uc_mcontext).__ss.__rdi as usize,
+                    arg1: (*cx.uc_mcontext).__ss.__rsi as usize,
                 }
             }
         } else if #[cfg(all(target_vendor = "apple", target_arch = "aarch64"))] {
@@ -293,6 +308,9 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 TrapRegisters {
                     pc: (*cx.uc_mcontext).__ss.__pc as usize,
                     fp: (*cx.uc_mcontext).__ss.__fp as usize,
+                    fp: (*cx.uc_mcontext).__ss.__sp as usize,
+                    arg0: (*cx.uc_mcontext).__ss.__x[0] as usize,
+                    arg1: (*cx.uc_mcontext).__ss.__x[1] as usize,
                 }
             }
         } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
@@ -300,30 +318,45 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.uc_mcontext.mc_rip as usize,
                 fp: cx.uc_mcontext.mc_rbp as usize,
+                sp: cx.uc_mcontext.mc_rsp as usize,
+                arg0: cx.uc_mcontext.mc_rdi as usize,
+                arg1: cx.uc_mcontext.mc_rsi as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.__gregs[libc::REG_PC] as usize,
                 fp: cx.uc_mcontext.__gregs[libc::REG_S0] as usize,
+                sp: cx.uc_mcontext.__gregs[libc::REG_SP] as usize,
+                arg0: cx.uc_mcontext.__gregs[libc::REG_A0 + 0] as usize,
+                arg1: cx.uc_mcontext.__gregs[libc::REG_A0 + 1] as usize,
             }
         } else if #[cfg(all(target_os = "freebsd", target_arch = "aarch64"))] {
             let cx = unsafe { &*(cx as *const libc::mcontext_t) };
             TrapRegisters {
                 pc: cx.mc_gpregs.gp_elr as usize,
                 fp: cx.mc_gpregs.gp_x[29] as usize,
+                sp: cx.mc_gpregs.gp_sp as usize,
+                arg0: cx.mc_gpregs.gp_x[0] as usize,
+                arg1: cx.mc_gpregs.gp_x[1] as usize,
             }
         } else if #[cfg(all(target_os = "openbsd", target_arch = "x86_64"))] {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.sc_rip as usize,
                 fp: cx.sc_rbp as usize,
+                sp: cx.sc_rsp as usize,
+                arg0: cx.sc_rdi as usize,
+                arg1: cx.sc_rsi as usize,
             }
         } else if #[cfg(all(target_os = "linux", target_arch = "arm"))] {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.arm_pc as usize,
                 fp: cx.uc_mcontext.arm_fp as usize,
+                sp: cx.uc_mcontext.arm_sp as usize,
+                arg0: cx.uc_mcontext.arm_r0 as usize,
+                arg1: cx.uc_mcontext.arm_r1 as usize,
             }
         } else {
             compile_error!("unsupported platform");
@@ -334,28 +367,52 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
 
 /// Updates the siginfo context stored in `cx` to resume to `handler` up on
 /// resumption while returning from the signal handler.
-unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
+unsafe fn store_handler_in_ucontext(
+    cx: *mut libc::c_void,
+    handler: &Handler,
+    args: &TrapResumeArgs,
+) {
     cfg_if::cfg_if! {
         if #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "illumos"), target_arch = "x86_64"))] {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.gregs[libc::REG_RIP as usize] = handler.pc as _;
             cx.uc_mcontext.gregs[libc::REG_RSP as usize] = handler.sp as _;
             cx.uc_mcontext.gregs[libc::REG_RBP as usize] = handler.fp as _;
-            cx.uc_mcontext.gregs[libc::REG_RAX as usize] = 0;
-            cx.uc_mcontext.gregs[libc::REG_RDX as usize] = 0;
+            match *args {
+                TrapResumeArgs::Handler(a, b) => {
+                    cx.uc_mcontext.gregs[libc::REG_RAX as usize] = a as _;
+                    cx.uc_mcontext.gregs[libc::REG_RDX as usize] = b as _;
+                }
+                TrapResumeArgs::Call(a, b) => {
+                    cx.uc_mcontext.gregs[libc::REG_RDI as usize] = a as _;
+                    cx.uc_mcontext.gregs[libc::REG_RSI as usize] = b as _;
+                }
+            }
         } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.pc = handler.pc as _;
             cx.uc_mcontext.sp = handler.sp as _;
             cx.uc_mcontext.regs[29] = handler.fp as _;
-            cx.uc_mcontext.regs[0] = 0;
-            cx.uc_mcontext.regs[1] = 0;
+            match *args {
+                TrapResumeArgs::Handler(a, b) | TrapResumeArgs::Call(a, b) => {
+                    cx.uc_mcontext.regs[0] = a as _;
+                    cx.uc_mcontext.regs[1] = b as _;
+                }
+            }
         } else if #[cfg(all(target_os = "linux", target_arch = "s390x"))] {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.psw.addr = handler.pc as _;
             cx.uc_mcontext.gregs[15] = handler.sp as _;
-            cx.uc_mcontext.gregs[6] = 0;
-            cx.uc_mcontext.gregs[7] = 0;
+            match *args {
+                TrapResumeArgs::Handler(a, b) => {
+                    cx.uc_mcontext.gregs[6] = a as _;
+                    cx.uc_mcontext.gregs[7] = b as _;
+                }
+                TrapResumeArgs::Call(a, b) => {
+                    cx.uc_mcontext.gregs[2] = a as _;
+                    cx.uc_mcontext.gregs[3] = b as _;
+                }
+            }
         } else if #[cfg(all(target_vendor = "apple", target_arch = "x86_64"))] {
             unsafe {
                 let cx = cx.cast::<libc::ucontext_t>().as_mut().unwrap();
@@ -363,8 +420,16 @@ unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
                 cx.__ss.__rip = handler.pc as _;
                 cx.__ss.__rsp = handler.sp as _;
                 cx.__ss.__rbp = handler.fp as _;
-                cx.__ss.__rax = 0;
-                cx.__ss.__rdx = 0;
+                match *args {
+                    TrapResumeArgs::Handler(a, b) => {
+                        cx.__ss.__rax = a as _;
+                        cx.__ss.__rdx = b as _;
+                    }
+                    TrapResumeArgs::Call(a, b) => {
+                        cx.__ss.__rdi = a as _;
+                        cx.__ss.__rsi = b as _;
+                    }
+                }
             }
         } else if #[cfg(all(target_vendor = "apple", target_arch = "aarch64"))] {
             unsafe {
@@ -373,23 +438,39 @@ unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
                 cx.__ss.__pc = handler.pc as _;
                 cx.__ss.__sp = handler.sp as _;
                 cx.__ss.__fp = handler.fp as _;
-                cx.__ss.__x[0] = 0;
-                cx.__ss.__x[1] = 0;
+                match *args {
+                    TrapResumeArgs::Handler(a, b) | TrapResumeArgs::Call(a, b) => {
+                        cx.__ss.__x[0] = a as _;
+                        cx.__ss.__x[1] = b as _;
+                    }
+                }
             }
         } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.mc_rip = handler.pc as _;
             cx.uc_mcontext.mc_rbp = handler.fp as _;
             cx.uc_mcontext.mc_rsp = handler.sp as _;
-            cx.uc_mcontext.mc_rax = 0;
-            cx.uc_mcontext.mc_rdx = 0;
+            match *args {
+                TrapResumeArgs::Handler(a, b) => {
+                    cx.uc_mcontext.mc_rax = a as _;
+                    cx.uc_mcontext.mc_rdx = b as _;
+                }
+                TrapResumeArgs::Call(a, b) => {
+                    cx.uc_mcontext.mc_rdi = a as _;
+                    cx.uc_mcontext.mc_rsi = b as _;
+                }
+            }
         } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.__gregs[libc::REG_PC] = handler.pc as _;
             cx.uc_mcontext.__gregs[libc::REG_S0] = handler.fp as _;
             cx.uc_mcontext.__gregs[libc::REG_SP] = handler.sp as _;
-            cx.uc_mcontext.__gregs[libc::REG_A0] = 0;
-            cx.uc_mcontext.__gregs[libc::REG_A0 + 1] = 0;
+            match *args {
+                TrapResumeArgs::Handler(a, b) | TrapResumeArgs::Call(a, b) => {
+                    cx.uc_mcontext.__gregs[libc::REG_A0] = a as _;
+                    cx.uc_mcontext.__gregs[libc::REG_A0 + 1] = b as _;
+                }
+            }
         } else {
             compile_error!("unsupported platform");
             panic!();

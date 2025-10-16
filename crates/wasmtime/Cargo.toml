@@ -412,4 +412,10 @@ component-model-async-bytes = [
 ]
 
 # Enables support for guest debugging.
-debug = ['runtime']
+debug = [
+  'runtime',
+  'async',
+  'gc', # For simplicity to avoid too many config conditionals.
+  'wasmtime-environ/debug',
+  'wasmtime-cranelift?/debug',
+]

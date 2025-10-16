@@ -457,6 +457,9 @@ impl InterpreterRef<'_> {
         let regs = TrapRegisters {
             pc: pc.as_ptr() as usize,
             fp: self.vm().fp() as usize,
+            sp: self.vm()[XReg::sp].get_u64() as usize,
+            arg0: 0, // TODO: Needed for debugging support.
+            arg1: 0,
         };
         let handler = tls::with(|s| {
             let s = s.unwrap();
@@ -487,7 +490,7 @@ impl InterpreterRef<'_> {
 
                         // Trap was handled, yay! Configure interpreter state
                         // to resume at the exception handler.
-                        TrapTest::Trap(handler) => handler,
+                        TrapTest::Trap(handler, _args) => handler,
                     }
                 }
             }

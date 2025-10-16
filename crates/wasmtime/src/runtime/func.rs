@@ -1481,6 +1481,40 @@ impl Func {
     pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
         self.vm_func_ref(store).as_ptr().addr()
     }
+
+    /// Run an async call on a store within a debugger context,
+    /// providing intermediate debug-step results when execution
+    /// yields for any debug-related event (or fuel pauses).
+    ///
+    /// This invocation yields debug events within the immediately
+    /// invoked activation, but not further down the stack if the Wasm
+    /// calls back out into the host and then that calls back into
+    /// Wasm. In other words, the scope of the debug session ends when
+    /// Wasm calls back out.
+    ///
+    /// Returns `None` if debug instrumentation is not enabled for the
+    /// engine containing this store.
+    #[cfg(feature = "debug")] // N.B.: `debug` implies `async`.
+    pub fn debug_call<'a, T: Send + 'static>(
+        &'a self,
+        mut store: impl AsContextMut<Data = T> + 'a,
+        params: &'a [Val],
+        results: &'a mut [Val],
+    ) -> Option<crate::DebugSession<'a, T>> {
+        assert!(store.as_context_mut().engine().config().async_support);
+        if !store.as_context_mut().engine().tunables().debug_guest {
+            return None;
+        }
+        let was_active =
+            core::mem::replace(&mut store.as_context_mut().0.debugging_state.active, true);
+        assert!(
+            !was_active,
+            "Nested debugging sessions on one store are not supported"
+        );
+        let raw_store = NonNull::from_mut(store.as_context_mut().0);
+        let future = self.call_async(store, params, results);
+        Some(crate::DebugSession::new(raw_store, future))
+    }
 }
 
 /// Prepares for entrance into WebAssembly.
@@ -2235,7 +2269,7 @@ impl<T> Caller<'_, T> {
     ///
     /// See ['Store::debug_frames`] for more details.
     #[cfg(feature = "debug")]
-    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_>> {
+    pub fn debug_frames(&mut self) -> Option<crate::DebugFrameCursor<'_, T>> {
         self.store.debug_frames()
     }
 }
