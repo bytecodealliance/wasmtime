@@ -448,7 +448,9 @@ impl PartitionAdapterModules {
             }
 
             // These items can't transitively depend on an adapter
-            dfg::CoreDef::Trampoline(_) | dfg::CoreDef::InstanceFlags(_) => {}
+            dfg::CoreDef::Trampoline(_)
+            | dfg::CoreDef::InstanceFlags(_)
+            | dfg::CoreDef::UnsafeIntrinsic(..) => {}
         }
     }
 

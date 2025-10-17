@@ -1,4 +1,4 @@
-use crate::component::{ComponentTranslation, ComponentTypesBuilder};
+use crate::component::{ComponentTranslation, ComponentTypesBuilder, UnsafeIntrinsic};
 use crate::{Abi, CompiledFunctionBody, FuncKey, Tunables};
 use anyhow::Result;
 
@@ -17,6 +17,16 @@ pub trait ComponentCompiler: Send + Sync {
         key: FuncKey,
         abi: Abi,
         tunables: &Tunables,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody>;
+
+    /// Compile the given Wasmtime intrinsic.
+    fn compile_intrinsic(
+        &self,
+        tunables: &Tunables,
+        component: &ComponentTranslation,
+        intrinsic: UnsafeIntrinsic,
+        abi: Abi,
         symbol: &str,
     ) -> Result<CompiledFunctionBody>;
 }

@@ -115,6 +115,11 @@ impl<T> VmPtr<T> {
     pub fn as_ptr(&self) -> *mut T {
         self.as_non_null().as_ptr()
     }
+
+    /// Similar to `{NonNull,core::ptr}::dangling()` but for `VmPtr`.
+    pub fn dangling() -> Self {
+        NonNull::dangling().into()
+    }
 }
 
 // `VmPtr<T>`, like raw pointers, is trivially `Clone`/`Copy`.

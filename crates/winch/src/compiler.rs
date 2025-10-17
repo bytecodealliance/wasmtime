@@ -6,6 +6,8 @@ use std::mem;
 use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift::CompiledFunction;
+#[cfg(feature = "component-model")]
+use wasmtime_environ::component::ComponentTranslation;
 use wasmtime_environ::{
     CompileError, CompiledFunctionBody, DefinedFuncIndex, FuncKey, FunctionBodyData, FunctionLoc,
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, StaticModuleIndex, Tunables, VMOffsets,
@@ -392,6 +394,25 @@ impl wasmtime_environ::component::ComponentCompiler for NoInlineCompiler {
             .0
             .component_compiler()
             .compile_trampoline(component, types, key, abi, tunables, symbol)?;
+        if let Some(c) = self.0.inlining_compiler() {
+            c.finish_compiling(&mut body, None, symbol)
+                .map_err(|e| CompileError::Codegen(e.to_string()))?;
+        }
+        Ok(body)
+    }
+
+    fn compile_intrinsic(
+        &self,
+        tunables: &Tunables,
+        component: &ComponentTranslation,
+        intrinsic: wasmtime_environ::component::UnsafeIntrinsic,
+        abi: wasmtime_environ::Abi,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody> {
+        let mut body = self
+            .0
+            .component_compiler()
+            .compile_intrinsic(tunables, component, intrinsic, abi, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
             c.finish_compiling(&mut body, None, symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;

@@ -245,8 +245,20 @@ pub struct StoreInner<T: 'static> {
     #[cfg(target_has_atomic = "64")]
     epoch_deadline_behavior:
         Option<Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>>,
-    // for comments about `ManuallyDrop`, see `Store::into_data`
-    data: ManuallyDrop<T>,
+
+    /// The user's `T` data.
+    ///
+    /// Don't actually access it via this field, however! Use the
+    /// `Store{,Inner,Context,ContextMut}::data[_mut]` methods instead, to
+    /// preserve stacked borrows and provenance in the face of potential
+    /// direct-access of `T` from Wasm code (via unsafe intrinsics).
+    ///
+    /// The only exception to the above is when taking ownership of the value,
+    /// e.g. in `Store::into_data`, after which nothing can access this field
+    /// via raw pointers anymore so there is no more provenance to preserve.
+    ///
+    /// For comments about `ManuallyDrop`, see `Store::into_data`.
+    data_no_provenance: ManuallyDrop<T>,
 }
 
 enum ResourceLimiterInner<T> {
@@ -703,8 +715,12 @@ impl<T> Store<T> {
             call_hook: None,
             #[cfg(target_has_atomic = "64")]
             epoch_deadline_behavior: None,
-            data: ManuallyDrop::new(data),
+            data_no_provenance: ManuallyDrop::new(data),
         });
+
+        let store_data =
+            <NonNull<ManuallyDrop<T>>>::from(&mut inner.data_no_provenance).cast::<()>();
+        inner.inner.vm_store_context.store_data = store_data.into();
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
 
@@ -748,13 +764,13 @@ impl<T> Store<T> {
         }
     }
 
-    /// Access the underlying data owned by this `Store`.
+    /// Access the underlying `T` data owned by this `Store`.
     #[inline]
     pub fn data(&self) -> &T {
         self.inner.data()
     }
 
-    /// Access the underlying data owned by this `Store`.
+    /// Access the underlying `T` data owned by this `Store`.
     #[inline]
     pub fn data_mut(&mut self) -> &mut T {
         self.inner.data_mut()
@@ -808,7 +824,7 @@ impl<T> Store<T> {
         unsafe {
             let mut inner = ManuallyDrop::take(&mut self.inner);
             core::mem::forget(self);
-            ManuallyDrop::take(&mut inner.data)
+            ManuallyDrop::take(&mut inner.data_no_provenance)
         }
     }
 
@@ -870,7 +886,7 @@ impl<T> Store<T> {
         // Apply the limits on instances, tables, and memory given by the limiter:
         let inner = &mut self.inner;
         let (instance_limit, table_limit, memory_limit) = {
-            let l = limiter(&mut inner.data);
+            let l = limiter(inner.data_mut());
             (l.instances(), l.tables(), l.memories())
         };
         let innermost = &mut inner.inner;
@@ -1315,12 +1331,49 @@ impl<'a, T> StoreContextMut<'a, T> {
 impl<T> StoreInner<T> {
     #[inline]
     fn data(&self) -> &T {
-        &self.data
+        // We are actually just accessing `&self.data_no_provenance` but we must
+        // do so with the `VMStoreContext::store_data` pointer's provenance. If
+        // we did otherwise, i.e. directly accessed the field, we would
+        // invalidate that pointer, which would in turn invalidate any direct
+        // `T` accesses that Wasm code makes via unsafe intrinsics.
+        let data: *const ManuallyDrop<T> = &raw const self.data_no_provenance;
+        let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
+        let ptr = provenance.with_addr(data.addr());
+
+        // SAFETY: The pointer is non-null, points to our `T` data, and is valid
+        // to access because of our `&self` borrow.
+        debug_assert_ne!(ptr, core::ptr::null_mut());
+        debug_assert_eq!(ptr.addr(), (&raw const self.data_no_provenance).addr());
+        unsafe { &*ptr }
+    }
+
+    #[inline]
+    fn data_limiter_and_opaque(
+        &mut self,
+    ) -> (
+        &mut T,
+        Option<&mut ResourceLimiterInner<T>>,
+        &mut StoreOpaque,
+    ) {
+        // See the comments about provenance in `StoreInner::data` above.
+        let data: *mut ManuallyDrop<T> = &raw mut self.data_no_provenance;
+        let provenance = self.inner.vm_store_context.store_data.as_ptr().cast::<T>();
+        let ptr = provenance.with_addr(data.addr());
+
+        // SAFETY: The pointer is non-null, points to our `T` data, and is valid
+        // to access because of our `&mut self` borrow.
+        debug_assert_ne!(ptr, core::ptr::null_mut());
+        debug_assert_eq!(ptr.addr(), (&raw const self.data_no_provenance).addr());
+        let data = unsafe { &mut *ptr };
+
+        let limiter = self.limiter.as_mut();
+
+        (data, limiter, &mut self.inner)
     }
 
     #[inline]
     fn data_mut(&mut self) -> &mut T {
-        &mut self.data
+        self.data_limiter_and_opaque().0
     }
 
     #[inline]
@@ -2562,14 +2615,15 @@ unsafe impl<T> VMStore for StoreInner<T> {
     fn resource_limiter_and_store_opaque(
         &mut self,
     ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque) {
-        (
-            self.limiter.as_mut().map(|l| match l {
-                ResourceLimiterInner::Sync(s) => StoreResourceLimiter::Sync(s(&mut self.data)),
-                #[cfg(feature = "async")]
-                ResourceLimiterInner::Async(s) => StoreResourceLimiter::Async(s(&mut self.data)),
-            }),
-            &mut self.inner,
-        )
+        let (data, limiter, opaque) = self.data_limiter_and_opaque();
+
+        let limiter = limiter.map(|l| match l {
+            ResourceLimiterInner::Sync(s) => StoreResourceLimiter::Sync(s(data)),
+            #[cfg(feature = "async")]
+            ResourceLimiterInner::Async(s) => StoreResourceLimiter::Async(s(data)),
+        });
+
+        (limiter, opaque)
     }
 
     #[cfg(target_has_atomic = "64")]
@@ -2619,7 +2673,7 @@ impl<T: fmt::Debug> fmt::Debug for Store<T> {
         let inner = &**self.inner as *const StoreInner<T>;
         f.debug_struct("Store")
             .field("inner", &inner)
-            .field("data", &self.inner.data)
+            .field("data", self.inner.data())
             .finish()
     }
 }
@@ -2628,9 +2682,9 @@ impl<T> Drop for Store<T> {
     fn drop(&mut self) {
         self.run_manual_drop_routines();
 
-        // for documentation on this `unsafe`, see `into_data`.
+        // For documentation on this `unsafe`, see `into_data`.
         unsafe {
-            ManuallyDrop::drop(&mut self.inner.data);
+            ManuallyDrop::drop(&mut self.inner.data_no_provenance);
             ManuallyDrop::drop(&mut self.inner);
         }
     }
@@ -2717,8 +2771,7 @@ impl<T: AsStoreOpaque + ?Sized> AsStoreOpaque for &mut T {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_fuel, refuel, set_fuel};
-    use std::num::NonZeroU64;
+    use super::*;
 
     struct FuelTank {
         pub consumed_fuel: i64,
@@ -2834,5 +2887,36 @@ mod tests {
         assert_eq!(tank.reserve_fuel, 3);
         assert_eq!(tank.consumed_fuel, 4);
         assert_eq!(tank.get_fuel(), 0);
+    }
+
+    #[test]
+    fn store_data_provenance() {
+        // Test that we juggle pointer provenance and all that correctly, and
+        // miri is happy with everything, while allowing both Rust code and
+        // "Wasm" to access and modify the store's `T` data. Note that this is
+        // not actually Wasm mutating the store data here because compiling Wasm
+        // under miri is way too slow.
+
+        unsafe fn run_wasm(store: &mut Store<u32>) {
+            let ptr = store
+                .inner
+                .inner
+                .vm_store_context
+                .store_data
+                .as_ptr()
+                .cast::<u32>();
+            unsafe { *ptr += 1 }
+        }
+
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, 0_u32);
+
+        assert_eq!(*store.data(), 0);
+        *store.data_mut() += 1;
+        assert_eq!(*store.data(), 1);
+        unsafe { run_wasm(&mut store) }
+        assert_eq!(*store.data(), 2);
+        *store.data_mut() += 1;
+        assert_eq!(*store.data(), 3);
     }
 }

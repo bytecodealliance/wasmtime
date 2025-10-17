@@ -428,6 +428,20 @@ impl ComponentInstance {
         }
     }
 
+    /// Get the core Wasm function reference for the given unsafe intrinsic.
+    pub fn unsafe_intrinsic_func_ref(&self, idx: UnsafeIntrinsic) -> NonNull<VMFuncRef> {
+        unsafe {
+            let offset = self.offsets.unsafe_intrinsic_func_ref(idx);
+            let ret = self.vmctx_plus_offset_raw::<VMFuncRef>(offset);
+            debug_assert!(
+                mem::transmute::<Option<VmPtr<VMWasmCallFunction>>, usize>(ret.as_ref().wasm_call)
+                    != INVALID_PTR
+            );
+            debug_assert!(ret.as_ref().vmctx.as_ptr() as usize != INVALID_PTR);
+            ret
+        }
+    }
+
     /// Stores the runtime memory pointer at the index specified.
     ///
     /// This is intended to be called during the instantiation process of a
@@ -543,6 +557,27 @@ impl ComponentInstance {
         }
     }
 
+    /// Same as `set_trampoline` but for intrinsic functions.
+    pub fn set_intrinsic(
+        self: Pin<&mut Self>,
+        intrinsic: UnsafeIntrinsic,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        array_call: NonNull<VMArrayCallFunction>,
+        type_index: VMSharedTypeIndex,
+    ) {
+        unsafe {
+            let offset = self.offsets.unsafe_intrinsic_func_ref(intrinsic);
+            debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
+            let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
+            *self.vmctx_plus_offset_mut(offset) = VMFuncRef {
+                wasm_call: Some(wasm_call.into()),
+                array_call: array_call.into(),
+                type_index,
+                vmctx: vmctx.into(),
+            };
+        }
+    }
+
     /// Configures the destructor for a resource at the `idx` specified.
     ///
     /// This is required to be called for each resource as it's defined within a
@@ -633,6 +668,14 @@ impl ComponentInstance {
             for i in 0..self.offsets.num_trampolines {
                 let i = TrampolineIndex::from_u32(i);
                 let offset = self.offsets.trampoline_func_ref(i);
+                // SAFETY: see above
+                unsafe {
+                    *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                }
+            }
+            for i in 0..self.offsets.num_unsafe_intrinsics {
+                let i = UnsafeIntrinsic::from_u32(i);
+                let offset = self.offsets.unsafe_intrinsic_func_ref(i);
                 // SAFETY: see above
                 unsafe {
                     *self.as_mut().vmctx_plus_offset_mut(offset) = INVALID_PTR;
