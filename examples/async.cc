@@ -5,7 +5,7 @@ function.
 You can compile and run this example on Linux with:
 
    cargo build --release -p wasmtime-c-api
-   c++ examples/async.cpp \
+   c++ examples/async.cc \
        -I crates/c-api/include \
        target/release/libwasmtime.a \
        -std=c++11 \
