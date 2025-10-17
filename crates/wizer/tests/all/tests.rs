@@ -951,15 +951,15 @@ async fn mixture_of_globals() -> Result<()> {
     wizen_and_run_wasm(&[], 42 + 2 + 43 + 4, &wasm, wizer).await
 }
 
-#[test]
-fn memory_init_and_data_segments() -> Result<()> {
+#[tokio::test]
+async fn memory_init_and_data_segments() -> Result<()> {
     let _ = env_logger::try_init();
     let wasm = wat_to_wasm(
         r#"
 (module
   (memory 1)
 
-  (func (export "wizer.initialize")
+  (func (export "wizer-initialize")
     i32.const 2
     i32.const 0
     i32.const 2
@@ -990,5 +990,5 @@ fn memory_init_and_data_segments() -> Result<()> {
         "#,
     )?;
     let wizer = get_wizer();
-    wizen_and_run_wasm(&[], 0x02010403 + 0x06050201, &wasm, wizer)
+    wizen_and_run_wasm(&[], 0x02010403 + 0x06050201, &wasm, wizer).await
 }
