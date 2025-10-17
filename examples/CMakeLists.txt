@@ -63,7 +63,7 @@ create_rust_wasm(resource-component wasm32-wasip2)
 # C/C++ examples/tests
 create_target(anyref anyref.c)
 create_target(anyref-cpp anyref.cc)
-create_target(async async.cpp)
+create_target(async async.cc)
 create_target(externref externref.c)
 create_target(externref-cpp externref.cc)
 create_target(fib-debug fib-debug/main.c)
