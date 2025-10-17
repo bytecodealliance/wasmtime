@@ -452,6 +452,19 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t *,
 WASMTIME_CONFIG_PROP(void, macos_use_mach_ports, bool)
 
 /**
+ * \brief Configures Wasmtime to not use signals-based trap handlers, for
+ * example disables `SIGILL` and `SIGSEGV` handler registration on Unix
+ * platforms.
+ *
+ * This option defaults to `true`: signals-based trap handlers are enabled
+ * by default.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.signals_based_traps
+ */
+WASMTIME_CONFIG_PROP(void, signals_based_traps, bool)
+
+/**
  * Return the data from a LinearMemory instance.
  *
  * The size in bytes as well as the maximum number of bytes that can be
