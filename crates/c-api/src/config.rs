@@ -278,6 +278,11 @@ pub extern "C" fn wasmtime_config_macos_use_mach_ports_set(c: &mut wasm_config_t
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_signals_based_traps_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.signals_based_traps(enable);
+}
+
+#[unsafe(no_mangle)]
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 pub unsafe extern "C" fn wasmtime_config_cranelift_flag_enable(
     c: &mut wasm_config_t,

@@ -523,6 +523,12 @@ public:
     wasmtime_config_macos_use_mach_ports_set(ptr.get(), enable);
   }
 
+  /// \brief Configures Wasmtime to not use signals-based trap handlers
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.signals_based_traps
+  void signals_based_traps(bool enable) {
+    wasmtime_config_signals_based_traps_set(ptr.get(), enable);
+  }
+
 #ifdef WASMTIME_FEATURE_CACHE
   /// \brief Loads the default cache configuration present on the system.
   ///
