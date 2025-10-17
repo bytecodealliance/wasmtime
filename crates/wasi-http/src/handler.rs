@@ -235,8 +235,11 @@ where
         if available != self.available {
             self.available = available;
             if available {
-                self.handler.0.worker_count.fetch_add(1, SeqCst);
+                self.handler.0.worker_count.fetch_add(1, Relaxed);
             } else {
+                // Here we use `SeqCst` to ensure the load/store is ordered
+                // correctly with respect to the `Queue::is_empty` check we do
+                // below.
                 let count = self.handler.0.worker_count.fetch_sub(1, SeqCst);
                 // This addresses what would otherwise be a race condition in
                 // `ProxyHandler::spawn` where it only starts a worker if the
@@ -582,7 +585,20 @@ where
                     // for what happens if the available worker count goes to
                     // zero right after we check it here, and note that we only
                     // check the count _after_ we've pushed the task to the
-                    // queue.
+                    // queue.  We use `SeqCst` here to ensure that we get an
+                    // updated view of `worker_count` as it exists after the
+                    // `Queue::push` above.
+                    //
+                    // The upshot is that at least one (or more) of the
+                    // following will happen:
+                    //
+                    // - An existing worker will accept the task
+                    // - We'll start a new worker here to accept the task
+                    // - `Worker::set_available` will start a new worker to accept the task
+                    //
+                    // I.e. it should not be possible for the task to be
+                    // orphaned indefinitely in the queue without being
+                    // accepted.
                     if self.0.worker_count.load(SeqCst) == 0 {
                         self.start_worker(None, None);
                     }
