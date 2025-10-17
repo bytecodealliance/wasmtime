@@ -112,32 +112,32 @@ async fn resume_separate_thread() -> Result<()> {
     let component = format!(
         r#"
             (component
-                (import "thread-yield" (func $thread-yield (result (list u8))))
+                (import "yield" (func $yield (result (list u8))))
                 (core module $libc
                     (memory (export "memory") 1)
                     {REALLOC_AND_FREE}
                 )
                 (core instance $libc (instantiate $libc))
 
-                (core func $thread-yield
+                (core func $yield
                     (canon lower
-                        (func $thread-yield)
+                        (func $yield)
                         (memory $libc "memory")
                         (realloc (func $libc "realloc"))
                     )
                 )
 
                 (core module $m
-                    (import "" "thread-yield" (func $thread-yield (param i32)))
+                    (import "" "yield" (func $yield (param i32)))
                     (import "libc" "memory" (memory 0))
                     (func $start
                         i32.const 8
-                        call $thread-yield
+                        call $yield
                     )
                     (start $start)
                 )
                 (core instance (instantiate $m
-                    (with "" (instance (export "thread-yield" (func $thread-yield))))
+                    (with "" (instance (export "yield" (func $yield))))
                     (with "libc" (instance $libc))
                 ))
             )
@@ -147,7 +147,7 @@ async fn resume_separate_thread() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker
         .root()
-        .func_wrap_async("thread-yield", |_: StoreContextMut<()>, _: ()| {
+        .func_wrap_async("yield", |_: StoreContextMut<()>, _: ()| {
             Box::new(async {
                 tokio::task::yield_now().await;
                 Ok((vec![1u8, 2u8],))

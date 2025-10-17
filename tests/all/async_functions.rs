@@ -819,10 +819,10 @@ async fn non_stacky_async_activations() -> Result<()> {
         &engine,
         r#"
             (module $m2
-                (import "" "thread-yield" (func $thread-yield))
+                (import "" "yield" (func $yield))
 
                 (func $run_async (export "run_async")
-                    call $thread-yield
+                    call $yield
                 )
             )
         "#,
@@ -852,7 +852,7 @@ async fn non_stacky_async_activations() -> Result<()> {
             let mut store2 = Store::new(caller.engine(), ());
             let mut linker2 = Linker::<()>::new(caller.engine());
             linker2
-                .func_wrap_async("", "thread-yield", {
+                .func_wrap_async("", "yield", {
                     let stacks = stacks.clone();
                     move |caller, _: ()| {
                         let stacks = stacks.clone();
