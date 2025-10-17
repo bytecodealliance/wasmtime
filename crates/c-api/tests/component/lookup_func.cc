@@ -35,11 +35,7 @@ TEST(component, lookup_func) {
 
   auto instance = linker.instantiate(context, component).unwrap();
 
-  wasmtime_component_func_t func = {};
-  const auto found = wasmtime_component_instance_get_func(
-      instance.capi(), context.capi(), f->capi(), &func);
-  EXPECT_TRUE(found);
-  EXPECT_NE(func.store_id, 0);
+  *instance.get_func(context, *f);
 
   auto f2 = instance.get_export_index(context, nullptr, "f");
   EXPECT_TRUE(f2);

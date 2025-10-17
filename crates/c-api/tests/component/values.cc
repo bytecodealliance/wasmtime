@@ -60,10 +60,10 @@ static std::string echo_component(std::string_view type, std::string_view func,
 struct Context {
   Engine engine;
   Store store;
-  wasmtime_context_t *context;
+  Store::Context context;
   Component component;
   Instance instance;
-  wasmtime_component_func_t func;
+  Func func;
 };
 
 static Context create(std::string_view type, std::string_view body,
@@ -72,7 +72,7 @@ static Context create(std::string_view type, std::string_view body,
   auto component_text = echo_component(type, body, host_params);
   Engine engine;
   Store store(engine);
-  const auto context = store.context().capi();
+  const auto context = store.context();
   Component component = Component::compile(engine, component_text).unwrap();
 
   auto f = component.export_index(nullptr, "call");
@@ -87,13 +87,8 @@ static Context create(std::string_view type, std::string_view body,
                                                 callback, nullptr, nullptr);
   }
 
-  auto instance = linker.instantiate(store.context(), component).unwrap();
-
-  wasmtime_component_func_t func = {};
-  const auto found = wasmtime_component_instance_get_func(
-      instance.capi(), context, f->capi(), &func);
-  EXPECT_TRUE(found);
-  EXPECT_NE(func.store_id, 0);
+  auto instance = linker.instantiate(context, component).unwrap();
+  auto func = *instance.get_func(context, *f);
 
   return Context{
       .engine = engine,
@@ -176,12 +171,11 @@ local.get $res
   auto arg = make(1, 2);
   auto res = wasmtime_component_val_t{};
 
-  auto err =
-      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
+                                          &arg, 1, &res, 1);
   CHECK_ERR(err);
 
-  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
-  CHECK_ERR(err);
+  ctx.func.post_return(ctx.context).unwrap();
 
   check(res, 3, 4);
 
@@ -240,12 +234,11 @@ local.get $res
   auto arg = make("hello from A!");
   auto res = wasmtime_component_val_t{};
 
-  auto err =
-      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
+                                          &arg, 1, &res, 1);
   CHECK_ERR(err);
 
-  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
-  CHECK_ERR(err);
+  ctx.func.post_return(ctx.context).unwrap();
 
   check(res, "hello from B!");
 
@@ -316,12 +309,11 @@ local.get $res
   auto arg = make({1, 2, 3});
   auto res = wasmtime_component_val_t{};
 
-  auto err =
-      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
+                                          &arg, 1, &res, 1);
   CHECK_ERR(err);
 
-  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
-  CHECK_ERR(err);
+  ctx.func.post_return(ctx.context).unwrap();
 
   check(res, {4, 5, 6, 7});
 
@@ -394,12 +386,11 @@ local.get $res
   auto arg = make({1, 2, 3});
   auto res = wasmtime_component_val_t{};
 
-  auto err =
-      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
+                                          &arg, 1, &res, 1);
   CHECK_ERR(err);
 
-  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
-  CHECK_ERR(err);
+  ctx.func.post_return(ctx.context).unwrap();
 
   check(res, {4, 5, 6});
 
@@ -506,12 +497,11 @@ local.get $res
   auto arg = make_aa(123);
   auto res = wasmtime_component_val_t{};
 
-  auto err =
-      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
+                                          &arg, 1, &res, 1);
   CHECK_ERR(err);
 
-  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
-  CHECK_ERR(err);
+  ctx.func.post_return(ctx.context).unwrap();
 
   check_bb(res, "textt");
 
@@ -562,12 +552,11 @@ call $do
   auto arg = make("aa");
   auto res = wasmtime_component_val_t{};
 
-  auto err =
-      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
+                                          &arg, 1, &res, 1);
   CHECK_ERR(err);
 
-  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
-  CHECK_ERR(err);
+  ctx.func.post_return(ctx.context).unwrap();
 
   check(res, "bb");
 
@@ -640,12 +629,11 @@ local.get $res
   auto arg = make(123);
   auto res = wasmtime_component_val_t{};
 
-  auto err =
-      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
+                                          &arg, 1, &res, 1);
   CHECK_ERR(err);
 
-  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
-  CHECK_ERR(err);
+  ctx.func.post_return(ctx.context).unwrap();
 
   check(res, {});
 
@@ -716,12 +704,11 @@ local.get $res
   auto arg = make(true, 123);
   auto res = wasmtime_component_val_t{};
 
-  auto err =
-      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
+                                          &arg, 1, &res, 1);
   CHECK_ERR(err);
 
-  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
-  CHECK_ERR(err);
+  ctx.func.post_return(ctx.context).unwrap();
 
   check(res, false, 456);
 
@@ -778,12 +765,11 @@ call $do
   auto arg = make({"aa"});
   auto res = wasmtime_component_val_t{};
 
-  auto err =
-      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
+                                          &arg, 1, &res, 1);
   CHECK_ERR(err);
 
-  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
-  CHECK_ERR(err);
+  ctx.func.post_return(ctx.context).unwrap();
 
   check(res, {"aa", "bb"});
 

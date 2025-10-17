@@ -9,6 +9,7 @@
 
 #include <string_view>
 #include <wasmtime/component/component.hh>
+#include <wasmtime/component/func.hh>
 #include <wasmtime/component/instance.h>
 #include <wasmtime/store.hh>
 
@@ -34,8 +35,8 @@ public:
   /// `instance` provided as an argument to this function is the containing
   /// export instance, if any, that `name` is looked up under.
   std::optional<ExportIndex> get_export_index(Store::Context cx,
-                                              ExportIndex *instance,
-                                              std::string_view name) {
+                                              const ExportIndex *instance,
+                                              std::string_view name) const {
     wasmtime_component_export_index_t *ret =
         wasmtime_component_instance_get_export_index(
             &this->instance, cx.capi(), instance ? instance->capi() : nullptr,
@@ -46,13 +47,19 @@ public:
     return ExportIndex(ret);
   }
 
-  // TODO: get_func via `wasmtime_component_instance_get_func`
+  /// \brief Looks up an exported function by its export index.
+  std::optional<Func> get_func(Store::Context cx,
+                               const ExportIndex &index) const {
+    wasmtime_component_func_t ret;
+    bool found = wasmtime_component_instance_get_func(&instance, cx.capi(),
+                                                      index.capi(), &ret);
+    if (!found)
+      return std::nullopt;
+    return Func(ret);
+  }
 
   /// \brief Returns the underlying C API pointer.
   const wasmtime_component_instance_t *capi() const { return &instance; }
-
-  /// \brief Returns the underlying C API pointer.
-  wasmtime_component_instance_t *capi() { return &instance; }
 };
 
 } // namespace component
