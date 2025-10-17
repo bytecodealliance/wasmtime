@@ -120,7 +120,7 @@ pub unsafe extern "C" fn wasmtime_component_export_index_clone(
     export_index: &wasmtime_component_export_index_t,
 ) -> Box<wasmtime_component_export_index_t> {
     Box::new(wasmtime_component_export_index_t {
-        export_index: export_index.export_index.clone(),
+        export_index: export_index.export_index,
     })
 }
 
