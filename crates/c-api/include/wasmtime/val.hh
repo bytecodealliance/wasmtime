@@ -88,14 +88,14 @@ public:
   /// Consumes ownership of the underlying `wasmtime_externref_t` and returns
   /// the result of `wasmtime_externref_to_raw`.
   uint32_t take_raw(Store::Context cx) {
-    uint32_t ret = wasmtime_externref_to_raw(cx.raw_context(), &val);
+    uint32_t ret = wasmtime_externref_to_raw(cx.capi(), &val);
     wasmtime_externref_set_null(&val);
     return ret;
   }
 
   /// Returns `wasmtime_externref_to_raw`.
   uint32_t borrow_raw(Store::Context cx) const {
-    return wasmtime_externref_to_raw(cx.raw_context(), &val);
+    return wasmtime_externref_to_raw(cx.capi(), &val);
   }
 };
 
@@ -148,14 +148,14 @@ public:
   /// Consumes ownership of the underlying `wasmtime_anyref_t` and returns the
   /// result of `wasmtime_anyref_to_raw`.
   uint32_t take_raw(Store::Context cx) {
-    uint32_t ret = wasmtime_anyref_to_raw(cx.raw_context(), &val);
+    uint32_t ret = wasmtime_anyref_to_raw(cx.capi(), &val);
     wasmtime_anyref_set_null(&val);
     return ret;
   }
 
   /// Returns `wasmtime_anyref_to_raw`.
   uint32_t borrow_raw(Store::Context cx) const {
-    return wasmtime_anyref_to_raw(cx.raw_context(), &val);
+    return wasmtime_anyref_to_raw(cx.capi(), &val);
   }
 
   /// \brief If this is an `i31`, get the value zero-extended.

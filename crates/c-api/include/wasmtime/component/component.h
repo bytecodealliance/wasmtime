@@ -130,6 +130,13 @@ wasmtime_component_get_export_index(
     const char *name, size_t name_len);
 
 /**
+ * \brief Creates a new separately-owned copy of the specified index.
+ */
+WASM_API_EXTERN wasmtime_component_export_index_t *
+wasmtime_component_export_index_clone(
+    const wasmtime_component_export_index_t *index);
+
+/**
  * \brief Deletes a #wasmtime_component_export_index_t
  *
  * \param export_index the export index to delete

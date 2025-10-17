@@ -2,12 +2,17 @@
 
 #include <gtest/gtest.h>
 #include <wasmtime.h>
+#include <wasmtime/component/component.hh>
+#include <wasmtime/store.hh>
 
 #include <array>
 #include <format>
 #include <optional>
 #include <span>
 #include <variant>
+
+using namespace wasmtime;
+using namespace wasmtime::component;
 
 static std::string echo_component(std::string_view type, std::string_view func,
                                   std::string_view host_params) {
@@ -53,10 +58,10 @@ static std::string echo_component(std::string_view type, std::string_view func,
 }
 
 struct Context {
-  wasm_engine_t *engine;
-  wasmtime_store_t *store;
+  Engine engine;
+  Store store;
   wasmtime_context_t *context;
-  wasmtime_component_t *component;
+  Component component;
   wasmtime_component_instance_t instance;
   wasmtime_component_func_t func;
 };
@@ -65,26 +70,16 @@ static Context create(std::string_view type, std::string_view body,
                       std::string_view host_params,
                       wasmtime_component_func_callback_t callback) {
   auto component_text = echo_component(type, body, host_params);
-  const auto engine = wasm_engine_new();
-  EXPECT_NE(engine, nullptr);
+  Engine engine;
+  Store store(engine);
+  const auto context = store.context().capi();
+  Component component = Component::compile(engine, component_text).unwrap();
 
-  const auto store = wasmtime_store_new(engine, nullptr, nullptr);
-  const auto context = wasmtime_store_context(store);
+  auto f = component.export_index(nullptr, "call");
 
-  wasmtime_component_t *component = nullptr;
+  EXPECT_TRUE(f);
 
-  auto err = wasmtime_component_new(
-      engine, reinterpret_cast<const uint8_t *>(component_text.data()),
-      component_text.size(), &component);
-
-  CHECK_ERR(err);
-
-  auto f = wasmtime_component_get_export_index(component, nullptr, "call",
-                                               strlen("call"));
-
-  EXPECT_NE(f, nullptr);
-
-  const auto linker = wasmtime_component_linker_new(engine);
+  const auto linker = wasmtime_component_linker_new(engine.capi());
   const auto root = wasmtime_component_linker_root(linker);
 
   wasmtime_component_linker_instance_add_func(root, "do", strlen("do"),
@@ -93,34 +88,26 @@ static Context create(std::string_view type, std::string_view body,
   wasmtime_component_linker_instance_delete(root);
 
   wasmtime_component_instance_t instance = {};
-  err = wasmtime_component_linker_instantiate(linker, context, component,
-                                              &instance);
+  auto err = wasmtime_component_linker_instantiate(linker, context,
+                                                   component.capi(), &instance);
   CHECK_ERR(err);
 
   wasmtime_component_linker_delete(linker);
 
   wasmtime_component_func_t func = {};
-  const auto found =
-      wasmtime_component_instance_get_func(&instance, context, f, &func);
+  const auto found = wasmtime_component_instance_get_func(&instance, context,
+                                                          f->capi(), &func);
   EXPECT_TRUE(found);
   EXPECT_NE(func.store_id, 0);
 
-  wasmtime_component_export_index_delete(f);
-
   return Context{
       .engine = engine,
-      .store = store,
+      .store = std::move(store),
       .context = context,
       .component = component,
       .instance = instance,
       .func = func,
   };
-}
-
-static void destroy(Context &ctx) {
-  wasmtime_component_delete(ctx.component);
-  wasmtime_store_delete(ctx.store);
-  wasm_engine_delete(ctx.engine);
 }
 
 TEST(component, value_record) {
@@ -205,8 +192,6 @@ local.get $res
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);
-
-  destroy(ctx);
 }
 
 TEST(component, value_string) {
@@ -271,8 +256,6 @@ local.get $res
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);
-
-  destroy(ctx);
 }
 
 TEST(component, value_list) {
@@ -349,8 +332,6 @@ local.get $res
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);
-
-  destroy(ctx);
 }
 
 TEST(component, value_tuple) {
@@ -429,8 +410,6 @@ local.get $res
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);
-
-  destroy(ctx);
 }
 
 TEST(component, value_variant) {
@@ -543,8 +522,6 @@ local.get $res
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);
-
-  destroy(ctx);
 }
 
 TEST(component, value_enum) {
@@ -601,8 +578,6 @@ call $do
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);
-
-  destroy(ctx);
 }
 
 TEST(component, value_option) {
@@ -681,8 +656,6 @@ local.get $res
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);
-
-  destroy(ctx);
 }
 
 TEST(component, value_result) {
@@ -759,8 +732,6 @@ local.get $res
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);
-
-  destroy(ctx);
 }
 
 TEST(component, value_flags) {
@@ -823,8 +794,6 @@ call $do
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);
-
-  destroy(ctx);
 }
 
 TEST(component, value_list_inner) {
