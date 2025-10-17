@@ -1,4 +1,4 @@
-//! extra-files = ['dwarf_generic_satellite.cpp']
+//! extra-files = ['dwarf_generic_satellite.cc']
 
 // clang-format off
 // clang -o generic.wasm -target wasm32-unknown-wasip1 -g generic.cpp generic-satellite.cpp
