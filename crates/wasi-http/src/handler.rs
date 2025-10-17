@@ -149,6 +149,10 @@ pub trait HandlerState: 'static + Sync + Send {
     type StoreData: Send;
 
     /// Create a new [`Store`] for handling one or more requests.
+    ///
+    /// The `req_id` parameter is the value passed in the call to
+    /// [`ProxyHandler::spawn`] that created the worker to which the new `Store`
+    /// will belong.  See that function's documentation for details.
     fn new_store(&self, req_id: Option<u64>) -> Result<StoreBundle<Self::StoreData>>;
 
     /// Maximum time allowed to handle a request.
@@ -553,6 +557,14 @@ where
     ///
     /// This will either spawn a new background worker to run the task or
     /// deliver it to an already-running worker.
+    ///
+    /// The `req_id` will be passed to `<S as HandlerState>::new_store` _if_ a
+    /// new worker is started for this task.  It is intended to be used as a
+    /// "request identifier" corresponding to that task and can be used e.g. to
+    /// prefix all logging from the `Store` with that identifier.  Note that a
+    /// non-`None` value only makes sense when `<S as
+    /// HandlerState>::max_instance_reuse_count == 1`; otherwise the identifier
+    /// will not match subsequent tasks handled by the worker.
     pub fn spawn(&self, req_id: Option<u64>, task: TaskFn<S::StoreData>) {
         match self.0.state.max_instance_reuse_count() {
             0 => panic!("`max_instance_reuse_count` must be at least 1"),
@@ -572,7 +584,7 @@ where
                     // check the count _after_ we've pushed the task to the
                     // queue.
                     if self.0.worker_count.load(SeqCst) == 0 {
-                        self.start_worker(None, req_id);
+                        self.start_worker(None, None);
                     }
                 }
             }
