@@ -258,6 +258,36 @@ where
         task: Option<TaskFn<S::StoreData>>,
         req_id: Option<u64>,
     ) -> Result<()> {
+        // NB: The code the follows is rather subtle in that it is structured
+        // carefully to provide a few key invariants related to how instance
+        // reuse and request timeouts interact:
+        //
+        // - A task must never be allowed to run for more than 2x the request
+        // timeout, if any.
+        //
+        // - Every task we accept here must be allowed to run for at least 1x
+        // the request timeout, if any.
+        //
+        // - When more than one task is run concurrently in the same instance,
+        // we must stop accepting new tasks as soon as any existing task reaches
+        // the request timeout.  This serves to cap the amount of time we need
+        // to keep the instance alive before _all_ tasks have either completed
+        // or timed out.
+        //
+        // As of this writing, there's an additional wrinkle that makes
+        // guaranteeing those invariants particularly tricky: per #11869 and
+        // #11870, busy guest loops, epoch interruption, and host functions
+        // registered using `Linker::func_{wrap,new}_async` all require
+        // blocking, exclusive access to the `Store`, which effectively prevents
+        // the `StoreContextMut::run_concurrent` event loop from making
+        // progress.  That, in turn, prevents any concurrent tasks from
+        // executing, and also prevents the `AsyncFnOnce` passed to
+        // `run_concurrent` from being polled.  Consequently, we must rely on a
+        // "second line of defense" to ensure tasks are timed out promptly,
+        // which is to check for timeouts _outside_ the `run_concurrent` future.
+        // Once the aforementioned issues have been addressed, we'll be able to
+        // remove that check and its associated baggage.
+
         let handler = &self.handler.0;
 
         let StoreBundle {
@@ -332,6 +362,18 @@ where
                     // Poll any existing tasks, and if they're all `Pending`
                     // _and_ we haven't reached any reuse limits yet, poll for a
                     // new task from the queue.
+                    //
+                    // Note the the order of operations here is important.  By
+                    // polling `next_future` first, we'll disover any tasks that
+                    // may have timed out, at which point we'll stop accepting
+                    // new tasks altogether (see below for details).  This is
+                    // especially imporant in the case where the task was
+                    // blocked on a synchronous call to a host function which
+                    // has exclusive access to the `Store`; once that call
+                    // finishes, the first think we need to do is time out the
+                    // task.  If we were to poll for a new task first, then we'd
+                    // have to wait for _that_ task to finish or time out before
+                    // we could kill the instance.
                     future::poll_fn(|cx| match next_future.as_mut().poll(cx) {
                         Poll::Pending => {
                             // Note that `Pending` here doesn't necessarily mean
@@ -430,6 +472,14 @@ where
                 // complete or time out, at which point we can safely discard
                 // the instance.  If that deadline has not yet arrived, we
                 // schedule a wakeup to occur when it does.
+                //
+                // We uphold the "never kill an instance with a task which has
+                // been running for less than the request timeout" invariant
+                // here by noting that this timeout will only trigger if the
+                // `AsyncFnOnce` we passed to `run_concurrent` has been unable
+                // to run for at least the past `request_timeout` amount of
+                // time, meaning it can't possibly have accepted a task newer
+                // than that.
                 if let Some(deadline) = task_start_times
                     .lock()
                     .unwrap()
