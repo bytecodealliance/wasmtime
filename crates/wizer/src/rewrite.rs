@@ -25,11 +25,12 @@ impl Wizer {
         // than the original, uninitialized data segments.
         let add_data_segments = |data_section: &mut wasm_encoder::DataSection| {
             for seg in &snapshot.data_segments {
-                data_section.active(
-                    seg.memory_index,
-                    &ConstExpr::i32_const(seg.offset as i32),
-                    seg.data().iter().copied(),
-                );
+                let offset = if seg.is64 {
+                    ConstExpr::i64_const(seg.offset.cast_signed())
+                } else {
+                    ConstExpr::i32_const(u32::try_from(seg.offset).unwrap().cast_signed())
+                };
+                data_section.active(seg.memory_index, &offset, seg.data.iter().copied());
             }
         };
 
