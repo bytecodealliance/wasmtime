@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <string_view>
+#include <wasmtime/component/instance.hh>
 #include <wasmtime/component/linker.h>
 #include <wasmtime/engine.hh>
 #include <wasmtime/module.hh>
@@ -114,7 +115,16 @@ public:
     wasmtime_component_linker_allow_shadowing(ptr.get(), allow);
   }
 
-  // TODO: instantiate() using `wasmtime_component_linker_instantiate`
+  /// \brief Instantiates the given component within this linker.
+  Result<Instance> instantiate(Store::Context cx, Component &component) {
+    wasmtime_component_instance_t ret;
+    wasmtime_error_t *error = wasmtime_component_linker_instantiate(
+        ptr.get(), cx.capi(), component.capi(), &ret);
+    if (error != nullptr) {
+      return Error(error);
+    }
+    return Instance(ret);
+  }
 
 #ifdef WASMTIME_FEATURE_WASI
   /**

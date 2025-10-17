@@ -1,7 +1,4 @@
-#include "component/utils.h"
-
 #include <gtest/gtest.h>
-#include <wasmtime.h>
 #include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
@@ -30,9 +27,5 @@ TEST(wasip2, smoke) {
 
   Linker linker(engine);
   linker.add_wasip2().unwrap();
-
-  wasmtime_component_instance_t instance = {};
-  auto err = wasmtime_component_linker_instantiate(
-      linker.capi(), context.capi(), component.capi(), &instance);
-  CHECK_ERR(err);
+  linker.instantiate(context, component).unwrap();
 }

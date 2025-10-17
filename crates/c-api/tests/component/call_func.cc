@@ -35,14 +35,11 @@ TEST(component, call_func) {
 
   Linker linker(engine);
 
-  wasmtime_component_instance_t instance = {};
-  auto err = wasmtime_component_linker_instantiate(
-      linker.capi(), context.capi(), component.capi(), &instance);
-  CHECK_ERR(err);
+  auto instance = linker.instantiate(context, component).unwrap();
 
   wasmtime_component_func_t func = {};
   const auto found = wasmtime_component_instance_get_func(
-      &instance, context.capi(), f.capi(), &func);
+      instance.capi(), context.capi(), f.capi(), &func);
   EXPECT_TRUE(found);
 
   auto params = std::array<wasmtime_component_val_t, 2>{
@@ -58,9 +55,9 @@ TEST(component, call_func) {
 
   auto results = std::array<wasmtime_component_val_t, 1>{};
 
-  err = wasmtime_component_func_call(&func, context.capi(), params.data(),
-                                     params.size(), results.data(),
-                                     results.size());
+  auto err = wasmtime_component_func_call(&func, context.capi(), params.data(),
+                                          params.size(), results.data(),
+                                          results.size());
   CHECK_ERR(err);
 
   err = wasmtime_component_func_post_return(&func, context.capi());

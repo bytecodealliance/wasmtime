@@ -39,9 +39,10 @@ class ExportIndex {
 
   std::unique_ptr<wasmtime_component_export_index_t, deleter> ptr;
 
-  ExportIndex(wasmtime_component_export_index_t *raw) : ptr(raw) {}
-
 public:
+  /// \brief Constructs an ExportIndex from the underlying C API struct.
+  explicit ExportIndex(wasmtime_component_export_index_t *raw) : ptr(raw) {}
+
   /// Copies another index into this one.
   ExportIndex(const ExportIndex &other)
       : ptr(wasmtime_component_export_index_clone(other.ptr.get())) {}

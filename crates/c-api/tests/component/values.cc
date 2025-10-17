@@ -62,7 +62,7 @@ struct Context {
   Store store;
   wasmtime_context_t *context;
   Component component;
-  wasmtime_component_instance_t instance;
+  Instance instance;
   wasmtime_component_func_t func;
 };
 
@@ -87,14 +87,11 @@ static Context create(std::string_view type, std::string_view body,
                                                 callback, nullptr, nullptr);
   }
 
-  wasmtime_component_instance_t instance = {};
-  auto err = wasmtime_component_linker_instantiate(linker.capi(), context,
-                                                   component.capi(), &instance);
-  CHECK_ERR(err);
+  auto instance = linker.instantiate(store.context(), component).unwrap();
 
   wasmtime_component_func_t func = {};
-  const auto found = wasmtime_component_instance_get_func(&instance, context,
-                                                          f->capi(), &func);
+  const auto found = wasmtime_component_instance_get_func(
+      instance.capi(), context, f->capi(), &func);
   EXPECT_TRUE(found);
   EXPECT_NE(func.store_id, 0);
 
