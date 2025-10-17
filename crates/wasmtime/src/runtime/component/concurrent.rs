@@ -3018,17 +3018,6 @@ impl Instance {
         Ok(())
     }
 
-    fn pending_cancellation(&self, store: &mut StoreOpaque) -> bool {
-        let state = store.concurrent_state_mut();
-        let thread = state.guest_thread.unwrap();
-        if let Some(event) = state.get_mut(thread.task).unwrap().event.take() {
-            assert!(matches!(event, Event::Cancelled));
-            true
-        } else {
-            false
-        }
-    }
-
     /// Helper function for the `thread.yield`, `thread.yield-to`, `thread.suspend`,
     /// and `thread.switch-to` intrinsics.
     pub(crate) fn suspension_intrinsic<T: 'static>(
@@ -3040,7 +3029,7 @@ impl Instance {
         to_thread: Option<TableId<GuestThread>>,
     ) -> Result<bool> {
         // There could be a pending cancellation from a previous uncancellable wait
-        if cancellable && self.pending_cancellation(store.0) {
+        if cancellable && store.0.concurrent_state_mut().pending_cancellation() {
             return Ok(true);
         }
 
@@ -3064,7 +3053,7 @@ impl Instance {
 
         store.0.suspend(reason)?;
 
-        Ok(cancellable && self.pending_cancellation(store.0))
+        Ok(cancellable && store.0.concurrent_state_mut().pending_cancellation())
     }
 
     /// Helper function for the `waitable-set.wait` and `waitable-set.poll` intrinsics.
@@ -4484,9 +4473,9 @@ pub struct ConcurrentState {
     /// populated as needed.
     // TODO: this can and should be a `PrimaryMap`
     instance_states: HashMap<RuntimeComponentInstanceIndex, InstanceState>,
-    /// The "high priority" work queue for this instance's event loop.
+    /// The "high priority" work queue for this store's event loop.
     high_priority: Vec<WorkItem>,
-    /// The "low priority" work queue for this instance's event loop.
+    /// The "low priority" work queue for this store's event loop.
     low_priority: Vec<WorkItem>,
     /// A place to stash the reason a fiber is suspending so that the code which
     /// resumed it will know under what conditions the fiber should be resumed
@@ -4770,6 +4759,18 @@ impl ConcurrentState {
             .ok_or_else(|| anyhow!("no current thread"))?
             .thread
             .rep())
+    }
+
+    /// Returns whether there's a pending cancellation on the current guest thread,
+    /// consuming the event if so.
+    fn pending_cancellation(&mut self) -> bool {
+        let thread = self.guest_thread.unwrap();
+        if let Some(event) = self.get_mut(thread.task).unwrap().event.take() {
+            assert!(matches!(event, Event::Cancelled));
+            true
+        } else {
+            false
+        }
     }
 }
 
