@@ -1103,9 +1103,9 @@ impl<T> StoreContextMut<'_, T> {
         }
 
         loop {
-            // Take `ConcurrentState::futures` out of the instance so we can
-            // poll it while also safely giving any of the futures inside access
-            // to `self`.
+            // Take `ConcurrentState::futures` out of the store so we can poll
+            // it while also safely giving any of the futures inside access to
+            // `self`.
             let futures = self.0.concurrent_state_mut().futures.get_mut().take();
             let mut reset = Reset {
                 store: self.as_context_mut(),
@@ -1196,9 +1196,9 @@ impl<T> StoreContextMut<'_, T> {
             })
             .await;
 
-            // Put the `ConcurrentState::futures` back into the instance before
-            // we return or handle any work items since one or more of those
-            // items might append more futures.
+            // Put the `ConcurrentState::futures` back into the store before we
+            // return or handle any work items since one or more of those items
+            // might append more futures.
             drop(reset);
 
             match result? {
