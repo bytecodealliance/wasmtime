@@ -383,6 +383,7 @@ jobs:
               -p wasmtime-cli --no-default-features --features compile,cranelift
               -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
               -p wasmtime-cli --no-default-features --features objdump
+              -p wasmtime-cli --no-default-features --features wizer
               -p wasmtime-cli --all-features
               -p wasmtime-cli --features component-model
 
@@ -423,6 +424,8 @@ jobs:
               -p wasmtime-wizer --no-default-features
               -p wasmtime-wizer --no-default-features --features wasmtime
               -p wasmtime-wizer --no-default-features --features wasmprinter
+              -p wasmtime-wizer --no-default-features --features component-model
+              -p wasmtime-wizer --no-default-features --all-features
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

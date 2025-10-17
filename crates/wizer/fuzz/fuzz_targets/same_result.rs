@@ -19,6 +19,8 @@ use libfuzzer_sys::{
     arbitrary::{Arbitrary, Unstructured},
     fuzz_target,
 };
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
 use wasm_smith::MemoryOffsetChoices;
 use wasmtime::*;
 
@@ -102,9 +104,9 @@ fuzz_target!(|data: &[u8]| {
             let mut store = Store::new(&engine, ());
             wizer.init_func(init_func);
 
-            match wizer.run(&mut store, &wasm, |store, module| {
+            match assert_ready(wizer.run(&mut store, &wasm, async |store, module| {
                 Instance::new(store, module, &[])
-            }) {
+            })) {
                 Err(_) => continue 'init_loop,
                 Ok(s) => s,
             }
@@ -206,6 +208,14 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 });
+
+fn assert_ready<F: Future>(f: F) -> F::Output {
+    let mut context = Context::from_waker(Waker::noop());
+    match pin!(f).poll(&mut context) {
+        Poll::Ready(ret) => ret,
+        Poll::Pending => panic!("future wasn't ready"),
+    }
+}
 
 fn assert_val_eq(a: &Val, b: &Val) {
     match (a, b) {

@@ -2,7 +2,6 @@ use crate::InstanceState;
 use crate::info::ModuleContext;
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 use std::convert::TryFrom;
-use std::sync::Arc;
 
 /// The maximum number of data segments that we will emit. Most
 /// engines support more than this, but we want to leave some
@@ -41,21 +40,13 @@ pub struct DataSegment {
     pub memory_index: u32,
 
     /// This data segment's initialized memory that it originated from.
-    pub memory: Arc<Vec<u8>>,
+    pub data: Vec<u8>,
 
     /// The offset within the memory that `data` should be copied to.
     pub offset: u32,
 
     /// This segment's length.
     pub len: u32,
-}
-
-impl DataSegment {
-    pub fn data(&self) -> &[u8] {
-        let start = usize::try_from(self.offset).unwrap();
-        let end = start + usize::try_from(self.len).unwrap();
-        &self.memory[start..end]
-    }
 }
 
 impl DataSegment {
@@ -73,14 +64,12 @@ impl DataSegment {
     ///
     /// `self` must be in front of `other` and they must not overlap with each
     /// other.
-    fn merge(&self, other: &Self) -> DataSegment {
+    fn merge(&mut self, other: &Self) {
         let gap = self.gap(other);
 
-        DataSegment {
-            offset: self.offset,
-            len: self.len + gap + other.len,
-            ..self.clone()
-        }
+        self.len += gap + other.len;
+        self.data.extend(std::iter::repeat(0).take(gap as usize));
+        self.data.extend_from_slice(&other.data);
     }
 }
 
@@ -88,11 +77,11 @@ impl DataSegment {
 /// defaults.
 //
 // TODO: when we support reference types, we will have to snapshot tables.
-pub fn snapshot(module: &ModuleContext<'_>, ctx: &mut dyn InstanceState) -> Snapshot {
+pub async fn snapshot(module: &ModuleContext<'_>, ctx: &mut impl InstanceState) -> Snapshot {
     log::debug!("Snapshotting the initialized state");
 
-    let globals = snapshot_globals(module, ctx);
-    let (memory_mins, data_segments) = snapshot_memories(module, ctx);
+    let globals = snapshot_globals(module, ctx).await;
+    let (memory_mins, data_segments) = snapshot_memories(module, ctx).await;
 
     Snapshot {
         globals,
@@ -102,26 +91,25 @@ pub fn snapshot(module: &ModuleContext<'_>, ctx: &mut dyn InstanceState) -> Snap
 }
 
 /// Get the initialized values of all globals.
-fn snapshot_globals(
+async fn snapshot_globals(
     module: &ModuleContext<'_>,
-    ctx: &mut dyn InstanceState,
+    ctx: &mut impl InstanceState,
 ) -> Vec<(u32, SnapshotVal)> {
     log::debug!("Snapshotting global values");
 
-    module
-        .defined_global_exports
-        .as_ref()
-        .unwrap()
-        .iter()
-        .map(|(i, name)| (*i, ctx.global_get(&name)))
-        .collect()
+    let mut ret = Vec::new();
+    for (i, name) in module.defined_global_exports.as_ref().unwrap().iter() {
+        let val = ctx.global_get(&name).await;
+        ret.push((*i, val));
+    }
+    ret
 }
 
 /// Find the initialized minimum page size of each memory, as well as all
 /// regions of non-zero memory.
-fn snapshot_memories(
+async fn snapshot_memories(
     module: &ModuleContext<'_>,
-    instance: &mut dyn InstanceState,
+    instance: &mut impl InstanceState,
 ) -> (Vec<u64>, Vec<DataSegment>) {
     log::debug!("Snapshotting memories");
 
@@ -132,42 +120,45 @@ fn snapshot_memories(
         .defined_memories()
         .zip(module.defined_memory_exports.as_ref().unwrap());
     for ((memory_index, ty), name) in iter {
-        let memory = Arc::new(instance.memory_contents(&name));
-        let page_size = 1 << ty.page_size_log2.unwrap_or(16);
-        let num_wasm_pages = memory.len() / page_size;
-        memory_mins.push(num_wasm_pages as u64);
+        instance
+            .memory_contents(&name, |memory| {
+                let page_size = 1 << ty.page_size_log2.unwrap_or(16);
+                let num_wasm_pages = memory.len() / page_size;
+                memory_mins.push(num_wasm_pages as u64);
 
-        let memory_data = &memory[..];
+                let memory_data = &memory[..];
 
-        // Consider each Wasm page in parallel. Create data segments for each
-        // region of non-zero memory.
-        data_segments.par_extend((0..num_wasm_pages).into_par_iter().flat_map(|i| {
-            let page_end = (i + 1) * page_size;
-            let mut start = i * page_size;
-            let mut segments = vec![];
-            while start < page_end {
-                let nonzero = match memory_data[start..page_end]
-                    .iter()
-                    .position(|byte| *byte != 0)
-                {
-                    None => break,
-                    Some(i) => i,
-                };
-                start += nonzero;
-                let end = memory_data[start..page_end]
-                    .iter()
-                    .position(|byte| *byte == 0)
-                    .map_or(page_end, |zero| start + zero);
-                segments.push(DataSegment {
-                    memory_index,
-                    memory: memory.clone(),
-                    offset: u32::try_from(start).unwrap(),
-                    len: u32::try_from(end - start).unwrap(),
-                });
-                start = end;
-            }
-            segments
-        }));
+                // Consider each Wasm page in parallel. Create data segments for each
+                // region of non-zero memory.
+                data_segments.par_extend((0..num_wasm_pages).into_par_iter().flat_map(|i| {
+                    let page_end = (i + 1) * page_size;
+                    let mut start = i * page_size;
+                    let mut segments = vec![];
+                    while start < page_end {
+                        let nonzero = match memory_data[start..page_end]
+                            .iter()
+                            .position(|byte| *byte != 0)
+                        {
+                            None => break,
+                            Some(i) => i,
+                        };
+                        start += nonzero;
+                        let end = memory_data[start..page_end]
+                            .iter()
+                            .position(|byte| *byte == 0)
+                            .map_or(page_end, |zero| start + zero);
+                        segments.push(DataSegment {
+                            memory_index,
+                            data: memory_data[start..end].to_vec(),
+                            offset: u32::try_from(start).unwrap(),
+                            len: u32::try_from(end - start).unwrap(),
+                        });
+                        start = end;
+                    }
+                    segments
+                }));
+            })
+            .await;
     }
 
     if data_segments.is_empty() {
@@ -207,8 +198,7 @@ fn snapshot_memories(
 
         // Okay, merge them together into `a` (so that the next iteration can
         // merge it with its predecessor) and then omit `b`!
-        let merged = a.merge(b);
-        *a = merged;
+        a.merge(b);
     }
 
     remove_excess_segments(&mut merged_data_segments);
@@ -257,8 +247,10 @@ fn remove_excess_segments(merged_data_segments: &mut Vec<DataSegment>) {
     smallest_gaps.sort_unstable_by(|a, b| a.index.cmp(&b.index).reverse());
     for GapIndex { index, .. } in smallest_gaps {
         let index = usize::try_from(index).unwrap();
-        let merged = merged_data_segments[index].merge(&merged_data_segments[index + 1]);
-        merged_data_segments[index] = merged;
+        let [a, b] = merged_data_segments
+            .get_disjoint_mut([index, index + 1])
+            .unwrap();
+        a.merge(b);
 
         // Okay to use `swap_remove` here because, even though it makes
         // `merged_data_segments` unsorted, the segments are still sorted within

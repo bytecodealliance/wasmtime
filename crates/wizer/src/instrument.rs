@@ -83,7 +83,7 @@ pub(crate) fn instrument(module: &mut ModuleContext<'_>) -> Vec<u8> {
                 // Now export all of this module's defined globals, memories,
                 // and instantiations under well-known names so we can inspect
                 // them after initialization.
-                for (i, ty) in module.defined_globals() {
+                for (i, ty, _) in module.defined_globals() {
                     if !ty.mutable {
                         continue;
                     }

@@ -525,7 +525,8 @@ pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-a
 component-model = [
   "wasmtime/component-model",
   "wasmtime-wast?/component-model",
-  "wasmtime-cli-flags/component-model"
+  "wasmtime-cli-flags/component-model",
+  "wasmtime-wizer?/component-model",
 ]
 wat = ["dep:wat", "wasmtime/wat"]
 cache = ["dep:wasmtime-cache", "wasmtime-cli-flags/cache"]
@@ -581,6 +582,7 @@ wizer = [
   "dep:wasmtime-wasi",
   "dep:wasi-common",
   "dep:tokio",
+  "wasmtime/wave",
 ]
 
 [[test]]
