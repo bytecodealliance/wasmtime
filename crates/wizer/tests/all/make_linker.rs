@@ -81,7 +81,7 @@ async fn custom_linker() -> Result<()> {
   (type (func (param i32) (result i32)))
   (import "foo" "bar" (func (type 0)))
   (global $g (mut i32) (i32.const 0))
-  (func (export "wizer.initialize")
+  (func (export "wizer-initialize")
     global.get $g
     call 0
     global.set $g

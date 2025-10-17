@@ -123,7 +123,7 @@ async fn basic_global() -> Result<()> {
         r#"
 (module
   (global $g (mut i32) i32.const 0)
-  (func (export "wizer.initialize")
+  (func (export "wizer-initialize")
     i32.const 42
     global.set $g)
   (func (export "run") (result i32)
@@ -141,7 +141,7 @@ async fn basic_memory() -> Result<()> {
         r#"
 (module
   (memory 1)
-  (func (export "wizer.initialize")
+  (func (export "wizer-initialize")
     i32.const 0
     i32.const 42
     i32.store offset=1337)
@@ -162,7 +162,7 @@ async fn multi_memory() -> Result<()> {
 (module
  (memory $m1 1)
  (memory $m2 1)
- (func (export "wizer.initialize")
+ (func (export "wizer-initialize")
        i32.const 0
        i32.const 41
        i32.store $m1 offset=1337
@@ -359,7 +359,7 @@ async fn indirect_call_with_reference_types() -> anyhow::Result<()> {
         (func $f (type $sig)
           i32.const 42
         )
-        (func (export "wizer.initialize"))
+        (func (export "wizer-initialize"))
         (func (export "run") (result i32)
           i32.const 0
           call_indirect $table1 (type $sig)
@@ -496,7 +496,7 @@ async fn data_segment_at_end_of_memory() -> Result<()> {
         r#"
 (module
   (memory 1)
-  (func (export "wizer.initialize")
+  (func (export "wizer-initialize")
     ;; Store 42 to the last byte in memory.
     i32.const 0
     i32.const 42
@@ -535,7 +535,7 @@ async fn too_many_data_segments_for_engines() -> Result<()> {
   ;;     let num_pages = round_up(max_segments * wizer_min_gap / wasm_page_size);
   (memory 10)
 
-  (func (export "wizer.initialize")
+  (func (export "wizer-initialize")
     (local i32)
     loop
       (i32.ge_u (local.get 0) (i32.const 655360)) ;; 10 * wasm_page_size
@@ -562,7 +562,7 @@ async fn too_many_data_segments_for_engines() -> Result<()> {
 async fn rename_functions() -> Result<()> {
     let wat = r#"
 (module
- (func (export "wizer.initialize"))
+ (func (export "wizer-initialize"))
  (func (export "func_a") (result i32)
    i32.const 1)
  (func (export "func_b") (result i32)
@@ -613,7 +613,7 @@ async fn wasi_reactor() -> anyhow::Result<()> {
                 i32.const 6
                 global.set $g
               )
-              (func (export "wizer.initialize")
+              (func (export "wizer-initialize")
                 global.get $g
                 i32.const 7
                 i32.mul
@@ -660,7 +660,7 @@ async fn wasi_reactor_initializer_with_keep_init() -> anyhow::Result<()> {
           i32.const 1
           global.set $g
         )
-        (func (export "wizer.initialize")
+        (func (export "wizer-initialize")
           i32.const 2
           global.set $g)
         (func (export "run") (result i32)
@@ -682,7 +682,7 @@ async fn call_undefined_import_function_during_init() -> Result<()> {
         r#"
             (module
               (import "x" "f" (func $import))
-              (func (export "wizer.initialize")
+              (func (export "wizer-initialize")
                 (call $import)
               )
             )
@@ -699,7 +699,7 @@ async fn allow_undefined_import_function() -> Result<()> {
         r#"
             (module
               (import "x" "f" (func $import))
-              (func (export "wizer.initialize"))
+              (func (export "wizer-initialize"))
               (func (export "run") (result i32)
                 i32.const 42
               )
@@ -717,7 +717,7 @@ async fn accept_bulk_memory_copy() -> Result<()> {
         r#"
             (module
               (memory $memory (data "hello, wizer!"))
-              (func (export "wizer.initialize")
+              (func (export "wizer-initialize")
                 i32.const 42 ;; dst
                 i32.const 0  ;; src
                 i32.const 13 ;; size
@@ -763,7 +763,7 @@ async fn accept_bulk_memory_data_count() -> Result<()> {
 
     let mut exports = wasm_encoder::ExportSection::new();
     exports.export("run", wasm_encoder::ExportKind::Func, 0);
-    exports.export("wizer.initialize", wasm_encoder::ExportKind::Func, 1);
+    exports.export("wizer-initialize", wasm_encoder::ExportKind::Func, 1);
     module.section(&exports);
 
     module.section(&wasm_encoder::DataCountSection { count: 2 });
@@ -801,7 +801,7 @@ async fn accept_bulk_memory_fill() -> Result<()> {
         r#"
             (module
               (memory 1)
-              (func (export "wizer.initialize")
+              (func (export "wizer-initialize")
                 i32.const 42 ;; dst
                 i32.const 77 ;; value
                 i32.const 13 ;; size
@@ -826,7 +826,7 @@ async fn accept_bulk_memory_init() -> Result<()> {
             (module
               (memory 1)
               (data $data "hello, wizer!")
-              (func (export "wizer.initialize")
+              (func (export "wizer-initialize")
                 i32.const 42 ;; dst
                 i32.const 0  ;; offset
                 i32.const 13 ;; size
@@ -850,7 +850,7 @@ async fn accept_simd128() -> Result<()> {
         r#"
             (module
               (global $g (mut v128) (v128.const i32x4 2 3 5 7))
-              (func (export "wizer.initialize")
+              (func (export "wizer-initialize")
                 global.get $g
                 global.get $g
                 i32x4.mul
@@ -870,7 +870,7 @@ async fn relaxed_simd_deterministic() -> Result<()> {
         r#"
 (module
   (global $g (mut i32) i32.const 0)
-  (func (export "wizer.initialize")
+  (func (export "wizer-initialize")
     (v128.const f32x4 2796203.5 0.0 0.0 0.0)
     (v128.const f32x4 3.0 0.0 0.0 0.0)
     (v128.const f32x4 8388611.0 0.0 0.0 0.0)
@@ -900,7 +900,7 @@ async fn reject_mutable_globals_of_reference_types() -> Result<()> {
         r#"
 (module
   (global funcref (ref.null func))
-  (func (export "wizer.initialize"))
+  (func (export "wizer-initialize"))
   (func (export "run") (result i32) i32.const 42)
 )
         "#,
@@ -912,7 +912,7 @@ async fn reject_mutable_globals_of_reference_types() -> Result<()> {
         r#"
 (module
   (global (mut funcref) (ref.null func))
-  (func (export "wizer.initialize"))
+  (func (export "wizer-initialize"))
   (func (export "run") (result i32) i32.const 42)
 )
         "#,
@@ -931,7 +931,7 @@ async fn mixture_of_globals() -> Result<()> {
   (global $g2 i32 i32.const 2)
   (global $g3 (mut i32) i32.const 3)
   (global $g4 i32 i32.const 4)
-  (func (export "wizer.initialize")
+  (func (export "wizer-initialize")
     (global.set $g1 (i32.const 42))
     (global.set $g3 (i32.const 43))
   )

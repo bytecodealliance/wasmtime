@@ -53,8 +53,11 @@ const DEFAULT_KEEP_INIT_FUNC: bool = false;
 pub struct Wizer {
     /// The Wasm export name of the function that should be executed to
     /// initialize the Wasm module.
-    #[cfg_attr(feature = "clap", arg(short = 'f', long))]
-    init_func: Option<String>,
+    #[cfg_attr(
+        feature = "clap",
+        arg(short = 'f', long, default_value = "wizer-initialize")
+    )]
+    init_func: String,
 
     /// Any function renamings to perform.
     ///
@@ -142,7 +145,7 @@ impl Wizer {
     /// Construct a new `Wizer` builder.
     pub fn new() -> Self {
         Wizer {
-            init_func: None,
+            init_func: "wizer-initialize".to_string(),
             func_renames: vec![],
             keep_init_func: None,
         }
@@ -150,15 +153,15 @@ impl Wizer {
 
     /// The export name of the initializer function.
     ///
-    /// Defaults to `"wizer.initialize"`.
+    /// Defaults to `"wizer-initialize"`.
     pub fn init_func(&mut self, init_func: impl Into<String>) -> &mut Self {
-        self.init_func = Some(init_func.into());
+        self.init_func = init_func.into();
         self
     }
 
     /// Returns the initialization function that will be run for wizer.
-    pub fn core_init_func(&self) -> &str {
-        self.init_func.as_deref().unwrap_or("wizer.initialize")
+    pub fn get_init_func(&self) -> &str {
+        &self.init_func
     }
 
     /// Add a function rename to perform.

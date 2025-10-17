@@ -79,15 +79,9 @@ impl WizerCommand {
             run: self.run,
             argv0: None,
             invoke: Some(if is_component {
-                #[cfg(feature = "component-model")]
-                {
-                    format!("{}()", self.wizer.component_init_func())
-                }
-
-                #[cfg(not(feature = "component-model"))]
-                anyhow::bail!("support for components disabled at compile time");
+                format!("{}()", self.wizer.get_init_func())
             } else {
-                self.wizer.core_init_func().to_string()
+                self.wizer.get_init_func().to_string()
             }),
             module_and_args: vec![self.input.clone().into()],
             preloads: self.preloads.clone(),

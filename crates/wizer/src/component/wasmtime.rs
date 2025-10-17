@@ -35,7 +35,7 @@ impl Wizer {
         &self,
         component: &Component,
     ) -> anyhow::Result<ComponentExportIndex> {
-        let init_func = self.component_init_func();
+        let init_func = self.get_init_func();
         let (ty, index) = component
             .get_export(None, init_func)
             .ok_or_else(|| anyhow!("the component does export the function `{init_func}`"))?;

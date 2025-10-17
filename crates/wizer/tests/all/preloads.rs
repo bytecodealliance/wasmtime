@@ -64,7 +64,7 @@ async fn test_preloads() {
      (import "mod2" "f" (func $mod2f (param i32) (result i32)))
      (global $g1 (mut i32) (i32.const 0))
      (global $g2 (mut i32) (i32.const 0))
-     (func (export "wizer.initialize")
+     (func (export "wizer-initialize")
       i32.const 100
       call $mod1f
       global.set $g1

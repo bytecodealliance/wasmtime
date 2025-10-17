@@ -28,22 +28,22 @@ impl Wizer {
     /// function has the correct type.
     fn validate_init_func(&self, module: &wasmtime::Module) -> anyhow::Result<()> {
         log::debug!("Validating the exported initialization function");
-        match module.get_export(self.core_init_func()) {
+        match module.get_export(self.get_init_func()) {
             Some(wasmtime::ExternType::Func(func_ty)) => {
                 if func_ty.params().len() != 0 || func_ty.results().len() != 0 {
                     anyhow::bail!(
                         "the Wasm module's `{}` function export does not have type `[] -> []`",
-                        self.core_init_func()
+                        self.get_init_func()
                     );
                 }
             }
             Some(_) => anyhow::bail!(
                 "the Wasm module's `{}` export is not a function",
-                self.core_init_func()
+                self.get_init_func()
             ),
             None => anyhow::bail!(
                 "the Wasm module does not have a `{}` export",
-                self.core_init_func()
+                self.get_init_func()
             ),
         }
         Ok(())
@@ -64,7 +64,7 @@ impl Wizer {
                     .await
                     .context("calling the Reactor initialization function")?;
 
-                if self.core_init_func() == "_initialize" {
+                if self.get_init_func() == "_initialize" {
                     // Don't run `_initialize` twice if the it was explicitly
                     // requested as the init function.
                     return Ok(());
@@ -73,12 +73,12 @@ impl Wizer {
         }
 
         let init_func = instance
-            .get_typed_func::<(), ()>(&mut *store, self.core_init_func())
+            .get_typed_func::<(), ()>(&mut *store, self.get_init_func())
             .expect("checked by `validate_init_func`");
         init_func
             .call_async(&mut *store, ())
             .await
-            .with_context(|| format!("the `{}` function trapped", self.core_init_func()))?;
+            .with_context(|| format!("the `{}` function trapped", self.get_init_func()))?;
 
         Ok(())
     }

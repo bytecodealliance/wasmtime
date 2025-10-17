@@ -33,7 +33,7 @@ struct UserAgentParserEntry {
     // os_v3_replacement: Option<String>,
 }
 
-#[unsafe(export_name = "wizer.initialize")]
+#[unsafe(export_name = "wizer-initialize")]
 pub extern "C" fn init() {
     LazyLock::force(&UA_REGEX_SET);
 }

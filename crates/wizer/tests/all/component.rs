@@ -160,7 +160,7 @@ async fn simple() -> Result<()> {
             )
             (core instance $i (instantiate $m))
             (func (export "run") (result u32) (canon lift (core func $i "run")))
-            (func (export "component-init") (canon lift (core func $i "init")))
+            (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
     .await?;
@@ -180,7 +180,7 @@ async fn snapshot_global_i32() -> Result<()> {
             )
             (core instance $i (instantiate $m))
             (func (export "run") (result u32) (canon lift (core func $i "run")))
-            (func (export "component-init") (canon lift (core func $i "init")))
+            (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
     .await?;
@@ -203,7 +203,7 @@ async fn snapshot_global_i64() -> Result<()> {
             )
             (core instance $i (instantiate $m))
             (func (export "run") (result u32) (canon lift (core func $i "run")))
-            (func (export "component-init") (canon lift (core func $i "init")))
+            (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
     .await?;
@@ -225,7 +225,7 @@ async fn snapshot_global_f32() -> Result<()> {
             )
             (core instance $i (instantiate $m))
             (func (export "run") (result u32) (canon lift (core func $i "run")))
-            (func (export "component-init") (canon lift (core func $i "init")))
+            (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
     .await?;
@@ -247,7 +247,7 @@ async fn snapshot_global_f64() -> Result<()> {
             )
             (core instance $i (instantiate $m))
             (func (export "run") (result u32) (canon lift (core func $i "run")))
-            (func (export "component-init") (canon lift (core func $i "init")))
+            (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
     .await?;
@@ -293,7 +293,7 @@ async fn snapshot_memory() -> Result<()> {
             )
             (core instance $i (instantiate $m))
             (func (export "run") (result u32) (canon lift (core func $i "run")))
-            (func (export "component-init") (canon lift (core func $i "init")))
+            (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
     .await?;
@@ -397,7 +397,7 @@ async fn multiple_modules() -> Result<()> {
             ))
 
             (func (export "run") (result u32) (canon lift (core func $c "run")))
-            (func (export "component-init") (canon lift (core func $c "init")))
+            (func (export "wizer-initialize") (canon lift (core func $c "init")))
         )"#,
     )
     .await?;

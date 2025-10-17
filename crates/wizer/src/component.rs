@@ -16,11 +16,6 @@ const WIZER_INSTANCE: &str = "wasmtime:wizer/access";
 pub use self::info::ComponentContext;
 
 impl Wizer {
-    /// Returns the initialization function that will be run for wizer.
-    pub fn component_init_func(&self) -> &str {
-        self.init_func.as_deref().unwrap_or("component-init")
-    }
-
     /// Same as [`Wizer::instrument`], except for components.
     pub fn instrument_component<'a>(
         &self,
