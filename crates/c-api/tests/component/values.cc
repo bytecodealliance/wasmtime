@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 #include <wasmtime.h>
-#include <wasmtime/component/component.hh>
+#include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
 #include <array>
@@ -79,20 +79,18 @@ static Context create(std::string_view type, std::string_view body,
 
   EXPECT_TRUE(f);
 
-  const auto linker = wasmtime_component_linker_new(engine.capi());
-  const auto root = wasmtime_component_linker_root(linker);
+  Linker linker(engine);
+  {
+    auto root = linker.root();
 
-  wasmtime_component_linker_instance_add_func(root, "do", strlen("do"),
-                                              callback, nullptr, nullptr);
-
-  wasmtime_component_linker_instance_delete(root);
+    wasmtime_component_linker_instance_add_func(root.capi(), "do", strlen("do"),
+                                                callback, nullptr, nullptr);
+  }
 
   wasmtime_component_instance_t instance = {};
-  auto err = wasmtime_component_linker_instantiate(linker, context,
+  auto err = wasmtime_component_linker_instantiate(linker.capi(), context,
                                                    component.capi(), &instance);
   CHECK_ERR(err);
-
-  wasmtime_component_linker_delete(linker);
 
   wasmtime_component_func_t func = {};
   const auto found = wasmtime_component_instance_get_func(&instance, context,

@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 #include <wasmtime.h>
-#include <wasmtime/component/component.hh>
+#include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
 using namespace wasmtime;
@@ -28,14 +28,11 @@ TEST(wasip2, smoke) {
 
   Component component = Component::compile(engine, component_text).unwrap();
 
-  const auto linker = wasmtime_component_linker_new(engine.capi());
-
-  wasmtime_component_linker_add_wasip2(linker);
+  Linker linker(engine);
+  linker.add_wasip2().unwrap();
 
   wasmtime_component_instance_t instance = {};
-  auto err = wasmtime_component_linker_instantiate(linker, context.capi(),
-                                                   component.capi(), &instance);
+  auto err = wasmtime_component_linker_instantiate(
+      linker.capi(), context.capi(), component.capi(), &instance);
   CHECK_ERR(err);
-
-  wasmtime_component_linker_delete(linker);
 }

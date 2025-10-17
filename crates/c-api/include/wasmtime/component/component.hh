@@ -2,8 +2,8 @@
  * \file wasmtime/component/component.hh
  */
 
-#ifndef WASMTIME_COMPONENT_HH
-#define WASMTIME_COMPONENT_HH
+#ifndef WASMTIME_COMPONENT_COMPONENT_HH
+#define WASMTIME_COMPONENT_COMPONENT_HH
 
 #include <wasmtime/conf.h>
 
@@ -227,4 +227,4 @@ public:
 
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
-#endif // WASMTIME_COMPONENT_HH
+#endif // WASMTIME_COMPONENT_COMPONENT_HH

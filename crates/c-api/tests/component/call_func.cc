@@ -3,7 +3,7 @@
 #include <array>
 #include <gtest/gtest.h>
 #include <wasmtime.h>
-#include <wasmtime/component/component.hh>
+#include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
 using namespace wasmtime;
@@ -33,11 +33,11 @@ TEST(component, call_func) {
   auto component = Component::compile(engine, component_text).unwrap();
   auto f = *component.export_index(nullptr, "f");
 
-  const auto linker = wasmtime_component_linker_new(engine.capi());
+  Linker linker(engine);
 
   wasmtime_component_instance_t instance = {};
-  auto err = wasmtime_component_linker_instantiate(linker, context.capi(),
-                                                   component.capi(), &instance);
+  auto err = wasmtime_component_linker_instantiate(
+      linker.capi(), context.capi(), component.capi(), &instance);
   CHECK_ERR(err);
 
   wasmtime_component_func_t func = {};
@@ -68,6 +68,4 @@ TEST(component, call_func) {
 
   EXPECT_EQ(results[0].kind, WASMTIME_COMPONENT_U32);
   EXPECT_EQ(results[0].of.u32, 69);
-
-  wasmtime_component_linker_delete(linker);
 }

@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 #include <wasmtime.h>
-#include <wasmtime/component/component.hh>
+#include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
 using namespace wasmtime;
@@ -34,11 +34,11 @@ TEST(component, lookup_func) {
 
   EXPECT_TRUE(f);
 
-  const auto linker = wasmtime_component_linker_new(engine.capi());
+  Linker linker(engine);
 
   wasmtime_component_instance_t instance = {};
-  auto err = wasmtime_component_linker_instantiate(linker, context.capi(),
-                                                   component.capi(), &instance);
+  auto err = wasmtime_component_linker_instantiate(
+      linker.capi(), context.capi(), component.capi(), &instance);
   CHECK_ERR(err);
 
   wasmtime_component_func_t func = {};
@@ -52,5 +52,4 @@ TEST(component, lookup_func) {
   EXPECT_NE(f2, nullptr);
 
   wasmtime_component_export_index_delete(f2);
-  wasmtime_component_linker_delete(linker);
 }

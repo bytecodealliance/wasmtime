@@ -4,5 +4,6 @@
 #define WASMTIME_COMPONENT_HH
 
 #include <wasmtime/component/component.hh>
+#include <wasmtime/component/linker.hh>
 
 #endif // WASMTIME_COMPONENT_HH
