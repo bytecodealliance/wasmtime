@@ -2,6 +2,11 @@
 
 #include <gtest/gtest.h>
 #include <wasmtime.h>
+#include <wasmtime/component/component.hh>
+#include <wasmtime/store.hh>
+
+using namespace wasmtime;
+using namespace wasmtime::component;
 
 TEST(component, lookup_func) {
   static constexpr auto component_text = std::string_view{
@@ -16,52 +21,36 @@ TEST(component, lookup_func) {
 )
       )END",
   };
-  const auto engine = wasm_engine_new();
-  EXPECT_NE(engine, nullptr);
 
-  const auto store = wasmtime_store_new(engine, nullptr, nullptr);
-  const auto context = wasmtime_store_context(store);
+  Engine engine;
+  Store store(engine);
+  auto context = store.context();
+  Component component = Component::compile(engine, component_text).unwrap();
+  auto f = component.export_index(nullptr, "ff");
 
-  wasmtime_component_t *component = nullptr;
+  EXPECT_FALSE(f);
 
-  auto err = wasmtime_component_new(
-      engine, reinterpret_cast<const uint8_t *>(component_text.data()),
-      component_text.size(), &component);
+  f = component.export_index(nullptr, "f");
 
-  CHECK_ERR(err);
+  EXPECT_TRUE(f);
 
-  auto f = wasmtime_component_get_export_index(component, nullptr, "ff",
-                                               strlen("ff"));
-
-  EXPECT_EQ(f, nullptr);
-
-  f = wasmtime_component_get_export_index(component, nullptr, "f", strlen("f"));
-
-  EXPECT_NE(f, nullptr);
-
-  const auto linker = wasmtime_component_linker_new(engine);
+  const auto linker = wasmtime_component_linker_new(engine.capi());
 
   wasmtime_component_instance_t instance = {};
-  err = wasmtime_component_linker_instantiate(linker, context, component,
-                                              &instance);
+  auto err = wasmtime_component_linker_instantiate(linker, context.capi(),
+                                                   component.capi(), &instance);
   CHECK_ERR(err);
 
   wasmtime_component_func_t func = {};
-  const auto found =
-      wasmtime_component_instance_get_func(&instance, context, f, &func);
+  const auto found = wasmtime_component_instance_get_func(
+      &instance, context.capi(), f->capi(), &func);
   EXPECT_TRUE(found);
   EXPECT_NE(func.store_id, 0);
 
-  wasmtime_component_export_index_delete(f);
+  auto f2 = wasmtime_component_instance_get_export_index(
+      &instance, context.capi(), nullptr, "f", strlen("f"));
+  EXPECT_NE(f2, nullptr);
 
-  f = wasmtime_component_instance_get_export_index(&instance, context, nullptr,
-                                                   "f", strlen("f"));
-  EXPECT_NE(f, nullptr);
-
-  wasmtime_component_export_index_delete(f);
+  wasmtime_component_export_index_delete(f2);
   wasmtime_component_linker_delete(linker);
-  wasmtime_component_delete(component);
-
-  wasmtime_store_delete(store);
-  wasm_engine_delete(engine);
 }

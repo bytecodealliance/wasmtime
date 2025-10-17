@@ -108,7 +108,7 @@ template <> struct WasmType<std::optional<ExternRef>> {
       return std::nullopt;
     }
     wasmtime_externref_t val;
-    wasmtime_externref_from_raw(cx.raw_context(), p->externref, &val);
+    wasmtime_externref_from_raw(cx.capi(), p->externref, &val);
     return ExternRef(val);
   }
 };
@@ -618,7 +618,7 @@ public:
       ptr = reinterpret_cast<wasmtime_val_raw_t *>(alignof(wasmtime_val_raw_t));
     WasmTypeList<Params>::store(cx, ptr, params);
     wasm_trap_t *trap = nullptr;
-    auto *error = wasmtime_func_call_unchecked(cx.raw_context(), &f.func, ptr,
+    auto *error = wasmtime_func_call_unchecked(cx.capi(), &f.func, ptr,
                                                storage.size(), &trap);
     if (error != nullptr) {
       return TrapError(Error(error));
@@ -666,7 +666,7 @@ template <> struct detail::WasmType<std::optional<Func>> {
   static void store(Store::Context cx, wasmtime_val_raw_t *p,
                     const std::optional<Func> func) {
     if (func) {
-      p->funcref = wasmtime_func_to_raw(cx.raw_context(), &func->capi());
+      p->funcref = wasmtime_func_to_raw(cx.capi(), &func->capi());
     } else {
       p->funcref = 0;
     }
@@ -677,7 +677,7 @@ template <> struct detail::WasmType<std::optional<Func>> {
       return std::nullopt;
     }
     wasmtime_func_t ret;
-    wasmtime_func_from_raw(cx.raw_context(), p->funcref, &ret);
+    wasmtime_func_from_raw(cx.capi(), p->funcref, &ret);
     return ret;
   }
 };
