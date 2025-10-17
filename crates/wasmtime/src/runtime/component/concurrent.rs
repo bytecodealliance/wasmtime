@@ -3191,7 +3191,7 @@ impl Instance {
             let caller = concurrent_state.guest_thread.unwrap();
             let guest_task = TableId::<GuestTask>::new(rep);
             let task = concurrent_state.get_mut(guest_task)?;
-            if !task.have_lowered_parameters() {
+            if !task.already_lowered_parameters() {
                 task.lower_params = None;
                 task.lift_result = None;
 
@@ -4042,7 +4042,7 @@ pub(crate) struct GuestTask {
 }
 
 impl GuestTask {
-    fn have_lowered_parameters(&self) -> bool {
+    fn already_lowered_parameters(&self) -> bool {
         // We reset `lower_params` after we lower the parameters
         self.lower_params.is_none()
     }
@@ -4894,7 +4894,7 @@ impl TaskId {
     /// and delete the task when all threads are done.
     pub(crate) fn host_future_dropped<T>(&self, store: StoreContextMut<T>) -> Result<()> {
         let task = store.0.concurrent_state_mut().get_mut(self.task)?;
-        if !task.have_lowered_parameters() {
+        if !task.already_lowered_parameters() {
             Waitable::Guest(self.task).delete_from(store.0.concurrent_state_mut())?
         } else {
             task.host_future_state = HostFutureState::Dropped;
