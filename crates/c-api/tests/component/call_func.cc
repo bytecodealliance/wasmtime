@@ -1,8 +1,5 @@
-#include "utils.h"
-
 #include <array>
 #include <gtest/gtest.h>
-#include <wasmtime.h>
 #include <wasmtime/component.hh>
 #include <wasmtime/store.hh>
 
@@ -38,26 +35,17 @@ TEST(component, call_func) {
   auto instance = linker.instantiate(context, component).unwrap();
   auto func = *instance.get_func(context, f);
 
-  auto params = std::array<wasmtime_component_val_t, 2>{
-      wasmtime_component_val_t{
-          .kind = WASMTIME_COMPONENT_U32,
-          .of = {.u32 = 34},
-      },
-      wasmtime_component_val_t{
-          .kind = WASMTIME_COMPONENT_U32,
-          .of = {.u32 = 35},
-      },
+  auto params = std::array<Val, 2>{
+      uint32_t(34),
+      uint32_t(35),
   };
 
-  auto results = std::array<wasmtime_component_val_t, 1>{};
+  auto results = std::array<Val, 1>{false};
 
-  auto err = wasmtime_component_func_call(func.capi(), context.capi(),
-                                          params.data(), params.size(),
-                                          results.data(), results.size());
-  CHECK_ERR(err);
+  func.call(context, params, results).unwrap();
 
   func.post_return(context).unwrap();
 
-  EXPECT_EQ(results[0].kind, WASMTIME_COMPONENT_U32);
-  EXPECT_EQ(results[0].of.u32, 69);
+  EXPECT_TRUE(results[0].is_u32());
+  EXPECT_EQ(results[0].get_u32(), 69);
 }

@@ -11,6 +11,7 @@
 #include <string_view>
 #include <wasmtime/component/instance.hh>
 #include <wasmtime/component/linker.h>
+#include <wasmtime/component/val.hh>
 #include <wasmtime/engine.hh>
 #include <wasmtime/module.hh>
 
@@ -74,7 +75,50 @@ public:
     return LinkerInstance(ret);
   }
 
-  // TODO `add_func()` via `wasmtime_component_linker_instance_add_func`
+private:
+  template <typename F>
+  static wasmtime_error_t *
+  raw_callback(void *env, wasmtime_context_t *store,
+               const wasmtime_component_val_t *args, size_t nargs,
+               wasmtime_component_val_t *results, size_t nresults) {
+    static_assert(alignof(Val) == alignof(wasmtime_component_val_t));
+    static_assert(sizeof(Val) == sizeof(wasmtime_component_val_t));
+    F *func = reinterpret_cast<F *>(env);
+    Span<const Val> args_span(Val::from_capi(args), nargs);
+    Span<Val> results_span(Val::from_capi(results), nresults);
+    Result<std::monostate> result =
+        (*func)(Store::Context(store), args_span, results_span);
+    if (!result) {
+      return result.err().release();
+    }
+    return nullptr;
+  }
+
+  template <typename F> static void raw_finalize(void *env) {
+    std::unique_ptr<F> ptr(reinterpret_cast<F *>(env));
+  }
+
+public:
+  /// \brief Defines a function within this linker instance.
+  template <typename F,
+            std::enable_if_t<
+                std::is_invocable_r_v<Result<std::monostate>, F, Store::Context,
+                                      Span<const Val>, Span<Val>>,
+                bool> = true>
+  Result<std::monostate> add_func(std::string_view name, F &&f) {
+    auto *error = wasmtime_component_linker_instance_add_func(
+        ptr.get(), name.data(), name.length(),
+        raw_callback<std::remove_reference_t<F>>,
+        std::make_unique<std::remove_reference_t<F>>(std::forward<F>(f))
+            .release(),
+        raw_finalize<std::remove_reference_t<F>>);
+
+    if (error != nullptr) {
+      return Error(error);
+    }
+
+    return std::monostate();
+  }
 };
 
 /**

@@ -48,6 +48,26 @@ public:                                                                        \
   }                                                                            \
                                                                                \
   /**                                                                          \
+   * Converts the raw C API representation to this class without taking        \
+   * ownership.                                                                \
+   */                                                                          \
+  static name *from_capi(Raw *capi) { return reinterpret_cast<name *>(capi); } \
+                                                                               \
+  /**                                                                          \
+   * Converts to the raw C API representation to this class without taking     \
+   * ownership.                                                                \
+   */                                                                          \
+  static const Raw *to_capi(const name *capi) {                                \
+    return reinterpret_cast<const Raw *>(capi);                                \
+  }                                                                            \
+                                                                               \
+  /**                                                                          \
+   * Converts to the raw C API representation to this class without taking     \
+   * ownership.                                                                \
+   */                                                                          \
+  static Raw *to_capi(name *capi) { return reinterpret_cast<Raw *>(capi); }    \
+                                                                               \
+  /**                                                                          \
    * \brief Copy constructor to clone `other`.                                 \
    */                                                                          \
   name(const name &other) { copy(other.raw); }                                 \

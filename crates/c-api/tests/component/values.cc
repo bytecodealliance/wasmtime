@@ -66,9 +66,11 @@ struct Context {
   Func func;
 };
 
+typedef Result<std::monostate> (*host_func_t)(Store::Context, Span<const Val>,
+                                              Span<Val>);
+
 static Context create(std::string_view type, std::string_view body,
-                      std::string_view host_params,
-                      wasmtime_component_func_callback_t callback) {
+                      std::string_view host_params, host_func_t callback) {
   auto component_text = echo_component(type, body, host_params);
   Engine engine;
   Store store(engine);
@@ -80,12 +82,7 @@ static Context create(std::string_view type, std::string_view body,
   EXPECT_TRUE(f);
 
   Linker linker(engine);
-  {
-    auto root = linker.root();
-
-    wasmtime_component_linker_instance_add_func(root.capi(), "do", strlen("do"),
-                                                callback, nullptr, nullptr);
-  }
+  linker.root().add_func("do", callback).unwrap();
 
   auto instance = linker.instantiate(context, component).unwrap();
   auto func = *instance.get_func(context, *f);
@@ -144,29 +141,25 @@ call $do
 local.get $res
 	  )",
       "(param i64 i64 i32)",
-      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
-          size_t args_len, wasmtime_component_val_t *rets,
-          size_t rets_len) -> wasmtime_error_t * {
-        EXPECT_EQ(args_len, 1);
-        check(*Val::from_capi(&args[0]), 1, 2);
+      +[](Store::Context, Span<const Val> args,
+          Span<Val> rets) -> Result<std::monostate> {
+        EXPECT_EQ(args.size(), 1);
+        check(args[0], 1, 2);
 
-        EXPECT_EQ(rets_len, 1);
-        make(3, 4).capi_transfer(rets[0]);
+        EXPECT_EQ(rets.size(), 1);
+        rets[0] = make(3, 4);
 
-        return nullptr;
+        return std::monostate();
       });
 
   auto arg = make(1, 2);
-  auto res = wasmtime_component_val_t{};
+  auto res = Val(false);
 
-  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
-                                          arg.capi(), 1, &res, 1);
-  CHECK_ERR(err);
-
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
   ctx.func.post_return(ctx.context).unwrap();
 
-  Val result(std::move(res));
-  check(result, 3, 4);
+  check(res, 3, 4);
 }
 
 TEST(component, value_string) {
@@ -197,29 +190,25 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32)",
-      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
-          size_t args_len, wasmtime_component_val_t *rets,
-          size_t rets_len) -> wasmtime_error_t * {
-        EXPECT_EQ(args_len, 1);
-        check(*Val::from_capi(&args[0]), "hello from A!");
+      +[](Store::Context, Span<const Val> args,
+          Span<Val> rets) -> Result<std::monostate> {
+        EXPECT_EQ(args.size(), 1);
+        check(args[0], "hello from A!");
 
-        EXPECT_EQ(rets_len, 1);
-        make("hello from B!").capi_transfer(rets[0]);
+        EXPECT_EQ(rets.size(), 1);
+        rets[0] = make("hello from B!");
 
-        return nullptr;
+        return std::monostate();
       });
 
   auto arg = make("hello from A!");
-  auto res = wasmtime_component_val_t{};
+  auto res = Val(false);
 
-  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
-                                          arg.capi(), 1, &res, 1);
-  CHECK_ERR(err);
-
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
   ctx.func.post_return(ctx.context).unwrap();
 
-  Val result(std::move(res));
-  check(result, "hello from B!");
+  check(res, "hello from B!");
 }
 
 TEST(component, value_list) {
@@ -257,30 +246,25 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32)",
-      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
-          size_t args_len, wasmtime_component_val_t *rets,
-          size_t rets_len) -> wasmtime_error_t * {
-        EXPECT_EQ(args_len, 1);
-        check(*Val::from_capi(&args[0]), {1, 2, 3});
+      +[](Store::Context, Span<const Val> args,
+          Span<Val> rets) -> Result<std::monostate> {
+        EXPECT_EQ(args.size(), 1);
+        check(args[0], {1, 2, 3});
 
-        EXPECT_EQ(rets_len, 1);
-        make({uint32_t(4), uint32_t(5), uint32_t(6), uint32_t(7)})
-            .capi_transfer(rets[0]);
+        EXPECT_EQ(rets.size(), 1);
+        rets[0] = make({uint32_t(4), uint32_t(5), uint32_t(6), uint32_t(7)});
 
-        return nullptr;
+        return std::monostate();
       });
 
   auto arg = make({uint32_t(1), uint32_t(2), uint32_t(3)});
-  auto res = wasmtime_component_val_t{};
+  auto res = Val(false);
 
-  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
-                                          arg.capi(), 1, &res, 1);
-  CHECK_ERR(err);
-
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
   ctx.func.post_return(ctx.context).unwrap();
 
-  Val result(std::move(res));
-  check(result, {4, 5, 6, 7});
+  check(res, {4, 5, 6, 7});
 }
 
 TEST(component, value_tuple) {
@@ -319,29 +303,25 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32 i32)",
-      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
-          size_t args_len, wasmtime_component_val_t *rets,
-          size_t rets_len) -> wasmtime_error_t * {
-        EXPECT_EQ(args_len, 1);
-        check(*Val::from_capi(&args[0]), {1, 2, 3});
+      +[](Store::Context, Span<const Val> args,
+          Span<Val> rets) -> Result<std::monostate> {
+        EXPECT_EQ(args.size(), 1);
+        check(args[0], {1, 2, 3});
 
-        EXPECT_EQ(rets_len, 1);
-        make({uint32_t(4), uint32_t(5), uint32_t(6)}).capi_transfer(rets[0]);
+        EXPECT_EQ(rets.size(), 1);
+        rets[0] = make({uint32_t(4), uint32_t(5), uint32_t(6)});
 
-        return nullptr;
+        return std::monostate();
       });
 
   auto arg = make({uint32_t(1), uint32_t(2), uint32_t(3)});
-  auto res = wasmtime_component_val_t{};
+  auto res = Val(false);
 
-  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
-                                          arg.capi(), 1, &res, 1);
-  CHECK_ERR(err);
-
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
   ctx.func.post_return(ctx.context).unwrap();
 
-  Val result(std::move(res));
-  check(result, {4, 5, 6});
+  check(res, {4, 5, 6});
 }
 
 TEST(component, value_variant) {
@@ -397,29 +377,25 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32 i32)",
-      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
-          size_t args_len, wasmtime_component_val_t *rets,
-          size_t rets_len) -> wasmtime_error_t * {
-        EXPECT_EQ(args_len, 1);
-        check_aa(*Val::from_capi(&args[0]), 123);
+      +[](Store::Context, Span<const Val> args,
+          Span<Val> rets) -> Result<std::monostate> {
+        EXPECT_EQ(args.size(), 1);
+        check_aa(args[0], 123);
 
-        EXPECT_EQ(rets_len, 1);
-        make_bb("textt").capi_transfer(rets[0]);
+        EXPECT_EQ(rets.size(), 1);
+        rets[0] = make_bb("textt");
 
-        return nullptr;
+        return std::monostate();
       });
 
   auto arg = make_aa(123);
-  auto res = wasmtime_component_val_t{};
+  auto res = Val(false);
 
-  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
-                                          arg.capi(), 1, &res, 1);
-  CHECK_ERR(err);
-
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
   ctx.func.post_return(ctx.context).unwrap();
 
-  Val result(std::move(res));
-  check_bb(result, "textt");
+  check_bb(res, "textt");
 }
 
 TEST(component, value_enum) {
@@ -440,29 +416,25 @@ local.get $x
 call $do
 	  )",
       "(param i32) (result i32)",
-      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
-          size_t args_len, wasmtime_component_val_t *rets,
-          size_t rets_len) -> wasmtime_error_t * {
-        EXPECT_EQ(args_len, 1);
-        check(*Val::from_capi(&args[0]), "aa");
+      +[](Store::Context, Span<const Val> args,
+          Span<Val> rets) -> Result<std::monostate> {
+        EXPECT_EQ(args.size(), 1);
+        check(args[0], "aa");
 
-        EXPECT_EQ(rets_len, 1);
-        make("bb").capi_transfer(rets[0]);
+        EXPECT_EQ(rets.size(), 1);
+        rets[0] = make("bb");
 
-        return nullptr;
+        return std::monostate();
       });
 
   auto arg = make("aa");
-  auto res = wasmtime_component_val_t{};
+  auto res = Val(false);
 
-  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
-                                          arg.capi(), 1, &res, 1);
-  CHECK_ERR(err);
-
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
   ctx.func.post_return(ctx.context).unwrap();
 
-  Val result(std::move(res));
-  check(result, "bb");
+  check(res, "bb");
 }
 
 TEST(component, value_option) {
@@ -503,29 +475,25 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32)",
-      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
-          size_t args_len, wasmtime_component_val_t *rets,
-          size_t rets_len) -> wasmtime_error_t * {
-        EXPECT_EQ(args_len, 1);
-        check(*Val::from_capi(&args[0]), 123);
+      +[](Store::Context, Span<const Val> args,
+          Span<Val> rets) -> Result<std::monostate> {
+        EXPECT_EQ(args.size(), 1);
+        check(args[0], 123);
 
-        EXPECT_EQ(rets_len, 1);
-        make({}).capi_transfer(rets[0]);
+        EXPECT_EQ(rets.size(), 1);
+        rets[0] = make({});
 
-        return nullptr;
+        return std::monostate();
       });
 
   auto arg = make(123);
-  auto res = wasmtime_component_val_t{};
+  auto res = Val(false);
 
-  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
-                                          arg.capi(), 1, &res, 1);
-  CHECK_ERR(err);
-
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
   ctx.func.post_return(ctx.context).unwrap();
 
-  Val result(std::move(res));
-  check(result, {});
+  check(res, {});
 }
 
 TEST(component, value_result) {
@@ -564,29 +532,25 @@ call $do
 local.get $res
 	  )",
       "(param i32 i32 i32)",
-      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
-          size_t args_len, wasmtime_component_val_t *rets,
-          size_t rets_len) -> wasmtime_error_t * {
-        EXPECT_EQ(args_len, 1);
-        check(*Val::from_capi(&args[0]), true, 123);
+      +[](Store::Context, Span<const Val> args,
+          Span<Val> rets) -> Result<std::monostate> {
+        EXPECT_EQ(args.size(), 1);
+        check(args[0], true, 123);
 
-        EXPECT_EQ(rets_len, 1);
-        make(false, 456).capi_transfer(rets[0]);
+        EXPECT_EQ(rets.size(), 1);
+        rets[0] = make(false, 456);
 
-        return nullptr;
+        return std::monostate();
       });
 
   auto arg = make(true, 123);
-  auto res = wasmtime_component_val_t{};
+  auto res = Val(false);
 
-  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
-                                          arg.capi(), 1, &res, 1);
-  CHECK_ERR(err);
-
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
   ctx.func.post_return(ctx.context).unwrap();
 
-  Val result(std::move(res));
-  check(result, false, 456);
+  check(res, false, 456);
 }
 
 TEST(component, value_flags) {
@@ -612,29 +576,25 @@ local.get $x
 call $do
 	  )",
       "(param i32) (result i32)",
-      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
-          size_t args_len, wasmtime_component_val_t *rets,
-          size_t rets_len) -> wasmtime_error_t * {
-        EXPECT_EQ(args_len, 1);
-        check(*Val::from_capi(&args[0]), {"aa"});
+      +[](Store::Context, Span<const Val> args,
+          Span<Val> rets) -> Result<std::monostate> {
+        EXPECT_EQ(args.size(), 1);
+        check(args[0], {"aa"});
 
-        EXPECT_EQ(rets_len, 1);
-        make({Flag("aa"), Flag("bb")}).capi_transfer(rets[0]);
+        EXPECT_EQ(rets.size(), 1);
+        rets[0] = make({Flag("aa"), Flag("bb")});
 
-        return nullptr;
+        return std::monostate();
       });
 
   auto arg = make({Flag("aa")});
-  auto res = wasmtime_component_val_t{};
+  auto res = Val(false);
 
-  auto err = wasmtime_component_func_call(ctx.func.capi(), ctx.context.capi(),
-                                          arg.capi(), 1, &res, 1);
-  CHECK_ERR(err);
-
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
   ctx.func.post_return(ctx.context).unwrap();
 
-  Val result(std::move(res));
-  check(result, {"aa", "bb"});
+  check(res, {"aa", "bb"});
 }
 
 TEST(component, value_list_inner) {

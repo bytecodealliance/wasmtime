@@ -9,7 +9,9 @@
 
 #include <string_view>
 #include <wasmtime/component/func.h>
+#include <wasmtime/component/val.hh>
 #include <wasmtime/error.hh>
+#include <wasmtime/span.hh>
 #include <wasmtime/store.hh>
 
 namespace wasmtime {
@@ -28,7 +30,18 @@ public:
   /// \brief Returns the underlying C API pointer.
   const wasmtime_component_func_t *capi() const { return &func; }
 
-  // TODO: call with `wasmtime_component_func_call`
+  /// \brief Invokes this component function with the provided `args` and the
+  /// results are placed in `results`.
+  Result<std::monostate> call(Store::Context cx, Span<const Val> args,
+                              Span<Val> results) const {
+    wasmtime_error_t *error = wasmtime_component_func_call(
+        &func, cx.capi(), Val::to_capi(args.data()), args.size(),
+        Val::to_capi(results.data()), results.size());
+    if (error != nullptr) {
+      return Error(error);
+    }
+    return std::monostate();
+  }
 
   /**
    * \brief Invokes the `post-return` canonical ABI option, if specified.
