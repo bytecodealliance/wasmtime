@@ -1,3 +1,6 @@
+//! This module defines the `ResourceType` type in the public API of Wasmtime,
+//! which is all possible types of resources.
+
 use crate::runtime::vm::component::ComponentInstance;
 use crate::store::StoreId;
 use core::any::TypeId;

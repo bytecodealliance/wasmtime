@@ -1,3 +1,14 @@
+//! This module defines the `ResourceAny` type in the public API of Wasmtime,
+//! which represents a dynamically typed resource handle that could either be
+//! owned by the guest or the host.
+//!
+//! This is in contrast with `Resource<T>`, for example, and `ResourceAny` has
+//! more "state" behind it. Specifically a `ResourceAny` has a type and a
+//! `HostResourceIndex` which points inside of a `HostResourceData` structure
+//! inside of a stoer. The `ResourceAny::resource_drop` method, or a conversion
+//! to `Resource<T>`, is required to be called to avoid leaking data within a
+//! store.
+
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceIndex, HostResourceTables};

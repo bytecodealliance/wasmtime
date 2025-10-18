@@ -1,3 +1,25 @@
+//! Infrastructure for managing "host tables" of resources in the component
+//! model.
+//!
+//! This module is mostly an implementation detail of `ResourceAny` where it
+//! tracks the ability for the host to have a handle to any resource, be it
+//! either guest-defined or host-defined. The `HostResourceData` type is
+//! stored inside of a `Store<T>` and `HostResourceTables` provides temporary
+//! access to this information.
+//!
+//! This provides operations in terms of "lift" and "lower" terminology where
+//! the idea is that a resource is "lowered" to the host meaning that metadata
+//! about the resource is inserted into `HostResourceData` through
+//! `HostResourceTables`. This produces a `HostResourceIndex` which can
+//! then be used to access it later on. The `HostResourceIndex` can later be
+//! used to "lift" the resource from the table back into its constituent parts
+//! or remove it from the table.
+//!
+//! This tracks borrow state where you can, for example, lift a borrow from a
+//! `HostResourceIndex` that represents an "own". This will activate
+//! borrow-tracking infrastructure to ensure that the borrow is deleted before
+//! the own is removed or otherwise taken out.
+
 use crate::prelude::*;
 use crate::runtime::vm::component::{
     InstanceFlags, ResourceTables, TypedResource, TypedResourceIndex,

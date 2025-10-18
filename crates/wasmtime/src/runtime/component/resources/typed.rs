@@ -1,3 +1,13 @@
+//! This module defines the `Resource<T>` type in the public API of Wasmtime.
+//!
+//! The purpose of this type is to represent a typed resource on the host where
+//! the runtime representation is just a 32-bit integer plus some minor state
+//! tracking. Notably the `T` enables statically differentiating resources from
+//! one another and enables up-front type-checking where the lift/lower
+//! operations need not do any type-checking at all.
+//!
+//! The actual `T` type parameter is just a guide, no `T` value is ever needed.
+
 use crate::AsContextMut;
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
