@@ -1,5 +1,5 @@
-use super::Reader;
 use super::address_transform::AddressTransform;
+use crate::debug::Reader;
 use anyhow::Error;
 use gimli::{AttributeValue, DebuggingInformationEntry, RangeListsOffset, Unit, write};
 use wasmtime_environ::DefinedFuncIndex;
@@ -12,14 +12,11 @@ pub(crate) enum RangeInfoBuilder {
 }
 
 impl RangeInfoBuilder {
-    pub(crate) fn from<R>(
-        dwarf: &gimli::Dwarf<R>,
-        unit: &Unit<R, R::Offset>,
-        entry: &DebuggingInformationEntry<R>,
-    ) -> Result<Self, Error>
-    where
-        R: Reader,
-    {
+    pub(crate) fn from(
+        dwarf: &gimli::Dwarf<Reader<'_>>,
+        unit: &Unit<Reader<'_>>,
+        entry: &DebuggingInformationEntry<Reader<'_>>,
+    ) -> Result<Self, Error> {
         if let Some(AttributeValue::RangeListsRef(r)) = entry.attr_value(gimli::DW_AT_ranges)? {
             let r = dwarf.ranges_offset_from_raw(unit, r);
             return RangeInfoBuilder::from_ranges_ref(dwarf, unit, r);
@@ -45,14 +42,11 @@ impl RangeInfoBuilder {
         )
     }
 
-    pub(crate) fn from_ranges_ref<R>(
-        dwarf: &gimli::Dwarf<R>,
-        unit: &Unit<R, R::Offset>,
+    pub(crate) fn from_ranges_ref(
+        dwarf: &gimli::Dwarf<Reader<'_>>,
+        unit: &Unit<Reader<'_>>,
         ranges: RangeListsOffset,
-    ) -> Result<Self, Error>
-    where
-        R: Reader,
-    {
+    ) -> Result<Self, Error> {
         let mut ranges = dwarf.ranges(unit, ranges)?;
         let mut result = Vec::new();
         while let Some(range) = ranges.next()? {
@@ -69,15 +63,12 @@ impl RangeInfoBuilder {
         })
     }
 
-    pub(crate) fn from_subprogram_die<R>(
-        dwarf: &gimli::Dwarf<R>,
-        unit: &Unit<R, R::Offset>,
-        entry: &DebuggingInformationEntry<R>,
+    pub(crate) fn from_subprogram_die(
+        dwarf: &gimli::Dwarf<Reader<'_>>,
+        unit: &Unit<Reader<'_>>,
+        entry: &DebuggingInformationEntry<Reader<'_>>,
         addr_tr: &AddressTransform,
-    ) -> Result<Self, Error>
-    where
-        R: Reader,
-    {
+    ) -> Result<Self, Error> {
         let addr =
             if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc)? {
                 addr

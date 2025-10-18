@@ -43,13 +43,6 @@ impl<'a> Compilation<'a> {
     }
 }
 
-pub(crate) trait Reader: gimli::Reader<Offset = usize> + Send + Sync {}
-
-impl<'input, Endian> Reader for gimli::EndianSlice<'input, Endian> where
-    Endian: gimli::Endianity + Send + Sync
-{
-}
-
 #[derive(Error, Debug)]
 #[error("Debug info transform error: {0}")]
 pub struct TransformError(&'static str);
