@@ -10,7 +10,7 @@ use super::{TransformError, dbi_log};
 use anyhow::{Error, bail};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{
-    AttributeValue, DebugLineOffset, DebuggingInformationEntry, Dwarf, Unit, UnitOffset, write,
+    AttributeValue, DebugLineOffset, DebuggingInformationEntry, UnitOffset, UnitRef, write,
 };
 
 #[derive(Debug)]
@@ -47,10 +47,9 @@ fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
 }
 
 pub(crate) fn clone_die_attributes<'a>(
-    dwarf: &gimli::Dwarf<Reader<'a>>,
-    unit: &Unit<Reader<'a>>,
+    unit: UnitRef<Reader<'a>>,
     entry: &DebuggingInformationEntry<Reader<'a>>,
-    addr_tr: &'a AddressTransform,
+    addr_tr: &AddressTransform,
     frame_info: Option<&FunctionFrameInfo>,
     out_unit: &mut write::Unit,
     out_entry_id: write::UnitEntryId,
@@ -59,7 +58,7 @@ pub(crate) fn clone_die_attributes<'a>(
     out_strings: &mut write::StringTable,
     pending_die_refs: &mut PendingUnitRefs,
     pending_di_refs: &mut PendingDebugInfoRefs,
-    mut attr_context: EntryAttributesContext<'a>,
+    mut attr_context: EntryAttributesContext<'_>,
     isa: &dyn TargetIsa,
 ) -> Result<(), Error> {
     let unit_encoding = unit.encoding();
@@ -70,12 +69,12 @@ pub(crate) fn clone_die_attributes<'a>(
         // FIXME for CU: currently address_transform operate on a single
         // function range, and when CU spans multiple ranges the
         // transformation may be incomplete.
-        RangeInfoBuilder::from(dwarf, unit, entry)?
+        RangeInfoBuilder::from(unit, entry)?
     };
     range_info.build(addr_tr, out_unit, out_entry_id);
 
     let mut is_obj_ptr = false;
-    prepare_die_context(dwarf, unit, entry, &mut attr_context, &mut is_obj_ptr)?;
+    prepare_die_context(unit, entry, &mut attr_context, &mut is_obj_ptr)?;
 
     let mut attrs = entry.attrs();
     while let Some(attr) = attrs.next()? {
@@ -133,7 +132,7 @@ pub(crate) fn clone_die_attributes<'a>(
                     continue;
                 }
                 gimli::DW_AT_name => {
-                    let old_name: &str = &dwarf.attr_string(unit, attr.value())?.to_string_lossy();
+                    let old_name: &str = &unit.attr_string(attr.value())?.to_string_lossy();
                     let new_name = format!("__{old_name}");
                     dbi_log!(
                         "Object pointer: renamed '{}' -> '{}'",
@@ -158,7 +157,7 @@ pub(crate) fn clone_die_attributes<'a>(
                 write::AttributeValue::Address(addr)
             }
             AttributeValue::DebugAddrIndex(i) => {
-                let u = dwarf.address(unit, i)?;
+                let u = unit.address(i)?;
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }
@@ -202,28 +201,18 @@ pub(crate) fn clone_die_attributes<'a>(
             }
             AttributeValue::String(d) => write::AttributeValue::String(d.to_vec()),
             AttributeValue::DebugStrRef(_) | AttributeValue::DebugStrOffsetsIndex(_) => {
-                let s = dwarf
-                    .attr_string(unit, attr_value)?
-                    .to_string_lossy()
-                    .into_owned();
+                let s = unit.attr_string(attr_value)?.to_vec();
                 write::AttributeValue::StringRef(out_strings.add(s))
             }
             AttributeValue::RangeListsRef(_) | AttributeValue::DebugRngListsIndex(_) => {
-                let r = dwarf.attr_ranges_offset(unit, attr_value)?.unwrap();
-                let range_info = RangeInfoBuilder::from_ranges_ref(dwarf, unit, r)?;
+                let r = unit.attr_ranges_offset(attr_value)?.unwrap();
+                let range_info = RangeInfoBuilder::from_ranges_ref(unit, r)?;
                 let range_list_id = range_info.build_ranges(addr_tr, &mut out_unit.ranges);
                 write::AttributeValue::RangeListRef(range_list_id)
             }
             AttributeValue::LocationListsRef(_) | AttributeValue::DebugLocListsIndex(_) => {
-                let r = dwarf.attr_locations_offset(unit, attr_value)?.unwrap();
-                let low_pc = 0;
-                let mut locs = dwarf.locations.locations(
-                    r,
-                    unit_encoding,
-                    low_pc,
-                    &dwarf.debug_addr,
-                    unit.addr_base,
-                )?;
+                let r = unit.attr_locations_offset(attr_value)?.unwrap();
+                let mut locs = unit.locations(r)?;
                 let frame_base =
                     if let EntryAttributesContext::Children { frame_base, .. } = attr_context {
                         frame_base
@@ -373,10 +362,9 @@ pub(crate) fn clone_die_attributes<'a>(
     Ok(())
 }
 
-fn prepare_die_context(
-    dwarf: &Dwarf<Reader<'_>>,
-    unit: &Unit<Reader<'_>>,
-    entry: &DebuggingInformationEntry<Reader<'_>>,
+fn prepare_die_context<'a>(
+    unit: UnitRef<Reader<'a>>,
+    entry: &DebuggingInformationEntry<Reader<'a>>,
     attr_context: &mut EntryAttributesContext<'_>,
     is_obj_ptr: &mut bool,
 ) -> Result<(), Error> {
@@ -407,7 +395,7 @@ fn prepare_die_context(
                 subprogram.param_num += 1;
 
                 if subprogram.obj_ptr == entry.offset()
-                    || is_obj_ptr_param(dwarf, unit, entry, subprogram.param_num)?
+                    || is_obj_ptr_param(unit, entry, subprogram.param_num)?
                 {
                     *is_obj_ptr = true;
                 }
@@ -418,10 +406,9 @@ fn prepare_die_context(
     Ok(())
 }
 
-fn is_obj_ptr_param(
-    dwarf: &Dwarf<Reader<'_>>,
-    unit: &Unit<Reader<'_>>,
-    entry: &DebuggingInformationEntry<Reader<'_>>,
+fn is_obj_ptr_param<'a>(
+    unit: UnitRef<Reader<'a>>,
+    entry: &DebuggingInformationEntry<Reader<'a>>,
     param_num: isize,
 ) -> Result<bool, Error> {
     debug_assert!(entry.tag() == gimli::DW_TAG_formal_parameter);
@@ -437,7 +424,7 @@ fn is_obj_ptr_param(
     {
         // Either this has no name (declarations omit them), or its explicitly "this".
         let name = entry.attr_value(gimli::DW_AT_name)?;
-        if name.is_none() || dwarf.attr_string(unit, name.unwrap())?.slice().eq(b"this") {
+        if name.is_none() || unit.attr_string(name.unwrap())?.slice().eq(b"this") {
             // Finally, a type check. We expect a pointer.
             if let Some(type_attr) = entry.attr_value(gimli::DW_AT_type)? {
                 if let Some(type_die) = resolve_die_ref(unit, &type_attr)? {
