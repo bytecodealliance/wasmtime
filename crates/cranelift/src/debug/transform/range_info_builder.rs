@@ -1,7 +1,7 @@
 use super::address_transform::AddressTransform;
 use crate::debug::Reader;
 use anyhow::Error;
-use gimli::{AttributeValue, DebuggingInformationEntry, RangeListsOffset, Unit, write};
+use gimli::{AttributeValue, DebuggingInformationEntry, RangeListsOffset, UnitRef, write};
 use wasmtime_environ::DefinedFuncIndex;
 
 pub(crate) enum RangeInfoBuilder {
@@ -13,13 +13,12 @@ pub(crate) enum RangeInfoBuilder {
 
 impl RangeInfoBuilder {
     pub(crate) fn from(
-        dwarf: &gimli::Dwarf<Reader<'_>>,
-        unit: &Unit<Reader<'_>>,
+        unit: UnitRef<Reader<'_>>,
         entry: &DebuggingInformationEntry<Reader<'_>>,
     ) -> Result<Self, Error> {
         if let Some(AttributeValue::RangeListsRef(r)) = entry.attr_value(gimli::DW_AT_ranges)? {
-            let r = dwarf.ranges_offset_from_raw(unit, r);
-            return RangeInfoBuilder::from_ranges_ref(dwarf, unit, r);
+            let r = unit.ranges_offset_from_raw(r);
+            return RangeInfoBuilder::from_ranges_ref(unit, r);
         };
 
         let low_pc =
@@ -28,7 +27,7 @@ impl RangeInfoBuilder {
             } else if let Some(AttributeValue::DebugAddrIndex(i)) =
                 entry.attr_value(gimli::DW_AT_low_pc)?
             {
-                dwarf.address(unit, i)?
+                unit.address(i)?
             } else {
                 return Ok(RangeInfoBuilder::Undefined);
             };
@@ -43,11 +42,10 @@ impl RangeInfoBuilder {
     }
 
     pub(crate) fn from_ranges_ref(
-        dwarf: &gimli::Dwarf<Reader<'_>>,
-        unit: &Unit<Reader<'_>>,
+        unit: UnitRef<Reader<'_>>,
         ranges: RangeListsOffset,
     ) -> Result<Self, Error> {
-        let mut ranges = dwarf.ranges(unit, ranges)?;
+        let mut ranges = unit.ranges(ranges)?;
         let mut result = Vec::new();
         while let Some(range) = ranges.next()? {
             if range.begin >= range.end {
@@ -64,8 +62,7 @@ impl RangeInfoBuilder {
     }
 
     pub(crate) fn from_subprogram_die(
-        dwarf: &gimli::Dwarf<Reader<'_>>,
-        unit: &Unit<Reader<'_>>,
+        unit: UnitRef<Reader<'_>>,
         entry: &DebuggingInformationEntry<Reader<'_>>,
         addr_tr: &AddressTransform,
     ) -> Result<Self, Error> {
@@ -75,12 +72,12 @@ impl RangeInfoBuilder {
             } else if let Some(AttributeValue::DebugAddrIndex(i)) =
                 entry.attr_value(gimli::DW_AT_low_pc)?
             {
-                dwarf.address(unit, i)?
+                unit.address(i)?
             } else if let Some(AttributeValue::RangeListsRef(r)) =
                 entry.attr_value(gimli::DW_AT_ranges)?
             {
-                let r = dwarf.ranges_offset_from_raw(unit, r);
-                let mut ranges = dwarf.ranges(unit, r)?;
+                let r = unit.ranges_offset_from_raw(r);
+                let mut ranges = unit.ranges(r)?;
                 if let Some(range) = ranges.next()? {
                     range.begin
                 } else {

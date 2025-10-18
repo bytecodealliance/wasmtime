@@ -2,7 +2,7 @@ use super::TransformError;
 use super::address_transform::AddressTransform;
 use crate::debug::Reader;
 use anyhow::{Error, bail};
-use gimli::{DebugLineOffset, LineEncoding, Unit, write};
+use gimli::{DebugLineOffset, LineEncoding, UnitRef, write};
 use wasmtime_environ::DefinedFuncIndex;
 
 #[derive(Debug)]
@@ -37,8 +37,7 @@ enum ReadLineProgramState {
 }
 
 pub(crate) fn clone_line_program(
-    dwarf: &gimli::Dwarf<Reader<'_>>,
-    unit: &Unit<Reader<'_>>,
+    unit: UnitRef<Reader<'_>>,
     comp_name: Option<Reader<'_>>,
     addr_tr: &AddressTransform,
     out_encoding: gimli::Encoding,
@@ -58,7 +57,7 @@ pub(crate) fn clone_line_program(
         };
         let out_comp_dir = match header.directory(0) {
             Some(comp_dir) => clone_line_string(
-                dwarf.attr_string(unit, comp_dir)?,
+                unit.attr_string(comp_dir)?,
                 gimli::DW_FORM_string,
                 out_strings,
             )?,
@@ -81,7 +80,7 @@ pub(crate) fn clone_line_program(
         dirs.push(out_program.default_directory());
         for dir_attr in header.include_directories() {
             let dir_id = out_program.add_directory(clone_line_string(
-                dwarf.attr_string(unit, *dir_attr)?,
+                unit.attr_string(*dir_attr)?,
                 gimli::DW_FORM_string,
                 out_strings,
             )?);
@@ -95,7 +94,7 @@ pub(crate) fn clone_line_program(
             let dir_id = dirs[dir_index as usize];
             let file_id = out_program.add_file(
                 clone_line_string(
-                    dwarf.attr_string(unit, file_entry.path_name())?,
+                    unit.attr_string(file_entry.path_name())?,
                     gimli::DW_FORM_string,
                     out_strings,
                 )?,
