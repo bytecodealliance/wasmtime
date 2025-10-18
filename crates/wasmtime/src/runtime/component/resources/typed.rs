@@ -1,10 +1,9 @@
 use crate::AsContextMut;
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
-use crate::component::resources::{HostResourceIndex, HostResourceTables, ResourceTypeKind};
+use crate::component::resources::{HostResourceIndex, HostResourceTables};
 use crate::component::{ComponentType, Lift, Lower, ResourceAny, ResourceType};
 use crate::prelude::*;
-use core::any::TypeId;
 use core::fmt;
 use core::marker;
 use core::mem::MaybeUninit;
@@ -432,9 +431,8 @@ unsafe impl<T: 'static> ComponentType for Resource<T> {
             InterfaceType::Own(t) | InterfaceType::Borrow(t) => *t,
             other => bail!("expected `own` or `borrow`, found `{}`", desc(other)),
         };
-        match types.resource_type(resource).kind {
-            ResourceTypeKind::Host(id) if TypeId::of::<T>() == id => {}
-            _ => bail!("resource type mismatch"),
+        if !types.resource_type(resource).is_host::<T>() {
+            bail!("resource type mismatch");
         }
 
         Ok(())
