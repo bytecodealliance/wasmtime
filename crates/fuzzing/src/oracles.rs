@@ -21,6 +21,7 @@ mod stacks;
 
 use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::{DiffEngine, DiffInstance};
+use crate::generators::GcOps;
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
 use arbitrary::Arbitrary;
@@ -778,10 +779,7 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
 ///
 /// Returns the number of `gc` operations which occurred throughout the test
 /// case -- used to test below that gc happens reasonably soon and eventually.
-pub fn table_ops(
-    mut fuzz_config: generators::Config,
-    mut ops: generators::table_ops::TableOps,
-) -> Result<usize> {
+pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usize> {
     let expected_drops = Arc::new(AtomicUsize::new(0));
     let num_dropped = Arc::new(AtomicUsize::new(0));
 
@@ -814,7 +812,7 @@ pub fn table_ops(
             let expected_drops = expected_drops.clone();
             let num_gcs = num_gcs.clone();
             move |mut caller: Caller<'_, StoreLimits>, _params, results| {
-                log::info!("table_ops: GC");
+                log::info!("gc_ops: GC");
                 if num_gcs.fetch_add(1, SeqCst) < MAX_GCS {
                     caller.gc(None);
                 }
@@ -832,7 +830,7 @@ pub fn table_ops(
                     CountDrops::new(&expected_drops, num_dropped.clone()),
                 )?;
 
-                log::info!("table_ops: gc() -> ({a:?}, {b:?}, {c:?})");
+                log::info!("gc_ops: gc() -> ({a:?}, {b:?}, {c:?})");
                 results[0] = Some(a).into();
                 results[1] = Some(b).into();
                 results[2] = Some(c).into();
@@ -849,7 +847,7 @@ pub fn table_ops(
                       b: Option<Rooted<ExternRef>>,
                       c: Option<Rooted<ExternRef>>|
                       -> Result<()> {
-                    log::info!("table_ops: take_refs({a:?}, {b:?}, {c:?})",);
+                    log::info!("gc_ops: take_refs({a:?}, {b:?}, {c:?})",);
 
                     // Do the assertion on each ref's inner data, even though it
                     // all points to the same atomic, so that if we happen to
@@ -893,7 +891,7 @@ pub fn table_ops(
             let num_dropped = num_dropped.clone();
             let expected_drops = expected_drops.clone();
             move |mut caller, _params, results| {
-                log::info!("table_ops: make_refs");
+                log::info!("gc_ops: make_refs");
 
                 let a = ExternRef::new(
                     &mut caller,
@@ -908,7 +906,7 @@ pub fn table_ops(
                     CountDrops::new(&expected_drops, num_dropped.clone()),
                 )?;
 
-                log::info!("table_ops: make_refs() -> ({a:?}, {b:?}, {c:?})");
+                log::info!("gc_ops: make_refs() -> ({a:?}, {b:?}, {c:?})");
 
                 results[0] = Some(a).into();
                 results[1] = Some(b).into();
@@ -927,7 +925,7 @@ pub fn table_ops(
 
         let func = Func::new(&mut store, func_ty, {
             move |_caller: Caller<'_, StoreLimits>, _params, _results| {
-                log::info!("table_ops: take_struct(<ref any>)");
+                log::info!("gc_ops: take_struct(<ref any>)");
                 Ok(())
             }
         });
@@ -942,7 +940,7 @@ pub fn table_ops(
                         let imp_name = name.to_string();
                         let func =
                             Func::new(&mut store, ft.clone(), move |_caller, _params, _results| {
-                                log::info!("table_ops: {imp_name}(<typed structref>)");
+                                log::info!("gc_ops: {imp_name}(<typed structref>)");
                                 Ok(())
                             });
                         linker.define(&store, "", name, func).unwrap();
@@ -958,7 +956,7 @@ pub fn table_ops(
             let mut scope = RootScope::new(&mut store);
 
             log::info!(
-                "table_ops: begin allocating {} externref arguments",
+                "gc_ops: begin allocating {} externref arguments",
                 ops.limits.num_globals
             );
             let args: Vec<_> = (0..ops.limits.num_params)
@@ -970,7 +968,7 @@ pub fn table_ops(
                 })
                 .collect::<Result<_>>()?;
             log::info!(
-                "table_ops: end allocating {} externref arguments",
+                "gc_ops: end allocating {} externref arguments",
                 ops.limits.num_globals
             );
 
@@ -978,18 +976,17 @@ pub fn table_ops(
             // valid traps are table-out-of-bounds which happens through `table.get`
             // and `table.set` generated or an out-of-fuel trap. Otherwise any other
             // error is unexpected and should fail fuzzing.
-            log::info!("table_ops: calling into Wasm `run` function");
+            log::info!("gc_ops: calling into Wasm `run` function");
             let err = run.call(&mut scope, &args, &mut []).unwrap_err();
-            match err.downcast::<GcHeapOutOfMemory<CountDrops>>() {
-                Ok(_oom) => {}
-                Err(err) => {
-                    let trap = err
-                        .downcast::<Trap>()
-                        .expect("if not GC oom, error should be a Wasm trap");
-                    match trap {
-                        Trap::TableOutOfBounds | Trap::OutOfFuel => {}
-                        _ => panic!("unexpected trap: {trap}"),
-                    }
+            if err.is::<GcHeapOutOfMemory<CountDrops>>() || err.is::<GcHeapOutOfMemory<()>>() {
+                // Accept GC OOM as an allowed outcome for this fuzzer.
+            } else {
+                let trap = err
+                    .downcast::<Trap>()
+                    .expect("if not GC oom, error should be a Wasm trap");
+                match trap {
+                    Trap::TableOutOfBounds | Trap::OutOfFuel | Trap::AllocationTooLarge => {}
+                    _ => panic!("unexpected trap: {trap}"),
                 }
             }
         }
@@ -1410,12 +1407,12 @@ mod tests {
         assert!(ok);
     }
 
-    // Test that the `table_ops` fuzzer eventually runs the gc function in the host.
+    // Test that the `gc_ops` fuzzer eventually runs the gc function in the host.
     // We've historically had issues where this fuzzer accidentally wasn't fuzzing
     // anything for a long time so this is an attempt to prevent that from happening
     // again.
     #[test]
-    fn table_ops_eventually_gcs() {
+    fn gc_ops_eventually_gcs() {
         // Skip if we're under emulation because some fuzz configurations will do
         // large address space reservations that QEMU doesn't handle well.
         if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
@@ -1423,7 +1420,7 @@ mod tests {
         }
 
         let ok = gen_until_pass(|(config, test), _| {
-            let result = table_ops(config, test)?;
+            let result = gc_ops(config, test)?;
             Ok(result > 0)
         });
 
