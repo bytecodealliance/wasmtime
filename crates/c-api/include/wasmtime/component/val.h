@@ -94,7 +94,8 @@ struct wasmtime_component_valrecord_entry;
   } name##_t;                                                                  \
                                                                                \
   /** \brief Create vec from \p ptr and \p size */                             \
-  WASM_API_EXTERN void name##_new(name##_t *out, size_t size, type *ptr);      \
+  WASM_API_EXTERN void name##_new(name##_t *out, size_t size,                  \
+                                  const type *ptr);                            \
   /** \brief Create an empty vec */                                            \
   WASM_API_EXTERN void name##_new_empty(name##_t *out);                        \
   /** \brief Create a vec with length \p size */                               \
@@ -199,10 +200,51 @@ typedef struct wasmtime_component_valrecord_entry {
   wasmtime_component_val_t val;
 } wasmtime_component_valrecord_entry_t;
 
-/// \brief Allocates a new #wasmtime_component_val_t
-WASM_API_EXTERN wasmtime_component_val_t *wasmtime_component_val_new();
+/// \brief Allocates a new `wasmtime_component_val_t` on the heap, initializing
+/// it with the contents of `val`.
+///
+/// This function is intended to be used with the `variant`, `result`, and
+/// `option` fields of `wasmtime_component_valunion_t`. The returned pointer
+/// must be deallocated with `wasmtime_component_val_free` to deallocate the
+/// heap-owned pointer. The `val` provided is "taken" meaning that its contents
+/// are transferred to the returned pointer. This is not a clone operation but
+/// instead is an operation used to move `val` onto a Wasmtime-defined heap
+/// allocation.
+///
+/// Note that `wasmtime_component_val_delete` should not be used for
+/// deallocating the return value because that will deallocate the contents of
+/// the value but not the value pointer itself.
+WASM_API_EXTERN wasmtime_component_val_t *
+wasmtime_component_val_new(wasmtime_component_val_t *val);
 
-/// \brief Calls the destructor on \p value deallocating any owned memory
+/// \brief Deallocates the heap-allocated value at `ptr`.
+///
+/// This function will perform `wasmtime_component_val_delete` on `ptr` and
+/// then it will deallocate `ptr` itself. This should not be used on
+/// embedder-owned `ptr` storage. This function is used to clean up
+/// allocations made by `wasmtime_component_val_new`.
+WASM_API_EXTERN void wasmtime_component_val_free(wasmtime_component_val_t *ptr);
+
+/// \brief Performs a deep copy of the provided `src`, storing the results into
+/// `dst`.
+///
+/// The `dst` value must have `wasmtime_component_val_delete` run to discard
+/// its contents.
+WASM_API_EXTERN void
+wasmtime_component_val_clone(const wasmtime_component_val_t *src,
+                             wasmtime_component_val_t *dst);
+
+/// \brief Deallocates any memory owned by `value`.
+///
+/// This function will look at `value->kind` and deallocate any memory if
+/// necessary. For example lists will deallocate
+/// `value->of.list`.
+///
+/// Note that this function is not to be confused with
+/// `wasmtime_component_val_free` which not only deallocates the memory that
+/// `value` owns but also deallocates the memory of `value` itself. This
+/// function should only be used when the embedder owns the pointer `value`
+/// itself.
 WASM_API_EXTERN void
 wasmtime_component_val_delete(wasmtime_component_val_t *value);
 
