@@ -13,6 +13,7 @@ mod custom_code_memory;
 mod debug;
 mod defaults;
 mod epoch_interruption;
+mod eqref;
 mod exceptions;
 mod exnrefs;
 mod externals;
